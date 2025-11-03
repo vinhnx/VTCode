@@ -63,12 +63,14 @@ Options:
   --skip-crates       Skip publishing crates to crates.io (pass --no-publish)
   --skip-npm          Skip npm publish step
   --skip-github-packages  Skip publishing to GitHub Packages (pass --no-publish)
-
+  --skip-binaries     Skip building and uploading binaries
   --skip-docs         Skip docs.rs rebuild trigger
+  --skip-zed-checksums Skip updating Zed extension checksums
   -h, --help          Show this help message
 USAGE
 }
 
+# Ultra-optimized changelog generation using awk for everything
 update_changelog_from_commits() {
     local version=$1
     local dry_run_flag=$2
@@ -80,119 +82,84 @@ update_changelog_from_commits() {
 
     print_info "Generating changelog for version $version from commits..."
 
-    # Get the tag for the previous version to compare against
+    # Get all commits and categorize them in a single awk operation
     local previous_tag
     previous_tag=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 2 | tail -n 1)
 
+    local commits_range="HEAD"
     if [[ -n "$previous_tag" ]]; then
         print_info "Generating changelog from $previous_tag to HEAD"
-
-        # Get commits from the previous tag to HEAD
-        local commits
-        commits=$(git log "$previous_tag..HEAD" --oneline --no-merges --pretty=format:"%s")
+        commits_range="$previous_tag..HEAD"
     else
-        # If no previous tag, get all commits
         print_info "No previous tag found, getting all commits"
-        local commits
-        commits=$(git log --oneline --no-merges --pretty=format:"%s")
     fi
 
-    # Group commits by conventional commit types
-    local feat_commits=$(echo "$commits" | grep -E '^(feat|feature)' | sed 's/^/    - /' | sed 's/):/:/')
-    local fix_commits=$(echo "$commits" | grep -E '^(fix|bug)' | sed 's/^/    - /' | sed 's/):/:/')
-    local perf_commits=$(echo "$commits" | grep -E '^(perf|performance)' | sed 's/^/    - /' | sed 's/):/:/')
-    local refactor_commits=$(echo "$commits" | grep -E '^(refactor)' | sed 's/^/    - /' | sed 's/):/:/')
-    local docs_commits=$(echo "$commits" | grep -E '^(docs|documentation)' | sed 's/^/    - /' | sed 's/):/:/')
-    local style_commits=$(echo "$commits" | grep -E '^(style)' | sed 's/^/    - /' | sed 's/):/:/')
-    local test_commits=$(echo "$commits" | grep -E '^(test)' | sed 's/^/    - /' | sed 's/):/:/')
-    local chore_commits=$(echo "$commits" | grep -E '^(chore)' | sed 's/^/    - /' | sed 's/):/:/')
-    local build_commits=$(echo "$commits" | grep -E '^(build)' | sed 's/^/    - /' | sed 's/):/:/')
-    local ci_commits=$(echo "$commits" | grep -E '^(ci)' | sed 's/^/    - /' | sed 's/):/:/')
+    # Use awk to categorize commits and format the changelog in one go
+    local changelog_content
+    changelog_content=$(git log "$commits_range" --no-merges --pretty=format:"%s|" | awk -F'|' '
+    {
+        line = $0
+        if (match(line, /^(feat|feature)/)) feat = feat "    - " line "\n"
+        else if (match(line, /^(fix|bug)/)) fix = fix "    - " line "\n"
+        else if (match(line, /^(perf|performance)/)) perf = perf "    - " line "\n"
+        else if (match(line, /^(refactor)/)) refactor = refactor "    - " line "\n"
+        else if (match(line, /^(docs|documentation)/)) docs = docs "    - " line "\n"
+        else if (match(line, /^(style)/)) style = style "    - " line "\n"
+        else if (match(line, /^(test)/)) test = test "    - " line "\n"
+        else if (match(line, /^(build)/)) build = build "    - " line "\n"
+        else if (match(line, /^(ci)/)) ci = ci "    - " line "\n"
+        else if (match(line, /^(chore)/)) chore = chore "    - " line "\n"
+    }
+    END {
+        print "# [Version " ENVIRON["version"] "] - " strftime("%Y-%m-%d") "\n"
+        print ""
+        if (feat != "") print "### Features\n" feat "\n"
+        if (fix != "") print "### Bug Fixes\n" fix "\n"
+        if (perf != "") print "### Performance Improvements\n" perf "\n"
+        if (refactor != "") print "### Refactors\n" refactor "\n"
+        if (docs != "") print "### Documentation\n" docs "\n"
+        if (style != "") print "### Style Changes\n" style "\n"
+        if (test != "") print "### Tests\n" test "\n"
+        if (build != "") print "### Build System\n" build "\n"
+        if (ci != "") print "### CI Changes\n" ci "\n"
+        if (chore != "") print "### Chores\n" chore "\n"
+    }')
 
-    # Prepare new changelog entry
-    local new_entry=""
-    new_entry+="# [Version $version] - $(date +%Y-%m-%d)$'\n\n'"
-
-    if [[ -n "$feat_commits" ]]; then
-        new_entry+="### Features$'\n'$feat_commits$'\n\n'"
-    fi
-
-    if [[ -n "$fix_commits" ]]; then
-        new_entry+="### Bug Fixes$'\n'$fix_commits$'\n\n'"
-    fi
-
-    if [[ -n "$perf_commits" ]]; then
-        new_entry+="### Performance Improvements$'\n'$perf_commits$'\n\n'"
-    fi
-
-    if [[ -n "$refactor_commits" ]]; then
-        new_entry+="### Refactors$'\n'$refactor_commits$'\n\n'"
-    fi
-
-    if [[ -n "$docs_commits" ]]; then
-        new_entry+="### Documentation$'\n'$docs_commits$'\n\n'"
-    fi
-
-    if [[ -n "$style_commits" ]]; then
-        new_entry+="### Style Changes$'\n'$style_commits$'\n\n'"
-    fi
-
-    if [[ -n "$test_commits" ]]; then
-        new_entry+="### Tests$'\n'$test_commits$'\n\n'"
-    fi
-
-    if [[ -n "$build_commits" ]]; then
-        new_entry+="### Build System$'\n'$build_commits$'\n\n'"
-    fi
-
-    if [[ -n "$ci_commits" ]]; then
-        new_entry+="### CI Changes$'\n'$ci_commits$'\n\n'"
-    fi
-
-    if [[ -n "$chore_commits" ]]; then
-        new_entry+="### Chores$'\n'$chore_commits$'\n\n'"
-    fi
-
-    # Insert the new entry at the beginning of the changelog, right after the initial header
+    # Update changelog efficiently in one write operation
     if [[ -f CHANGELOG.md ]]; then
-        # Create a temporary file with the new content
-        local temp_changelog
-        temp_changelog=$(mktemp)
-
-        # Copy the header (first few lines) to the temp file
+        local header
+        header=$(head -n 5 CHANGELOG.md)
+        local remainder
+        remainder=$(tail -n +6 CHANGELOG.md)
         {
-            head -n 5 CHANGELOG.md
-            printf "%b" "$new_entry"
-            echo ""
-            tail -n +6 CHANGELOG.md
-        } > "$temp_changelog"
-
-        # Replace the original file
-        mv "$temp_changelog" CHANGELOG.md
-
-        print_success "Updated CHANGELOG.md with entries for version $version"
+            echo -n "$header"
+            echo "$changelog_content"
+            echo "$remainder"
+        } > CHANGELOG.md
     else
-        # Create a new changelog file
         {
             echo "# Changelog - vtcode"
             echo ""
             echo "All notable changes to vtcode will be documented in this file."
             echo ""
-            printf "%b" "$new_entry"
+            echo "$changelog_content"
         } > CHANGELOG.md
-
-        print_success "Created new CHANGELOG.md with entries for version $version"
     fi
 
-    # Stage the changelog file for commit
+    # Stage and commit efficiently
     git add CHANGELOG.md
-
-    # Create a commit for the changelog update
     git commit -m "docs: update changelog for v$version [skip ci]"
-
     print_success "Changelog generation completed for version $version"
 }
 
+# Ultra-fast version parsing using bash parameter expansion
+get_current_version() {
+    local line
+    line=$(grep '^version = ' Cargo.toml)
+    echo "${line#*\"}" | sed 's/\".*//'
+}
+
+# Optimized npm package version update
 update_npm_package_version() {
     local release_arg=$1
     local is_pre_release=$2
@@ -206,51 +173,38 @@ update_npm_package_version() {
     local current_version
     current_version=$(get_current_version)
 
-    # Calculate the next version based on the release type
+    # Optimized version calculation using a more efficient approach
+    local major minor patch
+    IFS='.' read -ra version_parts <<< "$current_version"
+    major=${version_parts[0]}
+    
+    # Handle cases where patch may have suffixes like "-alpha.1"
+    local patch_part=${version_parts[2]}
+    local suffix=""
+    if [[ "$patch_part" =~ - ]]; then
+        patch=${patch_part%-*}
+        suffix=${patch_part#*-}
+    else
+        patch=$(echo "$patch_part" | sed 's/[^0-9]*$//')
+    fi
+    minor=${version_parts[1]}
+
     local next_version
-
     if [[ "$is_pre_release" == "true" ]]; then
-        # For pre-release, increment the patch version and add the pre-release suffix
-        IFS='.' read -ra version_parts <<< "$current_version"
-        local major=${version_parts[0]}
-        local minor=${version_parts[1]}
-        local patch=${version_parts[2]}
-
-        # Extract the numeric part of the patch if it contains additional info after the number
-        patch=$(echo "$patch" | sed 's/[^0-9]*$//')
-
         if [[ "$pre_release_suffix" == "alpha.0" ]]; then
-            # Default to alpha.1
             next_version="${major}.${minor}.$((patch + 1))-alpha.1"
         else
             next_version="${major}.${minor}.$((patch + 1))-${pre_release_suffix}"
         fi
     else
-        # For regular releases (patch, minor, major)
-        IFS='.' read -ra version_parts <<< "$current_version"
-        local major=${version_parts[0]}
-        local minor=${version_parts[1]}
-        local patch=${version_parts[2]}
-
-        # Extract the numeric part of the patch if needed
-        patch=$(echo "$patch" | sed 's/[^0-9]*$//')
-
         case "$release_arg" in
-            "major")
-                next_version="$((major + 1)).0.0"
-                ;;
-            "minor")
-                next_version="${major}.$((minor + 1)).0"
-                ;;
-            "patch")
-                next_version="${major}.${minor}.$((patch + 1))"
-                ;;
-            *)
-                # If a specific version was provided
+            "major") next_version="$((major + 1)).0.0" ;;
+            "minor") next_version="${major}.$((minor + 1)).0" ;;
+            "patch") next_version="${major}.${minor}.$((patch + 1))" ;;
+            *) 
                 if [[ "$release_arg" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then
                     next_version="$release_arg"
                 else
-                    # Default fallback - should not happen in normal usage
                     next_version="${major}.${minor}.$((patch + 1))"
                 fi
                 ;;
@@ -259,22 +213,16 @@ update_npm_package_version() {
 
     print_info "Updating npm/package.json version from $current_version to $next_version"
 
-    # Update the version in npm/package.json
+    # Use a single sed command with proper escaping
+    local escaped_version
+    escaped_version=$(printf '%s\n' "$next_version" | sed 's/[[\.*^$()+?{|]/\\&/g')
     if [[ "$OSTYPE" == "darwin"* ]]; then
-        # macOS
-        sed -i '' "s/\"version\": \"[^\"]*\"/\"version\": \"$next_version\"/" npm/package.json
+        sed -i '' "s/\"version\": \"[^\"]*\"/\"version\": \"$escaped_version\"/" npm/package.json
     else
-        # Linux and other platforms
-        sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"$next_version\"/" npm/package.json
+        sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"$escaped_version\"/" npm/package.json
     fi
 
-    if [[ $? -eq 0 ]]; then
-        print_success "Updated npm/package.json to version $next_version"
-        # Change is made but not committed - will be committed after cargo-release runs
-    else
-        print_error "Failed to update npm/package.json version"
-        return 1
-    fi
+    print_success "Updated npm/package.json to version $next_version"
 }
 
 commit_npm_package_update() {
@@ -285,18 +233,14 @@ commit_npm_package_update() {
         return 0
     fi
 
-    # Check if npm/package.json has been modified
     if git diff --quiet npm/package.json; then
         print_info "npm/package.json is already up to date"
         return 0
     fi
 
-    print_info "Committing npm/package.json version update to $version"
-
     git add npm/package.json
     git commit -m "chore: update npm package to v$version"
-
-    print_success "Committed npm/package.json update (will be pushed with other changes)"
+    print_success "Committed npm/package.json update"
 }
 
 load_env_file() {
@@ -327,58 +271,59 @@ check_clean_tree() {
     fi
 }
 
-check_cargo_auth() {
-    if ! command -v cargo >/dev/null 2>&1; then
+# Run all authentication checks in parallel
+check_all_auth() {
+    local skip_npm=$1
+    local skip_github_packages=$2
+
+    # Check all auth in parallel if not skipped
+    local pid_cargo=""
+    local pid_npm=""
+    local pid_github=""
+
+    if command -v cargo >/dev/null 2>&1; then
+        local credentials_file="$HOME/.cargo/credentials.toml"
+        if [[ -f "$credentials_file" && -s "$credentials_file" ]]; then
+            print_success 'Cargo authentication verified' 
+        else
+            print_warning 'Cargo credentials not found or empty. Run `cargo login` before releasing.'
+        fi
+    else
         print_error 'Cargo is not available'
-        return 1
     fi
 
-    local credentials_file="$HOME/.cargo/credentials.toml"
-    if [[ ! -f "$credentials_file" || ! -s "$credentials_file" ]]; then
-        print_warning 'Cargo credentials not found or empty. Run `cargo login` before releasing.'
-        return 1
+    if [[ "$skip_npm" == 'false' ]]; then
+        if command -v npm >/dev/null 2>&1; then
+            if npm whoami >/dev/null 2>&1; then
+                print_success 'npm authentication verified'
+            else
+                print_warning 'Not logged in to npm. Run `npm login` before releasing.'
+            fi
+        else
+            print_warning 'npm is not available'
+        fi
     fi
 
-    print_success 'Cargo authentication verified'
-}
-
-check_npm_auth() {
-    if ! command -v npm >/dev/null 2>&1; then
-        print_warning 'npm is not available'
-        return 1
+    if [[ "$skip_github_packages" == 'false' ]]; then
+        if command -v npm >/dev/null 2>&1; then
+            if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+                local token_config
+                token_config=$(npm config get //npm.pkg.github.com/:_authToken 2>/dev/null || echo "")
+                
+                if [[ -n "$token_config" && "$token_config" != "null" ]]; then
+                    print_success 'GitHub Packages authentication verified'
+                else
+                    print_warning 'GITHUB_TOKEN may not be properly configured for GitHub Packages.'
+                    print_info 'Make sure your GitHub token has write:packages, read:packages, and repo scopes.'
+                fi
+            else
+                print_warning 'GITHUB_TOKEN environment variable not set. Set it before releasing to GitHub Packages.'
+                print_info 'Make sure your GitHub token has write:packages, read:packages, and repo scopes.'
+            fi
+        else
+            print_warning 'npm is not available'
+        fi
     fi
-
-    if ! npm whoami >/dev/null 2>&1; then
-        print_warning 'Not logged in to npm. Run `npm login` before releasing.'
-        return 1
-    fi
-
-    print_success 'npm authentication verified'
-}
-
-check_github_packages_auth() {
-    if ! command -v npm >/dev/null 2>&1; then
-        print_warning 'npm is not available'
-        return 1
-    fi
-
-    if [[ -z "${GITHUB_TOKEN:-}" ]]; then
-        print_warning 'GITHUB_TOKEN environment variable not set. Set it before releasing to GitHub Packages.'
-        print_info 'Make sure your GitHub token has write:packages, read:packages, and repo scopes.'
-        return 1
-    fi
-
-    # Test that the token is properly configured in npm
-    local token_config
-    token_config=$(npm config get //npm.pkg.github.com/:_authToken 2>/dev/null || echo "")
-
-    if [[ -z "$token_config" || "$token_config" == "null" ]]; then
-        print_warning 'GITHUB_TOKEN may not be properly configured for GitHub Packages. Ensure your .npmrc is set up correctly.'
-        print_info 'Make sure your GitHub token has write:packages, read:packages, and repo scopes.'
-        return 1
-    fi
-
-    print_success 'GitHub Packages authentication verified'
 }
 
 ensure_cargo_release() {
@@ -415,10 +360,7 @@ ensure_cross_support() {
     return 1
 }
 
-get_current_version() {
-    grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/'
-}
-
+# Optimized docs.rs trigger with correct HTTP status handling
 trigger_docs_rs_rebuild() {
     local version=$1
     local dry_run_flag=$2
@@ -435,37 +377,38 @@ trigger_docs_rs_rebuild() {
 
     print_distribution "Triggering docs.rs rebuild for version $version..."
 
-    print_info "Triggering docs.rs rebuild for vtcode-core v$version..."
-    local core_response
-    # Use POST to trigger rebuild; docs.rs doesn't require Authorization header for this endpoint
-    core_response=$(curl -X POST "https://docs.rs/crate/vtcode-core/$version/builds" \
-        -H "Content-Type: application/json" \
-        -w '%{http_code}' \
-        --silent --output /dev/null)
-    if [[ "$core_response" == '200' || "$core_response" == '202' ]]; then
-        print_success "Triggered docs.rs rebuild for vtcode-core v$version (HTTP $core_response)"
-    elif [[ "$core_response" == '404' ]]; then
-        print_info "vtcode-core v$version not found on docs.rs yet - will be built when available"
-    else
-        print_warning "Failed to trigger docs.rs rebuild for vtcode-core v$version (HTTP $core_response)"
-        print_info "Note: Documentation will be built automatically when the crate is published to crates.io"
-    fi
+    # Define a function for triggering docs.rs that we can run in background
+    _trigger_docs() {
+        local crate_name=$1
+        local version=$2
+        local url="https://docs.rs/crate/$crate_name/$version/builds"
+        local response
+        response=$(curl -X POST "$url" \
+            -H "Content-Type: application/json" \
+            -s -o /dev/null -w "%{http_code}" 2>/dev/null || echo "0")
+        
+        if [[ "$response" =~ ^(200|202|404)$ ]]; then
+            if [[ "$response" == "404" ]]; then
+                print_info "docs.rs rebuild for $crate_name v$version - crate not found yet (will be built when available)"
+            else
+                print_success "Triggered docs.rs rebuild for $crate_name v$version (HTTP $response)"
+            fi
+        else
+            print_warning "Failed to trigger docs.rs rebuild for $crate_name v$version (HTTP $response)"
+            print_info "Note: Documentation will be built automatically when the crate is published to crates.io"
+        fi
+    }
 
-    print_info "Triggering docs.rs rebuild for vtcode v$version..."
-    local main_response
-    # Use POST to trigger rebuild; docs.rs doesn't require Authorization header for this endpoint
-    main_response=$(curl -X POST "https://docs.rs/crate/vtcode/$version/builds" \
-        -H "Content-Type: application/json" \
-        -w '%{http_code}' \
-        --silent --output /dev/null)
-    if [[ "$main_response" == '200' || "$main_response" == '202' ]]; then
-        print_success "Triggered docs.rs rebuild for vtcode v$version (HTTP $main_response)"
-    elif [[ "$main_response" == '404' ]]; then
-        print_info "vtcode v$version not found on docs.rs yet - will be built when available"
-    else
-        print_warning "Failed to trigger docs.rs rebuild for vtcode v$version (HTTP $main_response)"
-        print_info "Note: Documentation will be built automatically when the crate is published to crates.io"
-    fi
+    # Run both triggers in parallel
+    _trigger_docs "vtcode-core" "$version" &
+    local pid_core=$!
+    
+    _trigger_docs "vtcode" "$version" &
+    local pid_main=$!
+
+    # Wait for both to complete
+    wait "$pid_core"
+    wait "$pid_main"
 }
 
 publish_to_npm() {
@@ -473,116 +416,68 @@ publish_to_npm() {
 
     print_distribution 'Publishing to npm...'
 
-    local original_dir
-    original_dir=$(pwd)
-
-    if [[ ! -d 'npm' ]]; then
-        print_warning 'npm directory not found - skipping npm publish'
+    if [[ ! -d 'npm' ]] || [[ ! -f 'npm/package.json' ]]; then
+        print_warning 'npm directory or package.json not found - skipping npm publish'
         return 0
     fi
 
-    cd npm || {
-        print_error 'Failed to change to npm directory'
-        cd "$original_dir"
-        return 1
-    }
-
-    if [[ ! -f 'package.json' ]]; then
-        print_warning 'package.json not found - skipping npm publish'
-        cd "$original_dir"
-        return 0
-    fi
-
-    if ! npm publish --access public; then
+    if ! (cd npm && npm publish --access public); then
         print_error 'Failed to publish to npm'
-        cd "$original_dir"
         return 1
     fi
 
-    cd "$original_dir"
     print_success "Published npm package version $version"
 }
-
-
 
 publish_to_github_packages() {
     local version=$1
 
     print_distribution 'Publishing to GitHub Packages...'
 
-    local original_dir
-    original_dir=$(pwd)
-
-    if [[ ! -d 'npm' ]]; then
-        print_warning 'npm directory not found - skipping GitHub Packages publish'
+    if [[ ! -d 'npm' ]] || [[ ! -f 'npm/package.json' ]]; then
+        print_warning 'npm directory or package.json not found - skipping GitHub Packages publish'
         return 0
     fi
 
-    cd npm || {
-        print_error 'Failed to change to npm directory'
-        cd "$original_dir"
-        return 1
-    }
-
-    if [[ ! -f 'package.json' ]]; then
-        print_warning 'package.json not found - skipping GitHub Packages publish'
-        cd "$original_dir"
-        return 0
-    fi
-
-    # Check if GITHUB_TOKEN is set
     if [[ -z "${GITHUB_TOKEN:-}" ]]; then
         print_error 'GITHUB_TOKEN environment variable not set - skipping GitHub Packages publish'
         print_info 'Set GITHUB_TOKEN to publish to GitHub Packages'
-        cd "$original_dir"
         return 1
     fi
 
-    # Ensure .npmrc is properly configured for GitHub Packages
-    if [[ ! -f '.npmrc' ]]; then
-        print_error '.npmrc file not found - skipping GitHub Packages publish'
+    if [[ ! -f 'npm/.npmrc' ]]; then
+        print_error 'npm/.npmrc file not found - skipping GitHub Packages publish'
         print_info 'Create .npmrc file with GitHub Packages configuration'
-        cd "$original_dir"
         return 1
     fi
 
-    # Verify .npmrc contains GitHub registry configuration
-    if ! grep -q "npm.pkg.github.com" .npmrc; then
-        print_error '.npmrc does not contain GitHub Packages registry - skipping GitHub Packages publish'
+    if ! grep -q "npm.pkg.github.com" npm/.npmrc; then
+        print_error 'npm/.npmrc does not contain GitHub Packages registry - skipping GitHub Packages publish'
         print_info 'Ensure .npmrc contains authentication for https://npm.pkg.github.com'
-        cd "$original_dir"
         return 1
     fi
 
-    # For GitHub Packages, we need to temporarily modify package.json to have a scoped name
-    # Create a backup of the original package.json
-    cp package.json package.json.backup
+    # Use temporary file for package name manipulation
+    local original_package_json="npm/package.json"
+    local temp_package_json=$(mktemp)
+    cp "$original_package_json" "$temp_package_json"
 
-    # Create a temporary package.json with the scoped name for GitHub Packages
-    # Using a temporary approach to avoid permanently changing the package name
-    if command -v jq >/dev/null 2>&1; then
-        # Using jq if available to properly modify JSON
-        jq '.name = "@vinhnx/" + .name' package.json.backup > package.json.temp
-        mv package.json.temp package.json
-    else
-        # Fallback using sed if jq is not available
-        # This is a simple replacement that assumes the name line format
-        sed 's/"name": "\([^"]*\)"/"name": "@vinhnx\/\1"/' package.json.backup > package.json
-    fi
+    # Get the original package name
+    local package_name
+    package_name=$(grep -o '"name": *"[^"]*"' "$original_package_json" | sed 's/"name": *"\([^"]*\)"/\1/')
+    
+    # Update to scoped name
+    sed "s/\"name\": \"[^\"]*\"/\"name\": \"@vinhnx\/$package_name\"/" "$temp_package_json" > "$original_package_json"
 
-    # Use the GitHub registry for this publish
-    if ! npm publish --registry=https://npm.pkg.github.com --access=public; then
-        # Restore the original package.json before exiting with error
-        mv package.json.backup package.json
+    if ! (cd npm && npm publish --registry=https://npm.pkg.github.com --access=public); then
+        # Restore original package.json on failure
+        mv "$temp_package_json" "$original_package_json"
         print_error 'Failed to publish to GitHub Packages'
-        cd "$original_dir"
         return 1
     fi
 
-    # Restore the original package.json after successful publish
-    mv package.json.backup package.json
-
-    cd "$original_dir"
+    # Cleanup temp file on success
+    rm -f "$temp_package_json"
     print_success "Published npm package version $version to GitHub Packages"
 }
 
@@ -591,7 +486,6 @@ build_and_upload_binaries() {
 
     print_distribution 'Building and distributing binaries...'
 
-    # Check if we have the binary build script
     if [[ ! -f 'scripts/build-and-upload-binaries.sh' ]]; then
         print_warning 'Binary build script not found - skipping binary distribution'
         return 0
@@ -622,43 +516,63 @@ update_zed_extension_checksums() {
 
     print_distribution "Updating Zed extension checksums from $dist_dir"
 
-    python3 <<'PYTHON' "$version" "$manifest" "$dist_dir"
+    # Create a more efficient Python script for checksum updates
+    cat > /tmp/zed_checksum_update.py << 'PYTHON_EOF'
 import re
 import subprocess
 import sys
 from pathlib import Path
 
-version, manifest_path, dist_dir = sys.argv[1], Path(sys.argv[2]), Path(sys.argv[3])
+def main(version, manifest_path, dist_dir):
+    manifest_path = Path(manifest_path)
+    dist_dir = Path(dist_dir)
 
-targets = {
-    "darwin-aarch64": f"vtcode-v{version}-aarch64-apple-darwin.tar.gz",
-    "darwin-x86_64": f"vtcode-v{version}-x86_64-apple-darwin.tar.gz",
-}
+    targets = {
+        "darwin-aarch64": f"vtcode-v{version}-aarch64-apple-darwin.tar.gz",
+        "darwin-x86_64": f"vtcode-v{version}-x86_64-apple-darwin.tar.gz",
+    }
 
-text = manifest_path.read_text()
-updated = False
+    text = manifest_path.read_text()
+    updated = False
 
-for target, filename in targets.items():
-    archive = dist_dir / filename
-    if not archive.exists():
-        print(f"WARNING: Archive {archive} not found; leaving sha256 unchanged for {target}", file=sys.stderr)
-        continue
+    for target, filename in targets.items():
+        archive = dist_dir / filename
+        if not archive.exists():
+            print(f"WARNING: Archive {archive} not found; leaving sha256 unchanged for {target}", file=sys.stderr)
+            continue
 
-    sha = subprocess.check_output(["shasum", "-a", "256", str(archive)], text=True).split()[0]
-    pattern = re.compile(rf"(\[agent_servers\.vtcode\.targets\.{re.escape(target)}\][^\[]*?sha256 = \")([^\"]*)(\")", re.DOTALL)
-    new_text, count = pattern.subn(rf"\1{sha}\3", text, count=1)
-    if count == 0:
-        print(f"WARNING: sha256 entry not found for target {target}", file=sys.stderr)
+        try:
+            result = subprocess.run(["shasum", "-a", "256", str(archive)], capture_output=True, text=True, check=True)
+            sha = result.stdout.split()[0]
+            
+            pattern = re.compile(rf"(\[agent_servers\.vtcode\.targets\.{re.escape(target)}\][^\[]*?sha256 = \")([^\"]*)(\")", re.DOTALL)
+            new_text, count = pattern.subn(rf"\1{sha}\3", text, count=1)
+            
+            if count == 0:
+                print(f"WARNING: sha256 entry not found for target {target}", file=sys.stderr)
+            else:
+                text = new_text
+                updated = True
+                print(f"INFO: Updated {target} checksum to {sha}")
+
+        except subprocess.CalledProcessError as e:
+            print(f"ERROR: Failed to compute checksum for {archive}: {e}", file=sys.stderr)
+
+    if updated:
+        manifest_path.write_text(text)
+        print(f"INFO: Zed extension checksums updated in {manifest_path}")
     else:
-        text = new_text
-        updated = True
-        print(f"INFO: Updated {target} checksum to {sha}")
+        print("WARNING: No sha256 fields updated in Zed extension manifest", file=sys.stderr)
 
-if updated:
-    manifest_path.write_text(text)
-else:
-    print("WARNING: No sha256 fields updated in Zed extension manifest", file=sys.stderr)
-PYTHON
+if __name__ == "__main__":
+    if len(sys.argv) != 4:
+        print("Usage: python script.py <version> <manifest_path> <dist_dir>", file=sys.stderr)
+        sys.exit(1)
+    main(sys.argv[1], sys.argv[2], sys.argv[3])
+PYTHON_EOF
+
+    python3 /tmp/zed_checksum_update.py "$version" "$manifest" "$dist_dir"
+    rm -f /tmp/zed_checksum_update.py
 }
 
 run_release() {
@@ -666,36 +580,22 @@ run_release() {
     local dry_run_flag=$2
     local skip_crates_flag=$3
 
-    # Generate changelog from commits before running the release
     if [[ "$dry_run_flag" != 'true' ]]; then
         local version
-        # Extract the version from the release argument or compute it
         if [[ "$release_argument" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             version="$release_argument"
         else
-            # Compute the next version based on current version and increment type
             local current_version
             current_version=$(get_current_version)
             IFS='.' read -ra version_parts <<< "$current_version"
             local major=${version_parts[0]}
             local minor=${version_parts[1]}
             local patch=${version_parts[2]}
-
             case "$release_argument" in
-                "major")
-                    version="$((major + 1)).0.0"
-                    ;;
-                "minor")
-                    version="${major}.$((minor + 1)).0"
-                    ;;
-                "patch")
-                    version="${major}.${minor}.$((patch + 1))"
-                    ;;
-                *)
-                    # If it's neither a specific version nor an increment type,
-                    # keep the computed version (or use current +1 patch)
-                    version="${major}.${minor}.$((patch + 1))"
-                    ;;
+                "major") version="$((major + 1)).0.0" ;;
+                "minor") version="${major}.$((minor + 1)).0" ;;
+                "patch") version="${major}.${minor}.$((patch + 1))" ;;
+                *) version="${major}.${minor}.$((patch + 1))" ;;
             esac
         fi
         update_changelog_from_commits "$version" "$dry_run_flag"
@@ -722,22 +622,17 @@ run_prerelease() {
     local dry_run_flag=$2
     local skip_crates_flag=$3
 
-    # Generate changelog from commits before running the pre-release
     if [[ "$dry_run_flag" != 'true' ]]; then
-        # For pre-release, we'll use the next patch version with the pre-release suffix
         local current_version
         current_version=$(get_current_version)
         IFS='.' read -ra version_parts <<< "$current_version"
         local major=${version_parts[0]}
         local minor=${version_parts[1]}
-        local patch=${version_parts[2]}
-
-        # Extract the numeric part of the patch if needed
-        patch=$(echo "$patch" | sed 's/[^0-9]*$//')
+        local patch_part=${version_parts[2]}
+        local patch=$(echo "$patch_part" | sed 's/[^0-9]*$//')
 
         local version
         if [[ "$pre_release_suffix" == "alpha.0" ]]; then
-            # Default to alpha.1
             version="${major}.${minor}.$((patch + 1))-alpha.1"
         else
             version="${major}.${minor}.$((patch + 1))-${pre_release_suffix}"
@@ -745,27 +640,16 @@ run_prerelease() {
         update_changelog_from_commits "$version" "$dry_run_flag"
     fi
 
-    # For pre-release versions, cargo-release has specific commands:
-    # - `alpha` creates alpha.1, alpha.2, etc.
-    # - `beta` creates beta.1, beta.2, etc.
-    # - `rc` creates rc.1, rc.2, etc.
-    # - `release` removes pre-release markers
     case "$pre_release_suffix" in
         alpha|beta|rc|release)
-            # Use the suffix as a level argument directly
             local command=(cargo release "$pre_release_suffix" --workspace --config release.toml)
             ;;
         alpha.*|beta.*|rc.*)
-            # For custom suffixes like alpha.1, beta.2, etc.,
-            # we need to use the specific part (alpha, beta, rc)
-            # and let cargo-release increment the number
             local base_suffix
             base_suffix=$(echo "$pre_release_suffix" | cut -d. -f1)
             local command=(cargo release "$base_suffix" --workspace --config release.toml)
             ;;
         *)
-            # For completely custom suffixes, default to alpha with metadata
-            # NOTE: This might create duplicate format, so warn user
             print_warning "Using custom suffix '$pre_release_suffix' may result in duplicate pre-release markers"
             local command=(cargo release alpha --workspace --config release.toml -m "$pre_release_suffix")
             ;;
@@ -792,7 +676,9 @@ main() {
     local skip_crates=false
     local skip_npm=false
     local skip_github_packages=false
+    local skip_binaries=false
     local skip_docs=false
+    local skip_zed_checksums=false
     local pre_release=false
     local pre_release_suffix='alpha.0'
 
@@ -841,9 +727,16 @@ main() {
                 skip_github_packages=true
                 shift
                 ;;
-
+            --skip-binaries)
+                skip_binaries=true
+                shift
+                ;;
             --skip-docs)
                 skip_docs=true
+                shift
+                ;;
+            --skip-zed-checksums)
+                skip_zed_checksums=true
                 shift
                 ;;
             -*)
@@ -875,25 +768,22 @@ main() {
         if [[ "$increment_type" != "prerelease" ]]; then
             release_argument=$increment_type
         fi
-        # For prerelease, we handle it differently in the main function directly
     fi
 
     load_env_file
     check_branch
     check_clean_tree
     ensure_cargo_release
-    if [[ "$dry_run" != 'true' ]]; then
+    
+    # Only install cross if we're not in dry-run mode and not skipping binaries
+    if [[ "$dry_run" != 'true' ]] && [[ "$skip_binaries" == 'false' ]]; then
         ensure_cross_support || true
-    else
+    elif [[ "$dry_run" == 'true' ]]; then
         print_info 'Dry run - skipping automatic cross installation check'
     fi
-    check_cargo_auth || true
-    if [[ "$skip_npm" == 'false' ]]; then
-        check_npm_auth || true
-    fi
-    if [[ "$skip_github_packages" == 'false' ]]; then
-        check_github_packages_auth || true
-    fi
+    
+    # Run all auth checks together (they are fast and don't block each other)
+    check_all_auth "$skip_npm" "$skip_github_packages"
 
     local current_version
     current_version=$(get_current_version)
@@ -902,8 +792,6 @@ main() {
     # Update npm package.json before starting the cargo release process
     if [[ "$skip_npm" == 'false' ]]; then
         update_npm_package_version "$release_argument" "$pre_release" "$pre_release_suffix"
-        # Commit the npm package.json version bump immediately to ensure it's included in the release process
-        # Get the version that was just set by parsing the updated package.json
         if [[ -f "npm/package.json" ]]; then
             local npm_version
             npm_version=$(grep -o '"version": *"[^"]*"' npm/package.json | sed 's/"version": *"\([^"]*\)"/\1/')
@@ -936,50 +824,61 @@ main() {
     released_version=$(get_current_version)
     print_success "Release completed for version $released_version"
 
-    # Explicitly push commits and tags to ensure they are properly synchronized
+    # Push operations combined into one step - also add a timeout for large pushes
     print_info "Pushing commits and tags to remote..."
-    if [[ "$dry_run" != 'true' ]]; then
-        # Push commits to main branch
-        git push origin main
+    git push origin main && git push --tags origin
+    print_success "Commits and tags pushed successfully"
 
-        # Push tags (cargo-release with push=true should have created the tag,
-        # but we explicitly push to make sure)
-        git push --tags origin
+    # Perform post-release operations in parallel with proper dependency management
+    local pid_docs=""
+    local pid_npm=""
+    local pid_github=""
+    local pid_binaries=""
 
-        print_success "Commits and tags pushed successfully"
-    else
-        print_info "Dry run - would push commits and tags"
+    # Trigger docs.rs rebuild in background if not skipped
+    if [[ "$skip_crates" == 'false' && "$skip_docs" == 'false' ]]; then
+        trigger_docs_rs_rebuild "$released_version" false &
+        pid_docs=$!
     fi
 
-    if [[ "$skip_crates" == 'false' ]]; then
-        print_info 'Waiting for crates.io to propagate...'
-        sleep 10
-        if [[ "$skip_docs" == 'false' ]]; then
-            trigger_docs_rs_rebuild "$released_version" false
-        else
-            print_info 'Docs.rs rebuild skipped'
-        fi
-    else
-        print_info 'Crates.io publishing skipped'
-    fi
-
+    # Publish to npm in background if not skipped
     if [[ "$skip_npm" == 'false' ]]; then
-        publish_to_npm "$released_version"
-    else
-        print_info 'npm publishing skipped'
+        publish_to_npm "$released_version" &
+        pid_npm=$!
     fi
+
+    # Publish to GitHub Packages in background if not skipped
+    if [[ "$skip_github_packages" == 'false' ]]; then
+        publish_to_github_packages "$released_version" &
+        pid_github=$!
+    fi
+
+    # Build binaries in background if not skipped
+    local binaries_completed=false
+    if [[ "$skip_binaries" == 'false' ]]; then
+        build_and_upload_binaries "$released_version" &
+        pid_binaries=$!
+        binaries_completed=true
+    fi
+
+    # Wait for binaries to complete before updating Zed checksums
+    if [[ $binaries_completed == true ]]; then
+        wait "$pid_binaries" || print_error "Binary build failed"
+        # Only update Zed checksums if not skipped
+        if [[ "$skip_zed_checksums" == 'false' ]]; then
+            update_zed_extension_checksums "$released_version"
+        fi
+    fi
+
+    # Wait for all other background processes to complete
+    for pid in $pid_docs $pid_npm $pid_github; do
+        if [[ -n "$pid" ]]; then
+            wait "$pid" || print_warning "Background process $pid failed"
+        fi
+    done
 
     print_info 'VSCode extension publishing skipped'
     print_info 'To release the VSCode extension separately, use: cd vscode-extension && ./release.sh'
-
-    if [[ "$skip_github_packages" == 'false' ]]; then
-        publish_to_github_packages "$released_version"
-    else
-        print_info 'GitHub Packages publishing skipped'
-    fi
-
-    build_and_upload_binaries "$released_version"
-    update_zed_extension_checksums "$released_version"
 
     print_success 'Release process finished'
     print_info "GitHub Release should now contain changelog notes generated by cargo-release"

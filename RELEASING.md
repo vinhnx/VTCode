@@ -43,6 +43,10 @@ cargo read-manifest | jq -r .version
 
 > The `scripts/release.sh` flow automatically installs `cross` when missing (unless `VTCODE_SKIP_AUTO_CROSS=1`). Set that environment variable if you prefer to manage installation yourself.
 
+### Cross-compilation Configuration
+
+VTCode includes optimized cross-compilation configuration in `Cross.toml` for building binaries across multiple platforms. See [docs/cross-compilation.md](docs/cross-compilation.md) for details about the configuration.
+
 ### What It Does
 
 -   Bumps version in `Cargo.toml` and related files

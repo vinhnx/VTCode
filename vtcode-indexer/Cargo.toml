@@ -12,6 +12,10 @@ documentation = "https://docs.rs/vtcode-indexer"
 categories = ["development-tools", "parsing", "command-line-interface"]
 keywords = ["vt", "tui", "indexer", "agent", "coding-agent"]
 
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
 
 [dependencies]
 anyhow = "1.0"

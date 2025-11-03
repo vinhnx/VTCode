@@ -26,3 +26,7 @@ schemars = { version = "1.0.4", optional = true, features = ["derive", "indexmap
 
 [lints]
 workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

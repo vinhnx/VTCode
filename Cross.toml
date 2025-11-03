@@ -1,0 +1,80 @@
+# Cross configuration for VTCode project
+# Optimized for cross-compilation of the multi-platform Rust-based terminal coding agent
+
+[build]
+# Use docker for reliable cross-compilation
+dockerfile = { path = "Dockerfile.cross", context = "." }
+# Enable caching for faster builds
+xargo = true
+# Build in release mode by default for binaries
+default-target = "x86_64-unknown-linux-gnu"
+
+# Environment variables needed for cross-compilation
+[build.env]
+# Allow pkg-config to work during cross-compilation
+passthrough = [
+    "PKG_CONFIG_ALLOW_CROSS",
+    "OPENSSL_DIR",
+    "OPENSSL_LIB_DIR", 
+    "OPENSSL_INCLUDE_DIR",
+    "SDKROOT",
+    "VTCODE_SKIP_AUTO_CROSS",
+]
+
+# Target-specific configurations
+[target.x86_64-apple-darwin]
+image = "ghcr.io/cross-rs/x86_64-apple-darwin:latest"
+pre-build = [
+    "export SDKROOT=$(xcrun --sdk macosx --show-sdk-path 2>/dev/null || echo '')",
+    "export PKG_CONFIG_ALLOW_CROSS=1"
+]
+
+[target.aarch64-apple-darwin] 
+image = "ghcr.io/cross-rs/aarch64-apple-darwin:latest"
+pre-build = [
+    "export SDKROOT=$(xcrun --sdk macosx --show-sdk-path 2>/dev/null || echo '')",
+    "export PKG_CONFIG_ALLOW_CROSS=1"
+]
+
+[target.x86_64-unknown-linux-gnu]
+image = "ghcr.io/cross-rs/x86_64-unknown-linux-gnu:latest"
+pre-build = [
+    "apt-get update && apt-get install -y pkg-config libssl-dev",
+    "export PKG_CONFIG_ALLOW_CROSS=1"
+]
+
+[target.aarch64-unknown-linux-gnu]
+image = "ghcr.io/cross-rs/aarch64-unknown-linux-gnu:latest"
+pre-build = [
+    "apt-get update && apt-get install -y pkg-config libssl-dev",
+    "export PKG_CONFIG_ALLOW_CROSS=1"
+]
+
+[target.x86_64-pc-windows-msvc]
+image = "ghcr.io/cross-rs/x86_64-pc-windows-msvc:latest"
+pre-build = [
+    "vcpkg install openssl:x64-windows",
+    "export PKG_CONFIG_ALLOW_CROSS=1"
+]
+
+[target.aarch64-pc-windows-msvc]
+image = "ghcr.io/cross-rs/aarch64-pc-windows-msvc:latest"
+pre-build = [
+    "vcpkg install openssl:x64-windows",
+    "export PKG_CONFIG_ALLOW_CROSS=1"
+]
+
+[build.features]
+# Enable default features to ensure full functionality during cross-compilation builds
+default = true
+
+# Preserve certain environment variables that are important for the build
+[build.env.passthrough]
+# Environment variables that need to be available during build
+VCPKG_ROOT = { env = "VCPKG_ROOT", default = "" }
+VCPKG_ROOT_STATUS = { env = "VCPKG_ROOT_STATUS", default = "" }
+OPENSSL_STATIC = { env = "OPENSSL_STATIC", default = "1" }
+
+# Configuration for different build profiles
+[build.target."x86_64-apple-darwin".build-std]
+features = ["-Z", "build-std=std,panic_abort"]

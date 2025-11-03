@@ -36,3 +36,7 @@ tempfile = "3.10"
 [[example]]
 name = "dry_run"
 required-features = ["dry-run"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

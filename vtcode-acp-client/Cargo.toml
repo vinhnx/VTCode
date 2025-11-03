@@ -14,3 +14,7 @@ keywords = ["vtcode", "acp", "agent", "client-connection", "vt"]
 
 [dependencies]
 agent-client-protocol = "0.7.0"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

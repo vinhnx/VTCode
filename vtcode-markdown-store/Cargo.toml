@@ -9,8 +9,12 @@ readme = "../README.md"
 homepage = "https://github.com/vinhnx/vtcode"
 repository = "https://github.com/vinhnx/vtcode"
 documentation = "https://docs.rs/vtcode-markdown-store"
-categories = ["data-structures", "serialization"]
-keywords = ["vt", "markdown", "storage", "agent", "serialization"]
+categories = ["data-structures", "encoding"]
+keywords = ["vt", "markdown", "storage", "agent", "encoding"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 
 [features]

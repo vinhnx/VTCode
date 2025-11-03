@@ -12,6 +12,10 @@ documentation = "https://docs.rs/vtcode-commons"
 categories = ["development-tools", "command-line-interface"]
 keywords = ["vt", "commons", "traits", "utilities", "error-handling"]
 
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
 
 [features]
 default = []
