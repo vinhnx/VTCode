@@ -65,7 +65,8 @@ Options:
   --skip-github-packages  Skip publishing to GitHub Packages (pass --no-publish)
   --skip-binaries     Skip building and uploading binaries
   --skip-docs         Skip docs.rs rebuild trigger
-  --skip-zed-checksums Skip updating Zed extension checksums
+  --skip-zed-checksums Skip updating Zed extension checksums (default behavior)
+  --enable-zed-checksums Enable updating Zed extension checksums (overrides skip)
   -h, --help          Show this help message
 USAGE
 }
@@ -398,7 +399,7 @@ def main(version, manifest_path, dist_dir):
             sha = result.stdout.split()[0]
             
             pattern = re.compile(rf"(\[agent_servers\.vtcode\.targets\.{re.escape(target)}\][^\[]*?sha256 = \")([^\"]*)(\")", re.DOTALL)
-            new_text, count = pattern.subn(rf"\1{sha}\3", text, count=1)
+            new_text, count = pattern.subn("\\g<1>" + sha + "\\g<3>", text, count=1)
             
             if count == 0:
                 print(f"WARNING: sha256 entry not found for target {target}", file=sys.stderr)
@@ -530,7 +531,8 @@ main() {
     local skip_github_packages=false
     local skip_binaries=false
     local skip_docs=false
-    local skip_zed_checksums=false
+    local skip_zed_checksums=true  # Changed to true to disable by default
+    local enable_zed_checksums=false
     local pre_release=false
     local pre_release_suffix='alpha.0'
 
@@ -589,6 +591,11 @@ main() {
                 ;;
             --skip-zed-checksums)
                 skip_zed_checksums=true
+                shift
+                ;;
+            --enable-zed-checksums)
+                skip_zed_checksums=false
+                enable_zed_checksums=true
                 shift
                 ;;
             -*)
@@ -708,7 +715,7 @@ main() {
     # Wait for binaries to complete before updating Zed checksums
     if [[ $binaries_completed == true ]]; then
         wait "$pid_binaries" || print_error "Binary build failed"
-        # Only update Zed checksums if not skipped
+        # Only update Zed checksums if explicitly enabled (disabled by default)
         if [[ "$skip_zed_checksums" == 'false' ]]; then
             # Only run Zed checksum update if dist directory exists and has files
             if [[ -d "dist" ]] && [[ "$(ls -A dist 2>/dev/null)" ]]; then
