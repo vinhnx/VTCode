@@ -64,13 +64,3 @@ pre-build = [
     "vcpkg install openssl:x64-windows",
     "export PKG_CONFIG_ALLOW_CROSS=1"
 ]
-
-[build.features]
-# Enable default features to ensure full functionality during cross-compilation builds
-default = true
-
-
-
-# Configuration for different build profiles
-[build.target."x86_64-apple-darwin".build-std]
-features = ["-Z", "build-std=std,panic_abort"]

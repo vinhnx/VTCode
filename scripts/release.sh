@@ -300,25 +300,24 @@ trigger_docs_rs_rebuild() {
     _trigger_docs() {
         local crate_name=$1
         local version=$2
-        local url="https://docs.rs/crate/$crate_name/$version/builds"
-        local response
-        response=$(curl -X POST "$url" \
-            -H "Content-Type: application/json" \
-            -s -o /dev/null -w "%{http_code}" 2>/dev/null || echo "0")
+        local url="https://docs.rs/crates/$crate_name/$version"
         
-        if [[ "$response" =~ ^(200|202|404)$ ]]; then
-            if [[ "$response" == "404" ]]; then
-                print_info "docs.rs rebuild for $crate_name v$version - crate not found yet (will be built when available)"
-            else
-                print_success "Triggered docs.rs rebuild for $crate_name v$version (HTTP $response)"
-            fi
+        # Try GET request to check if the crate exists
+        local response
+        response=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 10 "$url" 2>/dev/null || echo "0")
+        
+        if [[ "$response" == "200" ]]; then
+            print_info "Crate $crate_name v$version exists on docs.rs - documentation will update on next publish"
+        elif [[ "$response" == "404" ]]; then
+            print_info "Crate $crate_name v$version not found yet on docs.rs - will be built when published"
+        elif [[ "$response" == "405" ]]; then
+            print_info "Crate $crate_name v$version - docs.rs update happens automatically on publish"
         else
-            print_warning "Failed to trigger docs.rs rebuild for $crate_name v$version (HTTP $response)"
-            print_info "Note: Documentation will be built automatically when the crate is published to crates.io"
+            print_warning "Could not check docs.rs status for $crate_name v$version (HTTP $response)"
         fi
     }
 
-    # Run both triggers in parallel
+    # Run both checks in parallel
     _trigger_docs "vtcode-core" "$version" &
     local pid_core=$!
     
@@ -685,10 +684,9 @@ main() {
         pid_docs=$!
     fi
 
-    # Publish to npm in background if not skipped
+    # Skip npm publishing as npm release workflow has been removed
     if [[ "$skip_npm" == 'false' ]]; then
-        publish_to_npm "$released_version" &
-        pid_npm=$!
+        print_info "npm publishing skipped - npm release workflow has been removed"
     fi
 
     # Skip GitHub Packages publishing as npm release workflow has been removed
