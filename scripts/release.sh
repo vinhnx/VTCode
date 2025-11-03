@@ -151,6 +151,11 @@ update_changelog_from_commits() {
 
     # Stage and commit efficiently
     git add CHANGELOG.md
+    # Use environment variables to avoid git hanging for editor
+    GIT_AUTHOR_NAME="vtcode-release-bot" \
+    GIT_AUTHOR_EMAIL="noreply@vtcode.com" \
+    GIT_COMMITTER_NAME="vtcode-release-bot" \
+    GIT_COMMITTER_EMAIL="noreply@vtcode.com" \
     git commit -m "docs: update changelog for v$version [skip ci]"
     print_success "Changelog generation completed for version $version"
 }
@@ -243,6 +248,11 @@ commit_npm_package_update() {
     fi
 
     git add npm/package.json
+    # Use environment variables to avoid git hanging for editor
+    GIT_AUTHOR_NAME="vtcode-release-bot" \
+    GIT_AUTHOR_EMAIL="noreply@vtcode.com" \
+    GIT_COMMITTER_NAME="vtcode-release-bot" \
+    GIT_COMMITTER_EMAIL="noreply@vtcode.com" \
     git commit -m "chore: update npm package to v$version"
     print_success "Committed npm/package.json update"
 }
