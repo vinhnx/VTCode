@@ -48,6 +48,7 @@
     "workspaceContains:vtcode.toml",
     "onView:vtcodeQuickActionsView",
     "onView:vtcodeWorkspaceStatusView",
+    "onView:vtcodeAgentLoopView",
     "onCommand:vtcode.openQuickActions",
     "onCommand:vtcode.askAgent",
     "onCommand:vtcode.askSelection",
@@ -64,6 +65,9 @@
     "onCommand:vtcode.runAnalyze",
     "onCommand:vtcode.runUpdatePlanTask",
     "onCommand:vtcode.refreshQuickActions",
+    "onCommand:vtcode.refreshAgentTimeline",
+    "onCommand:vtcode.openAgentTrajectoryLog",
+    "onCommand:vtcode.sendCodeIdeCommand",
     "onCommand:vtcode.openChat"
   ],
   "main": "./dist/extension.js",
@@ -201,6 +205,18 @@
         "icon": "$(refresh)"
       },
       {
+        "command": "vtcode.refreshAgentTimeline",
+        "title": "Refresh Agent Loop Timeline",
+        "category": "VTCode",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "vtcode.openAgentTrajectoryLog",
+        "title": "Open Trajectory Log",
+        "category": "VTCode",
+        "icon": "$(file-text)"
+      },
+      {
         "command": "vtcode.openInstallGuide",
         "title": "View CLI Installation Guide",
         "category": "VTCode",
@@ -243,6 +259,12 @@
         "icon": "$(settings-gear)"
       },
       {
+        "command": "vtcode.sendCodeIdeCommand",
+        "title": "Send /code-ide Slash Command",
+        "category": "VTCode",
+        "icon": "$(terminal)"
+      },
+      {
         "command": "vtcode.configureMcpProviders",
         "title": "Configure MCP Providers",
         "category": "VTCode",
@@ -276,8 +298,17 @@
           "when": "vtcode.cliAvailable && vtcode.workspaceTrusted"
         },
         {
+          "command": "vtcode.sendCodeIdeCommand",
+          "when": "vtcode.cliAvailable && vtcode.workspaceTrusted"
+        },
+        {
           "command": "vtcode.askSelection",
           "when": "editorHasSelection && vtcode.cliAvailable && vtcode.workspaceTrusted"
+        },
+        {
+          "command": "vtcode.sendCodeIdeCommand",
+          "when": "view == vtcodeQuickActionsView && vtcode.cliAvailable && vtcode.workspaceTrusted",
+          "group": "navigation@45"
         },
         {
           "command": "vtcode.launchAgentTerminal",
@@ -360,6 +391,16 @@
           "command": "vtcode.toggleHumanInTheLoop",
           "when": "view == vtcodeQuickActionsView && vtcode.configAvailable && vtcode.workspaceTrusted",
           "group": "navigation@40"
+        },
+        {
+          "command": "vtcode.refreshAgentTimeline",
+          "when": "view == vtcodeAgentLoopView",
+          "group": "navigation@10"
+        },
+        {
+          "command": "vtcode.openAgentTrajectoryLog",
+          "when": "view == vtcodeAgentLoopView",
+          "group": "navigation@20"
         }
       ]
     },
@@ -383,6 +424,11 @@
         {
           "id": "vtcodeQuickActionsView",
           "name": "Quick Actions",
+          "when": "workbenchState != 'empty'"
+        },
+        {
+          "id": "vtcodeAgentLoopView",
+          "name": "Agent Loop Timeline",
           "when": "workbenchState != 'empty'"
         }
       ]
@@ -464,6 +510,22 @@
           "type": "string",
           "default": "vtcode",
           "description": "Executable used to run VTCode commands. Change this if VTCode is installed with a custom path."
+        },
+        "vtcode.terminal.allowMultipleInstances": {
+          "type": "boolean",
+          "default": false,
+          "description": "Allow multiple concurrent VTCode terminal sessions instead of reusing a single shared instance."
+        },
+        "vtcode.terminal.autoRunChat": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically launch `vtcode chat` when opening the VTCode terminal integration."
+        },
+        "vtcode.agentTimeline.refreshDebounceMs": {
+          "type": "integer",
+          "default": 250,
+          "minimum": 50,
+          "description": "Delay (in milliseconds) before refreshing the agent timeline after new terminal output or log activity."
         }
       }
     }
@@ -484,7 +546,8 @@
   },
 
   "dependencies": {
-    "@iarna/toml": "^2.2.5"
+    "@iarna/toml": "^2.2.5",
+    "node-pty": "^1.0.0"
   },
   "devDependencies": {
     "@types/glob": "^9.0.0",

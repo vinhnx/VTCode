@@ -32,7 +32,7 @@ async function runBuild() {
 		platform: 'node',
 		outbase: '.',
 		outdir: 'dist',
-		external: ['vscode'],
+                external: ['vscode', 'node-pty'],
 		logLevel: 'silent', // Disable esbuild's own logging since we handle it with the plugin
 		plugins: [
 			esbuildProblemMatcherPlugin,
