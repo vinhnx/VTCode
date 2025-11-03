@@ -3,6 +3,27 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - Latest Improvements# [Version 0.39.5] - 2025-11-03
+# [Version 0.39.11] - 2025-11-03
+
+
+### Features
+    - feat: add initial implementation of VT Code Zed extension with icons, themes, and logging commands
+
+
+### Refactors
+    - refactor: remove npm package support and update installation instructions
+    - refactor: update docs.rs URL and improve response handling in release script
+
+
+### Documentation
+    - docs: update changelog for v0.39.10 [skip ci]
+    - docs: update changelog for v0.39.9 [skip ci]
+
+
+### Chores
+    - chore: update dependencies, enhance README, and add diagnostics commands for Zed extension
+    - chore: release v0.39.10
+    - chore: release v0.39.9
 # [Version 0.39.10] - 2025-11-03
 
 
