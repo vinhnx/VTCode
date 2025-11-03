@@ -1,0 +1,141 @@
+name: Create Main VTCode Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: 'Release type'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+          - custom
+      version:
+        description: 'Custom version (only for custom release type)'
+        required: false
+        type: string
+      dry_run:
+        description: 'Dry run mode (show what would happen without making changes)'
+        required: false
+        type: boolean
+        default: false
+      skip_zed_checksums:
+        description: 'Skip updating Zed extension checksums (default behavior)'
+        required: false
+        type: boolean
+        default: true
+      enable_zed_checksums:
+        description: 'Enable updating Zed extension checksums (overrides skip)'
+        required: false
+        type: boolean
+        default: false
+      skip_crates:
+        description: 'Skip publishing to crates.io'
+        required: false
+        type: boolean
+        default: false
+      skip_binaries:
+        description: 'Skip building and uploading binaries'
+        required: false
+        type: boolean
+        default: false
+      skip_docs:
+        description: 'Skip docs.rs rebuild trigger'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  CARGO_TERM_COLOR: always
+  VTCODE_SKIP_AUTO_CROSS: 1  # Skip automatic cross installation in CI
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Install cargo-release
+        run: cargo install cargo-release
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 'lts/*'
+
+      - name: Configure Git
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+
+      - name: Setup environment
+        run: |
+          echo "CRATES_IO_TOKEN=${{ secrets.CRATES_IO_TOKEN }}" >> $GITHUB_ENV
+          echo "GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}" >> $GITHUB_ENV
+
+      - name: Run release script (dry run)
+        if: ${{ inputs.dry_run == true }}
+        run: |
+          chmod +x scripts/release.sh
+          if [ "${{ inputs.release_type }}" = "custom" ]; then
+            ./scripts/release.sh ${{ inputs.version }} \
+              --dry-run \
+              ${{ inputs.skip_zed_checksums && '--skip-zed-checksums' || inputs.enable_zed_checksums && '--enable-zed-checksums' || '--skip-zed-checksums' }} \
+              ${{ inputs.skip_crates && '--skip-crates' || '' }} \
+              ${{ inputs.skip_binaries && '--skip-binaries' || '' }} \
+              ${{ inputs.skip_docs && '--skip-docs' || '' }}
+          else
+            ./scripts/release.sh --${{ inputs.release_type }} \
+              --dry-run \
+              ${{ inputs.skip_zed_checksums && '--skip-zed-checksums' || inputs.enable_zed_checksums && '--enable-zed-checksums' || '--skip-zed-checksums' }} \
+              ${{ inputs.skip_crates && '--skip-crates' || '' }} \
+              ${{ inputs.skip_binaries && '--skip-binaries' || '' }} \
+              ${{ inputs.skip_docs && '--skip-docs' || '' }}
+          fi
+
+      - name: Run release script (actual release)
+        if: ${{ inputs.dry_run == false }}
+        run: |
+          chmod +x scripts/release.sh
+          if [ "${{ inputs.release_type }}" = "custom" ]; then
+            if [ -z "${{ inputs.version }}" ]; then
+              echo "Error: Custom version is required when using custom release type"
+              exit 1
+            fi
+            ./scripts/release.sh ${{ inputs.version }} \
+              ${{ inputs.skip_zed_checksums && '--skip-zed-checksums' || inputs.enable_zed_checksums && '--enable-zed-checksums' || '--skip-zed-checksums' }} \
+              ${{ inputs.skip_crates && '--skip-crates' || '' }} \
+              ${{ inputs.skip_binaries && '--skip-binaries' || '' }} \
+              ${{ inputs.skip_docs && '--skip-docs' || '' }}
+          else
+            ./scripts/release.sh --${{ inputs.release_type }} \
+              ${{ inputs.skip_zed_checksums && '--skip-zed-checksums' || inputs.enable_zed_checksums && '--enable-zed-checksums' || '--skip-zed-checksums' }} \
+              ${{ inputs.skip_crates && '--skip-crates' || '' }} \
+              ${{ inputs.skip_binaries && '--skip-binaries' || '' }} \
+              ${{ inputs.skip_docs && '--skip-docs' || '' }}
+          fi
+        env:
+          CRATES_IO_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: ${{ inputs.dry_run == false && inputs.skip_binaries == false }}
+        with:
+          generate_release_notes: true
+          token: ${{ secrets.GITHUB_TOKEN }}
