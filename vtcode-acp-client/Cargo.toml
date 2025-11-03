@@ -5,9 +5,12 @@ edition = "2024"
 authors = ["vinhnx <vinhnx@users.noreply.github.com>"]
 description = "Shared utilities for managing Agent Client Protocol client connections"
 license = "MIT"
+readme = "../README.md"
 repository = "https://github.com/vinhnx/vtcode"
 homepage = "https://github.com/vinhnx/vtcode"
 documentation = "https://docs.rs/vtcode-acp-client"
+categories = ["api-bindings", "network-programming", "text-editors"]
+keywords = ["vtcode", "acp", "agent", "client-connection", "vt"]
 
 [dependencies]
 agent-client-protocol = "0.7.0"

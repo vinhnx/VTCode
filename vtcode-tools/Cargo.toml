@@ -6,6 +6,8 @@ authors = ["vinhnx <vinhnx@users.noreply.github.com>"]
 description = "Prototype extraction of VTCode's modular tool registry"
 license = "MIT"
 publish = false
+categories = ["development-tools"]
+keywords = ["vtcode", "tools", "registry", "modular", "ai-tools"]
 
 [features]
 default = ["bash", "search", "net", "planner"]

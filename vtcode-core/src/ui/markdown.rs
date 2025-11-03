@@ -58,12 +58,15 @@ impl From<Tag<'_>> for MarkdownTag {
         match tag {
             Tag::Paragraph => MarkdownTag::Paragraph,
             Tag::Heading { level, .. } => MarkdownTag::Heading(heading_level_from_u8(level as u8)),
-            Tag::BlockQuote => MarkdownTag::BlockQuote,
+            Tag::BlockQuote(_) => MarkdownTag::BlockQuote,
             Tag::CodeBlock(kind) => MarkdownTag::CodeBlock(kind.into()),
             Tag::HtmlBlock => MarkdownTag::HtmlBlock,
             Tag::List(start) => MarkdownTag::List(start.map(|n| n as usize)),
             Tag::Item => MarkdownTag::Item,
             Tag::FootnoteDefinition(_) => MarkdownTag::FootnoteDefinition,
+            Tag::DefinitionList | Tag::DefinitionListTitle | Tag::DefinitionListDefinition => {
+                MarkdownTag::Paragraph
+            }
             Tag::Table(_) => MarkdownTag::Table,
             Tag::TableHead => MarkdownTag::TableHead,
             Tag::TableRow => MarkdownTag::TableRow,
@@ -71,6 +74,7 @@ impl From<Tag<'_>> for MarkdownTag {
             Tag::Emphasis => MarkdownTag::Emphasis,
             Tag::Strong => MarkdownTag::Strong,
             Tag::Strikethrough => MarkdownTag::Strikethrough,
+            Tag::Superscript | Tag::Subscript => MarkdownTag::Emphasis,
             Tag::Link { .. } => MarkdownTag::Link,
             Tag::Image { .. } => MarkdownTag::Image,
             Tag::MetadataBlock(_) => MarkdownTag::Paragraph, // fallback
@@ -94,12 +98,15 @@ impl From<TagEnd> for MarkdownTag {
         match tag_end {
             TagEnd::Paragraph => MarkdownTag::Paragraph,
             TagEnd::Heading(level) => MarkdownTag::Heading(heading_level_from_u8(level as u8)),
-            TagEnd::BlockQuote => MarkdownTag::BlockQuote,
+            TagEnd::BlockQuote(_) => MarkdownTag::BlockQuote,
             TagEnd::CodeBlock => MarkdownTag::CodeBlock(CodeBlockKind::Indented), // doesn't matter for end
             TagEnd::HtmlBlock => MarkdownTag::HtmlBlock,
             TagEnd::List(_) => MarkdownTag::List(None), // doesn't matter for end
             TagEnd::Item => MarkdownTag::Item,
             TagEnd::FootnoteDefinition => MarkdownTag::FootnoteDefinition,
+            TagEnd::DefinitionList
+            | TagEnd::DefinitionListTitle
+            | TagEnd::DefinitionListDefinition => MarkdownTag::Paragraph,
             TagEnd::Table => MarkdownTag::Table,
             TagEnd::TableHead => MarkdownTag::TableHead,
             TagEnd::TableRow => MarkdownTag::TableRow,
@@ -107,6 +114,7 @@ impl From<TagEnd> for MarkdownTag {
             TagEnd::Emphasis => MarkdownTag::Emphasis,
             TagEnd::Strong => MarkdownTag::Strong,
             TagEnd::Strikethrough => MarkdownTag::Strikethrough,
+            TagEnd::Superscript | TagEnd::Subscript => MarkdownTag::Emphasis,
             TagEnd::Link => MarkdownTag::Link,
             TagEnd::Image => MarkdownTag::Image,
             TagEnd::MetadataBlock(_) => MarkdownTag::Paragraph, // fallback
@@ -466,20 +474,31 @@ pub fn render_markdown(source: &str) -> Vec<MarkdownLine> {
 
 fn collect_markdown_events<'a>(parser: Parser<'a>) -> Vec<MarkdownEvent> {
     parser
-        .map(|event| match event {
-            Event::Start(tag) => MarkdownEvent::Start(tag.into()),
-            Event::End(tag_end) => MarkdownEvent::End(tag_end.into()),
-            Event::Text(text) => MarkdownEvent::Text(text.into_string()),
-            Event::Code(code) => MarkdownEvent::Code(code.into_string()),
-            Event::Html(html) => MarkdownEvent::Html(html.into_string()),
-            Event::FootnoteReference(ref_str) => {
-                MarkdownEvent::FootnoteReference(ref_str.into_string())
+        .map(|event| {
+            #[allow(unreachable_patterns)]
+            match event {
+                Event::Start(tag) => MarkdownEvent::Start(tag.into()),
+                Event::End(tag_end) => MarkdownEvent::End(tag_end.into()),
+                Event::Text(text) => MarkdownEvent::Text(text.into_string()),
+                Event::Code(code) => MarkdownEvent::Code(code.into_string()),
+                Event::Html(html) => MarkdownEvent::Html(html.into_string()),
+                Event::FootnoteReference(ref_str) => {
+                    MarkdownEvent::FootnoteReference(ref_str.into_string())
+                }
+                Event::SoftBreak => MarkdownEvent::SoftBreak,
+                Event::HardBreak => MarkdownEvent::HardBreak,
+                Event::Rule => MarkdownEvent::Rule,
+                Event::TaskListMarker(checked) => MarkdownEvent::TaskListMarker(checked),
+                Event::InlineHtml(html) => MarkdownEvent::Html(html.into_string()),
+                Event::InlineMath(math) => MarkdownEvent::Text(format!("${}$", math.into_string())),
+                Event::DisplayMath(math) => {
+                    MarkdownEvent::Text(format!("$$\n{}\n$$", math.into_string()))
+                }
+                other => {
+                    warn!(?other, "Unhandled pulldown-cmark event variant");
+                    MarkdownEvent::Text(String::new())
+                }
             }
-            Event::SoftBreak => MarkdownEvent::SoftBreak,
-            Event::HardBreak => MarkdownEvent::HardBreak,
-            Event::Rule => MarkdownEvent::Rule,
-            Event::TaskListMarker(checked) => MarkdownEvent::TaskListMarker(checked),
-            Event::InlineHtml(html) => MarkdownEvent::Html(html.into_string()),
         })
         .collect()
 }

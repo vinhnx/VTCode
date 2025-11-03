@@ -4,8 +4,11 @@ version = "0.39.3"
 edition = "2024"
 description = "Cross-platform shell execution helpers extracted from VTCode"
 license = "MIT"
+readme = "../README.md"
 repository = "https://github.com/vinhnx/vtcode"
 documentation = "https://docs.rs/vtcode-bash-runner"
+categories = ["development-tools", "command-line-utilities"]
+keywords = ["vtcode", "vt", "cross-platform", "shell", "bash-runner"]
 
 [features]
 default = ["std-process", "powershell-process"]

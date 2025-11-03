@@ -9,6 +9,8 @@ readme = "../README.md"
 homepage = "https://github.com/vinhnx/vtcode"
 repository = "https://github.com/vinhnx/vtcode"
 documentation = "https://docs.rs/vtcode-indexer"
+categories = ["development-tools", "parsing", "command-line-interface"]
+keywords = ["vt", "tui", "indexer", "agent", "coding-agent"]
 
 
 [dependencies]

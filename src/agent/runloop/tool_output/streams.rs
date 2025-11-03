@@ -37,7 +37,7 @@ pub(crate) fn render_stream_section(
 ) -> Result<()> {
     use std::fmt::Write as FmtWrite;
 
-    let is_mcp_tool = tool_name.map_or(false, |name| name.starts_with("mcp_"));
+    let is_mcp_tool = tool_name.is_some_and(|name| name.starts_with("mcp_"));
     let is_git_diff = matches!(
         tool_name,
         Some(vtcode_core::config::constants::tools::GIT_DIFF)
@@ -53,8 +53,8 @@ pub(crate) fn render_stream_section(
         strip_ansi_codes(content)
     };
 
-    if let Some(tool) = tool_name {
-        if let Ok(Some(log_path)) =
+    if let Some(tool) = tool_name
+        && let Ok(Some(log_path)) =
             spool_output_if_needed(normalized_content.as_ref(), tool, config)
         {
             // For very large output, show minimal preview to avoid TUI hang
@@ -157,19 +157,17 @@ pub(crate) fn render_stream_section(
                     msg_buffer.push_str(prefix);
                     msg_buffer.push_str(&display_line);
                 }
-                if !is_git_diff {
-                    if let Some(style) =
+                if !is_git_diff
+                    && let Some(style) =
                         select_line_style(tool_name, &display_line, git_styles, ls_styles)
                     {
                         renderer.line_with_style(style, &msg_buffer)?;
                         continue;
                     }
-                }
                 renderer.line(fallback_style, &msg_buffer)?;
             }
             return Ok(());
         }
-    }
 
     let (lines_vec, total, truncated_flag) = if force_tail_mode {
         let (tail, total) = tail_lines_streaming(normalized_content.as_ref(), tail_limit);
@@ -240,12 +238,11 @@ pub(crate) fn render_stream_section(
             display_buffer.push_str(line);
         }
 
-        if !is_git_diff {
-            if let Some(style) = select_line_style(tool_name, line, git_styles, ls_styles) {
+        if !is_git_diff
+            && let Some(style) = select_line_style(tool_name, line, git_styles, ls_styles) {
                 renderer.line_with_style(style, &display_buffer)?;
                 continue;
             }
-        }
         renderer.line(fallback_style, &display_buffer)?;
     }
 
@@ -402,12 +399,12 @@ pub(crate) fn tail_lines_streaming<'a>(
     (buffer, total)
 }
 
-pub(crate) fn select_stream_lines_streaming<'a>(
-    content: &'a str,
+pub(crate) fn select_stream_lines_streaming(
+    content: &str,
     mode: ToolOutputMode,
     tail_limit: usize,
     prefer_full: bool,
-) -> (SmallVec<[&'a str; 32]>, usize, bool) {
+) -> (SmallVec<[&str; 32]>, usize, bool) {
     if content.is_empty() {
         return (SmallVec::new(), 0, false);
     }
@@ -436,7 +433,7 @@ pub(crate) fn strip_ansi_codes(input: &str) -> Cow<'_, str> {
                 Some('[') => {
                     // CSI: ESC [ ... letter
                     chars.next();
-                    while let Some(next) = chars.next() {
+                    for next in chars.by_ref() {
                         if next.is_ascii_alphabetic() {
                             break;
                         }

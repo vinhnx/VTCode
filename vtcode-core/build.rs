@@ -16,6 +16,50 @@ const EMBEDDED_ASSETS: &[(&str, &str)] = &[
 ];
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let is_docsrs = env::var_os("DOCS_RS").is_some();
+
+    if is_docsrs {
+        // When building on docs.rs, generate empty placeholder files to prevent compilation errors
+        println!("cargo:warning=docs.rs build detected, generating placeholder files");
+        let out_dir = PathBuf::from(env::var("OUT_DIR")?);
+        let assets_out_dir = out_dir.join("embedded_assets");
+        std::fs::create_dir_all(&assets_out_dir)?;
+
+        // Generate a minimal metadata file for docs.rs builds
+        let placeholder_metadata = r#"#[derive(Clone, Copy)]
+pub struct Entry {
+    pub variant: super::ModelId,
+    pub id: &'static str,
+    pub vendor: &'static str,
+    pub display: &'static str,
+    pub description: &'static str,
+    pub efficient: bool,
+    pub top_tier: bool,
+    pub generation: &'static str,
+    pub reasoning: bool,
+    pub tool_call: bool,
+}
+
+pub const ENTRIES: &[Entry] = &[];
+
+#[derive(Clone, Copy)]
+pub struct VendorModels {
+    pub vendor: &'static str,
+    pub models: &'static [super::ModelId],
+}
+
+pub const VENDOR_MODELS: &[VendorModels] = &[];
+
+pub fn metadata_for(_model: super::ModelId) -> Option<super::OpenRouterMetadata> { None }
+
+pub fn parse_model(_value: &str) -> Option<super::ModelId> { None }
+
+pub fn vendor_groups() -> &'static [VendorModels] { VENDOR_MODELS }
+"#;
+        std::fs::write(out_dir.join("openrouter_metadata.rs"), placeholder_metadata)?;
+        return Ok(());
+    }
+
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=../vtcode-config/build_data/openrouter_models.json");
 

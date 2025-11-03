@@ -59,8 +59,8 @@ pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
     ];
 
     // Add key arguments if available
-    if let Some(args) = tool_args {
-        if let Some(obj) = args.as_object() {
+    if let Some(args) = tool_args
+        && let Some(obj) = args.as_object() {
             for (key, value) in obj.iter().take(3) {
                 if let Some(str_val) = value.as_str() {
                     let truncated = if str_val.len() > 60 {
@@ -79,7 +79,6 @@ pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
                 description_lines.push(format!("  ... and {} more arguments", obj.len() - 3));
             }
         }
-    }
 
     description_lines.push(String::new());
     description_lines.push("Choose how to handle this tool execution:".to_string());
@@ -304,15 +303,14 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
 
     if !hook_requires_prompt && tool_name == tool_names::RUN_COMMAND {
         tool_registry.mark_tool_preapproved(tool_name);
-        if let Ok(manager) = tool_registry.policy_manager_mut() {
-            if let Err(err) = manager.set_policy(tool_name, ToolPolicy::Allow).await {
+        if let Ok(manager) = tool_registry.policy_manager_mut()
+            && let Err(err) = manager.set_policy(tool_name, ToolPolicy::Allow).await {
                 tracing::warn!(
                     "Failed to persist auto-approval for '{}': {}",
                     tool_name,
                     err
                 );
             }
-        }
         return Ok(ToolPermissionFlow::Approved);
     }
 
@@ -353,15 +351,14 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
             tool_registry.mark_tool_preapproved(tool_name);
 
             // Try to persist to policy manager first
-            if let Ok(manager) = tool_registry.policy_manager_mut() {
-                if let Err(err) = manager.set_policy(tool_name, ToolPolicy::Allow).await {
+            if let Ok(manager) = tool_registry.policy_manager_mut()
+                && let Err(err) = manager.set_policy(tool_name, ToolPolicy::Allow).await {
                     tracing::warn!(
                         "Failed to persist permanent approval for '{}': {}",
                         tool_name,
                         err
                     );
                 }
-            }
 
             // Also try MCP tool policy persistence
             if let Err(err) = tool_registry

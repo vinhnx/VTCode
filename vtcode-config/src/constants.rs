@@ -106,8 +106,27 @@ pub mod models {
     }
 
     // OpenRouter models (extensible via vtcode.toml)
+    #[cfg(not(docsrs))]
     pub mod openrouter {
         include!(concat!(env!("OUT_DIR"), "/openrouter_constants.rs"));
+    }
+
+    #[cfg(docsrs)]
+    pub mod openrouter {
+        pub const SUPPORTED_MODELS: &[&str] = &[];
+        pub const REASONING_MODELS: &[&str] = &[];
+        pub const TOOL_UNAVAILABLE_MODELS: &[&str] = &[];
+
+        // Define the constants that are referenced elsewhere to avoid compile errors
+        pub const X_AI_GROK_CODE_FAST_1: &str = "x-ai/grok-code-fast-1";
+        pub const QWEN3_CODER: &str = "qwen/qwen3-coder";
+        pub const ANTHROPIC_CLAUDE_SONNET_4_5: &str = "anthropic/claude-4-5-sonnet";
+
+        pub mod vendor {
+            pub mod openrouter {
+                pub const MODELS: &[&str] = &[];
+            }
+        }
     }
 
     // LM Studio models (OpenAI-compatible local server)
@@ -264,10 +283,19 @@ pub mod models {
     pub const XAI_GROK_4_VISION: &str = xai::GROK_4_VISION;
     pub const DEEPSEEK_CHAT: &str = deepseek::DEEPSEEK_CHAT;
     pub const DEEPSEEK_REASONER: &str = deepseek::DEEPSEEK_REASONER;
+    #[cfg(not(docsrs))]
     pub const OPENROUTER_X_AI_GROK_CODE_FAST_1: &str = openrouter::X_AI_GROK_CODE_FAST_1;
+    #[cfg(docsrs)]
+    pub const OPENROUTER_X_AI_GROK_CODE_FAST_1: &str = "x-ai/grok-code-fast-1";
+    #[cfg(not(docsrs))]
     pub const OPENROUTER_QWEN3_CODER: &str = openrouter::QWEN3_CODER;
+    #[cfg(docsrs)]
+    pub const OPENROUTER_QWEN3_CODER: &str = "qwen/qwen3-coder";
+    #[cfg(not(docsrs))]
     pub const OPENROUTER_ANTHROPIC_CLAUDE_SONNET_4_5: &str =
         openrouter::ANTHROPIC_CLAUDE_SONNET_4_5;
+    #[cfg(docsrs)]
+    pub const OPENROUTER_ANTHROPIC_CLAUDE_SONNET_4_5: &str = "anthropic/claude-4-5-sonnet";
 }
 
 /// Prompt caching defaults shared across features and providers
@@ -308,7 +336,10 @@ pub mod model_helpers {
             "anthropic" => Some(models::anthropic::SUPPORTED_MODELS),
             "minimax" => Some(models::minimax::SUPPORTED_MODELS),
             "deepseek" => Some(models::deepseek::SUPPORTED_MODELS),
+            #[cfg(not(docsrs))]
             "openrouter" => Some(models::openrouter::SUPPORTED_MODELS),
+            #[cfg(docsrs)]
+            "openrouter" => Some(&[]),
             "moonshot" => Some(models::moonshot::SUPPORTED_MODELS),
             "xai" => Some(models::xai::SUPPORTED_MODELS),
             "zai" => Some(models::zai::SUPPORTED_MODELS),
@@ -325,7 +356,10 @@ pub mod model_helpers {
             "anthropic" => Some(models::anthropic::DEFAULT_MODEL),
             "minimax" => Some(models::minimax::DEFAULT_MODEL),
             "deepseek" => Some(models::deepseek::DEFAULT_MODEL),
+            #[cfg(not(docsrs))]
             "openrouter" => Some(models::openrouter::DEFAULT_MODEL),
+            #[cfg(docsrs)]
+            "openrouter" => Some("openrouter/auto"), // Fallback for docs.rs build
             "moonshot" => Some(models::moonshot::DEFAULT_MODEL),
             "xai" => Some(models::xai::DEFAULT_MODEL),
             "zai" => Some(models::zai::DEFAULT_MODEL),

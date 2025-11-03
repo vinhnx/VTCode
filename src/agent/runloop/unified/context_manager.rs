@@ -89,7 +89,7 @@ impl ContextManager {
     ) -> Result<String> {
         let curator_messages = build_curator_messages(
             attempt_history,
-            &*self.token_budget,
+            &self.token_budget,
             self.token_budget_enabled,
         )
         .await?;

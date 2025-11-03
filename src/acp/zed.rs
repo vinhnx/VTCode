@@ -195,24 +195,22 @@ impl PlanProgress {
     }
 
     fn start_context(&mut self) -> bool {
-        if let Some(index) = self.gather_index {
-            if discriminant(&self.entries[index].status)
+        if let Some(index) = self.gather_index
+            && discriminant(&self.entries[index].status)
                 == discriminant(&acp::PlanEntryStatus::Pending)
             {
                 return self.update_status(index, acp::PlanEntryStatus::InProgress);
             }
-        }
         false
     }
 
     fn complete_context(&mut self) -> bool {
-        if let Some(index) = self.gather_index {
-            if discriminant(&self.entries[index].status)
+        if let Some(index) = self.gather_index
+            && discriminant(&self.entries[index].status)
                 != discriminant(&acp::PlanEntryStatus::Completed)
             {
                 return self.update_status(index, acp::PlanEntryStatus::Completed);
             }
-        }
         false
     }
 
@@ -422,8 +420,8 @@ impl ZedAgent {
                 })
                 .collect::<Vec<_>>();
 
-        if available_local_tools.contains(tools::RUN_COMMAND) {
-            if let Some(run_decl) = build_function_declarations()
+        if available_local_tools.contains(tools::RUN_COMMAND)
+            && let Some(run_decl) = build_function_declarations()
                 .into_iter()
                 .find(|decl| decl.name == tools::RUN_COMMAND)
             {
@@ -438,7 +436,6 @@ impl ZedAgent {
                     ));
                 }
             }
-        }
         let acp_tool_registry = Rc::new(AcpToolRegistry::new(
             workspace_root.as_path(),
             read_file_enabled,
@@ -1020,14 +1017,13 @@ impl ZedAgent {
         session_id: &acp::SessionId,
         args: &Value,
     ) -> ToolExecutionReport {
-        if tool_name == tools::RUN_COMMAND {
-            if let Some(report) = self
+        if tool_name == tools::RUN_COMMAND
+            && let Some(report) = self
                 .execute_terminal_via_client(tool_name, client, session_id, args)
                 .await
             {
                 return report;
             }
-        }
 
         match descriptor {
             ToolDescriptor::Acp(tool) => {
@@ -1082,7 +1078,7 @@ impl ZedAgent {
         let request = acp::CreateTerminalRequest {
             session_id: session_id.clone(),
             command: program.to_string(),
-            args: rest.iter().cloned().collect(),
+            args: rest.to_vec(),
             env: Vec::new(),
             cwd: working_dir.clone(),
             output_byte_limit: None,
@@ -1389,14 +1385,13 @@ impl ZedAgent {
             lines.push("No results returned.".to_string());
         }
 
-        if let Some(has_more) = output.get("has_more").and_then(Value::as_bool) {
-            if has_more {
+        if let Some(has_more) = output.get("has_more").and_then(Value::as_bool)
+            && has_more {
                 lines.push(
                     "Additional results available (adjust page or per_page to view more)."
                         .to_string(),
                 );
             }
-        }
 
         if let Some(message) = output
             .get(TOOL_LIST_FILES_MESSAGE_KEY)
@@ -1889,8 +1884,8 @@ impl acp::Agent for ZedAgent {
                     break;
                 }
 
-                if tools_allowed {
-                    if let Some(tool_calls) = response
+                if tools_allowed
+                    && let Some(tool_calls) = response
                         .tool_calls
                         .clone()
                         .filter(|calls| !calls.is_empty())
@@ -1924,15 +1919,13 @@ impl acp::Agent for ZedAgent {
                         messages = self.resolved_messages(&session);
                         continue;
                     }
-                }
 
                 if let Some(content) = response.content.clone() {
                     if !content.is_empty() {
-                        if plan.has_context_step() && !plan.context_completed() {
-                            if plan.complete_context() {
+                        if plan.has_context_step() && !plan.context_completed()
+                            && plan.complete_context() {
                                 self.send_plan_update(&args.session_id, &plan).await?;
                             }
-                        }
                         if plan.start_response() {
                             self.send_plan_update(&args.session_id, &plan).await?;
                         }

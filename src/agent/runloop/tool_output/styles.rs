@@ -34,8 +34,8 @@ impl GitStyles {
 
     pub(crate) fn style_for_line(&self, kind: &DiffLineKind) -> Option<AnsiStyle> {
         match kind {
-            DiffLineKind::Addition => self.add.clone(),
-            DiffLineKind::Deletion => self.remove.clone(),
+            DiffLineKind::Addition => self.add,
+            DiffLineKind::Deletion => self.remove,
             DiffLineKind::Context => None,
         }
     }
@@ -139,11 +139,10 @@ impl LsStyles {
             }
         }
 
-        if let Some(code) = class_hint {
-            if let Some(style) = self.classes.get(code) {
+        if let Some(code) = class_hint
+            && let Some(style) = self.classes.get(code) {
                 return Some(*style);
             }
-        }
 
         let lower = name
             .trim_matches(|c| matches!(c, '"' | ',' | ' ' | '\u{0009}'))
@@ -154,11 +153,10 @@ impl LsStyles {
             }
         }
 
-        if lower.ends_with('*') {
-            if let Some(style) = self.classes.get("ex") {
+        if lower.ends_with('*')
+            && let Some(style) = self.classes.get("ex") {
                 return Some(*style);
             }
-        }
 
         None
     }

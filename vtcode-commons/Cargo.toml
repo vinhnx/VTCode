@@ -9,6 +9,8 @@ readme = "../README.md"
 homepage = "https://github.com/vinhnx/vtcode"
 repository = "https://github.com/vinhnx/vtcode"
 documentation = "https://docs.rs/vtcode-commons"
+categories = ["development-tools", "command-line-interface"]
+keywords = ["vt", "commons", "traits", "utilities", "error-handling"]
 
 
 [features]

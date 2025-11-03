@@ -104,17 +104,15 @@ fn build_header_highlights(onboarding_cfg: &AgentOnboardingConfig) -> Vec<Inline
         highlights.push(commands);
     }
 
-    if onboarding_cfg.include_usage_tips_in_welcome {
-        if let Some(usage) = usage_tips_highlight(&onboarding_cfg.usage_tips) {
+    if onboarding_cfg.include_usage_tips_in_welcome
+        && let Some(usage) = usage_tips_highlight(&onboarding_cfg.usage_tips) {
             highlights.push(usage);
         }
-    }
 
-    if onboarding_cfg.include_recommended_actions_in_welcome {
-        if let Some(actions) = recommended_actions_highlight(&onboarding_cfg.recommended_actions) {
+    if onboarding_cfg.include_recommended_actions_in_welcome
+        && let Some(actions) = recommended_actions_highlight(&onboarding_cfg.recommended_actions) {
             highlights.push(actions);
         }
-    }
 
     highlights
 }
@@ -253,17 +251,15 @@ async fn extract_guideline_highlights(
 }
 
 fn determine_home_dir() -> Option<PathBuf> {
-    if let Some(home) = std::env::var_os("HOME") {
-        if !home.is_empty() {
+    if let Some(home) = std::env::var_os("HOME")
+        && !home.is_empty() {
             return Some(PathBuf::from(home));
         }
-    }
 
-    if let Some(profile) = std::env::var_os("USERPROFILE") {
-        if !profile.is_empty() {
+    if let Some(profile) = std::env::var_os("USERPROFILE")
+        && !profile.is_empty() {
             return Some(PathBuf::from(profile));
         }
-    }
 
     None
 }

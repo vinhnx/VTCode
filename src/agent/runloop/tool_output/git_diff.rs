@@ -391,15 +391,15 @@ fn style_for_diff_line(line: &str, git_styles: &GitStyles) -> Option<AnsiStyle> 
 
     if trimmed.starts_with("@@") || trimmed.starts_with("diff --") || trimmed.starts_with("index ")
     {
-        return git_styles.header.clone();
+        return git_styles.header;
     }
 
     if trimmed.starts_with('+') && !trimmed.starts_with("+++") {
-        return git_styles.add.clone();
+        return git_styles.add;
     }
 
     if trimmed.starts_with('-') && !trimmed.starts_with("---") {
-        return git_styles.remove.clone();
+        return git_styles.remove;
     }
 
     None
@@ -479,11 +479,10 @@ fn render_structured_diff_section(
                     continue;
                 }
 
-                if let Some(prev_idx) = previous {
-                    if idx > prev_idx + 1 {
+                if let Some(prev_idx) = previous
+                    && idx > prev_idx + 1 {
                         push_diff_gap_line(&mut lines, &hunk.lines[prev_idx + 1..idx]);
                     }
-                }
 
                 lines.push(format_diff_line_row(diff_line, git_styles));
                 if diff_line.kind != DiffLineKind::Context {
@@ -645,8 +644,8 @@ fn strip_diff_fences(input: &str) -> Cow<'_, str> {
     }
 
     let body = trimmed.trim_start_matches("```diff");
-    let body = body.trim_start_matches(|ch| ch == '\r' || ch == '\n');
-    let body = body.trim_end_matches(|ch| ch == '\r' || ch == '\n');
+    let body = body.trim_start_matches(['\r', '\n']);
+    let body = body.trim_end_matches(['\r', '\n']);
     let body = body.trim_end_matches("```");
 
     Cow::Owned(body.trim().to_string())

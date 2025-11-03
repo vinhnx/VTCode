@@ -698,19 +698,17 @@ fn render_custom_prompt_list(
 
 fn render_prompt_summary(renderer: &mut AnsiRenderer, prompt: &CustomPrompt) -> Result<()> {
     let mut line = format!("  /prompt:{}", prompt.name);
-    if let Some(description) = &prompt.description {
-        if !description.trim().is_empty() {
+    if let Some(description) = &prompt.description
+        && !description.trim().is_empty() {
             line.push_str(" — ");
             line.push_str(description.trim());
         }
-    }
     renderer.line(MessageStyle::Info, &line)?;
 
-    if let Some(hint) = &prompt.argument_hint {
-        if !hint.trim().is_empty() {
+    if let Some(hint) = &prompt.argument_hint
+        && !hint.trim().is_empty() {
             renderer.line(MessageStyle::Info, &format!("      hint: {}", hint.trim()))?;
         }
-    }
 
     Ok(())
 }

@@ -1401,11 +1401,10 @@ fn interpret_session_start(
         return;
     }
 
-    if let Some(code) = result.exit_code {
-        if code != 0 {
+    if let Some(code) = result.exit_code
+        && code != 0 {
             handle_non_zero_exit(command, result, code, messages, false);
         }
-    }
 
     if !result.stderr.trim().is_empty() {
         messages.push(HookMessage::error(format!(
@@ -1417,29 +1416,22 @@ fn interpret_session_start(
 
     if let Some(json) = parse_json_output(&result.stdout) {
         let common = extract_common_fields(&json, messages);
-        if let Some(Value::Object(spec)) = common.hook_specific {
-            if matches_hook_event(&spec, "SessionStart") {
-                if let Some(additional) = spec
+        if let Some(Value::Object(spec)) = common.hook_specific
+            && matches_hook_event(&spec, "SessionStart")
+                && let Some(additional) = spec
                     .get("additionalContext")
                     .and_then(|value| value.as_str())
-                {
-                    if !additional.trim().is_empty() {
+                    && !additional.trim().is_empty() {
                         additional_context.push(additional.trim().to_string());
                     }
-                }
-            }
-        }
 
-        if !common.suppress_stdout {
-            if let Some(text) = json
+        if !common.suppress_stdout
+            && let Some(text) = json
                 .get("additional_context")
                 .and_then(|value| value.as_str())
-            {
-                if !text.trim().is_empty() {
+                && !text.trim().is_empty() {
                     additional_context.push(text.trim().to_string());
                 }
-            }
-        }
     } else if !result.stdout.trim().is_empty() {
         additional_context.push(result.stdout.trim().to_string());
     }
@@ -1455,11 +1447,10 @@ fn interpret_session_end(
         return;
     }
 
-    if let Some(code) = result.exit_code {
-        if code != 0 {
+    if let Some(code) = result.exit_code
+        && code != 0 {
             handle_non_zero_exit(command, result, code, messages, false);
         }
-    }
 
     if !result.stderr.trim().is_empty() {
         messages.push(HookMessage::error(format!(
@@ -1517,47 +1508,38 @@ fn interpret_user_prompt(
                 .or_else(|| Some("Prompt blocked by lifecycle hook.".to_string()));
         }
 
-        if let Some(decision) = common.decision.as_deref() {
-            if decision.eq_ignore_ascii_case("block") {
+        if let Some(decision) = common.decision.as_deref()
+            && decision.eq_ignore_ascii_case("block") {
                 outcome.allow_prompt = false;
                 outcome.block_reason = common
                     .decision_reason
                     .clone()
                     .or_else(|| Some("Prompt blocked by lifecycle hook.".to_string()));
             }
-        }
 
-        if let Some(Value::Object(spec)) = common.hook_specific {
-            if matches_hook_event(&spec, "UserPromptSubmit") {
-                if let Some(additional) = spec
+        if let Some(Value::Object(spec)) = common.hook_specific
+            && matches_hook_event(&spec, "UserPromptSubmit")
+                && let Some(additional) = spec
                     .get("additionalContext")
                     .and_then(|value| value.as_str())
-                {
-                    if !additional.trim().is_empty() {
+                    && !additional.trim().is_empty() {
                         outcome
                             .additional_context
                             .push(additional.trim().to_string());
                     }
-                }
-            }
-        }
 
-        if !common.suppress_stdout {
-            if let Some(text) = json
+        if !common.suppress_stdout
+            && let Some(text) = json
                 .get("additional_context")
                 .and_then(|value| value.as_str())
-            {
-                if !text.trim().is_empty() {
+                && !text.trim().is_empty() {
                     outcome.additional_context.push(text.trim().to_string());
                 }
-            }
-        }
 
-        if !outcome.allow_prompt {
-            if let Some(reason) = outcome.block_reason.clone() {
+        if !outcome.allow_prompt
+            && let Some(reason) = outcome.block_reason.clone() {
                 outcome.messages.push(HookMessage::error(reason));
             }
-        }
     } else if !result.stdout.trim().is_empty() {
         outcome
             .additional_context
@@ -1612,8 +1594,8 @@ fn interpret_pre_tool(
             return;
         }
 
-        if let Some(Value::Object(spec)) = common.hook_specific {
-            if matches_hook_event(&spec, "PreToolUse") {
+        if let Some(Value::Object(spec)) = common.hook_specific
+            && matches_hook_event(&spec, "PreToolUse") {
                 if let Some(decision) = spec
                     .get("permissionDecision")
                     .and_then(|value| value.as_str())
@@ -1633,15 +1615,12 @@ fn interpret_pre_tool(
                 if let Some(reason) = spec
                     .get("permissionDecisionReason")
                     .and_then(|value| value.as_str())
-                {
-                    if !reason.trim().is_empty() {
+                    && !reason.trim().is_empty() {
                         outcome
                             .messages
                             .push(HookMessage::info(reason.trim().to_string()));
                     }
-                }
             }
-        }
 
         if !common.suppress_stdout && !result.stdout.trim().is_empty() {
             outcome
@@ -1665,11 +1644,10 @@ fn interpret_post_tool(
         return;
     }
 
-    if let Some(code) = result.exit_code {
-        if code != 0 {
+    if let Some(code) = result.exit_code
+        && code != 0 {
             handle_non_zero_exit(command, result, code, &mut outcome.messages, true);
         }
-    }
 
     if !result.stderr.trim().is_empty() {
         outcome.messages.push(HookMessage::warning(format!(
@@ -1681,40 +1659,32 @@ fn interpret_post_tool(
 
     if let Some(json) = parse_json_output(&result.stdout) {
         let common = extract_common_fields(&json, &mut outcome.messages);
-        if let Some(decision) = common.decision.as_deref() {
-            if decision.eq_ignore_ascii_case("block") {
+        if let Some(decision) = common.decision.as_deref()
+            && decision.eq_ignore_ascii_case("block") {
                 outcome.block_reason = common
                     .decision_reason
                     .clone()
                     .or_else(|| Some("Tool execution requires attention.".to_string()));
             }
-        }
 
-        if let Some(Value::Object(spec)) = common.hook_specific {
-            if matches_hook_event(&spec, "PostToolUse") {
-                if let Some(additional) = spec
+        if let Some(Value::Object(spec)) = common.hook_specific
+            && matches_hook_event(&spec, "PostToolUse")
+                && let Some(additional) = spec
                     .get("additionalContext")
                     .and_then(|value| value.as_str())
-                {
-                    if !additional.trim().is_empty() {
+                    && !additional.trim().is_empty() {
                         outcome
                             .additional_context
                             .push(additional.trim().to_string());
                     }
-                }
-            }
-        }
 
-        if !common.suppress_stdout {
-            if let Some(text) = json
+        if !common.suppress_stdout
+            && let Some(text) = json
                 .get("additional_context")
                 .and_then(|value| value.as_str())
-            {
-                if !text.trim().is_empty() {
+                && !text.trim().is_empty() {
                     outcome.additional_context.push(text.trim().to_string());
                 }
-            }
-        }
     } else if !result.stdout.trim().is_empty() {
         outcome
             .messages

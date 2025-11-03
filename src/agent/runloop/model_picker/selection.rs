@@ -79,13 +79,10 @@ pub(super) fn parse_model_selection(
     if let Some(option) = options
         .iter()
         .find(|candidate| candidate.id.eq_ignore_ascii_case(model_token.trim()))
-    {
-        if let Some(provider) = provider_enum {
-            if provider == option.provider {
+        && let Some(provider) = provider_enum
+            && provider == option.provider {
                 return Ok(selection_from_option(option));
             }
-        }
-    }
 
     let provider_label = provider_enum
         .map(|provider| provider.label().to_string())

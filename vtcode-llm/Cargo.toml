@@ -6,6 +6,8 @@ authors = ["vinhnx <vinhnx@users.noreply.github.com>"]
 description = "Prototype extraction of VTCode's unified LLM client layer"
 license = "MIT"
 publish = false
+categories = ["api-bindings", "science::ml"]
+keywords = ["vtcode", "llm", "ai", "openai", "anthropic"]
 
 [features]
 default = [

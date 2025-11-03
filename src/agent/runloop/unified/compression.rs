@@ -85,7 +85,7 @@ pub fn compress_conversation_with_config(
     };
 
     // Process each turn with the configured rules
-    for (_i, turn) in turns.iter().enumerate() {
+    for turn in turns.iter() {
         // Skip empty or very short messages unless they're important
         let trimmed_len = turn.content.trim().len();
         if trimmed_len == 0 {

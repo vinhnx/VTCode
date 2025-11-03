@@ -1,6 +1,6 @@
 //! Terminal utilities and helpers
 
-use is_terminal::IsTerminal;
+use std::io::IsTerminal;
 use std::io::Write;
 
 /// Get the terminal width, fallback to 80 if unable to determine

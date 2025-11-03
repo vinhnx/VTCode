@@ -112,8 +112,8 @@ pub(super) fn render_step_one_inline(
                 });
             }
 
-            if dynamic_indexes.is_empty() {
-                if let Some(error) = dynamic_models.error_for(provider) {
+            if dynamic_indexes.is_empty()
+                && let Some(error) = dynamic_models.error_for(provider) {
                     let instructions = if provider == Provider::LmStudio {
                         get_lmstudio_setup_instructions()
                     } else {
@@ -131,7 +131,6 @@ pub(super) fn render_step_one_inline(
                         )),
                     });
                 }
-            }
         }
     }
 

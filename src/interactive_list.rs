@@ -122,14 +122,13 @@ pub fn run_interactive_selection(
                                 ),
                                 Span::raw(entry.title.clone()),
                             ])];
-                            if let Some(description) = entry.description.as_ref() {
-                                if !description.is_empty() && description != &entry.title {
+                            if let Some(description) = entry.description.as_ref()
+                                && !description.is_empty() && description != &entry.title {
                                     lines.push(Line::from(Span::styled(
                                         description.clone(),
                                         Style::default().fg(Color::Gray),
                                     )));
                                 }
-                            }
                             ListItem::new(lines)
                         })
                         .collect();
@@ -159,14 +158,13 @@ pub fn run_interactive_selection(
                         format!("Selected: {}", current.title),
                         Style::default().add_modifier(Modifier::BOLD),
                     ))];
-                    if let Some(description) = current.description.as_ref() {
-                        if !description.is_empty() && description != &current.title {
+                    if let Some(description) = current.description.as_ref()
+                        && !description.is_empty() && description != &current.title {
                             summary_lines.push(Line::from(Span::styled(
                                 description.clone(),
                                 Style::default().fg(Color::Gray),
                             )));
                         }
-                    }
                     summary_lines.push(Line::from(Span::raw(CONTROLS_HINT)));
                     summary_lines.push(Line::from(Span::styled(
                         NUMBER_JUMP_HINT,
@@ -230,11 +228,10 @@ pub fn run_interactive_selection(
                     }
                     KeyCode::Char(c) if c.is_ascii_digit() => {
                         number_buffer.push(c);
-                        if let Ok(index) = number_buffer.parse::<usize>() {
-                            if (1..=total).contains(&index) {
+                        if let Ok(index) = number_buffer.parse::<usize>()
+                            && (1..=total).contains(&index) {
                                 selected_index = index - 1;
                             }
-                        }
                         if number_buffer.len() >= total.to_string().len() {
                             number_buffer.clear();
                         }

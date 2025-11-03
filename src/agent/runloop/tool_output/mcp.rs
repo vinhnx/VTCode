@@ -15,11 +15,10 @@ pub(crate) fn resolve_renderer_profile(
 }
 
 pub(crate) fn render_context7_output(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
-    if let Some(meta) = val.get("meta").and_then(|value| value.as_object()) {
-        if let Some(query) = meta.get("query").and_then(|value| value.as_str()) {
+    if let Some(meta) = val.get("meta").and_then(|value| value.as_object())
+        && let Some(query) = meta.get("query").and_then(|value| value.as_str()) {
             renderer.line(MessageStyle::Info, &format!("  {}", shorten(query, 120)))?;
         }
-    }
 
     if let Some(messages) = val.get("messages").and_then(|value| value.as_array())
         && !messages.is_empty()
@@ -133,19 +132,18 @@ pub(crate) fn render_generic_output(renderer: &mut AnsiRenderer, val: &Value) ->
                         MessageStyle::Info,
                     ));
                 }
-            } else if item.get("type").and_then(|t| t.as_str()) == Some("resource") {
-                if let Some(uri) = item.get("uri").and_then(|v| v.as_str()) {
+            } else if item.get("type").and_then(|t| t.as_str()) == Some("resource")
+                && let Some(uri) = item.get("uri").and_then(|v| v.as_str()) {
                     block_lines.push(PanelContentLine::new(
                         format!("  [resource: {}]", uri),
                         MessageStyle::Info,
                     ));
                 }
-            }
         }
     }
 
-    if let Some(meta) = val.get("meta").and_then(|v| v.as_object()) {
-        if !meta.is_empty() {
+    if let Some(meta) = val.get("meta").and_then(|v| v.as_object())
+        && !meta.is_empty() {
             if !block_lines.is_empty() {
                 block_lines.push(PanelContentLine::new(String::new(), MessageStyle::Info));
             }
@@ -163,7 +161,6 @@ pub(crate) fn render_generic_output(renderer: &mut AnsiRenderer, val: &Value) ->
                 }
             }
         }
-    }
 
     if block_lines.is_empty() {
         return Ok(());

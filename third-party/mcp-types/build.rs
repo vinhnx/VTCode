@@ -1,3 +1,4 @@
+use schemars::schema::RootSchema;
 use std::{env, fs, path::Path};
 use typify::{TypeSpace, TypeSpaceSettings};
 
@@ -7,7 +8,7 @@ fn main() {
 
 fn generate(version: &str) {
     let is_docsrs = env::var_os("DOCS_RS").is_some();
-    
+
     // Don't regenerate schema when building on docs.rs
     if is_docsrs {
         println!("cargo:warning=docs.rs build detected, skipping schema regeneration");
@@ -17,7 +18,7 @@ fn generate(version: &str) {
 
     let schema_path = format!("./spec/{}-schema.json", version);
     let content = std::fs::read_to_string(schema_path).unwrap();
-    let schema = serde_json::from_str::<schemars::schema::RootSchema>(&content).unwrap();
+    let schema = serde_json::from_str::<RootSchema>(&content).unwrap();
 
     let mut type_space = TypeSpace::new(
         TypeSpaceSettings::default()

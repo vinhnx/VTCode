@@ -743,19 +743,16 @@ impl ModelPickerState {
     }
 
     fn find_existing_api_key(&self, env_key: &str) -> Result<Option<ExistingKey>> {
-        if let Ok(value) = std::env::var(env_key) {
-            if !value.trim().is_empty() {
+        if let Ok(value) = std::env::var(env_key)
+            && !value.trim().is_empty() {
                 return Ok(Some(ExistingKey::Environment));
             }
-        }
 
-        if let Some(workspace) = self.workspace.as_deref() {
-            if let Some(value) = read_workspace_env(workspace, env_key)? {
-                if !value.trim().is_empty() {
+        if let Some(workspace) = self.workspace.as_deref()
+            && let Some(value) = read_workspace_env(workspace, env_key)?
+                && !value.trim().is_empty() {
                     return Ok(Some(ExistingKey::WorkspaceDotenv(value)));
                 }
-            }
-        }
 
         Ok(None)
     }

@@ -13,7 +13,6 @@
 
 use anyhow::{Context, Error as AnyhowError, Result};
 use glob::Pattern;
-use perg::{SearchConfig, search_paths};
 use regex::escape;
 use serde_json::{self, Value, json};
 use std::io::ErrorKind;
@@ -26,6 +25,9 @@ use std::sync::atomic::Ordering;
 use std::thread;
 use std::time::Duration;
 use tokio::task::spawn_blocking;
+
+#[cfg(not(docsrs))]
+use perg::{SearchConfig, search_paths};
 
 /// Maximum number of search results to return
 const MAX_SEARCH_RESULTS: NonZeroUsize = NonZeroUsize::new(100).unwrap();
@@ -199,12 +201,20 @@ impl GrepSearchManager {
             Ok(matches) => Ok(matches),
             Err(err) => {
                 if Self::is_ripgrep_missing(&err) {
-                    Self::run_perg_backend(input).with_context(|| {
-                        format!(
-                            "perg fallback failed for pattern '{}' under '{}'",
-                            input.pattern, input.path
-                        )
-                    })
+                    #[cfg(not(docsrs))]
+                    {
+                        Self::run_perg_backend(input).with_context(|| {
+                            format!(
+                                "perg fallback failed for pattern '{}' under '{}'",
+                                input.pattern, input.path
+                            )
+                        })
+                    }
+                    #[cfg(docsrs)]
+                    {
+                        // When building docs.rs, return an empty result since perg functionality is not available
+                        Ok(Vec::new())
+                    }
                 } else {
                     Err(err)
                 }
@@ -331,21 +341,31 @@ impl GrepSearchManager {
         Ok(matches)
     }
 
+    #[cfg(not(docsrs))]
     fn run_perg_backend(input: &GrepSearchInput) -> Result<Vec<Value>> {
         let mut pattern = input.pattern.clone();
         if input.literal.unwrap_or(false) {
             pattern = escape(&pattern);
         }
 
-        // For perg, we'll use the parameters that it supports directly
+        // Map the most relevant grep options into perg's configuration structure.
+        let case_sensitive = input.case_sensitive.unwrap_or(false);
         let config = SearchConfig::new(
             pattern,
-            input.case_sensitive.unwrap_or(false), // Default to case-insensitive to match common ripgrep smart-case behavior
-            input.search_hidden.unwrap_or(false),  // Whether to search hidden directories
-            input.search_binary.unwrap_or(false),  // Whether to search binary files
-            input.respect_ignore_files.unwrap_or(true), // Whether to respect ignore files
-            false,                                 // Whether to search for whole words only
-            false, // Whether to search only in file content (not used for max_file_size)
+            !case_sensitive,
+            input.line_number.unwrap_or(true),
+            true,
+            input.invert_match.unwrap_or(false),
+            input.files_with_matches.unwrap_or(false),
+            false,
+            false,
+            0,
+            0,
+            input.context_lines.unwrap_or(0),
+            input.max_results,
+            input.only_matching.unwrap_or(false),
+            false,
+            String::from("never"),
         );
 
         let mut output_buffer = Vec::new();
@@ -442,6 +462,12 @@ impl GrepSearchManager {
         }
 
         Ok(matches)
+    }
+
+    #[cfg(docsrs)]
+    fn run_perg_backend(_input: &GrepSearchInput) -> Result<Vec<Value>> {
+        // When building docs.rs, return an empty result since perg functionality is not available
+        Ok(Vec::new())
     }
 
     fn is_ripgrep_missing(err: &AnyhowError) -> bool {

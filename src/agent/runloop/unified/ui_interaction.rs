@@ -43,7 +43,7 @@ pub(crate) async fn display_session_status(
         MessageStyle::Info,
         &format!(
             "  Reasoning effort: {}",
-            config.reasoning_effort.to_string()
+            config.reasoning_effort
         ),
     )?;
     renderer.line(
@@ -159,7 +159,7 @@ fn create_mini_progress_bar(percentage: u8, width: usize) -> String {
     for i in 0..width {
         if i < filled {
             bar.push('█');
-        } else if i == filled && percentage % (100 / width as u8) > 0 {
+        } else if i == filled && !percentage.is_multiple_of(100 / width as u8) {
             // Show partial progress for more precision
             let partial = match (percentage % (100 / width as u8)) * 8 / (100 / width as u8) {
                 0..=1 => '▏',
@@ -426,8 +426,7 @@ fn stream_plain_response_delta(
             continue;
         }
 
-        if chunk.ends_with('\n') {
-            let text = &chunk[..chunk.len() - 1];
+        if let Some(text) = chunk.strip_suffix('\n') {
             if !text.is_empty() {
                 if *pending_indent && !indent.is_empty() {
                     renderer.inline_with_style(style, indent)?;
@@ -520,8 +519,8 @@ impl StreamingReasoningState {
             self.finalize_cli(renderer)?;
 
             // Only display final reasoning if it wasn't streamed at all
-            if let Some(reasoning) = final_reasoning.map(str::trim) {
-                if !reasoning.is_empty() && self.aggregated.trim().is_empty() {
+            if let Some(reasoning) = final_reasoning.map(str::trim)
+                && !reasoning.is_empty() && self.aggregated.trim().is_empty() {
                     // No reasoning was streamed, display the final reasoning
                     renderer.line(
                         MessageStyle::Reasoning,
@@ -529,7 +528,6 @@ impl StreamingReasoningState {
                     )?;
                     self.aggregated = reasoning.to_string();
                 }
-            }
             Ok(())
         }
     }
@@ -724,7 +722,7 @@ pub(crate) async fn stream_and_render_response(
                 } else if last_progress_update.elapsed() >= std::time::Duration::from_millis(500) {
                     // Update progress message every 500ms with token count
                     spinner
-                        .update_message(&format!("Receiving response... ({} tokens)", token_count));
+                        .update_message(format!("Receiving response... ({} tokens)", token_count));
                     last_progress_update = std::time::Instant::now();
                 }
                 finish_spinner(&mut spinner_active);
@@ -752,7 +750,7 @@ pub(crate) async fn stream_and_render_response(
                     spinner_message_updated = true;
                 } else if last_progress_update.elapsed() >= std::time::Duration::from_millis(500) {
                     // Update progress message every 500ms with reasoning token count
-                    spinner.update_message(&format!(
+                    spinner.update_message(format!(
                         "Processing reasoning... ({} tokens)",
                         reasoning_token_count
                     ));

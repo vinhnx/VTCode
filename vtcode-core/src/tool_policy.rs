@@ -11,9 +11,9 @@ use dialoguer::{
     theme::ColorfulTheme,
 };
 use indexmap::IndexMap;
-use is_terminal::IsTerminal;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 
 use crate::ui::theme;

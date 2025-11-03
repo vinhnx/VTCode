@@ -5,7 +5,7 @@ use crate::config::constants::tools;
 use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
 use curl::easy::{Easy, List};
-use rand::{Rng, distributions::Alphanumeric};
+use rand::{Rng, distr::Alphanumeric};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
@@ -61,7 +61,7 @@ impl Default for CurlTool {
 impl CurlTool {
     async fn write_temp_file(&self, data: &[u8]) -> Result<PathBuf> {
         let suffix: String = {
-            let mut rng = rand::thread_rng();
+            let mut rng = rand::rng();
             (&mut rng)
                 .sample_iter(&Alphanumeric)
                 .take(10)

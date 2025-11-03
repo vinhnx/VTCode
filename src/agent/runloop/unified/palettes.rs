@@ -265,7 +265,7 @@ pub(crate) async fn handle_palette_selection(
                     Ok(None)
                 }
                 ThemePaletteMode::Inspect => {
-                    let label = theme::theme_label(&theme_id).unwrap_or_else(|| theme_id.as_str());
+                    let label = theme::theme_label(&theme_id).unwrap_or(theme_id.as_str());
                     renderer.line(
                         MessageStyle::Info,
                         &format!("Theme {} ({}) is available.", label, theme_id),
@@ -280,15 +280,14 @@ pub(crate) async fn handle_palette_selection(
             _ => Ok(Some(ActivePalette::Theme { mode })),
         },
         ActivePalette::Sessions { listings, limit } => {
-            if let InlineListSelection::Session(selected_id) = &selection {
-                if let Some(listing) = listings
+            if let InlineListSelection::Session(selected_id) = &selection
+                && let Some(listing) = listings
                     .iter()
                     .find(|entry| entry.identifier() == *selected_id)
                     .cloned()
                 {
                     render_session_details(renderer, &listing)?;
                 }
-            }
             if show_sessions_palette(renderer, &listings, limit)? {
                 Ok(Some(ActivePalette::Sessions { listings, limit }))
             } else {

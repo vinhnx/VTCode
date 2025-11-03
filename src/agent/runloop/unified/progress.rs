@@ -289,7 +289,7 @@ fn format_eta(duration: Duration) -> String {
         format!("{}m", (secs as f64 / 60.0).ceil() as u64)
     } else {
         let hours = secs / 3600;
-        let minutes = (secs % 3600 + 59) / 60; // Round up to nearest minute
+        let minutes = (secs % 3600).div_ceil(60); // Round up to nearest minute
         if minutes >= 60 {
             format!("{}h", hours + 1)
         } else {

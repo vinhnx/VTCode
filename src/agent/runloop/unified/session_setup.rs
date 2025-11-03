@@ -241,8 +241,8 @@ pub(crate) async fn initialize_session(
         }
 
         // Add MCP client to tool registry if available from async manager
-        if cfg.mcp.enabled {
-            if let Some(ref manager) = async_mcp_manager {
+        if cfg.mcp.enabled
+            && let Some(ref manager) = async_mcp_manager {
                 // If we polled earlier and grabbed a ready client, prefer that.
                 let status = manager.get_status().await;
                 if let super::async_mcp_manager::McpInitStatus::Ready { client } = &status {
@@ -256,7 +256,6 @@ pub(crate) async fn initialize_session(
                     );
                 }
             }
-        }
 
         // Initialize full auto mode if requested
         if full_auto {

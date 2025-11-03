@@ -146,29 +146,25 @@ fn is_known_textual_tool(name: &str) -> bool {
 
 pub(crate) fn detect_textual_tool_call(text: &str) -> Option<(String, Value)> {
     // Try gpt-oss channel format first
-    if let Some((name, args)) = parse_channel_tool_call(text) {
-        if let Some(result) = canonicalize_tool_result(name, args) {
+    if let Some((name, args)) = parse_channel_tool_call(text)
+        && let Some(result) = canonicalize_tool_result(name, args) {
             return Some(result);
         }
-    }
 
-    if let Some((name, args)) = parse_tagged_tool_call(text) {
-        if let Some(result) = canonicalize_tool_result(name, args) {
+    if let Some((name, args)) = parse_tagged_tool_call(text)
+        && let Some(result) = canonicalize_tool_result(name, args) {
             return Some(result);
         }
-    }
 
-    if let Some((name, args)) = parse_rust_struct_tool_call(text) {
-        if let Some(result) = canonicalize_tool_result(name, args) {
+    if let Some((name, args)) = parse_rust_struct_tool_call(text)
+        && let Some(result) = canonicalize_tool_result(name, args) {
             return Some(result);
         }
-    }
 
-    if let Some((name, args)) = parse_yaml_tool_call(text) {
-        if let Some(result) = canonicalize_tool_result(name, args) {
+    if let Some((name, args)) = parse_yaml_tool_call(text)
+        && let Some(result) = canonicalize_tool_result(name, args) {
             return Some(result);
         }
-    }
 
     for prefix in TEXTUAL_TOOL_PREFIXES {
         let prefix_bytes = prefix.as_bytes();
@@ -200,7 +196,7 @@ pub(crate) fn detect_textual_tool_call(text: &str) -> Option<(String, Value)> {
                 let after_name = &tail[name_len..];
 
                 // Use memchr to search for the opening parenthesis
-                let paren_pos = memmem::find(after_name.as_bytes(), &[b'(']);
+                let paren_pos = memmem::find(after_name.as_bytes(), b"(");
                 let paren_offset = if let Some(pos) = paren_pos {
                     pos
                 } else {
@@ -260,18 +256,16 @@ fn detect_direct_function_alias(text: &str) -> Option<(String, Value)> {
                 let start = search_start + offset;
                 let end = start + alias_lower.len();
 
-                if start > 0 {
-                    if let Some(prev) = lowered[..start].chars().rev().next() {
-                        if prev.is_ascii_alphanumeric() || prev == '_' {
+                if start > 0
+                    && let Some(prev) = lowered[..start].chars().next_back()
+                        && (prev.is_ascii_alphanumeric() || prev == '_') {
                             search_start = end;
                             continue;
                         }
-                    }
-                }
 
                 let mut paren_index: Option<usize> = None;
                 let mut iter = text[end..].char_indices();
-                while let Some((relative, ch)) = iter.next() {
+                for (relative, ch) in iter {
                     if ch.is_whitespace() {
                         continue;
                     }
@@ -735,9 +729,7 @@ fn parse_function_call_block(block: &str) -> Option<(String, Value)> {
     let args_body = trimmed[open_index + 1..close_index].trim();
 
     let canonical = canonicalize_tool_name(name);
-    if canonical.is_none() {
-        return None;
-    }
+    canonical.as_ref()?;
 
     let mut object = Map::new();
     let mut positional: Vec<Value> = Vec::new();
@@ -828,7 +820,7 @@ fn parse_yaml_tool_block(block: &str) -> Option<(String, Value)> {
         "text",
     ];
 
-    while let Some(line) = lines.next() {
+    for line in lines.by_ref() {
         let trimmed = line.trim();
         if trimmed.is_empty() {
             continue;
@@ -853,7 +845,7 @@ fn parse_yaml_tool_block(block: &str) -> Option<(String, Value)> {
     let mut multiline_buffer: Vec<String> = Vec::new();
     let mut multiline_indent: Option<usize> = None;
 
-    while let Some(line) = lines.next() {
+    for line in lines {
         let raw = line;
         let trimmed = raw.trim();
         if trimmed.is_empty() {
@@ -919,7 +911,7 @@ fn split_top_level_entries(body: &str) -> Vec<String> {
         if !trimmed.is_empty() {
             entries.push(
                 trimmed
-                    .trim_end_matches(|ch| ch == ',' || ch == ';')
+                    .trim_end_matches([',', ';'])
                     .trim()
                     .to_string(),
             );
@@ -964,7 +956,7 @@ fn split_function_arguments(body: &str) -> Vec<String> {
     fn push_arg(entries: &mut Vec<String>, current: &mut String) {
         let trimmed = current
             .trim()
-            .trim_end_matches(|ch| ch == ',' || ch == ';')
+            .trim_end_matches([',', ';'])
             .trim();
         if !trimmed.is_empty() {
             entries.push(trimmed.to_string());

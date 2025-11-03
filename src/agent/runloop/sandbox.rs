@@ -233,9 +233,7 @@ impl SandboxCoordinator {
                 which("srt")
                     .context(
                         "Anthropic sandbox runtime 'srt' was not found in PATH. Install via `npm install -g @anthropic-ai/sandbox-runtime`.",
-                    )
-                    .map(PathBuf::from)
-            }
+                    )}
             SandboxRuntimeKind::Firecracker => {
                 if let Some(path) = std::env::var_os(FIRECRACKER_LAUNCHER_ENV) {
                     return Ok(PathBuf::from(path));
@@ -247,9 +245,7 @@ impl SandboxCoordinator {
                     .or_else(|_| which("firecracker"))
                     .context(
                         "Firecracker runtime was not found in PATH. Install the Firecracker launcher or set FIRECRACKER_PATH.",
-                    )
-                    .map(PathBuf::from)
-            }
+                    )}
         }
     }
 
@@ -519,7 +515,7 @@ impl SandboxCoordinator {
         let deny_rules = self.build_deny_rules();
         let allowed_paths = self.allowed_paths_strings();
         let allowed_domains: Vec<_> = self.allowed_domains.iter().cloned().collect();
-        let runtime_kind = self.runtime_kind.clone();
+        let runtime_kind = self.runtime_kind;
 
         // Use blocking task to avoid blocking async runtime
         std::thread::spawn(move || -> Result<()> {
@@ -690,7 +686,7 @@ impl SandboxCoordinator {
             self.workspace_root.join(candidate)
         };
         let normalized = normalize_path(&combined);
-        if !normalized.starts_with(&self.canonical_workspace()) {
+        if !normalized.starts_with(self.canonical_workspace()) {
             return Err(anyhow!(
                 "Path '{}' escapes workspace '{}'",
                 normalized.display(),

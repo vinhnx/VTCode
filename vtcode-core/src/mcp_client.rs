@@ -1778,7 +1778,17 @@ impl ClientHandler for LoggingClientHandler {
             };
 
             if let Some(handler) = handler {
-                let schema = Value::Object(request.requested_schema.clone());
+                let schema = match serde_json::to_value(&request.requested_schema) {
+                    Ok(value) => value,
+                    Err(err) => {
+                        warn!(
+                            provider = provider.as_str(),
+                            error = %err,
+                            "Failed to serialize MCP elicitation schema; using null placeholder"
+                        );
+                        Value::Null
+                    }
+                };
                 let message = request.message.clone();
                 let payload = McpElicitationRequest {
                     message: message.clone(),

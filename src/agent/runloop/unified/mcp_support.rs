@@ -140,8 +140,8 @@ pub(crate) async fn display_mcp_status(
             for event in recent {
                 let timestamp: DateTime<Local> = DateTime::<Local>::from(event.timestamp);
                 let mut detail = event.status.label().to_string();
-                if let Some(args) = event.args_preview.as_ref() {
-                    if !args.trim().is_empty() {
+                if let Some(args) = event.args_preview.as_ref()
+                    && !args.trim().is_empty() {
                         let preview: String = args.chars().take(80).collect();
                         if preview.len() < args.len() {
                             detail.push_str(&format!(" · args {}…", preview));
@@ -149,7 +149,6 @@ pub(crate) async fn display_mcp_status(
                             detail.push_str(&format!(" · args {}", preview));
                         }
                     }
-                }
 
                 renderer.line(
                     MessageStyle::McpStatus,
@@ -571,15 +570,12 @@ pub(crate) async fn repair_mcp_runtime(
         return Ok(());
     };
 
-    match manager.get_status().await {
-        McpInitStatus::Disabled => {
-            renderer.line(
-                MessageStyle::Info,
-                "  MCP is disabled; update vtcode.toml to enable it.",
-            )?;
-            return Ok(());
-        }
-        _ => {}
+    if let McpInitStatus::Disabled = manager.get_status().await {
+        renderer.line(
+            MessageStyle::Info,
+            "  MCP is disabled; update vtcode.toml to enable it.",
+        )?;
+        return Ok(());
     }
 
     renderer.line(

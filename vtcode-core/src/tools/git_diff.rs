@@ -73,7 +73,7 @@ fn strip_ansi(text: &str) -> String {
     let mut parser = Parser::new();
 
     for byte in text.as_bytes() {
-        parser.advance(&mut performer, *byte);
+        parser.advance(&mut performer, std::slice::from_ref(byte));
     }
 
     performer.output

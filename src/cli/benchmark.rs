@@ -241,8 +241,8 @@ pub async fn handle_benchmark_command(
         .context("Failed to serialize benchmark report to JSON")?;
 
     if let Some(path) = &options.output {
-        if let Some(parent) = path.parent() {
-            if !parent.as_os_str().is_empty() {
+        if let Some(parent) = path.parent()
+            && !parent.as_os_str().is_empty() {
                 fs::create_dir_all(parent).with_context(|| {
                     format!(
                         "Failed to create benchmark report directory {}",
@@ -250,7 +250,6 @@ pub async fn handle_benchmark_command(
                     )
                 })?;
             }
-        }
 
         fs::write(path, serialized.as_bytes())
             .with_context(|| format!("Failed to write benchmark report to {}", path.display()))?;
@@ -359,18 +358,16 @@ fn prepare_task(mut raw: RawTaskSpec, index: usize, workspace: &Path) -> Result<
         .unwrap_or_else(|| format!("{} {}", DEFAULT_TASK_TITLE, index + 1));
 
     let mut description_parts: Vec<String> = Vec::new();
-    for candidate in [
+    for text in [
         raw.description.take(),
         raw.summary.take(),
         raw.problem.take(),
         raw.bug_description.take(),
         raw.query.take(),
-    ] {
-        if let Some(text) = candidate {
-            let trimmed = text.trim();
-            if !trimmed.is_empty() {
-                description_parts.push(trimmed.to_string());
-            }
+    ].into_iter().flatten() {
+        let trimmed = text.trim();
+        if !trimmed.is_empty() {
+            description_parts.push(trimmed.to_string());
         }
     }
 
@@ -445,8 +442,8 @@ fn convert_context_entry(
         RawContextEntry::Detailed(detail) => {
             let mut content = detail.content.unwrap_or_default().trim().to_string();
 
-            if content.is_empty() {
-                if let Some(path) = detail.path {
+            if content.is_empty()
+                && let Some(path) = detail.path {
                     let resolved = workspace.join(&path);
                     let canonical = resolved.canonicalize().with_context(|| {
                         format!(
@@ -468,7 +465,6 @@ fn convert_context_entry(
                         format!("Failed to read context file {}", canonical.display())
                     })?;
                 }
-            }
 
             if content.trim().is_empty() {
                 bail!(

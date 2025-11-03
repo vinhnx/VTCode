@@ -378,24 +378,85 @@ pub enum ModelId {
     OpenRouterMinimaxM2Free,
 }
 
+#[cfg(not(docsrs))]
 pub mod openrouter_generated {
     include!(concat!(env!("OUT_DIR"), "/openrouter_metadata.rs"));
 }
 
+#[cfg(docsrs)]
+pub mod openrouter_generated {
+    #[derive(Clone, Copy)]
+    pub struct Entry {
+        pub variant: super::ModelId,
+        pub id: &'static str,
+        pub vendor: &'static str,
+        pub display: &'static str,
+        pub description: &'static str,
+        pub efficient: bool,
+        pub top_tier: bool,
+        pub generation: &'static str,
+        pub reasoning: bool,
+        pub tool_call: bool,
+    }
+
+    pub const ENTRIES: &[Entry] = &[];
+
+    #[derive(Clone, Copy)]
+    pub struct VendorModels {
+        pub vendor: &'static str,
+        pub models: &'static [super::ModelId],
+    }
+
+    pub const VENDOR_MODELS: &[VendorModels] = &[];
+
+    pub fn metadata_for(_model: super::ModelId) -> Option<super::OpenRouterMetadata> {
+        None
+    }
+
+    pub fn parse_model(_value: &str) -> Option<super::ModelId> {
+        None
+    }
+
+    pub fn vendor_groups() -> &'static [VendorModels] {
+        VENDOR_MODELS
+    }
+}
+
 impl ModelId {
     fn openrouter_metadata(&self) -> Option<OpenRouterMetadata> {
-        openrouter_generated::metadata_for(*self)
+        #[cfg(not(docsrs))]
+        {
+            openrouter_generated::metadata_for(*self)
+        }
+        #[cfg(docsrs)]
+        {
+            None
+        }
     }
 
     fn parse_openrouter_model(value: &str) -> Option<Self> {
-        openrouter_generated::parse_model(value)
+        #[cfg(not(docsrs))]
+        {
+            openrouter_generated::parse_model(value)
+        }
+        #[cfg(docsrs)]
+        {
+            None
+        }
     }
 
     fn openrouter_vendor_groups() -> Vec<(&'static str, &'static [Self])> {
-        openrouter_generated::vendor_groups()
-            .iter()
-            .map(|group| (group.vendor, group.models))
-            .collect()
+        #[cfg(not(docsrs))]
+        {
+            openrouter_generated::vendor_groups()
+                .iter()
+                .map(|group| (group.vendor, group.models))
+                .collect()
+        }
+        #[cfg(docsrs)]
+        {
+            Vec::new()
+        }
     }
 
     fn openrouter_models() -> Vec<Self> {

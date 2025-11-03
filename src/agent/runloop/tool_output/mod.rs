@@ -207,8 +207,8 @@ fn render_error_details(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> 
         renderer.line(MessageStyle::Info, &format!("  Type: {}", type_description))?;
     }
 
-    if let Some(original) = val.get("original_error").and_then(|v| v.as_str()) {
-        if !original.trim().is_empty() {
+    if let Some(original) = val.get("original_error").and_then(|v| v.as_str())
+        && !original.trim().is_empty() {
             let display_error = if original.len() > 200 {
                 format!("{}...", &original[..197])
             } else {
@@ -216,7 +216,6 @@ fn render_error_details(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> 
             };
             renderer.line(MessageStyle::Info, &format!("  Details: {}", display_error))?;
         }
-    }
 
     if let Some(path) = val.get("path").and_then(|v| v.as_str()) {
         renderer.line(MessageStyle::Info, &format!("  Path: {}", path))?;
@@ -233,8 +232,8 @@ fn render_error_details(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> 
         }
     }
 
-    if let Some(suggestions) = val.get("recovery_suggestions").and_then(|v| v.as_array()) {
-        if !suggestions.is_empty() {
+    if let Some(suggestions) = val.get("recovery_suggestions").and_then(|v| v.as_array())
+        && !suggestions.is_empty() {
             renderer.line(MessageStyle::Info, "")?;
             renderer.line(MessageStyle::Info, "  Suggestions:")?;
             for (idx, suggestion) in suggestions.iter().take(5).enumerate() {
@@ -249,7 +248,6 @@ fn render_error_details(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> 
                 )?;
             }
         }
-    }
 
     Ok(())
 }

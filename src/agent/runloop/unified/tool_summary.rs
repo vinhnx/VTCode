@@ -112,7 +112,7 @@ fn describe_shell_command(args: &Value) -> Option<(String, HashSet<String>)> {
         used.insert("command".to_string());
         let joined = parts.join(" ");
         let summary = truncate_middle(&joined, 70);
-        return Some((format!("{}", summary), used));
+        return Some((summary.to_string(), used));
     }
 
     if let Some(cmd) = args
@@ -122,7 +122,7 @@ fn describe_shell_command(args: &Value) -> Option<(String, HashSet<String>)> {
     {
         used.insert("bash_command".to_string());
         let summary = truncate_middle(cmd, 70);
-        return Some((format!("{}", summary), used));
+        return Some((summary.to_string(), used));
     }
 
     None

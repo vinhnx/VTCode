@@ -86,6 +86,7 @@ use crate::agent::runloop::mcp_events;
 use crate::hooks::lifecycle::{
     HookMessage, HookMessageLevel, LifecycleHookEngine, SessionEndReason, SessionStartTrigger,
 };
+use crate::ide_context::IdeContextBridge;
 
 enum TurnLoopResult {
     Completed,
@@ -398,6 +399,7 @@ pub(crate) async fn run_single_agent_loop_unified(
         // Set the inline handle for the message queue system
         transcript::set_inline_handle(Arc::new(handle.clone()));
 
+        let mut ide_context_bridge = IdeContextBridge::from_env();
         let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), highlight_config);
 
         let workspace_for_indexer = config.workspace.clone();
@@ -566,8 +568,8 @@ pub(crate) async fn run_single_agent_loop_unified(
             renderer.line_if_not_empty(MessageStyle::Output)?;
         }
 
-        if full_auto {
-            if let Some(allowlist) = full_auto_allowlist.as_ref() {
+        if full_auto
+            && let Some(allowlist) = full_auto_allowlist.as_ref() {
                 if allowlist.is_empty() {
                     renderer.line(
                     MessageStyle::Info,
@@ -583,7 +585,6 @@ pub(crate) async fn run_single_agent_loop_unified(
                     )?;
                 }
             }
-        }
 
         let async_mcp_manager_for_signal = async_mcp_manager.clone();
         {
@@ -599,8 +600,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                     notify.notify_waiters();
 
                     // Shutdown MCP client on interrupt using async manager
-                    if let Some(mcp_manager) = &async_mcp_manager_for_signal {
-                        if let Err(e) = mcp_manager.shutdown().await {
+                    if let Some(mcp_manager) = &async_mcp_manager_for_signal
+                        && let Err(e) = mcp_manager.shutdown().await {
                             let error_msg = e.to_string();
                             if error_msg.contains("EPIPE")
                                 || error_msg.contains("Broken pipe")
@@ -617,7 +618,6 @@ pub(crate) async fn run_single_agent_loop_unified(
                                 );
                             }
                         }
-                    }
 
                     if matches!(signal, CtrlCSignal::Exit) {
                         break;
@@ -682,8 +682,8 @@ pub(crate) async fn run_single_agent_loop_unified(
 
             let interrupts = InlineInterruptCoordinator::new(ctrl_c_state.as_ref());
 
-            if let Some(mcp_manager) = &async_mcp_manager {
-                if !mcp_catalog_initialized {
+            if let Some(mcp_manager) = &async_mcp_manager
+                && !mcp_catalog_initialized {
                     match mcp_manager.get_status().await {
                         McpInitStatus::Ready { client } => {
                             tool_registry.set_mcp_client(Arc::clone(&client));
@@ -747,7 +747,6 @@ pub(crate) async fn run_single_agent_loop_unified(
                         McpInitStatus::Initializing { .. } | McpInitStatus::Disabled => {}
                     }
                 }
-            }
 
             let resources = InlineEventLoopResources {
                 renderer: &mut renderer,
@@ -794,8 +793,8 @@ pub(crate) async fn run_single_agent_loop_unified(
             // Check for MCP status changes and report errors
             if let Some(mcp_manager) = &async_mcp_manager {
                 let mcp_status = mcp_manager.get_status().await;
-                if mcp_status.is_error() {
-                    if let Some(error_msg) = mcp_status.get_error_message() {
+                if mcp_status.is_error()
+                    && let Some(error_msg) = mcp_status.get_error_message() {
                         renderer.line(
                             MessageStyle::Error,
                             &format!("⚠️  MCP Error: {}", error_msg),
@@ -805,7 +804,6 @@ pub(crate) async fn run_single_agent_loop_unified(
                             "💡 Use /mcp to check status or update your vtcode.toml configuration.",
                         )?;
                     }
-                }
             }
 
             if let Some(next_placeholder) = follow_up_placeholder.take() {
@@ -1680,11 +1678,10 @@ pub(crate) async fn run_single_agent_loop_unified(
 
                     // Keep system message + recent 15 messages
                     let mut compressed = Vec::new();
-                    if let Some(first) = working_history.first() {
-                        if matches!(first.role, uni::MessageRole::System) {
+                    if let Some(first) = working_history.first()
+                        && matches!(first.role, uni::MessageRole::System) {
                             compressed.push(first.clone());
                         }
-                    }
                     compressed.extend(working_history.iter().rev().take(15).rev().cloned());
                     working_history = compressed;
                 }
@@ -1751,7 +1748,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                         );
                     }
                     let result = if use_streaming {
-                        let outcome = stream_and_render_response(
+                        
+                        stream_and_render_response(
                             provider_client.as_ref(),
                             request,
                             &thinking_spinner,
@@ -1759,8 +1757,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                             &ctrl_c_state,
                             &ctrl_c_notify,
                         )
-                        .await;
-                        outcome
+                        .await
                     } else {
                         let provider_name = provider_client.name().to_string();
 
@@ -1879,10 +1876,10 @@ pub(crate) async fn run_single_agent_loop_unified(
                 let reasoning_trace = response.reasoning.clone();
 
                 // Strip harmony syntax from displayed content if present
-                if let Some(ref text) = final_text {
-                    if text.contains("<|start|>")
+                if let Some(ref text) = final_text
+                    && (text.contains("<|start|>")
                         || text.contains("<|channel|>")
-                        || text.contains("<|call|>")
+                        || text.contains("<|call|>"))
                     {
                         // Remove harmony tool call syntax from the displayed text
                         let cleaned = strip_harmony_syntax(text);
@@ -1892,7 +1889,6 @@ pub(crate) async fn run_single_agent_loop_unified(
                             final_text = None;
                         }
                     }
-                }
 
                 if tool_calls.is_empty()
                     && let Some(text) = final_text.clone()
@@ -1980,8 +1976,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                         }
 
                         // Render MCP tool calls as assistant messages instead of user input
-                        if name.starts_with("mcp_") {
-                            let tool_name = &name[4..]; // Remove "mcp_" prefix
+                        if let Some(tool_name) = name.strip_prefix("mcp_") {
+                            // Remove "mcp_" prefix
                             let (headline, _) = describe_tool_action(tool_name, &args_val);
 
                             // Render MCP tool call as a single message block
@@ -2112,8 +2108,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         );
 
                                         // Handle MCP events
-                                        if name.starts_with("mcp_") {
-                                            let tool_name = &name[4..];
+                                        if let Some(tool_name) = name.strip_prefix("mcp_") {
                                             let mut mcp_event = mcp_events::McpEvent::new(
                                                 "mcp".to_string(),
                                                 tool_name.to_string(),
@@ -2192,11 +2187,9 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         }
                                         if let Some(notice) =
                                             output.get("notice").and_then(|value| value.as_str())
-                                        {
-                                            if !notice.trim().is_empty() {
+                                            && !notice.trim().is_empty() {
                                                 notice_lines.push(notice.trim().to_string());
                                             }
-                                        }
                                         if !notice_lines.is_empty() {
                                             renderer.line(MessageStyle::Info, "")?;
                                             for line in notice_lines {
@@ -2346,8 +2339,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         let error_json = structured.to_json_value();
                                         let error_message = structured.message.clone();
 
-                                        if name.starts_with("mcp_") {
-                                            let tool_name = &name[4..];
+                                        if let Some(tool_name) = name.strip_prefix("mcp_") {
                                             renderer.line_if_not_empty(MessageStyle::Output)?;
                                             renderer.line(
                                                 MessageStyle::Error,
@@ -2845,8 +2837,8 @@ pub(crate) async fn run_single_agent_loop_unified(
         }
 
         // Shutdown MCP client properly before TUI shutdown using async manager
-        if let Some(mcp_manager) = &async_mcp_manager {
-            if let Err(e) = mcp_manager.shutdown().await {
+        if let Some(mcp_manager) = &async_mcp_manager
+            && let Err(e) = mcp_manager.shutdown().await {
                 let error_msg = e.to_string();
                 if error_msg.contains("EPIPE")
                     || error_msg.contains("Broken pipe")
@@ -2860,7 +2852,6 @@ pub(crate) async fn run_single_agent_loop_unified(
                     eprintln!("Warning: Failed to shutdown MCP client cleanly: {}", e);
                 }
             }
-        }
 
         handle.shutdown();
 

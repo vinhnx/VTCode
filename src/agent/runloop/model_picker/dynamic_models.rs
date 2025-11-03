@@ -144,7 +144,7 @@ impl DynamicModelRegistry {
             let lower = trimmed.to_ascii_lowercase();
             if static_index
                 .get(&provider)
-                .map_or(false, |set| set.contains(&lower))
+                .is_some_and(|set| set.contains(&lower))
             {
                 continue;
             }
@@ -173,11 +173,10 @@ impl DynamicModelRegistry {
     fn has_model(&self, provider: Provider, candidate: &str) -> bool {
         if let Some(indexes) = self.provider_models.get(&provider) {
             for index in indexes {
-                if let Some(entry) = self.entries.get(*index) {
-                    if entry.model_id.eq_ignore_ascii_case(candidate) {
+                if let Some(entry) = self.entries.get(*index)
+                    && entry.model_id.eq_ignore_ascii_case(candidate) {
                         return true;
                     }
-                }
             }
         }
         false
@@ -337,11 +336,10 @@ impl CachedDynamicModelStore {
             .unwrap_or_default()
             .as_secs();
 
-        if let Some(entry) = self.entries.get(&key) {
-            if now.saturating_sub(entry.fetched_at) <= DYNAMIC_MODEL_CACHE_TTL_SECS {
+        if let Some(entry) = self.entries.get(&key)
+            && now.saturating_sub(entry.fetched_at) <= DYNAMIC_MODEL_CACHE_TTL_SECS {
                 return (Ok(entry.models.clone()), None);
             }
-        }
 
         match fetch_fn(base_url.clone()).await {
             Ok(models) => {

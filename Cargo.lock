@@ -1928,7 +1928,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.62.1",
+ "windows-core",
 ]
 
 [[package]]
@@ -2212,17 +2212,6 @@ checksum = "dbc5ebe9c3a1a7a5127f920a418f7585e9e758e911d0466ed004f393b0e380b2"
 dependencies = [
  "memchr",
  "serde",
-]
-
-[[package]]
-name = "is-terminal"
-version = "0.4.17"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3640c1c38b8e4e43584d8df18be5fc6b0aa314ce6ebf51b53313d4306cca8e46"
-dependencies = [
- "hermit-abi",
- "libc",
- "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3706,22 +3695,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "reqwest-eventsource"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "632c55746dbb44275691640e7b40c907c16a2dc1a5842aa98aaec90da6ec6bde"
-dependencies = [
- "eventsource-stream",
- "futures-core",
- "futures-timer",
- "mime",
- "nom 7.1.3",
- "pin-project-lite",
- "reqwest",
- "thiserror 1.0.69",
-]
-
-[[package]]
 name = "rgb"
 version = "0.8.52"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3729,20 +3702,23 @@ checksum = "0c6a884d2998352bb4daf0183589aec883f16a6da1f4dde84d8e2e9a5409a1ce"
 
 [[package]]
 name = "rig-core"
-version = "0.21.0"
+version = "0.23.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9fda909fffdc506e22541e7221d2bd56f21b94ccea218adb4e1bb3677706669a"
+checksum = "5f9cbb51d97b03fb936caf5c1b05a7229cca0ddd569a0d09d9d2e2be41538fc2"
 dependencies = [
  "as-any",
  "async-stream",
  "base64 0.22.1",
  "bytes",
+ "eventsource-stream",
  "futures",
+ "futures-timer",
  "glob",
+ "http",
  "mime_guess",
  "ordered-float",
+ "pin-project-lite",
  "reqwest",
- "reqwest-eventsource",
  "schemars 1.0.4",
  "serde",
  "serde_json",
@@ -3971,7 +3947,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3fbf2ae1b8bc8e02df939598064d22402220cd5bbcca1c76f7d6a310974d5615"
 dependencies = [
  "dyn-clone",
- "indexmap 1.9.3",
  "schemars_derive 0.8.22",
  "serde",
  "serde_json",
@@ -3997,6 +3972,7 @@ checksum = "82d20c4491bc164fa2f6c5d44565947a52ad80b9505d8e36f8d54c27c739fcd0"
 dependencies = [
  "chrono",
  "dyn-clone",
+ "indexmap 2.12.0",
  "ref-cast",
  "schemars_derive 1.0.4",
  "serde",
@@ -5424,7 +5400,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode"
-version = "0.39.2"
+version = "0.39.3"
 dependencies = [
  "agent-client-protocol",
  "anstyle",
@@ -5442,7 +5418,6 @@ dependencies = [
  "indexmap 2.12.0",
  "indicatif 0.18.2",
  "insta",
- "is-terminal",
  "itertools 0.14.0",
  "libc",
  "memchr",
@@ -5475,14 +5450,14 @@ dependencies = [
 
 [[package]]
 name = "vtcode-acp-client"
-version = "0.39.2"
+version = "0.39.3"
 dependencies = [
  "agent-client-protocol",
 ]
 
 [[package]]
 name = "vtcode-bash-runner"
-version = "0.39.2"
+version = "0.39.3"
 dependencies = [
  "anyhow",
  "path-clean",
@@ -5495,14 +5470,14 @@ dependencies = [
 
 [[package]]
 name = "vtcode-commons"
-version = "0.39.2"
+version = "0.39.3"
 dependencies = [
  "anyhow",
 ]
 
 [[package]]
 name = "vtcode-config"
-version = "0.39.2"
+version = "0.39.3"
 dependencies = [
  "anyhow",
  "dirs",
@@ -5510,7 +5485,7 @@ dependencies = [
  "indexmap 2.12.0",
  "once_cell",
  "regex",
- "schemars 0.8.22",
+ "schemars 1.0.4",
  "serde",
  "serde_json",
  "serial_test",
@@ -5523,7 +5498,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-core"
-version = "0.39.2"
+version = "0.39.3"
 dependencies = [
  "ansi-to-tui",
  "anstream",
@@ -5554,7 +5529,6 @@ dependencies = [
  "humantime",
  "iana-time-zone",
  "indexmap 2.12.0",
- "is-terminal",
  "itertools 0.14.0",
  "json5",
  "line-clipping",
@@ -5616,10 +5590,10 @@ dependencies = [
 
 [[package]]
 name = "vtcode-exec-events"
-version = "0.39.2"
+version = "0.39.3"
 dependencies = [
  "log",
- "schemars 0.8.22",
+ "schemars 1.0.4",
  "serde",
  "serde_json",
  "tracing",
@@ -5627,7 +5601,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-indexer"
-version = "0.39.2"
+version = "0.39.3"
 dependencies = [
  "anyhow",
  "ignore",
@@ -5638,7 +5612,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-llm"
-version = "0.39.2"
+version = "0.39.3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5650,7 +5624,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-markdown-store"
-version = "0.39.2"
+version = "0.39.3"
 dependencies = [
  "anyhow",
  "fs2",
@@ -5664,7 +5638,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-tools"
-version = "0.39.2"
+version = "0.39.3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5952,7 +5926,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9babd3a767a4c1aef6900409f85f5d53ce2544ccdfaa86dad48c91782c6d6893"
 dependencies = [
  "windows-collections",
- "windows-core 0.61.2",
+ "windows-core",
  "windows-future",
  "windows-link 0.1.3",
  "windows-numerics",
@@ -5964,7 +5938,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3beeceb5e5cfd9eb1d76b381630e82c4241ccd0d27f1a39ed41b2760b255c5e8"
 dependencies = [
- "windows-core 0.61.2",
+ "windows-core",
 ]
 
 [[package]]
@@ -5976,21 +5950,8 @@ dependencies = [
  "windows-implement",
  "windows-interface",
  "windows-link 0.1.3",
- "windows-result 0.3.4",
- "windows-strings 0.4.2",
-]
-
-[[package]]
-name = "windows-core"
-version = "0.62.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6844ee5416b285084d3d3fffd743b925a6c9385455f64f6d4fa3031c4c2749a9"
-dependencies = [
- "windows-implement",
- "windows-interface",
- "windows-link 0.2.1",
- "windows-result 0.4.0",
- "windows-strings 0.5.0",
+ "windows-result",
+ "windows-strings",
 ]
 
 [[package]]
@@ -5999,7 +5960,7 @@ version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc6a41e98427b19fe4b73c550f060b59fa592d7d686537eebf9385621bfbad8e"
 dependencies = [
- "windows-core 0.61.2",
+ "windows-core",
  "windows-link 0.1.3",
  "windows-threading",
 ]
@@ -6044,7 +6005,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9150af68066c4c5c07ddc0ce30421554771e528bde427614c61038bc2c92c2b1"
 dependencies = [
- "windows-core 0.61.2",
+ "windows-core",
  "windows-link 0.1.3",
 ]
 
@@ -6055,8 +6016,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b8a9ed28765efc97bbc954883f4e6796c33a06546ebafacbabee9696967499e"
 dependencies = [
  "windows-link 0.1.3",
- "windows-result 0.3.4",
- "windows-strings 0.4.2",
+ "windows-result",
+ "windows-strings",
 ]
 
 [[package]]
@@ -6069,30 +6030,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "windows-result"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7084dcc306f89883455a206237404d3eaf961e5bd7e0f312f7c91f57eb44167f"
-dependencies = [
- "windows-link 0.2.1",
-]
-
-[[package]]
 name = "windows-strings"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56e6c93f3a0c3b36176cb1327a4958a0353d5d166c2a35cb268ace15e91d3b57"
 dependencies = [
  "windows-link 0.1.3",
-]
-
-[[package]]
-name = "windows-strings"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7218c655a553b0bed4426cf54b20d7ba363ef543b52d515b3e48d7fd55318dda"
-dependencies = [
- "windows-link 0.2.1",
 ]
 
 [[package]]

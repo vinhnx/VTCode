@@ -94,7 +94,7 @@ pub(crate) fn render_curl_result(
     use std::fmt::Write as FmtWrite;
 
     if let Some(status) = val.get("status").and_then(|v| v.as_u64()) {
-        let status_style = if status >= 200 && status < 300 {
+        let status_style = if (200..300).contains(&status) {
             MessageStyle::Response
         } else if status >= 400 {
             MessageStyle::Error
@@ -160,11 +160,10 @@ fn parse_command_tokens(payload: &Value) -> Option<Vec<String>> {
     if let Some(array) = payload.get("command").and_then(Value::as_array) {
         let mut tokens = Vec::new();
         for value in array {
-            if let Some(segment) = value.as_str() {
-                if !segment.is_empty() {
+            if let Some(segment) = value.as_str()
+                && !segment.is_empty() {
                     tokens.push(segment.to_string());
                 }
-            }
         }
         if !tokens.is_empty() {
             return Some(tokens);
@@ -175,11 +174,10 @@ fn parse_command_tokens(payload: &Value) -> Option<Vec<String>> {
         if command_str.trim().is_empty() {
             return None;
         }
-        if let Ok(segments) = shell_split(command_str) {
-            if !segments.is_empty() {
+        if let Ok(segments) = shell_split(command_str)
+            && !segments.is_empty() {
                 return Some(segments);
             }
-        }
     }
     None
 }
@@ -236,8 +234,8 @@ fn preprocess_terminal_stdout<'a>(tokens: Option<&[String]>, stdout: &'a str) ->
         return strip_rust_diagnostic_columns(normalized);
     }
 
-    if let Some(parts) = tokens {
-        if command_is_multicol_listing(parts) && !listing_has_single_column_flag(parts) {
+    if let Some(parts) = tokens
+        && command_is_multicol_listing(parts) && !listing_has_single_column_flag(parts) {
             let plain = strip_ansi_codes(normalized.as_ref());
             let mut rows = String::with_capacity(plain.len());
             for entry in plain.split_whitespace() {
@@ -249,7 +247,6 @@ fn preprocess_terminal_stdout<'a>(tokens: Option<&[String]>, stdout: &'a str) ->
             }
             return Cow::Owned(rows);
         }
-    }
 
     normalized
 }
