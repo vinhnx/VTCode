@@ -221,15 +221,23 @@ update_npm_package_version() {
 
     print_info "Updating npm/package.json version from $current_version to $next_version"
 
-    # Use a single sed command with proper escaping
+    # Use a temporary file approach to avoid issues with sed -i
     local escaped_version
     # Properly escape special characters for sed, with ] at the start of the bracket to avoid issues
     escaped_version=$(printf '%s\n' "$next_version" | sed 's/[]\.*^$()+?{|]/\\&/g')
+    
+    # Create a temporary file and use sed to replace the version
+    local temp_file=$(mktemp)
     if [[ "$OSTYPE" == "darwin"* ]]; then
-        sed -i '' "s/\"version\": \"[^\"]*\"/\"version\": \"$escaped_version\"/" npm/package.json
+        # macOS sed with backup extension
+        sed "s/\"version\": \"[^\"]*\"/\"version\": \"$escaped_version\"/" npm/package.json > "$temp_file"
     else
-        sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"$escaped_version\"/" npm/package.json
+        # Linux sed
+        sed "s/\"version\": \"[^\"]*\"/\"version\": \"$escaped_version\"/" npm/package.json > "$temp_file"
     fi
+    
+    # Move the temporary file to replace the original
+    mv "$temp_file" npm/package.json
 
     print_success "Updated npm/package.json to version $next_version"
 }
@@ -495,7 +503,11 @@ publish_to_github_packages() {
     # Update to scoped name - properly escape the package name for sed
     local escaped_package_name
     escaped_package_name=$(printf '%s\n' "$package_name" | sed 's/[&/\]/\\&/g')
-    sed "s/\"name\": \"[^\"]*\"/\"name\": \"@vinhnx\/$escaped_package_name\"/" "$temp_package_json" > "$original_package_json"
+    
+    # Use temporary file approach to avoid issues with sed in-place editing
+    local temp_output=$(mktemp)
+    sed "s/\"name\": \"[^\"]*\"/\"name\": \"@vinhnx\/$escaped_package_name\"/" "$temp_package_json" > "$temp_output"
+    mv "$temp_output" "$original_package_json"
 
     if ! (cd npm && npm publish --registry=https://npm.pkg.github.com --access=public); then
         # Restore original package.json on failure
