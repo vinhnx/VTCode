@@ -1,0 +1,115 @@
+name: Release on Tag Push
+
+# This workflow runs when a tag matching the pattern v* is pushed
+# It builds and uploads binaries for the release
+on:
+  push:
+    tags:
+      - 'v*'  # Triggers on tags like v1.0.0, v0.1.2, etc.
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 'lts/*'
+          
+      - name: Generate changelog and create release
+        run: npx changelogithub --github ${{ github.repository }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
+  build-binaries:
+    needs: create-release
+    name: Build and Upload Release Binaries
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            name: x86_64-unknown-linux-gnu
+            binary_name: vtcode
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            name: aarch64-unknown-linux-gnu
+            binary_name: vtcode
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            name: x86_64-apple-darwin
+            binary_name: vtcode
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            name: aarch64-apple-darwin
+            binary_name: vtcode
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            name: x86_64-pc-windows-msvc
+            binary_name: vtcode.exe
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install x86_64 OpenSSL on macOS
+        if: matrix.target == 'x86_64-apple-darwin'
+        shell: bash
+        env:
+          NONINTERACTIVE: 1
+        run: |
+          sudo softwareupdate --install-rosetta --agree-to-license || true
+          /usr/bin/arch -x86_64 /bin/bash -lc '
+            if [[ ! -x /usr/local/bin/brew ]]; then
+              /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+            fi
+            /usr/local/bin/brew update
+            /usr/local/bin/brew install openssl@3
+          '
+          OPENSSL_DIR=$(/usr/bin/arch -x86_64 /usr/local/bin/brew --prefix openssl@3)
+          echo "OPENSSL_DIR=$OPENSSL_DIR" >> "$GITHUB_ENV"
+          echo "OPENSSL_INCLUDE_DIR=$OPENSSL_DIR/include" >> "$GITHUB_ENV"
+          echo "OPENSSL_LIB_DIR=$OPENSSL_DIR/lib" >> "$GITHUB_ENV"
+          echo "PKG_CONFIG_PATH=$OPENSSL_DIR/lib/pkgconfig:${PKG_CONFIG_PATH:-}" >> "$GITHUB_ENV"
+
+      - name: Build release binary
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Package binary (Unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          cd target/${{ matrix.target }}/release
+          tar -czf ../../../vtcode-v${{ github.ref_name }}-${{ matrix.name }}.tar.gz ${{ matrix.binary_name }}
+
+      - name: Package binary (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          cd target/${{ matrix.target }}/release
+          7z a ../../../vtcode-v${{ github.ref_name }}-${{ matrix.name }}.zip ${{ matrix.binary_name }}
+
+      - name: Upload binary to release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: vtcode-v${{ github.ref_name }}-${{ matrix.name }}.${{ matrix.os == 'windows-latest' && 'zip' || 'tar.gz' }}
+          asset_name: vtcode-v${{ github.ref_name }}-${{ matrix.name }}.${{ matrix.os == 'windows-latest' && 'zip' || 'tar.gz' }}
+          tag: ${{ github.ref }}
+          overwrite: true
