@@ -54,7 +54,12 @@ check_dependencies() {
         exit 1
     fi
 
-    if command -v cross &> /dev/null; then
+    # By default, disable Docker usage to avoid Docker daemon dependency
+    # Users can override by setting VTCODE_DISABLE_CROSS=0 to re-enable cross
+    if [[ "${VTCODE_DISABLE_CROSS:-1}" == "1" ]] || [[ "${CROSS_CONTAINER_ENGINE:-}" == "" ]]; then
+        BUILD_TOOL="cargo"
+        print_info "Docker/cross usage disabled by default (set VTCODE_DISABLE_CROSS=0 to enable) – using cargo for builds"
+    elif command -v cross &> /dev/null; then
         BUILD_TOOL="cross"
         print_success "Detected cross – using it for reproducible cross-compilation builds"
     else
