@@ -13,7 +13,7 @@ The VTCode project has **two separate release processes** with independent versi
 
 ## 1. Main VTCode Binary Release
 
-The main VTCode Rust binary, npm package, and related components.
+The main VTCode Rust binary and related components.
 
 ### Current Version
 
@@ -54,7 +54,7 @@ VTCode includes optimized cross-compilation configuration in `Cross.toml` for bu
 -   Builds and tests the project
 -   Creates git tag: `v{version}` (e.g., `v0.39.3`)
 -   Publishes to crates.io
--   Publishes to npm (optional)
+
 -   Publishes to GitHub Packages (optional)
 -   Builds and uploads platform-specific binaries
 -   Updates Homebrew formula (optional)
@@ -91,17 +91,14 @@ cd vscode-extension
 # Or from repository root
 cd vscode-extension && ./release.sh [patch|minor|major]
 
-# Or using npm scripts
-npm run release:patch
-npm run release:minor
-npm run release:major
+# Or using cargo scripts
 ```
 
 ### What It Does
 
 -   Bumps version in `package.json`
 -   Updates `CHANGELOG.md` with new version and date
--   Builds the extension (`npm run bundle`)
+-   Builds the extension
 -   Packages the extension (`.vsix` file)
 -   Commits changes to git
 -   Creates git tag: `vscode-v{version}` (e.g., `vscode-v0.1.2`)
@@ -114,7 +111,7 @@ npm run release:major
 
 The extension release script requires:
 
--   `node` and `npm`
+-   `node` and other build tools
 -   `git`
 -   `jq` (JSON processor)
 -   `@vscode/vsce` (auto-installed if missing)
@@ -214,7 +211,7 @@ git push origin :refs/tags/<tag-name>
 ### Main VTCode Binary
 
 -   **crates.io**: https://crates.io/crates/vtcode
--   **npm**: https://www.npmjs.com/package/vtcode-ai
+
 -   **GitHub Packages**: https://github.com/vinhnx/vtcode/packages
 -   **Homebrew**: `brew install vinhnx/tap/vtcode`
 -   **GitHub Releases**: https://github.com/vinhnx/vtcode/releases

@@ -689,9 +689,9 @@ main() {
         print_info "npm publishing skipped - npm release workflow has been removed"
     fi
 
-    # Skip GitHub Packages publishing as npm release workflow has been removed
+    # Skip GitHub Packages publishing as npm release workflow has been completely removed
     if [[ "$skip_github_packages" == 'false' ]]; then
-        print_info "GitHub Packages publishing skipped - npm release workflow has been removed"
+        print_info "GitHub Packages publishing skipped - npm/GitHub Packages release workflow has been completely removed"
     fi
 
     # Build binaries in background if not skipped
@@ -717,7 +717,7 @@ main() {
     fi
 
     # Wait for all other background processes to complete
-    for pid in $pid_docs $pid_npm; do
+    for pid in $pid_docs; do
         if [[ -n "$pid" ]]; then
             wait "$pid" || print_warning "Background process $pid failed"
         fi

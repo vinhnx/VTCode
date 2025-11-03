@@ -1,6 +1,6 @@
 <h1 align="center">VT Code</h1>
 
-<p align="center"><code>cargo install vtcode</code> | <code>brew install vtcode</code> | <code>npm install -g vtcode-ai</code></p>
+<p align="center"><code>cargo install vtcode</code> | <code>brew install vtcode</code></p>
 <p align="center">
   <a href="./docs/guides/mcp-integration.md">
     <img src="https://img.shields.io/badge/agent%20client%20protocol-black?style=for-the-badge&logo=zedindustries" alt="zed"/>
@@ -25,14 +25,14 @@
   <a href="https://docs.rs/vtcode">
     <img src="https://img.shields.io/badge/docs-rs-%23000000.svg?e&logo=rust&logoColor=white" alt="docs.rs"/>
   </a>
-  <a href="https://www.npmjs.com/package/vtcode">
-    <img src="https://img.shields.io/badge/npm-CB3837?logo=npm&logoColor=fff" alt="npm"/>
+  <a href="https://crates.io/crates/vtcode">
+    <img src="https://img.shields.io/crates/v/vtcode?color=fc8d62&label=crates.io" alt="Crates.io Version"/>
   </a>
-  <a href="#installing-and-running-vt-code">
-    <img src="https://img.shields.io/badge/Homebrew-FBB040?logo=homebrew&logoColor=fff" alt="npm"/>
+  <a href="https://github.com/vinhnx/vtcode/releases">
+    <img src="https://img.shields.io/github/v/release/vinhnx/vtcode?color=orange&label=GitHub" alt="GitHub Release"/>
   </a>
-  <a href="./docs/README.md">
-    <img src="https://img.shields.io/badge/documentation-4285F4?logo=googledocs&logoColor=fff" alt="Documentation"/>
+  <a href="https://github.com/vinhnx/vtcode/actions/workflows/ci.yml">
+    <img src="https://img.shields.io/github/actions/workflow/status/vinhnx/vtcode/ci.yml?branch=main&label=CI" alt="GitHub Actions Workflow Status"/>
   </a>
   <a href="https://deepwiki.com/vinhnx/vtcode"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
 </p>
@@ -63,10 +63,10 @@ Alternatively, if you use [Homebrew](https://brew.sh/):
 brew install vtcode
 ```
 
-Or if you prefer NPM:
+Or if you prefer Homebrew:
 
 ```shell
-npm install -g vtcode
+brew install vtcode
 ```
 
 Then simply run `vtcode` to get started:

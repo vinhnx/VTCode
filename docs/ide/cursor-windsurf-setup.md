@@ -18,7 +18,7 @@ cargo install vtcode
 brew install vtcode
 
 # Or with NPM
-npm install -g vtcode-ai
+
 ```
 
 Verify the installation:
