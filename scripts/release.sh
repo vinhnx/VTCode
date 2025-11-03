@@ -697,6 +697,9 @@ main() {
     # Build binaries in background if not skipped
     local binaries_completed=false
     if [[ "$skip_binaries" == 'false' ]]; then
+        # Disable cross compilation by default to avoid Docker dependency
+        # Users can override with VTCODE_DISABLE_CROSS=0 to use cross
+        export VTCODE_DISABLE_CROSS=${VTCODE_DISABLE_CROSS:-1}
         build_and_upload_binaries "$released_version" &
         pid_binaries=$!
         binaries_completed=true

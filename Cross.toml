@@ -22,6 +22,9 @@ passthrough = [
     "OPENSSL_STATIC",
 ]
 
+# Target-specific configurations - these will use Docker by default
+# To build without Docker, use `cargo build` directly or set CROSS_CONTAINER_ENGINE=
+
 # Target-specific configurations
 [target.x86_64-apple-darwin]
 image = "ghcr.io/cross-rs/x86_64-apple-darwin:latest"
