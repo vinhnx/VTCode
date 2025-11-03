@@ -250,7 +250,8 @@ commit_npm_package_update() {
         return 0
     fi
 
-    if git diff --quiet npm/package.json; then
+    # Check if file has changes using git status instead of git diff which can hang
+    if ! git status --porcelain npm/package.json | grep -q .; then
         print_info "npm/package.json is already up to date"
         return 0
     fi
