@@ -3,7 +3,7 @@ id = "vtcode.agent-server"
 name = "vtcode-agent-server"
 version = "0.37.1"
 display_name = "VT Code Agent Server"
-description = "VT Code packaged as a Zed Agent Server Extension."
+description = "VT Code packaged as a Zed Agent Server Extension. Integrates Rust-based terminal coding agent with LLM and tree-sitter support."
 repository = "https://github.com/vinhnx/vtcode"
 readme = "README.md"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
@@ -11,6 +11,23 @@ authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
 [agent_servers.vtcode]
 name = "VT Code"
 icon = "icons/vtcode.svg"
+
+[themes]
+vtcode = "themes/vtcode-theme.json"
+
+[grammars.json]
+repository = "https://github.com/tree-sitter/tree-sitter-json"
+commit = "001c28d7a29832b06b0e831ec77845553c89b56d"
+
+[slash_commands.logs]
+description = "Open VT trajectory logs"
+requires_argument = false
+
+[slash_commands.status]
+description = "Show VT Code status information"
+requires_argument = false
+
+[context_servers.vtcode]
 
 [agent_servers.vtcode.env]
 VT_ACP_ENABLED = "1"
