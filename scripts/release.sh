@@ -168,103 +168,9 @@ get_current_version() {
 }
 
 # Optimized npm package version update
-update_npm_package_version() {
-    local release_arg=$1
-    local is_pre_release=$2
-    local pre_release_suffix=$3
 
-    if [[ ! -f "npm/package.json" ]]; then
-        print_warning "npm/package.json not found - skipping npm version update"
-        return 0
-    fi
 
-    local current_version
-    current_version=$(get_current_version)
 
-    # Optimized version calculation using a more efficient approach
-    local major minor patch
-    IFS='.' read -ra version_parts <<< "$current_version"
-    major=${version_parts[0]}
-    
-    # Handle cases where patch may have suffixes like "-alpha.1"
-    local patch_part=${version_parts[2]}
-    local suffix=""
-    if [[ "$patch_part" =~ - ]]; then
-        patch=${patch_part%-*}
-        suffix=${patch_part#*-}
-    else
-        patch=$(echo "$patch_part" | sed 's/[^0-9]*$//')
-    fi
-    minor=${version_parts[1]}
-
-    local next_version
-    if [[ "$is_pre_release" == "true" ]]; then
-        if [[ "$pre_release_suffix" == "alpha.0" ]]; then
-            next_version="${major}.${minor}.$((patch + 1))-alpha.1"
-        else
-            next_version="${major}.${minor}.$((patch + 1))-${pre_release_suffix}"
-        fi
-    else
-        case "$release_arg" in
-            "major") next_version="$((major + 1)).0.0" ;;
-            "minor") next_version="${major}.$((minor + 1)).0" ;;
-            "patch") next_version="${major}.${minor}.$((patch + 1))" ;;
-            *) 
-                if [[ "$release_arg" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then
-                    next_version="$release_arg"
-                else
-                    next_version="${major}.${minor}.$((patch + 1))"
-                fi
-                ;;
-        esac
-    fi
-
-    print_info "Updating npm/package.json version from $current_version to $next_version"
-
-    # Use a temporary file approach to avoid issues with sed -i
-    local escaped_version
-    # Properly escape special characters for sed, with ] at the start of the bracket to avoid issues
-    escaped_version=$(printf '%s\n' "$next_version" | sed 's/[]\.*^$()+?{|]/\\&/g')
-    
-    # Create a temporary file and use sed to replace the version
-    local temp_file=$(mktemp)
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        # macOS sed with backup extension
-        sed "s/\"version\": \"[^\"]*\"/\"version\": \"$escaped_version\"/" npm/package.json > "$temp_file"
-    else
-        # Linux sed
-        sed "s/\"version\": \"[^\"]*\"/\"version\": \"$escaped_version\"/" npm/package.json > "$temp_file"
-    fi
-    
-    # Move the temporary file to replace the original
-    mv "$temp_file" npm/package.json
-
-    print_success "Updated npm/package.json to version $next_version"
-}
-
-commit_npm_package_update() {
-    local version=$1
-
-    if [[ ! -f "npm/package.json" ]]; then
-        print_warning "npm/package.json not found - skipping npm commit"
-        return 0
-    fi
-
-    # Check if file has changes using git status instead of git diff which can hang
-    if ! git status --porcelain npm/package.json | grep -q .; then
-        print_info "npm/package.json is already up to date"
-        return 0
-    fi
-
-    git add npm/package.json
-    # Use environment variables to avoid git hanging for editor
-    GIT_AUTHOR_NAME="vtcode-release-bot" \
-    GIT_AUTHOR_EMAIL="noreply@vtcode.com" \
-    GIT_COMMITTER_NAME="vtcode-release-bot" \
-    GIT_COMMITTER_EMAIL="noreply@vtcode.com" \
-    git commit -m "chore: update npm package to v$version"
-    print_success "Committed npm/package.json update"
-}
 
 load_env_file() {
     if [[ -f '.env' ]]; then
@@ -294,16 +200,12 @@ check_clean_tree() {
     fi
 }
 
-# Run all authentication checks in parallel
+# Run all authentication checks (without npm)
 check_all_auth() {
     local skip_npm=$1
     local skip_github_packages=$2
 
-    # Check all auth in parallel if not skipped
-    local pid_cargo=""
-    local pid_npm=""
-    local pid_github=""
-
+    # Check cargo auth
     if command -v cargo >/dev/null 2>&1; then
         local credentials_file="$HOME/.cargo/credentials.toml"
         if [[ -f "$credentials_file" && -s "$credentials_file" ]]; then
@@ -315,19 +217,13 @@ check_all_auth() {
         print_error 'Cargo is not available'
     fi
 
+    # Skip npm authentication as npm release workflow has been removed
     if [[ "$skip_npm" == 'false' ]]; then
-        if command -v npm >/dev/null 2>&1; then
-            if npm whoami >/dev/null 2>&1; then
-                print_success 'npm authentication verified'
-            else
-                print_warning 'Not logged in to npm. Run `npm login` before releasing.'
-            fi
-        else
-            print_warning 'npm is not available'
-        fi
+        print_info "npm release workflow has been removed - skipping npm authentication checks"
     fi
 
     if [[ "$skip_github_packages" == 'false' ]]; then
+        # GitHub Packages authentication still requires npm but we'll provide info
         if command -v npm >/dev/null 2>&1; then
             if [[ -n "${GITHUB_TOKEN:-}" ]]; then
                 local token_config
@@ -344,7 +240,7 @@ check_all_auth() {
                 print_info 'Make sure your GitHub token has write:packages, read:packages, and repo scopes.'
             fi
         else
-            print_warning 'npm is not available'
+            print_warning 'npm is not available (required for GitHub Packages authentication)'
         fi
     fi
 }
@@ -434,93 +330,9 @@ trigger_docs_rs_rebuild() {
     wait "$pid_main"
 }
 
-publish_to_npm() {
-    local version=$1
 
-    print_distribution 'Publishing to npm...'
 
-    if [[ ! -d 'npm' ]] || [[ ! -f 'npm/package.json' ]]; then
-        print_warning 'npm directory or package.json not found - skipping npm publish'
-        return 0
-    fi
 
-    # Check if this version already exists on npm to avoid conflicts
-    if npm view "vtcode-ai@$version" version >/dev/null 2>&1; then
-        print_warning "npm package vtcode-ai@$version already exists - skipping publish"
-        return 0
-    fi
-
-    if ! (cd npm && npm publish --access public); then
-        print_error 'Failed to publish to npm'
-        return 1
-    fi
-
-    print_success "Published npm package version $version"
-}
-
-publish_to_github_packages() {
-    local version=$1
-
-    print_distribution 'Publishing to GitHub Packages...'
-
-    if [[ ! -d 'npm' ]] || [[ ! -f 'npm/package.json' ]]; then
-        print_warning 'npm directory or package.json not found - skipping GitHub Packages publish'
-        return 0
-    fi
-
-    if [[ -z "${GITHUB_TOKEN:-}" ]]; then
-        print_error 'GITHUB_TOKEN environment variable not set - skipping GitHub Packages publish'
-        print_info 'Set GITHUB_TOKEN to publish to GitHub Packages'
-        return 1
-    fi
-
-    if [[ ! -f 'npm/.npmrc' ]]; then
-        print_error 'npm/.npmrc file not found - skipping GitHub Packages publish'
-        print_info 'Create .npmrc file with GitHub Packages configuration'
-        return 1
-    fi
-
-    if ! grep -q "npm.pkg.github.com" npm/.npmrc; then
-        print_error 'npm/.npmrc does not contain GitHub Packages registry - skipping GitHub Packages publish'
-        print_info 'Ensure .npmrc contains authentication for https://npm.pkg.github.com'
-        return 1
-    fi
-
-    # Check if this version already exists on GitHub Packages to avoid conflicts
-    if npm view --registry=https://npm.pkg.github.com "@vinhnx/vtcode@$version" version >/dev/null 2>&1; then
-        print_warning "GitHub Packages @vinhnx/vtcode@$version already exists - skipping publish"
-        return 0
-    fi
-
-    # Use temporary file for package name manipulation
-    local original_package_json="npm/package.json"
-    local temp_package_json=$(mktemp)
-    cp "$original_package_json" "$temp_package_json"
-
-    # Get the original package name
-    local package_name
-    package_name=$(grep -o '"name": *"[^"]*"' "$original_package_json" | sed 's/"name": *"\([^"]*\)"/\1/')
-    
-    # Update to scoped name - properly escape the package name for sed
-    local escaped_package_name
-    escaped_package_name=$(printf '%s\n' "$package_name" | sed 's/[&/\]/\\&/g')
-    
-    # Use temporary file approach to avoid issues with sed in-place editing
-    local temp_output=$(mktemp)
-    sed "s/\"name\": \"[^\"]*\"/\"name\": \"@vinhnx\/$escaped_package_name\"/" "$temp_package_json" > "$temp_output"
-    mv "$temp_output" "$original_package_json"
-
-    if ! (cd npm && npm publish --registry=https://npm.pkg.github.com --access=public); then
-        # Restore original package.json on failure
-        mv "$temp_package_json" "$original_package_json"
-        print_error 'Failed to publish to GitHub Packages'
-        return 1
-    fi
-
-    # Cleanup temp file on success
-    rm -f "$temp_package_json"
-    print_success "Published npm package version $version to GitHub Packages"
-}
 
 build_and_upload_binaries() {
     local version=$1
@@ -830,18 +642,9 @@ main() {
     current_version=$(get_current_version)
     print_info "Current version: $current_version"
 
-    # Update npm package.json before starting the cargo release process
+    # Skip npm package.json update as npm release workflow has been removed
     if [[ "$skip_npm" == 'false' ]]; then
-        update_npm_package_version "$release_argument" "$pre_release" "$pre_release_suffix"
-        if [[ -f "npm/package.json" ]]; then
-            local npm_version
-            npm_version=$(grep -o '"version": *"[^"]*"' npm/package.json | sed 's/"version": *"\([^"]*\)"/\1/')
-            if [[ -n "$npm_version" ]]; then
-                commit_npm_package_update "$npm_version"
-            else
-                print_warning "Could not determine npm package version"
-            fi
-        fi
+        print_info "npm release workflow has been removed - skipping npm package updates"
     fi
 
     if [[ "$dry_run" == 'true' ]]; then
@@ -888,10 +691,9 @@ main() {
         pid_npm=$!
     fi
 
-    # Publish to GitHub Packages in background if not skipped
+    # Skip GitHub Packages publishing as npm release workflow has been removed
     if [[ "$skip_github_packages" == 'false' ]]; then
-        publish_to_github_packages "$released_version" &
-        pid_github=$!
+        print_info "GitHub Packages publishing skipped - npm release workflow has been removed"
     fi
 
     # Build binaries in background if not skipped
@@ -917,7 +719,7 @@ main() {
     fi
 
     # Wait for all other background processes to complete
-    for pid in $pid_docs $pid_npm $pid_github; do
+    for pid in $pid_docs $pid_npm; do
         if [[ -n "$pid" ]]; then
             wait "$pid" || print_warning "Background process $pid failed"
         fi
