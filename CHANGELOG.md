@@ -3,6 +3,21 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - Latest Improvements# [Version 0.39.5] - 2025-11-03
+# [Version 0.39.12] - 2025-11-03
+
+
+### Features
+    - feat: disable Docker usage by default in build script and update Cross.toml comments
+    - feat: add initial implementation of VT Code Zed extension with icons, themes, and logging commands
+
+
+### Documentation
+    - docs: update changelog for v0.39.11 [skip ci]
+
+
+### Chores
+    - chore: release v0.39.11
+    - chore: update dependencies, enhance README, and add diagnostics commands for Zed extension
 # [Version 0.39.11] - 2025-11-03
 
 
