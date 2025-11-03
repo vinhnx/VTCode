@@ -12,12 +12,11 @@ use ratatui::{
     Frame,
     layout::{Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
-    symbols::border,
-    text::{Line, Span, Text},
+    text::{Line, Span},
     widgets::{Block, BorderType, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
 };
 use tokio::sync::mpsc::UnboundedSender;
-use tui_popup::{Popup, PopupState, SizedWrapper};
+use tui_popup::PopupState;
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
@@ -2775,35 +2774,24 @@ impl Session {
             modal.list.is_some(),
         );
 
-        frame.render_widget(Clear, area);
-
-        let body = SizedWrapper {
-            inner: Text::raw(""),
-            width: area.width as usize,
-            height: area.height as usize,
-        };
-
-        let popup = Popup::new(body)
+        let block = Block::default()
             .title(Line::styled(modal.title.clone(), styles.title))
             .borders(Borders::ALL)
-            .border_set(border::ROUNDED)
+            .border_type(BorderType::Rounded)
             .border_style(styles.border);
 
-        frame.render_stateful_widget_ref(popup, viewport, &mut modal.popup_state);
+        frame.render_widget(Clear, area);
+        frame.render_widget(block, area);
 
-        let Some(popup_area) = modal.popup_state.area() else {
-            return;
-        };
-
-        if popup_area.width <= 2 || popup_area.height <= 2 {
+        if area.width <= 2 || area.height <= 2 {
             return;
         }
 
         let inner = Rect {
-            x: popup_area.x.saturating_add(1),
-            y: popup_area.y.saturating_add(1),
-            width: popup_area.width.saturating_sub(2),
-            height: popup_area.height.saturating_sub(2),
+            x: area.x.saturating_add(1),
+            y: area.y.saturating_add(1),
+            width: area.width.saturating_sub(2),
+            height: area.height.saturating_sub(2),
         };
 
         if inner.width == 0 || inner.height == 0 {
