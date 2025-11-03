@@ -1,6 +1,6 @@
 [package]
 name = "vtcode-exec-events"
-version = "0.39.10"
+version = "0.39.11"
 edition = "2024"
 description = "Structured execution telemetry event schema used across VTCode crates."
 license = "MIT OR Apache-2.0"
