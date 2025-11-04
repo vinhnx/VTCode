@@ -45,3 +45,4 @@ vtcode-core = { path = "../vtcode-core" }
 [dev-dependencies]
 futures = "0.3"
 tempfile = "3"
+assert_fs = "1.1"

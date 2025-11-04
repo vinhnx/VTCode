@@ -1,5 +1,5 @@
+use assert_fs::TempDir;
 use serde_json::json;
-use tempfile::TempDir;
 use vtcode_core::config::constants::tools;
 use vtcode_core::config::loader::ConfigManager;
 use vtcode_core::tool_policy::ToolPolicy as RuntimeToolPolicy;

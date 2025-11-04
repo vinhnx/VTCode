@@ -1,8 +1,10 @@
+use assert_fs::prelude::*;
+use assert_fs::TempDir;
 use std::env;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use tempfile::{NamedTempFile, TempDir};
+use tempfile::NamedTempFile;
 
 /// Test environment setup and teardown
 pub struct TestEnv {
@@ -29,15 +31,15 @@ impl TestEnv {
     }
 
     pub fn create_test_file(&self, name: &str, content: &str) -> PathBuf {
-        let file_path = self.temp_dir.path().join(name);
-        fs::write(&file_path, content).expect("Failed to create test file");
-        file_path
+        let file = self.temp_dir.child(name);
+        file.write_str(content).expect("Failed to create test file");
+        file.path().to_path_buf()
     }
 
     pub fn create_test_dir(&self, name: &str) -> PathBuf {
-        let dir_path = self.temp_dir.path().join(name);
-        fs::create_dir_all(&dir_path).expect("Failed to create test directory");
-        dir_path
+        let dir = self.temp_dir.child(name);
+        dir.create_dir_all().expect("Failed to create test directory");
+        dir.path().to_path_buf()
     }
 }
 

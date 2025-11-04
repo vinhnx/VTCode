@@ -5406,6 +5406,7 @@ dependencies = [
  "anstyle",
  "anyhow",
  "assert_cmd",
+ "assert_fs",
  "async-trait",
  "chrono",
  "clap",
@@ -5460,6 +5461,7 @@ name = "vtcode-bash-runner"
 version = "0.39.13"
 dependencies = [
  "anyhow",
+ "assert_fs",
  "path-clean",
  "serde",
  "shell-escape",
@@ -5480,6 +5482,7 @@ name = "vtcode-config"
 version = "0.39.13"
 dependencies = [
  "anyhow",
+ "assert_fs",
  "dirs",
  "dotenvy",
  "indexmap 2.12.0",
@@ -5615,6 +5618,7 @@ name = "vtcode-llm"
 version = "0.39.13"
 dependencies = [
  "anyhow",
+ "assert_fs",
  "async-trait",
  "futures",
  "tempfile",
@@ -5641,6 +5645,7 @@ name = "vtcode-tools"
 version = "0.39.13"
 dependencies = [
  "anyhow",
+ "assert_fs",
  "async-trait",
  "serde_json",
  "tempfile",

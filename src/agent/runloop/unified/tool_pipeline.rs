@@ -352,12 +352,11 @@ mod tests {
     use tokio::task::yield_now;
     use tokio::time::advance;
     use tracing::Level;
+    use assert_fs::TempDir;
+    use futures::future::BoxFuture;
     use tracing_subscriber::fmt;
     use vtcode_core::config::types::CapabilityLevel;
     use vtcode_core::tools::registry::ToolRegistration;
-
-    use futures::future::BoxFuture;
-    use tempfile::tempdir;
 
     #[tokio::test]
     async fn test_execute_tool_with_timeout() {
@@ -481,7 +480,7 @@ mod tests {
 
         let _guard = tracing::subscriber::set_default(subscriber);
 
-        let temp_dir = tempdir().expect("create temp dir");
+        let temp_dir = TempDir::new().expect("create temp dir");
         let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
         registry
             .register_tool(ToolRegistration::new(

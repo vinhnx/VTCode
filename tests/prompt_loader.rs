@@ -1,8 +1,8 @@
 /// Integration tests for system prompt loading functionality
 /// This test ensures the prompt loading system works correctly and provides good error messages.
+use assert_fs::TempDir;
 use std::fs;
 use std::path::Path;
-use tempfile::tempdir;
 use vtcode_core::config::constants::prompts;
 
 /// Test that the default system prompt path constant is correct
@@ -18,7 +18,7 @@ fn default_prompt_path_constant() {
 /// Test loading system prompt from file when it exists
 #[test]
 fn load_system_prompt_from_existing_file() {
-    let temp_dir = tempdir().expect("Failed to create temp directory");
+    let temp_dir = TempDir::new().expect("Failed to create temp directory");
     let prompts_dir = temp_dir.path().join("prompts");
     fs::create_dir_all(&prompts_dir).expect("Failed to create prompts directory");
 
@@ -38,7 +38,7 @@ fn load_system_prompt_from_existing_file() {
 /// Test behavior when system prompt file doesn't exist
 #[test]
 fn prompt_file_missing_behavior() {
-    let temp_dir = tempdir().expect("Failed to create temp directory");
+    let temp_dir = TempDir::new().expect("Failed to create temp directory");
     let nonexistent_path = temp_dir.path().join("prompts").join("system.md");
 
     // Verify the file doesn't exist
@@ -55,7 +55,7 @@ fn prompt_file_missing_behavior() {
 /// Test prompt file with various content formats
 #[test]
 fn prompt_file_content_variations() {
-    let temp_dir = tempdir().expect("Failed to create temp directory");
+    let temp_dir = TempDir::new().expect("Failed to create temp directory");
     let prompts_dir = temp_dir.path().join("prompts");
     fs::create_dir_all(&prompts_dir).expect("Failed to create prompts directory");
 
@@ -178,7 +178,7 @@ fn prompt_directory_structure() {
 /// Integration test that validates the complete prompt loading workflow
 #[test]
 fn integration_prompt_loading_workflow() {
-    let temp_dir = tempdir().expect("Failed to create temp directory");
+    let temp_dir = TempDir::new().expect("Failed to create temp directory");
     let original_dir = std::env::current_dir().expect("Failed to get current directory");
 
     // Change to temp directory for this test
@@ -195,7 +195,7 @@ You are a helpful coding assistant for the VTCode Rust project with access to fi
 
 ## Available Tools
 - list_files: List files and directories
-- read_file: Read file contents  
+- read_file: Read file contents
 - grep_file: Search for patterns in code
 - run_terminal_cmd: Execute terminal commands
 

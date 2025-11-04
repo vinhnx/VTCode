@@ -205,10 +205,10 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use anyhow::{Error, Result, anyhow};
+    use assert_fs::TempDir;
     use std::borrow::Cow;
     use std::sync::{Arc, Mutex};
-
-    use anyhow::{Error, Result, anyhow};
 
     #[derive(Clone)]
     struct TestPaths {
@@ -288,7 +288,7 @@ mod tests {
 
     #[test]
     fn applies_workspace_paths_to_prompt_cache() {
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = TempDir::new().unwrap();
         let root = temp_dir.path().join("workspace");
         let config = root.join("config");
         let cache = root.join("cache");
@@ -329,7 +329,7 @@ mod tests {
 
     #[test]
     fn reports_errors_when_telemetry_fails() {
-        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir = TempDir::new().unwrap();
         let root = temp_dir.path().join("workspace");
         let config = root.join("config");
         let cache = root.join("cache");
