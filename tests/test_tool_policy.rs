@@ -7,11 +7,12 @@
 //! serde = { version = "1.0", features = ["derive"] }
 //! serde_json = "1.0"
 //! dirs = "5.0"
-//! tempfile = "3.0"
+//! assert_fs = "1.1"
 //! indexmap = { version = "2.2", features = ["serde"] }
 //! ```
 
 use anyhow::{Context, Result};
+use assert_fs::TempDir;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -202,7 +203,7 @@ fn main() -> Result<()> {
     println!();
 
     // Create a temporary directory for testing
-    let temp_dir = tempfile::tempdir()?;
+    let temp_dir = TempDir::new()?;
     let config_path = temp_dir.path().join("tool-policy.json");
 
     // Create a new policy manager

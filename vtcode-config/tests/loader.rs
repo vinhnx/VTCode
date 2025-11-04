@@ -1,10 +1,9 @@
+use anyhow::Result;
+use assert_fs::TempDir;
+use serial_test::serial;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-
-use anyhow::Result;
-use serial_test::serial;
-use tempfile::TempDir;
 use vtcode_commons::paths::WorkspacePaths;
 use vtcode_config::ConfigManager;
 use vtcode_config::constants::defaults;

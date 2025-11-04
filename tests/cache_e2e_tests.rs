@@ -1,8 +1,8 @@
 //! End-to-end tests for file operations with quick-cache integration
 
+use assert_fs::TempDir;
 use serde_json::{Value, json};
 use std::fs;
-use tempfile::TempDir;
 use vtcode_core::tools::cache::FileCache;
 use vtcode_core::tools::registry::ToolRegistry;
 

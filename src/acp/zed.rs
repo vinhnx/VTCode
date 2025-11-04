@@ -623,6 +623,10 @@ impl ZedAgent {
             if parts.is_empty() {
                 return Err("command array cannot be empty".to_string());
             }
+            // Validate that the executable (first element) is non-empty
+            if parts[0].trim().is_empty() {
+                return Err("command executable cannot be empty".to_string());
+            }
             return Ok(parts);
         }
 
@@ -631,6 +635,10 @@ impl ZedAgent {
                 .map_err(|error| format!("failed to parse command string: {error}"))?;
             if segments.is_empty() {
                 return Err("command string cannot be empty".to_string());
+            }
+            // Validate that the executable (first element) is non-empty
+            if segments[0].trim().is_empty() {
+                return Err("command executable cannot be empty".to_string());
             }
             return Ok(segments);
         }
@@ -1995,9 +2003,9 @@ impl acp::Agent for ZedAgent {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use assert_fs::TempDir;
     use serde_json::{Value, json};
     use std::collections::BTreeMap;
-    use tempfile::tempdir;
     use tokio::fs;
     use vtcode_core::config::core::PromptCachingConfig;
     use vtcode_core::config::types::{
@@ -2059,7 +2067,7 @@ mod tests {
 
     #[tokio::test]
     async fn run_list_files_defaults_to_workspace_root() {
-        let temp = tempdir().unwrap();
+        let temp = TempDir::new().unwrap();
         let file_path = temp.path().join("example.txt");
         fs::write(&file_path, "hello").await.unwrap();
 
@@ -2079,7 +2087,7 @@ mod tests {
 
     #[tokio::test]
     async fn run_list_files_accepts_uri_argument() {
-        let temp = tempdir().unwrap();
+        let temp = TempDir::new().unwrap();
         let nested = temp.path().join("nested");
         fs::create_dir_all(&nested).await.unwrap();
         let inner = nested.join("inner.txt");
@@ -2101,5 +2109,71 @@ mod tests {
                 .map(|path| path.contains("inner.txt"))
                 .unwrap_or(false)
         }));
+    }
+
+    #[test]
+    fn parse_terminal_command_rejects_empty_array() {
+        let args = json!({ "command": [] });
+        let result = ZedAgent::parse_terminal_command(&args);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "command array cannot be empty");
+    }
+
+    #[test]
+    fn parse_terminal_command_rejects_empty_string() {
+        let args = json!({ "command": "" });
+        let result = ZedAgent::parse_terminal_command(&args);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "command string cannot be empty");
+    }
+
+    #[test]
+    fn parse_terminal_command_rejects_whitespace_only_string() {
+        let args = json!({ "command": "   " });
+        let result = ZedAgent::parse_terminal_command(&args);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "command string cannot be empty");
+    }
+
+    #[test]
+    fn parse_terminal_command_rejects_empty_executable_in_array() {
+        let args = json!({ "command": ["", "arg1", "arg2"] });
+        let result = ZedAgent::parse_terminal_command(&args);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "command executable cannot be empty");
+    }
+
+    #[test]
+    fn parse_terminal_command_rejects_whitespace_only_executable_in_array() {
+        let args = json!({ "command": ["  ", "arg1"] });
+        let result = ZedAgent::parse_terminal_command(&args);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "command executable cannot be empty");
+    }
+
+    #[test]
+    fn parse_terminal_command_accepts_valid_array() {
+        let args = json!({ "command": ["ls", "-la"] });
+        let result = ZedAgent::parse_terminal_command(&args);
+        assert!(result.is_ok());
+        let cmd = result.unwrap();
+        assert_eq!(cmd, vec!["ls", "-la"]);
+    }
+
+    #[test]
+    fn parse_terminal_command_accepts_valid_string() {
+        let args = json!({ "command": "echo test" });
+        let result = ZedAgent::parse_terminal_command(&args);
+        assert!(result.is_ok());
+        let cmd = result.unwrap();
+        assert_eq!(cmd, vec!["echo", "test"]);
+    }
+
+    #[test]
+    fn parse_terminal_command_rejects_missing_command_field() {
+        let args = json!({});
+        let result = ZedAgent::parse_terminal_command(&args);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "run_terminal_cmd requires a 'command' array");
     }
 }

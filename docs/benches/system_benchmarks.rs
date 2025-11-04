@@ -1,8 +1,7 @@
-use std::env;
-
+use assert_fs::TempDir;
 use criterion::{BatchSize, Criterion, black_box, criterion_group, criterion_main};
 use serde_json::json;
-use tempfile::TempDir;
+use std::env;
 use vtcode::StartupContext;
 use vtcode_core::cli::args::Cli;
 use vtcode_core::config::constants::tools;

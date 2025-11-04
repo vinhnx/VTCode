@@ -425,9 +425,9 @@ fn resolve_workspace_path(workspace_arg: Option<PathBuf>) -> Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use assert_fs::TempDir;
     use std::env;
     use std::sync::{Mutex, OnceLock};
-    use tempfile::tempdir;
 
     fn workspace_guard() -> std::sync::MutexGuard<'static, ()> {
         static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
@@ -440,7 +440,7 @@ mod tests {
     fn resolves_current_dir_when_none() -> Result<()> {
         let _guard = workspace_guard();
         let original_cwd = env::current_dir()?;
-        let temp_dir = tempdir()?;
+        let temp_dir = TempDir::new()?;
         env::set_current_dir(temp_dir.path())?;
 
         let resolved = resolve_workspace_path(None)?;
@@ -454,7 +454,7 @@ mod tests {
     fn resolves_relative_workspace_path() -> Result<()> {
         let _guard = workspace_guard();
         let original_cwd = env::current_dir()?;
-        let temp_dir = tempdir()?;
+        let temp_dir = TempDir::new()?;
         let workspace_dir = temp_dir.path().join("project");
         std::fs::create_dir(&workspace_dir)?;
         env::set_current_dir(temp_dir.path())?;

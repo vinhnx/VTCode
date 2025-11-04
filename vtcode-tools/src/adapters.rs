@@ -200,14 +200,14 @@ where
 #[cfg(all(test, feature = "policies"))]
 mod tests {
     use super::*;
-    use tempfile::tempdir;
+    use assert_fs::TempDir;
     use vtcode_commons::{
         DisplayErrorFormatter, MemoryErrorReporter, MemoryTelemetry, StaticWorkspacePaths,
     };
 
     #[test]
     fn builds_registry_with_workspace_paths() {
-        let temp = tempdir().expect("tempdir");
+        let temp = TempDir::new().expect("tempdir");
         let workspace_root = temp.path().join("workspace");
         let config_dir = temp.path().join("config");
         std::fs::create_dir_all(&workspace_root).expect("workspace");

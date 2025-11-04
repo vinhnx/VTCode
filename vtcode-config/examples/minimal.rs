@@ -1,7 +1,6 @@
+use assert_fs::TempDir;
 use std::path::PathBuf;
 use std::sync::Arc;
-
-use tempfile::tempdir;
 use vtcode_commons::reference::StaticWorkspacePaths;
 use vtcode_config::ConfigManager;
 use vtcode_config::defaults::{
@@ -10,7 +9,7 @@ use vtcode_config::defaults::{
 
 fn main() -> anyhow::Result<()> {
     // Create a disposable workspace that mimics a downstream project layout.
-    let workspace = tempdir()?;
+    let workspace = TempDir::new()?;
     let workspace_root = workspace.path().to_path_buf();
     let config_dir = workspace_root.join("config");
 

@@ -1,6 +1,6 @@
 use anyhow::Result;
+use assert_fs::TempDir;
 use std::collections::BTreeMap;
-use tempfile::TempDir;
 use tokio::time::{Duration, sleep};
 use vtcode_core::{
     Agent,
