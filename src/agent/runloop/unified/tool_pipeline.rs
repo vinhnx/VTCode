@@ -1,4 +1,3 @@
-use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -11,7 +10,6 @@ use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
 use super::progress::ProgressReporter;
-use tracing::warn;
 use vtcode_core::exec::cancellation;
 use vtcode_core::tools::registry::ToolErrorType;
 use vtcode_core::tools::registry::{ToolExecutionError, ToolRegistry, ToolTimeoutCategory};
@@ -208,9 +206,6 @@ async fn execute_tool_with_progress(
                     ExecutionControl::Continue
                 }
             }
-            _ => None,
-        };
-        let mut warning_emitted = false;
 
             result = time::timeout(TOOL_TIMEOUT, exec_future) => ExecutionControl::Completed(result),
         };
@@ -245,7 +240,7 @@ async fn execute_tool_with_progress(
                         progress_reporter
                             .set_message(format!("{} timed out", name))
                             .await;
-                        create_timeout_error(name)
+                        create_timeout_error(name, ToolTimeoutCategory::Default, Some(TOOL_TIMEOUT))
                     }
                 };
             }
