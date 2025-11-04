@@ -88,8 +88,8 @@ impl TrajectoryLogger {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use assert_fs::TempDir;
     use std::fs;
-    use tempfile::TempDir;
 
     #[test]
     fn test_trajectory_logger_log_route_integration() {

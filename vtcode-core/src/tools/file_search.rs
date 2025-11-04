@@ -431,8 +431,8 @@ fn compile_fuzzy_pattern(pattern: &str) -> Option<FuzzyPattern> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use assert_fs::TempDir;
     use std::path::{Path, PathBuf};
-    use tempfile::TempDir;
 
     fn collect_relative_paths(results: &[FileSearchResult], root: &Path) -> Vec<PathBuf> {
         results

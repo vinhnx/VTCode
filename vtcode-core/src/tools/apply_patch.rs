@@ -352,7 +352,7 @@ impl Patch {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
+    use assert_fs::TempDir;
 
     #[test]
     fn test_parse_simple_patch() {

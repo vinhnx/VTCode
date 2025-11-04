@@ -1030,8 +1030,8 @@ fn title_case(value: &str) -> String {
 mod tests {
     use super::*;
     use anyhow::Result;
+    use assert_fs::TempDir;
     use std::fs;
-    use tempfile::tempdir;
 
     fn has_model(options: &[ModelOption], model: ModelId) -> bool {
         let id = model.as_str();
@@ -1087,7 +1087,7 @@ mod tests {
 
     #[test]
     fn read_workspace_env_returns_value_when_present() -> Result<()> {
-        let dir = tempdir()?;
+        let dir = TempDir::new()?;
         let env_path = dir.path().join(".env");
         fs::write(&env_path, "OPENAI_API_KEY=sk-test\n")?;
         let value = super::read_workspace_env(dir.path(), "OPENAI_API_KEY")?;
@@ -1097,7 +1097,7 @@ mod tests {
 
     #[test]
     fn read_workspace_env_returns_none_when_missing_file() -> Result<()> {
-        let dir = tempdir()?;
+        let dir = TempDir::new()?;
         let value = super::read_workspace_env(dir.path(), "OPENAI_API_KEY")?;
         assert_eq!(value, None);
         Ok(())
@@ -1105,7 +1105,7 @@ mod tests {
 
     #[test]
     fn read_workspace_env_returns_none_when_key_absent() -> Result<()> {
-        let dir = tempdir()?;
+        let dir = TempDir::new()?;
         let env_path = dir.path().join(".env");
         fs::write(&env_path, "OTHER_KEY=value\n")?;
         let value = super::read_workspace_env(dir.path(), "OPENAI_API_KEY")?;

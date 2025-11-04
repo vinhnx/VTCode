@@ -1,15 +1,15 @@
 use std::time::Duration;
 
 use anyhow::Result;
+use assert_fs::TempDir;
 use portable_pty::PtySize;
-use tempfile::tempdir;
 
 use vtcode_core::config::PtyConfig;
 use vtcode_core::tools::{PtyCommandRequest, PtyManager};
 
 #[tokio::test]
 async fn run_pty_command_captures_output() -> Result<()> {
-    let temp_dir = tempdir()?;
+    let temp_dir = TempDir::new()?;
     let manager = PtyManager::new(temp_dir.path().to_path_buf(), PtyConfig::default());
 
     let working_dir = manager.resolve_working_dir(Some("."))?;
@@ -38,7 +38,7 @@ async fn run_pty_command_captures_output() -> Result<()> {
 
 #[test]
 fn create_list_and_close_session_preserves_screen_contents() -> Result<()> {
-    let temp_dir = tempdir()?;
+    let temp_dir = TempDir::new()?;
     let manager = PtyManager::new(temp_dir.path().to_path_buf(), PtyConfig::default());
 
     let working_dir = manager.resolve_working_dir(Some("."))?;
@@ -103,7 +103,7 @@ fn create_list_and_close_session_preserves_screen_contents() -> Result<()> {
 
 #[test]
 fn resolve_working_dir_rejects_missing_directory() {
-    let temp_dir = tempdir().unwrap();
+    let temp_dir = TempDir::new().unwrap();
     let manager = PtyManager::new(temp_dir.path().to_path_buf(), PtyConfig::default());
 
     let error = manager.resolve_working_dir(Some("missing"));
@@ -112,7 +112,7 @@ fn resolve_working_dir_rejects_missing_directory() {
 
 #[test]
 fn session_input_roundtrip_and_resize() -> Result<()> {
-    let temp_dir = tempdir()?;
+    let temp_dir = TempDir::new()?;
     let mut config = PtyConfig::default();
     config.scrollback_lines = 200;
     let manager = PtyManager::new(temp_dir.path().to_path_buf(), config);

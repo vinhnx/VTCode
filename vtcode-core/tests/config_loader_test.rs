@@ -1,7 +1,7 @@
 //! Test for configuration loading with home directory support
 
+use assert_fs::TempDir;
 use std::fs;
-use tempfile::TempDir;
 use vtcode_core::config::VTCodeConfig;
 
 #[test]

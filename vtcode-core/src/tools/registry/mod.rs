@@ -711,9 +711,9 @@ fn normalize_mcp_tool_identifier(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use assert_fs::TempDir;
     use async_trait::async_trait;
     use serde_json::json;
-    use tempfile::TempDir;
 
     const CUSTOM_TOOL_NAME: &str = "custom_test_tool";
 

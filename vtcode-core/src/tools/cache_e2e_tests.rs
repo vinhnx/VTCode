@@ -1,11 +1,11 @@
 //! End-to-end tests for file operations with quick-cache integration
 
+use assert_fs::TempDir;
+use serde_json::{json, Value};
 use std::fs;
 use std::path::PathBuf;
-use tempfile::TempDir;
 use vtcode_core::tools::cache::FileCache;
 use vtcode_core::tools::registry::ToolRegistry;
-use serde_json::{Value, json};
 
 #[cfg(test)]
 mod e2e_tests {

@@ -138,7 +138,7 @@ fn canonicalize_dir(path: &Path) -> Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::tempdir;
+    use assert_fs::TempDir;
 
     fn write_doc(dir: &Path, content: &str) {
         std::fs::write(dir.join("AGENTS.md"), content).unwrap();
@@ -146,14 +146,14 @@ mod tests {
 
     #[test]
     fn returns_none_when_no_docs_present() {
-        let tmp = tempdir().unwrap();
+        let tmp = TempDir::new().unwrap();
         let result = read_project_doc(tmp.path(), 4096).unwrap();
         assert!(result.is_none());
     }
 
     #[test]
     fn reads_doc_within_limit() {
-        let tmp = tempdir().unwrap();
+        let tmp = TempDir::new().unwrap();
         write_doc(tmp.path(), "hello world");
 
         let result = read_project_doc(tmp.path(), 4096).unwrap().unwrap();
@@ -163,7 +163,7 @@ mod tests {
 
     #[test]
     fn truncates_when_limit_exceeded() {
-        let tmp = tempdir().unwrap();
+        let tmp = TempDir::new().unwrap();
         let content = "A".repeat(64);
         write_doc(tmp.path(), &content);
 
@@ -174,7 +174,7 @@ mod tests {
 
     #[test]
     fn reads_docs_from_repo_root_downwards() {
-        let repo = tempdir().unwrap();
+        let repo = TempDir::new().unwrap();
         std::fs::write(repo.path().join(".git"), "gitdir: /tmp/git").unwrap();
         write_doc(repo.path(), "root doc");
 
@@ -198,7 +198,7 @@ mod tests {
 
     #[test]
     fn includes_extra_instruction_files() {
-        let repo = tempdir().unwrap();
+        let repo = TempDir::new().unwrap();
         write_doc(repo.path(), "root doc");
         let docs = repo.path().join("docs");
         std::fs::create_dir_all(&docs).unwrap();

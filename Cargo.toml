@@ -141,6 +141,7 @@ name = "vtcode"
 path = "src/main.rs"
 
 [dev-dependencies]
+assert_fs = "1.1"
 criterion = "0.5"
 tempfile = "3.0"
 indexmap = { version = "2.2", features = ["serde"] }

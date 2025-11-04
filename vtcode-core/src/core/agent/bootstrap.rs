@@ -198,11 +198,12 @@ mod tests {
     use crate::core::agent::snapshots::{
         DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
     };
+    use assert_fs::TempDir;
     use std::collections::BTreeMap;
 
     #[test]
     fn builds_default_component_set() {
-        let temp_dir = tempfile::tempdir().expect("temp dir");
+        let temp_dir = TempDir::new().expect("temp dir");
         let agent_config = AgentConfig {
             model: models::GEMINI_2_5_FLASH_PREVIEW.to_string(),
             api_key: "test-api-key".to_string(),
@@ -233,7 +234,7 @@ mod tests {
 
     #[test]
     fn allows_overriding_components() {
-        let temp_dir = tempfile::tempdir().expect("temp dir");
+        let temp_dir = TempDir::new().expect("temp dir");
         let agent_config = AgentConfig {
             model: models::GEMINI_2_5_FLASH_PREVIEW.to_string(),
             api_key: "test-api-key".to_string(),

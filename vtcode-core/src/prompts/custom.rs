@@ -562,7 +562,7 @@ fn is_identifier_continue(ch: char) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::tempdir;
+    use assert_fs::TempDir;
 
     #[test]
     fn prompt_invocation_parses_named_and_positional_arguments() {
@@ -576,7 +576,7 @@ mod tests {
 
     #[test]
     fn custom_prompt_expands_placeholders() {
-        let temp = tempdir().unwrap();
+        let temp = TempDir::new().unwrap();
         let path = temp.path().join("review.md");
         fs::write(
             &path,
@@ -596,7 +596,7 @@ mod tests {
 
     #[test]
     fn custom_prompt_registry_loads_from_directory() {
-        let temp = tempdir().unwrap();
+        let temp = TempDir::new().unwrap();
         let prompts_dir = temp.path().join("prompts");
         fs::create_dir_all(&prompts_dir).unwrap();
         fs::write(prompts_dir.join("draft.md"), "Draft PR for $1").unwrap();
@@ -614,7 +614,7 @@ mod tests {
 
     #[test]
     fn builtin_prompt_available_without_files() {
-        let temp = tempdir().unwrap();
+        let temp = TempDir::new().unwrap();
         let registry = CustomPromptRegistry::load(None, temp.path()).expect("load registry");
         let prompt = registry.get("vtcode").expect("builtin prompt available");
 
@@ -625,7 +625,7 @@ mod tests {
 
     #[test]
     fn custom_prompt_overrides_builtin_version() {
-        let temp = tempdir().unwrap();
+        let temp = TempDir::new().unwrap();
         let prompts_dir = temp.path().join("prompts");
         fs::create_dir_all(&prompts_dir).unwrap();
         fs::write(prompts_dir.join("vtcode.md"), "Workspace-specific kickoff").unwrap();

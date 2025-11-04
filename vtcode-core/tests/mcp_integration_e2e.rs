@@ -3,8 +3,8 @@
 //! These tests verify that MCP integration works correctly with real MCP servers.
 //! They test the complete flow from configuration loading to tool execution.
 
+use assert_fs::TempDir;
 use std::collections::HashMap;
-use tempfile::TempDir;
 use tokio::process::Command;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::mcp::{

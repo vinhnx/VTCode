@@ -1975,9 +1975,9 @@ impl acp::Agent for ZedAgent {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use assert_fs::TempDir;
     use serde_json::{Value, json};
     use std::collections::BTreeMap;
-    use tempfile::tempdir;
     use tokio::fs;
     use vtcode_core::config::core::PromptCachingConfig;
     use vtcode_core::config::types::{
@@ -2031,7 +2031,7 @@ mod tests {
 
     #[tokio::test]
     async fn run_list_files_defaults_to_workspace_root() {
-        let temp = tempdir().unwrap();
+        let temp = TempDir::new().unwrap();
         let file_path = temp.path().join("example.txt");
         fs::write(&file_path, "hello").await.unwrap();
 
@@ -2051,7 +2051,7 @@ mod tests {
 
     #[tokio::test]
     async fn run_list_files_accepts_uri_argument() {
-        let temp = tempdir().unwrap();
+        let temp = TempDir::new().unwrap();
         let nested = temp.path().join("nested");
         fs::create_dir_all(&nested).await.unwrap();
         let inner = nested.join("inner.txt");

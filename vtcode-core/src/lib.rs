@@ -208,7 +208,7 @@ pub use utils::vtcodegitignore::initialize_vtcode_gitignore;
 mod tests {
     use super::*;
 
-    use tempfile::TempDir;
+    use assert_fs::TempDir;
 
     #[test]
     fn test_library_exports() {

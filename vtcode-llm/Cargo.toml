@@ -41,5 +41,6 @@ vtcode-commons = { path = "../vtcode-commons" }
 vtcode-core = { path = "../vtcode-core" }
 
 [dev-dependencies]
+assert_fs = "1.1"
 futures = "0.3"
 tempfile = "3"

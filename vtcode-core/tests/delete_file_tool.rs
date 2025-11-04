@@ -1,9 +1,10 @@
+use assert_fs::TempDir;
 use serde_json::json;
 use vtcode_core::tools::ToolRegistry;
 
 #[tokio::test]
 async fn delete_file_tool_removes_file() {
-    let tmp = tempfile::TempDir::new().unwrap();
+    let tmp = TempDir::new().unwrap();
     let file_path = tmp.path().join("to_delete.txt");
     tokio::fs::write(&file_path, b"hello").await.unwrap();
 

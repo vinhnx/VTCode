@@ -336,9 +336,9 @@ fn collect_non_empty_entries(items: &[String]) -> Vec<&str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use assert_fs::TempDir;
     use std::collections::BTreeMap;
     use std::fs;
-    use tempfile::tempdir;
     use vtcode_core::config::core::PromptCachingConfig;
     use vtcode_core::config::models::Provider;
     use vtcode_core::config::types::{
@@ -350,7 +350,7 @@ mod tests {
 
     #[test]
     fn test_prepare_session_bootstrap_builds_sections() {
-        let tmp = tempdir().unwrap();
+        let tmp = TempDir::new().unwrap();
         fs::write(
             tmp.path().join("Cargo.toml"),
             "[package]\nname = \"demo\"\nversion = \"0.1.0\"\ndescription = \"Demo project\"\n",
@@ -450,7 +450,7 @@ mod tests {
 
     #[test]
     fn test_welcome_hides_optional_sections_by_default() {
-        let tmp = tempdir().unwrap();
+        let tmp = TempDir::new().unwrap();
         fs::write(
             tmp.path().join("Cargo.toml"),
             "[package]\nname = \"demo\"\nversion = \"0.1.0\"\ndescription = \"Demo project\"\n",
@@ -506,7 +506,7 @@ mod tests {
 
     #[test]
     fn test_prepare_session_bootstrap_hides_placeholder_when_planning_disabled() {
-        let tmp = tempdir().unwrap();
+        let tmp = TempDir::new().unwrap();
         fs::write(
             tmp.path().join("Cargo.toml"),
             "[package]\nname = \"demo\"\nversion = \"0.1.0\"\ndescription = \"Demo\"\n",

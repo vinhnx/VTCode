@@ -1123,7 +1123,7 @@ pub struct ToolConstraints {
 mod tests {
     use super::*;
     use crate::config::constants::tools;
-    use tempfile::tempdir;
+    use assert_fs::TempDir;
 
     #[test]
     fn test_tool_policy_config_serialization() {
@@ -1145,7 +1145,7 @@ mod tests {
 
     #[test]
     fn test_policy_updates() {
-        let dir = tempdir().unwrap();
+        let dir = TempDir::new().unwrap();
         let config_path = dir.path().join("tool-policy.json");
 
         let mut config = ToolPolicyConfig::default();

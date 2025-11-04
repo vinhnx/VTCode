@@ -1,6 +1,6 @@
 //! Tests for simple project management and caching utilities
 
-use tempfile::TempDir;
+use assert_fs::TempDir;
 use vtcode_core::project::{SimpleCache, SimpleProjectManager};
 
 #[test]

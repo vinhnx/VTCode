@@ -242,9 +242,9 @@ pub async fn reload_vtcode_gitignore() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use assert_fs::TempDir;
     use std::fs::File;
     use std::io::Write;
-    use tempfile::TempDir;
 
     /// Test the vtcodegitignore functionality in isolation
     #[tokio::test]

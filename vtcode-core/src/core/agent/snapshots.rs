@@ -521,7 +521,7 @@ pub struct CheckpointRestore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
+    use assert_fs::TempDir;
 
     fn setup_manager() -> (TempDir, SnapshotManager) {
         let dir = TempDir::new().expect("tempdir");

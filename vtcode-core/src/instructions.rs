@@ -312,16 +312,16 @@ fn canonicalize_dir(path: &Path) -> Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::tempdir;
+    use assert_fs::TempDir;
 
     #[test]
     fn collects_sources_with_precedence_and_patterns() -> Result<()> {
-        let workspace = tempdir()?;
+        let workspace = TempDir::new()?;
         let project_root = workspace.path();
         let nested = project_root.join("src");
         std::fs::create_dir_all(&nested)?;
 
-        let global_home = tempdir()?;
+        let global_home = TempDir::new()?;
         let global_rule = global_home.path().join(".vtcode").join(AGENTS_FILENAME);
         std::fs::create_dir_all(global_rule.parent().unwrap())?;
         std::fs::write(&global_rule, "# Global Rules\n- Global applies")?;
@@ -370,7 +370,7 @@ mod tests {
 
     #[test]
     fn handles_missing_instructions_gracefully() -> Result<()> {
-        let workspace = tempdir()?;
+        let workspace = TempDir::new()?;
         let project_root = workspace.path();
         let nested = project_root.join("src");
         std::fs::create_dir_all(&nested)?;
@@ -386,7 +386,7 @@ mod tests {
 
     #[test]
     fn enforces_byte_budget() -> Result<()> {
-        let workspace = tempdir()?;
+        let workspace = TempDir::new()?;
         let project_root = workspace.path();
         let root_rule = project_root.join(AGENTS_FILENAME);
         std::fs::write(&root_rule, "A".repeat(4096))?;
@@ -401,9 +401,9 @@ mod tests {
 
     #[test]
     fn expands_home_patterns() -> Result<()> {
-        let workspace = tempdir()?;
+        let workspace = TempDir::new()?;
         let project_root = workspace.path();
-        let home = tempdir()?;
+        let home = TempDir::new()?;
         let personal = home.path().join("notes.md");
         std::fs::write(&personal, "# Personal instructions")?;
 

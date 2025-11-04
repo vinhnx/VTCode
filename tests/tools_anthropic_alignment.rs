@@ -1,12 +1,13 @@
+use assert_fs::TempDir;
+use assert_fs::prelude::*;
 use serde_json::json;
 use std::fs;
-use tempfile::tempdir;
 use vtcode_core::ToolRegistry;
 use vtcode_core::config::constants::tools;
 
 #[tokio::test]
 async fn list_files_pagination_and_default_response_format() {
-    let dir = tempdir().unwrap();
+    let dir = TempDir::new().unwrap();
     let ws = dir.path().to_path_buf();
 
     // Create workspace files
@@ -15,17 +16,19 @@ async fn list_files_pagination_and_default_response_format() {
     fs::write(ws.join("src/b.rs"), "fn b() {}\n").unwrap();
 
     // Workspace policy with constraints
-    let vtcode_dir = ws.join(".vtcode");
-    fs::create_dir_all(&vtcode_dir).unwrap();
-    fs::write(
-        vtcode_dir.join("tool-policy.json"),
-        json!({
-            "version": 1,
-            "available_tools": [tools::LIST_FILES],
-            "policies": { tools::LIST_FILES: "allow" },
-            "constraints": { tools::LIST_FILES: { "max_items_per_call": 10, "default_response_format": "concise" } }
-        }).to_string(),
-    ).unwrap();
+    let vtcode_dir = dir.child(".vtcode");
+    vtcode_dir.create_dir_all().unwrap();
+    let list_policy = json!({
+        "version": 1,
+        "available_tools": [tools::LIST_FILES],
+        "policies": { tools::LIST_FILES: "allow" },
+        "constraints": { tools::LIST_FILES: { "max_items_per_call": 10, "default_response_format": "concise" } }
+    })
+    .to_string();
+    vtcode_dir
+        .child("tool-policy.json")
+        .write_str(&list_policy)
+        .unwrap();
 
     let mut registry = ToolRegistry::new(ws.clone());
     registry.allow_all_tools().unwrap_or_else(|err| {
@@ -60,22 +63,26 @@ async fn grep_file_default_concise_and_cap() {
         eprintln!("skipping grep_file_default_concise_and_cap: ripgrep not installed");
         return;
     }
-    let dir = tempdir().unwrap();
+    let dir = TempDir::new().unwrap();
     let ws = dir.path().to_path_buf();
-    fs::write(ws.join("file.txt"), "TODO: one\nTODO: two\n").unwrap();
+    dir.child("file.txt")
+        .write_str("TODO: one\nTODO: two\n")
+        .unwrap();
 
     // Minimal policy that allows grep and caps results
-    let vtcode_dir = ws.join(".vtcode");
-    fs::create_dir_all(&vtcode_dir).unwrap();
-    fs::write(
-        vtcode_dir.join("tool-policy.json"),
-        json!({
-            "version": 1,
-            "available_tools": [tools::GREP_FILE],
-            "policies": { tools::GREP_FILE: "allow" },
-            "constraints": { tools::GREP_FILE: { "max_results_per_call": 1, "default_response_format": "concise" } }
-        }).to_string(),
-    ).unwrap();
+    let vtcode_dir = dir.child(".vtcode");
+    vtcode_dir.create_dir_all().unwrap();
+    let grep_policy = json!({
+        "version": 1,
+        "available_tools": [tools::GREP_FILE],
+        "policies": { tools::GREP_FILE: "allow" },
+        "constraints": { tools::GREP_FILE: { "max_results_per_call": 1, "default_response_format": "concise" } }
+    })
+    .to_string();
+    vtcode_dir
+        .child("tool-policy.json")
+        .write_str(&grep_policy)
+        .unwrap();
 
     let mut registry = ToolRegistry::new(ws.clone());
     let out = registry

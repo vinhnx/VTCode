@@ -7,8 +7,8 @@
 //! - Cleanup mechanisms
 //! - Error handling and edge cases
 
+use assert_fs::TempDir;
 use std::collections::HashMap;
-use tempfile::TempDir;
 use tokio::test;
 
 use vtcode_core::agent::snapshots::*;

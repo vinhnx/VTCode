@@ -1,8 +1,9 @@
+use assert_fs::TempDir;
 /// Integration tests for system prompt loading functionality
 /// This test ensures the prompt loading system works correctly and provides good error messages.
+use assert_fs::prelude::*;
 use std::fs;
 use std::path::Path;
-use tempfile::tempdir;
 use vtcode_core::config::constants::prompts;
 
 /// Test that the default system prompt path constant is correct
@@ -18,17 +19,23 @@ fn default_prompt_path_constant() {
 /// Test loading system prompt from file when it exists
 #[test]
 fn load_system_prompt_from_existing_file() {
-    let temp_dir = tempdir().expect("Failed to create temp directory");
-    let prompts_dir = temp_dir.path().join("prompts");
-    fs::create_dir_all(&prompts_dir).expect("Failed to create prompts directory");
+    let temp_dir = TempDir::new().expect("Failed to create temp directory");
+    let prompts_dir = temp_dir.child("prompts");
+    prompts_dir
+        .create_dir_all()
+        .expect("Failed to create prompts directory");
 
-    let prompt_path = prompts_dir.join("system.md");
+    let prompt_file = prompts_dir.child("system.md");
     let test_prompt = "You are a test assistant with specific instructions.\n\nUse these tools:\n- test_tool: For testing purposes";
 
-    fs::write(&prompt_path, test_prompt).expect("Failed to write test prompt file");
+    prompt_file
+        .write_str(test_prompt)
+        .expect("Failed to write test prompt file");
 
     // Simulate loading from the file (since we don't have direct access to load_system_prompt)
-    let loaded_content = fs::read_to_string(&prompt_path).expect("Failed to read prompt file");
+    let loaded_content = prompt_file
+        .read_string()
+        .expect("Failed to read prompt file");
 
     assert_eq!(loaded_content, test_prompt);
     assert!(loaded_content.contains("test assistant"));
@@ -38,14 +45,14 @@ fn load_system_prompt_from_existing_file() {
 /// Test behavior when system prompt file doesn't exist
 #[test]
 fn prompt_file_missing_behavior() {
-    let temp_dir = tempdir().expect("Failed to create temp directory");
-    let nonexistent_path = temp_dir.path().join("prompts").join("system.md");
+    let temp_dir = TempDir::new().expect("Failed to create temp directory");
+    let nonexistent_path = temp_dir.child("prompts/system.md");
 
     // Verify the file doesn't exist
-    assert!(!nonexistent_path.exists());
+    assert!(!nonexistent_path.path().exists());
 
     // Test the error case
-    let result = fs::read_to_string(&nonexistent_path);
+    let result = fs::read_to_string(nonexistent_path.path());
     assert!(result.is_err());
 
     // The error should be a not found error
@@ -55,9 +62,11 @@ fn prompt_file_missing_behavior() {
 /// Test prompt file with various content formats
 #[test]
 fn prompt_file_content_variations() {
-    let temp_dir = tempdir().expect("Failed to create temp directory");
-    let prompts_dir = temp_dir.path().join("prompts");
-    fs::create_dir_all(&prompts_dir).expect("Failed to create prompts directory");
+    let temp_dir = TempDir::new().expect("Failed to create temp directory");
+    let prompts_dir = temp_dir.child("prompts");
+    prompts_dir
+        .create_dir_all()
+        .expect("Failed to create prompts directory");
 
     let large_content = "A".repeat(10000);
     let test_cases = vec![
@@ -75,11 +84,13 @@ fn prompt_file_content_variations() {
     ];
 
     for (test_name, content) in test_cases {
-        let prompt_path =
-            prompts_dir.join(format!("{}.md", test_name.replace(" ", "_").to_lowercase()));
-        fs::write(&prompt_path, content).expect("Failed to write test file");
+        let prompt_file =
+            prompts_dir.child(format!("{}.md", test_name.replace(" ", "_").to_lowercase()));
+        prompt_file
+            .write_str(content)
+            .expect("Failed to write test file");
 
-        let loaded = fs::read_to_string(&prompt_path).expect("Failed to load test file");
+        let loaded = prompt_file.read_string().expect("Failed to load test file");
 
         assert_eq!(loaded, content, "Content mismatch for test: {}", test_name);
     }
@@ -178,7 +189,7 @@ fn prompt_directory_structure() {
 /// Integration test that validates the complete prompt loading workflow
 #[test]
 fn integration_prompt_loading_workflow() {
-    let temp_dir = tempdir().expect("Failed to create temp directory");
+    let temp_dir = TempDir::new().expect("Failed to create temp directory");
     let original_dir = std::env::current_dir().expect("Failed to get current directory");
 
     // Change to temp directory for this test

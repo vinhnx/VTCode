@@ -507,7 +507,7 @@ pub fn update_model_preference(provider: &str, model: &str) -> Result<(), DotErr
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
+    use assert_fs::TempDir;
 
     #[test]
     fn test_dot_manager_initialization() {

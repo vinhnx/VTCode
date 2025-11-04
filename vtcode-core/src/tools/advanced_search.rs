@@ -513,8 +513,8 @@ impl Tool for AdvancedSearchTool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use assert_fs::TempDir;
     use std::sync::Arc;
-    use tempfile::TempDir;
 
     #[tokio::test]
     async fn test_case_insensitive_search() {

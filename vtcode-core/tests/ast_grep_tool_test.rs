@@ -6,10 +6,11 @@ use vtcode_core::tools::registry::ToolRegistry;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use assert_fs::TempDir;
 
     #[tokio::test]
     async fn test_ast_grep_tool_registration() {
-        let temp_dir = tempfile::TempDir::new().unwrap();
+        let temp_dir = TempDir::new().unwrap();
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf());
 
         // Check if AST-grep tool is available (only if ast-grep is installed)
@@ -24,7 +25,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_ast_grep_tool_execution() {
-        let temp_dir = tempfile::TempDir::new().unwrap();
+        let temp_dir = TempDir::new().unwrap();
         let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf());
 
         // Create a simple test file
