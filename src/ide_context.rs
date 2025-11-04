@@ -56,8 +56,6 @@ impl IdeContextBridge {
         self.last_digest = Some(digest);
         Ok(Some(trimmed.to_string()))
     }
-
-
 }
 
 fn compute_digest(value: &str) -> u64 {
