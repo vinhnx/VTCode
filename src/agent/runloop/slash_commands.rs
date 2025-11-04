@@ -186,6 +186,18 @@ pub fn handle_slash_command(
                 return Ok(SlashCommandOutcome::Handled);
             }
 
+            if tokens
+                .first()
+                .map(|token| token.trim().is_empty())
+                .unwrap_or(true)
+            {
+                renderer.line(
+                    MessageStyle::Error,
+                    "Command name cannot be empty. Usage: /command <program> [args...]",
+                )?;
+                return Ok(SlashCommandOutcome::Handled);
+            }
+
             let mut command_vec = Vec::new();
             command_vec.push(Value::String(tokens[0].clone()));
             command_vec.extend(
@@ -689,4 +701,32 @@ fn format_duration_label(duration: Duration) -> String {
     }
     parts.push(format!("{}s", seconds));
     parts.join(" ")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn renderer() -> AnsiRenderer {
+        // A stdout-backed renderer is sufficient for validating command routing logic in tests.
+        AnsiRenderer::stdout()
+    }
+
+    #[test]
+    fn command_slash_requires_program() {
+        let mut renderer = renderer();
+        let registry = CustomPromptRegistry::default();
+        let outcome = handle_slash_command("/command", &mut renderer, &registry)
+            .expect("slash command should not error");
+        assert!(matches!(outcome, SlashCommandOutcome::Handled));
+    }
+
+    #[test]
+    fn command_slash_rejects_blank_program() {
+        let mut renderer = renderer();
+        let registry = CustomPromptRegistry::default();
+        let outcome = handle_slash_command("/command \"\"", &mut renderer, &registry)
+            .expect("slash command should not error");
+        assert!(matches!(outcome, SlashCommandOutcome::Handled));
+    }
 }

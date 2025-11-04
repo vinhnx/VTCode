@@ -233,6 +233,14 @@ impl ToolRegistry {
             return Err(anyhow!("command array cannot be empty"));
         }
 
+        if command_vec
+            .first()
+            .map(|segment| segment.trim().is_empty())
+            .unwrap_or(true)
+        {
+            return Err(anyhow!("command executable cannot be empty"));
+        }
+
         let mode = args
             .get("mode")
             .and_then(|v| v.as_str())
@@ -994,9 +1002,11 @@ fn normalized_shell_name(shell: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        normalized_shell_name, should_use_windows_command_tokenizer, tokenize_command_string,
-        tokenize_windows_command,
+        ToolRegistry, normalized_shell_name, should_use_windows_command_tokenizer,
+        tokenize_command_string, tokenize_windows_command,
     };
+    use serde_json::json;
+    use tempfile::TempDir;
 
     #[test]
     fn windows_tokenizer_preserves_paths_with_spaces() {
@@ -1038,5 +1048,28 @@ mod tests {
         )));
         assert!(should_use_windows_command_tokenizer(Some("pwsh")));
         assert_eq!(normalized_shell_name("/bin/bash"), "bash");
+    }
+
+    #[tokio::test]
+    async fn run_terminal_cmd_rejects_blank_executable() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf());
+        registry.allow_all_tools().ok();
+
+        let args = json!({
+            "command": [""],
+        });
+
+        let error = registry
+            .run_terminal_cmd_executor(args)
+            .await
+            .expect_err("blank command should fail");
+
+        assert!(
+            error
+                .to_string()
+                .contains("command executable cannot be empty"),
+            "unexpected error: {error:#}"
+        );
     }
 }

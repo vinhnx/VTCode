@@ -594,6 +594,7 @@ impl ZedAgent {
             if parts.is_empty() {
                 return Err("command array cannot be empty".to_string());
             }
+            Self::ensure_command_executable(&parts)?;
             return Ok(parts);
         }
 
@@ -603,10 +604,22 @@ impl ZedAgent {
             if segments.is_empty() {
                 return Err("command string cannot be empty".to_string());
             }
+            Self::ensure_command_executable(&segments)?;
             return Ok(segments);
         }
 
         Err("run_terminal_cmd requires a 'command' array".to_string())
+    }
+
+    fn ensure_command_executable(parts: &[String]) -> Result<(), String> {
+        if parts
+            .first()
+            .map(|segment| segment.trim().is_empty())
+            .unwrap_or(true)
+        {
+            return Err("command executable cannot be empty".to_string());
+        }
+        Ok(())
     }
 
     fn resolve_terminal_working_dir(&self, args: &Value) -> Result<Option<PathBuf>, String> {
@@ -2073,5 +2086,16 @@ mod tests {
                 .map(|path| path.contains("inner.txt"))
                 .unwrap_or(false)
         }));
+    }
+
+    #[test]
+    fn ensure_command_executable_rejects_blank_values() {
+        let err = ZedAgent::ensure_command_executable(&[String::new()])
+            .expect_err("blank executable should error");
+        assert_eq!(err, "command executable cannot be empty");
+
+        let err = ZedAgent::ensure_command_executable(&["   ".to_string()])
+            .expect_err("whitespace executable should error");
+        assert_eq!(err, "command executable cannot be empty");
     }
 }
