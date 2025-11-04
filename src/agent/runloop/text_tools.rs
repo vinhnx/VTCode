@@ -269,7 +269,7 @@ fn detect_direct_function_alias(text: &str) -> Option<(String, Value)> {
                 }
 
                 let mut paren_index: Option<usize> = None;
-                let mut iter = text[end..].char_indices();
+                let iter = text[end..].char_indices();
                 for (relative, ch) in iter {
                     if ch.is_whitespace() {
                         continue;

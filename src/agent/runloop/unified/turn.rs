@@ -524,7 +524,6 @@ pub(crate) async fn run_single_agent_loop_unified(
                 Ok(None) => {}
                 Err(err) => {
                     warn!("Failed to update IDE context snapshot: {}", err);
-                    ide_context_bridge = None;
                 }
             }
         }

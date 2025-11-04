@@ -299,8 +299,22 @@ update_homebrew_formula() {
     # Update x86_64 SHA256
     sed -i.bak "s|sha256 \"[a-f0-9]*\"|sha256 \"$x86_64_sha256\"|g" "$formula_path"
 
-    # Update aarch64 SHA256 (find the line with aarch64 and update the SHA256 on the next line)
-    sed -i.bak "/aarch64-apple-darwin/,+1{s|sha256 \"[a-f0-9]*\"|sha256 \"$aarch64_sha256\"|g};" "$formula_path"
+    # Update aarch64 SHA256 (find the line with aarch64 and update the next SHA256 line)
+    # Using a more portable approach with Python for cross-platform compatibility
+    python3 -c "
+import re
+with open('$formula_path', 'r') as f:
+    content = f.read()
+
+# Replace x86_64 SHA256 (first occurrence after x86_64 url)
+content = re.sub(r'(x86_64-apple-darwin.*?sha256\s+\")([a-f0-9]+)(\")', r'\g<1>${x86_64_sha256}\g<3>', content, 1, re.DOTALL)
+
+# Replace aarch64 SHA256 (first occurrence after aarch64 url)
+content = re.sub(r'(aarch64-apple-darwin.*?sha256\s+\")([a-f0-9]+)(\")', r'\g<1>${aarch64_sha256}\g<3>', content, 1, re.DOTALL)
+
+with open('$formula_path', 'w') as f:
+    f.write(content)
+"
 
     # Clean up backup files
     rm "$formula_path.bak"

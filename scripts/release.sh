@@ -352,6 +352,72 @@ build_and_upload_binaries() {
     print_success 'Binaries built and distributed successfully'
 }
 
+update_extensions_version() {
+    local version=$1
+
+    print_info "Syncing extension versions with main project version $version..."
+
+    # Update Zed extension version
+    update_zed_extension_version "$version"
+
+    # Update VSCode extension version
+    update_vscode_extension_version "$version"
+}
+
+update_zed_extension_version() {
+    local version=$1
+    local manifest="zed-extension/extension.toml"
+
+    if [[ ! -f "$manifest" ]]; then
+        print_warning "Zed extension manifest not found at $manifest; skipping version update"
+        return 0
+    fi
+
+    print_distribution "Updating Zed extension version to $version"
+
+    # Use Python to update the version and URLs in extension.toml
+    python3 -c "
+import re
+from pathlib import Path
+
+manifest_path = Path('$manifest')
+content = manifest_path.read_text()
+
+# Update the main version field
+content = re.sub(r'^version = \".*\"', f'version = \"{version}\"', content, flags=re.MULTILINE)
+
+# Update URLs to use the new version
+content = re.sub(
+    r'https://github.com/vinhnx/vtcode/releases/download/v[0-9.]+/vtcode-v[0-9.]+-(aarch64-apple-darwin|x86_64-apple-darwin)\.tar\.gz',
+    f'https://github.com/vinhnx/vtcode/releases/download/v{version}/vtcode-v{version}-\\\\1.tar.gz',
+    content
+)
+
+manifest_path.write_text(content)
+print(f'INFO: Zed extension version updated to {version}')
+"
+}
+
+update_vscode_extension_version() {
+    local version=$1
+    local package_json="vscode-extension/package.json"
+
+    if [[ ! -f "$package_json" ]]; then
+        print_warning 'VSCode extension package.json not found; skipping version update'
+        return 0
+    fi
+
+    print_distribution "Updating VSCode extension version to $version"
+
+    # Use jq to update the version in package.json
+    if command -v jq >/dev/null 2>&1; then
+        jq --arg new_version "$version" '.version = $new_version' "$package_json" > "$package_json.tmp" && mv "$package_json.tmp" "$package_json"
+        print_info "VSCode extension version updated to $version"
+    else
+        print_warning 'jq not found; skipping VSCode extension version update'
+    fi
+}
+
 update_zed_extension_checksums() {
     local version=$1
     local manifest="zed-extension/extension.toml"
@@ -725,6 +791,9 @@ main() {
             fi
         fi
     fi
+
+    # Update extension versions to match main project version
+    update_extensions_version "$released_version"
 
     # Wait for all other background processes to complete
     for pid in $pid_docs; do
