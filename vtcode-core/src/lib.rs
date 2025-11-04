@@ -188,7 +188,7 @@ pub use mcp_client::validate_mcp_config;
 pub use prompts::{
     generate_lightweight_instruction, generate_specialized_instruction, generate_system_instruction,
 };
-pub use sandbox::SandboxProfile; // Configuration for Anthropic sandbox runtime integration
+pub use sandbox::{SandboxEnvironment, SandboxProfile, SandboxRuntimeKind, SandboxSettings}; // Configuration for Anthropic sandbox runtime integration
 pub use tool_policy::{ToolPolicy, ToolPolicyManager};
 pub use tools::grep_file::GrepSearchManager;
 pub use tools::tree_sitter::TreeSitterAnalyzer;
