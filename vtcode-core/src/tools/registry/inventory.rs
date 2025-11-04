@@ -11,6 +11,7 @@ use crate::tools::file_ops::FileOpsTool;
 use crate::tools::git_diff::GitDiffTool;
 use crate::tools::grep_file::GrepSearchManager;
 use crate::tools::plan::PlanManager;
+use tracing::warn;
 
 #[derive(Debug, Clone)]
 struct ToolCacheEntry {
@@ -49,7 +50,7 @@ impl ToolInventory {
         let ast_grep_engine = match AstGrepEngine::new() {
             Ok(engine) => Some(Arc::new(engine)),
             Err(err) => {
-                eprintln!("Warning: Failed to initialize AST-grep engine: {}", err);
+                warn!("Failed to initialize AST-grep engine: {err}");
                 None
             }
         };

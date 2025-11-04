@@ -5,8 +5,10 @@ use std::time::Duration;
 use anyhow::Error;
 use serde_json::Value;
 use tokio::sync::Notify;
+use tokio::task::JoinHandle;
 use tokio::time;
 use tokio_util::sync::CancellationToken;
+use tracing::warn;
 
 use super::progress::ProgressReporter;
 use tracing::warn;
@@ -15,6 +17,9 @@ use vtcode_core::tools::registry::ToolErrorType;
 use vtcode_core::tools::registry::{ToolExecutionError, ToolRegistry, ToolTimeoutCategory};
 
 use super::state::CtrlCState;
+
+const TOOL_TIMEOUT: Duration = Duration::from_secs(300);
+const TOOL_TIMEOUT_WARNING_HEADROOM: Duration = Duration::from_secs(5);
 
 /// Status of a tool execution with progress information
 #[derive(Debug)]
@@ -105,6 +110,13 @@ async fn execute_tool_with_progress(
 ) -> ToolExecutionStatus {
     let start_time = std::time::Instant::now();
 
+    let warning_cancel_token = CancellationToken::new();
+    let warning_task = spawn_timeout_warning_task(
+        name.to_string(),
+        start_time,
+        warning_cancel_token.clone(),
+    );
+
     // Phase 1: Preparation (0-15%)
     progress_reporter
         .set_message(format!("Preparing {}...", name))
@@ -123,12 +135,7 @@ async fn execute_tool_with_progress(
         .await;
     progress_reporter.set_progress(20).await;
 
-    let category = registry.timeout_category_for(name).await;
-    let timeout_policy = registry.timeout_policy().clone();
-    let timeout_duration = timeout_policy.ceiling_for(category);
-    let warning_fraction = timeout_policy.warning_fraction();
-
-    'outer: loop {
+    let status = loop {
         // Create a fresh clone of registry and args for each iteration
         let mut registry_clone = registry.clone();
         let args_clone = args.clone();
@@ -183,93 +190,37 @@ async fn execute_tool_with_progress(
             return ToolExecutionStatus::Cancelled;
         }
 
-        let mut exec_future = Box::pin(exec_future);
-        let mut timeout_timer = timeout_duration.map(|duration| Box::pin(time::sleep(duration)));
-        let mut warning_timer: Option<Pin<Box<time::Sleep>>> = match timeout_duration {
-            Some(duration) if warning_fraction > 0.0 && warning_fraction < 1.0 => {
-                let threshold = duration.mul_f32(warning_fraction);
-                if threshold.is_zero() {
-                    None
+        enum ExecutionControl {
+            Continue,
+            Cancelled,
+            Completed(Result<Result<Value, Error>, time::error::Elapsed>),
+        }
+
+        let control = tokio::select! {
+            biased;
+
+            _ = ctrl_c_notify.notified() => {
+                if ctrl_c_state.is_cancel_requested() || ctrl_c_state.is_exit_requested() {
+                    token.cancel();
+                    ExecutionControl::Cancelled
                 } else {
-                    Some(Box::pin(time::sleep(threshold)))
+                    token.cancel();
+                    ExecutionControl::Continue
                 }
             }
             _ => None,
         };
         let mut warning_emitted = false;
 
-        enum ExecutionOutcome {
-            Completed(anyhow::Result<Value>),
-            Timeout,
-            Cancelled,
-        }
-
-        let outcome = loop {
-            tokio::select! {
-                _ = ctrl_c_notify.notified() => {
-                    if ctrl_c_state.is_cancel_requested() || ctrl_c_state.is_exit_requested() {
-                        token.cancel();
-                        break ExecutionOutcome::Cancelled;
-                    }
-                    token.cancel();
-                    continue 'outer;
-                }
-                _ = async {
-                    if let Some(timer) = warning_timer.as_mut() {
-                        timer.as_mut().await;
-                    }
-                }, if warning_timer.is_some() && !warning_emitted => {
-                    warning_emitted = true;
-                    warning_timer = None;
-                    if let Some(limit) = timeout_duration {
-                        let elapsed = start_time.elapsed();
-                        let message = format!(
-                            "{} has run for {:.1}s ({} ceiling: {}s). Press Ctrl+C to cancel or adjust [timeouts] in vtcode.toml.",
-                            name,
-                            elapsed.as_secs_f32(),
-                            category.label(),
-                            limit.as_secs()
-                        );
-                        progress_reporter.set_message(message).await;
-                        if progress_reporter.current_progress() < 90 {
-                            progress_reporter.set_progress(90).await;
-                        }
-                        warn!(
-                            tool = name,
-                            category = category.label(),
-                            elapsed_seconds = elapsed.as_secs_f32(),
-                            ceiling_seconds = limit.as_secs(),
-                            "tool execution nearing timeout ceiling"
-                        );
-                    }
-                    continue;
-                }
-                _ = async {
-                    if let Some(timer) = timeout_timer.as_mut() {
-                        timer.as_mut().await;
-                    }
-                }, if timeout_timer.is_some() => {
-                    token.cancel();
-                    break ExecutionOutcome::Timeout;
-                }
-                result = &mut exec_future => {
-                    break ExecutionOutcome::Completed(result);
-                }
-            }
+            result = time::timeout(TOOL_TIMEOUT, exec_future) => ExecutionControl::Completed(result),
         };
 
-        match outcome {
-            ExecutionOutcome::Cancelled => return ToolExecutionStatus::Cancelled,
-            ExecutionOutcome::Timeout => {
-                progress_reporter
-                    .set_message(format!("{} timed out", name))
-                    .await;
-                return create_timeout_error(name, category, timeout_duration);
-            }
-            ExecutionOutcome::Completed(result) => {
-                return match result {
-                    Ok(output) => {
-                        // Phase 5: Finalization (95-100%)
+        match control {
+            ExecutionControl::Continue => continue,
+            ExecutionControl::Cancelled => break ToolExecutionStatus::Cancelled,
+            ExecutionControl::Completed(result) => {
+                break match result {
+                    Ok(Ok(output)) => {
                         progress_reporter
                             .set_message(format!("Finalizing {}...", name))
                             .await;
@@ -277,24 +228,36 @@ async fn execute_tool_with_progress(
 
                         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
-                        // Mark as complete
                         progress_reporter.set_progress(100).await;
                         progress_reporter
                             .set_message(format!("{} completed successfully", name))
                             .await;
                         process_tool_output(output)
                     }
-                    Err(error) => {
-                        // Update with error status
+                    Ok(Err(error)) => {
                         progress_reporter
                             .set_message(format!("{} failed", name))
                             .await;
                         ToolExecutionStatus::Failure { error }
                     }
+                    Err(_) => {
+                        token.cancel();
+                        progress_reporter
+                            .set_message(format!("{} timed out", name))
+                            .await;
+                        create_timeout_error(name)
+                    }
                 };
             }
         }
+    };
+
+    warning_cancel_token.cancel();
+    if let Some(handle) = warning_task {
+        let _ = handle.await;
     }
+
+    status
 }
 
 /// Process the output from a tool execution and convert it to a ToolExecutionStatus
@@ -365,16 +328,49 @@ fn create_timeout_error(
     }
 }
 
+fn spawn_timeout_warning_task(
+    tool_name: String,
+    start_time: std::time::Instant,
+    cancel_token: CancellationToken,
+) -> Option<JoinHandle<()>> {
+    let warning_delay = TOOL_TIMEOUT
+        .checked_sub(TOOL_TIMEOUT_WARNING_HEADROOM)
+        .filter(|delay| !delay.is_zero())?;
+
+    Some(tokio::spawn(async move {
+        tokio::select! {
+            _ = cancel_token.cancelled() => {}
+            _ = tokio::time::sleep(warning_delay) => {
+                let elapsed = start_time.elapsed().as_secs();
+                let timeout_secs = TOOL_TIMEOUT.as_secs();
+                let remaining_secs = TOOL_TIMEOUT_WARNING_HEADROOM.as_secs();
+                warn!(
+                    "Tool '{}' has run for {} seconds and is approaching the {} second time limit ({} seconds remaining). It will be cancelled soon unless it completes.",
+                    tool_name,
+                    elapsed,
+                    timeout_secs,
+                    remaining_secs
+                );
+            }
+        }
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use futures::future::BoxFuture;
     use serde_json::json;
-    use std::sync::Arc;
-    use std::time::Duration as StdDuration;
+    use std::io;
+    use std::sync::{Arc, Mutex};
+    use std::time::Duration;
     use tokio::sync::Notify;
     use tokio::task::yield_now;
-    use vtcode_core::config::TimeoutsConfig;
+    use tokio::time::advance;
+    use tracing::Level;
+    use assert_fs::TempDir;
+    use futures::future::BoxFuture;
+    use tracing_subscriber::fmt;
     use vtcode_core::config::types::CapabilityLevel;
     use vtcode_core::tools::registry::ToolRegistration;
 
@@ -457,72 +453,101 @@ mod tests {
         }
     }
 
-    const DELAYED_TOOL: &str = "delayed_tool";
+    #[derive(Clone)]
+    struct CaptureWriter {
+        buffer: Arc<Mutex<Vec<String>>>,
+    }
 
-    fn delayed_tool_executor(
-        _registry: &mut ToolRegistry,
+    impl CaptureWriter {
+        fn new(buffer: Arc<Mutex<Vec<String>>>) -> Self {
+            Self { buffer }
+        }
+    }
+
+    impl io::Write for CaptureWriter {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            let text = String::from_utf8_lossy(buf).to_string();
+            self.buffer.lock().unwrap().push(text);
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    fn slow_tool_executor<'a>(
+        _registry: &'a mut ToolRegistry,
         _args: Value,
-    ) -> BoxFuture<'_, anyhow::Result<Value>> {
+    ) -> BoxFuture<'a, anyhow::Result<Value>> {
         Box::pin(async move {
-            if let Some(token) = cancellation::current_tool_cancellation() {
-                let _ = token.cancelled().await;
-            } else {
-                tokio::time::sleep(StdDuration::from_secs(60)).await;
-            }
-            Ok(json!({ "status": "cancelled" }))
+            tokio::time::sleep(TOOL_TIMEOUT + Duration::from_secs(1)).await;
+            Ok(json!({
+                "exit_code": 0
+            }))
         })
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn emits_warning_before_timeout_ceiling() {
-        let mut registry = ToolRegistry::new(std::env::current_dir().unwrap()).await;
-        registry
-            .register_tool(
-                ToolRegistration::new(
-                    DELAYED_TOOL,
-                    CapabilityLevel::Editing,
-                    false,
-                    delayed_tool_executor,
-                )
-                .with_llm_visibility(false),
-            )
-            .expect("tool registration should succeed");
+        let warnings = Arc::new(Mutex::new(Vec::new()));
+        let writer_buffer = warnings.clone();
 
-        let mut timeouts = TimeoutsConfig::default();
-        timeouts.default_ceiling_seconds = 1;
-        timeouts.warning_threshold_percent = 10;
-        registry.apply_timeout_policy(&timeouts);
+        let subscriber = fmt()
+            .with_writer(move || CaptureWriter::new(writer_buffer.clone()))
+            .with_max_level(Level::WARN)
+            .without_time()
+            .finish();
+
+        let _guard = tracing::subscriber::set_default(subscriber);
+
+        let temp_dir = TempDir::new().expect("create temp dir");
+        let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        registry
+            .register_tool(ToolRegistration::new(
+                "__test_slow_tool__",
+                CapabilityLevel::Basic,
+                false,
+                slow_tool_executor,
+            ))
+            .expect("register slow tool");
 
         let ctrl_c_state = Arc::new(CtrlCState::new());
         let ctrl_c_notify = Arc::new(Notify::new());
-        let reporter = ProgressReporter::new();
 
-        let ctrl_c_state_handle = ctrl_c_state.clone();
-        let ctrl_c_notify_handle = ctrl_c_notify.clone();
-        let reporter_handle = reporter.clone();
+        let mut registry_task = registry;
+        let ctrl_c_state_clone = ctrl_c_state.clone();
+        let ctrl_c_notify_clone = ctrl_c_notify.clone();
 
-        let handle = tokio::spawn(async move {
+        let execution = tokio::spawn(async move {
             execute_tool_with_timeout(
-                &mut registry,
-                DELAYED_TOOL,
-                json!({}),
-                &ctrl_c_state_handle,
-                &ctrl_c_notify_handle,
-                Some(&reporter_handle),
+                &mut registry_task,
+                "__test_slow_tool__",
+                Value::Null,
+                &ctrl_c_state_clone,
+                &ctrl_c_notify_clone,
+                None,
             )
             .await
         });
 
-        tokio::time::sleep(StdDuration::from_millis(150)).await;
+        let warning_delay = TOOL_TIMEOUT
+            .checked_sub(TOOL_TIMEOUT_WARNING_HEADROOM)
+            .expect("warning delay");
+        advance(warning_delay).await;
         yield_now().await;
 
-        let (_, _, warning_message, _, _, _) = reporter.get_state().get_progress().await;
-        assert!(warning_message.contains("has run"));
-        assert!(warning_message.contains("Press Ctrl+C"));
+        let captured = warnings.lock().unwrap();
+        let combined = captured.join("");
+        assert!(
+            combined.contains("has run"),
+            "expected warning log to include 'has run', captured logs: {}",
+            combined
+        );
+        drop(captured);
 
-        tokio::time::sleep(StdDuration::from_millis(1200)).await;
-
-        let status = handle.await.expect("task should complete");
+        advance(TOOL_TIMEOUT_WARNING_HEADROOM + Duration::from_secs(1)).await;
+        let status = execution.await.expect("join execution");
         assert!(matches!(status, ToolExecutionStatus::Timeout { .. }));
     }
 }

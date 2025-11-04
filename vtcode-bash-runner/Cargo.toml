@@ -32,6 +32,7 @@ workspace = true
 
 [dev-dependencies]
 tempfile = "3.10"
+assert_fs = "1.1"
 
 [[example]]
 name = "dry_run"

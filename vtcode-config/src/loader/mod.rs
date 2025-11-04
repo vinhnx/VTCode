@@ -1219,7 +1219,7 @@ default_policy = "prompt"
 
     #[test]
     fn config_defaults_provider_overrides_paths_and_theme() {
-        let workspace = tempfile::tempdir().expect("failed to create workspace");
+        let workspace = assert_fs::TempDir::new().expect("failed to create workspace");
         let workspace_root = workspace.path();
         let config_dir = workspace_root.join("config-root");
         fs::create_dir_all(&config_dir).expect("failed to create config directory");

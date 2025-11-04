@@ -105,6 +105,10 @@ impl CommandTool {
         }
 
         let program = &command[0];
+        // Validate that the executable is non-empty after trimming
+        if program.trim().is_empty() {
+            return Err(anyhow!("Command executable cannot be empty"));
+        }
         if program.contains(char::is_whitespace) {
             return Err(anyhow!(
                 "Program name cannot contain whitespace: {}",
@@ -151,6 +155,10 @@ impl Tool for CommandTool {
         let input: EnhancedTerminalInput = serde_json::from_value(args.clone())?;
         if input.command.is_empty() {
             return Err(anyhow!("Command cannot be empty"));
+        }
+        // Validate that the executable is non-empty after trimming
+        if input.command[0].trim().is_empty() {
+            return Err(anyhow!("Command executable cannot be empty"));
         }
         Ok(())
     }
@@ -320,5 +328,61 @@ mod tests {
                 .to_string()
                 .contains("working directory '../' escapes the workspace root")
         );
+    }
+
+    #[tokio::test]
+    async fn prepare_invocation_rejects_empty_command() {
+        let tool = make_tool();
+        let input = make_input(vec![]);
+        let error = tool
+            .prepare_invocation(&input)
+            .await
+            .expect_err("empty command should be rejected");
+        assert!(error.to_string().contains("Command cannot be empty"));
+    }
+
+    #[tokio::test]
+    async fn prepare_invocation_rejects_empty_executable() {
+        let tool = make_tool();
+        let input = make_input(vec!["", "arg1"]);
+        let error = tool
+            .prepare_invocation(&input)
+            .await
+            .expect_err("empty executable should be rejected");
+        assert!(error.to_string().contains("Command executable cannot be empty"));
+    }
+
+    #[tokio::test]
+    async fn prepare_invocation_rejects_whitespace_only_executable() {
+        let tool = make_tool();
+        let input = make_input(vec!["   ", "arg1"]);
+        let error = tool
+            .prepare_invocation(&input)
+            .await
+            .expect_err("whitespace-only executable should be rejected");
+        assert!(error.to_string().contains("Command executable cannot be empty"));
+    }
+
+    #[tokio::test]
+    async fn validate_args_rejects_empty_command() {
+        let tool = make_tool();
+        let args = json!({ "command": [] });
+        let error = tool.validate_args(&args).expect_err("empty command should fail validation");
+        assert!(error.to_string().contains("Command cannot be empty"));
+    }
+
+    #[tokio::test]
+    async fn validate_args_rejects_empty_executable() {
+        let tool = make_tool();
+        let args = json!({ "command": ["", "arg1"] });
+        let error = tool.validate_args(&args).expect_err("empty executable should fail validation");
+        assert!(error.to_string().contains("Command executable cannot be empty"));
+    }
+
+    #[tokio::test]
+    async fn validate_args_accepts_valid_command() {
+        let tool = make_tool();
+        let args = json!({ "command": ["ls", "-la"] });
+        tool.validate_args(&args).expect("valid command should pass validation");
     }
 }
