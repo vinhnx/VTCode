@@ -17,11 +17,9 @@ fn main() {
         // When building on docs.rs, generate empty placeholder files to prevent compilation errors
         println!("cargo:warning=docs.rs build detected, generating placeholder files");
         generate_placeholder_artifacts();
-    } else {
-        if let Err(error) = generate_artifacts() {
-            eprintln!("error: {error:#}");
-            std::process::exit(1);
-        }
+    } else if let Err(error) = generate_artifacts() {
+        eprintln!("error: {error:#}");
+        std::process::exit(1);
     }
 }
 

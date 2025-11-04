@@ -763,14 +763,24 @@ pub struct FunctionDefinition {
     pub parameters: Value,
 }
 
+fn sanitize_tool_description(description: &str) -> String {
+    let normalized = description
+        .lines()
+        .map(|line| line.trim_end())
+        .collect::<Vec<_>>()
+        .join("\n");
+    normalized.trim().to_string()
+}
+
 impl ToolDefinition {
     /// Create a new tool definition with function type
     pub fn function(name: String, description: String, parameters: Value) -> Self {
+        let sanitized_description = sanitize_tool_description(&description);
         Self {
             tool_type: "function".to_string(),
             function: FunctionDefinition {
                 name,
-                description,
+                description: sanitized_description,
                 parameters,
             },
         }
@@ -987,5 +997,33 @@ impl From<LLMError> for crate::llm::types::LLMError {
             LLMError::Network(msg) => crate::llm::types::LLMError::NetworkError(msg),
             LLMError::Provider(msg) => crate::llm::types::LLMError::ApiError(msg),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn sanitize_tool_description_trims_padding() {
+        let input = "\n\nLine 1\nLine 2 \n";
+        assert_eq!(sanitize_tool_description(input), "Line 1\nLine 2");
+    }
+
+    #[test]
+    fn sanitize_tool_description_preserves_internal_blank_lines() {
+        let input = "Line 1\n\nLine 3";
+        assert_eq!(sanitize_tool_description(input), input);
+    }
+
+    #[test]
+    fn tool_definition_function_uses_sanitized_description() {
+        let tool = ToolDefinition::function(
+            "demo".to_string(),
+            "  Line 1  \n".to_string(),
+            json!({"type": "object", "properties": {}}),
+        );
+        assert_eq!(tool.function.description, "Line 1");
     }
 }

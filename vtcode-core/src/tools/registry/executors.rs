@@ -13,6 +13,7 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::time::sleep;
+use tracing::warn;
 use vte::{Parser, Perform};
 
 use crate::config::PtyConfig;
@@ -349,6 +350,24 @@ impl ToolRegistry {
             )
         })?;
         let patch = Patch::parse(input)?;
+        let delete_ops = patch
+            .operations()
+            .iter()
+            .filter(|op| matches!(op, crate::tools::editing::PatchOperation::DeleteFile { .. }))
+            .count();
+        let add_ops = patch
+            .operations()
+            .iter()
+            .filter(|op| matches!(op, crate::tools::editing::PatchOperation::AddFile { .. }))
+            .count();
+
+        if delete_ops > 0 && add_ops > 0 {
+            warn!(
+                delete_ops,
+                add_ops,
+                "apply_patch will delete and recreate files; ensure backups or incremental edits"
+            );
+        }
 
         // Generate diff preview
         let mut diff_lines = Vec::new();
@@ -385,7 +404,16 @@ impl ToolRegistry {
             }
         }
 
-        let results = patch.apply(self.workspace_root()).await?;
+        let results = match patch.apply(self.workspace_root()).await {
+            Ok(results) => results,
+            Err(err) => {
+                warn!(
+                    error = %err,
+                    "apply_patch failed; consider falling back to incremental edits"
+                );
+                return Err(err);
+            }
+        };
         Ok(json!({
             "success": true,
             "applied": results,

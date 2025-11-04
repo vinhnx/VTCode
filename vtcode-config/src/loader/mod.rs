@@ -12,6 +12,7 @@ use crate::mcp::McpClientConfig;
 use crate::root::{PtyConfig, UiConfig};
 use crate::router::RouterConfig;
 use crate::telemetry::TelemetryConfig;
+use crate::timeouts::TimeoutsConfig;
 use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -137,6 +138,10 @@ pub struct VTCodeConfig {
     #[serde(default)]
     pub syntax_highlighting: SyntaxHighlightingConfig,
 
+    /// Timeout ceilings and UI warning thresholds
+    #[serde(default)]
+    pub timeouts: TimeoutsConfig,
+
     /// Automation configuration
     #[serde(default)]
     pub automation: AutomationConfig,
@@ -175,6 +180,10 @@ impl VTCodeConfig {
         self.hooks
             .validate()
             .context("Invalid hooks configuration")?;
+
+        self.timeouts
+            .validate()
+            .context("Invalid timeouts configuration")?;
 
         Ok(())
     }
