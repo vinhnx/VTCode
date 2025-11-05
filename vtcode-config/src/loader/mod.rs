@@ -1157,9 +1157,9 @@ mod tests {
 
         let result = ConfigManager::load_from_file(temp_file.path());
         assert!(result.is_err(), "expected validation error");
-        let error = result.unwrap_err();
+        let error = format!("{:?}", result.err().unwrap());
         assert!(
-            error.to_string().contains("validate"),
+            error.contains("validate"),
             "expected validation context in error, got: {}",
             error
         );
@@ -1233,9 +1233,9 @@ default_policy = "prompt"
         let static_paths = StaticWorkspacePaths::new(workspace_root, &config_dir);
         let provider = WorkspacePathsDefaults::new(Arc::new(static_paths))
             .with_config_file_name(config_file_name)
-            .with_home_paths::<Vec<PathBuf>, _>(Vec::new())
+            .with_home_paths(Vec::new())
             .with_syntax_theme("custom-theme")
-            .with_syntax_languages(["zig"]);
+            .with_syntax_languages(vec!["zig".to_string()]);
 
         defaults::provider::with_config_defaults_provider_for_test(Arc::new(provider), || {
             let manager = ConfigManager::load_from_workspace(workspace_root)

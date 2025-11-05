@@ -13,7 +13,7 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::time::sleep;
-use tracing::warn;
+use tracing::{debug, warn};
 use vte::{Parser, Perform};
 
 use crate::config::PtyConfig;
@@ -367,6 +367,82 @@ impl ToolRegistry {
                 add_ops,
                 "apply_patch will delete and recreate files; ensure backups or incremental edits"
             );
+
+            // Emit telemetry event for destructive operation detection
+            // This addresses the Codex issue review recommendation to track
+            // cascading delete/recreate sequences
+            //
+            // Reference: docs/research/codex_issue_review.md - apply_patch Tool Reliability
+            let affected_files: Vec<String> = patch
+                .operations()
+                .iter()
+                .filter_map(|op| match op {
+                    crate::tools::editing::PatchOperation::DeleteFile { path } => Some(path.clone()),
+                    crate::tools::editing::PatchOperation::AddFile { path, .. } => Some(path.clone()),
+                    _ => None,
+                })
+                .collect();
+
+            // Check if we're in a git repository (simple heuristic for backup detection)
+            let has_git_backup = self.workspace_root().join(".git").exists();
+
+            let event = crate::tools::registry::ToolTelemetryEvent::delete_and_recreate_warning(
+                "apply_patch",
+                affected_files.clone(),
+                has_git_backup,
+            );
+
+            // Log the telemetry event (structured logging for observability)
+            debug!(
+                event = ?event,
+                "Emitting destructive operation telemetry"
+            );
+
+            // TODO: Add confirmation prompt for destructive operations
+            //
+            // Implementation should:
+            // 1. Check if running in interactive mode (not --skip-confirmations)
+            // 2. Check if running in TUI mode vs CLI mode
+            // 3. In CLI mode: Use dialoguer for confirmation prompt
+            // 4. In TUI mode: Use modal confirmation (handled by runloop)
+            // 5. Show affected files and backup status in prompt
+            // 6. Allow user to abort operation
+            //
+            // Example implementation:
+            // ```rust
+            // if !self.skip_confirmations && !has_git_backup {
+            //     let prompt_msg = format!(
+            //         "apply_patch will delete and recreate {} file(s):\n{}\n\n\
+            //          No git backup detected. Continue?",
+            //         affected_files.len(),
+            //         affected_files.join("\n")
+            //     );
+            //
+            //     // CLI mode confirmation
+            //     if !std::env::var("VTCODE_TUI_MODE").is_ok() {
+            //         let confirmed = dialoguer::Confirm::new()
+            //             .with_prompt(prompt_msg)
+            //             .default(false)
+            //             .interact()?;
+            //         if !confirmed {
+            //             return Ok(json!({
+            //                 "success": false,
+            //                 "error": "Operation cancelled by user"
+            //             }));
+            //         }
+            //     }
+            //     // TUI mode: Return special status code for runloop to handle
+            //     else {
+            //         return Err(anyhow!(
+            //             "CONFIRMATION_REQUIRED: {}",
+            //             prompt_msg
+            //         ));
+            //     }
+            // }
+            // ```
+            //
+            // Reference: docs/research/codex_issue_review.md - Confirmation prompts
+            // Related: src/agent/runloop/unified/tool_routing.rs - ensure_tool_permission()
         }
 
         // Generate diff preview

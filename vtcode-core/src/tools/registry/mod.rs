@@ -11,6 +11,7 @@ mod legacy;
 mod policy;
 mod pty;
 mod registration;
+mod telemetry;
 mod utils;
 
 pub use declarations::{
@@ -19,6 +20,7 @@ pub use declarations::{
 };
 pub use error::{ToolErrorType, ToolExecutionError, classify_error};
 pub use registration::{ToolExecutorFn, ToolHandler, ToolRegistration};
+pub use telemetry::ToolTelemetryEvent;
 
 use builtins::register_builtin_tools;
 use inventory::ToolInventory;
@@ -95,6 +97,78 @@ impl ToolTimeoutPolicy {
             mcp_ceiling: config.ceiling_duration(config.mcp_ceiling_seconds),
             warning_fraction: config.warning_threshold_fraction().clamp(0.0, 0.99),
         }
+    }
+
+    /// Validate the timeout policy configuration
+    ///
+    /// Ensures that:
+    /// - Ceiling values are within reasonable bounds (1s - 3600s)
+    /// - Warning fraction is between 0.0 and 1.0
+    /// - No ceiling is configured as 0 seconds
+    pub fn validate(&self) -> anyhow::Result<()> {
+        // Validate default ceiling
+        if let Some(ceiling) = self.default_ceiling {
+            if ceiling < Duration::from_secs(1) {
+                anyhow::bail!(
+                    "default_ceiling_seconds must be at least 1 second (got {}s)",
+                    ceiling.as_secs()
+                );
+            }
+            if ceiling > Duration::from_secs(3600) {
+                anyhow::bail!(
+                    "default_ceiling_seconds must not exceed 3600 seconds/1 hour (got {}s)",
+                    ceiling.as_secs()
+                );
+            }
+        }
+
+        // Validate PTY ceiling
+        if let Some(ceiling) = self.pty_ceiling {
+            if ceiling < Duration::from_secs(1) {
+                anyhow::bail!(
+                    "pty_ceiling_seconds must be at least 1 second (got {}s)",
+                    ceiling.as_secs()
+                );
+            }
+            if ceiling > Duration::from_secs(3600) {
+                anyhow::bail!(
+                    "pty_ceiling_seconds must not exceed 3600 seconds/1 hour (got {}s)",
+                    ceiling.as_secs()
+                );
+            }
+        }
+
+        // Validate MCP ceiling
+        if let Some(ceiling) = self.mcp_ceiling {
+            if ceiling < Duration::from_secs(1) {
+                anyhow::bail!(
+                    "mcp_ceiling_seconds must be at least 1 second (got {}s)",
+                    ceiling.as_secs()
+                );
+            }
+            if ceiling > Duration::from_secs(3600) {
+                anyhow::bail!(
+                    "mcp_ceiling_seconds must not exceed 3600 seconds/1 hour (got {}s)",
+                    ceiling.as_secs()
+                );
+            }
+        }
+
+        // Validate warning fraction
+        if self.warning_fraction <= 0.0 {
+            anyhow::bail!(
+                "warning_threshold_percent must be greater than 0 (got {})",
+                self.warning_fraction * 100.0
+            );
+        }
+        if self.warning_fraction >= 1.0 {
+            anyhow::bail!(
+                "warning_threshold_percent must be less than 100 (got {})",
+                self.warning_fraction * 100.0
+            );
+        }
+
+        Ok(())
     }
 
     pub fn ceiling_for(&self, category: ToolTimeoutCategory) -> Option<Duration> {
@@ -451,7 +525,18 @@ impl ToolRegistry {
     }
 
     pub fn apply_timeout_policy(&mut self, timeouts: &TimeoutsConfig) {
-        self.timeout_policy = ToolTimeoutPolicy::from_config(timeouts);
+        let policy = ToolTimeoutPolicy::from_config(timeouts);
+
+        // Validate the policy before applying
+        if let Err(e) = policy.validate() {
+            warn!(
+                error = %e,
+                "Invalid timeout configuration detected, using defaults"
+            );
+            self.timeout_policy = ToolTimeoutPolicy::default();
+        } else {
+            self.timeout_policy = policy;
+        }
     }
 
     pub fn timeout_policy(&self) -> &ToolTimeoutPolicy {
