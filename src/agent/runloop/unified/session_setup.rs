@@ -233,6 +233,7 @@ pub(crate) async fn initialize_session(
     tool_registry.initialize_async().await?;
     if let Some(cfg) = vt_cfg {
         tool_registry.apply_commands_config(&cfg.commands);
+        tool_registry.apply_timeout_policy(&cfg.timeouts);
         if let Err(err) = tool_registry.apply_config_policies(&cfg.tools).await {
             eprintln!(
                 "Warning: Failed to apply tool policies from config: {}",

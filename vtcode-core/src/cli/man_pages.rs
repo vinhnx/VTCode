@@ -202,6 +202,15 @@ impl ManPageGenerator {
             .control("TP", [])
             .text([bold(".vtcode/")])
             .text([roman("Project cache and context directory")])
+            .control("SH", ["SAFETY"])
+            .control("TP", [])
+            .text([roman(
+                "apply_patch: reserve for reviewed diffs or small batches. For large refactors or critical files, stage local backups and prefer edit_file/write_file to avoid partial rewrites if a patch fails.",
+            )])
+            .control("TP", [])
+            .text([roman(
+                "Timeout governance: tune [timeouts] in vtcode.toml to clamp tool duration. VTCode warns once execution passes the configured warning threshold so you can cancel runaway commands.",
+            )])
             .control("SH", ["SEE ALSO"])
             .text([roman("Full documentation: https://github.com/vinhnx/vtcode")])
             .text([roman("Related commands: cargo(1), rustc(1), git(1)")])

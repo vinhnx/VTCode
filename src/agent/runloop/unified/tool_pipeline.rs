@@ -12,7 +12,7 @@ use tracing::warn;
 use super::progress::ProgressReporter;
 use vtcode_core::exec::cancellation;
 use vtcode_core::tools::registry::ToolErrorType;
-use vtcode_core::tools::registry::{ToolExecutionError, ToolRegistry};
+use vtcode_core::tools::registry::{ToolExecutionError, ToolRegistry, ToolTimeoutCategory};
 
 use super::state::CtrlCState;
 
@@ -240,7 +240,7 @@ async fn execute_tool_with_progress(
                         progress_reporter
                             .set_message(format!("{} timed out", name))
                             .await;
-                        create_timeout_error(name)
+                        create_timeout_error(name, ToolTimeoutCategory::Default, Some(TOOL_TIMEOUT))
                     }
                 };
             }
@@ -299,17 +299,27 @@ fn process_tool_output(output: Value) -> ToolExecutionStatus {
 }
 
 /// Create a timeout error for a tool execution
-fn create_timeout_error(name: &str) -> ToolExecutionStatus {
-    ToolExecutionStatus::Timeout {
-        error: ToolExecutionError::new(
-            name.to_string(),
-            ToolErrorType::Timeout,
-            format!(
-                "Operation '{}' timed out after {} seconds",
-                name,
-                TOOL_TIMEOUT.as_secs()
-            ),
+fn create_timeout_error(
+    name: &str,
+    category: ToolTimeoutCategory,
+    timeout: Option<Duration>,
+) -> ToolExecutionStatus {
+    let message = match timeout {
+        Some(limit) => format!(
+            "Operation '{}' exceeded the {} timeout ceiling ({}s)",
+            name,
+            category.label(),
+            limit.as_secs()
         ),
+        None => format!(
+            "Operation '{}' exceeded the {} timeout ceiling",
+            name,
+            category.label()
+        ),
+    };
+
+    ToolExecutionStatus::Timeout {
+        error: ToolExecutionError::new(name.to_string(), ToolErrorType::Timeout, message),
     }
 }
 
@@ -344,6 +354,7 @@ fn spawn_timeout_warning_task(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use futures::future::BoxFuture;
     use serde_json::json;
     use std::io;
     use std::sync::{Arc, Mutex};
@@ -423,10 +434,15 @@ mod tests {
 
     #[test]
     fn test_create_timeout_error() {
-        let status = create_timeout_error("test_tool");
+        let status = create_timeout_error(
+            "test_tool",
+            ToolTimeoutCategory::Default,
+            Some(Duration::from_secs(42)),
+        );
         if let ToolExecutionStatus::Timeout { error } = status {
             assert!(error.message.contains("test_tool"));
-            assert!(error.message.contains("timed out"));
+            assert!(error.message.contains("timeout ceiling"));
+            assert!(error.message.contains("42"));
         } else {
             panic!("Expected Timeout variant");
         }
