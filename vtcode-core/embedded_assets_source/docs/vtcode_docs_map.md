@@ -143,6 +143,13 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Unit testing, integration testing, test coverage, CI/CD
   - **User Questions**: "How is VT Code tested?", "What testing approach is used?"
 
+### Integrations & Tooling
+
+- **File**: `docs/guides/mcp-integration.md`
+  - **Content**: MCP provider configuration, specification cross-references, and tooling guidance
+  - **Topics**: Protocol reference map, provider transports, security settings, allowlists, vtcode-as-server options, testing workflows
+  - **User Questions**: "How do I configure MCP providers?", "Where do MCP specs live?", "What security knobs exist?", "How do I verify MCP connectivity?"
+
 ### Troubleshooting & Fixes
 
 - **File**: `docs/fixes/mcp_broken_pipe_fix.md`

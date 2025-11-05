@@ -98,6 +98,7 @@ Deploying VT Code in production? Focus on enterprise features:
 
 -   **Decision Ledger** - Persistent, compact history of key decisions and constraints
 -   **Error Recovery** - Intelligent error handling with pattern detection and context preservation
+-   **Smart Summarization (EXPERIMENTAL)** - Automatic conversation compression with importance scoring, semantic similarity detection, and advanced error analysis (disabled by default)
 -   **Conversation Summarization** - Automatic compression for long sessions with quality scoring
 -   **Context Compression** - Summarizes older turns while preserving ledger, errors, and recent activity
 -   **Tool Traces** - Tool inputs/outputs summarized and fed back for continuity
@@ -134,10 +135,10 @@ VT Code implements a **multi-layered security model** to protect against prompt 
 -   **File Size Limits** - Configurable resource constraints
 -   **API Key Security** - Secure credential management
 
-**[Security Quick Reference](./SECURITY_QUICK_REFERENCE.md)** - Security at a glance  
-**[Security Model](./SECURITY_MODEL.md)** - Complete security architecture  
-**[Security Audit](./SECURITY_AUDIT.md)** - Vulnerability analysis and testing  
-**[Security Guide](./guides/security.md)** - Best practices and configuration  
+**[Security Quick Reference](./SECURITY_QUICK_REFERENCE.md)** - Security at a glance
+**[Security Model](./SECURITY_MODEL.md)** - Complete security architecture
+**[Security Audit](./SECURITY_AUDIT.md)** - Vulnerability analysis and testing
+**[Security Guide](./guides/security.md)** - Best practices and configuration
 **[Tool Policies](./vtcode_tools_policy.md)** - Command execution policies
 
 ## Quick Start Guide
@@ -220,15 +221,15 @@ VT Code is evaluated on industry-standard benchmarks to measure code generation 
 
 **Latest:** `gemini-2.5-flash-lite` achieves **61.6% pass@1** on the complete HumanEval dataset (164 tasks)
 
-| Metric | Value |
-|--------|-------|
-| Pass@1 | 61.6% |
-| Median Latency | 0.973s |
-| P90 Latency | 1.363s |
-| Cost | $0.00 (free tier) |
+| Metric         | Value             |
+| -------------- | ----------------- |
+| Pass@1         | 61.6%             |
+| Median Latency | 0.973s            |
+| P90 Latency    | 1.363s            |
+| Cost           | $0.00 (free tier) |
 
-**[View Full Benchmark Results](./benchmarks/HUMANEVAL_2025-10-22.md)**  
-📈 **[Model Comparison](./benchmarks/COMPARISON.md)**  
+**[View Full Benchmark Results](./benchmarks/HUMANEVAL_2025-10-22.md)**
+📈 **[Model Comparison](./benchmarks/COMPARISON.md)**
 🔧 **[Run Your Own Benchmarks](./benchmarks/README.md)**
 
 ### Running Benchmarks
