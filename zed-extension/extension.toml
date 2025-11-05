@@ -23,10 +23,6 @@ keywords = [
 name = "VT Code"
 icon = "icons/vtcode.svg"
 
-[grammars.json]
-repository = "https://github.com/tree-sitter/tree-sitter-json"
-commit = "001c28d7a29832b06b0e831ec77845553c89b56d"
-
 [slash_commands.logs]
 description = "Open VT trajectory logs"
 requires_argument = false

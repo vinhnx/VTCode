@@ -38,6 +38,9 @@ members = [
     "vtcode-bash-runner",
     "vtcode-exec-events",
 ]
+exclude = [
+    "zed-extension",
+]
 
 [patch.crates-io]
 vtcode-commons = { path = "vtcode-commons" }

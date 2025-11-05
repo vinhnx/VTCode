@@ -6,7 +6,5 @@ edition = "2021"
 [lib]
 crate-type = ["cdylib"]
 
-[workspace]
-
 [dependencies]
-zed_extension_api = "0.6.0"
+zed_extension_api = "0.7.0"
