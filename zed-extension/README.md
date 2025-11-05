@@ -73,3 +73,40 @@ After verification, push the manifest changes and publish the release so the ext
 
 -   When you add Linux or Windows builds, extend `extension.toml` with the appropriate target tables and rerun the release script so their checksums are captured automatically.
 -   Re-run `zed: install dev extension` after each release to confirm download, checksum validation, and ACP negotiation succeed with the updated manifest.
+
+
+## Troubleshooting Development Installation
+
+If you encounter build errors when installing the development extension in Zed:
+
+1. Make sure you have the correct Rust version installed (check rust-toolchain.toml):
+   ```bash
+   rustup show
+   ```
+
+2. Ensure the required WASM target is installed:
+   ```bash
+   rustup target add wasm32-wasip2
+   ```
+
+3. Build the extension for the WASM target:
+   ```bash
+   cd zed-extension
+   cargo build --target wasm32-wasip2 --release
+   ```
+
+4. Verify the extension.wasm file exists and is up-to-date:
+   ```bash
+   ls -la extension.wasm
+   ```
+
+5. If needed, copy the built WASM file to the extension root:
+   ```bash
+   cp target/wasm32-wasip2/release/vtcode_zed_extension.wasm extension.wasm
+   ```
+
+6. Clean any cached build artifacts if you continue to have issues:
+   ```bash
+   cargo clean
+   ```
+
