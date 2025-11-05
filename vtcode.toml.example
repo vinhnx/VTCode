@@ -53,6 +53,31 @@ instruction_max_bytes = 16384
 # List of additional instruction files to include in context
 instruction_files = []
 
+# EXPERIMENTAL: Smart summarization for long conversations
+# This feature automatically compresses conversation history when context grows too large
+# WARNING: This is experimental and may affect conversation quality
+[agent.smart_summarization]
+# Enable smart conversation summarization (disabled by default)
+enabled = false
+
+# Minimum interval between summarizations (in seconds)
+min_summary_interval_secs = 30
+
+# Maximum concurrent summarization tasks
+max_concurrent_tasks = 4
+
+# Minimum number of turns before triggering summarization
+min_turns_threshold = 20
+
+# Token usage percentage that triggers summarization (0.0 - 1.0)
+token_threshold_percent = 0.6
+
+# Maximum content length per turn after compression (in characters)
+max_turn_content_length = 2000
+
+# Total size threshold for applying additional compression (in bytes)
+aggressive_compression_threshold = 15000
+
 # Onboarding configuration - Customize the startup experience
 [agent.onboarding]
 # Enable the onboarding welcome message on startup
