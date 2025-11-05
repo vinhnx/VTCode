@@ -429,7 +429,7 @@
             "description": "Open your workspace configuration to adjust VTCode preferences.",
             "media": {
               "type": "markdown",
-              "markdown": "Open **VTCode: Open Configuration** to jump directly into the workspace `vtcode.toml`."
+              "markdown": "Run [VTCode: Open Configuration](command:vtcode.openConfig) to jump directly into the workspace `vtcode.toml`."
             },
             "completionEvents": ["onCommand:vtcode.openConfig"]
           }

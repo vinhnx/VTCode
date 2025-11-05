@@ -10,10 +10,7 @@ use std::time::Duration;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ToolTelemetryEvent {
     /// A tool execution was attempted
-    ToolExecutionStarted {
-        tool_name: String,
-        has_args: bool,
-    },
+    ToolExecutionStarted { tool_name: String, has_args: bool },
 
     /// A tool execution completed successfully
     ToolExecutionCompleted {

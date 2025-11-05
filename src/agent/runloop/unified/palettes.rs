@@ -349,5 +349,5 @@ fn format_duration_label(duration: Duration) -> String {
 pub(crate) fn apply_prompt_style(handle: &InlineHandle) {
     let styles = theme::active_styles();
     let style = convert_style(styles.primary);
-    handle.set_prompt("❯ ".to_string(), style);
+    handle.set_prompt("".to_string(), style);
 }

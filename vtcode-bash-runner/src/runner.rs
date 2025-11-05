@@ -462,9 +462,9 @@ fn format_pattern(shell: ShellKind, pattern: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use assert_fs::TempDir;
     use crate::executor::{CommandInvocation, CommandOutput, CommandStatus};
     use crate::policy::AllowAllPolicy;
+    use assert_fs::TempDir;
     use std::sync::{Arc, Mutex};
 
     #[derive(Clone, Default)]

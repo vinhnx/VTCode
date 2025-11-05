@@ -17,8 +17,8 @@ use serde_json::{Value, json};
 /// - No mixed language in string values within the same response
 /// - Consistent character set usage (Latin, CJK, Cyrillic, etc.)
 fn validate_json_language_consistency(json: &Value) -> Result<()> {
-    let json_str = serde_json::to_string_pretty(json)
-        .context("Failed to serialize JSON for validation")?;
+    let json_str =
+        serde_json::to_string_pretty(json).context("Failed to serialize JSON for validation")?;
 
     // Check for mixed scripts in the same JSON structure
     let has_latin = json_str.chars().any(|c| c.is_ascii_alphabetic());
@@ -53,7 +53,10 @@ fn validate_json_keys(value: &Value) -> Result<()> {
         Value::Object(map) => {
             for (key, val) in map {
                 // Keys should be ASCII identifiers
-                if !key.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
+                if !key
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+                {
                     let suggestion = sanitize_key_name(key);
                     anyhow::bail!(
                         "JSON key '{}' contains non-identifier characters - possible language mixing.\n\
@@ -421,12 +424,12 @@ This is in English.
 
     #[test]
     fn test_sanitize_key_name_suggestions() {
-        assert_eq!(sanitize_key_name("状态"), "sanitized_key");  // All non-ASCII
+        assert_eq!(sanitize_key_name("状态"), "sanitized_key"); // All non-ASCII
         assert_eq!(sanitize_key_name("my key"), "my_key");
         assert_eq!(sanitize_key_name("test-key"), "test-key");
         assert_eq!(sanitize_key_name("valid_key"), "valid_key");
         assert_eq!(sanitize_key_name("_underscore_"), "underscore");
-        assert_eq!(sanitize_key_name("___"), "sanitized_key");  // All underscores
+        assert_eq!(sanitize_key_name("___"), "sanitized_key"); // All underscores
     }
 }
 
@@ -467,8 +470,8 @@ pub fn validate_tool_response_language(tool_name: &str, response: &Value) -> Res
 mod integration_tests {
     use super::*;
     use assert_fs::TempDir;
-    use vtcode_core::tools::ToolRegistry;
     use vtcode_core::config::constants::tools;
+    use vtcode_core::tools::ToolRegistry;
 
     #[tokio::test]
     async fn test_read_file_response_language_consistency() {

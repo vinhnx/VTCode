@@ -1,5 +1,5 @@
-use assert_fs::prelude::*;
 use assert_fs::TempDir;
+use assert_fs::prelude::*;
 use serde_json::json;
 use std::fs;
 use vtcode_core::ToolRegistry;

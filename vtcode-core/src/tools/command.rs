@@ -349,7 +349,11 @@ mod tests {
             .prepare_invocation(&input)
             .await
             .expect_err("empty executable should be rejected");
-        assert!(error.to_string().contains("Command executable cannot be empty"));
+        assert!(
+            error
+                .to_string()
+                .contains("Command executable cannot be empty")
+        );
     }
 
     #[tokio::test]
@@ -360,14 +364,20 @@ mod tests {
             .prepare_invocation(&input)
             .await
             .expect_err("whitespace-only executable should be rejected");
-        assert!(error.to_string().contains("Command executable cannot be empty"));
+        assert!(
+            error
+                .to_string()
+                .contains("Command executable cannot be empty")
+        );
     }
 
     #[tokio::test]
     async fn validate_args_rejects_empty_command() {
         let tool = make_tool();
         let args = json!({ "command": [] });
-        let error = tool.validate_args(&args).expect_err("empty command should fail validation");
+        let error = tool
+            .validate_args(&args)
+            .expect_err("empty command should fail validation");
         assert!(error.to_string().contains("Command cannot be empty"));
     }
 
@@ -375,14 +385,21 @@ mod tests {
     async fn validate_args_rejects_empty_executable() {
         let tool = make_tool();
         let args = json!({ "command": ["", "arg1"] });
-        let error = tool.validate_args(&args).expect_err("empty executable should fail validation");
-        assert!(error.to_string().contains("Command executable cannot be empty"));
+        let error = tool
+            .validate_args(&args)
+            .expect_err("empty executable should fail validation");
+        assert!(
+            error
+                .to_string()
+                .contains("Command executable cannot be empty")
+        );
     }
 
     #[tokio::test]
     async fn validate_args_accepts_valid_command() {
         let tool = make_tool();
         let args = json!({ "command": ["ls", "-la"] });
-        tool.validate_args(&args).expect("valid command should pass validation");
+        tool.validate_args(&args)
+            .expect("valid command should pass validation");
     }
 }

@@ -1,5 +1,5 @@
-use assert_fs::prelude::*;
 use assert_fs::TempDir;
+use assert_fs::prelude::*;
 use std::env;
 use std::fs;
 use std::io::Write;
@@ -38,7 +38,8 @@ impl TestEnv {
 
     pub fn create_test_dir(&self, name: &str) -> PathBuf {
         let dir = self.temp_dir.child(name);
-        dir.create_dir_all().expect("Failed to create test directory");
+        dir.create_dir_all()
+            .expect("Failed to create test directory");
         dir.path().to_path_buf()
     }
 }

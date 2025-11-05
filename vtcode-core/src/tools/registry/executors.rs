@@ -13,7 +13,7 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::time::sleep;
-use tracing::{debug, warn};
+use tracing::{debug, trace, warn};
 use vte::{Parser, Perform};
 
 use crate::config::PtyConfig;
@@ -377,8 +377,12 @@ impl ToolRegistry {
                 .operations()
                 .iter()
                 .filter_map(|op| match op {
-                    crate::tools::editing::PatchOperation::DeleteFile { path } => Some(path.clone()),
-                    crate::tools::editing::PatchOperation::AddFile { path, .. } => Some(path.clone()),
+                    crate::tools::editing::PatchOperation::DeleteFile { path } => {
+                        Some(path.clone())
+                    }
+                    crate::tools::editing::PatchOperation::AddFile { path, .. } => {
+                        Some(path.clone())
+                    }
                     _ => None,
                 })
                 .collect();
@@ -757,6 +761,16 @@ impl ToolRegistry {
             pixel_width: 0,
             pixel_height: 0,
         };
+
+        debug!(
+            target: "vtcode::pty",
+            session_id = %session_id,
+            command = ?command_parts,
+            working_dir = %working_dir.display(),
+            rows,
+            cols,
+            "creating PTY session"
+        );
 
         self.start_pty_session()?;
         let result = match self.pty_manager().create_session(
@@ -1620,6 +1634,9 @@ fn strip_ansi(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use base64::Engine as _;
+    use base64::engine::general_purpose::STANDARD as BASE64;
+    use serde_json::{Map, json};
 
     #[test]
     fn test_strip_ansi() {
@@ -1679,6 +1696,38 @@ mod tests {
     }
 
     #[test]
+    fn pty_input_prefers_base64_over_plain_text() {
+        let mut payload = Map::new();
+        payload.insert(
+            "session_id".to_string(),
+            Value::String("test-session".into()),
+        );
+        payload.insert("append_newline".to_string(), Value::Bool(false));
+        payload.insert("input".to_string(), Value::String("plain".into()));
+        let encoded = BASE64.encode(b"decoded");
+        payload.insert("input_base64".to_string(), Value::String(encoded));
+
+        let parsed = PtyInputPayload::from_map(&payload).expect("pty payload");
+        assert_eq!(parsed.buffer, b"decoded");
+        assert!(!parsed.append_newline);
+    }
+
+    #[test]
+    fn pty_input_rejects_empty_payload_without_newline() {
+        let mut payload = Map::new();
+        payload.insert(
+            "session_id".to_string(),
+            Value::String("empty-session".into()),
+        );
+
+        let err = PtyInputPayload::from_map(&payload).expect_err("expected failure");
+        assert!(
+            err.to_string()
+                .contains("send_pty_input requires 'input' or 'input_base64'")
+        );
+    }
+
+    #[test]
     fn tokenizer_uses_posix_rules_for_posix_shells() {
         let tokens =
             tokenize_command_string("echo 'hello world'", Some("/bin/bash")).expect("tokens");
@@ -1708,6 +1757,72 @@ mod tests {
         config.preferred_shell = Some("/bin/zsh".to_string());
         let resolved = super::resolve_shell_preference(None, &config);
         assert_eq!(resolved.as_deref(), Some("/bin/zsh"));
+    }
+
+    #[test]
+    fn pty_input_prefers_base64_over_plain_text() {
+        let map: Map<String, Value> = json!({
+            "session_id": "pty-1",
+            "input": "ls",
+            "input_base64": BASE64.encode("pwd"),
+            "append_newline": false,
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+
+        let payload = PtyInputPayload::from_map(&map).expect("payload");
+        assert_eq!(payload.buffer, b"pwd");
+        assert!(!payload.append_newline);
+    }
+
+    #[test]
+    fn pty_input_uses_plain_text_when_base64_missing() {
+        let map: Map<String, Value> = json!({
+            "session_id": "pty-2",
+            "input": "echo hello",
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+
+        let payload = PtyInputPayload::from_map(&map).expect("payload");
+        assert_eq!(payload.buffer, b"echo hello");
+        assert!(!payload.append_newline);
+    }
+
+    #[test]
+    fn pty_input_rejects_empty_without_newline() {
+        let map: Map<String, Value> = json!({
+            "session_id": "pty-3",
+            "input": "",
+            "append_newline": false,
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+
+        let err = PtyInputPayload::from_map(&map).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("send_pty_input requires 'input' or 'input_base64'")
+        );
+    }
+
+    #[test]
+    fn pty_input_allows_empty_when_newline_requested() {
+        let map: Map<String, Value> = json!({
+            "session_id": "pty-4",
+            "input": "",
+            "append_newline": true,
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+
+        let payload = PtyInputPayload::from_map(&map).expect("payload");
+        assert!(payload.buffer.is_empty());
+        assert!(payload.append_newline);
     }
 }
 
@@ -1750,10 +1865,27 @@ impl PtyInputPayload {
             .unwrap_or(0);
         let drain_output = bool_from_map(map, "drain", true);
 
+        let input_text = map.get("input").and_then(Value::as_str);
+        let input_base64_text = map.get("input_base64").and_then(Value::as_str);
+        let input_preview = input_text.map(Self::preview_string);
+        let input_base64_preview = input_base64_text.map(Self::preview_string);
+
+        debug!(
+            target: "vtcode::pty",
+            session_id = %session_id,
+            append_newline,
+            wait_ms,
+            drain_output,
+            input_len = input_text.map(|text| text.len()).unwrap_or(0),
+            input_preview = input_preview.as_deref(),
+            input_base64_len = input_base64_text.map(|text| text.len()).unwrap_or(0),
+            input_base64_preview = input_base64_preview.as_deref(),
+            "received send_pty_input payload"
+        );
+
         let mut buffer = Vec::new();
-        if let Some(text) = map.get("input").and_then(|value| value.as_str()) {
-            buffer.extend_from_slice(text.as_bytes());
-        }
+
+        // Prefer input_base64 if present, else use input
         if let Some(encoded) = map
             .get("input_base64")
             .and_then(|value| value.as_str())
@@ -1763,13 +1895,40 @@ impl PtyInputPayload {
                 .decode(encoded.as_bytes())
                 .context("input_base64 must be valid base64")?;
             buffer.extend_from_slice(&decoded);
+        } else if let Some(text) = map.get("input").and_then(|value| value.as_str()) {
+            buffer.extend_from_slice(text.as_bytes());
         }
 
+        debug!(
+            target: "vtcode::pty",
+            session_id = %session_id,
+            buffer_len = buffer.len(),
+            buffer_preview = %Self::preview_bytes(&buffer),
+            "prepared PTY input buffer"
+        );
+
         if buffer.is_empty() && !append_newline {
+            debug!(
+                target: "vtcode::pty",
+                session_id = %session_id,
+                "rejecting empty PTY input without append_newline"
+            );
             return Err(anyhow!(
                 "send_pty_input requires 'input' or 'input_base64' unless append_newline is true"
             ));
         }
+
+        trace!(
+            target: "vtcode::pty",
+            session_id = session_id.as_str(),
+            append_newline,
+            wait_ms,
+            drain_output,
+            has_input = map.contains_key("input"),
+            has_input_base64 = map.contains_key("input_base64"),
+            buffer_len = buffer.len(),
+            "parsed PTY input payload"
+        );
 
         Ok(Self {
             session_id,
@@ -1778,6 +1937,32 @@ impl PtyInputPayload {
             wait_ms,
             drain_output,
         })
+    }
+
+    fn preview_string(text: &str) -> String {
+        const MAX_PREVIEW: usize = 64;
+        if text.len() <= MAX_PREVIEW {
+            text.to_string()
+        } else {
+            format!("{}…", &text[..MAX_PREVIEW])
+        }
+    }
+
+    fn preview_bytes(bytes: &[u8]) -> String {
+        const MAX_BYTES: usize = 64;
+        if let Ok(text) = std::str::from_utf8(bytes) {
+            return Self::preview_string(text);
+        }
+
+        let mut hex = String::new();
+        for byte in bytes.iter().take(MAX_BYTES / 2) {
+            use std::fmt::Write as _;
+            let _ = write!(hex, "{:02x}", byte);
+        }
+        if bytes.len() > MAX_BYTES / 2 {
+            hex.push('…');
+        }
+        format!("hex:{}", hex)
     }
 }
 

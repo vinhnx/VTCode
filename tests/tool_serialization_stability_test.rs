@@ -24,8 +24,8 @@ fn generate_tool_schema_hash(tool_name: &str, schema: &Value) -> Result<String> 
     use std::hash::{Hash, Hasher};
 
     // Use deterministic JSON serialization (sorted keys, no pretty-print)
-    let canonical = serde_json::to_string(schema)
-        .context("Failed to serialize schema for hashing")?;
+    let canonical =
+        serde_json::to_string(schema).context("Failed to serialize schema for hashing")?;
 
     // Generate hash
     let mut hasher = DefaultHasher::new();
@@ -125,11 +125,7 @@ fn snapshot_current_tool_schemas() -> Result<BTreeMap<String, Value>> {
 }
 
 /// Validates that a schema hasn't changed from its baseline
-fn validate_schema_stability(
-    tool_name: &str,
-    current: &Value,
-    baseline: &Value,
-) -> Result<()> {
+fn validate_schema_stability(tool_name: &str, current: &Value, baseline: &Value) -> Result<()> {
     // Exact match required - no whitespace tolerance
     let current_str = serde_json::to_string(current)?;
     let baseline_str = serde_json::to_string(baseline)?;
@@ -158,10 +154,7 @@ fn validate_whitespace_consistency(schema: &Value) -> Result<()> {
     // Check for trailing whitespace
     for (line_num, line) in schema_str.lines().enumerate() {
         if line.ends_with(' ') || line.ends_with('\t') {
-            anyhow::bail!(
-                "Tool schema line {} has trailing whitespace",
-                line_num + 1
-            );
+            anyhow::bail!("Tool schema line {} has trailing whitespace", line_num + 1);
         }
     }
 
@@ -184,7 +177,10 @@ fn validate_encoding_invariants(schema: &Value) -> Result<()> {
     }
 
     // Check for control characters that shouldn't be in schemas
-    if schema_str.chars().any(|c| c.is_control() && c != '\n' && c != '\t') {
+    if schema_str
+        .chars()
+        .any(|c| c.is_control() && c != '\n' && c != '\t')
+    {
         anyhow::bail!("Tool schema contains unexpected control characters");
     }
 
@@ -282,7 +278,12 @@ mod tests {
 
         let result = validate_encoding_invariants(&schema_with_spaces);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("leading/trailing whitespace"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("leading/trailing whitespace")
+        );
     }
 
     #[test]
@@ -419,10 +420,7 @@ mod integration_tests {
 
         // Validate that registry was created successfully
         // Tool list validation would require additional registry API methods
-        assert!(
-            temp_dir.path().exists(),
-            "Registry workspace should exist"
-        );
+        assert!(temp_dir.path().exists(), "Registry workspace should exist");
     }
 
     #[tokio::test]

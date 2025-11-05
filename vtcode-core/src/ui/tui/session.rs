@@ -52,7 +52,7 @@ use crate::prompts::CustomPromptRegistry;
 use crate::tools::PlanSummary;
 use crate::tools::{PlanCompletionState, PlanStep, StepStatus, TaskPlan};
 
-const USER_PREFIX: &str = "❯ ";
+const USER_PREFIX: &str = "";
 const PLACEHOLDER_COLOR: RgbColor = RgbColor(0x88, 0x88, 0x88);
 const PROMPT_COMMAND_NAME: &str = "prompt";
 const LEGACY_PROMPT_COMMAND_NAME: &str = "prompts";
@@ -350,7 +350,9 @@ impl Session {
     ) {
         match event {
             CrosstermEvent::Key(key) => {
-                if matches!(key.kind, KeyEventKind::Press | KeyEventKind::Repeat) {
+                // Only process Press events to avoid duplicate character insertion
+                // Repeat events can cause characters to be inserted multiple times
+                if matches!(key.kind, KeyEventKind::Press) {
                     if let Some(outbound) = self.process_key(key) {
                         if let Some(cb) = callback {
                             cb(&outbound);
@@ -3258,6 +3260,13 @@ impl Session {
                 self.scroll_offset = 0;
                 // Input is handled with standard paragraph, not TextArea
                 self.update_slash_suggestions();
+
+                // Don't submit empty input
+                if submitted.trim().is_empty() {
+                    self.mark_dirty();
+                    return None;
+                }
+
                 self.remember_submitted_input(&submitted);
                 self.mark_dirty();
 

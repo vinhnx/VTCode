@@ -2174,6 +2174,9 @@ mod tests {
         let args = json!({});
         let result = ZedAgent::parse_terminal_command(&args);
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), "run_terminal_cmd requires a 'command' array");
+        assert_eq!(
+            result.unwrap_err(),
+            "run_terminal_cmd requires a 'command' array"
+        );
     }
 }

@@ -637,19 +637,16 @@ pub(crate) async fn run_single_agent_loop_unified(
             let mcp_status = mcp_manager.get_status().await;
             if mcp_status.is_error() {
                 if let Some(error_msg) = mcp_status.get_error_message() {
-                    renderer.line(
-                        MessageStyle::Error,
-                        &format!("⚠️  MCP Error: {}", error_msg),
-                    )?;
+                    renderer.line(MessageStyle::Error, &format!("MCP Error: {}", error_msg))?;
                     renderer.line(
                         MessageStyle::Info,
-                        "💡 Use /mcp to check status or update your vtcode.toml configuration.",
+                        "Use /mcp to check status or update your vtcode.toml configuration.",
                     )?;
                 }
             } else if mcp_status.is_initializing() {
                 renderer.line(
                     MessageStyle::Info,
-                    "🔄 MCP is still initializing in the background...",
+                    "MCP is still initializing in the background...",
                 )?;
             }
         }
@@ -787,13 +784,10 @@ pub(crate) async fn run_single_agent_loop_unified(
                 if mcp_status.is_error()
                     && let Some(error_msg) = mcp_status.get_error_message()
                 {
-                    renderer.line(
-                        MessageStyle::Error,
-                        &format!("⚠️  MCP Error: {}", error_msg),
-                    )?;
+                    renderer.line(MessageStyle::Error, &format!("MCP Error: {}", error_msg))?;
                     renderer.line(
                         MessageStyle::Info,
-                        "💡 Use /mcp to check status or update your vtcode.toml configuration.",
+                        "Use /mcp to check status or update your vtcode.toml configuration.",
                     )?;
                 }
             }
