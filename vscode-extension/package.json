@@ -49,6 +49,7 @@
     "onView:vtcodeQuickActionsView",
     "onView:vtcodeWorkspaceStatusView",
     "onView:vtcodeAgentLoopView",
+    "onView:vtcodeChat",
     "onCommand:vtcode.openQuickActions",
     "onCommand:vtcode.askAgent",
     "onCommand:vtcode.askSelection",
@@ -429,6 +430,12 @@
         {
           "id": "vtcodeAgentLoopView",
           "name": "Agent Loop Timeline",
+          "when": "workbenchState != 'empty'"
+        },
+        {
+          "id": "vtcodeChat",
+          "name": "Chat",
+          "type": "webview",
           "when": "workbenchState != 'empty'"
         }
       ]

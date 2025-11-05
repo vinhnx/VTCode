@@ -1,8 +1,15 @@
 import { spawn, type SpawnOptionsWithoutStdio } from "node:child_process";
 import * as vscode from "vscode";
-import { VtcodeTerminalManager, type VtcodeTerminalHandle } from "./agentTerminal";
+import {
+    VtcodeTerminalManager,
+    type VtcodeTerminalHandle,
+} from "./agentTerminal";
+import { ChatViewProvider } from "./chatView";
 import { registerVtcodeLanguageFeatures } from "./languageFeatures";
-import { registerTrajectoryView, TrajectoryViewController } from "./trajectoryView";
+import {
+    registerTrajectoryView,
+    TrajectoryViewController,
+} from "./trajectoryView";
 import {
     appendMcpProvider,
     loadConfigSummaryFromUri,
@@ -117,6 +124,7 @@ let statusBarItem: vscode.StatusBarItem | undefined;
 let quickActionsProviderInstance: QuickActionTreeDataProvider | undefined;
 let workspaceInsightsProvider: WorkspaceInsightsTreeDataProvider | undefined;
 let trajectoryViewController: TrajectoryViewController | undefined;
+let chatViewProvider: ChatViewProvider | undefined;
 let terminalManager: VtcodeTerminalManager | undefined;
 let lastAgentTerminalId: string | undefined;
 let cliAvailable = false;
@@ -203,21 +211,38 @@ export function activate(context: vscode.ExtensionContext) {
                     );
                 } else {
                     channel.appendLine(
-                        `[info] VTCode terminal ${event.terminalId} exited with code ${
-                            event.code ?? "unknown"
-                        }.`
+                        `[info] VTCode terminal ${
+                            event.terminalId
+                        } exited with code ${event.code ?? "unknown"}.`
                     );
                 }
             })
         );
-    }
 
+        // Register chat view provider immediately after terminal manager is created
+        getOutputChannel().appendLine(
+            "[info] Registering chat view provider..."
+        );
+        chatViewProvider = new ChatViewProvider(context, terminalManager);
+        context.subscriptions.push(
+            vscode.window.registerWebviewViewProvider(
+                ChatViewProvider.viewType,
+                chatViewProvider
+            )
+        );
+        getOutputChannel().appendLine(
+            "[info] Chat view provider registered successfully"
+        );
+    } else {
+        getOutputChannel().appendLine(
+            "[warning] Running in web mode - terminal and chat features disabled"
+        );
+    }
     trajectoryViewController = registerTrajectoryView(context, {
         onAgentOutput: terminalManager?.onDidReceiveOutput,
     });
 
     initializeContextKeys();
-
     void registerVtcodeConfigWatcher(context, handleConfigUpdate);
 
     updateWorkspaceTrustState(workspaceTrusted);
@@ -896,7 +921,9 @@ export function activate(context: vscode.ExtensionContext) {
             }
 
             const sendSlash = (terminalId: string): boolean =>
-                terminalManager?.sendText(terminalId, "/code-ide", { addNewLine: true }) ?? false;
+                terminalManager?.sendText(terminalId, "/code-ide", {
+                    addNewLine: true,
+                }) ?? false;
 
             let targetId = lastAgentTerminalId;
             if (targetId && sendSlash(targetId)) {
@@ -3102,9 +3129,7 @@ async function openMcpGuide(): Promise<void> {
 
 async function ensureAgentTerminalSession(
     forceNew: boolean = false
-): Promise<
-    { handle: VtcodeTerminalHandle; created: boolean } | undefined
-> {
+): Promise<{ handle: VtcodeTerminalHandle; created: boolean } | undefined> {
     if (!terminalManager) {
         void vscode.window.showWarningMessage(
             "The VTCode terminal integration is unavailable in this environment."
@@ -3126,9 +3151,8 @@ async function ensureAgentTerminalSession(
     if (!effectiveForceNew) {
         if (allowMultiple) {
             if (lastAgentTerminalId) {
-                existingHandle = terminalManager.getTerminalHandle(
-                    lastAgentTerminalId
-                );
+                existingHandle =
+                    terminalManager.getTerminalHandle(lastAgentTerminalId);
             }
         } else {
             existingHandle = terminalManager.getTerminalHandle(
@@ -3175,7 +3199,9 @@ async function ensureAgentTerminalSession(
                 await ideContextBridge.flush();
             }
             await delay(200);
-            terminalManager?.sendText(handle.id, chatCommand, { addNewLine: true });
+            terminalManager?.sendText(handle.id, chatCommand, {
+                addNewLine: true,
+            });
         })();
     }
 
@@ -3224,9 +3250,7 @@ function buildVtcodeChatCommand(
 ): string {
     const quotedCommand = quoteForShell(commandPath);
     const argsText = formatArgsForShell(["chat", ...configArgs]);
-    return argsText.length > 0
-        ? `${quotedCommand} ${argsText}`
-        : quotedCommand;
+    return argsText.length > 0 ? `${quotedCommand} ${argsText}` : quotedCommand;
 }
 
 function delay(durationMs: number): Promise<void> {
