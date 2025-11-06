@@ -343,7 +343,7 @@ impl Session {
                     ListItem::new(Line::from(vec![
                         Span::styled(format!("/{}", command.name), self.slash_name_style()),
                         Span::raw(" "),
-                        Span::styled(command.description.clone(), self.slash_description_style()),
+                        Span::styled(command.description.to_string(), self.slash_description_style()),
                     ]))
                 }
                 slash_palette::SlashPaletteSuggestion::Custom(prompt) => {
@@ -359,12 +359,7 @@ impl Session {
             .collect()
     }
 
-    fn slash_match_style(&self) -> Style {
-        let mut style = InlineTextStyle::default();
-        style.bold = true;
-        style.color = self.theme.primary.or(self.theme.foreground);
-        ratatui_style_from_inline(&style, self.theme.foreground)
-    }
+
 
     fn slash_highlight_style(&self) -> Style {
         let mut style = Style::default().add_modifier(Modifier::REVERSED | Modifier::BOLD);
