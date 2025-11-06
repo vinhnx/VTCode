@@ -503,7 +503,7 @@ ${output}`
             <header class="chat-header">
                 <div class="chat-title">
                     <span class="chat-logo">VT</span>
-                    <span>VTCode Companion</span>
+                    <span>VT Code</span>
                 </div>
                 <div id="status" class="chat-status" aria-live="polite"></div>
             </header>
