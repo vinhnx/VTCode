@@ -351,19 +351,9 @@ fn spawn_timeout_warning_task(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use assert_fs::TempDir;
-    use futures::future::BoxFuture;
     use serde_json::json;
-    use std::io;
-    use std::sync::{Arc, Mutex};
-    use std::time::Duration;
+    use std::sync::Arc;
     use tokio::sync::Notify;
-    use tokio::task::yield_now;
-    use tracing::Level;
-    use tracing_subscriber::fmt;
-    use vtcode_core::config::types::CapabilityLevel;
-    use vtcode_core::tools::registry::ToolRegistration;
-
     #[tokio::test]
     async fn test_execute_tool_with_timeout() {
         // Setup test dependencies
@@ -443,40 +433,7 @@ mod tests {
         }
     }
 
-    #[derive(Clone)]
-    struct CaptureWriter {
-        buffer: Arc<Mutex<Vec<String>>>,
-    }
 
-    impl CaptureWriter {
-        fn new(buffer: Arc<Mutex<Vec<String>>>) -> Self {
-            Self { buffer }
-        }
-    }
-
-    impl io::Write for CaptureWriter {
-        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-            let text = String::from_utf8_lossy(buf).to_string();
-            self.buffer.lock().unwrap().push(text);
-            Ok(buf.len())
-        }
-
-        fn flush(&mut self) -> io::Result<()> {
-            Ok(())
-        }
-    }
-
-    fn slow_tool_executor<'a>(
-        _registry: &'a mut ToolRegistry,
-        _args: Value,
-    ) -> BoxFuture<'a, anyhow::Result<Value>> {
-        Box::pin(async move {
-            tokio::time::sleep(TOOL_TIMEOUT + Duration::from_secs(1)).await;
-            Ok(json!({
-                "exit_code": 0
-            }))
-        })
-    }
 
     // Note: This test requires tokio's test-util feature (start_paused, advance)
     // which is not enabled in the standard build. The test is commented out
