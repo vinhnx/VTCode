@@ -31,9 +31,6 @@
   <a href="https://github.com/vinhnx/vtcode/releases">
     <img src="https://img.shields.io/github/v/release/vinhnx/vtcode?color=orange&label=GitHub" alt="GitHub Release"/>
   </a>
-  <a href="https://github.com/vinhnx/vtcode/actions/workflows/ci.yml">
-    <img src="https://img.shields.io/github/actions/workflow/status/vinhnx/vtcode/ci.yml?branch=main&label=CI" alt="GitHub Actions Workflow Status"/>
-  </a>
   <a href="https://deepwiki.com/vinhnx/vtcode"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
 </p>
 
