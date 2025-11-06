@@ -19,6 +19,21 @@ const esbuildProblemMatcherPlugin = {
 	}
 };
 
+/**
+ * Plugin to mark .node files as external
+ * @type {import('esbuild').Plugin}
+ */
+const nativeNodeModulesPlugin = {
+	name: 'native-node-modules',
+	setup(build) {
+		// Mark all .node files as external
+		build.onResolve({ filter: /\.node$/ }, args => ({
+			path: args.path,
+			external: true
+		}));
+	}
+};
+
 async function runBuild() {
 	const ctx = await esbuild.context({
 		entryPoints: [
@@ -30,12 +45,12 @@ async function runBuild() {
 		sourcemap: !production,
 		sourcesContent: false,
 		platform: 'node',
-		outbase: '.',
-		outdir: 'dist',
-		external: ['vscode'],
+		outfile: 'dist/extension.js',
+		external: ['vscode', 'node-pty'],
 		logLevel: 'silent', // Disable esbuild's own logging since we handle it with the plugin
 		plugins: [
 			esbuildProblemMatcherPlugin,
+			nativeNodeModulesPlugin,
 		],
 		define: {
 			'process.env.NODE_ENV': JSON.stringify(production ? 'production' : 'development'),
