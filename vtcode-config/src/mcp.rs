@@ -592,8 +592,13 @@ pub struct McpHttpServerConfig {
     pub protocol_version: String,
 
     /// Headers to include in requests
+    #[serde(default, alias = "headers")]
+    pub http_headers: HashMap<String, String>,
+
+    /// Headers whose values are sourced from environment variables
+    /// (`{ header-name = "ENV_VAR" }`). Empty values are ignored.
     #[serde(default)]
-    pub headers: HashMap<String, String>,
+    pub env_http_headers: HashMap<String, String>,
 }
 
 impl Default for McpHttpServerConfig {
@@ -602,7 +607,8 @@ impl Default for McpHttpServerConfig {
             endpoint: String::new(),
             api_key_env: None,
             protocol_version: default_mcp_protocol_version(),
-            headers: HashMap::new(),
+            http_headers: HashMap::new(),
+            env_http_headers: HashMap::new(),
         }
     }
 }
