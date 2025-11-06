@@ -3,6 +3,40 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - Latest Improvements# [Version 0.39.5] - 2025-11-03
+# [Version 0.40.0] - 2025-11-06
+
+
+### Features
+    - feat: Enhance workspace trust and automation features
+    - feat: add workspace trust request functionality
+    - feat: Add VTCode Chat extension with MCP integration
+    - feat: add experimental smart summarization feature for conversation compression
+    - feat: replace tempfile with assert_fs for improved temporary directory handling
+
+
+### Bug Fixes
+    - fix: add wasm32-wasip2 component to toolchain configuration
+
+
+### Refactors
+    - refactor: remove wasm32-wasip2 component from toolchain configuration and clean up test imports
+    - refactor: clean up test module by removing unused imports and structures
+    - refactor: replace assert_fs::prelude with tempfile::tempdir in tests
+    - refactor: remove unused zed-extension files and grammars
+    - refactor: update tool policies, exclude zed-extension from workspace, and upgrade zed_extension_api dependency
+    - refactor: update tool policy and improve command handling; streamline error messages and enhance telemetry logging
+    - refactor: update extension ID and name for consistency
+    - refactor: remove unused imports and streamline timeout error handling
+    - refactor: improve logging for AST-grep engine initialization
+
+
+### Documentation
+    - docs: add troubleshooting section for development installation
+    - docs: update changelog for v0.39.13 [skip ci]
+
+
+### Chores
+    - chore: release v0.39.13
 # [Version 0.39.13] - 2025-11-03
 
 
