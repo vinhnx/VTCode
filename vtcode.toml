@@ -124,6 +124,15 @@ max_snapshots = 50
 # Maximum age of checkpoints to keep (in days)
 max_age_days = 30
 
+[agent.smart_summarization]
+enabled = false
+min_summary_interval_secs = 30
+max_concurrent_tasks = 4
+min_turns_threshold = 20
+token_threshold_percent = 0.6
+max_turn_content_length = 2000
+aggressive_compression_threshold = 15000
+
 # Tool security configuration
 [tools]
 # Default policy when no specific policy is defined ("allow", "prompt", "deny")
@@ -603,6 +612,15 @@ enabled = true
 
 [mcp.allowlist]
 enforce = false
+
+[mcp.server]
+enabled = false
+bind_address = "127.0.0.1"
+port = 3000
+transport = "sse"
+name = "vtcode-mcp-server"
+version = "0.39.13"
+exposed_tools = []
 
 [acp.zed]
 enabled = true
