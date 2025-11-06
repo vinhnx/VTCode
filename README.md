@@ -29,7 +29,7 @@
     <img src="https://img.shields.io/crates/v/vtcode?color=fc8d62&label=crates.io" alt="Crates.io Version"/>
   </a>
   <a href="https://github.com/vinhnx/vtcode/releases">
-    <img src="https://img.shields.io/github/v/release/vinhnx/vtcode?color=orange&label=GitHub" alt="GitHub Release"/>
+    <img src="https://img.shields.io/github/v/release/vinhnx/vtcode?color=orange&label=Release" alt="GitHub Release"/>
   </a>
   <a href="https://deepwiki.com/vinhnx/vtcode"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
 </p>
