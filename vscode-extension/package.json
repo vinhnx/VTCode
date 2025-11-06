@@ -384,6 +384,12 @@
           "id": "vtcodeQuickActionsView",
           "name": "Quick Actions",
           "when": "workbenchState != 'empty'"
+        },
+        {
+          "id": "vtcodeChatView",
+          "name": "Chat",
+          "type": "webview",
+          "icon": "media/vtcode-icon.svg"
         }
       ]
     },
@@ -484,7 +490,8 @@
   },
 
   "dependencies": {
-    "@iarna/toml": "^2.2.5"
+    "@iarna/toml": "^2.2.5",
+    "node-pty": "^1.0.0"
   },
   "devDependencies": {
     "@types/glob": "^9.0.0",
