@@ -1,5 +1,8 @@
+mod slash_commands;
+
 use anyhow::{Context, Result};
 use chrono::Local;
+use slash_commands::{SlashCommandContext, SlashCommandControl};
 use std::collections::{BTreeSet, HashMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -10,73 +13,51 @@ use tokio::task;
 #[cfg(debug_assertions)]
 use tracing::debug;
 use tracing::warn;
-use vtcode_core::commands::init::{GenerateAgentsFileStatus, generate_agents_file};
 use vtcode_core::config::constants::{defaults, ui};
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::agent::snapshots::{SnapshotConfig, SnapshotManager};
-use vtcode_core::core::decision_tracker::{Action as DTAction, DecisionOutcome, DecisionTracker};
+use vtcode_core::core::decision_tracker::{Action as DTAction, DecisionOutcome};
 use vtcode_core::core::router::{Router, TaskClass};
 use vtcode_core::llm::error_display;
 use vtcode_core::llm::provider::{self as uni};
 use vtcode_core::tools::registry::{ToolErrorType, ToolExecutionError, classify_error};
-use vtcode_core::ui::slash::{SLASH_COMMANDS, SlashCommandInfo};
 use vtcode_core::ui::theme;
-use vtcode_core::ui::tui::{
-    InlineEvent, InlineEventCallback, InlineHandle, spawn_session, theme_from_styles,
-};
+use vtcode_core::ui::tui::{InlineEvent, InlineEventCallback, spawn_session, theme_from_styles};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::at_pattern::parse_at_patterns;
-use vtcode_core::utils::session_archive::{
-    self, SessionArchive, SessionArchiveMetadata, SessionMessage,
-};
+use vtcode_core::utils::session_archive::{SessionArchive, SessionArchiveMetadata, SessionMessage};
 use vtcode_core::utils::transcript;
 
 use crate::agent::runloop::ResumeSession;
 use crate::agent::runloop::git::confirm_changes_with_git_diff;
 use crate::agent::runloop::is_context_overflow_error;
-use crate::agent::runloop::model_picker::{
-    ModelPickerProgress, ModelPickerStart, ModelPickerState,
-};
+use crate::agent::runloop::model_picker::{ModelPickerProgress, ModelPickerState};
 use crate::agent::runloop::prompt::refine_user_prompt_if_enabled;
-use crate::agent::runloop::slash_commands::{
-    McpCommandAction, SlashCommandOutcome, handle_slash_command,
-};
+use crate::agent::runloop::slash_commands::handle_slash_command;
 use crate::agent::runloop::text_tools::{detect_textual_tool_call, extract_code_fence_blocks};
 use crate::agent::runloop::tool_output::render_code_fence_blocks;
 use crate::agent::runloop::tool_output::render_tool_output;
 use crate::agent::runloop::ui::{build_inline_header_context, render_session_banner};
 use crate::agent::runloop::unified::ui_interaction::{
-    PlaceholderSpinner, display_session_status, display_token_cost, stream_and_render_response,
+    PlaceholderSpinner, stream_and_render_response,
 };
 
-use super::config_modal::{MODAL_CLOSE_HINT, load_config_modal_content};
 use super::harmony::strip_harmony_syntax;
-use super::workspace::{
-    bootstrap_config_files, build_workspace_index, load_workspace_files, refresh_vt_config,
-};
+use super::utils::{render_hook_messages, safe_force_redraw};
+use super::workspace::{load_workspace_files, refresh_vt_config};
 use crate::agent::runloop::mcp_events;
 use crate::agent::runloop::unified::async_mcp_manager::McpInitStatus;
 use crate::agent::runloop::unified::context_manager::ContextManager;
 use crate::agent::runloop::unified::curator::{
     build_curator_tools, format_provider_label, resolve_mode_label,
 };
-use crate::agent::runloop::unified::diagnostics::run_doctor_diagnostics;
-use crate::agent::runloop::unified::display::{
-    display_user_message, ensure_turn_bottom_gap, persist_theme_preference,
-};
+use crate::agent::runloop::unified::display::{display_user_message, ensure_turn_bottom_gap};
 use crate::agent::runloop::unified::inline_events::{
     InlineEventLoopResources, InlineInterruptCoordinator, InlineLoopAction, poll_inline_loop_action,
 };
-use crate::agent::runloop::unified::mcp_support::{
-    diagnose_mcp, display_mcp_config_summary, display_mcp_providers, display_mcp_status,
-    display_mcp_tools, refresh_mcp_tools, render_mcp_config_edit_guidance,
-    render_mcp_login_guidance, repair_mcp_runtime,
-};
 use crate::agent::runloop::unified::model_selection::finalize_model_selection;
-use crate::agent::runloop::unified::palettes::{
-    ActivePalette, apply_prompt_style, show_help_palette, show_sessions_palette, show_theme_palette,
-};
+use crate::agent::runloop::unified::palettes::{ActivePalette, apply_prompt_style};
 use crate::agent::runloop::unified::progress::ProgressReporter;
 use crate::agent::runloop::unified::session_setup::{
     SessionState, build_mcp_tool_definitions, initialize_session,
@@ -95,12 +76,8 @@ use crate::agent::runloop::unified::tool_routing::{ToolPermissionFlow, ensure_to
 use crate::agent::runloop::unified::tool_summary::{
     describe_tool_action, humanize_tool_name, render_tool_call_summary_with_status,
 };
-use crate::agent::runloop::unified::workspace_links::{
-    LinkedDirectory, handle_workspace_directory_command, remove_directory_symlink,
-};
-use crate::hooks::lifecycle::{
-    HookMessage, HookMessageLevel, LifecycleHookEngine, SessionEndReason, SessionStartTrigger,
-};
+use crate::agent::runloop::unified::workspace_links::{LinkedDirectory, remove_directory_symlink};
+use crate::hooks::lifecycle::{LifecycleHookEngine, SessionEndReason, SessionStartTrigger};
 use crate::ide_context::IdeContextBridge;
 
 enum TurnLoopResult {
@@ -656,591 +633,48 @@ pub(crate) async fn run_single_agent_loop_unified(
                         let outcome =
                             handle_slash_command(command_input, &mut renderer, &custom_prompts)
                                 .await?;
-                        let is_submit_prompt =
-                            matches!(outcome, SlashCommandOutcome::SubmitPrompt { .. });
-                        match outcome {
-                            SlashCommandOutcome::SubmitPrompt { prompt } => {
+                        let command_result = slash_commands::handle_outcome(
+                            outcome,
+                            SlashCommandContext {
+                                renderer: &mut renderer,
+                                handle: &handle,
+                                session: &mut session,
+                                config: &mut config,
+                                vt_cfg: &mut vt_cfg,
+                                provider_client: &mut provider_client,
+                                session_bootstrap: &session_bootstrap,
+                                model_picker_state: &mut model_picker_state,
+                                palette_state: &mut palette_state,
+                                sandbox: &mut sandbox,
+                                tool_registry: &mut tool_registry,
+                                conversation_history: &mut conversation_history,
+                                decision_ledger: &decision_ledger,
+                                context_manager: &mut context_manager,
+                                session_stats: &mut session_stats,
+                                tools: &tools,
+                                token_budget_enabled,
+                                trim_config: &trim_config,
+                                async_mcp_manager: async_mcp_manager.as_ref(),
+                                mcp_panel_state: &mut mcp_panel_state,
+                                linked_directories: &mut linked_directories,
+                                ctrl_c_state: &ctrl_c_state,
+                                ctrl_c_notify: &ctrl_c_notify,
+                                default_placeholder: &default_placeholder,
+                                lifecycle_hooks: lifecycle_hooks.as_ref(),
+                                full_auto,
+                            },
+                        )
+                        .await?;
+                        match command_result {
+                            SlashCommandControl::SubmitPrompt(prompt) => {
                                 input_owned = prompt;
-                                // Don't continue - fall through to process the prompt
                             }
-                            SlashCommandOutcome::Handled => {
-                                continue;
-                            }
-                            SlashCommandOutcome::ThemeChanged(theme_id) => {
-                                persist_theme_preference(&mut renderer, &theme_id).await?;
-                                let styles = theme::active_styles();
-                                handle.set_theme(theme_from_styles(&styles));
-                                apply_prompt_style(&handle);
-                                continue;
-                            }
-                            SlashCommandOutcome::StartThemePalette { mode } => {
-                                if model_picker_state.is_some() {
-                                    renderer.line(
-                                        MessageStyle::Error,
-                                        "Close the active model picker before selecting a theme.",
-                                    )?;
-                                    continue;
-                                }
-                                if palette_state.is_some() {
-                                    renderer.line(
-                                    MessageStyle::Error,
-                                    "Another selection modal is already open. Press Esc to dismiss it before starting a new one.",
-                                )?;
-                                    continue;
-                                }
-                                if show_theme_palette(&mut renderer, mode)? {
-                                    palette_state = Some(ActivePalette::Theme { mode });
-                                }
-                                continue;
-                            }
-                            SlashCommandOutcome::StartSessionsPalette { limit } => {
-                                if model_picker_state.is_some() {
-                                    renderer.line(
-                                        MessageStyle::Error,
-                                        "Close the active model picker before browsing sessions.",
-                                    )?;
-                                    continue;
-                                }
-                                if palette_state.is_some() {
-                                    renderer.line(
-                                    MessageStyle::Error,
-                                    "Another selection modal is already open. Press Esc to close it before continuing.",
-                                )?;
-                                    continue;
-                                }
-
-                                match session_archive::list_recent_sessions(limit).await {
-                                    Ok(listings) => {
-                                        if show_sessions_palette(&mut renderer, &listings, limit)? {
-                                            palette_state =
-                                                Some(ActivePalette::Sessions { listings, limit });
-                                        }
-                                    }
-                                    Err(err) => {
-                                        renderer.line(
-                                            MessageStyle::Error,
-                                            &format!("Failed to load session archives: {}", err),
-                                        )?;
-                                    }
-                                }
-                                continue;
-                            }
-                            SlashCommandOutcome::StartHelpPalette => {
-                                if model_picker_state.is_some() {
-                                    renderer.line(
-                                        MessageStyle::Error,
-                                        "Close the active model picker before opening help.",
-                                    )?;
-                                    continue;
-                                }
-                                if palette_state.is_some() {
-                                    renderer.line(
-                                    MessageStyle::Error,
-                                    "Another selection modal is already open. Press Esc to dismiss it before starting a new one.",
-                                )?;
-                                    continue;
-                                }
-                                let commands: Vec<&'static SlashCommandInfo> =
-                                    SLASH_COMMANDS.iter().collect();
-                                if show_help_palette(&mut renderer, &commands)? {
-                                    palette_state = Some(ActivePalette::Help);
-                                }
-                                continue;
-                            }
-                            SlashCommandOutcome::StartFileBrowser { initial_filter } => {
-                                if model_picker_state.is_some() {
-                                    renderer.line(
-                                    MessageStyle::Error,
-                                    "Close the active model picker before opening file browser.",
-                                )?;
-                                    continue;
-                                }
-                                if palette_state.is_some() {
-                                    renderer.line(
-                                    MessageStyle::Error,
-                                    "Another selection modal is already open. Press Esc to dismiss it before starting a new one.",
-                                )?;
-                                    continue;
-                                }
-
-                                // Activate file palette with optional filter
-                                handle.force_redraw();
-                                if let Some(filter) = initial_filter {
-                                    // Insert @ symbol with filter into input
-                                    handle.set_input(format!("@{}", filter));
-                                } else {
-                                    // Just insert @ symbol to trigger file browser
-                                    handle.set_input("@".to_string());
-                                }
-
-                                renderer.line(
-                                MessageStyle::Info,
-                                "File browser activated. Use arrow keys to navigate, Enter to select, Esc to close.",
-                            )?;
-                                continue;
-                            }
-                            SlashCommandOutcome::ManageSandbox { action } => {
-                                if let Err(err) =
-                                    sandbox.handle_action(action, &mut renderer, &mut tool_registry)
-                                {
-                                    renderer.line(
-                                        MessageStyle::Error,
-                                        &format!("Sandbox error: {}", err),
-                                    )?;
-                                }
-                                continue;
-                            }
-                            SlashCommandOutcome::StartModelSelection => {
-                                if model_picker_state.is_some() {
-                                    renderer.line(
-                                    MessageStyle::Error,
-                                    "A model picker session is already active. Complete or type 'cancel' to exit it before starting another.",
-                                )?;
-                                    continue;
-                                }
-                                let reasoning = vt_cfg
-                                    .as_ref()
-                                    .map(|cfg| cfg.agent.reasoning_effort)
-                                    .unwrap_or(config.reasoning_effort);
-                                let workspace_hint = Some(config.workspace.clone());
-                                match ModelPickerState::new(
-                                    &mut renderer,
-                                    reasoning,
-                                    workspace_hint,
-                                )
-                                .await
-                                {
-                                    Ok(ModelPickerStart::InProgress(picker)) => {
-                                        model_picker_state = Some(picker);
-                                    }
-                                    Ok(ModelPickerStart::Completed { state, selection }) => {
-                                        if let Err(err) = finalize_model_selection(
-                                            &mut renderer,
-                                            &state,
-                                            selection,
-                                            &mut config,
-                                            &mut vt_cfg,
-                                            &mut provider_client,
-                                            &session_bootstrap,
-                                            &handle,
-                                            full_auto,
-                                        )
-                                        .await
-                                        {
-                                            renderer.line(
-                                                MessageStyle::Error,
-                                                &format!(
-                                                    "Failed to apply model selection: {}",
-                                                    err
-                                                ),
-                                            )?;
-                                        }
-                                    }
-                                    Err(err) => {
-                                        renderer.line(
-                                            MessageStyle::Error,
-                                            &format!("Failed to start model picker: {}", err),
-                                        )?;
-                                    }
-                                }
-                                continue;
-                            }
-                            SlashCommandOutcome::InitializeWorkspace { force } => {
-                                let workspace_path = config.workspace.clone();
-                                let workspace_label = workspace_path.display().to_string();
-                                renderer.line(
-                                    MessageStyle::Info,
-                                    &format!(
-                                        "Initializing vtcode configuration in {}...",
-                                        workspace_label
-                                    ),
-                                )?;
-
-                                let created_files =
-                                    match bootstrap_config_files(workspace_path.clone(), force)
-                                        .await
-                                    {
-                                        Ok(files) => files,
-                                        Err(err) => {
-                                            renderer.line(
-                                                MessageStyle::Error,
-                                                &format!(
-                                                    "Failed to initialize configuration: {}",
-                                                    err
-                                                ),
-                                            )?;
-                                            continue;
-                                        }
-                                    };
-
-                                if created_files.is_empty() {
-                                    renderer.line(
-                                        MessageStyle::Info,
-                                        "Existing configuration detected; no files were changed.",
-                                    )?;
-                                } else {
-                                    renderer.line(
-                                        MessageStyle::Info,
-                                        &format!(
-                                            "Created {}: {}",
-                                            if created_files.len() == 1 {
-                                                "file"
-                                            } else {
-                                                "files"
-                                            },
-                                            created_files.join(", "),
-                                        ),
-                                    )?;
-                                }
-
-                                renderer.line(
-                                    MessageStyle::Info,
-                                    "Indexing workspace context (this may take a moment)...",
-                                )?;
-
-                                match build_workspace_index(workspace_path.clone()).await {
-                                    Ok(()) => {
-                                        renderer.line(
-                                        MessageStyle::Info,
-                                        "Workspace indexing complete. Stored under .vtcode/index.",
-                                    )?;
-                                    }
-                                    Err(err) => {
-                                        renderer.line(
-                                            MessageStyle::Error,
-                                            &format!("Failed to index workspace: {}", err),
-                                        )?;
-                                    }
-                                }
-
-                                continue;
-                            }
-                            SlashCommandOutcome::GenerateAgentFile { overwrite } => {
-                                let workspace_path = config.workspace.clone();
-                                renderer.line(
-                                    MessageStyle::Info,
-                                    "Generating AGENTS.md guidance. This may take a moment...",
-                                )?;
-
-                                match generate_agents_file(
-                                    &mut tool_registry,
-                                    workspace_path.as_path(),
-                                    overwrite,
-                                )
-                                .await
-                                {
-                                    Ok(report) => match report.status {
-                                        GenerateAgentsFileStatus::Created => {
-                                            renderer.line(
-                                                MessageStyle::Info,
-                                                &format!(
-                                                    "Created AGENTS.md at {}",
-                                                    report.path.display()
-                                                ),
-                                            )?;
-                                        }
-                                        GenerateAgentsFileStatus::Overwritten => {
-                                            renderer.line(
-                                                MessageStyle::Info,
-                                                &format!(
-                                                    "Overwrote existing AGENTS.md at {}",
-                                                    report.path.display()
-                                                ),
-                                            )?;
-                                        }
-                                        GenerateAgentsFileStatus::SkippedExisting => {
-                                            renderer.line(
-                                                MessageStyle::Info,
-                                                &format!(
-                                                    "AGENTS.md already exists at {}. Use /generate-agent-file --force to regenerate it.",
-                                                    report.path.display()
-                                                ),
-                                            )?;
-                                        }
-                                    },
-                                    Err(err) => {
-                                        renderer.line(
-                                            MessageStyle::Error,
-                                            &format!(
-                                                "Failed to generate AGENTS.md guidance: {}",
-                                                err
-                                            ),
-                                        )?;
-                                    }
-                                }
-
-                                continue;
-                            }
-                            SlashCommandOutcome::ShowConfig => {
-                                let workspace_path = config.workspace.clone();
-                                let vt_snapshot = vt_cfg.clone();
-                                match load_config_modal_content(workspace_path, vt_snapshot).await {
-                                    Ok(content) => {
-                                        if renderer.prefers_untruncated_output() {
-                                            let mut modal_lines = Vec::new();
-                                            modal_lines.push(content.source_label.clone());
-                                            modal_lines.push(String::new());
-                                            modal_lines.extend(content.config_lines.clone());
-                                            modal_lines.push(String::new());
-                                            modal_lines.push(MODAL_CLOSE_HINT.to_string());
-                                            handle.close_modal();
-                                            handle.show_modal(
-                                                content.title.clone(),
-                                                modal_lines,
-                                                None,
-                                            );
-                                            renderer.line(
-                                                MessageStyle::Info,
-                                                &format!(
-                                                    "Opened {} modal ({}).",
-                                                    content.title, content.source_label
-                                                ),
-                                            )?;
-                                            renderer.line(MessageStyle::Info, MODAL_CLOSE_HINT)?;
-                                        } else {
-                                            renderer
-                                                .line(MessageStyle::Info, &content.source_label)?;
-                                            for line in content.config_lines {
-                                                renderer.line(MessageStyle::Info, &line)?;
-                                            }
-                                        }
-                                    }
-                                    Err(err) => {
-                                        renderer.line(
-                                            MessageStyle::Error,
-                                            &format!(
-                                                "Failed to load configuration for display: {}",
-                                                err
-                                            ),
-                                        )?;
-                                    }
-                                }
-                                continue;
-                            }
-                            SlashCommandOutcome::ExecuteTool { name, args } => {
-                                // Handle tool execution from slash command
-                                match ensure_tool_permission(
-                                    &mut tool_registry,
-                                    &name,
-                                    Some(&args),
-                                    &mut renderer,
-                                    &handle,
-                                    &mut session,
-                                    default_placeholder.clone(),
-                                    &ctrl_c_state,
-                                    &ctrl_c_notify,
-                                    lifecycle_hooks.as_ref(),
-                                )
-                                .await
-                                {
-                                    Ok(ToolPermissionFlow::Approved) => {
-                                        // Tool execution logic
-                                        continue;
-                                    }
-                                    Ok(ToolPermissionFlow::Denied) => continue,
-                                    Ok(ToolPermissionFlow::Exit) => {
-                                        session_end_reason = SessionEndReason::Exit;
-                                        break;
-                                    }
-                                    Ok(ToolPermissionFlow::Interrupted) => break,
-                                    Err(err) => {
-                                        renderer.line(
-                                            MessageStyle::Error,
-                                            &format!(
-                                                "Failed to evaluate policy for tool '{}': {}",
-                                                name, err
-                                            ),
-                                        )?;
-                                        continue;
-                                    }
-                                }
-                            }
-                            SlashCommandOutcome::ClearConversation => {
-                                conversation_history.clear();
-                                session_stats = SessionStats::default();
-                                context_manager.clear_curator_state();
-                                {
-                                    let mut ledger = decision_ledger.write().await;
-                                    *ledger = DecisionTracker::new();
-                                }
-                                context_manager.reset_token_budget().await;
-                                transcript::clear();
-                                renderer.clear_screen();
-                                renderer.line(
-                                    MessageStyle::Info,
-                                    "Cleared conversation history and token statistics.",
-                                )?;
-                                renderer.line_if_not_empty(MessageStyle::Output)?;
-                                continue;
-                            }
-                            SlashCommandOutcome::ShowStatus => {
-                                let token_budget = context_manager.token_budget();
-                                let tool_count = tools.read().await.len();
-                                display_session_status(
-                                    &mut renderer,
-                                    &config,
-                                    conversation_history.len(),
-                                    &session_stats,
-                                    token_budget.as_ref(),
-                                    token_budget_enabled,
-                                    trim_config.max_tokens,
-                                    tool_count,
-                                )
-                                .await?;
-                                continue;
-                            }
-                            SlashCommandOutcome::ShowCost => {
-                                let token_budget = context_manager.token_budget();
-                                renderer.line(MessageStyle::Info, "Token usage summary:")?;
-                                display_token_cost(
-                                    &mut renderer,
-                                    token_budget.as_ref(),
-                                    token_budget_enabled,
-                                    trim_config.max_tokens,
-                                    "",
-                                )
-                                .await?;
-                                continue;
-                            }
-                            SlashCommandOutcome::ManageMcp { action } => {
-                                match action {
-                                    McpCommandAction::Overview => {
-                                        display_mcp_status(
-                                            &mut renderer,
-                                            &session_bootstrap,
-                                            &mut tool_registry,
-                                            async_mcp_manager.as_ref().map(|m| m.as_ref()),
-                                            &mcp_panel_state,
-                                        )
-                                        .await?;
-                                    }
-                                    McpCommandAction::ListProviders => {
-                                        display_mcp_providers(
-                                            &mut renderer,
-                                            &session_bootstrap,
-                                            async_mcp_manager.as_ref().map(|m| m.as_ref()),
-                                        )
-                                        .await?;
-                                    }
-                                    McpCommandAction::ListTools => {
-                                        display_mcp_tools(&mut renderer, &mut tool_registry)
-                                            .await?;
-                                    }
-                                    McpCommandAction::RefreshTools => {
-                                        refresh_mcp_tools(&mut renderer, &mut tool_registry)
-                                            .await?;
-                                    }
-                                    McpCommandAction::ShowConfig => {
-                                        display_mcp_config_summary(
-                                            &mut renderer,
-                                            vt_cfg.as_ref(),
-                                            &session_bootstrap,
-                                            async_mcp_manager.as_ref().map(|m| m.as_ref()),
-                                        )
-                                        .await?;
-                                    }
-                                    McpCommandAction::EditConfig => {
-                                        render_mcp_config_edit_guidance(
-                                            &mut renderer,
-                                            config.workspace.as_path(),
-                                        )
-                                        .await?;
-                                    }
-                                    McpCommandAction::Repair => {
-                                        repair_mcp_runtime(
-                                            &mut renderer,
-                                            async_mcp_manager.as_ref().map(|m| m.as_ref()),
-                                            &mut tool_registry,
-                                            vt_cfg.as_ref(),
-                                        )
-                                        .await?;
-                                    }
-                                    McpCommandAction::Diagnose => {
-                                        diagnose_mcp(
-                                            &mut renderer,
-                                            vt_cfg.as_ref(),
-                                            &session_bootstrap,
-                                            async_mcp_manager.as_ref().map(|m| m.as_ref()),
-                                            &mut tool_registry,
-                                            &mcp_panel_state,
-                                        )
-                                        .await?;
-                                    }
-                                    McpCommandAction::Login(name) => {
-                                        render_mcp_login_guidance(&mut renderer, name, true)?;
-                                    }
-                                    McpCommandAction::Logout(name) => {
-                                        render_mcp_login_guidance(&mut renderer, name, false)?;
-                                    }
-                                }
-                                renderer.line_if_not_empty(MessageStyle::Output)?;
-                                continue;
-                            }
-                            SlashCommandOutcome::RunDoctor => {
-                                let provider_runtime = provider_client.name().to_string();
-                                run_doctor_diagnostics(
-                                    &mut renderer,
-                                    &config,
-                                    vt_cfg.as_ref(),
-                                    &provider_runtime,
-                                    async_mcp_manager.as_ref().map(|m| m.as_ref()),
-                                    &linked_directories,
-                                )
-                                .await?;
-                                renderer.line_if_not_empty(MessageStyle::Output)?;
-                                continue;
-                            }
-                            SlashCommandOutcome::ManageWorkspaceDirectories { command } => {
-                                handle_workspace_directory_command(
-                                    &mut renderer,
-                                    &config.workspace,
-                                    command,
-                                    &mut linked_directories,
-                                )
-                                .await?;
-                                renderer.line_if_not_empty(MessageStyle::Output)?;
-                                continue;
-                            }
-                            SlashCommandOutcome::NewSession => {
-                                renderer.line(MessageStyle::Info, "Starting new session...")?;
-                                session_end_reason = SessionEndReason::NewSession;
+                            SlashCommandControl::Continue => continue,
+                            SlashCommandControl::BreakWithReason(reason) => {
+                                session_end_reason = reason;
                                 break;
                             }
-                            SlashCommandOutcome::OpenDocs => {
-                                const DOCS_URL: &str = "https://deepwiki.com/vinhnx/vtcode";
-                                match webbrowser::open(DOCS_URL) {
-                                    Ok(_) => {
-                                        renderer.line(
-                                            MessageStyle::Info,
-                                            &format!(
-                                                "Opening documentation in browser: {}",
-                                                DOCS_URL
-                                            ),
-                                        )?;
-                                    }
-                                    Err(err) => {
-                                        renderer.line(
-                                            MessageStyle::Error,
-                                            &format!("Failed to open browser: {}", err),
-                                        )?;
-                                        renderer.line(
-                                            MessageStyle::Info,
-                                            &format!("Please visit: {}", DOCS_URL),
-                                        )?;
-                                    }
-                                }
-                                renderer.line_if_not_empty(MessageStyle::Output)?;
-                                continue;
-                            }
-                            SlashCommandOutcome::Exit => {
-                                renderer.line(MessageStyle::Info, "Goodbye!")?;
-                                session_end_reason = SessionEndReason::Exit;
-                                break;
-                            }
-                        }
-                        // Only continue if we didn't get a SubmitPrompt outcome
-                        if !is_submit_prompt {
-                            continue;
+                            SlashCommandControl::BreakWithoutReason => break,
                         }
                     }
                 }
@@ -2707,33 +2141,6 @@ pub(crate) async fn run_single_agent_loop_unified(
         }
 
         break;
-    }
-
-    Ok(())
-}
-
-fn safe_force_redraw(handle: &InlineHandle, last_forced_redraw: &mut Instant) {
-    // Rate limit force_redraw calls to prevent TUI corruption
-    if last_forced_redraw.elapsed() > std::time::Duration::from_millis(100) {
-        handle.force_redraw();
-        *last_forced_redraw = Instant::now();
-    }
-}
-
-fn render_hook_messages(renderer: &mut AnsiRenderer, messages: &[HookMessage]) -> Result<()> {
-    for message in messages {
-        let text = message.text.trim();
-        if text.is_empty() {
-            continue;
-        }
-
-        let style = match message.level {
-            HookMessageLevel::Info => MessageStyle::Info,
-            HookMessageLevel::Warning => MessageStyle::Info,
-            HookMessageLevel::Error => MessageStyle::Error,
-        };
-
-        renderer.line(style, text)?;
     }
 
     Ok(())

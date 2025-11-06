@@ -343,7 +343,10 @@ impl Session {
                     ListItem::new(Line::from(vec![
                         Span::styled(format!("/{}", command.name), self.slash_name_style()),
                         Span::raw(" "),
-                        Span::styled(command.description.to_string(), self.slash_description_style()),
+                        Span::styled(
+                            command.description.to_string(),
+                            self.slash_description_style(),
+                        ),
                     ]))
                 }
                 slash_palette::SlashPaletteSuggestion::Custom(prompt) => {
@@ -358,8 +361,6 @@ impl Session {
             })
             .collect()
     }
-
-
 
     fn slash_highlight_style(&self) -> Style {
         let mut style = Style::default().add_modifier(Modifier::REVERSED | Modifier::BOLD);
