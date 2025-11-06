@@ -79,6 +79,7 @@ VT Code provides several quick actions directly in the chat input for faster wor
 - **File Picker (`@`)** — Type `@` anywhere in your input to open the file picker and select files to reference in your message. This allows you to quickly mention files without typing full paths.
 - **Custom Prompt Shortcut (`#`)** — Type `#` at the start of input to quickly access and run custom prompts. This is a shorthand for accessing your saved prompts directly from the input bar.
 - **Slash Commands (`/`)** — Type `/` at the start of input to access all available slash commands including `/prompts`, `/files`, `/stats`, and many more.
+- **Shell Command Shortcut (`!cmd`)** — Type `!cmd` followed by a command to run it immediately via the sandboxed runner. The input is parsed locally, validated against the shell allow list, and cancelled if it exceeds the configured timeout.
 
 ## stats (session metrics)
 

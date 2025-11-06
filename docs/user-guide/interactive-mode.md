@@ -39,7 +39,7 @@ The VT Code terminal UI includes an interactive mode that combines keyboard-firs
 | :-- | :-- | :-- |
 | `#` at start of input | Access custom prompts. | Opens quick picker to select and run custom prompts directly from input bar. |
 | `/` at start of input | Issue a slash command. | Run `/help` or `/slash-commands` in a session to list everything available. |
-| `!` at start of input | Enter Bash mode. | Runs shell commands directly and streams their output. |
+| `!cmd` at start of input | Run a sandboxed shell command. | Commands are parsed locally, validated against the allow list, and time-limited. |
 | `@` within input | Open file picker. | Triggers file path autocomplete and picker to quickly reference files in your message. |
 
 ## Vim Editor Mode
@@ -119,17 +119,23 @@ Common backgrounded commands include:
 * Test runners (jest, pytest)
 * Development servers and other long-running processes
 
-### Bash Mode with `!`
+### Shell Commands with `!cmd`
 
-Prefix input with `!` to run commands directly without agent interpretation:
+Prefix input with `!cmd` to run an inline shell command without routing through the model:
 
 ```bash
-! npm test
-! git status
-! ls -la
+!cmd npm test
+!cmd git status
+!cmd ls -la
 ```
 
-Bash mode streams the command and its output into the chat, supports backgrounding via `Ctrl+B`, and is ideal for quick shell operations while keeping a shared context with the agent.
+Commands are executed by the same sandboxed runner that powers the agent’s `run_terminal_cmd` tool:
+
+* Arguments are parsed locally with POSIX rules so the agent never sees the raw command line.
+* Each invocation passes through the workspace execution policy allow list; unsupported binaries or flags are rejected with a clear error.
+* Processes inherit the sandbox profile (when enabled via `/sandbox`) and are cancelled automatically if they exceed the configured timeout.
+
+The output is streamed directly into the conversation, and you can still background the task with `Ctrl+B` if it runs long. Use `/bash` or `/sandbox` for multi-line scripts or to adjust sandbox permissions.
 
 ## Additional Resources
 

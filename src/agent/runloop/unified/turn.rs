@@ -13,7 +13,7 @@ use tracing::debug;
 use tracing::warn;
 use vtcode_core::SimpleIndexer;
 use vtcode_core::commands::init::{GenerateAgentsFileStatus, generate_agents_file};
-use vtcode_core::config::constants::{defaults, ui};
+use vtcode_core::config::constants::{defaults, tools, ui};
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::agent::snapshots::{SnapshotConfig, SnapshotManager};
@@ -21,7 +21,10 @@ use vtcode_core::core::decision_tracker::{Action as DTAction, DecisionOutcome, D
 use vtcode_core::core::router::{Router, TaskClass};
 use vtcode_core::llm::error_display;
 use vtcode_core::llm::provider::{self as uni};
-use vtcode_core::tools::registry::{ToolErrorType, ToolExecutionError, classify_error};
+use vtcode_core::tools::registry::{
+    ToolErrorType, ToolExecutionError, ToolRegistry, classify_error,
+};
+use vtcode_core::tools::types::EnhancedTerminalInput;
 use vtcode_core::ui::slash::{SLASH_COMMANDS, SlashCommandInfo};
 use vtcode_core::ui::theme;
 use vtcode_core::ui::tui::{
@@ -87,6 +90,8 @@ use crate::hooks::lifecycle::{
     HookMessage, HookMessageLevel, LifecycleHookEngine, SessionEndReason, SessionStartTrigger,
 };
 use crate::ide_context::IdeContextBridge;
+
+use shell_words::split as shell_split;
 
 enum TurnLoopResult {
     Completed,
@@ -243,6 +248,161 @@ async fn refresh_vt_config(
     super::super::apply_runtime_overrides(Some(&mut snapshot), runtime_cfg);
     *vt_cfg = Some(snapshot);
     Ok(())
+}
+
+fn prepare_inline_shell_command(raw_args: &str) -> Result<(String, EnhancedTerminalInput)> {
+    let trimmed = raw_args.trim();
+    if trimmed.is_empty() {
+        return Err(anyhow!("Usage: !cmd <command>"));
+    }
+
+    if trimmed.contains(['\n', '\r']) {
+        return Err(anyhow!(
+            "Multiline shell commands are not supported in !cmd. Use /bash for complex scripts."
+        ));
+    }
+
+    let tokens =
+        shell_split(trimmed).map_err(|err| anyhow!("failed to parse shell command: {}", err))?;
+
+    if tokens.is_empty() {
+        return Err(anyhow!("Usage: !cmd <command>"));
+    }
+
+    let input = EnhancedTerminalInput {
+        command: tokens,
+        working_dir: None,
+        timeout_secs: None,
+        mode: None,
+        response_format: None,
+        raw_command: Some(trimmed.to_string()),
+        shell: None,
+        login: None,
+    };
+
+    Ok((trimmed.to_string(), input))
+}
+
+async fn execute_inline_shell_command(
+    raw_args: &str,
+    renderer: &mut AnsiRenderer,
+    registry: &mut ToolRegistry,
+    vt_config: Option<&VTCodeConfig>,
+    ctrl_c_state: &Arc<CtrlCState>,
+    ctrl_c_notify: &Arc<Notify>,
+    input_status_state: &InputStatusState,
+    handle: &InlineHandle,
+    session_stats: &mut SessionStats,
+) -> Result<()> {
+    let (display_command, input) = prepare_inline_shell_command(raw_args)?;
+
+    renderer.line(MessageStyle::Info, &format!("!cmd {}", display_command))?;
+
+    let args_value =
+        serde_json::to_value(&input).context("failed to serialize shell command arguments")?;
+
+    let progress_reporter = ProgressReporter::new();
+    progress_reporter.set_total(100).await;
+    progress_reporter.set_progress(0).await;
+
+    let headline = input
+        .command
+        .first()
+        .map(|value| value.as_str())
+        .unwrap_or("command");
+    let spinner_message = format!("Running {}", headline);
+    progress_reporter.set_message(spinner_message.clone()).await;
+
+    let spinner = PlaceholderSpinner::with_progress(
+        handle,
+        input_status_state.left.clone(),
+        input_status_state.right.clone(),
+        spinner_message,
+        Some(&progress_reporter),
+    );
+
+    let status = execute_tool_with_timeout(
+        registry,
+        tools::RUN_COMMAND,
+        args_value,
+        ctrl_c_state,
+        ctrl_c_notify,
+        Some(&progress_reporter),
+    )
+    .await;
+
+    progress_reporter.complete().await;
+    spinner.finish();
+
+    match status {
+        ToolExecutionStatus::Success {
+            output,
+            command_success,
+            ..
+        } => {
+            session_stats.record_tool(tools::RUN_COMMAND);
+            render_tool_output(renderer, Some(tools::RUN_COMMAND), &output, vt_config)?;
+
+            let reported_error = output.get("error").is_some();
+            if !command_success && !reported_error {
+                if let Some(code) = output.get("exit_code").and_then(|value| value.as_i64()) {
+                    renderer.line(
+                        MessageStyle::Error,
+                        &format!("Command exited with code {}", code),
+                    )?;
+                } else {
+                    renderer.line(MessageStyle::Error, "Command reported a failure.")?;
+                }
+            }
+        }
+        ToolExecutionStatus::Failure { error } => {
+            renderer.line(
+                MessageStyle::Error,
+                &format!("Command failed: {}", error),
+            )?;
+        }
+        ToolExecutionStatus::Timeout { error } => {
+            renderer.line(
+                MessageStyle::Error,
+                &format!("Command timed out: {}", error.message),
+            )?;
+        }
+        ToolExecutionStatus::Cancelled => {
+            renderer.line(MessageStyle::Info, "Command execution cancelled.")?;
+        }
+        ToolExecutionStatus::Progress(update) => {
+            if !update.message.trim().is_empty() {
+                renderer.line(MessageStyle::Info, &update.message)?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod inline_shell_tests {
+    use super::*;
+
+    #[test]
+    fn prepare_inline_shell_command_trims_and_splits() {
+        let (display, input) = prepare_inline_shell_command("  ls -la  ").expect("parse");
+        assert_eq!(display, "ls -la");
+        assert_eq!(input.command, vec!["ls", "-la"]);
+        assert_eq!(input.raw_command.as_deref(), Some("ls -la"));
+    }
+
+    #[test]
+    fn prepare_inline_shell_command_rejects_newlines() {
+        let error = prepare_inline_shell_command("echo one\necho two").unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("Multiline shell commands are not supported"),
+            "unexpected error: {}",
+            error
+        );
+    }
 }
 
 /// Strip harmony syntax from text content to avoid displaying raw harmony tags
@@ -807,6 +967,33 @@ pub(crate) async fn run_single_agent_loop_unified(
                 "help" => {
                     renderer.line(MessageStyle::Info, "Commands: exit, help")?;
                     continue;
+                }
+                input if input.starts_with("!cmd") => {
+                    let Some(rest) = input.strip_prefix("!cmd") else {
+                        continue;
+                    };
+
+                    if !rest.is_empty() && !rest.starts_with(char::is_whitespace) {
+                        // Not an inline shell command; fall through to normal processing.
+                    } else {
+                        if let Err(err) = execute_inline_shell_command(
+                            rest,
+                            &mut renderer,
+                            &mut tool_registry,
+                            vt_cfg.as_ref(),
+                            &ctrl_c_state,
+                            &ctrl_c_notify,
+                            &input_status_state,
+                            &handle,
+                            &mut session_stats,
+                        )
+                        .await
+                        {
+                            renderer.line(MessageStyle::Error, &format!("{}", err))?;
+                        }
+                        handle.clear_input();
+                        continue;
+                    }
                 }
                 input if input.starts_with('/') => {
                     // Handle slash commands
