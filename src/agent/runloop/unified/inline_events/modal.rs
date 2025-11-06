@@ -1,5 +1,7 @@
 use anyhow::Result;
 
+use tracing::warn;
+
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::llm::provider::{self as uni};
@@ -97,7 +99,18 @@ impl<'a> PaletteCoordinator<'a> {
             if let Some(state) = restore {
                 *self.state = Some(state);
             }
+            return Ok(());
         }
+
+        // Safety net: If palette state is missing, log and inform the user
+        warn!(
+            "Palette selection {:?} dropped because no active palette was tracked",
+            selection
+        );
+        renderer.line(
+            MessageStyle::Error,
+            "Selection dismissed because the palette is no longer active. Please try again.",
+        )?;
 
         Ok(())
     }

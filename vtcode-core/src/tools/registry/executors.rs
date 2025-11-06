@@ -1760,7 +1760,7 @@ mod tests {
     }
 
     #[test]
-    fn pty_input_prefers_base64_over_plain_text() {
+    fn pty_input_prefers_base64_over_plain_text_v2() {
         let map: Map<String, Value> = json!({
             "session_id": "pty-1",
             "input": "ls",
@@ -1847,6 +1847,7 @@ impl PtySessionViewArgs {
     }
 }
 
+#[derive(Debug)]
 struct PtyInputPayload {
     session_id: String,
     buffer: Vec<u8>,

@@ -3817,6 +3817,7 @@ fn justify_plain_text(text: &str, max_width: usize) -> Option<String> {
 mod tests {
     use super::prompt_palette;
     use super::*;
+    use crate::tools::{PlanStep, StepStatus};
     use chrono::Utc;
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     use ratatui::{
