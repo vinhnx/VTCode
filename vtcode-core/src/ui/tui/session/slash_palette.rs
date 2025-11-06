@@ -65,12 +65,14 @@ pub fn command_prefix(input: &str, cursor: usize) -> Option<String> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg(test)]
 pub struct SlashPaletteHighlightSegment {
     pub content: String,
     pub highlighted: bool,
 }
 
 impl SlashPaletteHighlightSegment {
+    #[cfg(test)]
     pub fn highlighted(content: impl Into<String>) -> Self {
         Self {
             content: content.into(),
@@ -78,6 +80,7 @@ impl SlashPaletteHighlightSegment {
         }
     }
 
+    #[cfg(test)]
     pub fn plain(content: impl Into<String>) -> Self {
         Self {
             content: content.into(),
@@ -87,6 +90,7 @@ impl SlashPaletteHighlightSegment {
 }
 
 #[derive(Debug, Clone)]
+#[cfg(test)]
 pub struct SlashPaletteItem {
     #[allow(dead_code)]
     pub command: Option<&'static SlashCommandInfo>,
@@ -361,6 +365,7 @@ impl SlashPalette {
         self.apply_selection(Some(new_index))
     }
 
+    #[cfg(test)]
     pub fn items(&self) -> Vec<SlashPaletteItem> {
         self.suggestions
             .iter()
@@ -478,6 +483,7 @@ impl SlashPalette {
         }
     }
 
+    #[cfg(test)]
     fn highlight_name_segments_static(&self, name: &str) -> Vec<SlashPaletteHighlightSegment> {
         let Some(query) = self.filter_query.as_ref().filter(|query| !query.is_empty()) else {
             return vec![SlashPaletteHighlightSegment::plain(name.to_string())];
@@ -514,6 +520,7 @@ impl SlashPalette {
         segments
     }
 
+    #[cfg(test)]
     fn highlight_name_segments_custom(&self, name: &str) -> Vec<SlashPaletteHighlightSegment> {
         let Some(query) = self.filter_query.as_ref().filter(|query| !query.is_empty()) else {
             return vec![SlashPaletteHighlightSegment::plain(name.to_string())];

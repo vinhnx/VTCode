@@ -6,6 +6,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::Notify;
 use tokio::task;
+
 #[cfg(debug_assertions)]
 use tracing::debug;
 use tracing::warn;
@@ -21,7 +22,9 @@ use vtcode_core::llm::provider::{self as uni};
 use vtcode_core::tools::registry::{ToolErrorType, ToolExecutionError, classify_error};
 use vtcode_core::ui::slash::{SLASH_COMMANDS, SlashCommandInfo};
 use vtcode_core::ui::theme;
-use vtcode_core::ui::tui::{InlineEvent, InlineEventCallback, spawn_session, theme_from_styles};
+use vtcode_core::ui::tui::{
+    InlineEvent, InlineEventCallback, InlineHandle, spawn_session, theme_from_styles,
+};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::at_pattern::parse_at_patterns;
 use vtcode_core::utils::session_archive::{
@@ -47,49 +50,58 @@ use crate::agent::runloop::unified::ui_interaction::{
     PlaceholderSpinner, display_session_status, display_token_cost, stream_and_render_response,
 };
 
+use super::config_modal::{MODAL_CLOSE_HINT, load_config_modal_content};
+use super::harmony::strip_harmony_syntax;
+use super::workspace::{
+    bootstrap_config_files, build_workspace_index, load_workspace_files, refresh_vt_config,
+};
 use crate::agent::runloop::mcp_events;
-use crate::agent::runloop::unified::{
-    async_mcp_manager::McpInitStatus,
-    context_manager::ContextManager,
-    curator::{build_curator_tools, format_provider_label, resolve_mode_label},
-    diagnostics::run_doctor_diagnostics,
-    display::{display_user_message, ensure_turn_bottom_gap, persist_theme_preference},
-    inline_events::{
-        InlineEventLoopResources, InlineInterruptCoordinator, InlineLoopAction,
-        poll_inline_loop_action,
-    },
-    mcp_support::{
-        diagnose_mcp, display_mcp_config_summary, display_mcp_providers, display_mcp_status,
-        display_mcp_tools, refresh_mcp_tools, render_mcp_config_edit_guidance,
-        render_mcp_login_guidance, repair_mcp_runtime,
-    },
-    model_selection::finalize_model_selection,
-    palettes::{
-        ActivePalette, apply_prompt_style, show_help_palette, show_sessions_palette,
-        show_theme_palette,
-    },
-    progress::ProgressReporter,
-    session_setup::{SessionState, build_mcp_tool_definitions, initialize_session},
-    shell::{derive_recent_tool_output, should_short_circuit_shell},
-    state::{CtrlCSignal, CtrlCState, SessionStats},
-    status_line::{InputStatusState, update_input_status_if_changed},
-    tool_pipeline::{ToolExecutionStatus, execute_tool_with_timeout},
-    tool_routing::{ToolPermissionFlow, ensure_tool_permission},
-    tool_summary::{
-        describe_tool_action, humanize_tool_name, render_tool_call_summary_with_status,
-    },
-    workspace_links::{
-        LinkedDirectory, handle_workspace_directory_command, remove_directory_symlink,
-    },
+use crate::agent::runloop::unified::async_mcp_manager::McpInitStatus;
+use crate::agent::runloop::unified::context_manager::ContextManager;
+use crate::agent::runloop::unified::curator::{
+    build_curator_tools, format_provider_label, resolve_mode_label,
 };
-use crate::hooks::lifecycle::{LifecycleHookEngine, SessionEndReason, SessionStartTrigger};
+use crate::agent::runloop::unified::diagnostics::run_doctor_diagnostics;
+use crate::agent::runloop::unified::display::{
+    display_user_message, ensure_turn_bottom_gap, persist_theme_preference,
+};
+use crate::agent::runloop::unified::inline_events::{
+    InlineEventLoopResources, InlineInterruptCoordinator, InlineLoopAction, poll_inline_loop_action,
+};
+use crate::agent::runloop::unified::mcp_support::{
+    diagnose_mcp, display_mcp_config_summary, display_mcp_providers, display_mcp_status,
+    display_mcp_tools, refresh_mcp_tools, render_mcp_config_edit_guidance,
+    render_mcp_login_guidance, repair_mcp_runtime,
+};
+use crate::agent::runloop::unified::model_selection::finalize_model_selection;
+use crate::agent::runloop::unified::palettes::{
+    ActivePalette, apply_prompt_style, show_help_palette, show_sessions_palette, show_theme_palette,
+};
+use crate::agent::runloop::unified::progress::ProgressReporter;
+use crate::agent::runloop::unified::session_setup::{
+    SessionState, build_mcp_tool_definitions, initialize_session,
+};
+use crate::agent::runloop::unified::shell::{
+    derive_recent_tool_output, should_short_circuit_shell,
+};
+use crate::agent::runloop::unified::state::{CtrlCSignal, CtrlCState, SessionStats};
+use crate::agent::runloop::unified::status_line::{
+    InputStatusState, update_input_status_if_changed,
+};
+use crate::agent::runloop::unified::tool_pipeline::{
+    ToolExecutionStatus, execute_tool_with_timeout,
+};
+use crate::agent::runloop::unified::tool_routing::{ToolPermissionFlow, ensure_tool_permission};
+use crate::agent::runloop::unified::tool_summary::{
+    describe_tool_action, humanize_tool_name, render_tool_call_summary_with_status,
+};
+use crate::agent::runloop::unified::workspace_links::{
+    LinkedDirectory, handle_workspace_directory_command, remove_directory_symlink,
+};
+use crate::hooks::lifecycle::{
+    HookMessage, HookMessageLevel, LifecycleHookEngine, SessionEndReason, SessionStartTrigger,
+};
 use crate::ide_context::IdeContextBridge;
-
-use super::config::{
-    MODAL_CLOSE_HINT, bootstrap_config_files, load_config_modal_content, refresh_vt_config,
-};
-use super::utils::{render_hook_messages, safe_force_redraw, strip_harmony_syntax};
-use super::workspace::{build_workspace_index, load_workspace_files};
 
 enum TurnLoopResult {
     Completed,
@@ -2695,6 +2707,33 @@ pub(crate) async fn run_single_agent_loop_unified(
         }
 
         break;
+    }
+
+    Ok(())
+}
+
+fn safe_force_redraw(handle: &InlineHandle, last_forced_redraw: &mut Instant) {
+    // Rate limit force_redraw calls to prevent TUI corruption
+    if last_forced_redraw.elapsed() > std::time::Duration::from_millis(100) {
+        handle.force_redraw();
+        *last_forced_redraw = Instant::now();
+    }
+}
+
+fn render_hook_messages(renderer: &mut AnsiRenderer, messages: &[HookMessage]) -> Result<()> {
+    for message in messages {
+        let text = message.text.trim();
+        if text.is_empty() {
+            continue;
+        }
+
+        let style = match message.level {
+            HookMessageLevel::Info => MessageStyle::Info,
+            HookMessageLevel::Warning => MessageStyle::Info,
+            HookMessageLevel::Error => MessageStyle::Error,
+        };
+
+        renderer.line(style, text)?;
     }
 
     Ok(())
