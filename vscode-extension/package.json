@@ -2,7 +2,7 @@
   "name": "vtcode-companion",
   "displayName": "VTCode",
   "description": "VS Code extension for VT Code, a Rust-based terminal coding agent with semantic code intelligence and multi-provider AI support. Provides deep integration with the VTCode AI coding assistant for enhanced productivity.",
-  "version": "0.1.1",
+  "version": "0.40.1",
   "publisher": "nguyenxuanvinh",
   "repository": {
     "type": "git",
@@ -56,7 +56,7 @@
     "onCommand:vtcode.openDeepWiki",
     "onCommand:vtcode.openWalkthrough",
     "onCommand:vtcode.openInstallGuide",
-  "onCommand:vtcode.trustWorkspace",
+    "onCommand:vtcode.trustWorkspace",
     "onCommand:vtcode.toggleHumanInTheLoop",
     "onCommand:vtcode.openToolsPolicyGuide",
     "onCommand:vtcode.openToolsPolicyConfig",
@@ -81,8 +81,13 @@
     "languages": [
       {
         "id": "vtcode-config",
-        "aliases": ["VTCode Config", "vtcode.toml"],
-        "filenames": ["vtcode.toml"],
+        "aliases": [
+          "VTCode Config",
+          "vtcode.toml"
+        ],
+        "filenames": [
+          "vtcode.toml"
+        ],
         "configuration": "./language-configuration.json"
       }
     ],
@@ -96,11 +101,15 @@
     "taskDefinitions": [
       {
         "type": "vtcode",
-        "required": ["command"],
+        "required": [
+          "command"
+        ],
         "properties": {
           "command": {
             "type": "string",
-            "enum": ["update-plan"],
+            "enum": [
+              "update-plan"
+            ],
             "description": "VTCode CLI command to execute."
           },
           "summary": {
@@ -426,7 +435,9 @@
               "type": "markdown",
               "markdown": "Use **VTCode: Open Quick Actions** from the Command Palette or the status bar to explore available shortcuts."
             },
-            "completionEvents": ["onCommand:vtcode.openQuickActions"]
+            "completionEvents": [
+              "onCommand:vtcode.openQuickActions"
+            ]
           },
           {
             "id": "vtcode.walkthrough.askAgent",
@@ -436,7 +447,9 @@
               "type": "markdown",
               "markdown": "Select **VTCode: Ask the Agent** to stream a response directly into the VTCode output channel."
             },
-            "completionEvents": ["onCommand:vtcode.askAgent"]
+            "completionEvents": [
+              "onCommand:vtcode.askAgent"
+            ]
           },
           {
             "id": "vtcode.walkthrough.askSelection",
@@ -446,7 +459,9 @@
               "type": "markdown",
               "markdown": "Highlight a block of code, right-click, and choose **Ask About Selection with VTCode**."
             },
-            "completionEvents": ["onCommand:vtcode.askSelection"]
+            "completionEvents": [
+              "onCommand:vtcode.askSelection"
+            ]
           },
           {
             "id": "vtcode.walkthrough.config",
@@ -456,7 +471,9 @@
               "type": "markdown",
               "markdown": "Run [VTCode: Open Configuration](command:vtcode.openConfig) to jump directly into the workspace `vtcode.toml`."
             },
-            "completionEvents": ["onCommand:vtcode.openConfig"]
+            "completionEvents": [
+              "onCommand:vtcode.openConfig"
+            ]
           }
         ]
       }
@@ -507,7 +524,6 @@
     "release:minor": "./release.sh minor",
     "release:major": "./release.sh major"
   },
-
   "dependencies": {
     "@iarna/toml": "^2.2.5",
     "node-pty": "^1.0.0"

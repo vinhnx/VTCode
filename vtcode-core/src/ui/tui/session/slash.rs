@@ -145,7 +145,11 @@ impl Session {
     }
 
     pub(super) fn slash_navigation_available(&self) -> bool {
-        self.input_enabled && !self.slash_palette.is_empty()
+        self.input_enabled
+            && !self.slash_palette.is_empty()
+            && self.modal.is_none()
+            && !self.file_palette_active
+            && !self.prompt_palette_active
     }
 
     pub(super) fn move_slash_selection_up(&mut self) -> bool {
@@ -243,7 +247,7 @@ impl Session {
 
             self.input = new_input;
             self.cursor = cursor_position;
-            self.update_slash_suggestions();
+            self.clear_slash_suggestions();
             self.mark_dirty();
             return true;
         }
@@ -286,7 +290,7 @@ impl Session {
             self.mark_dirty();
             self.deferred_prompt_browser_trigger = true;
         } else {
-            self.update_slash_suggestions();
+            self.clear_slash_suggestions();
             self.mark_dirty();
         }
 

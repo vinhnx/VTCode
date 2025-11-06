@@ -302,6 +302,7 @@ pub(crate) async fn handle_palette_selection(
                     &format!("Inserted '/{}' into the input.", command),
                 )?;
             }
+            renderer.close_modal();
             Ok(None)
         }
     }
