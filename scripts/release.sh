@@ -65,8 +65,6 @@ Options:
   --skip-github-packages  Skip publishing to GitHub Packages (pass --no-publish)
   --skip-binaries     Skip building and uploading binaries
   --skip-docs         Skip docs.rs rebuild trigger
-  --skip-zed-checksums Skip updating Zed extension checksums (default behavior)
-  --enable-zed-checksums Enable updating Zed extension checksums (overrides skip)
   -h, --help          Show this help message
 USAGE
 }
@@ -357,46 +355,44 @@ update_extensions_version() {
 
     print_info "Syncing extension versions with main project version $version..."
 
-    # Update Zed extension version
-    update_zed_extension_version "$version"
-
-    # Update VSCode extension version
+    # Update VSCode extension version (Zed extension release removed)
     update_vscode_extension_version "$version"
 }
 
-update_zed_extension_version() {
-    local version=$1
-    local manifest="zed-extension/extension.toml"
-
-    if [[ ! -f "$manifest" ]]; then
-        print_warning "Zed extension manifest not found at $manifest; skipping version update"
-        return 0
-    fi
-
-    print_distribution "Updating Zed extension version to $version"
-
-    # Use Python to update the version and URLs in extension.toml
-    python3 -c "
-import re
-from pathlib import Path
-
-manifest_path = Path('$manifest')
-content = manifest_path.read_text()
-
-# Update the main version field
-content = re.sub(r'^version = \".*\"', f'version = \"{version}\"', content, flags=re.MULTILINE)
-
-# Update URLs to use the new version
-content = re.sub(
-    r'https://github.com/vinhnx/vtcode/releases/download/v[0-9.]+/vtcode-v[0-9.]+-(aarch64-apple-darwin|x86_64-apple-darwin)\.tar\.gz',
-    f'https://github.com/vinhnx/vtcode/releases/download/v{version}/vtcode-v{version}-\\\\1.tar.gz',
-    content
-)
-
-manifest_path.write_text(content)
-print(f'INFO: Zed extension version updated to {version}')
-"
-}
+# Zed extension functionality removed
+# update_zed_extension_version() {
+#     local version=$1
+#     local manifest="zed-extension/extension.toml"
+# 
+#     if [[ ! -f "$manifest" ]]; then
+#         print_warning "Zed extension manifest not found at $manifest; skipping version update"
+#         return 0
+#     fi
+# 
+#     print_distribution "Updating Zed extension version to $version"
+# 
+#     # Use Python to update the version and URLs in extension.toml
+#     python3 -c "
+# import re
+# from pathlib import Path
+# 
+# manifest_path = Path('$manifest')
+# content = manifest_path.read_text()
+# 
+# # Update the main version field
+# content = re.sub(r'^version = \".*\"', f'version = \"{version}\"', content, flags=re.MULTILINE)
+# 
+# # Update URLs to use the new version
+# content = re.sub(
+#     r'https://github.com/vinhnx/vtcode/releases/download/v[0-9.]+/vtcode-v[0-9.]+-(aarch64-apple-darwin|x86_64-apple-darwin)\.tar\.gz',
+#     f'https://github.com/vinhnx/vtcode/releases/download/v{version}/vtcode-v{version}-\\\\1.tar.gz',
+#     content
+# )
+# 
+# manifest_path.write_text(content)
+# print(f'INFO: Zed extension version updated to {version}')
+# "
+# }
 
 update_vscode_extension_version() {
     local version=$1
@@ -418,81 +414,82 @@ update_vscode_extension_version() {
     fi
 }
 
-update_zed_extension_checksums() {
-    local version=$1
-    local manifest="zed-extension/extension.toml"
-    local dist_dir="dist"
-
-    if [[ ! -f "$manifest" ]]; then
-        print_warning "Zed extension manifest not found at $manifest; skipping checksum update"
-        return 0
-    fi
-
-    if [[ ! -d "$dist_dir" ]]; then
-        print_warning "Distribution directory $dist_dir missing; skipping checksum update"
-        return 0
-    fi
-
-    print_distribution "Updating Zed extension checksums from $dist_dir"
-
-    # Create a more efficient Python script for checksum updates
-    cat > /tmp/zed_checksum_update.py << 'PYTHON_EOF'
-import re
-import subprocess
-import sys
-from pathlib import Path
-
-def main(version, manifest_path, dist_dir):
-    manifest_path = Path(manifest_path)
-    dist_dir = Path(dist_dir)
-
-    targets = {
-        "darwin-aarch64": f"vtcode-v{version}-aarch64-apple-darwin.tar.gz",
-        "darwin-x86_64": f"vtcode-v{version}-x86_64-apple-darwin.tar.gz",
-    }
-
-    text = manifest_path.read_text()
-    updated = False
-
-    for target, filename in targets.items():
-        archive = dist_dir / filename
-        if not archive.exists():
-            print(f"WARNING: Archive {archive} not found; leaving sha256 unchanged for {target}", file=sys.stderr)
-            continue
-
-        try:
-            result = subprocess.run(["shasum", "-a", "256", str(archive)], capture_output=True, text=True, check=True)
-            sha = result.stdout.split()[0]
-            
-            pattern = re.compile(rf"(\[agent_servers\.vtcode\.targets\.{re.escape(target)}\][^\[]*?sha256 = \")([^\"]*)(\")", re.DOTALL)
-            new_text, count = pattern.subn("\\g<1>" + sha + "\\g<3>", text, count=1)
-            
-            if count == 0:
-                print(f"WARNING: sha256 entry not found for target {target}", file=sys.stderr)
-            else:
-                text = new_text
-                updated = True
-                print(f"INFO: Updated {target} checksum to {sha}")
-
-        except subprocess.CalledProcessError as e:
-            print(f"ERROR: Failed to compute checksum for {archive}: {e}", file=sys.stderr)
-
-    if updated:
-        manifest_path.write_text(text)
-        print(f"INFO: Zed extension checksums updated in {manifest_path}")
-    else:
-        print("WARNING: No sha256 fields updated in Zed extension manifest", file=sys.stderr)
-
-if __name__ == "__main__":
-    if len(sys.argv) != 4:
-        print("Usage: python script.py <version> <manifest_path> <dist_dir>", file=sys.stderr)
-        sys.exit(1)
-    main(sys.argv[1], sys.argv[2], sys.argv[3])
-PYTHON_EOF
-
-    python3 /tmp/zed_checksum_update.py "$version" "$manifest" "$dist_dir"
-    rm -f /tmp/zed_checksum_update.py
-}
+# Zed extension functionality removed
+# update_zed_extension_checksums() {
+#     local version=$1
+#     local manifest="zed-extension/extension.toml"
+#     local dist_dir="dist"
+# 
+#     if [[ ! -f "$manifest" ]]; then
+#         print_warning "Zed extension manifest not found at $manifest; skipping checksum update"
+#         return 0
+#     fi
+# 
+#     if [[ ! -d "$dist_dir" ]]; then
+#         print_warning "Distribution directory $dist_dir missing; skipping checksum update"
+#         return 0
+#     fi
+# 
+#     print_distribution "Updating Zed extension checksums from $dist_dir"
+# 
+#     # Create a more efficient Python script for checksum updates
+#     cat > /tmp/zed_checksum_update.py << 'PYTHON_EOF'
+# import re
+# import subprocess
+# import sys
+# from pathlib import Path
+# 
+# def main(version, manifest_path, dist_dir):
+#     manifest_path = Path(manifest_path)
+#     dist_dir = Path(dist_dir)
+# 
+#     targets = {
+#         "darwin-aarch64": f"vtcode-v{version}-aarch64-apple-darwin.tar.gz",
+#         "darwin-x86_64": f"vtcode-v{version}-x86_64-apple-darwin.tar.gz",
+#     }
+# 
+#     text = manifest_path.read_text()
+#     updated = False
+# 
+#     for target, filename in targets.items():
+#         archive = dist_dir / filename
+#         if not archive.exists():
+#             print(f"WARNING: Archive {archive} not found; leaving sha256 unchanged for {target}", file=sys.stderr)
+#             continue
+# 
+#         try:
+#             result = subprocess.run(["shasum", "-a", "256", str(archive)], capture_output=True, text=True, check=True)
+#             sha = result.stdout.split()[0]
+#             
+#             pattern = re.compile(rf"(\[agent_servers\.vtcode\.targets\.{re.escape(target)}\][^\[]*?sha256 = \")([^\"]*)(\")", re.DOTALL)
+#             new_text, count = pattern.subn("\\g<1>" + sha + "\\g<3>", text, count=1)
+#             
+#             if count == 0:
+#                 print(f"WARNING: sha256 entry not found for target {target}", file=sys.stderr)
+#             else:
+#                 text = new_text
+#                 updated = True
+#                 print(f"INFO: Updated {target} checksum to {sha}")
+# 
+#         except subprocess.CalledProcessError as e:
+#             print(f"ERROR: Failed to compute checksum for {archive}: {e}", file=sys.stderr)
+# 
+#     if updated:
+#         manifest_path.write_text(text)
+#         print(f"INFO: Zed extension checksums updated in {manifest_path}")
+#     else:
+#         print("WARNING: No sha256 fields updated in Zed extension manifest", file=sys.stderr)
+# 
+# if __name__ == "__main__":
+#     if len(sys.argv) != 4:
+#         print("Usage: python script.py <version> <manifest_path> <dist_dir>", file=sys.stderr)
+#         sys.exit(1)
+#     main(sys.argv[1], sys.argv[2], sys.argv[3])
+# PYTHON_EOF
+# 
+#     python3 /tmp/zed_checksum_update.py "$version" "$manifest" "$dist_dir"
+#     rm -f /tmp/zed_checksum_update.py
+# }
 
 run_release() {
     local release_argument=$1
@@ -597,8 +594,6 @@ main() {
     local skip_github_packages=false
     local skip_binaries=false
     local skip_docs=false
-    local skip_zed_checksums=true  # Changed to true to disable by default
-    local enable_zed_checksums=false
     local pre_release=false
     local pre_release_suffix='alpha.0'
 
@@ -655,15 +650,7 @@ main() {
                 skip_docs=true
                 shift
                 ;;
-            --skip-zed-checksums)
-                skip_zed_checksums=true
-                shift
-                ;;
-            --enable-zed-checksums)
-                skip_zed_checksums=false
-                enable_zed_checksums=true
-                shift
-                ;;
+
             -*)
                 print_error "Unknown option: $1"
                 show_usage
@@ -781,15 +768,8 @@ main() {
     # Wait for binaries to complete before updating Zed checksums
     if [[ $binaries_completed == true ]]; then
         wait "$pid_binaries" || print_error "Binary build failed"
-        # Only update Zed checksums if explicitly enabled (disabled by default)
-        if [[ "$skip_zed_checksums" == 'false' ]]; then
-            # Only run Zed checksum update if dist directory exists and has files
-            if [[ -d "dist" ]] && [[ "$(ls -A dist 2>/dev/null)" ]]; then
-                update_zed_extension_checksums "$released_version"
-            else
-                print_warning "dist directory is empty or doesn't exist - skipping Zed extension checksum update"
-            fi
-        fi
+        # Zed extension checksum update removed
+        print_info "Zed extension checksum update functionality has been removed from this release"
     fi
 
     # Update extension versions to match main project version
