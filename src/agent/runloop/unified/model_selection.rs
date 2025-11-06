@@ -64,15 +64,16 @@ pub(crate) async fn finalize_model_selection(
     };
 
     if let Some(provider_enum) = selection.provider_enum
-        && let Err(err) = verify_model_with_rig(provider_enum, &selection.model, &api_key) {
-            renderer.line(
-                MessageStyle::Error,
-                &format!(
-                    "Rig validation warning: unable to initialise {} via rig-core ({err}).",
-                    selection.model_display
-                ),
-            )?;
-        }
+        && let Err(err) = verify_model_with_rig(provider_enum, &selection.model, &api_key)
+    {
+        renderer.line(
+            MessageStyle::Error,
+            &format!(
+                "Rig validation warning: unable to initialise {} via rig-core ({err}).",
+                selection.model_display
+            ),
+        )?;
+    }
 
     let updated_cfg = picker.persist_selection(&workspace, &selection).await?;
     *vt_cfg = Some(updated_cfg);
@@ -112,12 +113,13 @@ pub(crate) async fn finalize_model_selection(
 
     if let Some(provider_enum) = selection.provider_enum
         && selection.reasoning_supported
-            && let Some(payload) = reasoning_parameters_for(provider_enum, selection.reasoning) {
-                renderer.line(
-                    MessageStyle::Info,
-                    &format!("Rig reasoning configuration prepared: {}", payload),
-                )?;
-            }
+        && let Some(payload) = reasoning_parameters_for(provider_enum, selection.reasoning)
+    {
+        renderer.line(
+            MessageStyle::Info,
+            &format!("Rig reasoning configuration prepared: {}", payload),
+        )?;
+    }
 
     let reasoning_label = selection.reasoning.as_str().to_string();
     let mode_label = resolve_mode_label(config.ui_surface, full_auto);
@@ -193,10 +195,11 @@ async fn persist_env_value(workspace: &Path, key: &str, value: &str) -> Result<(
     let mut replaced = false;
     for line in lines.iter_mut() {
         if let Some((existing_key, _)) = line.split_once('=')
-            && existing_key.trim() == key {
-                *line = format!("{key}={value}");
-                replaced = true;
-            }
+            && existing_key.trim() == key
+        {
+            *line = format!("{key}={value}");
+            replaced = true;
+        }
     }
 
     if !replaced {

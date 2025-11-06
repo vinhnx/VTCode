@@ -59,37 +59,6 @@ Add these badges to your README:
 [![docs.rs](https://img.shields.io/docsrs/vtcode-core)](https://docs.rs/vtcode-core)
 ```
 
-### 2. npm Setup (Optional)
-
-If you want to publish to npm:
-
-```bash
-# Login to npm
-npm login
-
-# Verify login
-npm whoami
-```
-
-## Distribution Channels
-
-### Primary Channels
-
-1. **Cargo (crates.io)** - Rust package registry
-
-    - Install: `cargo install vtcode`
-    - URL: https://crates.io/crates/vtcode
-
-2. **GitHub Releases** - Pre-built binaries
-    - Download from: https://github.com/vinhnx/vtcode/releases
-    - Supports: Linux x64, macOS x64/ARM64, Windows x64
-
-### Optional Channels
-
-3. **npm** - Node.js package registry
-
-    - Install: `npm install -g vtcode`
-    - URL: https://www.npmjs.com/package/vtcode
 
 4. **Homebrew** - macOS package manager
     - Install: `brew install vtcode`
@@ -139,7 +108,6 @@ After running the release script, you may need to:
 
 ```bash
 # Check if you're logged in
-cargo login --help
 
 # Verify your token
 cat ~/.cargo/credentials.toml
@@ -151,7 +119,6 @@ cargo publish --dry-run
 ### npm Publishing Issues
 
 ```bash
-# Check login status
 npm whoami
 
 # Check npm configuration
@@ -161,7 +128,6 @@ npm config list
 cd npm && npm publish --dry-run
 ```
 
-### GitHub Actions Issues
 
 -   Ensure `CRATES_IO_TOKEN` secret is set in repository settings
 -   Check the Actions tab for workflow run details
@@ -179,8 +145,3 @@ cd npm && npm publish --dry-run
 If you encounter issues:
 
 1. Check the troubleshooting section above
-2. Review the official documentation:
-    - Cargo: https://doc.rust-lang.org/cargo/reference/publishing.html
-    - npm: https://docs.npmjs.com/packages-and-modules
-    - Homebrew: https://docs.brew.sh/Formula-Cookbook
-3. Check GitHub Issues for similar problems

@@ -8,3 +8,7 @@
 #   docs/models.json
 #   **/fixtures/*.gif
 #   docs/screenshots/*.png=600_000
+
+# Allow the pre-built Zed extension binary, which is required for the
+# integration tests and kept under 1 MB.
+zed-extension/extension.wasm=1_000_000

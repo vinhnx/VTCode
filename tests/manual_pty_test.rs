@@ -1,8 +1,8 @@
 //! Manual test for PTY functionality
 
 use anyhow::Result;
+use assert_fs::TempDir;
 use serde_json::json;
-use tempfile::TempDir;
 use vtcode_core::tools::ToolRegistry;
 
 #[tokio::main]

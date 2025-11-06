@@ -398,7 +398,7 @@ fn resolve_default_cache_dir() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::tempdir;
+    use assert_fs::TempDir;
 
     #[test]
     fn prompt_caching_defaults_align_with_constants() {
@@ -439,7 +439,7 @@ mod tests {
 
     #[test]
     fn resolve_cache_dir_uses_workspace_when_relative() {
-        let temp = tempdir().unwrap();
+        let temp = TempDir::new().unwrap();
         let workspace = temp.path();
         let cfg = PromptCachingConfig {
             cache_dir: "relative/cache".to_string(),

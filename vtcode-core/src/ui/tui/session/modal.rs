@@ -25,6 +25,7 @@ pub struct ModalState {
     pub lines: Vec<String>,
     pub list: Option<ModalListState>,
     pub secure_prompt: Option<SecurePromptConfig>,
+    #[allow(dead_code)]
     pub popup_state: PopupState,
     pub restore_input: bool,
     pub restore_cursor: bool,

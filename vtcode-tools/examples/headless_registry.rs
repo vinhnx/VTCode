@@ -20,13 +20,13 @@ fn main() {
 #[cfg(feature = "policies")]
 use anyhow::{Context, Result, anyhow};
 #[cfg(feature = "policies")]
+use assert_fs::TempDir;
+#[cfg(feature = "policies")]
 use async_trait::async_trait;
 #[cfg(feature = "policies")]
 use serde_json::{Value, json};
 #[cfg(feature = "policies")]
 use std::path::PathBuf;
-#[cfg(feature = "policies")]
-use tempfile::tempdir;
 #[cfg(feature = "policies")]
 use vtcode_commons::{
     DisplayErrorFormatter, NoopErrorReporter, NoopTelemetry, StaticWorkspacePaths,
@@ -81,7 +81,7 @@ impl Tool for EchoTool {
 async fn main() -> Result<()> {
     // Applications can keep workspace data wherever they like; a temporary
     // directory keeps the example self-contained.
-    let workspace = tempdir().context("failed to allocate workspace")?;
+    let workspace = TempDir::new().context("failed to allocate workspace")?;
     let workspace_root = PathBuf::from(workspace.path());
 
     // Store the policy file inside an arbitrary configuration tree that the

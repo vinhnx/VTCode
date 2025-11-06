@@ -278,6 +278,17 @@ refresh_interval_ms = 2000
 # Timeout for command execution in status line (milliseconds)
 command_timeout_ms = 200
 
+# Timeout ceilings and warning threshold for long-running tools
+[timeouts]
+# Maximum duration for standard (non-PTY) tools in seconds. Set to 0 to disable.
+default_ceiling_seconds = 180
+# Maximum duration for PTY-backed commands in seconds. Set to 0 to disable.
+pty_ceiling_seconds = 300
+# Maximum duration for MCP tool calls in seconds. Set to 0 to disable.
+mcp_ceiling_seconds = 120
+# Emit a warning once execution exceeds this percentage of the ceiling.
+warning_threshold_percent = 80
+
 # PTY (Pseudo Terminal) configuration - For interactive command execution
 [pty]
 # Enable PTY support for interactive commands

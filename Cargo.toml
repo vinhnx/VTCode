@@ -1,6 +1,6 @@
 [package]
 name = "vtcode"
-version = "0.39.5"
+version = "0.39.13"
 edition = "2024"
 authors = ["vinhnx <vinhnx@users.noreply.github.com>"]
 description = "A Rust-based terminal coding agent with modular architecture supporting multiple LLM providers"
@@ -37,6 +37,9 @@ members = [
     "vtcode-tools",
     "vtcode-bash-runner",
     "vtcode-exec-events",
+]
+exclude = [
+    "zed-extension",
 ]
 
 [patch.crates-io]
@@ -88,8 +91,8 @@ unwrap_used = "deny"
 
 
 [dependencies]
-vtcode-acp-client = { path = "vtcode-acp-client", version = "0.39.5" }
-vtcode-core = { path = "vtcode-core", version = "0.39.5" }
+vtcode-acp-client = { path = "vtcode-acp-client", version = "0.39.13" }
+vtcode-core = { path = "vtcode-core", version = "0.39.13" }
 anyhow = "1.0"
 clap = { version = "4.5", features = ["derive"] }
 serde_json = "1.0"
@@ -169,6 +172,7 @@ path = "src/main.rs"
 [dev-dependencies]
 criterion = "0.7"
 tempfile = "3.0"
+assert_fs = "1.1"
 indexmap = { version = "2.12", features = ["serde"] }
 rand = "0.9"
 regex = "1.12"

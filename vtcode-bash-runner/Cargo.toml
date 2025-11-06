@@ -1,6 +1,6 @@
 [package]
 name = "vtcode-bash-runner"
-version = "0.39.5"
+version = "0.39.13"
 edition = "2024"
 description = "Cross-platform shell execution helpers extracted from VTCode"
 license = "MIT"
@@ -23,15 +23,16 @@ exec-events = ["dep:vtcode-exec-events"]
 anyhow = "1.0"
 path-clean = "1.0"
 shell-escape = "0.1"
-vtcode-commons = { path = "../vtcode-commons", version = "0.39.5" }
+vtcode-commons = { path = "../vtcode-commons", version = "0.39.13" }
 serde = { version = "1.0", features = ["derive"], optional = true }
-vtcode-exec-events = { path = "../vtcode-exec-events", version = "0.39.5", optional = true }
+vtcode-exec-events = { path = "../vtcode-exec-events", version = "0.39.13", optional = true }
 
 [lints]
 workspace = true
 
 [dev-dependencies]
 tempfile = "3.10"
+assert_fs = "1.1"
 
 [[example]]
 name = "dry_run"

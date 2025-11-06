@@ -12,6 +12,7 @@ use crate::mcp::McpClientConfig;
 use crate::root::{PtyConfig, UiConfig};
 use crate::router::RouterConfig;
 use crate::telemetry::TelemetryConfig;
+use crate::timeouts::TimeoutsConfig;
 use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -137,6 +138,10 @@ pub struct VTCodeConfig {
     #[serde(default)]
     pub syntax_highlighting: SyntaxHighlightingConfig,
 
+    /// Timeout ceilings and UI warning thresholds
+    #[serde(default)]
+    pub timeouts: TimeoutsConfig,
+
     /// Automation configuration
     #[serde(default)]
     pub automation: AutomationConfig,
@@ -175,6 +180,10 @@ impl VTCodeConfig {
         self.hooks
             .validate()
             .context("Invalid hooks configuration")?;
+
+        self.timeouts
+            .validate()
+            .context("Invalid timeouts configuration")?;
 
         Ok(())
     }
@@ -1148,9 +1157,9 @@ mod tests {
 
         let result = ConfigManager::load_from_file(temp_file.path());
         assert!(result.is_err(), "expected validation error");
-        let error = result.unwrap_err();
+        let error = format!("{:?}", result.err().unwrap());
         assert!(
-            error.to_string().contains("validate"),
+            error.contains("validate"),
             "expected validation context in error, got: {}",
             error
         );
@@ -1210,7 +1219,7 @@ default_policy = "prompt"
 
     #[test]
     fn config_defaults_provider_overrides_paths_and_theme() {
-        let workspace = tempfile::tempdir().expect("failed to create workspace");
+        let workspace = assert_fs::TempDir::new().expect("failed to create workspace");
         let workspace_root = workspace.path();
         let config_dir = workspace_root.join("config-root");
         fs::create_dir_all(&config_dir).expect("failed to create config directory");
@@ -1224,9 +1233,9 @@ default_policy = "prompt"
         let static_paths = StaticWorkspacePaths::new(workspace_root, &config_dir);
         let provider = WorkspacePathsDefaults::new(Arc::new(static_paths))
             .with_config_file_name(config_file_name)
-            .with_home_paths::<Vec<PathBuf>, _>(Vec::new())
+            .with_home_paths(Vec::new())
             .with_syntax_theme("custom-theme")
-            .with_syntax_languages(["zig"]);
+            .with_syntax_languages(vec!["zig".to_string()]);
 
         defaults::provider::with_config_defaults_provider_for_test(Arc::new(provider), || {
             let manager = ConfigManager::load_from_workspace(workspace_root)

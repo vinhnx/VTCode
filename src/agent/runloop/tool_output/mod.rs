@@ -208,14 +208,15 @@ fn render_error_details(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> 
     }
 
     if let Some(original) = val.get("original_error").and_then(|v| v.as_str())
-        && !original.trim().is_empty() {
-            let display_error = if original.len() > 200 {
-                format!("{}...", &original[..197])
-            } else {
-                original.to_string()
-            };
-            renderer.line(MessageStyle::Info, &format!("  Details: {}", display_error))?;
-        }
+        && !original.trim().is_empty()
+    {
+        let display_error = if original.len() > 200 {
+            format!("{}...", &original[..197])
+        } else {
+            original.to_string()
+        };
+        renderer.line(MessageStyle::Info, &format!("  Details: {}", display_error))?;
+    }
 
     if let Some(path) = val.get("path").and_then(|v| v.as_str()) {
         renderer.line(MessageStyle::Info, &format!("  Path: {}", path))?;
@@ -233,21 +234,22 @@ fn render_error_details(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> 
     }
 
     if let Some(suggestions) = val.get("recovery_suggestions").and_then(|v| v.as_array())
-        && !suggestions.is_empty() {
-            renderer.line(MessageStyle::Info, "")?;
-            renderer.line(MessageStyle::Info, "  Suggestions:")?;
-            for (idx, suggestion) in suggestions.iter().take(5).enumerate() {
-                if let Some(text) = suggestion.as_str() {
-                    renderer.line(MessageStyle::Info, &format!("    {}. {}", idx + 1, text))?;
-                }
-            }
-            if suggestions.len() > 5 {
-                renderer.line(
-                    MessageStyle::Info,
-                    &format!("    ... and {} more", suggestions.len() - 5),
-                )?;
+        && !suggestions.is_empty()
+    {
+        renderer.line(MessageStyle::Info, "")?;
+        renderer.line(MessageStyle::Info, "  Suggestions:")?;
+        for (idx, suggestion) in suggestions.iter().take(5).enumerate() {
+            if let Some(text) = suggestion.as_str() {
+                renderer.line(MessageStyle::Info, &format!("    {}. {}", idx + 1, text))?;
             }
         }
+        if suggestions.len() > 5 {
+            renderer.line(
+                MessageStyle::Info,
+                &format!("    ... and {} more", suggestions.len() - 5),
+            )?;
+        }
+    }
 
     Ok(())
 }

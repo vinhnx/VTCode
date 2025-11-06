@@ -1,0 +1,6 @@
+name = "VT Trajectory Log"
+grammar = "json"
+path_suffixes = ["trajectory.jsonl", "sandbox.jsonl"]
+tab_size = 2
+hard_tabs = false
+first_line_pattern = "^\\{\"timestamp\""

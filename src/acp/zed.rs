@@ -198,9 +198,9 @@ impl PlanProgress {
         if let Some(index) = self.gather_index
             && discriminant(&self.entries[index].status)
                 == discriminant(&acp::PlanEntryStatus::Pending)
-            {
-                return self.update_status(index, acp::PlanEntryStatus::InProgress);
-            }
+        {
+            return self.update_status(index, acp::PlanEntryStatus::InProgress);
+        }
         false
     }
 
@@ -208,9 +208,9 @@ impl PlanProgress {
         if let Some(index) = self.gather_index
             && discriminant(&self.entries[index].status)
                 != discriminant(&acp::PlanEntryStatus::Completed)
-            {
-                return self.update_status(index, acp::PlanEntryStatus::Completed);
-            }
+        {
+            return self.update_status(index, acp::PlanEntryStatus::Completed);
+        }
         false
     }
 
@@ -424,18 +424,18 @@ impl ZedAgent {
             && let Some(run_decl) = build_function_declarations()
                 .into_iter()
                 .find(|decl| decl.name == tools::RUN_COMMAND)
-            {
-                let already_registered = local_definitions
-                    .iter()
-                    .any(|definition| definition.function_name() == tools::RUN_COMMAND);
-                if !already_registered {
-                    local_definitions.push(ToolDefinition::function(
-                        run_decl.name.clone(),
-                        run_decl.description.clone(),
-                        run_decl.parameters.clone(),
-                    ));
-                }
+        {
+            let already_registered = local_definitions
+                .iter()
+                .any(|definition| definition.function_name() == tools::RUN_COMMAND);
+            if !already_registered {
+                local_definitions.push(ToolDefinition::function(
+                    run_decl.name.clone(),
+                    run_decl.description.clone(),
+                    run_decl.parameters.clone(),
+                ));
             }
+        }
         let acp_tool_registry = Rc::new(AcpToolRegistry::new(
             workspace_root.as_path(),
             read_file_enabled,
@@ -623,6 +623,10 @@ impl ZedAgent {
             if parts.is_empty() {
                 return Err("command array cannot be empty".to_string());
             }
+            // Validate that the executable (first element) is non-empty
+            if parts[0].trim().is_empty() {
+                return Err("command executable cannot be empty".to_string());
+            }
             return Ok(parts);
         }
 
@@ -631,6 +635,10 @@ impl ZedAgent {
                 .map_err(|error| format!("failed to parse command string: {error}"))?;
             if segments.is_empty() {
                 return Err("command string cannot be empty".to_string());
+            }
+            // Validate that the executable (first element) is non-empty
+            if segments[0].trim().is_empty() {
+                return Err("command executable cannot be empty".to_string());
             }
             return Ok(segments);
         }
@@ -1021,9 +1029,9 @@ impl ZedAgent {
             && let Some(report) = self
                 .execute_terminal_via_client(tool_name, client, session_id, args)
                 .await
-            {
-                return report;
-            }
+        {
+            return report;
+        }
 
         match descriptor {
             ToolDescriptor::Acp(tool) => {
@@ -1386,12 +1394,12 @@ impl ZedAgent {
         }
 
         if let Some(has_more) = output.get("has_more").and_then(Value::as_bool)
-            && has_more {
-                lines.push(
-                    "Additional results available (adjust page or per_page to view more)."
-                        .to_string(),
-                );
-            }
+            && has_more
+        {
+            lines.push(
+                "Additional results available (adjust page or per_page to view more).".to_string(),
+            );
+        }
 
         if let Some(message) = output
             .get(TOOL_LIST_FILES_MESSAGE_KEY)
@@ -1889,43 +1897,45 @@ impl acp::Agent for ZedAgent {
                         .tool_calls
                         .clone()
                         .filter(|calls| !calls.is_empty())
-                    {
-                        if plan.start_context() {
-                            self.send_plan_update(&args.session_id, &plan).await?;
-                        }
+                {
+                    if plan.start_context() {
+                        self.send_plan_update(&args.session_id, &plan).await?;
+                    }
+                    self.push_message(
+                        &session,
+                        Message::assistant_with_tools(
+                            response.content.clone().unwrap_or_default(),
+                            tool_calls.clone(),
+                        ),
+                    );
+                    let tool_results = self
+                        .execute_tool_calls(&session, &args.session_id, &tool_calls)
+                        .await?;
+                    if plan.complete_context() {
+                        self.send_plan_update(&args.session_id, &plan).await?;
+                    }
+                    for result in tool_results {
                         self.push_message(
                             &session,
-                            Message::assistant_with_tools(
-                                response.content.clone().unwrap_or_default(),
-                                tool_calls.clone(),
-                            ),
+                            Message::tool_response(result.tool_call_id, result.llm_response),
                         );
-                        let tool_results = self
-                            .execute_tool_calls(&session, &args.session_id, &tool_calls)
-                            .await?;
-                        if plan.complete_context() {
-                            self.send_plan_update(&args.session_id, &plan).await?;
-                        }
-                        for result in tool_results {
-                            self.push_message(
-                                &session,
-                                Message::tool_response(result.tool_call_id, result.llm_response),
-                            );
-                        }
-                        if session.cancel_flag.get() {
-                            stop_reason = acp::StopReason::Cancelled;
-                            break;
-                        }
-                        messages = self.resolved_messages(&session);
-                        continue;
                     }
+                    if session.cancel_flag.get() {
+                        stop_reason = acp::StopReason::Cancelled;
+                        break;
+                    }
+                    messages = self.resolved_messages(&session);
+                    continue;
+                }
 
                 if let Some(content) = response.content.clone() {
                     if !content.is_empty() {
-                        if plan.has_context_step() && !plan.context_completed()
-                            && plan.complete_context() {
-                                self.send_plan_update(&args.session_id, &plan).await?;
-                            }
+                        if plan.has_context_step()
+                            && !plan.context_completed()
+                            && plan.complete_context()
+                        {
+                            self.send_plan_update(&args.session_id, &plan).await?;
+                        }
                         if plan.start_response() {
                             self.send_plan_update(&args.session_id, &plan).await?;
                         }
@@ -1993,9 +2003,9 @@ impl acp::Agent for ZedAgent {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use assert_fs::TempDir;
     use serde_json::{Value, json};
     use std::collections::BTreeMap;
-    use tempfile::tempdir;
     use tokio::fs;
     use vtcode_core::config::core::PromptCachingConfig;
     use vtcode_core::config::types::{
@@ -2057,7 +2067,7 @@ mod tests {
 
     #[tokio::test]
     async fn run_list_files_defaults_to_workspace_root() {
-        let temp = tempdir().unwrap();
+        let temp = TempDir::new().unwrap();
         let file_path = temp.path().join("example.txt");
         fs::write(&file_path, "hello").await.unwrap();
 
@@ -2077,7 +2087,7 @@ mod tests {
 
     #[tokio::test]
     async fn run_list_files_accepts_uri_argument() {
-        let temp = tempdir().unwrap();
+        let temp = TempDir::new().unwrap();
         let nested = temp.path().join("nested");
         fs::create_dir_all(&nested).await.unwrap();
         let inner = nested.join("inner.txt");
@@ -2099,5 +2109,74 @@ mod tests {
                 .map(|path| path.contains("inner.txt"))
                 .unwrap_or(false)
         }));
+    }
+
+    #[test]
+    fn parse_terminal_command_rejects_empty_array() {
+        let args = json!({ "command": [] });
+        let result = ZedAgent::parse_terminal_command(&args);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "command array cannot be empty");
+    }
+
+    #[test]
+    fn parse_terminal_command_rejects_empty_string() {
+        let args = json!({ "command": "" });
+        let result = ZedAgent::parse_terminal_command(&args);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "command string cannot be empty");
+    }
+
+    #[test]
+    fn parse_terminal_command_rejects_whitespace_only_string() {
+        let args = json!({ "command": "   " });
+        let result = ZedAgent::parse_terminal_command(&args);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "command string cannot be empty");
+    }
+
+    #[test]
+    fn parse_terminal_command_rejects_empty_executable_in_array() {
+        let args = json!({ "command": ["", "arg1", "arg2"] });
+        let result = ZedAgent::parse_terminal_command(&args);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "command executable cannot be empty");
+    }
+
+    #[test]
+    fn parse_terminal_command_rejects_whitespace_only_executable_in_array() {
+        let args = json!({ "command": ["  ", "arg1"] });
+        let result = ZedAgent::parse_terminal_command(&args);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "command executable cannot be empty");
+    }
+
+    #[test]
+    fn parse_terminal_command_accepts_valid_array() {
+        let args = json!({ "command": ["ls", "-la"] });
+        let result = ZedAgent::parse_terminal_command(&args);
+        assert!(result.is_ok());
+        let cmd = result.unwrap();
+        assert_eq!(cmd, vec!["ls", "-la"]);
+    }
+
+    #[test]
+    fn parse_terminal_command_accepts_valid_string() {
+        let args = json!({ "command": "echo test" });
+        let result = ZedAgent::parse_terminal_command(&args);
+        assert!(result.is_ok());
+        let cmd = result.unwrap();
+        assert_eq!(cmd, vec!["echo", "test"]);
+    }
+
+    #[test]
+    fn parse_terminal_command_rejects_missing_command_field() {
+        let args = json!({});
+        let result = ZedAgent::parse_terminal_command(&args);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err(),
+            "run_terminal_cmd requires a 'command' array"
+        );
     }
 }

@@ -1,14 +1,41 @@
 schema_version = 1
-id = "vtcode.agent-server"
-name = "vtcode-agent-server"
+id = "vtcode"
+name = "vtcode"
 version = "0.37.1"
-display_name = "VT Code Agent Server"
-description = "VT Code packaged as a Zed Agent Server Extension."
+description = "VT Code packaged as a Zed Agent Server Extension. Integrates Rust-based terminal coding agent with LLM and tree-sitter support."
 repository = "https://github.com/vinhnx/vtcode"
 readme = "README.md"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
+categories = ["AI", "Agents", "Productivity", "Testing"]
+keywords = [
+    "ai",
+    "agent",
+    "llm",
+    "terminal",
+    "coding",
+    "assistant",
+    "mcp",
+    "model context protocol",
+    "automation",
+]
 
 [agent_servers.vtcode]
+name = "VT Code"
+icon = "icons/vtcode.svg"
+
+[slash_commands.logs]
+description = "Open VT trajectory logs"
+requires_argument = false
+
+[slash_commands.status]
+description = "Show VT Code status information"
+requires_argument = false
+
+[slash_commands.doctor]
+description = "Run VT Code diagnostics"
+requires_argument = false
+
+[context_servers.vtcode]
 name = "VT Code"
 icon = "icons/vtcode.svg"
 

@@ -84,14 +84,14 @@ usage_tips = [
     "Describe your current coding goal or ask for a quick status overview.",
     "Reference AGENTS.md guidelines when proposing changes.",
     "Draft or refresh your TODO list with update_plan before coding.",
-    "Prefer asking for targeted file reads or diffs before editing.",
+    "Use the Zed Assistant to interact with VT Code's ACP integration.",
 ]
 
 # List of recommended actions shown during onboarding
 recommended_actions = [
     "Start the session by outlining a 3–6 step TODO plan via update_plan.",
     "Review the highlighted guidelines and share the task you want to tackle.",
-    "Ask for a workspace tour if you need more context.",
+    "Try using slash commands like /logs, /status, and /doctor for diagnostics.",
 ]
 
 # Custom prompts configuration - Define personal assistant commands
@@ -255,6 +255,17 @@ refresh_interval_ms = 2000
 
 # Timeout for command execution in status line (milliseconds)
 command_timeout_ms = 200
+
+# Timeout ceilings and warnings for tool execution
+[timeouts]
+# Maximum duration for standard (non-PTY) tools in seconds. Set to 0 to disable.
+default_ceiling_seconds = 180
+# Maximum duration for PTY-backed commands in seconds. Set to 0 to disable.
+pty_ceiling_seconds = 300
+# Maximum duration for MCP tool calls in seconds. Set to 0 to disable.
+mcp_ceiling_seconds = 120
+# Emit a warning once a tool runs longer than this percentage of its ceiling.
+warning_threshold_percent = 80
 
 # PTY (Pseudo Terminal) configuration - For interactive command execution
 [pty]
@@ -579,19 +590,12 @@ context7 = "context7"
 name = "time"
 command = "uvx"
 args = ["mcp-server-time"]
-enabled = true
+enabled = false
 max_concurrent_requests = 3
 
 [mcp.providers.env]
 
-[mcp.server]
-enabled = false
-bind_address = "127.0.0.1"
-port = 3000
-transport = "sse"
-name = "vtcode-mcp-server"
-version = "0.29.6"
-exposed_tools = []
+
 
 # Agent Client Protocol (ACP) - IDE integration
 [acp]

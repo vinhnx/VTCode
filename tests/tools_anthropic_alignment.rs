@@ -1,3 +1,4 @@
+use assert_fs::TempDir;
 use serde_json::json;
 use std::fs;
 use tempfile::tempdir;
@@ -6,7 +7,7 @@ use vtcode_core::config::constants::tools;
 
 #[tokio::test]
 async fn list_files_pagination_and_default_response_format() {
-    let dir = tempdir().unwrap();
+    let dir = TempDir::new().unwrap();
     let ws = dir.path().to_path_buf();
 
     // Create workspace files

@@ -524,7 +524,6 @@ pub(crate) async fn run_single_agent_loop_unified(
                 Ok(None) => {}
                 Err(err) => {
                     warn!("Failed to update IDE context snapshot: {}", err);
-                    ide_context_bridge = None;
                 }
             }
         }
@@ -568,23 +567,22 @@ pub(crate) async fn run_single_agent_loop_unified(
             renderer.line_if_not_empty(MessageStyle::Output)?;
         }
 
-        if full_auto
-            && let Some(allowlist) = full_auto_allowlist.as_ref() {
-                if allowlist.is_empty() {
-                    renderer.line(
+        if full_auto && let Some(allowlist) = full_auto_allowlist.as_ref() {
+            if allowlist.is_empty() {
+                renderer.line(
                     MessageStyle::Info,
                     "Full-auto mode enabled with no tool permissions; tool calls will be skipped.",
                 )?;
-                } else {
-                    renderer.line(
-                        MessageStyle::Info,
-                        &format!(
-                            "Full-auto mode enabled. Permitted tools: {}",
-                            allowlist.join(", ")
-                        ),
-                    )?;
-                }
+            } else {
+                renderer.line(
+                    MessageStyle::Info,
+                    &format!(
+                        "Full-auto mode enabled. Permitted tools: {}",
+                        allowlist.join(", ")
+                    ),
+                )?;
             }
+        }
 
         let async_mcp_manager_for_signal = async_mcp_manager.clone();
         {
@@ -601,23 +599,21 @@ pub(crate) async fn run_single_agent_loop_unified(
 
                     // Shutdown MCP client on interrupt using async manager
                     if let Some(mcp_manager) = &async_mcp_manager_for_signal
-                        && let Err(e) = mcp_manager.shutdown().await {
-                            let error_msg = e.to_string();
-                            if error_msg.contains("EPIPE")
-                                || error_msg.contains("Broken pipe")
-                                || error_msg.contains("write EPIPE")
-                            {
-                                eprintln!(
-                                    "Info: MCP client shutdown encountered pipe errors during interrupt (normal): {}",
-                                    e
-                                );
-                            } else {
-                                eprintln!(
-                                    "Warning: Failed to shutdown MCP client on interrupt: {}",
-                                    e
-                                );
-                            }
+                        && let Err(e) = mcp_manager.shutdown().await
+                    {
+                        let error_msg = e.to_string();
+                        if error_msg.contains("EPIPE")
+                            || error_msg.contains("Broken pipe")
+                            || error_msg.contains("write EPIPE")
+                        {
+                            eprintln!(
+                                "Info: MCP client shutdown encountered pipe errors during interrupt (normal): {}",
+                                e
+                            );
+                        } else {
+                            eprintln!("Warning: Failed to shutdown MCP client on interrupt: {}", e);
                         }
+                    }
 
                     if matches!(signal, CtrlCSignal::Exit) {
                         break;
@@ -641,19 +637,16 @@ pub(crate) async fn run_single_agent_loop_unified(
             let mcp_status = mcp_manager.get_status().await;
             if mcp_status.is_error() {
                 if let Some(error_msg) = mcp_status.get_error_message() {
-                    renderer.line(
-                        MessageStyle::Error,
-                        &format!("⚠️  MCP Error: {}", error_msg),
-                    )?;
+                    renderer.line(MessageStyle::Error, &format!("MCP Error: {}", error_msg))?;
                     renderer.line(
                         MessageStyle::Info,
-                        "💡 Use /mcp to check status or update your vtcode.toml configuration.",
+                        "Use /mcp to check status or update your vtcode.toml configuration.",
                     )?;
                 }
             } else if mcp_status.is_initializing() {
                 renderer.line(
                     MessageStyle::Info,
-                    "🔄 MCP is still initializing in the background...",
+                    "MCP is still initializing in the background...",
                 )?;
             }
         }
@@ -683,70 +676,65 @@ pub(crate) async fn run_single_agent_loop_unified(
             let interrupts = InlineInterruptCoordinator::new(ctrl_c_state.as_ref());
 
             if let Some(mcp_manager) = &async_mcp_manager
-                && !mcp_catalog_initialized {
-                    match mcp_manager.get_status().await {
-                        McpInitStatus::Ready { client } => {
-                            tool_registry.set_mcp_client(Arc::clone(&client));
-                            match tool_registry.refresh_mcp_tools().await {
-                                Ok(()) => {
-                                    let mut registered_tools = 0usize;
-                                    match tool_registry.list_mcp_tools().await {
-                                        Ok(mcp_tools) => {
-                                            let new_definitions =
-                                                build_mcp_tool_definitions(&mcp_tools);
-                                            registered_tools = new_definitions.len();
-                                            let updated_snapshot = {
-                                                let mut guard = tools.write().await;
-                                                guard.retain(|tool| {
-                                                    !tool.function.name.starts_with("mcp_")
-                                                });
-                                                guard.extend(new_definitions);
-                                                guard.clone()
-                                            };
-                                            context_manager.update_tool_catalog(
-                                                build_curator_tools(&updated_snapshot),
-                                            );
-                                        }
-                                        Err(err) => {
-                                            warn!(
-                                                "Failed to enumerate MCP tools after refresh: {err}"
-                                            );
-                                        }
+                && !mcp_catalog_initialized
+            {
+                match mcp_manager.get_status().await {
+                    McpInitStatus::Ready { client } => {
+                        tool_registry.set_mcp_client(Arc::clone(&client));
+                        match tool_registry.refresh_mcp_tools().await {
+                            Ok(()) => {
+                                let mut registered_tools = 0usize;
+                                match tool_registry.list_mcp_tools().await {
+                                    Ok(mcp_tools) => {
+                                        let new_definitions =
+                                            build_mcp_tool_definitions(&mcp_tools);
+                                        registered_tools = new_definitions.len();
+                                        let updated_snapshot = {
+                                            let mut guard = tools.write().await;
+                                            guard.retain(|tool| {
+                                                !tool.function.name.starts_with("mcp_")
+                                            });
+                                            guard.extend(new_definitions);
+                                            guard.clone()
+                                        };
+                                        context_manager.update_tool_catalog(build_curator_tools(
+                                            &updated_snapshot,
+                                        ));
                                     }
+                                    Err(err) => {
+                                        warn!("Failed to enumerate MCP tools after refresh: {err}");
+                                    }
+                                }
 
-                                    renderer.line(
+                                renderer.line(
                                         MessageStyle::Info,
                                         &format!(
                                             "MCP tools ready ({} registered). Use /mcp tools to inspect the catalog.",
                                             registered_tools
                                         ),
                                     )?;
-                                    renderer.line_if_not_empty(MessageStyle::Output)?;
-                                }
-                                Err(err) => {
-                                    warn!(
-                                        "Failed to refresh MCP tools after initialization: {err}"
-                                    );
-                                    renderer.line(
-                                        MessageStyle::Error,
-                                        &format!("Failed to index MCP tools: {}", err),
-                                    )?;
-                                    renderer.line_if_not_empty(MessageStyle::Output)?;
-                                }
+                                renderer.line_if_not_empty(MessageStyle::Output)?;
                             }
-                            mcp_catalog_initialized = true;
+                            Err(err) => {
+                                warn!("Failed to refresh MCP tools after initialization: {err}");
+                                renderer.line(
+                                    MessageStyle::Error,
+                                    &format!("Failed to index MCP tools: {}", err),
+                                )?;
+                                renderer.line_if_not_empty(MessageStyle::Output)?;
+                            }
                         }
-                        McpInitStatus::Error { message } => {
-                            renderer.line(
-                                MessageStyle::Error,
-                                &format!("⚠️  MCP Error: {}", message),
-                            )?;
-                            renderer.line_if_not_empty(MessageStyle::Output)?;
-                            mcp_catalog_initialized = true;
-                        }
-                        McpInitStatus::Initializing { .. } | McpInitStatus::Disabled => {}
+                        mcp_catalog_initialized = true;
                     }
+                    McpInitStatus::Error { message } => {
+                        renderer
+                            .line(MessageStyle::Error, &format!("⚠️  MCP Error: {}", message))?;
+                        renderer.line_if_not_empty(MessageStyle::Output)?;
+                        mcp_catalog_initialized = true;
+                    }
+                    McpInitStatus::Initializing { .. } | McpInitStatus::Disabled => {}
                 }
+            }
 
             let resources = InlineEventLoopResources {
                 renderer: &mut renderer,
@@ -794,16 +782,14 @@ pub(crate) async fn run_single_agent_loop_unified(
             if let Some(mcp_manager) = &async_mcp_manager {
                 let mcp_status = mcp_manager.get_status().await;
                 if mcp_status.is_error()
-                    && let Some(error_msg) = mcp_status.get_error_message() {
-                        renderer.line(
-                            MessageStyle::Error,
-                            &format!("⚠️  MCP Error: {}", error_msg),
-                        )?;
-                        renderer.line(
-                            MessageStyle::Info,
-                            "💡 Use /mcp to check status or update your vtcode.toml configuration.",
-                        )?;
-                    }
+                    && let Some(error_msg) = mcp_status.get_error_message()
+                {
+                    renderer.line(MessageStyle::Error, &format!("MCP Error: {}", error_msg))?;
+                    renderer.line(
+                        MessageStyle::Info,
+                        "Use /mcp to check status or update your vtcode.toml configuration.",
+                    )?;
+                }
             }
 
             if let Some(next_placeholder) = follow_up_placeholder.take() {
@@ -1679,9 +1665,10 @@ pub(crate) async fn run_single_agent_loop_unified(
                     // Keep system message + recent 15 messages
                     let mut compressed = Vec::new();
                     if let Some(first) = working_history.first()
-                        && matches!(first.role, uni::MessageRole::System) {
-                            compressed.push(first.clone());
-                        }
+                        && matches!(first.role, uni::MessageRole::System)
+                    {
+                        compressed.push(first.clone());
+                    }
                     compressed.extend(working_history.iter().rev().take(15).rev().cloned());
                     working_history = compressed;
                 }
@@ -1748,7 +1735,6 @@ pub(crate) async fn run_single_agent_loop_unified(
                         );
                     }
                     let result = if use_streaming {
-                        
                         stream_and_render_response(
                             provider_client.as_ref(),
                             request,
@@ -1880,15 +1866,15 @@ pub(crate) async fn run_single_agent_loop_unified(
                     && (text.contains("<|start|>")
                         || text.contains("<|channel|>")
                         || text.contains("<|call|>"))
-                    {
-                        // Remove harmony tool call syntax from the displayed text
-                        let cleaned = strip_harmony_syntax(text);
-                        if !cleaned.trim().is_empty() {
-                            final_text = Some(cleaned);
-                        } else {
-                            final_text = None;
-                        }
+                {
+                    // Remove harmony tool call syntax from the displayed text
+                    let cleaned = strip_harmony_syntax(text);
+                    if !cleaned.trim().is_empty() {
+                        final_text = Some(cleaned);
+                    } else {
+                        final_text = None;
                     }
+                }
 
                 if tool_calls.is_empty()
                     && let Some(text) = final_text.clone()
@@ -2187,9 +2173,10 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         }
                                         if let Some(notice) =
                                             output.get("notice").and_then(|value| value.as_str())
-                                            && !notice.trim().is_empty() {
-                                                notice_lines.push(notice.trim().to_string());
-                                            }
+                                            && !notice.trim().is_empty()
+                                        {
+                                            notice_lines.push(notice.trim().to_string());
+                                        }
                                         if !notice_lines.is_empty() {
                                             renderer.line(MessageStyle::Info, "")?;
                                             for line in notice_lines {
@@ -2838,20 +2825,21 @@ pub(crate) async fn run_single_agent_loop_unified(
 
         // Shutdown MCP client properly before TUI shutdown using async manager
         if let Some(mcp_manager) = &async_mcp_manager
-            && let Err(e) = mcp_manager.shutdown().await {
-                let error_msg = e.to_string();
-                if error_msg.contains("EPIPE")
-                    || error_msg.contains("Broken pipe")
-                    || error_msg.contains("write EPIPE")
-                {
-                    eprintln!(
-                        "Info: MCP client shutdown encountered pipe errors (normal): {}",
-                        e
-                    );
-                } else {
-                    eprintln!("Warning: Failed to shutdown MCP client cleanly: {}", e);
-                }
+            && let Err(e) = mcp_manager.shutdown().await
+        {
+            let error_msg = e.to_string();
+            if error_msg.contains("EPIPE")
+                || error_msg.contains("Broken pipe")
+                || error_msg.contains("write EPIPE")
+            {
+                eprintln!(
+                    "Info: MCP client shutdown encountered pipe errors (normal): {}",
+                    e
+                );
+            } else {
+                eprintln!("Warning: Failed to shutdown MCP client cleanly: {}", e);
             }
+        }
 
         handle.shutdown();
 

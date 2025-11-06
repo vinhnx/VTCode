@@ -113,24 +113,22 @@ pub(super) fn render_step_one_inline(
             }
 
             if dynamic_indexes.is_empty()
-                && let Some(error) = dynamic_models.error_for(provider) {
-                    let instructions = if provider == Provider::LmStudio {
-                        get_lmstudio_setup_instructions()
-                    } else {
-                        get_ollama_setup_instructions()
-                    };
-                    items.push(InlineListItem {
-                        title: format!("{} server unreachable", provider.label()),
-                        subtitle: Some(format!("{error}\n{instructions}")),
-                        badge: Some("Info".to_string()),
-                        indent: 2,
-                        selection: Some(InlineListSelection::CustomModel),
-                        search_value: Some(format!(
-                            "{} setup",
-                            provider.label().to_ascii_lowercase()
-                        )),
-                    });
-                }
+                && let Some(error) = dynamic_models.error_for(provider)
+            {
+                let instructions = if provider == Provider::LmStudio {
+                    get_lmstudio_setup_instructions()
+                } else {
+                    get_ollama_setup_instructions()
+                };
+                items.push(InlineListItem {
+                    title: format!("{} server unreachable", provider.label()),
+                    subtitle: Some(format!("{error}\n{instructions}")),
+                    badge: Some("Info".to_string()),
+                    indent: 2,
+                    selection: Some(InlineListSelection::CustomModel),
+                    search_value: Some(format!("{} setup", provider.label().to_ascii_lowercase())),
+                });
+            }
         }
     }
 

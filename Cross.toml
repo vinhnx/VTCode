@@ -2,8 +2,6 @@
 # Optimized for cross-compilation of the multi-platform Rust-based terminal coding agent
 
 [build]
-# Use docker for reliable cross-compilation
-dockerfile = { path = "Dockerfile.cross", context = "." }
 # Enable caching for faster builds
 xargo = true
 # Build in release mode by default for binaries
@@ -19,7 +17,13 @@ passthrough = [
     "OPENSSL_INCLUDE_DIR",
     "SDKROOT",
     "VTCODE_SKIP_AUTO_CROSS",
+    "VCPKG_ROOT",
+    "VCPKG_ROOT_STATUS", 
+    "OPENSSL_STATIC",
 ]
+
+# Target-specific configurations - these will use Docker by default
+# To build without Docker, use `cargo build` directly or set CROSS_CONTAINER_ENGINE=
 
 # Target-specific configurations
 [target.x86_64-apple-darwin]
@@ -63,18 +67,3 @@ pre-build = [
     "vcpkg install openssl:x64-windows",
     "export PKG_CONFIG_ALLOW_CROSS=1"
 ]
-
-[build.features]
-# Enable default features to ensure full functionality during cross-compilation builds
-default = true
-
-# Preserve certain environment variables that are important for the build
-[build.env.passthrough]
-# Environment variables that need to be available during build
-VCPKG_ROOT = { env = "VCPKG_ROOT", default = "" }
-VCPKG_ROOT_STATUS = { env = "VCPKG_ROOT_STATUS", default = "" }
-OPENSSL_STATIC = { env = "OPENSSL_STATIC", default = "1" }
-
-# Configuration for different build profiles
-[build.target."x86_64-apple-darwin".build-std]
-features = ["-Z", "build-std=std,panic_abort"]

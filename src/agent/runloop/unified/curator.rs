@@ -81,13 +81,14 @@ pub(crate) fn build_curated_sections(context: &CuratedContext) -> Vec<CuratedPro
     let mut sections = Vec::new();
 
     if let Some(summary) = &context.ledger_summary
-        && !summary.trim().is_empty() {
-            sections.push(CuratedPromptSection {
-                heading: "Decision Ledger",
-                component: ContextComponent::DecisionLedger,
-                body: summary.trim().to_string(),
-            });
-        }
+        && !summary.trim().is_empty()
+    {
+        sections.push(CuratedPromptSection {
+            heading: "Decision Ledger",
+            component: ContextComponent::DecisionLedger,
+            body: summary.trim().to_string(),
+        });
+    }
 
     if !context.active_files.is_empty() {
         let mut body = String::new();
@@ -113,9 +114,10 @@ pub(crate) fn build_curated_sections(context: &CuratedContext) -> Vec<CuratedPro
             }
             let _ = writeln!(body, "{}", line);
             if let Some(resolution) = &error.resolution
-                && !resolution.trim().is_empty() {
-                    let _ = writeln!(body, "  resolution: {}", resolution.trim());
-                }
+                && !resolution.trim().is_empty()
+            {
+                let _ = writeln!(body, "  resolution: {}", resolution.trim());
+            }
         }
         sections.push(CuratedPromptSection {
             heading: "Recent Errors",
@@ -162,16 +164,16 @@ pub(crate) async fn build_curator_messages(
     for (index, message) in history.iter().enumerate() {
         let mut materialized = message.content.as_text();
         if let Some(tool_calls) = &message.tool_calls
-            && !tool_calls.is_empty() {
-                let serialized =
-                    serde_json::to_string(tool_calls).unwrap_or_else(|_| "[]".to_string());
-                if !serialized.is_empty() {
-                    if !materialized.is_empty() {
-                        materialized.push('\n');
-                    }
-                    materialized.push_str(&serialized);
+            && !tool_calls.is_empty()
+        {
+            let serialized = serde_json::to_string(tool_calls).unwrap_or_else(|_| "[]".to_string());
+            if !serialized.is_empty() {
+                if !materialized.is_empty() {
+                    materialized.push('\n');
                 }
+                materialized.push_str(&serialized);
             }
+        }
 
         let component = map_role_to_component(&message.role);
         let component_id = format!("msg_{}", index);

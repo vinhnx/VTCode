@@ -1,5 +1,5 @@
+use assert_fs::TempDir;
 use std::fs;
-use tempfile::tempdir;
 use vtcode_core::tools::tree_sitter::analyzer::Position;
 use vtcode_core::tools::tree_sitter::refactoring::{
     CodeChange, RefactoringEngine, RefactoringKind, RefactoringOperation, TextRange,
@@ -22,7 +22,7 @@ fn make_range(offset: usize, len: usize) -> TextRange {
 
 #[tokio::test]
 async fn rename_conflict_detected() {
-    let dir = tempdir().unwrap();
+    let dir = TempDir::new().unwrap();
     let file = dir.path().join("conflict.rs");
     let content = "let x = 1;\nlet y = 2;\nprintln!(\"{}\", x);\n";
     fs::write(&file, content).unwrap();
@@ -47,7 +47,7 @@ async fn rename_conflict_detected() {
 
 #[tokio::test]
 async fn rename_applies_change() {
-    let dir = tempdir().unwrap();
+    let dir = TempDir::new().unwrap();
     let file = dir.path().join("rename.rs");
     let content = "let x = 1;\nprintln!(\"{}\", x);\n";
     fs::write(&file, content).unwrap();

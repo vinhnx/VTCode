@@ -233,6 +233,7 @@ pub(crate) async fn initialize_session(
     tool_registry.initialize_async().await?;
     if let Some(cfg) = vt_cfg {
         tool_registry.apply_commands_config(&cfg.commands);
+        tool_registry.apply_timeout_policy(&cfg.timeouts);
         if let Err(err) = tool_registry.apply_config_policies(&cfg.tools).await {
             eprintln!(
                 "Warning: Failed to apply tool policies from config: {}",
@@ -242,20 +243,21 @@ pub(crate) async fn initialize_session(
 
         // Add MCP client to tool registry if available from async manager
         if cfg.mcp.enabled
-            && let Some(ref manager) = async_mcp_manager {
-                // If we polled earlier and grabbed a ready client, prefer that.
-                let status = manager.get_status().await;
-                if let super::async_mcp_manager::McpInitStatus::Ready { client } = &status {
-                    tool_registry = tool_registry.with_mcp_client(Arc::clone(client));
-                    if let Err(err) = tool_registry.refresh_mcp_tools().await {
-                        warn!("Failed to refresh MCP tools: {}", err);
-                    }
-                } else {
-                    debug!(
-                        "MCP client not ready during startup; it will be available later if it finishes initializing"
-                    );
+            && let Some(ref manager) = async_mcp_manager
+        {
+            // If we polled earlier and grabbed a ready client, prefer that.
+            let status = manager.get_status().await;
+            if let super::async_mcp_manager::McpInitStatus::Ready { client } = &status {
+                tool_registry = tool_registry.with_mcp_client(Arc::clone(client));
+                if let Err(err) = tool_registry.refresh_mcp_tools().await {
+                    warn!("Failed to refresh MCP tools: {}", err);
                 }
+            } else {
+                debug!(
+                    "MCP client not ready during startup; it will be available later if it finishes initializing"
+                );
             }
+        }
 
         // Initialize full auto mode if requested
         if full_auto {

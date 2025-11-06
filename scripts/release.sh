@@ -65,7 +65,8 @@ Options:
   --skip-github-packages  Skip publishing to GitHub Packages (pass --no-publish)
   --skip-binaries     Skip building and uploading binaries
   --skip-docs         Skip docs.rs rebuild trigger
-  --skip-zed-checksums Skip updating Zed extension checksums
+  --skip-zed-checksums Skip updating Zed extension checksums (default behavior)
+  --enable-zed-checksums Enable updating Zed extension checksums (overrides skip)
   -h, --help          Show this help message
 USAGE
 }
@@ -99,7 +100,7 @@ update_changelog_from_commits() {
     local date_str
     date_str=$(date +%Y-%m-%d)
     
-    changelog_content=$(git log "$commits_range" --no-merges --pretty=format:"%s|" | awk -F'|' -v vers="$version" -v date="$date_str" '
+    changelog_content=$(git log "$commits_range" --no-merges --pretty=format:"%s" | awk -v vers="$version" -v date="$date_str" '
     {
         line = $0
         if (match(line, /^(feat|feature)/)) feat = feat "    - " line "\n"
@@ -135,22 +136,27 @@ update_changelog_from_commits() {
         local remainder
         remainder=$(tail -n +6 CHANGELOG.md)
         {
-            echo -n "$header"
-            echo "$changelog_content"
-            echo "$remainder"
+            printf '%s\n' "$header"
+            printf '%s\n' "$changelog_content"
+            printf '%s\n' "$remainder"
         } > CHANGELOG.md
     else
         {
-            echo "# Changelog - vtcode"
-            echo ""
-            echo "All notable changes to vtcode will be documented in this file."
-            echo ""
-            echo "$changelog_content"
+            printf '%s\n' "# Changelog - vtcode"
+            printf '%s\n' ""
+            printf '%s\n' "All notable changes to vtcode will be documented in this file."
+            printf '%s\n' ""
+            printf '%s\n' "$changelog_content"
         } > CHANGELOG.md
     fi
 
     # Stage and commit efficiently
     git add CHANGELOG.md
+    # Use environment variables to avoid git hanging for editor
+    GIT_AUTHOR_NAME="vtcode-release-bot" \
+    GIT_AUTHOR_EMAIL="noreply@vtcode.com" \
+    GIT_COMMITTER_NAME="vtcode-release-bot" \
+    GIT_COMMITTER_EMAIL="noreply@vtcode.com" \
     git commit -m "docs: update changelog for v$version [skip ci]"
     print_success "Changelog generation completed for version $version"
 }
@@ -163,88 +169,9 @@ get_current_version() {
 }
 
 # Optimized npm package version update
-update_npm_package_version() {
-    local release_arg=$1
-    local is_pre_release=$2
-    local pre_release_suffix=$3
 
-    if [[ ! -f "npm/package.json" ]]; then
-        print_warning "npm/package.json not found - skipping npm version update"
-        return 0
-    fi
 
-    local current_version
-    current_version=$(get_current_version)
 
-    # Optimized version calculation using a more efficient approach
-    local major minor patch
-    IFS='.' read -ra version_parts <<< "$current_version"
-    major=${version_parts[0]}
-    
-    # Handle cases where patch may have suffixes like "-alpha.1"
-    local patch_part=${version_parts[2]}
-    local suffix=""
-    if [[ "$patch_part" =~ - ]]; then
-        patch=${patch_part%-*}
-        suffix=${patch_part#*-}
-    else
-        patch=$(echo "$patch_part" | sed 's/[^0-9]*$//')
-    fi
-    minor=${version_parts[1]}
-
-    local next_version
-    if [[ "$is_pre_release" == "true" ]]; then
-        if [[ "$pre_release_suffix" == "alpha.0" ]]; then
-            next_version="${major}.${minor}.$((patch + 1))-alpha.1"
-        else
-            next_version="${major}.${minor}.$((patch + 1))-${pre_release_suffix}"
-        fi
-    else
-        case "$release_arg" in
-            "major") next_version="$((major + 1)).0.0" ;;
-            "minor") next_version="${major}.$((minor + 1)).0" ;;
-            "patch") next_version="${major}.${minor}.$((patch + 1))" ;;
-            *) 
-                if [[ "$release_arg" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then
-                    next_version="$release_arg"
-                else
-                    next_version="${major}.${minor}.$((patch + 1))"
-                fi
-                ;;
-        esac
-    fi
-
-    print_info "Updating npm/package.json version from $current_version to $next_version"
-
-    # Use a single sed command with proper escaping
-    local escaped_version
-    escaped_version=$(printf '%s\n' "$next_version" | sed 's/[[\.*^$()+?{|]/\\&/g')
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        sed -i '' "s/\"version\": \"[^\"]*\"/\"version\": \"$escaped_version\"/" npm/package.json
-    else
-        sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"$escaped_version\"/" npm/package.json
-    fi
-
-    print_success "Updated npm/package.json to version $next_version"
-}
-
-commit_npm_package_update() {
-    local version=$1
-
-    if [[ ! -f "npm/package.json" ]]; then
-        print_warning "npm/package.json not found - skipping npm commit"
-        return 0
-    fi
-
-    if git diff --quiet npm/package.json; then
-        print_info "npm/package.json is already up to date"
-        return 0
-    fi
-
-    git add npm/package.json
-    git commit -m "chore: update npm package to v$version"
-    print_success "Committed npm/package.json update"
-}
 
 load_env_file() {
     if [[ -f '.env' ]]; then
@@ -274,16 +201,12 @@ check_clean_tree() {
     fi
 }
 
-# Run all authentication checks in parallel
+# Run all authentication checks (without npm)
 check_all_auth() {
     local skip_npm=$1
     local skip_github_packages=$2
 
-    # Check all auth in parallel if not skipped
-    local pid_cargo=""
-    local pid_npm=""
-    local pid_github=""
-
+    # Check cargo auth
     if command -v cargo >/dev/null 2>&1; then
         local credentials_file="$HOME/.cargo/credentials.toml"
         if [[ -f "$credentials_file" && -s "$credentials_file" ]]; then
@@ -295,19 +218,13 @@ check_all_auth() {
         print_error 'Cargo is not available'
     fi
 
+    # Skip npm authentication as npm release workflow has been removed
     if [[ "$skip_npm" == 'false' ]]; then
-        if command -v npm >/dev/null 2>&1; then
-            if npm whoami >/dev/null 2>&1; then
-                print_success 'npm authentication verified'
-            else
-                print_warning 'Not logged in to npm. Run `npm login` before releasing.'
-            fi
-        else
-            print_warning 'npm is not available'
-        fi
+        print_info "npm release workflow has been removed - skipping npm authentication checks"
     fi
 
     if [[ "$skip_github_packages" == 'false' ]]; then
+        # GitHub Packages authentication still requires npm but we'll provide info
         if command -v npm >/dev/null 2>&1; then
             if [[ -n "${GITHUB_TOKEN:-}" ]]; then
                 local token_config
@@ -324,7 +241,7 @@ check_all_auth() {
                 print_info 'Make sure your GitHub token has write:packages, read:packages, and repo scopes.'
             fi
         else
-            print_warning 'npm is not available'
+            print_warning 'npm is not available (required for GitHub Packages authentication)'
         fi
     fi
 }
@@ -384,25 +301,24 @@ trigger_docs_rs_rebuild() {
     _trigger_docs() {
         local crate_name=$1
         local version=$2
-        local url="https://docs.rs/crate/$crate_name/$version/builds"
-        local response
-        response=$(curl -X POST "$url" \
-            -H "Content-Type: application/json" \
-            -s -o /dev/null -w "%{http_code}" 2>/dev/null || echo "0")
+        local url="https://docs.rs/crates/$crate_name/$version"
         
-        if [[ "$response" =~ ^(200|202|404)$ ]]; then
-            if [[ "$response" == "404" ]]; then
-                print_info "docs.rs rebuild for $crate_name v$version - crate not found yet (will be built when available)"
-            else
-                print_success "Triggered docs.rs rebuild for $crate_name v$version (HTTP $response)"
-            fi
+        # Try GET request to check if the crate exists
+        local response
+        response=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 10 "$url" 2>/dev/null || echo "0")
+        
+        if [[ "$response" == "200" ]]; then
+            print_info "Crate $crate_name v$version exists on docs.rs - documentation will update on next publish"
+        elif [[ "$response" == "404" ]]; then
+            print_info "Crate $crate_name v$version not found yet on docs.rs - will be built when published"
+        elif [[ "$response" == "405" ]]; then
+            print_info "Crate $crate_name v$version - docs.rs update happens automatically on publish"
         else
-            print_warning "Failed to trigger docs.rs rebuild for $crate_name v$version (HTTP $response)"
-            print_info "Note: Documentation will be built automatically when the crate is published to crates.io"
+            print_warning "Could not check docs.rs status for $crate_name v$version (HTTP $response)"
         fi
     }
 
-    # Run both triggers in parallel
+    # Run both checks in parallel
     _trigger_docs "vtcode-core" "$version" &
     local pid_core=$!
     
@@ -414,75 +330,9 @@ trigger_docs_rs_rebuild() {
     wait "$pid_main"
 }
 
-publish_to_npm() {
-    local version=$1
 
-    print_distribution 'Publishing to npm...'
 
-    if [[ ! -d 'npm' ]] || [[ ! -f 'npm/package.json' ]]; then
-        print_warning 'npm directory or package.json not found - skipping npm publish'
-        return 0
-    fi
 
-    if ! (cd npm && npm publish --access public); then
-        print_error 'Failed to publish to npm'
-        return 1
-    fi
-
-    print_success "Published npm package version $version"
-}
-
-publish_to_github_packages() {
-    local version=$1
-
-    print_distribution 'Publishing to GitHub Packages...'
-
-    if [[ ! -d 'npm' ]] || [[ ! -f 'npm/package.json' ]]; then
-        print_warning 'npm directory or package.json not found - skipping GitHub Packages publish'
-        return 0
-    fi
-
-    if [[ -z "${GITHUB_TOKEN:-}" ]]; then
-        print_error 'GITHUB_TOKEN environment variable not set - skipping GitHub Packages publish'
-        print_info 'Set GITHUB_TOKEN to publish to GitHub Packages'
-        return 1
-    fi
-
-    if [[ ! -f 'npm/.npmrc' ]]; then
-        print_error 'npm/.npmrc file not found - skipping GitHub Packages publish'
-        print_info 'Create .npmrc file with GitHub Packages configuration'
-        return 1
-    fi
-
-    if ! grep -q "npm.pkg.github.com" npm/.npmrc; then
-        print_error 'npm/.npmrc does not contain GitHub Packages registry - skipping GitHub Packages publish'
-        print_info 'Ensure .npmrc contains authentication for https://npm.pkg.github.com'
-        return 1
-    fi
-
-    # Use temporary file for package name manipulation
-    local original_package_json="npm/package.json"
-    local temp_package_json=$(mktemp)
-    cp "$original_package_json" "$temp_package_json"
-
-    # Get the original package name
-    local package_name
-    package_name=$(grep -o '"name": *"[^"]*"' "$original_package_json" | sed 's/"name": *"\([^"]*\)"/\1/')
-    
-    # Update to scoped name
-    sed "s/\"name\": \"[^\"]*\"/\"name\": \"@vinhnx\/$package_name\"/" "$temp_package_json" > "$original_package_json"
-
-    if ! (cd npm && npm publish --registry=https://npm.pkg.github.com --access=public); then
-        # Restore original package.json on failure
-        mv "$temp_package_json" "$original_package_json"
-        print_error 'Failed to publish to GitHub Packages'
-        return 1
-    fi
-
-    # Cleanup temp file on success
-    rm -f "$temp_package_json"
-    print_success "Published npm package version $version to GitHub Packages"
-}
 
 build_and_upload_binaries() {
     local version=$1
@@ -500,6 +350,72 @@ build_and_upload_binaries() {
     fi
 
     print_success 'Binaries built and distributed successfully'
+}
+
+update_extensions_version() {
+    local version=$1
+
+    print_info "Syncing extension versions with main project version $version..."
+
+    # Update Zed extension version
+    update_zed_extension_version "$version"
+
+    # Update VSCode extension version
+    update_vscode_extension_version "$version"
+}
+
+update_zed_extension_version() {
+    local version=$1
+    local manifest="zed-extension/extension.toml"
+
+    if [[ ! -f "$manifest" ]]; then
+        print_warning "Zed extension manifest not found at $manifest; skipping version update"
+        return 0
+    fi
+
+    print_distribution "Updating Zed extension version to $version"
+
+    # Use Python to update the version and URLs in extension.toml
+    python3 -c "
+import re
+from pathlib import Path
+
+manifest_path = Path('$manifest')
+content = manifest_path.read_text()
+
+# Update the main version field
+content = re.sub(r'^version = \".*\"', f'version = \"{version}\"', content, flags=re.MULTILINE)
+
+# Update URLs to use the new version
+content = re.sub(
+    r'https://github.com/vinhnx/vtcode/releases/download/v[0-9.]+/vtcode-v[0-9.]+-(aarch64-apple-darwin|x86_64-apple-darwin)\.tar\.gz',
+    f'https://github.com/vinhnx/vtcode/releases/download/v{version}/vtcode-v{version}-\\\\1.tar.gz',
+    content
+)
+
+manifest_path.write_text(content)
+print(f'INFO: Zed extension version updated to {version}')
+"
+}
+
+update_vscode_extension_version() {
+    local version=$1
+    local package_json="vscode-extension/package.json"
+
+    if [[ ! -f "$package_json" ]]; then
+        print_warning 'VSCode extension package.json not found; skipping version update'
+        return 0
+    fi
+
+    print_distribution "Updating VSCode extension version to $version"
+
+    # Use jq to update the version in package.json
+    if command -v jq >/dev/null 2>&1; then
+        jq --arg new_version "$version" '.version = $new_version' "$package_json" > "$package_json.tmp" && mv "$package_json.tmp" "$package_json"
+        print_info "VSCode extension version updated to $version"
+    else
+        print_warning 'jq not found; skipping VSCode extension version update'
+    fi
 }
 
 update_zed_extension_checksums() {
@@ -549,7 +465,7 @@ def main(version, manifest_path, dist_dir):
             sha = result.stdout.split()[0]
             
             pattern = re.compile(rf"(\[agent_servers\.vtcode\.targets\.{re.escape(target)}\][^\[]*?sha256 = \")([^\"]*)(\")", re.DOTALL)
-            new_text, count = pattern.subn(rf"\1{sha}\3", text, count=1)
+            new_text, count = pattern.subn("\\g<1>" + sha + "\\g<3>", text, count=1)
             
             if count == 0:
                 print(f"WARNING: sha256 entry not found for target {target}", file=sys.stderr)
@@ -681,7 +597,8 @@ main() {
     local skip_github_packages=false
     local skip_binaries=false
     local skip_docs=false
-    local skip_zed_checksums=false
+    local skip_zed_checksums=true  # Changed to true to disable by default
+    local enable_zed_checksums=false
     local pre_release=false
     local pre_release_suffix='alpha.0'
 
@@ -742,6 +659,11 @@ main() {
                 skip_zed_checksums=true
                 shift
                 ;;
+            --enable-zed-checksums)
+                skip_zed_checksums=false
+                enable_zed_checksums=true
+                shift
+                ;;
             -*)
                 print_error "Unknown option: $1"
                 show_usage
@@ -792,18 +714,9 @@ main() {
     current_version=$(get_current_version)
     print_info "Current version: $current_version"
 
-    # Update npm package.json before starting the cargo release process
+    # Skip npm package.json update as npm release workflow has been removed
     if [[ "$skip_npm" == 'false' ]]; then
-        update_npm_package_version "$release_argument" "$pre_release" "$pre_release_suffix"
-        if [[ -f "npm/package.json" ]]; then
-            local npm_version
-            npm_version=$(grep -o '"version": *"[^"]*"' npm/package.json | sed 's/"version": *"\([^"]*\)"/\1/')
-            if [[ -n "$npm_version" ]]; then
-                commit_npm_package_update "$npm_version"
-            else
-                print_warning "Could not determine npm package version"
-            fi
-        fi
+        print_info "npm release workflow has been removed - skipping npm package updates"
     fi
 
     if [[ "$dry_run" == 'true' ]]; then
@@ -844,21 +757,22 @@ main() {
         pid_docs=$!
     fi
 
-    # Publish to npm in background if not skipped
+    # Skip npm publishing as npm release workflow has been removed
     if [[ "$skip_npm" == 'false' ]]; then
-        publish_to_npm "$released_version" &
-        pid_npm=$!
+        print_info "npm publishing skipped - npm release workflow has been removed"
     fi
 
-    # Publish to GitHub Packages in background if not skipped
+    # Skip GitHub Packages publishing as npm release workflow has been completely removed
     if [[ "$skip_github_packages" == 'false' ]]; then
-        publish_to_github_packages "$released_version" &
-        pid_github=$!
+        print_info "GitHub Packages publishing skipped - npm/GitHub Packages release workflow has been completely removed"
     fi
 
     # Build binaries in background if not skipped
     local binaries_completed=false
     if [[ "$skip_binaries" == 'false' ]]; then
+        # Disable cross compilation by default to avoid Docker dependency
+        # Users can override with VTCODE_DISABLE_CROSS=0 to use cross
+        export VTCODE_DISABLE_CROSS=${VTCODE_DISABLE_CROSS:-1}
         build_and_upload_binaries "$released_version" &
         pid_binaries=$!
         binaries_completed=true
@@ -867,14 +781,22 @@ main() {
     # Wait for binaries to complete before updating Zed checksums
     if [[ $binaries_completed == true ]]; then
         wait "$pid_binaries" || print_error "Binary build failed"
-        # Only update Zed checksums if not skipped
+        # Only update Zed checksums if explicitly enabled (disabled by default)
         if [[ "$skip_zed_checksums" == 'false' ]]; then
-            update_zed_extension_checksums "$released_version"
+            # Only run Zed checksum update if dist directory exists and has files
+            if [[ -d "dist" ]] && [[ "$(ls -A dist 2>/dev/null)" ]]; then
+                update_zed_extension_checksums "$released_version"
+            else
+                print_warning "dist directory is empty or doesn't exist - skipping Zed extension checksum update"
+            fi
         fi
     fi
 
+    # Update extension versions to match main project version
+    update_extensions_version "$released_version"
+
     # Wait for all other background processes to complete
-    for pid in $pid_docs $pid_npm $pid_github; do
+    for pid in $pid_docs; do
         if [[ -n "$pid" ]]; then
             wait "$pid" || print_warning "Background process $pid failed"
         fi

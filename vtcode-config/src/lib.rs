@@ -38,6 +38,7 @@ pub mod router;
 #[cfg(feature = "schema")]
 pub mod schema;
 pub mod telemetry;
+pub mod timeouts;
 pub mod types;
 
 pub use acp::{
@@ -71,4 +72,5 @@ pub use router::{ComplexityModelMap, HeuristicSettings, ResourceBudget, RouterCo
 #[cfg(feature = "schema")]
 pub use schema::{vtcode_config_schema, vtcode_config_schema_json, vtcode_config_schema_pretty};
 pub use telemetry::TelemetryConfig;
+pub use timeouts::TimeoutsConfig;
 pub use types::{ReasoningEffortLevel, UiSurfacePreference};

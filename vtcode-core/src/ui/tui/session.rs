@@ -12,12 +12,11 @@ use ratatui::{
     Frame,
     layout::{Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
-    symbols::border,
-    text::{Line, Span, Text},
+    text::{Line, Span},
     widgets::{Block, BorderType, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
 };
 use tokio::sync::mpsc::UnboundedSender;
-use tui_popup::{Popup, PopupState, SizedWrapper};
+use tui_popup::PopupState;
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
@@ -53,7 +52,7 @@ use crate::prompts::CustomPromptRegistry;
 use crate::tools::PlanSummary;
 use crate::tools::{PlanCompletionState, PlanStep, StepStatus, TaskPlan};
 
-const USER_PREFIX: &str = "❯ ";
+const USER_PREFIX: &str = "";
 const PLACEHOLDER_COLOR: RgbColor = RgbColor(0x88, 0x88, 0x88);
 const PROMPT_COMMAND_NAME: &str = "prompt";
 const LEGACY_PROMPT_COMMAND_NAME: &str = "prompts";
@@ -351,7 +350,9 @@ impl Session {
     ) {
         match event {
             CrosstermEvent::Key(key) => {
-                if matches!(key.kind, KeyEventKind::Press | KeyEventKind::Repeat) {
+                // Only process Press events to avoid duplicate character insertion
+                // Repeat events can cause characters to be inserted multiple times
+                if matches!(key.kind, KeyEventKind::Press) {
                     if let Some(outbound) = self.process_key(key) {
                         if let Some(cb) = callback {
                             cb(&outbound);
@@ -2775,35 +2776,24 @@ impl Session {
             modal.list.is_some(),
         );
 
-        frame.render_widget(Clear, area);
-
-        let body = SizedWrapper {
-            inner: Text::raw(""),
-            width: area.width as usize,
-            height: area.height as usize,
-        };
-
-        let popup = Popup::new(body)
+        let block = Block::default()
             .title(Line::styled(modal.title.clone(), styles.title))
             .borders(Borders::ALL)
-            .border_set(border::ROUNDED)
+            .border_type(BorderType::Rounded)
             .border_style(styles.border);
 
-        frame.render_stateful_widget_ref(popup, viewport, &mut modal.popup_state);
+        frame.render_widget(Clear, area);
+        frame.render_widget(block, area);
 
-        let Some(popup_area) = modal.popup_state.area() else {
-            return;
-        };
-
-        if popup_area.width <= 2 || popup_area.height <= 2 {
+        if area.width <= 2 || area.height <= 2 {
             return;
         }
 
         let inner = Rect {
-            x: popup_area.x.saturating_add(1),
-            y: popup_area.y.saturating_add(1),
-            width: popup_area.width.saturating_sub(2),
-            height: popup_area.height.saturating_sub(2),
+            x: area.x.saturating_add(1),
+            y: area.y.saturating_add(1),
+            width: area.width.saturating_sub(2),
+            height: area.height.saturating_sub(2),
         };
 
         if inner.width == 0 || inner.height == 0 {
@@ -3270,6 +3260,13 @@ impl Session {
                 self.scroll_offset = 0;
                 // Input is handled with standard paragraph, not TextArea
                 self.update_slash_suggestions();
+
+                // Don't submit empty input
+                if submitted.trim().is_empty() {
+                    self.mark_dirty();
+                    return None;
+                }
+
                 self.remember_submitted_input(&submitted);
                 self.mark_dirty();
 

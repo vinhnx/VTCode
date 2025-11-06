@@ -11,6 +11,7 @@ mod legacy;
 mod policy;
 mod pty;
 mod registration;
+mod telemetry;
 mod utils;
 
 pub use declarations::{
@@ -19,6 +20,7 @@ pub use declarations::{
 };
 pub use error::{ToolErrorType, ToolExecutionError, classify_error};
 pub use registration::{ToolExecutorFn, ToolHandler, ToolRegistration};
+pub use telemetry::ToolTelemetryEvent;
 
 use builtins::register_builtin_tools;
 use inventory::ToolInventory;
@@ -28,7 +30,7 @@ use utils::normalize_tool_output;
 
 #[cfg(test)]
 use crate::config::constants::tools;
-use crate::config::{CommandsConfig, PtyConfig, ToolsConfig};
+use crate::config::{CommandsConfig, PtyConfig, TimeoutsConfig, ToolsConfig};
 use crate::tool_policy::{ToolPolicy, ToolPolicyManager};
 use crate::tools::ast_grep::AstGrepEngine;
 use crate::tools::file_ops::FileOpsTool;
@@ -40,6 +42,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 use tracing::{debug, warn};
 
 use super::plan::PlanManager;
@@ -50,6 +53,137 @@ use super::traits::Tool;
 #[cfg(test)]
 use crate::config::types::CapabilityLevel;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToolTimeoutCategory {
+    Default,
+    Pty,
+    Mcp,
+}
+
+impl ToolTimeoutCategory {
+    pub fn label(&self) -> &'static str {
+        match self {
+            ToolTimeoutCategory::Default => "standard",
+            ToolTimeoutCategory::Pty => "PTY",
+            ToolTimeoutCategory::Mcp => "MCP",
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ToolTimeoutPolicy {
+    default_ceiling: Option<Duration>,
+    pty_ceiling: Option<Duration>,
+    mcp_ceiling: Option<Duration>,
+    warning_fraction: f32,
+}
+
+impl Default for ToolTimeoutPolicy {
+    fn default() -> Self {
+        Self {
+            default_ceiling: Some(Duration::from_secs(180)),
+            pty_ceiling: Some(Duration::from_secs(300)),
+            mcp_ceiling: Some(Duration::from_secs(120)),
+            warning_fraction: 0.8,
+        }
+    }
+}
+
+impl ToolTimeoutPolicy {
+    pub fn from_config(config: &TimeoutsConfig) -> Self {
+        Self {
+            default_ceiling: config.ceiling_duration(config.default_ceiling_seconds),
+            pty_ceiling: config.ceiling_duration(config.pty_ceiling_seconds),
+            mcp_ceiling: config.ceiling_duration(config.mcp_ceiling_seconds),
+            warning_fraction: config.warning_threshold_fraction().clamp(0.0, 0.99),
+        }
+    }
+
+    /// Validate the timeout policy configuration
+    ///
+    /// Ensures that:
+    /// - Ceiling values are within reasonable bounds (1s - 3600s)
+    /// - Warning fraction is between 0.0 and 1.0
+    /// - No ceiling is configured as 0 seconds
+    pub fn validate(&self) -> anyhow::Result<()> {
+        // Validate default ceiling
+        if let Some(ceiling) = self.default_ceiling {
+            if ceiling < Duration::from_secs(1) {
+                anyhow::bail!(
+                    "default_ceiling_seconds must be at least 1 second (got {}s)",
+                    ceiling.as_secs()
+                );
+            }
+            if ceiling > Duration::from_secs(3600) {
+                anyhow::bail!(
+                    "default_ceiling_seconds must not exceed 3600 seconds/1 hour (got {}s)",
+                    ceiling.as_secs()
+                );
+            }
+        }
+
+        // Validate PTY ceiling
+        if let Some(ceiling) = self.pty_ceiling {
+            if ceiling < Duration::from_secs(1) {
+                anyhow::bail!(
+                    "pty_ceiling_seconds must be at least 1 second (got {}s)",
+                    ceiling.as_secs()
+                );
+            }
+            if ceiling > Duration::from_secs(3600) {
+                anyhow::bail!(
+                    "pty_ceiling_seconds must not exceed 3600 seconds/1 hour (got {}s)",
+                    ceiling.as_secs()
+                );
+            }
+        }
+
+        // Validate MCP ceiling
+        if let Some(ceiling) = self.mcp_ceiling {
+            if ceiling < Duration::from_secs(1) {
+                anyhow::bail!(
+                    "mcp_ceiling_seconds must be at least 1 second (got {}s)",
+                    ceiling.as_secs()
+                );
+            }
+            if ceiling > Duration::from_secs(3600) {
+                anyhow::bail!(
+                    "mcp_ceiling_seconds must not exceed 3600 seconds/1 hour (got {}s)",
+                    ceiling.as_secs()
+                );
+            }
+        }
+
+        // Validate warning fraction
+        if self.warning_fraction <= 0.0 {
+            anyhow::bail!(
+                "warning_threshold_percent must be greater than 0 (got {})",
+                self.warning_fraction * 100.0
+            );
+        }
+        if self.warning_fraction >= 1.0 {
+            anyhow::bail!(
+                "warning_threshold_percent must be less than 100 (got {})",
+                self.warning_fraction * 100.0
+            );
+        }
+
+        Ok(())
+    }
+
+    pub fn ceiling_for(&self, category: ToolTimeoutCategory) -> Option<Duration> {
+        match category {
+            ToolTimeoutCategory::Default => self.default_ceiling,
+            ToolTimeoutCategory::Pty => self.pty_ceiling.or(self.default_ceiling),
+            ToolTimeoutCategory::Mcp => self.mcp_ceiling.or(self.default_ceiling),
+        }
+    }
+
+    pub fn warning_fraction(&self) -> f32 {
+        self.warning_fraction
+    }
+}
+
 #[derive(Clone)]
 pub struct ToolRegistry {
     inventory: ToolInventory,
@@ -57,6 +191,8 @@ pub struct ToolRegistry {
     pty_sessions: PtySessionManager,
     mcp_client: Option<Arc<McpClient>>,
     mcp_tool_index: HashMap<String, Vec<String>>,
+    mcp_tool_presence: HashMap<String, bool>,
+    timeout_policy: ToolTimeoutPolicy,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -145,6 +281,8 @@ impl ToolRegistry {
             pty_sessions,
             mcp_client: None,
             mcp_tool_index: HashMap::new(),
+            mcp_tool_presence: HashMap::new(),
+            timeout_policy: ToolTimeoutPolicy::default(),
         };
 
         registry.sync_policy_catalog().await;
@@ -255,9 +393,13 @@ impl ToolRegistry {
         }
 
         // If not found, check if it's an MCP tool
-        if let Some(mcp_client) = &self.mcp_client {
-            if name.starts_with("mcp_") {
-                let tool_name = &name[4..]; // Remove "mcp_" prefix
+        if name.starts_with("mcp_") {
+            let tool_name = &name[4..];
+            if self.find_mcp_provider(tool_name).is_some() {
+                return true;
+            }
+
+            if let Some(mcp_client) = &self.mcp_client {
                 if let Ok(true) = mcp_client.has_mcp_tool(tool_name).await {
                     return true;
                 }
@@ -380,6 +522,49 @@ impl ToolRegistry {
         self.inventory
             .command_tool_mut()
             .update_commands_config(commands_config.clone());
+    }
+
+    pub fn apply_timeout_policy(&mut self, timeouts: &TimeoutsConfig) {
+        let policy = ToolTimeoutPolicy::from_config(timeouts);
+
+        // Validate the policy before applying
+        if let Err(e) = policy.validate() {
+            warn!(
+                error = %e,
+                "Invalid timeout configuration detected, using defaults"
+            );
+            self.timeout_policy = ToolTimeoutPolicy::default();
+        } else {
+            self.timeout_policy = policy;
+        }
+    }
+
+    pub fn timeout_policy(&self) -> &ToolTimeoutPolicy {
+        &self.timeout_policy
+    }
+
+    pub async fn timeout_category_for(&mut self, name: &str) -> ToolTimeoutCategory {
+        let canonical_name = canonical_tool_name(name);
+        let tool_name = canonical_name.as_ref();
+
+        if let Some(registration) = self.inventory.registration_for(tool_name) {
+            return if registration.uses_pty() {
+                ToolTimeoutCategory::Pty
+            } else {
+                ToolTimeoutCategory::Default
+            };
+        }
+
+        if let Some(stripped) = name.strip_prefix("mcp_") {
+            if self.has_mcp_tool(stripped).await {
+                return ToolTimeoutCategory::Mcp;
+            }
+        } else if self.find_mcp_provider(tool_name).is_some() || self.has_mcp_tool(tool_name).await
+        {
+            return ToolTimeoutCategory::Mcp;
+        }
+
+        ToolTimeoutCategory::Default
     }
 
     pub async fn execute_tool(&mut self, name: &str, args: Value) -> Result<Value> {
@@ -555,6 +740,8 @@ impl ToolRegistry {
     /// Set the MCP client for this registry
     pub fn with_mcp_client(mut self, mcp_client: Arc<McpClient>) -> Self {
         self.mcp_client = Some(mcp_client);
+        self.mcp_tool_index.clear();
+        self.mcp_tool_presence.clear();
         self
     }
 
@@ -562,6 +749,7 @@ impl ToolRegistry {
     pub fn set_mcp_client(&mut self, mcp_client: Arc<McpClient>) {
         self.mcp_client = Some(mcp_client);
         self.mcp_tool_index.clear();
+        self.mcp_tool_presence.clear();
     }
 
     /// Get the MCP client if available
@@ -579,18 +767,39 @@ impl ToolRegistry {
     }
 
     /// Check if an MCP tool exists
-    pub async fn has_mcp_tool(&self, tool_name: &str) -> bool {
-        if let Some(mcp_client) = &self.mcp_client {
-            match mcp_client.has_mcp_tool(tool_name).await {
-                Ok(true) => true,
-                Ok(false) => false,
-                Err(_) => {
-                    // Log error but return false to continue operation
-                    false
-                }
+    pub async fn has_mcp_tool(&mut self, tool_name: &str) -> bool {
+        if self
+            .mcp_tool_index
+            .values()
+            .any(|tools| tools.iter().any(|candidate| candidate == tool_name))
+        {
+            self.mcp_tool_presence.insert(tool_name.to_string(), true);
+            return true;
+        }
+
+        if let Some(cached) = self.mcp_tool_presence.get(tool_name) {
+            return *cached;
+        }
+
+        let Some(mcp_client) = &self.mcp_client else {
+            self.mcp_tool_presence.insert(tool_name.to_string(), false);
+            return false;
+        };
+
+        match mcp_client.has_mcp_tool(tool_name).await {
+            Ok(result) => {
+                self.mcp_tool_presence.insert(tool_name.to_string(), result);
+                result
             }
-        } else {
-            false
+            Err(err) => {
+                warn!(
+                    tool = tool_name,
+                    error = %err,
+                    "failed to query MCP tool presence"
+                );
+                self.mcp_tool_presence.insert(tool_name.to_string(), false);
+                false
+            }
         }
     }
 
@@ -657,6 +866,12 @@ impl ToolRegistry {
             }
 
             self.mcp_tool_index = provider_map;
+            self.mcp_tool_presence.clear();
+            for tools in self.mcp_tool_index.values() {
+                for tool in tools {
+                    self.mcp_tool_presence.insert(tool.clone(), true);
+                }
+            }
 
             if let Some(allowlist) = self
                 .policy_gateway
@@ -770,6 +985,7 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use serde_json::json;
+    use std::time::Duration;
     use tempfile::TempDir;
 
     const CUSTOM_TOOL_NAME: &str = "custom_test_tool";
@@ -857,5 +1073,26 @@ mod tests {
             "context7lookup"
         );
         assert_eq!(normalize_mcp_tool_identifier("alpha_beta"), "alphabeta");
+    }
+
+    #[test]
+    fn timeout_policy_derives_from_config() {
+        let mut config = TimeoutsConfig::default();
+        config.default_ceiling_seconds = 0;
+        config.pty_ceiling_seconds = 600;
+        config.mcp_ceiling_seconds = 90;
+        config.warning_threshold_percent = 75;
+
+        let policy = ToolTimeoutPolicy::from_config(&config);
+        assert_eq!(policy.ceiling_for(ToolTimeoutCategory::Default), None);
+        assert_eq!(
+            policy.ceiling_for(ToolTimeoutCategory::Pty),
+            Some(Duration::from_secs(600))
+        );
+        assert_eq!(
+            policy.ceiling_for(ToolTimeoutCategory::Mcp),
+            Some(Duration::from_secs(90))
+        );
+        assert!((policy.warning_fraction() - 0.75).abs() < f32::EPSILON);
     }
 }

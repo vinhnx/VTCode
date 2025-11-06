@@ -147,24 +147,28 @@ fn is_known_textual_tool(name: &str) -> bool {
 pub(crate) fn detect_textual_tool_call(text: &str) -> Option<(String, Value)> {
     // Try gpt-oss channel format first
     if let Some((name, args)) = parse_channel_tool_call(text)
-        && let Some(result) = canonicalize_tool_result(name, args) {
-            return Some(result);
-        }
+        && let Some(result) = canonicalize_tool_result(name, args)
+    {
+        return Some(result);
+    }
 
     if let Some((name, args)) = parse_tagged_tool_call(text)
-        && let Some(result) = canonicalize_tool_result(name, args) {
-            return Some(result);
-        }
+        && let Some(result) = canonicalize_tool_result(name, args)
+    {
+        return Some(result);
+    }
 
     if let Some((name, args)) = parse_rust_struct_tool_call(text)
-        && let Some(result) = canonicalize_tool_result(name, args) {
-            return Some(result);
-        }
+        && let Some(result) = canonicalize_tool_result(name, args)
+    {
+        return Some(result);
+    }
 
     if let Some((name, args)) = parse_yaml_tool_call(text)
-        && let Some(result) = canonicalize_tool_result(name, args) {
-            return Some(result);
-        }
+        && let Some(result) = canonicalize_tool_result(name, args)
+    {
+        return Some(result);
+    }
 
     for prefix in TEXTUAL_TOOL_PREFIXES {
         let prefix_bytes = prefix.as_bytes();
@@ -258,13 +262,14 @@ fn detect_direct_function_alias(text: &str) -> Option<(String, Value)> {
 
                 if start > 0
                     && let Some(prev) = lowered[..start].chars().next_back()
-                        && (prev.is_ascii_alphanumeric() || prev == '_') {
-                            search_start = end;
-                            continue;
-                        }
+                    && (prev.is_ascii_alphanumeric() || prev == '_')
+                {
+                    search_start = end;
+                    continue;
+                }
 
                 let mut paren_index: Option<usize> = None;
-                let mut iter = text[end..].char_indices();
+                let iter = text[end..].char_indices();
                 for (relative, ch) in iter {
                     if ch.is_whitespace() {
                         continue;
@@ -462,10 +467,25 @@ fn convert_harmony_args_to_tool_format(tool_name: &str, parsed: Value) -> Value 
                     .filter_map(|v| v.as_str().map(|s| s.to_string()))
                     .collect();
 
+                // Validate non-empty command and executable
+                if command.is_empty() || command[0].trim().is_empty() {
+                    return serde_json::json!({
+                        "command": command,
+                        "_validation_error": "command executable cannot be empty"
+                    });
+                }
+
                 serde_json::json!({
                     "command": command
                 })
             } else if let Some(cmd_str) = parsed.get("cmd").and_then(|v| v.as_str()) {
+                // Validate non-empty command string
+                if cmd_str.trim().is_empty() {
+                    return serde_json::json!({
+                        "command": [cmd_str],
+                        "_validation_error": "command executable cannot be empty"
+                    });
+                }
                 serde_json::json!({
                     "command": [cmd_str]
                 })
@@ -909,12 +929,7 @@ fn split_top_level_entries(body: &str) -> Vec<String> {
     fn push_entry(entries: &mut Vec<String>, current: &mut String) {
         let trimmed = current.trim();
         if !trimmed.is_empty() {
-            entries.push(
-                trimmed
-                    .trim_end_matches([',', ';'])
-                    .trim()
-                    .to_string(),
-            );
+            entries.push(trimmed.trim_end_matches([',', ';']).trim().to_string());
         }
         current.clear();
     }
@@ -954,10 +969,7 @@ fn split_top_level_entries(body: &str) -> Vec<String> {
 
 fn split_function_arguments(body: &str) -> Vec<String> {
     fn push_arg(entries: &mut Vec<String>, current: &mut String) {
-        let trimmed = current
-            .trim()
-            .trim_end_matches([',', ';'])
-            .trim();
+        let trimmed = current.trim().trim_end_matches([',', ';']).trim();
         if !trimmed.is_empty() {
             entries.push(trimmed.to_string());
         }
@@ -1355,5 +1367,57 @@ mode: overwrite
         let (name, args) = detect_textual_tool_call(message).expect("should parse harmony format");
         assert_eq!(name, "run_terminal_cmd");
         assert_eq!(args["command"], serde_json::json!(["pwd"]));
+    }
+
+    #[test]
+    fn test_convert_harmony_args_rejects_empty_command_array() {
+        let parsed = serde_json::json!({ "cmd": [] });
+        let result = convert_harmony_args_to_tool_format("run_terminal_cmd", parsed);
+        assert!(result.get("_validation_error").is_some());
+        assert_eq!(
+            result["_validation_error"],
+            serde_json::json!("command executable cannot be empty")
+        );
+    }
+
+    #[test]
+    fn test_convert_harmony_args_rejects_empty_command_string() {
+        let parsed = serde_json::json!({ "cmd": "" });
+        let result = convert_harmony_args_to_tool_format("run_terminal_cmd", parsed);
+        assert!(result.get("_validation_error").is_some());
+        assert_eq!(
+            result["_validation_error"],
+            serde_json::json!("command executable cannot be empty")
+        );
+    }
+
+    #[test]
+    fn test_convert_harmony_args_rejects_whitespace_only_command() {
+        let parsed = serde_json::json!({ "cmd": "   " });
+        let result = convert_harmony_args_to_tool_format("run_terminal_cmd", parsed);
+        assert!(result.get("_validation_error").is_some());
+    }
+
+    #[test]
+    fn test_convert_harmony_args_rejects_empty_executable_in_array() {
+        let parsed = serde_json::json!({ "cmd": ["", "arg1"] });
+        let result = convert_harmony_args_to_tool_format("run_terminal_cmd", parsed);
+        assert!(result.get("_validation_error").is_some());
+    }
+
+    #[test]
+    fn test_convert_harmony_args_accepts_valid_command_array() {
+        let parsed = serde_json::json!({ "cmd": ["ls", "-la"] });
+        let result = convert_harmony_args_to_tool_format("run_terminal_cmd", parsed);
+        assert!(result.get("_validation_error").is_none());
+        assert_eq!(result["command"], serde_json::json!(["ls", "-la"]));
+    }
+
+    #[test]
+    fn test_convert_harmony_args_accepts_valid_command_string() {
+        let parsed = serde_json::json!({ "cmd": "echo test" });
+        let result = convert_harmony_args_to_tool_format("run_terminal_cmd", parsed);
+        assert!(result.get("_validation_error").is_none());
+        assert_eq!(result["command"], serde_json::json!(["echo test"]));
     }
 }

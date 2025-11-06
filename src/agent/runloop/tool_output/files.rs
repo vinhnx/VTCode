@@ -141,12 +141,13 @@ pub(crate) fn render_list_dir_output(
     }
 
     if let Some(page) = val.get("page").and_then(|v| v.as_u64())
-        && let Some(total) = val.get("total_items").and_then(|v| v.as_u64()) {
-            renderer.line(
-                MessageStyle::Info,
-                &format!("  Page {} ({} items total)", page, total),
-            )?;
-        }
+        && let Some(total) = val.get("total_items").and_then(|v| v.as_u64())
+    {
+        renderer.line(
+            MessageStyle::Info,
+            &format!("  Page {} ({} items total)", page, total),
+        )?;
+    }
 
     if let Some(items) = val.get("items").and_then(|v| v.as_array()) {
         if items.is_empty() {
@@ -199,9 +200,10 @@ pub(crate) fn render_read_file_output(renderer: &mut AnsiRenderer, val: &Value) 
     }
 
     if let Some(start) = val.get("start_line").and_then(|v| v.as_u64())
-        && let Some(end) = val.get("end_line").and_then(|v| v.as_u64()) {
-            renderer.line(MessageStyle::Info, &format!("  lines: {}-{}", start, end))?;
-        }
+        && let Some(end) = val.get("end_line").and_then(|v| v.as_u64())
+    {
+        renderer.line(MessageStyle::Info, &format!("  lines: {}-{}", start, end))?;
+    }
 
     Ok(())
 }

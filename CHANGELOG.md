@@ -3,6 +3,151 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - Latest Improvements# [Version 0.39.5] - 2025-11-03
+# [Version 0.39.13] - 2025-11-03
+
+
+### Features
+    - feat: disable Docker usage by default in build script and update Cross.toml comments
+
+
+### Documentation
+    - docs: update changelog for v0.39.12 [skip ci]
+
+
+### Chores
+    - chore: release v0.39.12
+# [Version 0.39.12] - 2025-11-03
+
+
+### Features
+    - feat: disable Docker usage by default in build script and update Cross.toml comments
+    - feat: add initial implementation of VT Code Zed extension with icons, themes, and logging commands
+
+
+### Documentation
+    - docs: update changelog for v0.39.11 [skip ci]
+
+
+### Chores
+    - chore: release v0.39.11
+    - chore: update dependencies, enhance README, and add diagnostics commands for Zed extension
+# [Version 0.39.11] - 2025-11-03
+
+
+### Features
+    - feat: add initial implementation of VT Code Zed extension with icons, themes, and logging commands
+
+
+### Refactors
+    - refactor: remove npm package support and update installation instructions
+    - refactor: update docs.rs URL and improve response handling in release script
+
+
+### Documentation
+    - docs: update changelog for v0.39.10 [skip ci]
+    - docs: update changelog for v0.39.9 [skip ci]
+
+
+### Chores
+    - chore: update dependencies, enhance README, and add diagnostics commands for Zed extension
+    - chore: release v0.39.10
+    - chore: release v0.39.9
+# [Version 0.39.10] - 2025-11-03
+
+
+### Refactors
+    - refactor: remove npm package support and update installation instructions
+    - refactor: update docs.rs URL and improve response handling in release script
+
+
+### Documentation
+    - docs: update changelog for v0.39.9 [skip ci]
+    - docs: update changelog for v0.39.8 [skip ci]
+
+
+### Chores
+    - chore: release v0.39.9
+    - chore: release v0.39.8
+# [Version 0.39.9] - 2025-11-03
+
+
+### Refactors
+    - refactor: remove npm package support and update installation instructions
+    - refactor: update docs.rs URL and improve response handling in release script
+
+
+### Documentation
+    - docs: update changelog for v0.39.8 [skip ci]
+
+
+### Chores
+    - chore: release v0.39.8
+# [Version 0.39.8] - 2025-11-03
+
+
+### Bug Fixes
+    - fix: restore npm/package.json file removed in error
+
+
+### Documentation
+    - docs: update changelog for v0.39.7 [skip ci]
+
+
+### Chores
+    - chore: release v0.39.7
+    - chore: update npm package to v0.39.7
+    - chore: update Cross.toml and release script for improved environment variable handling
+# [Version 0.39.7] - 2025-11-03
+
+
+### Bug Fixes
+    - fix: restore npm/package.json file removed in error
+
+
+### Documentation
+    - docs: update changelog for v0.39.6 [skip ci]
+
+
+### Chores
+    - chore: update npm package to v0.39.7
+    - chore: update Cross.toml and release script for improved environment variable handling
+    - chore: release v0.39.6
+    - chore: update npm package to v0.39.6
+# [Version 0.39.6] - 2025-11-03
+
+
+### Features
+    - feat: add cross-compilation configuration and documentation
+    - feat: Enhance development and release process for VTCode extension
+
+
+### Bug Fixes
+    - fix: update changelog generation to handle date formatting correctly
+    - fix: rename VTCode Update Plan tool for consistency
+    - fix: update language model tool properties for VTCode Update Plan
+
+
+### Refactors
+    - refactor: remove unused IdeContextBridge and clean up session initialization
+
+
+### Documentation
+    - docs: update changelog for v0.39.5 [skip ci]
+    - docs: update changelog for v0.39.4 [skip ci]
+    - docs: update changelog for v0.39.3 [skip ci]
+    - docs: update homebrew installation to use core tap
+
+
+### Chores
+    - chore: update npm package to v0.39.6
+    - chore: release v0.39.5
+    - chore: update npm package to v0.39.5
+    - chore: release v0.39.4
+    - chore: update npm package to v0.39.4
+    - chore: release v0.39.3
+    - chore: update npm package to v0.39.3
+    - chore: update version to 0.1.1 and add release date to changelog
+    - chore(deps): bump the cargo-monthly-rollup group across 1 directory with 28 updates
 
 
 ### Features

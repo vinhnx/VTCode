@@ -50,6 +50,16 @@ state from a single source of truth.
 5.  Add tests that cover both registration (`available_tools`/`has_tool`) and
     execution via `ToolRegistry::execute_tool`.
 
+## Safety guidelines
+
+-   Prefer `edit_file`/`write_file` for high-impact assets. Reach for
+    `apply_patch` only when you have reviewed the diff locally or staged a
+    backup—failed patches can leave partially rewritten files.
+-   Tune the `[timeouts]` table in `vtcode.toml` when integrating long-running
+    tooling. VTCode raises an inline warning once execution crosses the
+    `warning_threshold_percent` so you can cancel runaway commands before they
+    hit the ceiling.
+
 ## Testing checklist
 
 After modifying registrations or adding new tools run the following commands

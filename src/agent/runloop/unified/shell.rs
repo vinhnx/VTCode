@@ -118,9 +118,10 @@ pub(crate) fn derive_recent_tool_output(history: &[uni::Message]) -> Option<Stri
 
     // Only add exit code if we already have some output (stdout or stderr)
     if !output_parts.is_empty()
-        && let Some(code) = exit_code.filter(|&c| c != 0) {
-            output_parts.push(format!("Exit code: {}", code));
-        }
+        && let Some(code) = exit_code.filter(|&c| c != 0)
+    {
+        output_parts.push(format!("Exit code: {}", code));
+    }
 
     // If we have output, return it
     if !output_parts.is_empty() {

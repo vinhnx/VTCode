@@ -285,9 +285,9 @@ pub(crate) async fn handle_palette_selection(
                     .iter()
                     .find(|entry| entry.identifier() == *selected_id)
                     .cloned()
-                {
-                    render_session_details(renderer, &listing)?;
-                }
+            {
+                render_session_details(renderer, &listing)?;
+            }
             if show_sessions_palette(renderer, &listings, limit)? {
                 Ok(Some(ActivePalette::Sessions { listings, limit }))
             } else {
@@ -349,5 +349,5 @@ fn format_duration_label(duration: Duration) -> String {
 pub(crate) fn apply_prompt_style(handle: &InlineHandle) {
     let styles = theme::active_styles();
     let style = convert_style(styles.primary);
-    handle.set_prompt("❯ ".to_string(), style);
+    handle.set_prompt("".to_string(), style);
 }

@@ -161,9 +161,10 @@ fn parse_command_tokens(payload: &Value) -> Option<Vec<String>> {
         let mut tokens = Vec::new();
         for value in array {
             if let Some(segment) = value.as_str()
-                && !segment.is_empty() {
-                    tokens.push(segment.to_string());
-                }
+                && !segment.is_empty()
+            {
+                tokens.push(segment.to_string());
+            }
         }
         if !tokens.is_empty() {
             return Some(tokens);
@@ -175,9 +176,10 @@ fn parse_command_tokens(payload: &Value) -> Option<Vec<String>> {
             return None;
         }
         if let Ok(segments) = shell_split(command_str)
-            && !segments.is_empty() {
-                return Some(segments);
-            }
+            && !segments.is_empty()
+        {
+            return Some(segments);
+        }
     }
     None
 }
@@ -235,18 +237,20 @@ fn preprocess_terminal_stdout<'a>(tokens: Option<&[String]>, stdout: &'a str) ->
     }
 
     if let Some(parts) = tokens
-        && command_is_multicol_listing(parts) && !listing_has_single_column_flag(parts) {
-            let plain = strip_ansi_codes(normalized.as_ref());
-            let mut rows = String::with_capacity(plain.len());
-            for entry in plain.split_whitespace() {
-                if entry.is_empty() {
-                    continue;
-                }
-                rows.push_str(entry);
-                rows.push('\n');
+        && command_is_multicol_listing(parts)
+        && !listing_has_single_column_flag(parts)
+    {
+        let plain = strip_ansi_codes(normalized.as_ref());
+        let mut rows = String::with_capacity(plain.len());
+        for entry in plain.split_whitespace() {
+            if entry.is_empty() {
+                continue;
             }
-            return Cow::Owned(rows);
+            rows.push_str(entry);
+            rows.push('\n');
         }
+        return Cow::Owned(rows);
+    }
 
     normalized
 }

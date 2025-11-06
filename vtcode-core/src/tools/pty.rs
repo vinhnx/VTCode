@@ -30,6 +30,179 @@ struct PtyState {
     sessions: Mutex<HashMap<String, Arc<PtySessionHandle>>>,
 }
 
+struct CommandEchoState {
+    command_bytes: Vec<u8>,
+    failure: Vec<usize>,
+    matched: usize,
+    require_newline: bool,
+    pending_newline: bool,
+    consumed_once: bool,
+}
+
+impl CommandEchoState {
+    fn new(command: &str, expect_newline: bool) -> Option<Self> {
+        let trimmed = command.trim_matches(|ch| ch == '\n' || ch == '\r');
+        if trimmed.is_empty() {
+            return None;
+        }
+
+        let command_bytes = trimmed.as_bytes().to_vec();
+        if command_bytes.is_empty() {
+            return None;
+        }
+
+        let failure = build_failure(&command_bytes);
+
+        Some(Self {
+            command_bytes,
+            failure,
+            matched: 0,
+            require_newline: expect_newline,
+            pending_newline: expect_newline,
+            consumed_once: false,
+        })
+    }
+
+    fn reset(&mut self) {
+        self.matched = 0;
+        self.pending_newline = self.require_newline;
+    }
+
+    fn consume_chunk(&mut self, text: &str) -> (usize, bool) {
+        let mut index = 0usize;
+        let bytes = text.as_bytes();
+        const ZERO_WIDTH_SPACE: &[u8] = "\u{200B}".as_bytes();
+
+        while index < bytes.len() {
+            let slice = &text[index..];
+
+            if let Some(len) = parse_ansi_sequence(slice) {
+                index += len;
+                continue;
+            }
+
+            if slice.as_bytes().starts_with(ZERO_WIDTH_SPACE) {
+                index += ZERO_WIDTH_SPACE.len();
+                continue;
+            }
+
+            let byte = bytes[index];
+
+            if byte == b'\r' {
+                index += 1;
+                self.reset();
+                continue;
+            }
+
+            if self.pending_newline {
+                if byte == b'\n' {
+                    index += 1;
+                    self.pending_newline = false;
+                    continue;
+                }
+                self.pending_newline = false;
+            }
+
+            let mut matched_byte = false;
+            loop {
+                if let Some(&expected) = self.command_bytes.get(self.matched) {
+                    if byte == expected {
+                        self.matched += 1;
+                        index += 1;
+                        if self.matched == self.command_bytes.len() {
+                            self.consumed_once = true;
+                            self.pending_newline = self.require_newline;
+                            self.matched = if self.command_bytes.len() > 1 {
+                                self.failure[self.matched - 1]
+                            } else {
+                                0
+                            };
+                        }
+                        matched_byte = true;
+                        break;
+                    }
+                }
+
+                if self.matched == 0 {
+                    break;
+                }
+
+                self.matched = self.failure[self.matched - 1];
+            }
+
+            if matched_byte {
+                continue;
+            }
+
+            break;
+        }
+
+        let done = self.consumed_once && !self.pending_newline && self.matched == 0;
+        (index, done)
+    }
+}
+
+fn build_failure(pattern: &[u8]) -> Vec<usize> {
+    let mut failure = vec![0usize; pattern.len()];
+    let mut length = 0usize;
+    let mut index = 1usize;
+
+    while index < pattern.len() {
+        if pattern[index] == pattern[length] {
+            length += 1;
+            failure[index] = length;
+            index += 1;
+        } else if length != 0 {
+            length = failure[length - 1];
+        } else {
+            failure[index] = 0;
+            index += 1;
+        }
+    }
+
+    failure
+}
+
+fn parse_ansi_sequence(text: &str) -> Option<usize> {
+    let bytes = text.as_bytes();
+    if bytes.len() < 2 || bytes[0] != 0x1b {
+        return None;
+    }
+
+    let kind = bytes[1];
+    match kind {
+        b'[' => {
+            for (index, byte) in bytes.iter().enumerate().skip(2) {
+                if (0x40..=0x7e).contains(byte) {
+                    return Some(index + 1);
+                }
+            }
+            None
+        }
+        b']' => {
+            for index in 2..bytes.len() {
+                match bytes[index] {
+                    0x07 => return Some(index + 1),
+                    0x1b if index + 1 < bytes.len() && bytes[index + 1] == b'\\' => {
+                        return Some(index + 2);
+                    }
+                    _ => {}
+                }
+            }
+            None
+        }
+        b'P' | b'^' | b'_' => {
+            for index in 2..bytes.len() {
+                if bytes[index] == 0x1b && index + 1 < bytes.len() && bytes[index + 1] == b'\\' {
+                    return Some(index + 2);
+                }
+            }
+            None
+        }
+        _ => Some(2),
+    }
+}
+
 struct PtyScrollback {
     lines: VecDeque<String>,
     pending_lines: VecDeque<String>,
@@ -146,6 +319,7 @@ struct PtySessionHandle {
     scrollback: Arc<Mutex<PtyScrollback>>,
     reader_thread: Mutex<Option<JoinHandle<()>>>,
     metadata: VTCodePtySession,
+    last_input: Mutex<Option<CommandEchoState>>,
 }
 
 impl PtySessionHandle {
@@ -180,7 +354,32 @@ impl PtySessionHandle {
         } else {
             scrollback.pending()
         };
-        if text.is_empty() { None } else { Some(text) }
+        if text.is_empty() {
+            return None;
+        }
+
+        let filtered = self.strip_command_echo(text);
+        if filtered.is_empty() {
+            None
+        } else {
+            Some(filtered)
+        }
+    }
+
+    fn strip_command_echo(&self, text: String) -> String {
+        let mut guard = self.last_input.lock();
+        let Some(state) = guard.as_mut() else {
+            return text;
+        };
+
+        let (consumed, done) = state.consume_chunk(&text);
+        if done {
+            *guard = None;
+        }
+
+        text.get(consumed..)
+            .map(|tail| tail.to_string())
+            .unwrap_or_default()
     }
 }
 
@@ -566,6 +765,7 @@ impl PtyManager {
                 scrollback,
                 reader_thread: Mutex::new(Some(reader_thread)),
                 metadata: metadata.clone(),
+                last_input: Mutex::new(None),
             }),
         );
 
@@ -597,6 +797,15 @@ impl PtyManager {
         append_newline: bool,
     ) -> Result<usize> {
         let handle = self.session_handle(session_id)?;
+
+        if let Ok(input_text) = std::str::from_utf8(data) {
+            let mut last_input = handle.last_input.lock();
+            *last_input = CommandEchoState::new(input_text, append_newline);
+        } else {
+            let mut last_input = handle.last_input.lock();
+            *last_input = None;
+        }
+
         let mut writer_guard = handle.writer.lock();
         let writer = writer_guard
             .as_mut()

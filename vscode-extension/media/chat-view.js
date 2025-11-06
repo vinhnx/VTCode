@@ -1,318 +1,330 @@
-// VTCode Chat View Client-Side Script
-
+// Modern, optimized chat view with performance improvements
 (function () {
-	try {
-		const vscode = acquireVsCodeApi();
-		let state = vscode.getState() || { messages: [] };
+	'use strict';
 
-		// DOM elements
-		const transcriptContainer = document.getElementById("transcript-container");
-		const userInput = document.getElementById("user-input");
-		const sendButton = document.getElementById("send-button");
-		const clearButton = document.getElementById("clear-button");
-		const cancelButton = document.getElementById("cancel-button");
-		const thinkingIndicator = document.getElementById("thinking-indicator");
-		const approvalPanel = document.getElementById("approval-panel");
+	const vscode = acquireVsCodeApi();
 
-		// Check if all elements are found
-		if (!transcriptContainer || !userInput || !sendButton || !clearButton || !cancelButton) {
-			console.error("Chat view: Required DOM elements not found", {
-				transcriptContainer: !!transcriptContainer,
-				userInput: !!userInput,
-				sendButton: !!sendButton,
-				clearButton: !!clearButton,
-				cancelButton: !!cancelButton,
-			});
+	// Cache DOM references
+	const elements = {
+		transcript: document.getElementById('transcript'),
+		status: document.getElementById('status'),
+		form: document.getElementById('composer'),
+		input: document.getElementById('message'),
+		sendBtn: document.getElementById('send'),
+		cancelBtn: document.getElementById('cancel'),
+		clearBtn: document.getElementById('clear')
+	};
+	if (elements.status) {
+		elements.status.textContent = 'Ready';
+	}
+
+	// State
+	let state = {
+		messages: [],
+		isStreaming: false,
+		streamingBubble: null,
+		reasoningBubble: null,
+		toolStreamingBubble: null,
+		rafId: null,
+		pendingUpdate: null
+	};
+
+	// Cache icon HTML to avoid repeated string creation
+	const ICONS = {
+		copy: '<span class="codicon codicon-copy"></span>',
+		check: '<span class="codicon codicon-check"></span>',
+		refresh: '<span class="codicon codicon-refresh"></span>',
+		terminal: '<span class="codicon codicon-terminal"></span>',
+		shield: '<span class="codicon codicon-shield"></span>'
+	};
+
+	// Use Intl.DateTimeFormat for better date formatting (cached)
+	const dateFormatter = new Intl.DateTimeFormat(undefined, {
+		dateStyle: 'medium',
+		timeStyle: 'short'
+	});
+
+	// Performance: Use DocumentFragment for batch DOM operations
+	const createMessageElement = (entry) => {
+		const fragment = document.createDocumentFragment();
+		const wrapper = document.createElement('div');
+		wrapper.className = 'chat-message-wrapper';
+
+		const bubble = document.createElement('div');
+		bubble.className = `chat-message chat-message--${entry.role}`;
+		bubble.textContent = entry.content;
+
+		if (entry.timestamp) {
+			bubble.title = dateFormatter.format(new Date(entry.timestamp));
+		}
+
+		wrapper.appendChild(bubble);
+
+		// Add metadata row with actions
+		if (entry.role === 'assistant' || entry.role === 'tool' || entry.role === 'error') {
+			const meta = document.createElement('div');
+			meta.className = 'chat-message-meta';
+
+			// Tool badge
+			if (entry.role === 'tool') {
+				const badge = document.createElement('span');
+				badge.className = 'chat-tool-badge';
+				const toolType = entry.metadata?.toolType === 'command' ? 'Terminal' : 'Tool';
+				const toolName = entry.metadata?.tool ? String(entry.metadata.tool) : '';
+				const label = toolName ? `${toolType}: ${toolName}` : toolType;
+				badge.innerHTML = `${ICONS.terminal} ${label}`;
+				meta.appendChild(badge);
+			}
+
+			// HITL badge
+			if (entry.metadata?.humanApproved) {
+				const badge = document.createElement('span');
+				badge.className = 'chat-hitl-badge';
+				badge.innerHTML = `${ICONS.shield} HITL`;
+				meta.appendChild(badge);
+			}
+
+			// Actions
+			const actions = document.createElement('div');
+			actions.className = 'chat-message-actions';
+			actions.style.marginLeft = 'auto';
+
+			// Copy button
+			if (entry.role === 'assistant' || entry.role === 'tool') {
+				const copyBtn = createActionButton(ICONS.copy, 'Copy', () => {
+					navigator.clipboard.writeText(entry.content).then(() => {
+						copyBtn.innerHTML = ICONS.check;
+						setTimeout(() => {
+							copyBtn.innerHTML = ICONS.copy;
+						}, 2000);
+					}).catch(err => console.error('Copy failed:', err));
+				});
+				actions.appendChild(copyBtn);
+			}
+
+			// Retry button
+			if (entry.role === 'error') {
+				const retryBtn = createActionButton(ICONS.refresh, 'Retry', () => {
+					vscode.postMessage({ type: 'retry' });
+				});
+				actions.appendChild(retryBtn);
+			}
+
+			meta.appendChild(actions);
+			wrapper.appendChild(meta);
+		}
+
+		fragment.appendChild(wrapper);
+		return fragment;
+	};
+
+	const createActionButton = (iconHTML, title, onClick) => {
+		const btn = document.createElement('button');
+		btn.className = 'chat-action-button';
+		btn.innerHTML = iconHTML;
+		btn.title = title;
+		btn.addEventListener('click', onClick, { passive: true });
+		return btn;
+	};
+
+	// Performance: Batch render with DocumentFragment
+	const renderTranscript = () => {
+		// Use replaceChildren for better performance than innerHTML
+		elements.transcript.replaceChildren();
+
+		if (state.messages.length === 0) {
+			const empty = document.createElement('div');
+			empty.className = 'chat-empty-state';
+			empty.textContent = 'No messages yet';
+			elements.transcript.appendChild(empty);
 			return;
 		}
 
-		// Initialize
-		init();
-
-		function init() {
-			setupEventListeners();
-			renderMessages(state.messages);
-			showEmptyStateIfNeeded();
-			if (userInput) {
-				userInput.focus();
-			}
+		// Batch create all elements
+		const fragment = document.createDocumentFragment();
+		for (const entry of state.messages) {
+			fragment.appendChild(createMessageElement(entry));
 		}
 
-	function setupEventListeners() {
-		sendButton.addEventListener("click", handleSend);
-		clearButton.addEventListener("click", handleClear);
-		cancelButton.addEventListener("click", handleCancel);
+		elements.transcript.appendChild(fragment);
 
-		userInput.addEventListener("keydown", (e) => {
-			if (e.key === "Enter" && !e.shiftKey) {
-				e.preventDefault();
-				handleSend();
-			}
-		});
-
-		// Handle messages from extension
-		window.addEventListener("message", handleExtensionMessage);
-	}
-
-	function handleSend() {
-		const text = userInput.value.trim();
-		if (!text) {
-			return;
-		}
-
-		vscode.postMessage({
-			type: "userMessage",
-			text,
-		});
-
-		userInput.value = "";
-		userInput.focus();
-	}
-
-	function handleClear() {
-		if (confirm("Clear all transcript? This cannot be undone.")) {
-			vscode.postMessage({
-				type: "clearTranscript",
+		// Smooth scroll to bottom
+		requestAnimationFrame(() => {
+			elements.transcript.scrollTo({
+				top: elements.transcript.scrollHeight,
+				behavior: 'smooth'
 			});
-		}
-	}
-
-	function handleCancel() {
-		vscode.postMessage({
-			type: "cancelOperation",
 		});
-	}
+	};
 
-	function handleExtensionMessage(event) {
+	const setThinking = (active) => {
+		elements.status.textContent = active ? 'Synthesizing...' : 'Ready';
+		state.isStreaming = active;
+		updateButtonStates();
+	};
+
+	const updateButtonStates = () => {
+		const { sendBtn, cancelBtn, input } = elements;
+
+		if (state.isStreaming) {
+			sendBtn.style.display = 'none';
+			cancelBtn.style.display = 'inline-block';
+			input.disabled = true;
+			input.placeholder = 'Processing...';
+		} else {
+			sendBtn.style.display = 'inline-block';
+			cancelBtn.style.display = 'none';
+			input.disabled = false;
+			input.placeholder = 'Ask VTCode...';
+		}
+	};
+
+	// Optimized stream content update with RAF
+	const updateStreamContent = (content) => {
+		state.pendingUpdate = content;
+
+		if (state.rafId) return;
+
+		state.rafId = requestAnimationFrame(() => {
+			if (state.streamingBubble && state.pendingUpdate !== null) {
+				state.streamingBubble.textContent = state.pendingUpdate;
+				elements.transcript.scrollTop = elements.transcript.scrollHeight;
+			}
+			state.rafId = null;
+			state.pendingUpdate = null;
+		});
+	};
+
+	const cleanupStreamingElements = () => {
+		[state.streamingBubble, state.reasoningBubble, state.toolStreamingBubble].forEach(el => {
+			el?.remove();
+		});
+		state.streamingBubble = null;
+		state.reasoningBubble = null;
+		state.toolStreamingBubble = null;
+
+		const skeleton = elements.transcript.querySelector('.chat-skeleton');
+		skeleton?.remove();
+	};
+
+	// Event delegation for better performance
+	elements.transcript.addEventListener('click', (e) => {
+		const button = e.target.closest('.chat-action-button');
+		if (!button) return;
+
+		// Button click handler is already attached
+	}, { passive: true });
+
+	// Form submission
+	elements.form.addEventListener('submit', (e) => {
+		e.preventDefault();
+		const text = elements.input.value.trim();
+		if (!text || state.isStreaming) return;
+
+		vscode.postMessage({ type: 'sendMessage', text });
+		elements.input.value = '';
+		elements.input.focus();
+	});
+
+	// Keyboard shortcut
+	elements.input.addEventListener('keydown', (e) => {
+		if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+			e.preventDefault();
+			elements.form.dispatchEvent(new Event('submit'));
+		}
+	});
+
+	// Cancel button
+	elements.cancelBtn.addEventListener('click', () => {
+		vscode.postMessage({ type: 'cancel' });
+		cleanupStreamingElements();
+		state.isStreaming = false;
+		updateButtonStates();
+	});
+
+	// Clear button
+	elements.clearBtn.addEventListener('click', () => {
+		vscode.postMessage({ type: 'clear' });
+	});
+
+	// Message handler
+	window.addEventListener('message', (event) => {
+		const { type } = event.data;
 		const message = event.data;
 
-		switch (message.type) {
-			case "addMessage":
-				addMessage(message.message);
+		switch (type || message.type) {
+			case 'transcript':
+				state.messages = message.messages ?? [];
+				state.streamingBubble = null;
+				state.toolStreamingBubble = null;
+				state.reasoningBubble = null;
+				renderTranscript();
 				break;
 
-			case "clearTranscript":
-				clearTranscript();
-				break;
+			case 'thinking':
+				setThinking(Boolean(message.active));
 
-			case "thinking":
-				setThinking(message.thinking);
-				break;
-
-			case "requestToolApproval":
-				showToolApproval(message.toolCall);
-				break;
-		}
-	}
-
-	function addMessage(message) {
-		state.messages.push(message);
-		vscode.setState(state);
-
-		const messageEl = createMessageElement(message);
-		transcriptContainer.appendChild(messageEl);
-		scrollToBottom();
-		hideEmptyState();
-	}
-
-	function createMessageElement(message) {
-		const messageEl = document.createElement("div");
-		messageEl.className = `message message-${message.role}`;
-		messageEl.dataset.id = message.id;
-
-		// Add error/warning class for system messages
-		if (message.role === "system" && message.content.toLowerCase().includes("error")) {
-			messageEl.classList.add("error");
-		} else if (message.role === "system" && message.content.toLowerCase().includes("warning")) {
-			messageEl.classList.add("warning");
-		}
-
-		// Header
-		const header = document.createElement("div");
-		header.className = "message-header";
-
-		const roleSpan = document.createElement("span");
-		roleSpan.className = "message-role";
-		roleSpan.textContent = getRoleDisplayName(message.role);
-
-		const timestampSpan = document.createElement("span");
-		timestampSpan.className = "message-timestamp";
-		timestampSpan.textContent = formatTimestamp(message.timestamp);
-
-		header.appendChild(roleSpan);
-		header.appendChild(timestampSpan);
-		messageEl.appendChild(header);
-
-		// Content
-		const content = document.createElement("div");
-		content.className = "message-content";
-		content.textContent = message.content;
-		messageEl.appendChild(content);
-
-		// Metadata
-		if (message.metadata) {
-			const metadata = document.createElement("div");
-			metadata.className = "message-metadata";
-
-			if (message.metadata.reasoning) {
-				const reasoning = document.createElement("div");
-				reasoning.innerHTML = `<strong>Reasoning:</strong> ${escapeHtml(message.metadata.reasoning)}`;
-				metadata.appendChild(reasoning);
-			}
-
-			if (message.metadata.toolCall) {
-				const toolCall = document.createElement("div");
-				toolCall.className = "tool-call";
-				toolCall.innerHTML = `
-					<strong>Tool:</strong> ${escapeHtml(message.metadata.toolCall.name)}<br>
-					<strong>Arguments:</strong> ${escapeHtml(JSON.stringify(message.metadata.toolCall.arguments, null, 2))}
-				`;
-				metadata.appendChild(toolCall);
-			}
-
-			if (message.metadata.toolResult) {
-				const toolResult = document.createElement("div");
-				toolResult.className = "tool-result";
-				if (message.metadata.toolResult.error) {
-					toolResult.classList.add("error");
+				if (message.active && !state.streamingBubble) {
+					const skeleton = document.createElement('div');
+					skeleton.className = 'chat-skeleton';
+					skeleton.innerHTML = `
+						<div class="chat-skeleton-line"></div>
+						<div class="chat-skeleton-line"></div>
+						<div class="chat-skeleton-line"></div>
+					`;
+					elements.transcript.appendChild(skeleton);
+					requestAnimationFrame(() => {
+						elements.transcript.scrollTop = elements.transcript.scrollHeight;
+					});
+				} else if (!message.active) {
+					elements.transcript.querySelector('.chat-skeleton')?.remove();
 				}
+				break;
 
-				let resultHtml = `<strong>Result:</strong><br>`;
-				if (message.metadata.toolResult.error) {
-					resultHtml += `<span style="color: var(--vscode-errorForeground);">Error: ${escapeHtml(message.metadata.toolResult.error)}</span>`;
-				} else {
-					resultHtml += `<pre><code>${escapeHtml(JSON.stringify(message.metadata.toolResult.result, null, 2))}</code></pre>`;
+			case 'stream':
+				elements.transcript.querySelector('.chat-skeleton')?.remove();
+
+				if (!state.streamingBubble) {
+					state.streamingBubble = document.createElement('div');
+					state.streamingBubble.className = 'chat-message chat-message--assistant';
+					elements.transcript.appendChild(state.streamingBubble);
 				}
+				updateStreamContent(message.content);
+				break;
 
-				if (message.metadata.toolResult.executionTimeMs) {
-					resultHtml += `<br><small>Executed in ${message.metadata.toolResult.executionTimeMs}ms</small>`;
+			case 'reasoning':
+				if (!state.reasoningBubble) {
+					state.reasoningBubble = document.createElement('div');
+					state.reasoningBubble.className = 'chat-reasoning';
+					elements.transcript.appendChild(state.reasoningBubble);
 				}
+				state.reasoningBubble.textContent = message.content;
+				requestAnimationFrame(() => {
+					elements.transcript.scrollTop = elements.transcript.scrollHeight;
+				});
+				break;
 
-				toolResult.innerHTML = resultHtml;
-				metadata.appendChild(toolResult);
-			}
-
-			messageEl.appendChild(metadata);
+			case 'toolStream':
+				if (!state.toolStreamingBubble) {
+					state.toolStreamingBubble = document.createElement('div');
+					state.toolStreamingBubble.className = 'chat-message chat-message--tool';
+					elements.transcript.appendChild(state.toolStreamingBubble);
+				}
+				state.toolStreamingBubble.textContent += (message.chunk?.replace(/\r/g, '') ?? '');
+				requestAnimationFrame(() => {
+					elements.transcript.scrollTop = elements.transcript.scrollHeight;
+				});
+				break;
 		}
+	});
 
-		return messageEl;
-	}
-
-	function getRoleDisplayName(role) {
-		const names = {
-			user: "You",
-			assistant: "Agent",
-			system: "System",
-			tool: "Tool",
-		};
-		return names[role] || role;
-	}
-
-	function formatTimestamp(timestamp) {
-		const date = new Date(timestamp);
-		return date.toLocaleTimeString();
-	}
-
-	function escapeHtml(text) {
-		const div = document.createElement("div");
-		div.textContent = text;
-		return div.innerHTML;
-	}
-
-	function clearTranscript() {
-		state.messages = [];
-		vscode.setState(state);
-		transcriptContainer.innerHTML = "";
-		showEmptyStateIfNeeded();
-	}
-
-	function renderMessages(messages) {
-		transcriptContainer.innerHTML = "";
-		messages.forEach((message) => {
-			const messageEl = createMessageElement(message);
-			transcriptContainer.appendChild(messageEl);
-		});
-		scrollToBottom();
-	}
-
-	function scrollToBottom() {
-		transcriptContainer.scrollTop = transcriptContainer.scrollHeight;
-	}
-
-	function setThinking(thinking) {
-		thinkingIndicator.style.display = thinking ? "block" : "none";
-		sendButton.disabled = thinking;
-		if (thinking) {
-			scrollToBottom();
+	// Cleanup on unload
+	window.addEventListener('beforeunload', () => {
+		if (state.rafId) {
+			cancelAnimationFrame(state.rafId);
 		}
-	}
+	});
 
-	function showToolApproval(toolCall) {
-		approvalPanel.style.display = "block";
-
-		approvalPanel.innerHTML = `
-			<div class="approval-header">🔧 Tool Approval Required</div>
-			<div class="approval-tool-info">
-				<strong>Tool:</strong> ${escapeHtml(toolCall.name)}<br>
-				<strong>Arguments:</strong><br>
-				<pre><code>${escapeHtml(JSON.stringify(toolCall.arguments, null, 2))}</code></pre>
-			</div>
-			<div class="approval-buttons">
-				<button id="approve-button">✓ Approve</button>
-				<button id="reject-button">✗ Reject</button>
-			</div>
-		`;
-
-		document.getElementById("approve-button").addEventListener("click", () => {
-			vscode.postMessage({
-				type: "toolApproval",
-				toolId: toolCall.id,
-				approved: true,
-			});
-			approvalPanel.style.display = "none";
-		});
-
-		document.getElementById("reject-button").addEventListener("click", () => {
-			vscode.postMessage({
-				type: "toolApproval",
-				toolId: toolCall.id,
-				approved: false,
-			});
-			approvalPanel.style.display = "none";
-		});
-	}
-
-	function showEmptyStateIfNeeded() {
-		if (state.messages.length === 0) {
-			transcriptContainer.innerHTML = `
-				<div class="empty-state">
-					<h3>🤖 VTCode Chat</h3>
-					<p>Start a conversation with your AI coding assistant!</p>
-					<p>
-						<span class="command-hint">/</span> System commands<br>
-						<span class="command-hint">@</span> Agent commands<br>
-						<span class="command-hint">#</span> Tool commands
-					</p>
-					<p>Type <strong>/help</strong> to see all available commands.</p>
-				</div>
-			`;
-		}
-	}
-
-	function hideEmptyState() {
-		const emptyState = transcriptContainer.querySelector(".empty-state");
-		if (emptyState) {
-			emptyState.remove();
-		}
-	}
-	} catch (error) {
-		console.error("Chat view initialization error:", error);
-		document.body.innerHTML = `
-			<div style="padding: 20px; color: var(--vscode-errorForeground);">
-				<h3>❌ Chat View Error</h3>
-				<p>Failed to initialize chat view: ${error.message}</p>
-				<p>Please reload the window or check the developer console.</p>
-			</div>
-		`;
-	}
+	// Initial message
+	vscode.postMessage({ type: 'ready' });
 })();

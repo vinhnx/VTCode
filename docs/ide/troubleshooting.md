@@ -16,7 +16,7 @@ This guide covers common issues and solutions when using VTCode with your IDE.
    brew install vtcode
    
    # Or with NPM
-   npm install -g vtcode-ai
+
    ```
 2. Check that VTCode is in your PATH:
    ```bash

@@ -47,6 +47,7 @@ pub use models::{ModelId, OpenRouterMetadata};
 pub use router::{ComplexityModelMap, HeuristicSettings, ResourceBudget, RouterConfig};
 pub use telemetry::TelemetryConfig;
 pub use types::{ReasoningEffortLevel, UiSurfacePreference};
+pub use vtcode_config::TimeoutsConfig;
 pub use vtcode_config::root::{
     PtyConfig, StatusLineConfig, StatusLineMode, ToolOutputMode, UiConfig,
 };

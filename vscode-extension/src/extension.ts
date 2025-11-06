@@ -1,15 +1,8 @@
 import { spawn, type SpawnOptionsWithoutStdio } from "node:child_process";
 import * as vscode from "vscode";
-import {
-    VtcodeTerminalManager,
-    type VtcodeTerminalHandle,
-} from "./agentTerminal";
 import { ChatViewProvider } from "./chatView";
 import { registerVtcodeLanguageFeatures } from "./languageFeatures";
-import {
-    registerTrajectoryView,
-    TrajectoryViewController,
-} from "./trajectoryView";
+import { VtcodeBackend } from "./vtcodeBackend";
 import {
     appendMcpProvider,
     loadConfigSummaryFromUri,
@@ -123,22 +116,27 @@ let outputChannel: vscode.OutputChannel | undefined;
 let statusBarItem: vscode.StatusBarItem | undefined;
 let quickActionsProviderInstance: QuickActionTreeDataProvider | undefined;
 let workspaceInsightsProvider: WorkspaceInsightsTreeDataProvider | undefined;
-let trajectoryViewController: TrajectoryViewController | undefined;
-let chatViewProvider: ChatViewProvider | undefined;
-let terminalManager: VtcodeTerminalManager | undefined;
-let lastAgentTerminalId: string | undefined;
+let agentTerminal: vscode.Terminal | undefined;
+let terminalCloseListener: vscode.Disposable | undefined;
 let cliAvailable = false;
 let missingCliWarningShown = false;
 let cliAvailabilityCheck: Promise<void> | undefined;
 let currentConfigSummary: VtcodeConfigSummary | undefined;
 let lastConfigUri: string | undefined;
 let lastConfigParseError: string | undefined;
+let lastAutomationFullAutoEnabled: boolean | undefined;
 let workspaceTrusted = vscode.workspace.isTrusted;
+let chatBackend: VtcodeBackend | undefined;
+let chatViewProviderInstance: ChatViewProvider | undefined;
+let activationContext: vscode.ExtensionContext | undefined;
+let lastProviderModelWarningKey: string | undefined;
 
 const CLI_DETECTION_TIMEOUT_MS = 4000;
 const VT_CODE_CHAT_PARTICIPANT_ID = "vtcode.agent";
 const VT_CODE_UPDATE_PLAN_TOOL = "vtcode-updatePlan";
 const VT_CODE_MCP_PROVIDER_ID = "vtcode.workspaceMcp";
+const TRUST_PROMPT_STATE_KEY = "vtcode.trustPromptShown";
+const FULL_AUTO_WARNING_STATE_KEY = "vtcode.fullAutoWarningShown";
 
 const mcpDefinitionsChanged = new vscode.EventEmitter<void>();
 
@@ -152,11 +150,39 @@ const MAX_IDE_CONTEXT_CHARS = 6000;
 const MAX_FULL_DOCUMENT_CONTEXT_LINES = 400;
 const ACTIVE_EDITOR_CONTEXT_WINDOW = 80;
 const MAX_VISIBLE_EDITOR_CONTEXTS = 3;
-const DEFAULT_AGENT_TERMINAL_ID = "vtcode.agent.default";
 
 export function activate(context: vscode.ExtensionContext) {
+    activationContext = context;
     outputChannel = vscode.window.createOutputChannel("VTCode");
     context.subscriptions.push(outputChannel);
+
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    chatBackend = new VtcodeBackend(
+        getConfiguredCommandPath(),
+        workspaceRoot,
+        outputChannel
+    );
+    chatBackend.setEnvironmentProvider(() => getVtcodeEnvironment());
+
+    outputChannel.appendLine("[info] Registering chat view provider...");
+    chatViewProviderInstance = new ChatViewProvider(
+        context.extensionUri,
+        chatBackend,
+        outputChannel
+    );
+    const viewId = "vtcodeChatView"; // Hardcoded to match package.json
+    outputChannel.appendLine(`[info] Registering view with ID: ${viewId}`);
+    context.subscriptions.push(
+        vscode.window.registerWebviewViewProvider(
+            viewId,
+            chatViewProviderInstance
+        )
+    );
+    outputChannel.appendLine(
+        "[info] Chat view provider registered successfully"
+    );
+
+    chatViewProviderInstance.setWorkspaceTrusted(workspaceTrusted);
 
     ensureStableApi(context);
     logExtensionHostContext(context);
@@ -199,53 +225,12 @@ export function activate(context: vscode.ExtensionContext) {
         )
     );
 
-    if (vscode.env.uiKind !== vscode.UIKind.Web) {
-        terminalManager = new VtcodeTerminalManager(context);
-        context.subscriptions.push(terminalManager);
-        context.subscriptions.push(
-            terminalManager.onDidExit((event) => {
-                const channel = getOutputChannel();
-                if (event.errorMessage) {
-                    channel.appendLine(
-                        `[error] VTCode terminal ${event.terminalId} failed: ${event.errorMessage}`
-                    );
-                } else {
-                    channel.appendLine(
-                        `[info] VTCode terminal ${
-                            event.terminalId
-                        } exited with code ${event.code ?? "unknown"}.`
-                    );
-                }
-            })
-        );
-
-        // Register chat view provider immediately after terminal manager is created
-        getOutputChannel().appendLine(
-            "[info] Registering chat view provider..."
-        );
-        chatViewProvider = new ChatViewProvider(context, terminalManager);
-        context.subscriptions.push(
-            vscode.window.registerWebviewViewProvider(
-                ChatViewProvider.viewType,
-                chatViewProvider
-            )
-        );
-        getOutputChannel().appendLine(
-            "[info] Chat view provider registered successfully"
-        );
-    } else {
-        getOutputChannel().appendLine(
-            "[warning] Running in web mode - terminal and chat features disabled"
-        );
-    }
-    trajectoryViewController = registerTrajectoryView(context, {
-        onAgentOutput: terminalManager?.onDidReceiveOutput,
-    });
-
     initializeContextKeys();
+
     void registerVtcodeConfigWatcher(context, handleConfigUpdate);
 
     updateWorkspaceTrustState(workspaceTrusted);
+    void promptForWorkspaceTrustOnActivation(context);
 
     if (workspaceTrusted) {
         setStatusBarChecking(getConfiguredCommandPath());
@@ -256,7 +241,6 @@ export function activate(context: vscode.ExtensionContext) {
             updateWorkspaceTrustState(true);
             setStatusBarChecking(getConfiguredCommandPath());
             await refreshCliAvailability("manual");
-            void trajectoryViewController?.refreshNow();
         })
     );
 
@@ -264,7 +248,13 @@ export function activate(context: vscode.ExtensionContext) {
         () => {
             quickActionsProviderInstance?.refresh();
             workspaceInsightsProvider?.refresh();
-            trajectoryViewController?.handleWorkspaceFoldersChanged();
+            const workspaceRoot =
+                vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+            chatBackend?.updateConfiguration(
+                getConfiguredCommandPath(),
+                workspaceRoot,
+                currentConfigSummary
+            );
             void refreshCliAvailability("manual");
         }
     );
@@ -302,6 +292,97 @@ export function activate(context: vscode.ExtensionContext) {
             if (selection) {
                 await selection.run();
             }
+        }
+    );
+    const trustWorkspaceCommand = vscode.commands.registerCommand(
+        "vtcode.trustWorkspace",
+        async () => {
+            if (workspaceTrusted) {
+                void vscode.window.showInformationMessage(
+                    "This workspace is already trusted for VTCode automation."
+                );
+                return;
+            }
+
+            const trustedNow = await requestWorkspaceTrust(
+                "allow VTCode to process prompts with human oversight"
+            );
+            if (trustedNow) {
+                void vscode.window.showInformationMessage(
+                    "Workspace trust granted. VTCode can now process prompts with human-in-the-loop safeguards."
+                );
+                return;
+            }
+
+            const selection = await vscode.window.showInformationMessage(
+                "Workspace trust is still required for VTCode. Open the trust management settings?",
+                "Manage Workspace Trust"
+            );
+            if (selection === "Manage Workspace Trust") {
+                await vscode.commands.executeCommand(
+                    "workbench.action.manageTrust"
+                );
+                if (vscode.workspace.isTrusted) {
+                    updateWorkspaceTrustState(true);
+                    void vscode.window.showInformationMessage(
+                        "Workspace trust granted. VTCode can now process prompts with human-in-the-loop safeguards."
+                    );
+                }
+            }
+        }
+    );
+    const verifyWorkspaceTrustCommand = vscode.commands.registerCommand(
+        "vtcode.verifyWorkspaceTrust",
+        async () => {
+            const wasTrusted = workspaceTrusted;
+            if (!wasTrusted) {
+                const granted = await requestWorkspaceTrust(
+                    "allow VTCode to process prompts with human oversight"
+                );
+                if (!granted) {
+                    void vscode.window.showWarningMessage(
+                        "Workspace trust is still disabled. VTCode chat prompts will continue to ask for trust until you approve it."
+                    );
+                    return;
+                }
+            }
+
+            const channel = getOutputChannel();
+            channel.appendLine(
+                "[info] Workspace trust verified. VTCode chat prompts will stream without additional trust confirmations."
+            );
+
+            void vscode.window.showInformationMessage(
+                "Workspace trust verified. VTCode chat prompts no longer show the trust modal; tool executions still require approval.",
+                { modal: false }
+            );
+
+            const hitlEnabled = currentConfigSummary?.humanInTheLoop !== false;
+            if (hitlEnabled) {
+                channel.appendLine(
+                    "[info] Tool execution approvals remain active via the VTCode chat view."
+                );
+            } else {
+                channel.appendLine(
+                    "[warn] human_in_the_loop is disabled in vtcode.toml. Tools may execute without an approval prompt."
+                );
+            }
+
+            void vscode.commands.executeCommand(
+                "setContext",
+                "vtcode.workspaceTrustVerified",
+                true
+            );
+        }
+    );
+    const flushIdeContextCommand = vscode.commands.registerCommand(
+        "vtcode.flushIdeContextSnapshot",
+        async () => {
+            if (!ideContextBridge) {
+                return false;
+            }
+            await ideContextBridge.flush();
+            return true;
         }
     );
 
@@ -487,29 +568,21 @@ export function activate(context: vscode.ExtensionContext) {
                 return;
             }
 
-            const chatCommands: Array<{ id: string; args?: unknown[] }> = [
-                { id: "workbench.action.chat.open" },
-                { id: "workbench.panel.chatSidebar.view.focus" },
-                { id: "workbench.panel.chat.view.focus" },
-            ];
-
-            let opened = false;
-            for (const entry of chatCommands) {
-                try {
-                    await vscode.commands.executeCommand(
-                        entry.id,
-                        ...(entry.args ?? [])
-                    );
-                    opened = true;
-                    break;
-                } catch (error) {
-                    // Try the next known command if this one is unavailable.
-                }
+            try {
+                await vscode.commands.executeCommand(
+                    "workbench.view.extension.vtcode"
+                );
+            } catch {
+                // If the container is unavailable we still try to focus the view directly.
             }
 
-            if (!opened) {
-                void vscode.window.showInformationMessage(
-                    "Open the Chat view and mention @vtcode.agent to start a conversation with VTCode."
+            try {
+                await vscode.commands.executeCommand(
+                    `${ChatViewProvider.viewId}.focus`
+                );
+            } catch {
+                void vscode.window.showWarningMessage(
+                    "The VTCode Chat view is unavailable in this environment."
                 );
                 return;
             }
@@ -517,7 +590,7 @@ export function activate(context: vscode.ExtensionContext) {
             if (!chatLaunchHintShown) {
                 chatLaunchHintShown = true;
                 void vscode.window.showInformationMessage(
-                    "Mention @vtcode.agent in the Chat view to start a conversation with VTCode."
+                    "Start a conversation with VTCode using the chat panel."
                 );
             }
         }
@@ -854,107 +927,27 @@ export function activate(context: vscode.ExtensionContext) {
     const launchAgentTerminal = vscode.commands.registerCommand(
         "vtcode.launchAgentTerminal",
         async () => {
-            if (vscode.env.uiKind === vscode.UIKind.Web) {
-                void vscode.window.showWarningMessage(
-                    "The VTCode terminal integration requires the VS Code desktop application."
-                );
-                return;
-            }
-
             if (!(await ensureCliAvailableForCommand())) {
                 return;
             }
 
-            const allowMultiple = getAllowMultipleTerminalSetting();
-            const session = await ensureAgentTerminalSession(allowMultiple);
-            if (!session) {
+            const cwd = getWorkspaceRoot();
+            if (!cwd) {
+                void vscode.window.showWarningMessage(
+                    "Open a workspace folder before launching the VTCode agent terminal."
+                );
                 return;
             }
 
-            session.handle.show(true);
-            const channel = getOutputChannel();
-            const terminalName = session.handle.terminal.name;
-            if (session.created) {
+            const commandPath = getConfiguredCommandPath();
+            const { terminal, created } = ensureAgentTerminal(commandPath, cwd);
+            terminal.show(true);
+            if (created) {
+                const channel = getOutputChannel();
                 channel.appendLine(
-                    `[info] Launched VTCode terminal “${terminalName}” for workspace ${
-                        getWorkspaceRoot() ?? "unknown"
-                    }.`
-                );
-            } else {
-                channel.appendLine(
-                    `[info] Focused VTCode terminal “${terminalName}”.`
+                    `[info] Launching VTCode agent terminal with "${commandPath} chat" in ${cwd}.`
                 );
             }
-        }
-    );
-
-    const sendCodeIdeCommand = vscode.commands.registerCommand(
-        "vtcode.sendCodeIdeCommand",
-        async () => {
-            if (vscode.env.uiKind === vscode.UIKind.Web) {
-                void vscode.window.showWarningMessage(
-                    "Slash commands are unavailable in the web extension host. Launch VS Code Desktop to control the terminal."
-                );
-                return;
-            }
-
-            if (!(await ensureCliAvailableForCommand())) {
-                return;
-            }
-
-            if (!terminalManager) {
-                void vscode.window.showWarningMessage(
-                    "Launch the VTCode agent terminal before sending slash commands."
-                );
-                return;
-            }
-
-            if (ideContextBridge) {
-                await ideContextBridge.flush();
-            }
-
-            const autoRunChat = getAutoRunChatSetting();
-            if (!autoRunChat) {
-                void vscode.window.showInformationMessage(
-                    "The VTCode terminal auto-run setting is disabled. Ensure a chat session is active before sending /code-ide."
-                );
-            }
-
-            const sendSlash = (terminalId: string): boolean =>
-                terminalManager?.sendText(terminalId, "/code-ide", {
-                    addNewLine: true,
-                }) ?? false;
-
-            let targetId = lastAgentTerminalId;
-            if (targetId && sendSlash(targetId)) {
-                getOutputChannel().appendLine(
-                    `[info] Sent /code-ide slash command to VTCode terminal ${targetId}.`
-                );
-                return;
-            }
-
-            const session = await ensureAgentTerminalSession(false);
-            if (!session) {
-                return;
-            }
-
-            targetId = session.handle.id;
-            lastAgentTerminalId = targetId;
-
-            if (session.created && autoRunChat) {
-                await delay(600);
-            }
-
-            if (!sendSlash(targetId)) {
-                void vscode.window.showWarningMessage(
-                    "Failed to send /code-ide. Start a VTCode chat session in the integrated terminal and try again."
-                );
-                return;
-            }
-
-            getOutputChannel().appendLine(
-                `[info] Sent /code-ide slash command to VTCode terminal ${targetId}.`
-            );
         }
     );
 
@@ -1056,6 +1049,9 @@ export function activate(context: vscode.ExtensionContext) {
 
     context.subscriptions.push(
         quickActionsCommand,
+        trustWorkspaceCommand,
+        verifyWorkspaceTrustCommand,
+        flushIdeContextCommand,
         askAgent,
         askSelection,
         openConfig,
@@ -1069,7 +1065,6 @@ export function activate(context: vscode.ExtensionContext) {
         openToolsPolicyConfigCommand,
         configureMcpProvidersCommand,
         launchAgentTerminal,
-        sendCodeIdeCommand,
         runAnalyze,
         runUpdatePlanTaskCommand,
         refreshQuickActions,
@@ -1138,12 +1133,15 @@ export function deactivate() {
         statusBarItem = undefined;
     }
 
-    if (terminalManager) {
-        terminalManager.dispose();
-        terminalManager = undefined;
+    if (agentTerminal) {
+        agentTerminal.dispose();
+        agentTerminal = undefined;
     }
 
-    lastAgentTerminalId = undefined;
+    if (terminalCloseListener) {
+        terminalCloseListener.dispose();
+        terminalCloseListener = undefined;
+    }
 
     quickActionsProviderInstance = undefined;
     cliAvailabilityCheck = undefined;
@@ -1186,8 +1184,15 @@ function createQuickActions(
                 label: "Trust this workspace for VTCode",
                 description:
                     "Grant workspace trust to enable VTCode automation and CLI access.",
-                command: "workbench.action.manageTrust",
+                command: "vtcode.trustWorkspace",
                 icon: "shield",
+            },
+            {
+                label: "Verify workspace trust flow",
+                description:
+                    "Run the VTCode trust checklist so chat prompts stop requesting trust while tools stay gated.",
+                command: "vtcode.verifyWorkspaceTrust",
+                icon: "shield-check",
             },
             {
                 label: "Review VTCode CLI requirements",
@@ -1201,6 +1206,20 @@ function createQuickActions(
 
     if (trusted && cliAvailableState) {
         actions.push(
+            {
+                label: "Verify workspace trust flow",
+                description:
+                    "Confirm VTCode chat prompts avoid the trust modal while tool executions still require approval.",
+                command: "vtcode.verifyWorkspaceTrust",
+                icon: "shield-check",
+            },
+            {
+                label: "Refresh IDE context snapshot",
+                description:
+                    "Force a new .vtcode/ide-context block so the agent sees your latest editor state.",
+                command: "vtcode.flushIdeContextSnapshot",
+                icon: "history",
+            },
             {
                 label: "Ask the VTCode agent…",
                 description:
@@ -1237,13 +1256,6 @@ function createQuickActions(
                 icon: "terminal",
             },
             {
-                label: "Send /code-ide to terminal",
-                description:
-                    "Trigger the /code-ide slash command in the active VTCode terminal session.",
-                command: "vtcode.sendCodeIdeCommand",
-                icon: "symbol-event",
-            },
-            {
                 label: "Analyze workspace with VTCode",
                 description:
                     "Run vtcode analyze and stream the report to the VTCode output channel.",
@@ -1262,6 +1274,16 @@ function createQuickActions(
     }
 
     if (trusted && summary?.hasConfig) {
+        if (summary.automationFullAutoEnabled === true) {
+            actions.push({
+                label: "Full-auto automation detected (blocked)",
+                description:
+                    "Open vtcode.toml to disable [automation.full_auto]; VS Code will not run autonomous tasks.",
+                command: "vtcode.openConfig",
+                icon: "shield-off",
+            });
+        }
+
         const hitlEnabled = summary.humanInTheLoop !== false;
         actions.push({
             label: hitlEnabled
@@ -1368,8 +1390,8 @@ function createWorkspaceInsights(
         command: trusted
             ? undefined
             : {
-                  command: "workbench.action.manageTrust",
-                  title: "Manage Workspace Trust",
+                  command: "vtcode.trustWorkspace",
+                  title: "Trust Workspace for VTCode",
               },
         tooltip: trusted
             ? "Workspace trust allows VTCode to spawn CLI processes."
@@ -1426,6 +1448,58 @@ function createWorkspaceInsights(
                 command: "vtcode.openConfig",
                 title: "Open vtcode.toml",
             },
+        });
+
+        if (summary.agentProvider) {
+            const provider = summary.agentProvider;
+            const defaultModel = summary.agentDefaultModel;
+            const providerLower = provider.toLowerCase();
+            const modelLower = defaultModel?.toLowerCase() ?? "";
+            const mismatch =
+                (providerLower === "ollama" &&
+                    (defaultModel?.includes(":") ?? false)) ||
+                (providerLower !== "openrouter" &&
+                    modelLower.startsWith("gpt-oss:"));
+
+            insights.push({
+                label: `Agent provider: ${provider}`,
+                description: defaultModel
+                    ? `Default model: ${defaultModel}`
+                    : "No default model configured",
+                icon: mismatch ? "alert" : "globe",
+                command: mismatch
+                    ? {
+                          command: "vtcode.openConfig",
+                          title: "Review agent provider configuration",
+                      }
+                    : undefined,
+                tooltip: mismatch
+                    ? "Provider and default_model may require different credentials. Update vtcode.toml to avoid CLI failures."
+                    : undefined,
+            });
+        }
+
+        const fullAutoEnabled = summary.automationFullAutoEnabled === true;
+        const allowedTools = summary.automationFullAutoAllowedTools;
+        const automationDescription = fullAutoEnabled
+            ? allowedTools && allowedTools.length > 0
+                ? `Allowed tools: ${allowedTools.join(
+                      ", "
+                  )}. VS Code blocks autonomous execution; disable automation.full_auto to avoid warnings.`
+                : "automation.full_auto is enabled. VS Code blocks autonomous execution; disable the setting to silence this warning."
+            : "automation.full_auto is disabled. VTCode prompts require explicit approval.";
+        insights.push({
+            label: fullAutoEnabled
+                ? "Full-auto automation detected (blocked)"
+                : "Full-auto automation disabled",
+            description: automationDescription,
+            icon: fullAutoEnabled ? "shield-off" : "shield",
+            command: fullAutoEnabled
+                ? {
+                      command: "vtcode.openConfig",
+                      title: "Disable automation.full_auto",
+                  }
+                : undefined,
         });
 
         const hitlStatus =
@@ -1513,6 +1587,12 @@ function createWorkspaceInsights(
 
 function handleConfigUpdate(summary: VtcodeConfigSummary) {
     currentConfigSummary = summary;
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    chatBackend?.updateConfiguration(
+        getConfiguredCommandPath(),
+        workspaceRoot,
+        summary
+    );
 
     void vscode.commands.executeCommand(
         "setContext",
@@ -1539,6 +1619,11 @@ function handleConfigUpdate(summary: VtcodeConfigSummary) {
         "vtcode.mcpEnabled",
         summary.mcpEnabled === true
     );
+    void vscode.commands.executeCommand(
+        "setContext",
+        "vtcode.fullAutoEnabled",
+        summary.automationFullAutoEnabled === true
+    );
 
     const configUriString = summary.uri?.toString();
     if (summary.parseError && summary.parseError !== lastConfigParseError) {
@@ -1557,6 +1642,29 @@ function handleConfigUpdate(summary: VtcodeConfigSummary) {
             : "vtcode.toml";
         channel.appendLine(`[info] Using VTCode configuration from ${label}.`);
     }
+
+    if (summary.hasConfig) {
+        const enabled = summary.automationFullAutoEnabled === true;
+        if (enabled && lastAutomationFullAutoEnabled !== true) {
+            const channel = getOutputChannel();
+            channel.appendLine(
+                "[warn] VTCode extension: Full-auto mode is blocked inside VS Code. Human-in-the-loop approval remains required."
+            );
+            void maybeWarnAboutFullAuto(summary);
+        } else if (!enabled && lastAutomationFullAutoEnabled !== false) {
+            const channel = getOutputChannel();
+            channel.appendLine(
+                "[info] automation.full_auto is disabled; VTCode will rely on CLI safeguards for prompt execution."
+            );
+        }
+        lastAutomationFullAutoEnabled = enabled;
+        maybeWarnAboutProviderModel(summary);
+    } else {
+        lastAutomationFullAutoEnabled = undefined;
+        lastProviderModelWarningKey = undefined;
+    }
+
+    chatViewProviderInstance?.updateConfig(summary);
 
     lastConfigUri = configUriString;
     lastConfigParseError = summary.parseError;
@@ -1642,7 +1750,7 @@ async function detectCliAvailability(commandPath: string): Promise<boolean> {
                 clearTimeout(timer);
                 complete(code === 0);
             });
-        } catch (error) {
+        } catch {
             complete(false);
         }
     });
@@ -1862,6 +1970,12 @@ function updateWorkspaceTrustState(trusted: boolean): void {
         "vtcode.workspaceTrusted",
         trusted
     );
+    void vscode.commands.executeCommand(
+        "setContext",
+        "vtcode.workspaceTrustVerified",
+        trusted
+    );
+    chatViewProviderInstance?.setWorkspaceTrusted(trusted);
 
     const commandPath = getConfiguredCommandPath();
     updateCliAvailabilityState(
@@ -1870,6 +1984,8 @@ function updateWorkspaceTrustState(trusted: boolean): void {
         trusted ? undefined : "untrusted"
     );
     mcpDefinitionsChanged.fire();
+    quickActionsProviderInstance?.refresh();
+    workspaceInsightsProvider?.refresh();
 }
 
 function initializeContextKeys(): void {
@@ -1881,6 +1997,8 @@ function initializeContextKeys(): void {
         ["vtcode.toolPoliciesConfigured", false],
         ["vtcode.mcpConfigured", false],
         ["vtcode.mcpEnabled", false],
+        ["vtcode.fullAutoEnabled", false],
+        ["vtcode.workspaceTrustVerified", workspaceTrusted],
     ];
 
     for (const [key, value] of contextDefaults) {
@@ -1888,10 +2006,52 @@ function initializeContextKeys(): void {
     }
 }
 
+type WorkspaceTrustApi = typeof vscode.workspace & {
+    requestWorkspaceTrust?: (opts?: {
+        message?: string;
+        modal?: boolean;
+        buttons?: ReadonlyArray<vscode.MessageItem>;
+    }) => Thenable<boolean | undefined>;
+};
+
+async function requestWorkspaceTrust(action: string): Promise<boolean> {
+    if (workspaceTrusted) {
+        return true;
+    }
+
+    const trustApi = vscode.workspace as WorkspaceTrustApi;
+    const requestFn = trustApi.requestWorkspaceTrust;
+    if (typeof requestFn === "function") {
+        try {
+            const granted = await requestFn({
+                message: `VTCode requires a trusted workspace to ${action}.`,
+                modal: true,
+            });
+            if (granted) {
+                updateWorkspaceTrustState(true);
+                return true;
+            }
+        } catch (error) {
+            const channel = getOutputChannel();
+            const details =
+                error instanceof Error ? error.message : String(error);
+            channel.appendLine(
+                `[warn] Workspace trust request failed: ${details}`
+            );
+        }
+    }
+
+    return false;
+}
+
 async function ensureWorkspaceTrustedForCommand(
     action: string
 ): Promise<boolean> {
     if (workspaceTrusted) {
+        return true;
+    }
+
+    if (await requestWorkspaceTrust(action)) {
         return true;
     }
 
@@ -1902,9 +2062,125 @@ async function ensureWorkspaceTrustedForCommand(
 
     if (selection === "Manage Workspace Trust") {
         await vscode.commands.executeCommand("workbench.action.manageTrust");
+        const trustedNow = vscode.workspace.isTrusted;
+        if (trustedNow) {
+            updateWorkspaceTrustState(trustedNow);
+            return true;
+        }
     }
 
     return false;
+}
+
+async function promptForWorkspaceTrustOnActivation(
+    context: vscode.ExtensionContext
+): Promise<void> {
+    if (workspaceTrusted || vscode.env.uiKind === vscode.UIKind.Web) {
+        return;
+    }
+
+    const workspaceId =
+        vscode.workspace.workspaceFolders?.[0]?.uri.toString() ?? "global";
+    const storageKey = `${TRUST_PROMPT_STATE_KEY}:${workspaceId}`;
+    const alreadyPrompted = context.globalState.get<boolean>(storageKey);
+    if (alreadyPrompted) {
+        return;
+    }
+
+    await context.globalState.update(storageKey, true);
+    try {
+        const granted = await requestWorkspaceTrust(
+            "allow VTCode to process prompts with human-in-the-loop safeguards"
+        );
+        if (!granted && !workspaceTrusted) {
+            const selection = await vscode.window.showInformationMessage(
+                "VTCode requires workspace trust to process prompts. Open workspace trust settings?",
+                "Manage Workspace Trust"
+            );
+            if (selection === "Manage Workspace Trust") {
+                await vscode.commands.executeCommand(
+                    "workbench.action.manageTrust"
+                );
+                if (vscode.workspace.isTrusted) {
+                    updateWorkspaceTrustState(true);
+                }
+            }
+        }
+    } catch (error) {
+        const channel = getOutputChannel();
+        const details = error instanceof Error ? error.message : String(error);
+        channel.appendLine(
+            `[warn] Automatic workspace trust prompt failed: ${details}`
+        );
+    }
+}
+
+function getWorkspaceStorageKey(base: string): string {
+    const workspaceId =
+        vscode.workspace.workspaceFolders?.[0]?.uri.toString() ?? "global";
+    return `${base}:${workspaceId}`;
+}
+
+async function maybeWarnAboutFullAuto(
+    summary: VtcodeConfigSummary
+): Promise<void> {
+    if (!activationContext || summary.automationFullAutoEnabled !== true) {
+        return;
+    }
+
+    const storageKey = getWorkspaceStorageKey(FULL_AUTO_WARNING_STATE_KEY);
+    if (activationContext.globalState.get<boolean>(storageKey)) {
+        return;
+    }
+
+    await activationContext.globalState.update(storageKey, true);
+    const selection = await vscode.window.showWarningMessage(
+        "VTCode full-auto mode is blocked in VS Code. The extension will continue to require manual oversight before executing tools.",
+        "Open vtcode.toml",
+        "Dismiss"
+    );
+
+    if (selection === "Open vtcode.toml") {
+        await vscode.commands.executeCommand("vtcode.openConfig");
+    }
+}
+
+function maybeWarnAboutProviderModel(summary: VtcodeConfigSummary): void {
+    const provider = summary.agentProvider?.trim();
+    const defaultModel = summary.agentDefaultModel?.trim();
+
+    if (!provider || !defaultModel) {
+        lastProviderModelWarningKey = undefined;
+        return;
+    }
+
+    const key = `${provider}|${defaultModel}`;
+    const providerLower = provider.toLowerCase();
+    const modelLower = defaultModel.toLowerCase();
+
+    let mismatch = false;
+    if (providerLower === "ollama") {
+        mismatch = defaultModel.includes(":");
+    } else if (providerLower === "openrouter") {
+        mismatch = false;
+    } else if (modelLower.startsWith("gpt-oss:")) {
+        mismatch = true;
+    }
+
+    if (!mismatch) {
+        lastProviderModelWarningKey = undefined;
+        return;
+    }
+
+    if (lastProviderModelWarningKey === key) {
+        return;
+    }
+
+    lastProviderModelWarningKey = key;
+    const channel = getOutputChannel();
+    channel.appendLine(
+        `[warn] VTCode config mismatch: provider "${provider}" may not support default_model "${defaultModel}". Update vtcode.toml or configure the required API credentials to avoid CLI failures.`
+    );
 }
 
 function getConfiguredCommandPath(): string {
@@ -2257,7 +2533,9 @@ function registerVtcodeAiIntegrations(context: vscode.ExtensionContext): void {
                             ? `\`\`\`\n${normalized}\n\`\`\``
                             : "VTCode completed the update_plan request but did not emit any output.";
 
-                    return [new vscode.LanguageModelTextPart(content)];
+                    return {
+                        content: [new vscode.LanguageModelTextPart(content)],
+                    };
                 },
             }
         );
@@ -2996,14 +3274,22 @@ class IdeContextFileBridge implements vscode.Disposable {
 
 function getVtcodeEnvironment(
     overrides: NodeJS.ProcessEnv = {}
-): NodeJS.ProcessEnv {
-    const env = { ...process.env, ...overrides };
+): Record<string, string> {
+    const merged = { ...process.env, ...overrides };
+    const env: Record<string, string> = {};
+    for (const [key, value] of Object.entries(merged)) {
+        if (typeof value === "string") {
+            env[key] = value;
+        }
+    }
+
     const contextPath = getIdeContextFilePath();
     if (contextPath) {
         env[IDE_CONTEXT_ENV_VARIABLE] = contextPath;
     } else {
         delete env[IDE_CONTEXT_ENV_VARIABLE];
     }
+
     return env;
 }
 
@@ -3127,134 +3413,55 @@ async function openMcpGuide(): Promise<void> {
     );
 }
 
-async function ensureAgentTerminalSession(
-    forceNew: boolean = false
-): Promise<{ handle: VtcodeTerminalHandle; created: boolean } | undefined> {
-    if (!terminalManager) {
-        void vscode.window.showWarningMessage(
-            "The VTCode terminal integration is unavailable in this environment."
-        );
-        return undefined;
+function ensureAgentTerminal(
+    commandPath: string,
+    cwd: string
+): { terminal: vscode.Terminal; created: boolean } {
+    if (agentTerminal) {
+        return { terminal: agentTerminal, created: false };
     }
 
-    const cwd = getWorkspaceRoot();
-    if (!cwd) {
-        void vscode.window.showWarningMessage(
-            "Open a workspace folder before launching the VTCode agent terminal."
-        );
-        return undefined;
-    }
-
-    const allowMultiple = getAllowMultipleTerminalSetting();
-    const effectiveForceNew = allowMultiple ? forceNew : false;
-    let existingHandle: VtcodeTerminalHandle | undefined;
-    if (!effectiveForceNew) {
-        if (allowMultiple) {
-            if (lastAgentTerminalId) {
-                existingHandle =
-                    terminalManager.getTerminalHandle(lastAgentTerminalId);
-            }
-        } else {
-            existingHandle = terminalManager.getTerminalHandle(
-                DEFAULT_AGENT_TERMINAL_ID
-            );
-        }
-    }
-
-    if (existingHandle) {
-        lastAgentTerminalId = existingHandle.id;
-        return { handle: existingHandle, created: false };
-    }
-
-    const terminalId = allowMultiple
-        ? `vtcode.agent.${Date.now().toString(36)}`
-        : DEFAULT_AGENT_TERMINAL_ID;
-    const title = allowMultiple
-        ? `VTCode Agent ${new Date().toLocaleTimeString()}`
-        : "VTCode Agent";
-    const autoRunChat = getAutoRunChatSetting();
-    const commandPath = getConfiguredCommandPath();
-    const configArgs = getConfigArguments();
-    const chatCommand = buildVtcodeChatCommand(commandPath, configArgs);
-    const shell = getPreferredShellCommand();
-    const message = autoRunChat
-        ? undefined
-        : `Run ${chatCommand} to start VTCode.`;
-
-    const { handle, created } = terminalManager.createOrShowTerminal({
-        id: terminalId,
-        title,
-        commandPath: shell.commandPath,
-        args: shell.args,
+    const terminal = vscode.window.createTerminal({
+        name: "VTCode Agent",
         cwd,
         env: getVtcodeEnvironment(),
-        message,
+        iconPath: new vscode.ThemeIcon("comment-discussion"),
     });
 
-    lastAgentTerminalId = handle.id;
-
-    if (autoRunChat && created) {
+    // Instead of immediate execution, use a slight delay to allow any auto-activation to complete
+    setTimeout(() => {
         void (async () => {
             if (ideContextBridge) {
                 await ideContextBridge.flush();
             }
-            await delay(200);
-            terminalManager?.sendText(handle.id, chatCommand, {
-                addNewLine: true,
-            });
+            const quotedCommandPath = /\s/.test(commandPath)
+                ? `"${commandPath.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`
+                : commandPath;
+            const configArgs = getConfigArguments();
+            const terminalArgs = ["chat", ...configArgs];
+            const argsText = formatArgsForShell(terminalArgs);
+            const commandText =
+                argsText.length > 0
+                    ? `${quotedCommandPath} ${argsText}`
+                    : quotedCommandPath;
+            // Send the VTCode command after a brief delay to allow any environment activation to complete
+            terminal.sendText(commandText, true);
         })();
+    }, 800); // 800ms delay to allow environment activation if it happens
+
+    agentTerminal = terminal;
+
+    if (!terminalCloseListener) {
+        terminalCloseListener = vscode.window.onDidCloseTerminal((closed) => {
+            if (closed === agentTerminal) {
+                agentTerminal = undefined;
+                terminalCloseListener?.dispose();
+                terminalCloseListener = undefined;
+            }
+        });
     }
 
-    return { handle, created };
-}
-
-function getAutoRunChatSetting(): boolean {
-    return (
-        vscode.workspace
-            .getConfiguration("vtcode")
-            .get<boolean>("terminal.autoRunChat", true) ?? true
-    );
-}
-
-function getAllowMultipleTerminalSetting(): boolean {
-    return (
-        vscode.workspace
-            .getConfiguration("vtcode")
-            .get<boolean>("terminal.allowMultipleInstances", false) ?? false
-    );
-}
-
-function getPreferredShellCommand(): {
-    commandPath: string;
-    args: string[];
-} {
-    if (process.platform === "win32") {
-        const comspec = process.env.COMSPEC?.trim();
-        if (comspec && comspec.length > 0) {
-            return { commandPath: comspec, args: [] };
-        }
-        return { commandPath: "C:\\Windows\\System32\\cmd.exe", args: [] };
-    }
-
-    const shell = process.env.SHELL?.trim();
-    if (shell && shell.length > 0) {
-        return { commandPath: shell, args: ["-l"] };
-    }
-
-    return { commandPath: "/bin/bash", args: ["-l"] };
-}
-
-function buildVtcodeChatCommand(
-    commandPath: string,
-    configArgs: string[]
-): string {
-    const quotedCommand = quoteForShell(commandPath);
-    const argsText = formatArgsForShell(["chat", ...configArgs]);
-    return argsText.length > 0 ? `${quotedCommand} ${argsText}` : quotedCommand;
-}
-
-function delay(durationMs: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, durationMs));
+    return { terminal, created: true };
 }
 
 function ensureStableApi(context: vscode.ExtensionContext) {
