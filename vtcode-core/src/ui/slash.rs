@@ -38,10 +38,7 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
             name: "theme",
             description: "Switch UI theme (usage: /theme <theme-id>)",
         },
-        SlashCommandInfo {
-            name: "list-themes",
-            description: "List all available UI themes",
-        },
+
         SlashCommandInfo {
             name: "sandbox",
             description: "Toggle and configure bash sandboxing (usage: /sandbox [status|enable|disable|allow-domain <domain>])",
@@ -90,11 +87,7 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
             name: "new",
             description: "Start a new session",
         },
-        // System
-        SlashCommandInfo {
-            name: "update",
-            description: "Check for vtcode updates (usage: /update [check|install|status])",
-        },
+
         SlashCommandInfo {
             name: "docs",
             description: "Open vtcode documentation in web browser",
@@ -210,7 +203,7 @@ mod tests {
     #[test]
     fn substring_matches_prioritize_earlier_occurrences() {
         let names = names_for("eme");
-        assert_eq!(names, vec!["theme", "list-themes"]);
+        assert_eq!(names, vec!["theme"]);
     }
 
     #[test]

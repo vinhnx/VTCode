@@ -35,7 +35,6 @@ Enter
 Sleep 5s
 
 # Show theme options
-Type "/list-themes"
 Enter
 Sleep 3s
 

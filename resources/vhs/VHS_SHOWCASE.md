@@ -40,7 +40,7 @@ This directory contains VHS (Video Hosting System) showcases for VT Code, demons
 ### TUI Demos
 - `demo-tui.tape` - Showcases the advanced Terminal User Interface:
   - Interactive chat interface
-  - Slash commands (`/help`, `/list-themes`)
+  - Slash commands (`/help`)
   - Theme switching
   - Verbose mode
 - `demo-tui.gif` - Generated GIF featuring the TUI experience
@@ -59,7 +59,7 @@ This directory contains VHS (Video Hosting System) showcases for VT Code, demons
 - Multi-provider LLM support (OpenAI, Anthropic, Gemini, etc.)
 - Tree-sitter code analysis
 - Advanced context management
-- Slash commands with `/exit`, `/help`, `/list-themes`, `/command`
+- Slash commands with `/exit`, `/help`, `/command`
 - Real-time PTY integration
 
 ## Prerequisites

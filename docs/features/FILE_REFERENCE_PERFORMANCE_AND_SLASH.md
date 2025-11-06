@@ -165,7 +165,7 @@ SlashCommandInfo {
 }
 ```
 
-Position: Between `/prompts` and `/update` commands
+Position: After `/prompt` command
 
 ### Command Handler
 

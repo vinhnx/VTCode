@@ -65,10 +65,6 @@ pub(crate) async fn run_doctor_diagnostics(
         .map(|version| format!("Found npm {}", version));
     render_doctor_check(renderer, "npm", npm_result)?;
 
-    let claude_result = detect_command_version("claude", &["--version"])
-        .map(|version| format!("Found Claude CLI {}", version));
-    render_doctor_check(renderer, "Claude CLI", claude_result)?;
-
     let mcp_result = if let Some(cfg) = vt_cfg {
         if cfg.mcp.enabled {
             if let Some(manager) = async_mcp_manager {

@@ -599,7 +599,7 @@ context7 = "context7"
 name = "time"
 command = "uvx"
 args = ["mcp-server-time"]
-enabled = false
+enabled = true
 max_concurrent_requests = 3
 
 [mcp.providers.env]
