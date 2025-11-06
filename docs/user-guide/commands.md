@@ -80,6 +80,20 @@ VT Code provides several quick actions directly in the chat input for faster wor
 - **Custom Prompt Shortcut (`#`)** — Type `#` at the start of input to quickly access and run custom prompts. This is a shorthand for accessing your saved prompts directly from the input bar.
 - **Slash Commands (`/`)** — Type `/` at the start of input to access all available slash commands including `/prompts`, `/files`, `/stats`, and many more.
 
+### `/code-ide` (VS Code integration)
+
+Use the `/code-ide` slash command to trigger IDE-specific actions from within a VTCode chat session or the integrated terminal. When the VS Code extension is installed:
+
+- Run `/code-ide` in the VTCode terminal session to synchronize with the sidebar views and refresh context-aware data.
+- Use the **VTCode: Send /code-ide Slash Command** command palette entry or the Quick Actions panel to dispatch the slash command directly to the active VTCode terminal.
+- The command will emit IDE events back to the extension host, keeping the Agent Loop timeline, status indicators, and MCP configuration summaries in sync.
+
+Configure the behaviour under **Settings › Extensions › VTCode**:
+
+- `vtcode.terminal.autoRunChat` — Automatically run `vtcode chat` when the managed terminal opens.
+- `vtcode.terminal.allowMultipleInstances` — Opt-in to creating new terminal sessions instead of reusing the shared VTCode terminal.
+- `vtcode.agentTimeline.refreshDebounceMs` — Control how quickly the Agent Loop timeline reacts to incoming terminal output.
+
 ## stats (session metrics)
 
 Display current configuration, available tools, and live performance metrics for the running
