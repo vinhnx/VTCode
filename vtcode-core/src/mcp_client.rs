@@ -963,11 +963,12 @@ impl McpProvider {
                     None => None,
                 };
 
+                let headers = build_headers(&http.http_headers, &http.env_http_headers);
                 let client = RmcpClient::new_streamable_http_client(
                     config.name.clone(),
                     &http.endpoint,
                     bearer_token,
-                    build_headers(&http.headers)?,
+                    headers,
                     elicitation_handler.clone(),
                 )
                 .await?;
@@ -1413,18 +1414,79 @@ fn schema_requires_field(schema: &Value, field: &str) -> bool {
     }
 }
 
-fn build_headers(headers: &HashMap<String, String>) -> Result<HeaderMap> {
+fn build_headers(
+    static_headers: &HashMap<String, String>,
+    env_headers: &HashMap<String, String>,
+) -> HeaderMap {
     let mut map = HeaderMap::new();
-    for (key, value) in headers {
-        let name = HeaderName::from_bytes(key.as_bytes()).with_context(|| {
-            format!("Invalid HTTP header name '{key}' in MCP provider configuration")
-        })?;
-        let header_value = HeaderValue::from_str(value).with_context(|| {
-            format!("Invalid HTTP header value for '{key}' in MCP provider configuration")
-        })?;
-        map.insert(name, header_value);
+
+    for (key, value) in static_headers {
+        match HeaderName::from_bytes(key.as_bytes()) {
+            Ok(name) => match HeaderValue::from_str(value) {
+                Ok(header_value) => {
+                    map.insert(name, header_value);
+                }
+                Err(err) => {
+                    warn!(
+                        header = key.as_str(),
+                        error = %err,
+                        "Skipping MCP HTTP header with invalid value"
+                    );
+                }
+            },
+            Err(err) => {
+                warn!(
+                    header = key.as_str(),
+                    error = %err,
+                    "Skipping MCP HTTP header with invalid name"
+                );
+            }
+        }
     }
-    Ok(map)
+
+    for (key, env_var) in env_headers {
+        match env::var(env_var) {
+            Ok(value) if !value.trim().is_empty() => match HeaderName::from_bytes(key.as_bytes()) {
+                Ok(name) => match HeaderValue::from_str(&value) {
+                    Ok(header_value) => {
+                        map.insert(name, header_value);
+                    }
+                    Err(err) => {
+                        warn!(
+                            header = key.as_str(),
+                            env_var = env_var.as_str(),
+                            error = %err,
+                            "Skipping MCP HTTP header from environment with invalid value"
+                        );
+                    }
+                },
+                Err(err) => {
+                    warn!(
+                        header = key.as_str(),
+                        env_var = env_var.as_str(),
+                        error = %err,
+                        "Skipping MCP HTTP header from environment with invalid name"
+                    );
+                }
+            },
+            Ok(_) => {
+                debug!(
+                    header = key.as_str(),
+                    env_var = env_var.as_str(),
+                    "Skipping MCP HTTP header from environment because the value is empty"
+                );
+            }
+            Err(_) => {
+                debug!(
+                    header = key.as_str(),
+                    env_var = env_var.as_str(),
+                    "Skipping MCP HTTP header from environment because the variable is unset"
+                );
+            }
+        }
+    }
+
+    map
 }
 
 /// Lightweight adapter around the rmcp transport mirroring Codex' `RmcpClient` API.
@@ -1478,10 +1540,30 @@ impl RmcpClient {
 
         if let Some(stderr) = stderr {
             let program_name = program.to_string_lossy().into_owned();
+            let provider_label = provider_name.clone();
             tokio::spawn(async move {
                 let mut reader = BufReader::new(stderr).lines();
-                while let Ok(Some(line)) = reader.next_line().await {
-                    debug!("MCP server stderr ({program_name}): {line}");
+                loop {
+                    match reader.next_line().await {
+                        Ok(Some(line)) => {
+                            info!(
+                                provider = provider_label.as_str(),
+                                program = program_name.as_str(),
+                                message = line.as_str(),
+                                "MCP server stderr"
+                            );
+                        }
+                        Ok(None) => break,
+                        Err(error) => {
+                            warn!(
+                                provider = provider_label.as_str(),
+                                program = program_name.as_str(),
+                                error = %error,
+                                "Failed to read MCP server stderr"
+                            );
+                            break;
+                        }
+                    }
                 }
             });
         }
@@ -2179,13 +2261,33 @@ const DEFAULT_ENV_VARS: &[&str] = &[
 
 #[cfg(windows)]
 const DEFAULT_ENV_VARS: &[&str] = &[
+    // Core path resolution
     "PATH",
     "PATHEXT",
+    // Shell and system roots
+    "COMSPEC",
+    "SYSTEMROOT",
+    "SYSTEMDRIVE",
+    // User context and profiles
     "USERNAME",
     "USERDOMAIN",
     "USERPROFILE",
+    "HOMEDRIVE",
+    "HOMEPATH",
+    // Program locations
+    "PROGRAMFILES",
+    "PROGRAMFILES(X86)",
+    "PROGRAMW6432",
+    "PROGRAMDATA",
+    // App data and caches
+    "LOCALAPPDATA",
+    "APPDATA",
+    // Temp locations
     "TEMP",
     "TMP",
+    // Common shells/pwsh hints
+    "POWERSHELL",
+    "PWSH",
 ];
 
 #[cfg(test)]

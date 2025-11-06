@@ -61,7 +61,8 @@ mod tests {
         assert!(http_config.endpoint.is_empty());
         assert!(http_config.api_key_env.is_none());
         assert_eq!(http_config.protocol_version, "2024-11-05");
-        assert!(http_config.headers.is_empty());
+        assert!(http_config.http_headers.is_empty());
+        assert!(http_config.env_http_headers.is_empty());
     }
 
     #[test]

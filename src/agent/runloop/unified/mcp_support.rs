@@ -262,12 +262,29 @@ pub(crate) async fn display_mcp_providers(
                         &format!("    bearer token env: {}", env),
                     )?;
                 }
-                if !http.headers.is_empty() {
+                if !http.http_headers.is_empty() {
                     renderer.line(
                         MessageStyle::Info,
                         &format!(
                             "    headers: {}",
-                            http.headers.keys().cloned().collect::<Vec<_>>().join(", ")
+                            http.http_headers
+                                .keys()
+                                .cloned()
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        ),
+                    )?;
+                }
+                if !http.env_http_headers.is_empty() {
+                    renderer.line(
+                        MessageStyle::Info,
+                        &format!(
+                            "    env headers: {}",
+                            http.env_http_headers
+                                .keys()
+                                .cloned()
+                                .collect::<Vec<_>>()
+                                .join(", ")
                         ),
                     )?;
                 }
