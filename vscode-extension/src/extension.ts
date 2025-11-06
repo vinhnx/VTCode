@@ -1808,10 +1808,53 @@ function initializeContextKeys(): void {
     }
 }
 
+type WorkspaceTrustApi = typeof vscode.workspace & {
+    requestWorkspaceTrust?: (opts?: {
+        message?: string;
+        modal?: boolean;
+        buttons?: ReadonlyArray<vscode.MessageItem>;
+    }) => Thenable<boolean | undefined>;
+};
+
+async function requestWorkspaceTrust(action: string): Promise<boolean> {
+    if (workspaceTrusted) {
+        return true;
+    }
+
+    const trustApi = vscode.workspace as WorkspaceTrustApi;
+    const requestFn = trustApi.requestWorkspaceTrust;
+    if (typeof requestFn === "function") {
+        try {
+            const granted = await requestFn({
+                message: `VTCode requires a trusted workspace to ${action}.`,
+                modal: true,
+                buttons: [{ label: "Trust Workspace" }, { label: "Not now" }],
+            });
+            if (granted) {
+                updateWorkspaceTrustState(true);
+                return true;
+            }
+        } catch (error) {
+            const channel = getOutputChannel();
+            const details =
+                error instanceof Error ? error.message : String(error);
+            channel.appendLine(
+                `[warn] Workspace trust request failed: ${details}`
+            );
+        }
+    }
+
+    return false;
+}
+
 async function ensureWorkspaceTrustedForCommand(
     action: string
 ): Promise<boolean> {
     if (workspaceTrusted) {
+        return true;
+    }
+
+    if (await requestWorkspaceTrust(action)) {
         return true;
     }
 
@@ -1822,6 +1865,10 @@ async function ensureWorkspaceTrustedForCommand(
 
     if (selection === "Manage Workspace Trust") {
         await vscode.commands.executeCommand("workbench.action.manageTrust");
+        if (vscode.workspace.isTrusted) {
+            updateWorkspaceTrustState(true);
+            return true;
+        }
     }
 
     return false;
