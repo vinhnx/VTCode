@@ -517,6 +517,9 @@ pub struct ClientCapabilities {
     ///Present if the client supports sampling from an LLM.
     #[serde(default, skip_serializing_if = "::serde_json::Map::is_empty")]
     pub sampling: ::serde_json::Map<::std::string::String, ::serde_json::Value>,
+    ///Present if the client supports elicitation requests from the server.
+    #[serde(default, skip_serializing_if = "::serde_json::Map::is_empty")]
+    pub elicitation: ::serde_json::Map<::std::string::String, ::serde_json::Value>,
 }
 impl ::std::convert::From<&ClientCapabilities> for ClientCapabilities {
     fn from(value: &ClientCapabilities) -> Self {
@@ -529,6 +532,7 @@ impl ::std::default::Default for ClientCapabilities {
             experimental: Default::default(),
             roots: Default::default(),
             sampling: Default::default(),
+            elicitation: Default::default(),
         }
     }
 }
@@ -2023,6 +2027,8 @@ impl ::std::default::Default for ImageContentAnnotations {
 pub struct Implementation {
     pub name: ::std::string::String,
     pub version: ::std::string::String,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub title: ::std::option::Option<::std::string::String>,
 }
 impl ::std::convert::From<&Implementation> for Implementation {
     fn from(value: &Implementation) -> Self {

@@ -1,3 +1,8 @@
+/// Application metadata constants shared across crates
+pub mod app {
+    pub const DISPLAY_NAME: &str = "VTCode";
+}
+
 /// Prompt path constants to avoid hardcoding throughout the codebase
 pub mod prompts {
     pub const DEFAULT_SYSTEM_PROMPT_PATH: &str = "prompts/system.md";
