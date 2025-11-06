@@ -43,15 +43,10 @@ use crate::agent::runloop::unified::ui_interaction::{
     PlaceholderSpinner, stream_and_render_response,
 };
 
-use super::config_modal::{MODAL_CLOSE_HINT, load_config_modal_content};
 use super::finalization::finalize_session;
 use super::harmony::strip_harmony_syntax;
 use super::utils::{render_hook_messages, safe_force_redraw};
 use super::workspace::{load_workspace_files, refresh_vt_config};
-use super::utils::{render_hook_messages, safe_force_redraw};
-use super::workspace::{
-    bootstrap_config_files, build_workspace_index, load_workspace_files, refresh_vt_config,
-};
 use crate::agent::runloop::mcp_events;
 use crate::agent::runloop::unified::async_mcp_manager::McpInitStatus;
 use crate::agent::runloop::unified::context_manager::ContextManager;
@@ -82,6 +77,7 @@ use crate::agent::runloop::unified::tool_routing::{ToolPermissionFlow, ensure_to
 use crate::agent::runloop::unified::tool_summary::{
     describe_tool_action, humanize_tool_name, render_tool_call_summary_with_status,
 };
+use crate::agent::runloop::unified::workspace_links::LinkedDirectory;
 use crate::agent::runloop::unified::workspace_links::{LinkedDirectory, remove_directory_symlink};
 use crate::hooks::lifecycle::{LifecycleHookEngine, SessionEndReason, SessionStartTrigger};
 use crate::agent::runloop::unified::workspace_links::{
