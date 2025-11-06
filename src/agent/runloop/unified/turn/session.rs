@@ -43,6 +43,7 @@ use crate::agent::runloop::unified::ui_interaction::{
     PlaceholderSpinner, stream_and_render_response,
 };
 
+use super::finalization::finalize_session;
 use super::harmony::strip_harmony_syntax;
 use super::utils::{render_hook_messages, safe_force_redraw};
 use super::workspace::{load_workspace_files, refresh_vt_config};
@@ -2041,93 +2042,18 @@ pub(crate) async fn run_single_agent_loop_unified(
             }
         }
 
-        let transcript_lines = transcript::snapshot();
-        if let Some(archive) = session_archive.take() {
-            let distinct_tools = session_stats.sorted_tools();
-            let total_messages = conversation_history.len();
-            let session_messages: Vec<SessionMessage> = conversation_history
-                .iter()
-                .map(SessionMessage::from)
-                .collect();
-            match archive.finalize(
-                transcript_lines,
-                total_messages,
-                distinct_tools,
-                session_messages,
-            ) {
-                Ok(path) => {
-                    if let Some(hooks) = &lifecycle_hooks {
-                        hooks.update_transcript_path(Some(path.clone())).await;
-                    }
-                    renderer.line(
-                        MessageStyle::Info,
-                        &format!("Session saved to {}", path.display()),
-                    )?;
-                    renderer.line_if_not_empty(MessageStyle::Output)?;
-                }
-                Err(err) => {
-                    renderer.line(
-                        MessageStyle::Error,
-                        &format!("Failed to save session: {}", err),
-                    )?;
-                    renderer.line_if_not_empty(MessageStyle::Output)?;
-                }
-            }
-        }
-
-        for linked in linked_directories {
-            if let Err(err) = remove_directory_symlink(&linked.link_path).await {
-                eprintln!(
-                    "Warning: failed to remove linked directory {}: {}",
-                    linked.link_path.display(),
-                    err
-                );
-            }
-        }
-
-        if let Some(hooks) = &lifecycle_hooks {
-            match hooks.run_session_end(session_end_reason).await {
-                Ok(messages) => {
-                    render_hook_messages(&mut renderer, &messages)?;
-                }
-                Err(err) => {
-                    renderer.line(
-                        MessageStyle::Error,
-                        &format!("Failed to run session end hooks: {}", err),
-                    )?;
-                }
-            }
-        }
-
-        // Shutdown MCP client properly before TUI shutdown using async manager
-        if let Some(mcp_manager) = &async_mcp_manager
-            && let Err(e) = mcp_manager.shutdown().await
-        {
-            let error_msg = e.to_string();
-            if error_msg.contains("EPIPE")
-                || error_msg.contains("Broken pipe")
-                || error_msg.contains("write EPIPE")
-            {
-                eprintln!(
-                    "Info: MCP client shutdown encountered pipe errors (normal): {}",
-                    e
-                );
-            } else {
-                eprintln!("Warning: Failed to shutdown MCP client cleanly: {}", e);
-            }
-        }
-
-        handle.shutdown();
-
-        // Clear the inline handle from the message queue system
-        transcript::clear_inline_handle();
-
-        // Clean up TUI mode environment variable
-        // SAFETY: We're removing the variable we set at the start of the session.
-        // No other threads should be accessing this variable at this point.
-        unsafe {
-            std::env::remove_var("VTCODE_TUI_MODE");
-        }
+        finalize_session(
+            &mut renderer,
+            lifecycle_hooks.as_ref(),
+            session_end_reason,
+            &mut session_archive,
+            &session_stats,
+            &conversation_history,
+            linked_directories,
+            async_mcp_manager.as_deref(),
+            &handle,
+        )
+        .await?;
 
         // If the session ended with NewSession, restart the loop with fresh config
         if matches!(session_end_reason, SessionEndReason::NewSession) {
