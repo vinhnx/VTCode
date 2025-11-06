@@ -1,20 +1,18 @@
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result};
 use chrono::Local;
 use std::collections::{BTreeSet, HashMap, VecDeque};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::Notify;
 use tokio::task;
 
-use toml::Value as TomlValue;
 #[cfg(debug_assertions)]
 use tracing::debug;
 use tracing::warn;
-use vtcode_core::SimpleIndexer;
 use vtcode_core::commands::init::{GenerateAgentsFileStatus, generate_agents_file};
 use vtcode_core::config::constants::{defaults, ui};
-use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
+use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::agent::snapshots::{SnapshotConfig, SnapshotManager};
 use vtcode_core::core::decision_tracker::{Action as DTAction, DecisionOutcome, DecisionTracker};
@@ -52,37 +50,54 @@ use crate::agent::runloop::unified::ui_interaction::{
     PlaceholderSpinner, display_session_status, display_token_cost, stream_and_render_response,
 };
 
-use super::async_mcp_manager::McpInitStatus;
-use super::context_manager::ContextManager;
-use super::curator::{build_curator_tools, format_provider_label, resolve_mode_label};
-use super::diagnostics::run_doctor_diagnostics;
-use super::display::{display_user_message, ensure_turn_bottom_gap, persist_theme_preference};
-use super::inline_events::{
+use super::config_modal::{MODAL_CLOSE_HINT, load_config_modal_content};
+use super::harmony::strip_harmony_syntax;
+use super::workspace::{
+    bootstrap_config_files, build_workspace_index, load_workspace_files, refresh_vt_config,
+};
+use crate::agent::runloop::mcp_events;
+use crate::agent::runloop::unified::async_mcp_manager::McpInitStatus;
+use crate::agent::runloop::unified::context_manager::ContextManager;
+use crate::agent::runloop::unified::curator::{
+    build_curator_tools, format_provider_label, resolve_mode_label,
+};
+use crate::agent::runloop::unified::diagnostics::run_doctor_diagnostics;
+use crate::agent::runloop::unified::display::{
+    display_user_message, ensure_turn_bottom_gap, persist_theme_preference,
+};
+use crate::agent::runloop::unified::inline_events::{
     InlineEventLoopResources, InlineInterruptCoordinator, InlineLoopAction, poll_inline_loop_action,
 };
-use super::mcp_support::{
+use crate::agent::runloop::unified::mcp_support::{
     diagnose_mcp, display_mcp_config_summary, display_mcp_providers, display_mcp_status,
     display_mcp_tools, refresh_mcp_tools, render_mcp_config_edit_guidance,
     render_mcp_login_guidance, repair_mcp_runtime,
 };
-use super::model_selection::finalize_model_selection;
-use super::palettes::{
+use crate::agent::runloop::unified::model_selection::finalize_model_selection;
+use crate::agent::runloop::unified::palettes::{
     ActivePalette, apply_prompt_style, show_help_palette, show_sessions_palette, show_theme_palette,
 };
-use super::progress::ProgressReporter;
-use super::session_setup::{SessionState, build_mcp_tool_definitions, initialize_session};
-use super::shell::{derive_recent_tool_output, should_short_circuit_shell};
-use super::state::{CtrlCSignal, CtrlCState, SessionStats};
-use super::status_line::{InputStatusState, update_input_status_if_changed};
-use super::tool_pipeline::{ToolExecutionStatus, execute_tool_with_timeout};
-use super::tool_routing::{ToolPermissionFlow, ensure_tool_permission};
-use super::tool_summary::{
+use crate::agent::runloop::unified::progress::ProgressReporter;
+use crate::agent::runloop::unified::session_setup::{
+    SessionState, build_mcp_tool_definitions, initialize_session,
+};
+use crate::agent::runloop::unified::shell::{
+    derive_recent_tool_output, should_short_circuit_shell,
+};
+use crate::agent::runloop::unified::state::{CtrlCSignal, CtrlCState, SessionStats};
+use crate::agent::runloop::unified::status_line::{
+    InputStatusState, update_input_status_if_changed,
+};
+use crate::agent::runloop::unified::tool_pipeline::{
+    ToolExecutionStatus, execute_tool_with_timeout,
+};
+use crate::agent::runloop::unified::tool_routing::{ToolPermissionFlow, ensure_tool_permission};
+use crate::agent::runloop::unified::tool_summary::{
     describe_tool_action, humanize_tool_name, render_tool_call_summary_with_status,
 };
-use super::workspace_links::{
+use crate::agent::runloop::unified::workspace_links::{
     LinkedDirectory, handle_workspace_directory_command, remove_directory_symlink,
 };
-use crate::agent::runloop::mcp_events;
 use crate::hooks::lifecycle::{
     HookMessage, HookMessageLevel, LifecycleHookEngine, SessionEndReason, SessionStartTrigger,
 };
@@ -96,179 +111,6 @@ enum TurnLoopResult {
         #[allow(dead_code)]
         reason: Option<String>,
     },
-}
-
-const CONFIG_MODAL_TITLE: &str = "VTCode Configuration";
-const MODAL_CLOSE_HINT: &str = "Press Esc to close the configuration modal.";
-const SENSITIVE_KEYWORDS: [&str; 5] = ["key", "token", "secret", "password", "credential"];
-const SENSITIVE_MASK: &str = "********";
-
-struct ConfigModalContent {
-    title: String,
-    source_label: String,
-    config_lines: Vec<String>,
-}
-
-async fn load_workspace_files(workspace: PathBuf) -> Result<Vec<String>> {
-    task::spawn_blocking(move || -> Result<Vec<String>> {
-        let mut indexer = SimpleIndexer::new(workspace.clone());
-        indexer.init()?;
-        indexer.index_directory(&workspace)?;
-
-        // Get all indexed files efficiently without regex overhead
-        let files = indexer.all_files();
-
-        Ok(files)
-    })
-    .await
-    .map_err(|err| anyhow!("failed to join file loading task: {}", err))?
-}
-
-async fn bootstrap_config_files(workspace: PathBuf, force: bool) -> Result<Vec<String>> {
-    let label = workspace.display().to_string();
-    let result = task::spawn_blocking(move || VTCodeConfig::bootstrap_project(&workspace, force))
-        .await
-        .map_err(|err| anyhow!("failed to join configuration bootstrap task: {}", err))?;
-    result.with_context(|| format!("failed to initialize configuration in {}", label))
-}
-
-async fn build_workspace_index(workspace: PathBuf) -> Result<()> {
-    let label = workspace.display().to_string();
-    let result = task::spawn_blocking(move || -> Result<()> {
-        let mut indexer = SimpleIndexer::new(workspace.clone());
-        indexer.init()?;
-        indexer.index_directory(&workspace)?;
-        Ok(())
-    })
-    .await
-    .map_err(|err| anyhow!("failed to join workspace indexing task: {}", err))?;
-    result.with_context(|| format!("failed to build workspace index in {}", label))
-}
-
-async fn load_config_modal_content(
-    workspace: PathBuf,
-    vt_cfg: Option<VTCodeConfig>,
-) -> Result<ConfigModalContent> {
-    task::spawn_blocking(move || prepare_config_modal_content(&workspace, vt_cfg))
-        .await
-        .map_err(|err| anyhow!("failed to join configuration load task: {}", err))?
-}
-
-fn prepare_config_modal_content(
-    workspace: &Path,
-    vt_cfg: Option<VTCodeConfig>,
-) -> Result<ConfigModalContent> {
-    let manager = ConfigManager::load_from_workspace(workspace).with_context(|| {
-        format!(
-            "failed to resolve configuration for workspace {}",
-            workspace.display()
-        )
-    })?;
-
-    let config_path = manager.config_path().map(Path::to_path_buf);
-    let config_data = if config_path.is_some() {
-        manager.config().clone()
-    } else if let Some(snapshot) = vt_cfg {
-        snapshot
-    } else {
-        manager.config().clone()
-    };
-
-    let mut value = TomlValue::try_from(config_data)
-        .context("failed to serialize configuration for display")?;
-    mask_sensitive_config(&mut value);
-
-    let formatted =
-        toml::to_string_pretty(&value).context("failed to render configuration to TOML")?;
-    let config_lines = formatted.lines().map(|line| line.to_string()).collect();
-
-    let source_label = if let Some(path) = config_path {
-        format!("Configuration source: {}", path.display())
-    } else {
-        "No vtcode.toml file found; showing runtime defaults.".to_string()
-    };
-
-    Ok(ConfigModalContent {
-        title: CONFIG_MODAL_TITLE.to_string(),
-        source_label,
-        config_lines,
-    })
-}
-
-fn mask_sensitive_config(value: &mut TomlValue) {
-    match value {
-        TomlValue::Table(table) => {
-            for (key, entry) in table.iter_mut() {
-                if is_sensitive_key(key) {
-                    *entry = TomlValue::String(SENSITIVE_MASK.to_string());
-                } else {
-                    mask_sensitive_config(entry);
-                }
-            }
-        }
-        TomlValue::Array(items) => {
-            for item in items {
-                mask_sensitive_config(item);
-            }
-        }
-        _ => {}
-    }
-}
-
-fn is_sensitive_key(key: &str) -> bool {
-    let lowered = key.to_ascii_lowercase();
-    SENSITIVE_KEYWORDS
-        .iter()
-        .any(|keyword| lowered.contains(keyword))
-}
-
-async fn load_workspace_config_snapshot(workspace: &Path) -> Result<VTCodeConfig> {
-    let workspace_buf = workspace.to_path_buf();
-    let label = workspace_buf.display().to_string();
-    let result = task::spawn_blocking(move || {
-        ConfigManager::load_from_workspace(&workspace_buf).map(|manager| manager.config().clone())
-    })
-    .await
-    .map_err(|err| anyhow!("failed to join workspace config load task: {}", err))?;
-
-    result.with_context(|| format!("failed to load configuration for {}", label))
-}
-
-async fn refresh_vt_config(
-    workspace: &Path,
-    runtime_cfg: &CoreAgentConfig,
-    vt_cfg: &mut Option<VTCodeConfig>,
-) -> Result<()> {
-    let mut snapshot = load_workspace_config_snapshot(workspace).await?;
-    super::super::apply_runtime_overrides(Some(&mut snapshot), runtime_cfg);
-    *vt_cfg = Some(snapshot);
-    Ok(())
-}
-
-/// Strip harmony syntax from text content to avoid displaying raw harmony tags
-fn strip_harmony_syntax(text: &str) -> String {
-    // Remove harmony tool call patterns
-    let mut result = text.to_string();
-    // Pattern: <|start|>assistant<|channel|>commentary to=... <|constrain|>...<|message|>...<|call|>
-    // We want to remove everything from <|start|> to <|call|> inclusive
-    while let Some(start_pos) = result.find("<|start|>") {
-        if let Some(call_pos) = result[start_pos..].find("<|call|>") {
-            let end_pos = start_pos + call_pos + "<|call|>".len();
-            result.replace_range(start_pos..end_pos, "");
-        } else {
-            // If no matching <|call|>, just remove <|start|>
-            result.replace_range(start_pos..start_pos + "<|start|>".len(), "");
-        }
-    }
-
-    // Clean up any remaining harmony tags
-    result = result.replace("<|channel|>", "");
-    result = result.replace("<|constrain|>", "");
-    result = result.replace("<|message|>", "");
-    result = result.replace("<|call|>", "");
-
-    // Clean up extra whitespace
-    result.trim().to_string()
 }
 
 pub(crate) async fn run_single_agent_loop_unified(
@@ -2895,44 +2737,4 @@ fn render_hook_messages(renderer: &mut AnsiRenderer, messages: &[HookMessage]) -
     }
 
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_strip_harmony_syntax_basic() {
-        let input = r#"<|start|>assistant<|channel|>commentary to=grep_file <|constrain|>json<|message|>{"path":"", "pattern":"TODO"}<|call|>"#;
-        let result = strip_harmony_syntax(input);
-        assert_eq!(result, "");
-    }
-
-    #[test]
-    fn test_strip_harmony_syntax_with_text() {
-        let input = r#"Here is some text <|start|>assistant<|channel|>commentary to=grep_file <|constrain|>json<|message|>{"path":"", "pattern":"TODO"}<|call|> and more text"#;
-        let result = strip_harmony_syntax(input);
-        assert_eq!(result, "Here is some text  and more text");
-    }
-
-    #[test]
-    fn test_strip_harmony_syntax_multiple() {
-        let input = r#"<|start|>assistant<|channel|>commentary to=tool1<|message|>{}<|call|> text <|start|>assistant<|channel|>commentary to=tool2<|message|>{}<|call|>"#;
-        let result = strip_harmony_syntax(input);
-        assert_eq!(result, "text");
-    }
-
-    #[test]
-    fn test_strip_harmony_syntax_no_harmony() {
-        let input = "This is normal text without harmony syntax";
-        let result = strip_harmony_syntax(input);
-        assert_eq!(result, input);
-    }
-
-    #[test]
-    fn test_strip_harmony_syntax_partial() {
-        let input = "Text with <|channel|> partial tags <|message|>";
-        let result = strip_harmony_syntax(input);
-        assert_eq!(result, "Text with  partial tags");
-    }
 }
