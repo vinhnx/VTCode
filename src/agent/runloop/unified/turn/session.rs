@@ -78,11 +78,6 @@ use crate::agent::runloop::unified::tool_summary::{
     describe_tool_action, humanize_tool_name, render_tool_call_summary_with_status,
 };
 use crate::agent::runloop::unified::workspace_links::LinkedDirectory;
-use crate::agent::runloop::unified::workspace_links::{LinkedDirectory, remove_directory_symlink};
-use crate::hooks::lifecycle::{LifecycleHookEngine, SessionEndReason, SessionStartTrigger};
-use crate::agent::runloop::unified::workspace_links::{
-    LinkedDirectory, handle_workspace_directory_command,
-};
 use crate::hooks::lifecycle::{LifecycleHookEngine, SessionEndReason, SessionStartTrigger};
 use crate::ide_context::IdeContextBridge;
 
