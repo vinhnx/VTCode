@@ -14,6 +14,9 @@
 		cancelBtn: document.getElementById('cancel'),
 		clearBtn: document.getElementById('clear')
 	};
+	if (elements.status) {
+		elements.status.textContent = 'Ready';
+	}
 
 	// State
 	let state = {
@@ -66,7 +69,10 @@
 			if (entry.role === 'tool') {
 				const badge = document.createElement('span');
 				badge.className = 'chat-tool-badge';
-				badge.innerHTML = `${ICONS.terminal} PTY`;
+				const toolType = entry.metadata?.toolType === 'command' ? 'Terminal' : 'Tool';
+				const toolName = entry.metadata?.tool ? String(entry.metadata.tool) : '';
+				const label = toolName ? `${toolType}: ${toolName}` : toolType;
+				badge.innerHTML = `${ICONS.terminal} ${label}`;
 				meta.appendChild(badge);
 			}
 
@@ -152,7 +158,7 @@
 	};
 
 	const setThinking = (active) => {
-		elements.status.textContent = active ? 'Thinking...' : '';
+		elements.status.textContent = active ? 'Synthesizing...' : 'Ready';
 		state.isStreaming = active;
 		updateButtonStates();
 	};

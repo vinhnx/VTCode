@@ -56,6 +56,7 @@
     "onCommand:vtcode.openDeepWiki",
     "onCommand:vtcode.openWalkthrough",
     "onCommand:vtcode.openInstallGuide",
+  "onCommand:vtcode.trustWorkspace",
     "onCommand:vtcode.toggleHumanInTheLoop",
     "onCommand:vtcode.openToolsPolicyGuide",
     "onCommand:vtcode.openToolsPolicyConfig",
@@ -156,6 +157,24 @@
         "title": "Open Quick Actions",
         "category": "VTCode",
         "icon": "$(rocket)"
+      },
+      {
+        "command": "vtcode.trustWorkspace",
+        "title": "Trust Workspace for VTCode",
+        "category": "VTCode",
+        "icon": "$(shield)"
+      },
+      {
+        "command": "vtcode.verifyWorkspaceTrust",
+        "title": "Verify Workspace Trust Flow",
+        "category": "VTCode",
+        "icon": "$(shield-check)"
+      },
+      {
+        "command": "vtcode.flushIdeContextSnapshot",
+        "title": "Refresh IDE Context Snapshot",
+        "category": "VTCode",
+        "icon": "$(symbol-structure)"
       },
       {
         "command": "vtcode.askAgent",

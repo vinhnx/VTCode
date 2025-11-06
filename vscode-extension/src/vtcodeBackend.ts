@@ -3,6 +3,10 @@ import type { ChildProcess } from "node:child_process";
 import { spawn } from "node:child_process";
 import { createInterface } from "readline";
 import * as vscode from "vscode";
+import type { VtcodeConfigSummary } from "./vtcodeConfig";
+
+const ANSI_CSI_PATTERN = new RegExp(String.raw`\u001B\[[0-9;]*[A-Za-z]`, "g");
+const ANSI_OSC_PATTERN = new RegExp(String.raw`\u001B][^\u0007]*\u0007`, "g");
 
 export interface VtcodeToolCall {
     readonly id: string;
@@ -215,6 +219,8 @@ interface PtyCommandOptions {
 export class VtcodeBackend implements vscode.Disposable {
     private abortController: AbortController | undefined;
     private currentProcess: ChildProcess | undefined;
+    private configSummary: VtcodeConfigSummary | undefined;
+    private environmentProvider: (() => Record<string, string>) | undefined;
 
     constructor(
         private commandPath: string,
@@ -234,10 +240,20 @@ export class VtcodeBackend implements vscode.Disposable {
      */
     updateConfiguration(
         commandPath: string,
-        workspaceRoot: string | undefined
+        workspaceRoot: string | undefined,
+        summary?: VtcodeConfigSummary
     ): void {
         this.commandPath = commandPath;
         this.workspaceRoot = workspaceRoot;
+        if (summary) {
+            this.configSummary = summary;
+        }
+    }
+
+    setEnvironmentProvider(
+        provider: (() => Record<string, string>) | undefined
+    ): void {
+        this.environmentProvider = provider;
     }
 
     /**
@@ -245,6 +261,25 @@ export class VtcodeBackend implements vscode.Disposable {
      * Supports cancellation via abort controller.
      */
     async *streamPrompt(
+        options: StreamPromptOptions
+    ): AsyncGenerator<VtcodeStreamChunk> {
+        if (this.shouldUseExec()) {
+            for await (const chunk of this.streamPromptViaExec(options)) {
+                yield chunk;
+            }
+            return;
+        }
+
+        for await (const chunk of this.streamPromptViaAsk(options)) {
+            yield chunk;
+        }
+    }
+
+    private shouldUseExec(): boolean {
+        return false;
+    }
+
+    private async *streamPromptViaExec(
         options: StreamPromptOptions
     ): AsyncGenerator<VtcodeStreamChunk> {
         this.abortController = new AbortController();
@@ -255,7 +290,7 @@ export class VtcodeBackend implements vscode.Disposable {
 
         const spawnOptions = {
             cwd: this.workspaceRoot,
-            env: { ...process.env },
+            env: this.buildSpawnEnv(),
         };
 
         this.output.appendLine(
@@ -353,9 +388,10 @@ export class VtcodeBackend implements vscode.Disposable {
             }
 
             if (exitCode !== null && exitCode !== 0) {
-                const message =
+                const raw =
                     stderrChunks.join("").trim() ||
                     `VTCode CLI exited with code ${exitCode}`;
+                const message = this.normalizeCliError(raw);
                 yield { kind: "error", message };
                 return;
             }
@@ -363,8 +399,9 @@ export class VtcodeBackend implements vscode.Disposable {
             yield { kind: "done" };
         } catch (error) {
             if (!signal.aborted) {
-                const message =
+                const raw =
                     error instanceof Error ? error.message : String(error);
+                const message = this.normalizeCliError(raw);
                 this.output.appendLine(`[vtcode] Stream error: ${message}`);
                 yield { kind: "error", message };
             }
@@ -373,7 +410,163 @@ export class VtcodeBackend implements vscode.Disposable {
             signal.removeEventListener("abort", abortHandler);
             this.abortController = undefined;
             proc.kill();
+            this.currentProcess = undefined;
         }
+    }
+
+    private async *streamPromptViaAsk(
+        options: StreamPromptOptions
+    ): AsyncGenerator<VtcodeStreamChunk> {
+        this.abortController = new AbortController();
+        const signal = this.abortController.signal;
+        const formattedPrompt = this.buildPromptPayload(options);
+        const args = ["ask", formattedPrompt];
+        const spawnOptions = {
+            cwd: this.workspaceRoot,
+            env: this.buildSpawnEnv(),
+        };
+
+        this.output.appendLine(
+            `[vtcode] Running: ${this.commandPath} ${args.join(" ")}`
+        );
+
+        this.currentProcess = spawn(this.commandPath, args, spawnOptions);
+        const proc = this.currentProcess;
+
+        if (!proc.stdout) {
+            throw new Error("Failed to create process stdout stream");
+        }
+
+        const stderrChunks: string[] = [];
+        let exitCode: number | null = null;
+
+        if (proc.stderr) {
+            proc.stderr.on("data", (chunk: Buffer) => {
+                const text = chunk.toString();
+                stderrChunks.push(text);
+                const trimmed = text.trim();
+                if (trimmed) {
+                    this.output.appendLine(`[vtcode][stderr] ${trimmed}`);
+                }
+            });
+        }
+
+        proc.on("close", (code: number | null) => {
+            exitCode = code;
+            if (code !== 0 && !signal.aborted) {
+                const reason =
+                    stderrChunks.join("").trim() ||
+                    `VTCode CLI exited with code ${code ?? "unknown"}`;
+                this.output.appendLine(`[vtcode] ${reason}`);
+            }
+        });
+
+        proc.on("error", (error: Error) => {
+            if (!signal.aborted) {
+                this.output.appendLine(
+                    `[vtcode] Process error: ${error.message}`
+                );
+            }
+        });
+
+        const abortHandler = () => {
+            proc.kill("SIGTERM");
+            this.output.appendLine("[vtcode] Prompt request cancelled by user");
+        };
+        signal.addEventListener("abort", abortHandler);
+
+        try {
+            for await (const chunk of proc.stdout) {
+                if (signal.aborted) {
+                    break;
+                }
+                const text = chunk.toString();
+                if (!text) {
+                    continue;
+                }
+                yield { kind: "text", text };
+            }
+
+            if (signal.aborted) {
+                return;
+            }
+
+            if (exitCode !== null && exitCode !== 0) {
+                const raw =
+                    stderrChunks.join("").trim() ||
+                    `VTCode CLI exited with code ${exitCode}`;
+                const message = this.normalizeCliError(raw);
+                yield { kind: "error", message };
+                return;
+            }
+
+            yield { kind: "done" };
+        } catch (error) {
+            if (!signal.aborted) {
+                const raw =
+                    error instanceof Error ? error.message : String(error);
+                const message = this.normalizeCliError(raw);
+                this.output.appendLine(`[vtcode] Prompt error: ${message}`);
+                yield { kind: "error", message };
+            }
+        } finally {
+            signal.removeEventListener("abort", abortHandler);
+            this.abortController = undefined;
+            proc.kill();
+            this.currentProcess = undefined;
+        }
+    }
+
+    private normalizeCliError(raw: string): string {
+        const clean = raw
+            .replace(ANSI_CSI_PATTERN, "")
+            .replace(ANSI_OSC_PATTERN, "")
+            .trim();
+        if (!clean) {
+            return "VTCode CLI reported an unknown error.";
+        }
+
+        const provider = this.configSummary?.agentProvider;
+        const defaultModel = this.configSummary?.agentDefaultModel;
+        const lower = clean.toLowerCase();
+
+        if (clean.includes("API key not found for provider")) {
+            const providerName = provider ?? "the configured provider";
+            return `${clean}\nHint: Configure credentials for ${providerName} or update vtcode.toml to use a model available locally${
+                defaultModel ? ` (current default_model: ${defaultModel})` : ""
+            }.`;
+        }
+
+        if (lower.includes("unauthorized")) {
+            const providerHint = provider ? ` (${provider})` : "";
+            return `${clean}\nHint: Check API credentials${providerHint} or adjust vtcode.toml to a provider you can access${
+                defaultModel ? ` (current default_model: ${defaultModel})` : ""
+            }.`;
+        }
+
+        return clean;
+    }
+
+    private buildSpawnEnv(): NodeJS.ProcessEnv {
+        const baseEnv = { ...process.env } as NodeJS.ProcessEnv;
+        if (!this.environmentProvider) {
+            return baseEnv;
+        }
+
+        try {
+            const overlay = this.environmentProvider();
+            for (const [key, value] of Object.entries(overlay)) {
+                baseEnv[key] = value;
+            }
+        } catch (error) {
+            const details =
+                error instanceof Error ? error.message : String(error);
+            this.output.appendLine(
+                `[vtcode] Failed to resolve VTCode environment overlay: ${details}`
+            );
+        }
+
+        return baseEnv;
     }
 
     private buildPromptPayload(options: StreamPromptOptions): string {
@@ -763,7 +956,7 @@ export class VtcodeBackend implements vscode.Disposable {
         const args = ["execute-tool", call.name, JSON.stringify(call.args)];
         const spawnOptions = {
             cwd: this.workspaceRoot,
-            env: { ...process.env },
+            env: this.buildSpawnEnv(),
         };
 
         return new Promise((resolve, reject) => {

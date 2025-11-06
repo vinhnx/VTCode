@@ -5,6 +5,7 @@ import {
     type VtcodeToolCall,
     type VtcodeToolExecutionResult,
 } from "./vtcodeBackend";
+import { VtcodeConfigSummary } from "./vtcodeConfig";
 
 interface ChatMessage {
     readonly role: "user" | "assistant" | "system" | "tool" | "error";
@@ -23,6 +24,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
     private view: vscode.WebviewView | undefined;
     private readonly messages: ChatMessage[] = [];
+    private workspaceTrusted = vscode.workspace.isTrusted;
+    private lastHumanInLoopSetting: boolean | undefined;
 
     constructor(
         private readonly extensionUri: vscode.Uri,
@@ -32,6 +35,21 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
     dispose(): void {
         /* noop */
+    }
+
+    public setWorkspaceTrusted(trusted: boolean): void {
+        this.workspaceTrusted = trusted;
+    }
+
+    public updateConfig(summary: VtcodeConfigSummary | undefined): void {
+        const previous = this.lastHumanInLoopSetting;
+        this.lastHumanInLoopSetting = summary?.humanInTheLoop ?? undefined;
+
+        if (summary?.humanInTheLoop === false && previous !== false) {
+            this.output.appendLine(
+                "[chatView] Configuration disabled human_in_the_loop; VTCode prompts will proceed without extra VS Code confirmations."
+            );
+        }
     }
 
     public resolveWebviewView(
@@ -93,6 +111,22 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
 
     private async handleUserMessage(text: string): Promise<void> {
+        if (!(await this.ensureWorkspaceTrusted())) {
+            this.addSystemMessage(
+                "Trust this workspace to send prompts to VTCode."
+            );
+            return;
+        }
+
+        const contextFlushed = await vscode.commands.executeCommand(
+            "vtcode.flushIdeContextSnapshot"
+        );
+        if (contextFlushed === false) {
+            this.output.appendLine(
+                "[vtcode] IDE context snapshot is unavailable; continuing without supplemental context."
+            );
+        }
+
         const userMessage: ChatMessage = {
             role: "user",
             content: text,
@@ -171,7 +205,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             const responsePayload =
                 result.result !== undefined ? result.result : result.text;
             chunk.respond(responsePayload);
-            this.addToolMessage(chunk.call, result);
+            this.addToolMessage(
+                chunk.call,
+                result,
+                usesTerminal ? "command" : "tool"
+            );
 
             // Show error if exit code is non-zero
             if (result.exitCode && result.exitCode !== 0) {
@@ -185,6 +223,29 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             chunk.reject(problem);
             this.addErrorMessage(`Tool ${chunk.call.name} failed: ${problem}`);
         }
+    }
+
+    private async ensureWorkspaceTrusted(): Promise<boolean> {
+        if (this.workspaceTrusted) {
+            return true;
+        }
+
+        const selection = await vscode.window.showWarningMessage(
+            "VTCode requires a trusted workspace before processing prompts.",
+            { modal: true },
+            "Trust Workspace",
+            "Cancel"
+        );
+
+        if (selection === "Trust Workspace") {
+            await vscode.commands.executeCommand("vtcode.trustWorkspace");
+            if (vscode.workspace.isTrusted) {
+                this.workspaceTrusted = true;
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private isTerminalTool(toolName: string): boolean {
@@ -288,7 +349,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
     private addToolMessage(
         call: VtcodeToolCall,
-        result: VtcodeToolExecutionResult
+        result: VtcodeToolExecutionResult,
+        toolKind: "command" | "tool"
     ): void {
         const text = result.text.trim();
         const preview = text.length > 0 ? text : "(no output)";
@@ -305,6 +367,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 arguments: call.args,
                 rawResult: result.result ?? result.text,
                 exitCode: result.exitCode,
+                toolType: toolKind,
                 humanApproved: true, // Mark as HITL approved
             },
         };
@@ -355,18 +418,45 @@ ${output}`
     }
 
     private buildConversationContext(): string {
-        // Include last 10 messages for context (exclude system/error messages)
+        const hitlState =
+            this.lastHumanInLoopSetting === false ? "disabled" : "enabled";
+        const toolGuidance =
+            this.lastHumanInLoopSetting === false
+                ? "Tools may execute without a manual approval prompt; describe safety checks before running destructive commands."
+                : "Tools require human approval before execution; propose shell commands and edits explicitly.";
+        const preamble = `system: You are the VTCode workspace agent running inside VS Code. Workspace trust is ${
+            this.workspaceTrusted ? "granted" : "restricted"
+        }. Human-in-the-loop is ${hitlState}. ${toolGuidance} Prefer using VTCode tools or PTY sessions for filesystem or shell access, and reference the IDE context snapshot when available.`;
+
         const relevantMessages = this.messages
-            .filter((m) => m.role === "user" || m.role === "assistant")
-            .slice(-10);
+            .filter(
+                (message) =>
+                    message.role === "user" ||
+                    message.role === "assistant" ||
+                    message.role === "tool"
+            )
+            .slice(-12);
 
         if (relevantMessages.length === 0) {
-            return "";
+            return preamble;
         }
 
-        return relevantMessages
-            .map((m) => `${m.role}: ${m.content}`)
+        const transcript = relevantMessages
+            .map((message) => {
+                const role = message.role === "tool" ? "tool" : message.role;
+                const content = this.truncateForContext(message.content, 2000);
+                return `${role}: ${content}`;
+            })
             .join("\n\n");
+
+        return `${preamble}\n\n${transcript}`;
+    }
+
+    private truncateForContext(content: string, limit: number): string {
+        if (content.length <= limit) {
+            return content;
+        }
+        return `${content.slice(0, limit - 20)}… [truncated]`;
     }
 
     private postTranscript(): void {
@@ -408,18 +498,26 @@ ${output}`
 <title>VTCode Chat</title>
 </head>
 <body>
-	<div id="chat-root" class="chat-root">
-		<div id="transcript" class="chat-transcript" role="log" aria-live="polite"></div>
-		<div id="status" class="chat-status" aria-live="polite"></div>
-		<form id="composer" class="chat-composer" aria-label="Send a message">
-			<textarea id="message" class="chat-input" rows="3" placeholder="Ask VTCode a question"></textarea>
-			<div class="chat-actions">
-				<button id="send" type="submit" class="chat-button">Send</button>
-				<button id="cancel" type="button" class="chat-button chat-button--secondary" style="display: none;">Cancel</button>
-				<button id="clear" type="button" class="chat-button chat-button--secondary">Clear</button>
-			</div>
-		</form>
-	</div>
+    <div id="chat-root" class="chat-root">
+        <div class="chat-surface">
+            <header class="chat-header">
+                <div class="chat-title">
+                    <span class="chat-logo">VT</span>
+                    <span>VTCode Companion</span>
+                </div>
+                <div id="status" class="chat-status" aria-live="polite"></div>
+            </header>
+            <div id="transcript" class="chat-transcript" role="log" aria-live="polite"></div>
+            <form id="composer" class="chat-composer" aria-label="Send a message">
+                <textarea id="message" class="chat-input" rows="3" placeholder="Ask VTCode a question"></textarea>
+                <div class="chat-actions">
+                    <button id="send" type="submit" class="chat-button">Send</button>
+                    <button id="cancel" type="button" class="chat-button chat-button--secondary" style="display: none;">Cancel</button>
+                    <button id="clear" type="button" class="chat-button chat-button--secondary">Clear</button>
+                </div>
+            </form>
+        </div>
+    </div>
 	<script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;

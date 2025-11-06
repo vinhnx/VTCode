@@ -1,6 +1,6 @@
-import * as vscode from 'vscode';
-import { join } from 'node:path';
-import * as TOML from '@iarna/toml';
+import * as TOML from "@iarna/toml";
+import { join } from "node:path";
+import * as vscode from "vscode";
 
 export interface VtcodeMcpProviderSummary {
     readonly name: string;
@@ -17,13 +17,17 @@ export interface VtcodeConfigSummary {
     readonly toolPoliciesCount?: number;
     readonly mcpEnabled?: boolean;
     readonly mcpProviders: VtcodeMcpProviderSummary[];
+    readonly agentProvider?: string;
+    readonly agentDefaultModel?: string;
+    readonly automationFullAutoEnabled?: boolean;
+    readonly automationFullAutoAllowedTools?: string[];
     readonly parseError?: string;
 }
 
 export type VtcodeConfigUpdateHandler = (summary: VtcodeConfigSummary) => void;
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
-    if (value && typeof value === 'object' && !Array.isArray(value)) {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
         return value as Record<string, unknown>;
     }
 
@@ -31,11 +35,11 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
 }
 
 function asBoolean(value: unknown): boolean | undefined {
-    return typeof value === 'boolean' ? value : undefined;
+    return typeof value === "boolean" ? value : undefined;
 }
 
 function asString(value: unknown): string | undefined {
-    return typeof value === 'string' ? value : undefined;
+    return typeof value === "string" ? value : undefined;
 }
 
 function asArray(value: unknown): unknown[] | undefined {
@@ -46,12 +50,15 @@ export async function registerVtcodeConfigWatcher(
     context: vscode.ExtensionContext,
     onUpdate: VtcodeConfigUpdateHandler
 ): Promise<void> {
-    if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length === 0) {
+    if (
+        !vscode.workspace.workspaceFolders ||
+        vscode.workspace.workspaceFolders.length === 0
+    ) {
         onUpdate({ hasConfig: false, mcpProviders: [] });
         return;
     }
 
-    const watcher = vscode.workspace.createFileSystemWatcher('**/vtcode.toml');
+    const watcher = vscode.workspace.createFileSystemWatcher("**/vtcode.toml");
     context.subscriptions.push(watcher);
 
     const refresh = async () => {
@@ -70,13 +77,24 @@ export async function registerVtcodeConfigWatcher(
     await refresh();
 }
 
-export async function pickVtcodeConfigUri(preferred?: vscode.Uri): Promise<vscode.Uri | undefined> {
-    const matches = await vscode.workspace.findFiles('**/vtcode.toml', '**/{node_modules,dist,out,.git,target}/**', 10);
+export async function pickVtcodeConfigUri(
+    preferred?: vscode.Uri
+): Promise<vscode.Uri | undefined> {
+    const matches = await vscode.workspace.findFiles(
+        "**/vtcode.toml",
+        "**/{node_modules,dist,out,.git,target}/**",
+        10
+    );
     if (matches.length === 0) {
         return undefined;
     }
 
-    if (preferred && matches.some((candidate) => candidate.toString() === preferred.toString())) {
+    if (
+        preferred &&
+        matches.some(
+            (candidate) => candidate.toString() === preferred.toString()
+        )
+    ) {
         return preferred;
     }
 
@@ -86,11 +104,11 @@ export async function pickVtcodeConfigUri(preferred?: vscode.Uri): Promise<vscod
 
     const items = matches.map((uri) => ({
         label: vscode.workspace.asRelativePath(uri, false),
-        uri
+        uri,
     }));
 
     const selection = await vscode.window.showQuickPick(items, {
-        placeHolder: 'Select the vtcode.toml to use'
+        placeHolder: "Select the vtcode.toml to use",
     });
 
     return selection?.uri;
@@ -98,46 +116,68 @@ export async function pickVtcodeConfigUri(preferred?: vscode.Uri): Promise<vscod
 
 export async function revealToolsPolicySection(uri: vscode.Uri): Promise<void> {
     const document = await vscode.workspace.openTextDocument(uri);
-    const editor = await vscode.window.showTextDocument(document, { preview: false });
+    const editor = await vscode.window.showTextDocument(document, {
+        preview: false,
+    });
     const text = document.getText();
-    const toolsPoliciesIndex = text.indexOf('[tools.policies]');
+    const toolsPoliciesIndex = text.indexOf("[tools.policies]");
     if (toolsPoliciesIndex >= 0) {
         const position = document.positionAt(toolsPoliciesIndex);
         editor.selection = new vscode.Selection(position, position);
-        editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
+        editor.revealRange(
+            new vscode.Range(position, position),
+            vscode.TextEditorRevealType.InCenter
+        );
         return;
     }
 
-    const toolsIndex = text.indexOf('[tools]');
+    const toolsIndex = text.indexOf("[tools]");
     if (toolsIndex >= 0) {
         const position = document.positionAt(toolsIndex);
         editor.selection = new vscode.Selection(position, position);
-        editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
+        editor.revealRange(
+            new vscode.Range(position, position),
+            vscode.TextEditorRevealType.InCenter
+        );
         return;
     }
 
     const endPosition = document.positionAt(text.length);
     editor.selection = new vscode.Selection(endPosition, endPosition);
-    editor.revealRange(new vscode.Range(endPosition, endPosition), vscode.TextEditorRevealType.InCenter);
+    editor.revealRange(
+        new vscode.Range(endPosition, endPosition),
+        vscode.TextEditorRevealType.InCenter
+    );
 }
 
 export async function revealMcpSection(uri: vscode.Uri): Promise<void> {
     const document = await vscode.workspace.openTextDocument(uri);
-    const editor = await vscode.window.showTextDocument(document, { preview: false });
+    const editor = await vscode.window.showTextDocument(document, {
+        preview: false,
+    });
     const text = document.getText();
-    const mcpIndex = text.indexOf('[mcp]');
+    const mcpIndex = text.indexOf("[mcp]");
     if (mcpIndex >= 0) {
         const position = document.positionAt(mcpIndex);
         editor.selection = new vscode.Selection(position, position);
-        editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
+        editor.revealRange(
+            new vscode.Range(position, position),
+            vscode.TextEditorRevealType.InCenter
+        );
     } else {
         const endPosition = document.positionAt(text.length);
         editor.selection = new vscode.Selection(endPosition, endPosition);
-        editor.revealRange(new vscode.Range(endPosition, endPosition), vscode.TextEditorRevealType.InCenter);
+        editor.revealRange(
+            new vscode.Range(endPosition, endPosition),
+            vscode.TextEditorRevealType.InCenter
+        );
     }
 }
 
-export async function setHumanInTheLoop(uri: vscode.Uri, enabled: boolean): Promise<boolean> {
+export async function setHumanInTheLoop(
+    uri: vscode.Uri,
+    enabled: boolean
+): Promise<boolean> {
     const document = await vscode.workspace.openTextDocument(uri);
     const text = document.getText();
     const match = text.match(/^(\s*human_in_the_loop\s*=\s*)(true|false)/m);
@@ -146,15 +186,25 @@ export async function setHumanInTheLoop(uri: vscode.Uri, enabled: boolean): Prom
     if (match && match.index !== undefined) {
         const start = document.positionAt(match.index);
         const end = document.positionAt(match.index + match[0].length);
-        edit.replace(uri, new vscode.Range(start, end), `${match[1]}${enabled}`);
+        edit.replace(
+            uri,
+            new vscode.Range(start, end),
+            `${match[1]}${enabled}`
+        );
     } else {
         const securityMatch = text.match(/^\s*\[security\]\s*$/m);
         if (securityMatch && securityMatch.index !== undefined) {
             const securityLine = document.positionAt(securityMatch.index).line;
             const insertPosition = new vscode.Position(securityLine + 1, 0);
-            edit.insert(uri, insertPosition, `human_in_the_loop = ${enabled}\n`);
+            edit.insert(
+                uri,
+                insertPosition,
+                `human_in_the_loop = ${enabled}\n`
+            );
         } else {
-            const appendText = `${text.endsWith('\n') ? '' : '\n'}[security]\nhuman_in_the_loop = ${enabled}\n`;
+            const appendText = `${
+                text.endsWith("\n") ? "" : "\n"
+            }[security]\nhuman_in_the_loop = ${enabled}\n`;
             const endPosition = document.positionAt(text.length);
             edit.insert(uri, endPosition, appendText);
         }
@@ -171,17 +221,17 @@ export async function setMcpProviderEnabled(
     uri: vscode.Uri,
     providerName: string,
     enabled: boolean
-): Promise<'updated' | 'nochange' | 'notfound'> {
+): Promise<"updated" | "nochange" | "notfound"> {
     const document = await vscode.workspace.openTextDocument(uri);
     const text = document.getText();
     const block = findMcpProviderBlock(document, text, providerName);
     if (!block) {
-        return 'notfound';
+        return "notfound";
     }
 
     const currentValue = block.enabledValue;
     if (currentValue === enabled) {
-        return 'nochange';
+        return "nochange";
     }
 
     const edit = new vscode.WorkspaceEdit();
@@ -189,22 +239,31 @@ export async function setMcpProviderEnabled(
         edit.replace(uri, block.enabledRange, `enabled = ${enabled}`);
     } else {
         const insertPosition = new vscode.Position(block.insertLine, 0);
-        const indentation = block.indentation ?? '';
-        edit.insert(uri, insertPosition, `${indentation}enabled = ${enabled}\n`);
+        const indentation = block.indentation ?? "";
+        edit.insert(
+            uri,
+            insertPosition,
+            `${indentation}enabled = ${enabled}\n`
+        );
     }
 
     const applied = await vscode.workspace.applyEdit(edit);
     if (applied) {
         await document.save();
-        return 'updated';
+        return "updated";
     }
 
-    return 'nochange';
+    return "nochange";
 }
 
 export async function appendMcpProvider(
     uri: vscode.Uri,
-    provider: { name: string; command: string; args: string[]; enabled: boolean }
+    provider: {
+        name: string;
+        command: string;
+        args: string[];
+        enabled: boolean;
+    }
 ): Promise<boolean> {
     const document = await vscode.workspace.openTextDocument(uri);
     const text = document.getText();
@@ -214,24 +273,32 @@ export async function appendMcpProvider(
     }
 
     const snippetLines = [
-        '',
-        '[[mcp.providers]]',
+        "",
+        "[[mcp.providers]]",
         `name = "${provider.name}"`,
-        `command = "${provider.command}"`
+        `command = "${provider.command}"`,
     ];
 
     if (provider.args.length > 0) {
-        const serializedArgs = provider.args.map((arg) => `"${arg.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`).join(', ');
+        const serializedArgs = provider.args
+            .map(
+                (arg) => `"${arg.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`
+            )
+            .join(", ");
         snippetLines.push(`args = [${serializedArgs}]`);
     }
 
     snippetLines.push(`enabled = ${provider.enabled}`);
-    snippetLines.push('');
+    snippetLines.push("");
 
-    const appendText = snippetLines.join('\n');
+    const appendText = snippetLines.join("\n");
     const endPosition = document.positionAt(text.length);
     const edit = new vscode.WorkspaceEdit();
-    edit.insert(uri, endPosition, `${text.endsWith('\n') ? '' : '\n'}${appendText}`);
+    edit.insert(
+        uri,
+        endPosition,
+        `${text.endsWith("\n") ? "" : "\n"}${appendText}`
+    );
 
     const applied = await vscode.workspace.applyEdit(edit);
     if (applied) {
@@ -240,14 +307,21 @@ export async function appendMcpProvider(
     return applied;
 }
 
-export async function loadConfigSummaryFromUri(uri: vscode.Uri): Promise<VtcodeConfigSummary> {
+export async function loadConfigSummaryFromUri(
+    uri: vscode.Uri
+): Promise<VtcodeConfigSummary> {
     const bytes = await vscode.workspace.fs.readFile(uri);
-    const text = Buffer.from(bytes).toString('utf8');
+    const text = Buffer.from(bytes).toString("utf8");
     try {
         const parsed = TOML.parse(text) as unknown;
         return buildSummaryFromParsed(uri, parsed);
     } catch (error) {
-        return { hasConfig: true, uri, mcpProviders: [], parseError: error instanceof Error ? error.message : String(error) };
+        return {
+            hasConfig: true,
+            uri,
+            mcpProviders: [],
+            parseError: error instanceof Error ? error.message : String(error),
+        };
     }
 }
 
@@ -261,7 +335,11 @@ async function loadPrimaryConfigSummary(): Promise<VtcodeConfigSummary> {
 }
 
 async function guessPrimaryConfigUri(): Promise<vscode.Uri | undefined> {
-    const matches = await vscode.workspace.findFiles('**/vtcode.toml', '**/{node_modules,dist,out,.git,target}/**', 10);
+    const matches = await vscode.workspace.findFiles(
+        "**/vtcode.toml",
+        "**/{node_modules,dist,out,.git,target}/**",
+        10
+    );
     if (matches.length === 0) {
         return undefined;
     }
@@ -273,7 +351,9 @@ async function guessPrimaryConfigUri(): Promise<vscode.Uri | undefined> {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (workspaceFolders) {
         for (const folder of workspaceFolders) {
-            const rootCandidate = matches.find((uri) => uri.fsPath === join(folder.uri.fsPath, 'vtcode.toml'));
+            const rootCandidate = matches.find(
+                (uri) => uri.fsPath === join(folder.uri.fsPath, "vtcode.toml")
+            );
             if (rootCandidate) {
                 return rootCandidate;
             }
@@ -283,18 +363,34 @@ async function guessPrimaryConfigUri(): Promise<vscode.Uri | undefined> {
     return matches.sort((a, b) => a.fsPath.length - b.fsPath.length)[0];
 }
 
-function buildSummaryFromParsed(uri: vscode.Uri, parsed: unknown): VtcodeConfigSummary {
+function buildSummaryFromParsed(
+    uri: vscode.Uri,
+    parsed: unknown
+): VtcodeConfigSummary {
     const root = asRecord(parsed) ?? {};
-    const security = asRecord(root['security']);
-    const tools = asRecord(root['tools']);
-    const mcp = asRecord(root['mcp']);
+    const security = asRecord(root["security"]);
+    const tools = asRecord(root["tools"]);
+    const mcp = asRecord(root["mcp"]);
+    const agent = asRecord(root["agent"]);
+    const automation = asRecord(root["automation"]);
+    const fullAuto = asRecord(automation?.["full_auto"]);
 
-    const humanInTheLoop = asBoolean(security?.['human_in_the_loop']);
-    const toolDefaultPolicy = asString(tools?.['default_policy']);
-    const toolPoliciesRecord = tools ? asRecord(tools['policies']) : undefined;
-    const toolPoliciesCount = toolPoliciesRecord ? Object.keys(toolPoliciesRecord).length : 0;
+    const humanInTheLoop = asBoolean(security?.["human_in_the_loop"]);
+    const toolDefaultPolicy = asString(tools?.["default_policy"]);
+    const toolPoliciesRecord = tools ? asRecord(tools["policies"]) : undefined;
+    const toolPoliciesCount = toolPoliciesRecord
+        ? Object.keys(toolPoliciesRecord).length
+        : 0;
 
-    const providersRaw = mcp ? asArray(mcp['providers']) ?? [] : [];
+    const automationFullAutoEnabled = asBoolean(fullAuto?.["enabled"]);
+    const automationFullAutoAllowedTools = asArray(
+        fullAuto?.["allowed_tools"]
+    )?.filter((value): value is string => typeof value === "string");
+
+    const agentProvider = asString(agent?.["provider"]);
+    const agentDefaultModel = asString(agent?.["default_model"]);
+
+    const providersRaw = mcp ? asArray(mcp["providers"]) ?? [] : [];
     const mcpProviders: VtcodeMcpProviderSummary[] = [];
     providersRaw.forEach((entry) => {
         const provider = asRecord(entry);
@@ -302,21 +398,23 @@ function buildSummaryFromParsed(uri: vscode.Uri, parsed: unknown): VtcodeConfigS
             return;
         }
 
-        const name = asString(provider['name']);
+        const name = asString(provider["name"]);
         if (!name) {
             return;
         }
 
-        const command = asString(provider['command']);
-        const enabledValue = asBoolean(provider['enabled']);
-        const argsCandidates = asArray(provider['args']);
-        const args = argsCandidates?.filter((value): value is string => typeof value === 'string');
+        const command = asString(provider["command"]);
+        const enabledValue = asBoolean(provider["enabled"]);
+        const argsCandidates = asArray(provider["args"]);
+        const args = argsCandidates?.filter(
+            (value): value is string => typeof value === "string"
+        );
 
         mcpProviders.push({
             name,
             command,
             enabled: enabledValue,
-            args
+            args,
         });
     });
 
@@ -326,8 +424,12 @@ function buildSummaryFromParsed(uri: vscode.Uri, parsed: unknown): VtcodeConfigS
         humanInTheLoop,
         toolDefaultPolicy,
         toolPoliciesCount,
-        mcpEnabled: asBoolean(mcp?.['enabled']),
-        mcpProviders
+        mcpEnabled: asBoolean(mcp?.["enabled"]),
+        mcpProviders,
+        agentProvider,
+        agentDefaultModel,
+        automationFullAutoEnabled,
+        automationFullAutoAllowedTools,
     };
 }
 
@@ -355,7 +457,7 @@ function findMcpProviderBlock(
 
     for (let index = 0; index < lines.length; index += 1) {
         const line = lines[index];
-        if (line.trim() !== '[[mcp.providers]]') {
+        if (line.trim() !== "[[mcp.providers]]") {
             continue;
         }
 
@@ -368,7 +470,7 @@ function findMcpProviderBlock(
         for (let inner = index + 1; inner < lines.length; inner += 1) {
             const candidate = lines[inner];
             const trimmed = candidate.trim();
-            if (trimmed.startsWith('[') && !trimmed.startsWith('#')) {
+            if (trimmed.startsWith("[") && !trimmed.startsWith("#")) {
                 insertLine = inner;
                 break;
             }
@@ -389,14 +491,16 @@ function findMcpProviderBlock(
                 if (matchOffset >= 0) {
                     const startOffset = lineOffsets[inner] + matchOffset;
                     const start = document.positionAt(startOffset);
-                    const end = document.positionAt(startOffset + enabledMatch[0].length);
+                    const end = document.positionAt(
+                        startOffset + enabledMatch[0].length
+                    );
                     enabledRange = new vscode.Range(start, end);
-                    enabledValue = enabledMatch[1] === 'true';
+                    enabledValue = enabledMatch[1] === "true";
                     indentation = candidate.slice(0, matchOffset);
                 }
             }
 
-            if (!indentation && trimmed && !trimmed.startsWith('#')) {
+            if (!indentation && trimmed && !trimmed.startsWith("#")) {
                 indentation = candidate.slice(0, candidate.indexOf(trimmed));
             }
         }
@@ -406,7 +510,7 @@ function findMcpProviderBlock(
                 enabledRange,
                 enabledValue,
                 indentation,
-                insertLine
+                insertLine,
             };
         }
     }
