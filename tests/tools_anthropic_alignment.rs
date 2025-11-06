@@ -1,7 +1,7 @@
 use assert_fs::TempDir;
-use tempfile::tempdir;
 use serde_json::json;
 use std::fs;
+use tempfile::tempdir;
 use vtcode_core::ToolRegistry;
 use vtcode_core::config::constants::tools;
 

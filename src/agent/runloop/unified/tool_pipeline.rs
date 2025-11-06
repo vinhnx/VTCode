@@ -433,8 +433,6 @@ mod tests {
         }
     }
 
-
-
     // Note: This test requires tokio's test-util feature (start_paused, advance)
     // which is not enabled in the standard build. The test is commented out
     // to avoid compilation errors. To run it, enable tokio/test-util in Cargo.toml.
