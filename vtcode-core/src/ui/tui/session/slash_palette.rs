@@ -71,6 +71,7 @@ pub struct SlashPaletteHighlightSegment {
     pub highlighted: bool,
 }
 
+#[cfg(test)]
 impl SlashPaletteHighlightSegment {
     #[cfg(test)]
     pub fn highlighted(content: impl Into<String>) -> Self {
