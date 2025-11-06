@@ -5,13 +5,13 @@
 # Core agent behavior; see docs/config/CONFIGURATION_PRECEDENCE.md.
 [agent]
 # Primary LLM provider to use (e.g., "openai", "gemini", "anthropic", "openrouter")
-provider = "ollama"
+provider = "openai"
 
 # Environment variable containing the API key for the provider
-api_key_env = "OLLAMA_API_KEY"
+api_key_env = "OPENAI_API_KEY"
 
 # Default model to use when no specific model is specified
-default_model = "gpt-oss:120b-cloud"
+default_model = "gpt-5-nano"
 
 # Visual theme for the terminal interface
 theme = "ciapre-dark"
@@ -385,15 +385,15 @@ llm_router_model = ""
 # Model mapping for different task types
 [router.models]
 # Model for simple queries
-simple = "gpt-oss:120b-cloud"
+simple = "gpt-5-nano"
 # Model for standard tasks
-standard = "gpt-oss:120b-cloud"
+standard = "gpt-5-nano"
 # Model for complex tasks
-complex = "gpt-oss:120b-cloud"
+complex = "gpt-5-nano"
 # Model for code generation heavy tasks
-codegen_heavy = "gpt-oss:120b-cloud"
+codegen_heavy = "gpt-5-nano"
 # Model for information retrieval heavy tasks
-retrieval_heavy = "gpt-oss:120b-cloud"
+retrieval_heavy = "gpt-5-nano"
 
 # Router budget settings (if applicable)
 [router.budgets]

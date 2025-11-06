@@ -993,7 +993,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                         &handle,
                         input_status_state.left.clone(),
                         input_status_state.right.clone(),
-                        "Sending request...",
+                        "Thinking...",
                     );
                     task::yield_now().await;
                     #[cfg(debug_assertions)]
