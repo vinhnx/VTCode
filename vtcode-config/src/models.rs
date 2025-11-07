@@ -296,6 +296,8 @@ pub enum ModelId {
     OpenRouterZaiGlm46,
     /// Kimi K2 0905 - MoonshotAI Kimi K2 0905 MoE release optimised for coding agents
     OpenRouterMoonshotaiKimiK20905,
+    /// Kimi K2 Thinking - MoonshotAI reasoning-tier Kimi K2 release optimized for long-horizon agents
+    OpenRouterMoonshotaiKimiK2Thinking,
     /// Kimi K2 (free) - Community tier for MoonshotAI Kimi K2
     OpenRouterMoonshotaiKimiK2Free,
     /// Qwen3 Max - Flagship Qwen3 mixture for general reasoning

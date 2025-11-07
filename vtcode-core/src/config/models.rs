@@ -118,7 +118,10 @@ impl Provider {
             }
             Provider::Ollama => models::ollama::REASONING_LEVEL_MODELS.contains(&model),
             Provider::LmStudio => false,
-            Provider::Moonshot => model == models::moonshot::KIMI_K2_THINKING || model == models::moonshot::KIMI_K2_THINKING_HEAVY,
+            Provider::Moonshot => {
+                model == models::moonshot::KIMI_K2_THINKING
+                    || model == models::moonshot::KIMI_K2_THINKING_HEAVY
+            }
             Provider::XAI => model == models::xai::GROK_4 || model == models::xai::GROK_4_CODE,
             Provider::ZAI => model == models::zai::GLM_4_6,
             Provider::Minimax => model == models::minimax::MINIMAX_M2,
@@ -303,6 +306,8 @@ pub enum ModelId {
     OpenRouterZaiGlm46,
     /// Kimi K2 0905 - MoonshotAI Kimi K2 0905 MoE release optimised for coding agents
     OpenRouterMoonshotaiKimiK20905,
+    /// Kimi K2 Thinking - MoonshotAI reasoning-tier Kimi K2 release optimized for long-horizon agents
+    OpenRouterMoonshotaiKimiK2Thinking,
     /// Kimi K2 (free) - Community tier for MoonshotAI Kimi K2
     OpenRouterMoonshotaiKimiK2Free,
     /// Qwen3 Max - Flagship Qwen3 mixture for general reasoning
@@ -522,6 +527,7 @@ impl ModelId {
             | ModelId::ZaiGlm432b0414128k => Provider::ZAI,
             ModelId::MoonshotKimiK2TurboPreview
             | ModelId::MoonshotKimiK2Thinking
+            | ModelId::MoonshotKimiK2ThinkingHeavy
             | ModelId::MoonshotKimiK20905Preview
             | ModelId::MoonshotKimiK20711Preview
             | ModelId::MoonshotKimiLatest
@@ -1070,7 +1076,10 @@ impl ModelId {
 
     /// Determine whether the model is a reasoning-capable variant
     pub fn is_reasoning_variant(&self) -> bool {
-        if matches!(self, ModelId::MoonshotKimiK2Thinking | ModelId::MoonshotKimiK2ThinkingHeavy) {
+        if matches!(
+            self,
+            ModelId::MoonshotKimiK2Thinking | ModelId::MoonshotKimiK2ThinkingHeavy
+        ) {
             return true;
         }
         if let Some(meta) = self.openrouter_metadata() {
@@ -1205,7 +1214,9 @@ impl FromStr for ModelId {
                 Ok(ModelId::MoonshotKimiK2TurboPreview)
             }
             s if s == models::MOONSHOT_KIMI_K2_THINKING => Ok(ModelId::MoonshotKimiK2Thinking),
-            s if s == models::MOONSHOT_KIMI_K2_THINKING_HEAVY => Ok(ModelId::MoonshotKimiK2ThinkingHeavy),
+            s if s == models::MOONSHOT_KIMI_K2_THINKING_HEAVY => {
+                Ok(ModelId::MoonshotKimiK2ThinkingHeavy)
+            }
             s if s == models::MOONSHOT_KIMI_K2_0905_PREVIEW => {
                 Ok(ModelId::MoonshotKimiK20905Preview)
             }

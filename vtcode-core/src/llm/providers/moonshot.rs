@@ -1,15 +1,19 @@
 use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::PromptCachingConfig;
+use crate::config::models::Provider as ModelProvider;
 use crate::llm::client::LLMClient;
 use crate::llm::error_display;
-use crate::llm::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse, Message, MessageRole, MessageContent, ToolCall, FunctionCall, FinishReason, Usage};
-use crate::llm::providers::common::{forward_prompt_cache_with_state, override_base_url, resolve_model};
+use crate::llm::provider::{
+    FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, Message, MessageRole, Usage,
+};
+use crate::llm::providers::common::{
+    forward_prompt_cache_with_state, override_base_url, resolve_model,
+};
 use crate::llm::rig_adapter::reasoning_parameters_for;
-use crate::config::models::Provider as ModelProvider;
 use crate::llm::types as llm_types;
 use async_trait::async_trait;
 use reqwest::Client;
-use serde_json::{Value, json, Map};
+use serde_json::{Map, Value, json};
 
 const PROVIDER_NAME: &str = "Moonshot";
 const PROVIDER_KEY: &str = "moonshot";
@@ -75,22 +79,25 @@ impl MoonshotProvider {
         let mut payload = Map::new();
 
         // Basic parameters
-        payload.insert(
-            "model".to_string(),
-            Value::String(request.model.clone()),
-        );
-        
+        payload.insert("model".to_string(), Value::String(request.model.clone()));
+
         payload.insert(
             "messages".to_string(),
             Value::Array(self.serialize_messages(request)?),
         );
 
         if let Some(max_tokens) = request.max_tokens {
-            payload.insert("max_tokens".to_string(), Value::Number(serde_json::Number::from(max_tokens)));
+            payload.insert(
+                "max_tokens".to_string(),
+                Value::Number(serde_json::Number::from(max_tokens)),
+            );
         }
 
         if let Some(temperature) = request.temperature {
-            payload.insert("temperature".to_string(), Value::Number(serde_json::Number::from_f64(temperature as f64).unwrap()));
+            payload.insert(
+                "temperature".to_string(),
+                Value::Number(serde_json::Number::from_f64(temperature as f64).unwrap()),
+            );
         }
 
         payload.insert("stream".to_string(), Value::Bool(request.stream));
@@ -98,10 +105,7 @@ impl MoonshotProvider {
         // Add tools if present
         if let Some(tools) = &request.tools {
             if !tools.is_empty() {
-                let serialized_tools = tools
-                    .iter()
-                    .map(|tool| json!(tool))
-                    .collect::<Vec<_>>();
+                let serialized_tools = tools.iter().map(|tool| json!(tool)).collect::<Vec<_>>();
                 payload.insert("tools".to_string(), Value::Array(serialized_tools));
 
                 // Add tool choice if specified
@@ -118,7 +122,9 @@ impl MoonshotProvider {
         if let Some(effort) = request.reasoning_effort {
             if self.supports_reasoning_effort(&request.model) {
                 // Use the configured reasoning parameters
-                if let Some(reasoning_payload) = reasoning_parameters_for(ModelProvider::Moonshot, effort) {
+                if let Some(reasoning_payload) =
+                    reasoning_parameters_for(ModelProvider::Moonshot, effort)
+                {
                     // Add the reasoning parameters to the payload
                     if let Some(obj) = reasoning_payload.as_object() {
                         for (key, value) in obj {
@@ -133,8 +139,14 @@ impl MoonshotProvider {
         if request.model == models::moonshot::KIMI_K2_THINKING_HEAVY {
             // Override or add Heavy Mode specific parameters
             payload.insert("heavy_thinking".to_string(), Value::Bool(true));
-            payload.insert("parallel_trajectories".to_string(), Value::Number(serde_json::Number::from(8)));
-            payload.insert("trajectory_aggregation".to_string(), Value::String("reflective".to_string()));
+            payload.insert(
+                "parallel_trajectories".to_string(),
+                Value::Number(serde_json::Number::from(8)),
+            );
+            payload.insert(
+                "trajectory_aggregation".to_string(),
+                Value::String("reflective".to_string()),
+            );
         }
 
         Ok(Value::Object(payload))
@@ -154,7 +166,7 @@ impl MoonshotProvider {
                 "role".to_string(),
                 Value::String(message.role.as_generic_str().to_string()),
             );
-            
+
             // Handle content as text
             let content_value = Value::String(message.content.as_text());
             message_map.insert("content".to_string(), content_value);
@@ -248,24 +260,31 @@ impl MoonshotProvider {
                     .iter()
                     .filter_map(|call| {
                         // Parse tool call from Moonshot's format
-                        call.get("id").and_then(|id_val| id_val.as_str()).and_then(|id| {
-                            call.get("function")
-                                .and_then(|func_val| func_val.as_object())
-                                .and_then(|func_obj| {
-                                    func_obj.get("name").and_then(|name_val| name_val.as_str()).and_then(|name| {
-                                        func_obj.get("arguments").and_then(|args_val| args_val.as_str()).map(|args| {
-                                            crate::llm::provider::ToolCall {
-                                                id: id.to_string(),
-                                                function: crate::llm::provider::FunctionCall {
-                                                    name: name.to_string(),
-                                                    arguments: args.to_string(),
-                                                },
-                                                call_type: "function".to_string(),
-                                            }
-                                        })
+                        call.get("id")
+                            .and_then(|id_val| id_val.as_str())
+                            .and_then(|id| {
+                                call.get("function")
+                                    .and_then(|func_val| func_val.as_object())
+                                    .and_then(|func_obj| {
+                                        func_obj
+                                            .get("name")
+                                            .and_then(|name_val| name_val.as_str())
+                                            .and_then(|name| {
+                                                func_obj
+                                                    .get("arguments")
+                                                    .and_then(|args_val| args_val.as_str())
+                                                    .map(|args| crate::llm::provider::ToolCall {
+                                                        id: id.to_string(),
+                                                        function:
+                                                            crate::llm::provider::FunctionCall {
+                                                                name: name.to_string(),
+                                                                arguments: args.to_string(),
+                                                            },
+                                                        call_type: "function".to_string(),
+                                                    })
+                                            })
                                     })
-                                })
-                        })
+                            })
                     })
                     .collect::<Vec<_>>()
             })
@@ -345,7 +364,8 @@ impl LLMProvider for MoonshotProvider {
             model
         };
 
-        requested == models::moonshot::KIMI_K2_THINKING || requested == models::moonshot::KIMI_K2_THINKING_HEAVY
+        requested == models::moonshot::KIMI_K2_THINKING
+            || requested == models::moonshot::KIMI_K2_THINKING_HEAVY
     }
 
     fn supports_reasoning_effort(&self, model: &str) -> bool {
@@ -355,7 +375,8 @@ impl LLMProvider for MoonshotProvider {
             model
         };
 
-        requested == models::moonshot::KIMI_K2_THINKING || requested == models::moonshot::KIMI_K2_THINKING_HEAVY
+        requested == models::moonshot::KIMI_K2_THINKING
+            || requested == models::moonshot::KIMI_K2_THINKING_HEAVY
     }
 
     async fn generate(&self, mut request: LLMRequest) -> Result<LLMResponse, LLMError> {
@@ -453,7 +474,7 @@ impl LLMClient for MoonshotProvider {
     async fn generate(&mut self, prompt: &str) -> Result<llm_types::LLMResponse, LLMError> {
         // Create a simple request to send to the model
         use crate::llm::provider::MessageContent;
-        
+
         let request = LLMRequest {
             messages: vec![Message {
                 role: MessageRole::User,
