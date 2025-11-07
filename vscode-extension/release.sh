@@ -129,8 +129,8 @@ update_changelog() {
 
 	# Replace [Unreleased] with version and date
 	if [[ "$OSTYPE" == "darwin"* ]]; then
-		# macOS
-		sed -i '' "s/## \[Unreleased\]/## [Unreleased]\n\n## [$version] - $date/" CHANGELOG.md
+		# macOS - need to handle newlines properly
+		sed -i '' "s/## \[Unreleased\]/## [Unreleased]\\\n\\\n## [$version] - $date/" CHANGELOG.md
 	else
 		# Linux
 		sed -i "s/## \[Unreleased\]/## [Unreleased]\n\n## [$version] - $date/" CHANGELOG.md
