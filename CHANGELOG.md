@@ -3,6 +3,54 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - Latest Improvements# [Version 0.39.5] - 2025-11-03
+# [Version 0.42.7] - 2025-11-07
+
+
+### Features
+    - feat: add Kimi K2 Thinking model support and update Moonshot provider logic
+
+
+### Bug Fixes
+    - fix: remove jsonschema dependency from mcp-types in Cargo.lock
+    - fix: remove mcp-types configuration from release.toml
+    - fix: ensure publish is set to false for mcp-types in release.toml
+    - fix: update mcp-types version to 0.1.1 in Cargo.lock
+    - fix: update mcp-types version to 0.1.1 in Cargo.toml
+    - fix: ensure publish is set to false in Cargo.toml
+    - fix: remove .cargo_vcs_info.json and update vtcode-core dependency version in Cargo.toml
+    - fix: update mcp-types dependency path in Cargo.toml and add jsonschema to dependencies
+
+
+### Documentation
+    - docs: update changelog for v0.42.6 [skip ci]
+    - docs: update changelog for v0.42.6 [skip ci]
+    - docs: update changelog for v0.42.6 [skip ci]
+    - docs: update changelog for v0.42.5 [skip ci]
+    - docs: update changelog for v0.42.4 [skip ci]
+    - docs: update changelog for v0.42.3 [skip ci]
+    - docs: update changelog for v0.42.3 [skip ci]
+    - docs: update changelog for v0.42.2 [skip ci]
+    - docs: update changelog for v0.42.1 [skip ci]
+    - docs: update changelog for v0.43.0 [skip ci]
+    - docs: update changelog for v0.42.0 [skip ci]
+    - docs: update changelog for v0.41.0 [skip ci]
+    - docs: update changelog for v0.40.1 [skip ci]
+    - docs: update changelog for v0.40.0 [skip ci]
+    - docs: update changelog for v0.40.1 [skip ci]
+
+
+### Chores
+    - chore: release v0.42.6
+    - chore: release v0.42.5
+    - chore: release v0.42.4
+    - chore: release v0.42.3
+    - chore: release v0.42.2
+    - chore: release v0.42.1
+    - chore: release v0.42.0
+    - chore: release v0.41.0
+    - chore: release v0.40.1
+    - chore: release v0.40.0
+    - chore: release v0.40.1
 # [Version 0.42.6] - 2025-11-07
 
 
