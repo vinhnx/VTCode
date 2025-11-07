@@ -3,6 +3,36 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - Latest Improvements# [Version 0.39.5] - 2025-11-03
+# [Version 0.42.3] - 2025-11-07
+
+
+### Features
+    - feat: add Kimi K2 Thinking model support and update Moonshot provider logic
+
+
+### Bug Fixes
+    - fix: update mcp-types dependency path in Cargo.toml and add jsonschema to dependencies
+
+
+### Documentation
+    - docs: update changelog for v0.42.2 [skip ci]
+    - docs: update changelog for v0.42.1 [skip ci]
+    - docs: update changelog for v0.43.0 [skip ci]
+    - docs: update changelog for v0.42.0 [skip ci]
+    - docs: update changelog for v0.41.0 [skip ci]
+    - docs: update changelog for v0.40.1 [skip ci]
+    - docs: update changelog for v0.40.0 [skip ci]
+    - docs: update changelog for v0.40.1 [skip ci]
+
+
+### Chores
+    - chore: release v0.42.2
+    - chore: release v0.42.1
+    - chore: release v0.42.0
+    - chore: release v0.41.0
+    - chore: release v0.40.1
+    - chore: release v0.40.0
+    - chore: release v0.40.1
 # [Version 0.42.2] - 2025-11-07
 
 
