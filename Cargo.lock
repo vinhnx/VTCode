@@ -2566,7 +2566,6 @@ dependencies = [
 name = "mcp-types"
 version = "0.1.1"
 dependencies = [
- "jsonschema",
  "prettyplease",
  "schemars 0.8.22",
  "serde",
