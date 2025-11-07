@@ -129,16 +129,9 @@ update_changelog() {
 
 	# Replace [Unreleased] with version and date
 	if [[ "$OSTYPE" == "darwin"* ]]; then
-		# macOS - use a temporary approach since sed has issues with newlines
-		awk -v version="[$version] - $date" '
-			/^## \[Unreleased\]$/ {
-				print $0
-				print ""
-				print "## " version
-				next
-			}
-			{ print }
-		' CHANGELOG.md > CHANGELOG.md.tmp && mv CHANGELOG.md.tmp CHANGELOG.md
+		# macOS - handle newlines properly by using a different approach
+		local new_header="## [Unreleased]\n\n## [$version] - $date"
+		perl -i -pe "s/## \[Unreleased\]/$new_header/" CHANGELOG.md
 	else
 		# Linux
 		sed -i "s/## \[Unreleased\]/## [Unreleased]\n\n## [$version] - $date/" CHANGELOG.md
