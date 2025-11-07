@@ -114,6 +114,8 @@ pub(crate) fn render_tool_output(
         } else {
             render_generic_output(renderer, val)?;
         }
+        // Early return for MCP tools - don't fall through to other rendering logic
+        return Ok(());
     }
 
     let output_mode = vt_config
