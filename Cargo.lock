@@ -2564,7 +2564,7 @@ dependencies = [
 
 [[package]]
 name = "mcp-types"
-version = "0.42.3"
+version = "0.42.4"
 dependencies = [
  "jsonschema",
  "prettyplease",
@@ -5571,7 +5571,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode"
-version = "0.42.3"
+version = "0.42.4"
 dependencies = [
  "agent-client-protocol",
  "anstyle",
@@ -5622,14 +5622,14 @@ dependencies = [
 
 [[package]]
 name = "vtcode-acp-client"
-version = "0.42.3"
+version = "0.42.4"
 dependencies = [
  "agent-client-protocol",
 ]
 
 [[package]]
 name = "vtcode-bash-runner"
-version = "0.42.3"
+version = "0.42.4"
 dependencies = [
  "anyhow",
  "assert_fs",
@@ -5643,14 +5643,14 @@ dependencies = [
 
 [[package]]
 name = "vtcode-commons"
-version = "0.42.3"
+version = "0.42.4"
 dependencies = [
  "anyhow",
 ]
 
 [[package]]
 name = "vtcode-config"
-version = "0.42.3"
+version = "0.42.4"
 dependencies = [
  "anyhow",
  "assert_fs",
@@ -5672,7 +5672,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-core"
-version = "0.42.3"
+version = "0.42.4"
 dependencies = [
  "ansi-to-tui",
  "anstream",
@@ -5765,7 +5765,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-exec-events"
-version = "0.42.3"
+version = "0.42.4"
 dependencies = [
  "log",
  "schemars 1.0.4",
@@ -5776,7 +5776,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-indexer"
-version = "0.42.3"
+version = "0.42.4"
 dependencies = [
  "anyhow",
  "ignore",
@@ -5787,7 +5787,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-llm"
-version = "0.42.3"
+version = "0.42.4"
 dependencies = [
  "anyhow",
  "assert_fs",
@@ -5800,7 +5800,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-markdown-store"
-version = "0.42.3"
+version = "0.42.4"
 dependencies = [
  "anyhow",
  "fs2",
@@ -5814,7 +5814,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-tools"
-version = "0.42.3"
+version = "0.42.4"
 dependencies = [
  "anyhow",
  "assert_fs",
