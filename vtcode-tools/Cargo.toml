@@ -21,7 +21,7 @@ examples = []
 
 [dependencies]
 vtcode-commons = { path = "../vtcode-commons", version = "0.42.2" }
-vtcode-core = { path = "../vtcode-core" }
+vtcode-core = { path = "../vtcode-core", version = "0.42.2" }
 
 [dev-dependencies]
 anyhow = "1"

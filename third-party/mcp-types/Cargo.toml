@@ -9,7 +9,7 @@
 # will likely look very different (and much more reasonable).
 # See Cargo.toml.orig for the original contents.
 #
-# NOTE: To update dependencies like schemars, this crate needs to be 
+# NOTE: To update dependencies like schemars, this crate needs to be
 # regenerated using the original generation tooling with newer versions.
 
 [package]
@@ -25,14 +25,10 @@ autotests = false
 autobenches = false
 description = "Generated bindings from the Model Context Protocol (MCP) JSON Schema(s)"
 readme = "README.md"
-keywords = [
-    "mcp",
-    "model",
-    "context",
-    "protocol",
-]
+keywords = ["mcp", "model", "context", "protocol"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/iqlusioninc/mcp-types"
+exclude = [".cargo_vcs_info.json"]
 
 [lib]
 name = "mcp_types"

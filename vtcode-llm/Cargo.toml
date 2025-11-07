@@ -40,7 +40,7 @@ mock = ["dep:async-trait"]
 anyhow = "1.0"
 async-trait = { version = "0.1", optional = true }
 vtcode-commons = { path = "../vtcode-commons", version = "0.42.2" }
-vtcode-core = { path = "../vtcode-core" }
+vtcode-core = { path = "../vtcode-core", version = "0.42.2" }
 
 [dev-dependencies]
 futures = "0.3"
