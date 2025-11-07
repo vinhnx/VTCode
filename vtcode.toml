@@ -5,13 +5,13 @@
 # Core agent behavior; see docs/config/CONFIGURATION_PRECEDENCE.md.
 [agent]
 # Primary LLM provider to use (e.g., "openai", "gemini", "anthropic", "openrouter")
-provider = "moonshot"
+provider = "ollama"
 
 # Environment variable containing the API key for the provider
-api_key_env = "MOONSHOT_API_KEY"
+api_key_env = "OLLAMA_API_KEY"
 
 # Default model to use when no specific model is specified
-default_model = "kimi-k2-thinking"
+default_model = "kimi-k2-thinking:cloud"
 
 # Visual theme for the terminal interface
 theme = "ciapre-dark"
@@ -111,7 +111,7 @@ max_file_size_kb = 64
 # Custom API keys for specific providers
 [agent.custom_api_keys]
 # Moonshot AI API key (for specific provider access)
-moonshot = "sk-sDj3JUXDbfARCYKNL4q7iGWRtWuhL1M4O6zzgtDpN3Yxt9EA"
+# moonshot = ""
 
 # Checkpointing configuration for session persistence
 [agent.checkpointing]
@@ -132,6 +132,10 @@ min_turns_threshold = 20
 token_threshold_percent = 0.6
 max_turn_content_length = 2000
 aggressive_compression_threshold = 15000
+# Enable context optimization and show "⚡ Optimizing context" message
+# When disabled (default), context will NOT be automatically compressed
+# Enable this to compress context at 20+ turns or 85% token usage
+show_context_optimization_message = false
 
 # Tool security configuration
 [tools]
@@ -385,15 +389,15 @@ llm_router_model = ""
 # Model mapping for different task types
 [router.models]
 # Model for simple queries
-simple = "kimi-k2-thinking"
+simple = "kimi-k2-thinking:cloud"
 # Model for standard tasks
-standard = "kimi-k2-thinking"
+standard = "kimi-k2-thinking:cloud"
 # Model for complex tasks
-complex = "kimi-k2-thinking"
+complex = "kimi-k2-thinking:cloud"
 # Model for code generation heavy tasks
-codegen_heavy = "kimi-k2-thinking"
+codegen_heavy = "kimi-k2-thinking:cloud"
 # Model for information retrieval heavy tasks
-retrieval_heavy = "kimi-k2-thinking"
+retrieval_heavy = "kimi-k2-thinking:cloud"
 
 # Router budget settings (if applicable)
 [router.budgets]

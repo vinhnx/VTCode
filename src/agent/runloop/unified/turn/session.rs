@@ -919,18 +919,59 @@ pub(crate) async fn run_single_agent_loop_unified(
                 }
 
                 // Automatic summarization: prevent context overflow and blocking
-                let conversation_len = working_history.len();
-                let should_compress = if token_budget_enabled {
-                    let budget = context_manager.token_budget();
-                    let usage_percent = budget.usage_percentage().await;
+                // Check if the feature is enabled in config (disabled by default)
+                let optimization_enabled = vt_cfg
+                    .as_ref()
+                    .map(|cfg| {
+                        cfg.agent
+                            .smart_summarization
+                            .show_context_optimization_message
+                    })
+                    .unwrap_or(false);
 
-                    // Trigger at 20 turns OR 85% token usage
-                    conversation_len >= 20 || usage_percent >= 85.0
+                let conversation_len = working_history.len();
+                let should_compress = if optimization_enabled {
+                    if token_budget_enabled {
+                        let budget = context_manager.token_budget();
+                        let usage_percent = budget.usage_percentage().await;
+
+                        // Trigger at 20 turns OR 85% token usage
+                        let result = conversation_len >= 20 || usage_percent >= 85.0;
+
+                        #[cfg(debug_assertions)]
+                        debug!(
+                            "Context optimization check: enabled={}, conversations={}, token_usage={:.1}%, should_compress={}",
+                            optimization_enabled, conversation_len, usage_percent, result
+                        );
+
+                        result
+                    } else {
+                        let result = conversation_len >= 20;
+
+                        #[cfg(debug_assertions)]
+                        debug!(
+                            "Context optimization check: enabled={}, conversations={}, should_compress={}",
+                            optimization_enabled, conversation_len, result
+                        );
+
+                        result
+                    }
                 } else {
-                    conversation_len >= 20
+                    #[cfg(debug_assertions)]
+                    debug!(
+                        "Context optimization disabled in config (conversations={})",
+                        conversation_len
+                    );
+                    false
                 };
 
                 if should_compress && working_history.len() > 15 {
+                    #[cfg(debug_assertions)]
+                    debug!(
+                        "Compressing context: {} messages → 15 recent + system message",
+                        conversation_len
+                    );
+
                     renderer.line(
                         MessageStyle::Info,
                         &format!(
@@ -948,6 +989,12 @@ pub(crate) async fn run_single_agent_loop_unified(
                     }
                     compressed.extend(working_history.iter().rev().take(15).rev().cloned());
                     working_history = compressed;
+
+                    #[cfg(debug_assertions)]
+                    debug!(
+                        "Context compressed successfully: final message count = {}",
+                        working_history.len()
+                    );
                 }
 
                 let mut attempt_history = working_history.clone();
@@ -1107,11 +1154,16 @@ pub(crate) async fn run_single_agent_loop_unified(
                             }
                         }
 
-                            let has_tool = working_history
+                            // Only treat as successful tool completion if we actually executed
+                            // tools in THIS turn (after the last assistant message), not just
+                            // because there are tool messages somewhere in history
+                            let has_recent_tool = working_history
                                 .iter()
+                                .rev()
+                                .take_while(|msg| msg.role != uni::MessageRole::Assistant)
                                 .any(|msg| msg.role == uni::MessageRole::Tool);
 
-                            if has_tool {
+                            if has_recent_tool {
                                 let reply = derive_recent_tool_output(&working_history)
                                     .unwrap_or_else(|| {
                                         "Command completed successfully.".to_string()

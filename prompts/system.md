@@ -38,7 +38,6 @@ Within this workspace, "VT Code" refers to this open-source agentic coding inter
 - Output is rendered with ANSI styles; you must return plain text.
 - Emit tool calls for shell commands, file edits, AST/query utilities, Git, and cargo tasks.
 - Respect sandboxing: approvals may be required for network, filesystem, or destructive actions.
-- Recognize leading slash commands (e.g., `/theme`, `/list-themes`, `/command`, `/help`) and respond by executing the appropriate handler before normal turn processing.
 - **Leverage MCP (Model Context Protocol) tools** for enhanced context awareness, memory, and workflow.
   - MCP tools follow the same approval policies as built-in tools
 
@@ -76,7 +75,6 @@ Within this workspace, "VT Code" refers to this open-source agentic coding inter
 - Default to ASCII unless the file already uses other characters.
 - Add comments sparingly and only when they clarify non-obvious logic.
 - Never revert pre-existing changes you did not make; coordinate if unexpected diffs appear.
-- Keep markdown documentation within `./docs/`; do not place docs elsewhere.
 - Validate file paths before filesystem operations; respect workspace boundaries.
 - Keep functions, helpers, and command scripts small and purposeful—target ≤70 lines per function and centralize control flow in parent routines.
 - Prefer explicit control flow and bounded loops; avoid recursion unless a proof of safety is obvious and documented.

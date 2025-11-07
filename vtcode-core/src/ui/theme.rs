@@ -242,6 +242,84 @@ static REGISTRY: Lazy<HashMap<&'static str, ThemeDefinition>> = Lazy::new(|| {
             },
         },
     );
+    
+    // Vitesse themes
+    map.insert(
+        "vitesse-black",
+        ThemeDefinition {
+            id: "vitesse-black",
+            label: "Vitesse Black",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0xDB, 0xD7, 0xCA), // Light gray foreground
+                background: RgbColor(0x00, 0x00, 0x00),     // Black
+                foreground: RgbColor(0xDB, 0xD7, 0xCA),     // Light gray
+                secondary_accent: RgbColor(0x4D, 0x93, 0x75), // Green (selection color)
+                alert: RgbColor(0xCB, 0x76, 0x76),          // Red for errors
+                logo_accent: RgbColor(0xDB, 0xD7, 0xCA),    // Light gray for logo accent
+            },
+        },
+    );
+    map.insert(
+        "vitesse-dark",
+        ThemeDefinition {
+            id: "vitesse-dark",
+            label: "Vitesse Dark",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0xDB, 0xD7, 0xCA), // Light gray foreground
+                background: RgbColor(0x12, 0x12, 0x12),     // Very dark gray
+                foreground: RgbColor(0xDB, 0xD7, 0xCA),     // Light gray
+                secondary_accent: RgbColor(0x4D, 0x93, 0x75), // Green (selection color)
+                alert: RgbColor(0xCB, 0x76, 0x76),          // Red for errors
+                logo_accent: RgbColor(0xDB, 0xD7, 0xCA),    // Light gray for logo accent
+            },
+        },
+    );
+    map.insert(
+        "vitesse-dark-soft",
+        ThemeDefinition {
+            id: "vitesse-dark-soft",
+            label: "Vitesse Dark Soft",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0xDB, 0xD7, 0xCA), // Light gray foreground
+                background: RgbColor(0x22, 0x22, 0x22),     // Very dark gray (soft)
+                foreground: RgbColor(0xDB, 0xD7, 0xCA),     // Light gray
+                secondary_accent: RgbColor(0x4D, 0x93, 0x75), // Green (selection color)
+                alert: RgbColor(0xCB, 0x76, 0x76),          // Red for errors
+                logo_accent: RgbColor(0xDB, 0xD7, 0xCA),    // Light gray for logo accent
+            },
+        },
+    );
+    map.insert(
+        "vitesse-light",
+        ThemeDefinition {
+            id: "vitesse-light",
+            label: "Vitesse Light",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0x39, 0x3A, 0x34), // Dark gray foreground
+                background: RgbColor(0xFF, 0xFF, 0xFF),     // White
+                foreground: RgbColor(0x39, 0x3A, 0x34),     // Dark gray
+                secondary_accent: RgbColor(0x1C, 0x6B, 0x48), // Green (selection color)
+                alert: RgbColor(0xAB, 0x59, 0x59),          // Red for errors
+                logo_accent: RgbColor(0x39, 0x3A, 0x34),    // Dark gray for logo accent
+            },
+        },
+    );
+    map.insert(
+        "vitesse-light-soft",
+        ThemeDefinition {
+            id: "vitesse-light-soft",
+            label: "Vitesse Light Soft",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0x39, 0x3A, 0x34), // Dark gray foreground
+                background: RgbColor(0xF1, 0xF0, 0xE9),     // Soft cream
+                foreground: RgbColor(0x39, 0x3A, 0x34),     // Dark gray
+                secondary_accent: RgbColor(0x1C, 0x6B, 0x48), // Green (selection color)
+                alert: RgbColor(0xAB, 0x59, 0x59),          // Red for errors
+                logo_accent: RgbColor(0x39, 0x3A, 0x34),    // Dark gray for logo accent
+            },
+        },
+    );
+    
     register_catppuccin_themes(&mut map);
     map
 });

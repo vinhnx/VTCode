@@ -94,7 +94,7 @@ pub mod models {
         pub const SUPPORTED_MODELS: &[&str] = &[
             "kimi-k2-turbo-preview",
             "kimi-k2-thinking",
-            "kimi-k2-thinking-heavy",
+            "kimi-k2-thinking-turbo",
             "kimi-k2-0905-preview",
             "kimi-k2-0711-preview",
             "kimi-latest",
@@ -105,7 +105,7 @@ pub mod models {
 
         pub const KIMI_K2_TURBO_PREVIEW: &str = "kimi-k2-turbo-preview";
         pub const KIMI_K2_THINKING: &str = "kimi-k2-thinking";
-        pub const KIMI_K2_THINKING_HEAVY: &str = "kimi-k2-thinking-heavy";
+        pub const KIMI_K2_THINKING_TURBO: &str = "kimi-k2-thinking-turbo";
         pub const KIMI_K2_0905_PREVIEW: &str = "kimi-k2-0905-preview";
         pub const KIMI_K2_0711_PREVIEW: &str = "kimi-k2-0711-preview";
         pub const KIMI_LATEST: &str = "kimi-latest";
@@ -168,7 +168,7 @@ pub mod models {
             DEFAULT_CLOUD_MODEL,
             GPT_OSS_20B_CLOUD,
             DEEPSEEK_V31_671B_CLOUD,
-            KIMI_K2_1T_CLOUD,
+            KIMI_K2_THINKING_CLOUD,
             QWEN3_CODER_480B_CLOUD,
             GLM_46_CLOUD,
             MINIMAX_M2_CLOUD,
@@ -182,20 +182,31 @@ pub mod models {
             QWEN3_1_7B,
             QWEN3_CODER_480B_CLOUD,
             DEEPSEEK_V31_671B_CLOUD,
-            KIMI_K2_1T_CLOUD,
+            KIMI_K2_THINKING_CLOUD,
             GLM_46_CLOUD,
             MINIMAX_M2_CLOUD,
         ];
 
         /// Models that require an explicit reasoning effort level instead of boolean toggle
-        pub const REASONING_LEVEL_MODELS: &[&str] =
-            &[GPT_OSS_20B, GPT_OSS_20B_CLOUD, GPT_OSS_120B_CLOUD];
+        pub const REASONING_LEVEL_MODELS: &[&str] = &[
+            GPT_OSS_20B,
+            GPT_OSS_20B_CLOUD,
+            GPT_OSS_120B_CLOUD,
+            KIMI_K2_THINKING_CLOUD,
+        ];
 
         pub const GPT_OSS_20B: &str = DEFAULT_LOCAL_MODEL;
         pub const GPT_OSS_20B_CLOUD: &str = "gpt-oss:20b-cloud";
         pub const GPT_OSS_120B_CLOUD: &str = DEFAULT_CLOUD_MODEL;
         pub const QWEN3_1_7B: &str = "qwen3:1.7b";
         pub const DEEPSEEK_V31_671B_CLOUD: &str = "deepseek-v3.1:671b-cloud";
+
+        /// Kimi K2 Thinking model - Reasoning-tier K2 release for long-horizon agentic tasks
+        /// Optimized for extended thinking and multi-step reasoning workflows
+        pub const KIMI_K2_THINKING_CLOUD: &str = "kimi-k2-thinking:cloud";
+
+        /// Kimi K2 1T model - High-capacity reasoning model for complex tasks
+        /// Note: This is a different model variant from KIMI_K2_THINKING_CLOUD
         pub const KIMI_K2_1T_CLOUD: &str = "kimi-k2:1t-cloud";
         pub const QWEN3_CODER_480B_CLOUD: &str = "qwen3-coder:480b-cloud";
         pub const GLM_46_CLOUD: &str = "glm-4.6:cloud";
@@ -280,7 +291,7 @@ pub mod models {
     pub const MINIMAX_M2: &str = minimax::MINIMAX_M2;
     pub const MOONSHOT_KIMI_K2_TURBO_PREVIEW: &str = moonshot::KIMI_K2_TURBO_PREVIEW;
     pub const MOONSHOT_KIMI_K2_THINKING: &str = moonshot::KIMI_K2_THINKING;
-    pub const MOONSHOT_KIMI_K2_THINKING_HEAVY: &str = moonshot::KIMI_K2_THINKING_HEAVY;
+    pub const MOONSHOT_KIMI_K2_THINKING_TURBO: &str = moonshot::KIMI_K2_THINKING_TURBO;
     pub const MOONSHOT_KIMI_K2_0905_PREVIEW: &str = moonshot::KIMI_K2_0905_PREVIEW;
     pub const MOONSHOT_KIMI_K2_0711_PREVIEW: &str = moonshot::KIMI_K2_0711_PREVIEW;
     pub const MOONSHOT_KIMI_LATEST: &str = moonshot::KIMI_LATEST;

@@ -409,6 +409,12 @@ pub struct AgentSmartSummarizationConfig {
     /// Total size threshold for applying additional compression (in bytes)
     #[serde(default = "default_aggressive_compression_threshold")]
     pub aggressive_compression_threshold: usize,
+
+    /// Enable context optimization feature and show notification message
+    /// When false (default), context compression is completely disabled
+    /// When true, compresses context at 20+ turns or 85% token usage
+    #[serde(default = "default_show_context_optimization_message")]
+    pub show_context_optimization_message: bool,
 }
 
 impl Default for AgentSmartSummarizationConfig {
@@ -421,6 +427,7 @@ impl Default for AgentSmartSummarizationConfig {
             token_threshold_percent: default_token_threshold_percent(),
             max_turn_content_length: default_max_turn_content_length(),
             aggressive_compression_threshold: default_aggressive_compression_threshold(),
+            show_context_optimization_message: default_show_context_optimization_message(),
         }
     }
 }
@@ -482,4 +489,8 @@ fn default_max_turn_content_length() -> usize {
 
 fn default_aggressive_compression_threshold() -> usize {
     15_000
+}
+
+fn default_show_context_optimization_message() -> bool {
+    false // Disabled by default - feature is opt-in to avoid surprising users
 }
