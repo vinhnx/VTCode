@@ -12,7 +12,6 @@ use vtcode_core::utils::session_archive;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ThemePaletteMode {
     Select,
-    Inspect,
 }
 
 pub enum SlashCommandOutcome {

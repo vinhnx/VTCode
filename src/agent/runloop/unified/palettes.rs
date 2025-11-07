@@ -16,10 +16,8 @@ use crate::agent::runloop::slash_commands::ThemePaletteMode;
 use super::display::persist_theme_preference;
 
 const THEME_PALETTE_TITLE: &str = "Theme picker";
-const THEME_LIST_TITLE: &str = "Available themes";
 const THEME_ACTIVE_BADGE: &str = "Active";
 const THEME_SELECT_HINT: &str = "Use ↑/↓ to choose a theme, Enter to apply, Esc to cancel.";
-const THEME_INSPECT_HINT: &str = "Use ↑/↓ to browse themes, Enter to view details, Esc to close.";
 const SESSIONS_PALETTE_TITLE: &str = "Archived sessions";
 const SESSIONS_HINT_PRIMARY: &str = "Use ↑/↓ to browse sessions.";
 const SESSIONS_HINT_SECONDARY: &str = "Enter to print details • Esc to close.";
@@ -44,11 +42,9 @@ pub(crate) fn show_theme_palette(
 ) -> Result<bool> {
     let title = match mode {
         ThemePaletteMode::Select => THEME_PALETTE_TITLE,
-        ThemePaletteMode::Inspect => THEME_LIST_TITLE,
     };
     let hint = match mode {
         ThemePaletteMode::Select => THEME_SELECT_HINT,
-        ThemePaletteMode::Inspect => THEME_INSPECT_HINT,
     };
 
     let current_id = theme::active_theme_id();
@@ -227,18 +223,6 @@ pub(crate) async fn handle_palette_selection(
                     }
                     Ok(None)
                 }
-                ThemePaletteMode::Inspect => {
-                    let label = theme::theme_label(&theme_id).unwrap_or(theme_id.as_str());
-                    renderer.line(
-                        MessageStyle::Info,
-                        &format!("Theme {} ({}) is available.", label, theme_id),
-                    )?;
-                    if show_theme_palette(renderer, mode)? {
-                        Ok(Some(ActivePalette::Theme { mode }))
-                    } else {
-                        Ok(None)
-                    }
-                }
             },
             _ => Ok(Some(ActivePalette::Theme { mode })),
         },
@@ -269,7 +253,6 @@ pub(crate) fn handle_palette_cancel(
         ActivePalette::Theme { mode } => {
             let message = match mode {
                 ThemePaletteMode::Select => "Theme selection cancelled.",
-                ThemePaletteMode::Inspect => "Closed theme list.",
             };
             renderer.line(MessageStyle::Info, message)?;
         }
