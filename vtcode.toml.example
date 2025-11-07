@@ -78,6 +78,11 @@ max_turn_content_length = 2000
 # Total size threshold for applying additional compression (in bytes)
 aggressive_compression_threshold = 15000
 
+# Enable context optimization and show "⚡ Optimizing context" message
+# When disabled (default), context will NOT be automatically compressed
+# Enable this to compress context at 20+ turns or 85% token usage
+show_context_optimization_message = false
+
 # Onboarding configuration - Customize the startup experience
 [agent.onboarding]
 # Enable the onboarding welcome message on startup

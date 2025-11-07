@@ -1543,10 +1543,11 @@
                 "context": 262144,
                 "max_output_tokens": null,
                 "cost": {
-                    "input_cache_hit": 6e-7,
-                    "input": 2.4e-6,
-                    "output": 1e-5
-                }
+                    "input_cache_hit": 1.5e-7,
+                    "input": 1.15e-6,
+                    "output": 8e-6
+                },
+                "description": "High-speed version of kimi-k2, always aligned with the latest kimi-k2 (kimi-k2-0905-preview). Same model parameters as kimi-k2, output speed up to 60 tokens/sec (max 100 tokens/sec). Context length 256k."
             },
             "kimi-k2-thinking": {
                 "id": "kimi-k2-thinking",
@@ -1563,7 +1564,26 @@
                     "input_cache_hit": 1.5e-7,
                     "input": 6e-7,
                     "output": 2.5e-6
-                }
+                },
+                "description": "A thinking model with general agentic and reasoning capabilities, specializing in deep reasoning tasks. Context length 256k."
+            },
+            "kimi-k2-thinking-turbo": {
+                "id": "kimi-k2-thinking-turbo",
+                "name": "Kimi K2 Thinking Turbo",
+                "reasoning": true,
+                "tool_call": true,
+                "modalities": {
+                    "input": ["text"],
+                    "output": ["text"]
+                },
+                "context": 262144,
+                "max_output_tokens": 262144,
+                "cost": {
+                    "input_cache_hit": 1.5e-7,
+                    "input": 1.15e-6,
+                    "output": 8e-6
+                },
+                "description": "High-speed version of kimi-k2-thinking, suitable for scenarios requiring both deep reasoning and extremely fast responses. Context length 256k."
             },
             "kimi-k2-0905-preview": {
                 "id": "kimi-k2-0905-preview",
@@ -1580,7 +1600,8 @@
                     "input_cache_hit": 1.5e-7,
                     "input": 6e-7,
                     "output": 2.5e-6
-                }
+                },
+                "description": "Based on kimi-k2-0711-preview, with enhanced agentic coding abilities, improved frontend code quality and practicality, and better context understanding. Context length 256k."
             },
             "kimi-k2-0711-preview": {
                 "id": "kimi-k2-0711-preview",
@@ -1597,7 +1618,8 @@
                     "input_cache_hit": 1.5e-7,
                     "input": 6e-7,
                     "output": 2.5e-6
-                }
+                },
+                "description": "Context length 128k. MoE foundation model with exceptional coding and agent capabilities."
             },
             "kimi-latest": {
                 "id": "kimi-latest",

@@ -15,10 +15,9 @@ use super::selection::{SelectionDetail, reasoning_level_description, reasoning_l
 
 pub(super) const CLOSE_THEME_MESSAGE: &str =
     "Close the active model picker before selecting a theme.";
-const STEP_ONE_TITLE: &str = "Model picker – Step 1";
-const STEP_TWO_TITLE: &str = "Model picker – Step 2";
-const STEP_ONE_NAVIGATION_HINT: &str = "Use ↑/↓ to navigate, Enter to select, or Esc to cancel.";
-const STEP_TWO_NAVIGATION_HINT: &str = "Use ↑/↓ to navigate, Enter to choose, or Esc to cancel.";
+const STEP_ONE_TITLE: &str = "Model picker #1";
+const STEP_TWO_TITLE: &str = "Model picker #2";
+
 pub(super) const CUSTOM_PROVIDER_TITLE: &str = "Custom provider + model";
 pub(super) const CUSTOM_PROVIDER_SUBTITLE: &str =
     "Provide the provider name and model identifier manually.";
@@ -152,10 +151,7 @@ pub(super) fn render_step_one_inline(
         search_value: Some("custom provider".to_string()),
     });
 
-    let lines = vec![
-        "Step 1 – choose a model".to_string(),
-        STEP_ONE_NAVIGATION_HINT.to_string(),
-    ];
+    let lines = vec![];
 
     let search = InlineListSearchConfig {
         label: "Search models or providers".to_string(),
@@ -173,7 +169,7 @@ pub(super) fn render_step_one_plain(
 ) -> Result<()> {
     renderer.line(
         MessageStyle::Info,
-        "Model picker – Step 1: select the model you want to use.",
+        "Model picker: select the model you want to use.",
     )?;
     renderer.line(
         MessageStyle::Info,
@@ -360,13 +356,10 @@ pub(super) fn render_reasoning_inline(
             search_value: None,
         });
     }
-    let mut lines = vec![
-        format!(
-            "Step 2 – select reasoning effort for {}.",
-            selection.model_display
-        ),
-        STEP_TWO_NAVIGATION_HINT.to_string(),
-    ];
+    let mut lines = vec![format!(
+        "Step 2 – select reasoning effort for {}.",
+        selection.model_display
+    )];
     if let Some(alternative) = selection.reasoning_off_model {
         lines.push(format!(
             "Select \"Use {} (reasoning off)\" to switch to {}.",

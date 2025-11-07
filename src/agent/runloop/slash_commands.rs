@@ -155,11 +155,13 @@ pub async fn handle_slash_command(
                 return Ok(SlashCommandOutcome::StartThemePalette {
                     mode: ThemePaletteMode::Select,
                 });
+            } else {
+                renderer.line(MessageStyle::Info, "Provide a theme name to switch themes")?;
+                render_theme_list(renderer)?;
             }
-
-            renderer.line(MessageStyle::Error, "Usage: /theme <theme-id>")?;
             Ok(SlashCommandOutcome::Handled)
         }
+
 
 
         "command" => {
@@ -824,4 +826,21 @@ fn format_duration_label(duration: Duration) -> String {
     }
     parts.push(format!("{}s", seconds));
     parts.join(" ")
+}
+
+fn render_theme_list(renderer: &mut AnsiRenderer) -> Result<()> {
+    let available_themes = theme::available_themes();
+    renderer.line(MessageStyle::Info, "Available themes:")?;
+    
+    for theme_id in available_themes {
+        if let Some(label) = theme::theme_label(theme_id) {
+            renderer.line(MessageStyle::Info, &format!("  /theme {} – {}", theme_id, label))?;
+        } else {
+            renderer.line(MessageStyle::Info, &format!("  /theme {} – {}", theme_id, theme_id))?;
+        }
+    }
+    
+    renderer.line(MessageStyle::Info, "")?;
+    renderer.line(MessageStyle::Info, &format!("Current theme: {}", theme::active_theme_label()))?;
+    Ok(())
 }

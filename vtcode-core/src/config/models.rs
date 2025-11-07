@@ -270,7 +270,10 @@ pub enum ModelId {
     OllamaQwen317b,
     /// DeepSeek V3.1 671B Cloud - DeepSeek reasoning deployment via Ollama Cloud
     OllamaDeepseekV31_671bCloud,
-    /// Kimi K2 1T Cloud - Kimi flagship model hosted by Ollama Cloud
+
+    /// Kimi K2 Thinking Cloud - Cloud-hosted Kimi K2 Thinking model served via Ollama Cloud
+    OllamaKimiK2ThinkingCloud,
+    /// Kimi K2 1T Cloud - Cloud-hosted Kimi K2 1T model served via Ollama Cloud
     OllamaKimiK21tCloud,
     /// Qwen3 Coder 480B Cloud - Large Qwen3 coding specialist via Ollama Cloud
     OllamaQwen3Coder480bCloud,
@@ -475,6 +478,8 @@ impl ModelId {
             ModelId::OllamaGptOss120bCloud => models::ollama::GPT_OSS_120B_CLOUD,
             ModelId::OllamaQwen317b => models::ollama::QWEN3_1_7B,
             ModelId::OllamaDeepseekV31_671bCloud => models::ollama::DEEPSEEK_V31_671B_CLOUD,
+
+            ModelId::OllamaKimiK2ThinkingCloud => models::ollama::KIMI_K2_THINKING_CLOUD,
             ModelId::OllamaKimiK21tCloud => models::ollama::KIMI_K2_1T_CLOUD,
             ModelId::OllamaQwen3Coder480bCloud => models::ollama::QWEN3_CODER_480B_CLOUD,
             ModelId::OllamaGlm46Cloud => models::ollama::GLM_46_CLOUD,
@@ -538,6 +543,7 @@ impl ModelId {
             | ModelId::OllamaGptOss120bCloud
             | ModelId::OllamaQwen317b
             | ModelId::OllamaDeepseekV31_671bCloud
+            | ModelId::OllamaKimiK2ThinkingCloud
             | ModelId::OllamaKimiK21tCloud
             | ModelId::OllamaQwen3Coder480bCloud
             | ModelId::OllamaGlm46Cloud => Provider::Ollama,
@@ -675,6 +681,8 @@ impl ModelId {
             ModelId::OllamaGptOss120bCloud => "GPT-OSS 120B (cloud)",
             ModelId::OllamaQwen317b => "Qwen3 1.7B (local)",
             ModelId::OllamaDeepseekV31_671bCloud => "DeepSeek V3.1 671B (cloud)",
+
+            ModelId::OllamaKimiK2ThinkingCloud => "Kimi K2 Thinking (cloud)",
             ModelId::OllamaKimiK21tCloud => "Kimi K2 1T (cloud)",
             ModelId::OllamaQwen3Coder480bCloud => "Qwen3 Coder 480B (cloud)",
             ModelId::OllamaGlm46Cloud => "GLM 4.6 (cloud)",
@@ -798,8 +806,12 @@ impl ModelId {
             ModelId::OllamaDeepseekV31_671bCloud => {
                 "DeepSeek V3.1 671B cloud deployment via Ollama with tool use and long-form reasoning"
             }
+
+            ModelId::OllamaKimiK2ThinkingCloud => {
+                "Cloud-hosted Kimi K2 Thinking model accessed through Ollama Cloud for advanced reasoning tasks"
+            }
             ModelId::OllamaKimiK21tCloud => {
-                "Kimi K2 1T cloud model streamed through Ollama for multilingual research tasks"
+                "Cloud-hosted Kimi K2 1T model accessed through Ollama Cloud for high-capacity reasoning tasks"
             }
             ModelId::OllamaQwen3Coder480bCloud => {
                 "Qwen3 Coder 480B expert model provided by Ollama Cloud for complex code generation"
@@ -890,6 +902,7 @@ impl ModelId {
             ModelId::OllamaGptOss120bCloud,
             ModelId::OllamaQwen317b,
             ModelId::OllamaDeepseekV31_671bCloud,
+            ModelId::OllamaKimiK2ThinkingCloud,
             ModelId::OllamaKimiK21tCloud,
             ModelId::OllamaQwen3Coder480bCloud,
             ModelId::OllamaGlm46Cloud,
@@ -1146,7 +1159,7 @@ impl ModelId {
             ModelId::OllamaGptOss120bCloud => "oss-cloud",
             ModelId::OllamaQwen317b => "oss",
             ModelId::OllamaDeepseekV31_671bCloud => "deepseek-v3.1",
-            ModelId::OllamaKimiK21tCloud => "kimi-k2",
+
             ModelId::OllamaQwen3Coder480bCloud => "qwen3",
             ModelId::OllamaGlm46Cloud => "glm-4.6",
             ModelId::LmStudioMetaLlama38BInstruct => "meta-llama-3",
@@ -1232,6 +1245,10 @@ impl FromStr for ModelId {
             s if s == models::ollama::QWEN3_1_7B => Ok(ModelId::OllamaQwen317b),
             s if s == models::ollama::DEEPSEEK_V31_671B_CLOUD => {
                 Ok(ModelId::OllamaDeepseekV31_671bCloud)
+            }
+
+            s if s == models::ollama::KIMI_K2_THINKING_CLOUD => {
+                Ok(ModelId::OllamaKimiK2ThinkingCloud)
             }
             s if s == models::ollama::KIMI_K2_1T_CLOUD => Ok(ModelId::OllamaKimiK21tCloud),
             s if s == models::ollama::QWEN3_CODER_480B_CLOUD => {
@@ -1578,6 +1595,10 @@ mod tests {
         assert_eq!(ModelId::OllamaGptOss120bCloud.provider(), Provider::Ollama);
         assert_eq!(ModelId::OllamaQwen317b.provider(), Provider::Ollama);
         assert_eq!(
+            ModelId::OllamaKimiK2ThinkingCloud.provider(),
+            Provider::Ollama
+        );
+        assert_eq!(
             ModelId::LmStudioMetaLlama38BInstruct.provider(),
             Provider::LmStudio
         );
@@ -1831,7 +1852,10 @@ mod tests {
             ModelId::OllamaDeepseekV31_671bCloud.generation(),
             "deepseek-v3.1"
         );
-        assert_eq!(ModelId::OllamaKimiK21tCloud.generation(), "kimi-k2");
+        assert_eq!(
+            ModelId::OllamaKimiK2ThinkingCloud.generation(),
+            "kimi-k2-thinking"
+        );
         assert_eq!(ModelId::OllamaQwen3Coder480bCloud.generation(), "qwen3");
         assert_eq!(ModelId::OllamaGlm46Cloud.generation(), "glm-4.6");
         assert_eq!(
@@ -1910,7 +1934,7 @@ mod tests {
         assert!(ollama_models.contains(&ModelId::OllamaGptOss120bCloud));
         assert!(ollama_models.contains(&ModelId::OllamaQwen317b));
         assert!(ollama_models.contains(&ModelId::OllamaDeepseekV31_671bCloud));
-        assert!(ollama_models.contains(&ModelId::OllamaKimiK21tCloud));
+
         assert!(ollama_models.contains(&ModelId::OllamaQwen3Coder480bCloud));
         assert!(ollama_models.contains(&ModelId::OllamaGlm46Cloud));
         assert_eq!(ollama_models.len(), 7);
