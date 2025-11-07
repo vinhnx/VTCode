@@ -3,6 +3,19 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - Latest Improvements# [Version 0.39.5] - 2025-11-03
+# [Version 0.41.0] - 2025-11-07
+
+
+### Documentation
+    - docs: update changelog for v0.40.1 [skip ci]
+    - docs: update changelog for v0.40.0 [skip ci]
+    - docs: update changelog for v0.40.1 [skip ci]
+
+
+### Chores
+    - chore: release v0.40.1
+    - chore: release v0.40.0
+    - chore: release v0.40.1
 # [Version 0.40.1] - 2025-11-06
 
 
