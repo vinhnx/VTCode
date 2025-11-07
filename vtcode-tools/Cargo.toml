@@ -1,6 +1,6 @@
 [package]
 name = "vtcode-tools"
-version = "0.42.2"
+version = "0.42.3"
 edition = "2024"
 authors = ["vinhnx <vinhnx@users.noreply.github.com>"]
 description = "Prototype extraction of VTCode's modular tool registry"
@@ -20,8 +20,8 @@ policies = []
 examples = []
 
 [dependencies]
-vtcode-commons = { path = "../vtcode-commons", version = "0.42.2" }
-vtcode-core = { path = "../vtcode-core", version = "0.42.2" }
+vtcode-commons = { path = "../vtcode-commons", version = "0.42.3" }
+vtcode-core = { path = "../vtcode-core", version = "0.42.3" }
 
 [dev-dependencies]
 anyhow = "1"
