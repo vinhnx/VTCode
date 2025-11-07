@@ -1077,8 +1077,14 @@ impl OpenAIProvider {
             .filter(|calls| !calls.is_empty());
 
         let reasoning = message
-            .get("reasoning")
+            .get("reasoning_content")
             .and_then(extract_reasoning_trace)
+            .or_else(|| message.get("reasoning").and_then(extract_reasoning_trace))
+            .or_else(|| {
+                choice
+                    .get("reasoning_content")
+                    .and_then(extract_reasoning_trace)
+            })
             .or_else(|| choice.get("reasoning").and_then(extract_reasoning_trace));
 
         let finish_reason = choice
@@ -2244,7 +2250,9 @@ impl LLMProvider for OpenAIProvider {
                                     telemetry.on_content_delta(delta);
                                     yield LLMStreamEvent::Token { delta: delta.to_string() };
                                 }
-                                "response.reasoning_text.delta" | "response.reasoning_summary_text.delta" => {
+                                "response.reasoning_text.delta"
+                                | "response.reasoning_summary_text.delta"
+                                | "response.reasoning_content.delta" => {
                                     let delta = payload
                                         .get("delta")
                                         .and_then(|value| value.as_str())

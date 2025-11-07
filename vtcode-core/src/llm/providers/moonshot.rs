@@ -70,8 +70,14 @@ impl LLMProvider for MoonshotProvider {
         "moonshot"
     }
 
-    fn supports_reasoning(&self, _model: &str) -> bool {
-        false
+    fn supports_reasoning(&self, model: &str) -> bool {
+        let requested = if model.trim().is_empty() {
+            self.model.as_str()
+        } else {
+            model
+        };
+
+        requested == models::moonshot::KIMI_K2_THINKING
     }
 
     fn supports_reasoning_effort(&self, _model: &str) -> bool {
