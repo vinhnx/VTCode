@@ -251,11 +251,35 @@ pub(crate) async fn initialize_session(
                 tool_registry = tool_registry.with_mcp_client(Arc::clone(client));
                 if let Err(err) = tool_registry.refresh_mcp_tools().await {
                     warn!("Failed to refresh MCP tools: {}", err);
+                    
+                    // Log which providers are configured to help with debugging
+                    if !cfg.mcp.providers.is_empty() {
+                        let provider_names: Vec<String> = cfg.mcp.providers.iter()
+                            .map(|p| format!("{} (enabled: {})", p.name, p.enabled))
+                            .collect();
+                        info!("Configured MCP providers: [{}]", provider_names.join(", "));
+                    }
                 }
             } else {
                 debug!(
                     "MCP client not ready during startup; it will be available later if it finishes initializing"
                 );
+                
+                // Log the status for debugging
+                match &status {
+                    super::async_mcp_manager::McpInitStatus::Error { message } => {
+                        warn!("MCP initialization failed: {}", message);
+                    },
+                    super::async_mcp_manager::McpInitStatus::Initializing { progress } => {
+                        info!("MCP still initializing: {}", progress);
+                    },
+                    super::async_mcp_manager::McpInitStatus::Disabled => {
+                        info!("MCP is disabled");
+                    },
+                    super::async_mcp_manager::McpInitStatus::Ready { .. } => {
+                        // This case is handled above
+                    },
+                };
             }
         }
 

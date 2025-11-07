@@ -4,7 +4,7 @@ use serde_json::{Map, Value};
 use shell_words::split as shell_split;
 use std::time::Duration;
 use vtcode_core::prompts::{CustomPrompt, CustomPromptRegistry, PromptInvocation};
-use vtcode_core::ui::slash::SLASH_COMMANDS;
+
 use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::session_archive;
@@ -42,7 +42,6 @@ pub enum SlashCommandOutcome {
     StartSessionsPalette {
         limit: usize,
     },
-    StartHelpPalette,
     StartFileBrowser {
         initial_filter: Option<String>,
     },
@@ -162,47 +161,8 @@ pub async fn handle_slash_command(
             renderer.line(MessageStyle::Error, "Usage: /theme <theme-id>")?;
             Ok(SlashCommandOutcome::Handled)
         }
-        "help" => {
-            if renderer.supports_inline_ui() {
-                return Ok(SlashCommandOutcome::StartHelpPalette);
-            }
-            renderer.line(MessageStyle::Info, "Available commands:")?;
-            for info in SLASH_COMMANDS.iter() {
-                renderer.line(
-                    MessageStyle::Info,
-                    &format!("  /{} - {}", info.name, info.description),
-                )?;
-            }
-            renderer.line(
-                MessageStyle::Info,
-                &format!(
-                    "  Themes available: {}",
-                    theme::available_themes().join(", ")
-                ),
-            )?;
-            Ok(SlashCommandOutcome::Handled)
-        }
-        "list-themes" => {
-            if renderer.supports_inline_ui() {
-                return Ok(SlashCommandOutcome::StartThemePalette {
-                    mode: ThemePaletteMode::Inspect,
-                });
-            }
-            renderer.line(MessageStyle::Info, "Available themes:")?;
-            for id in theme::available_themes() {
-                let marker = if theme::active_theme_id() == id {
-                    "*"
-                } else {
-                    " "
-                };
-                let label = theme::theme_label(id).unwrap_or(id);
-                renderer.line(
-                    MessageStyle::Info,
-                    &format!("{} {} ({})", marker, id, label),
-                )?;
-            }
-            Ok(SlashCommandOutcome::Handled)
-        }
+
+
         "command" => {
             if args.is_empty() {
                 renderer.line(MessageStyle::Error, "Usage: /command <program> [args...]")?;

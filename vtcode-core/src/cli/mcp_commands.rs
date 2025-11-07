@@ -123,6 +123,10 @@ pub struct AddMcpStreamableHttpArgs {
     /// Additional headers to send with each request (KEY=VALUE form).
     #[arg(long, value_parser = parse_env_pair, value_name = "KEY=VALUE")]
     pub header: Vec<(String, String)>,
+
+    /// Headers whose values are sourced from environment variables (KEY=ENV_VAR form).
+    #[arg(long, value_parser = parse_env_pair, value_name = "KEY=ENV_VAR")]
+    pub env_header: Vec<(String, String)>,
 }
 
 /// Arguments for the `remove` subcommand.
@@ -367,8 +371,11 @@ async fn run_get(get_args: GetArgs) -> Result<()> {
             let env = http.api_key_env.as_deref().unwrap_or("-");
             println!("  api_key_env: {env}");
             println!("  protocol_version: {}", http.protocol_version);
-            if !http.headers.is_empty() {
-                println!("  headers: {}", format_env_map(&http.headers));
+            if !http.http_headers.is_empty() {
+                println!("  headers: {}", format_env_map(&http.http_headers));
+            }
+            if !http.env_http_headers.is_empty() {
+                println!("  env_headers: {}", format_env_map(&http.env_http_headers));
             }
         }
     }
@@ -406,11 +413,14 @@ fn build_stdio_transport(args: AddMcpStdioArgs) -> Result<McpTransportConfig> {
 
 fn build_http_transport(args: AddMcpStreamableHttpArgs) -> McpTransportConfig {
     let headers = args.header.into_iter().collect::<HashMap<_, _>>();
+    let env_headers = args.env_header.into_iter().collect::<HashMap<_, _>>();
+    let default_config = McpHttpServerConfig::default();
     let transport = McpHttpServerConfig {
         endpoint: args.url,
         api_key_env: args.bearer_token_env_var,
-        protocol_version: McpHttpServerConfig::default().protocol_version,
-        headers,
+        protocol_version: default_config.protocol_version,
+        http_headers: headers,
+        env_http_headers: env_headers,
     };
 
     McpTransportConfig::Http(transport)
@@ -445,7 +455,8 @@ fn json_provider(provider: &McpProviderConfig) -> serde_json::Value {
             "endpoint": http.endpoint,
             "api_key_env": http.api_key_env,
             "protocol_version": http.protocol_version,
-            "headers": http.headers,
+            "headers": http.http_headers,
+            "env_headers": http.env_http_headers,
         }),
     };
 

@@ -171,7 +171,7 @@ VT Code now features a completely revamped terminal user interface with numerous
 During chat you can lead with `/` to trigger built-in actions without leaving the session:
 
 -   `/help` — list supported commands
--   `/list-themes` — show available ANSI themes
+
 -   `/theme <id>` — switch the active theme
 -   `/command <program> [args...]` — run a shell command via `run_terminal_cmd`
 

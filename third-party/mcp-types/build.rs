@@ -3,7 +3,11 @@ use std::{env, fs, path::Path};
 use typify::{TypeSpace, TypeSpaceSettings};
 
 fn main() {
-    generate("2024-11-05");
+    println!("cargo:rerun-if-env-changed=MCP_TYPES_FORCE_REGEN");
+
+    if env::var_os("MCP_TYPES_FORCE_REGEN").is_some() {
+        generate("2024-11-05");
+    }
 }
 
 fn generate(version: &str) {

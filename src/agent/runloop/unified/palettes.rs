@@ -3,7 +3,7 @@ use std::time::Duration;
 use anyhow::Result;
 use chrono::Local;
 
-use vtcode_core::ui::slash::SlashCommandInfo;
+
 use vtcode_core::ui::theme;
 use vtcode_core::ui::tui::{
     InlineHandle, InlineListItem, InlineListSelection, convert_style, theme_from_styles,
@@ -24,9 +24,7 @@ const SESSIONS_PALETTE_TITLE: &str = "Archived sessions";
 const SESSIONS_HINT_PRIMARY: &str = "Use ↑/↓ to browse sessions.";
 const SESSIONS_HINT_SECONDARY: &str = "Enter to print details • Esc to close.";
 const SESSIONS_LATEST_BADGE: &str = "Latest";
-const HELP_PALETTE_TITLE: &str = "Slash command help";
-const HELP_HINT_PRIMARY: &str = "Use ↑/↓ to pick a slash command.";
-const HELP_HINT_SECONDARY: &str = "Enter to insert into the input • Esc to dismiss.";
+
 
 #[derive(Clone)]
 pub(crate) enum ActivePalette {
@@ -37,7 +35,7 @@ pub(crate) enum ActivePalette {
         listings: Vec<SessionListing>,
         limit: usize,
     },
-    Help,
+
 }
 
 pub(crate) fn show_theme_palette(
@@ -146,42 +144,7 @@ pub(crate) fn show_sessions_palette(
     Ok(true)
 }
 
-pub(crate) fn show_help_palette(
-    renderer: &mut AnsiRenderer,
-    commands: &[&'static SlashCommandInfo],
-) -> Result<bool> {
-    if commands.is_empty() {
-        renderer.line(MessageStyle::Info, "No slash commands available.")?;
-        return Ok(false);
-    }
 
-    let mut items = Vec::new();
-    for info in commands {
-        let subtitle = if info.description.is_empty() {
-            None
-        } else {
-            Some(info.description.to_string())
-        };
-        items.push(InlineListItem {
-            title: format!("/{}", info.name),
-            subtitle,
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::SlashCommand(info.name.to_string())),
-            search_value: None,
-        });
-    }
-
-    let lines = vec![
-        HELP_HINT_PRIMARY.to_string(),
-        HELP_HINT_SECONDARY.to_string(),
-    ];
-    let selected = commands
-        .first()
-        .map(|info| InlineListSelection::SlashCommand(info.name.to_string()));
-    renderer.show_list_modal(HELP_PALETTE_TITLE, lines, items, selected, None);
-    Ok(true)
-}
 
 pub(crate) fn render_session_details(
     renderer: &mut AnsiRenderer,
@@ -294,17 +257,7 @@ pub(crate) async fn handle_palette_selection(
                 Ok(None)
             }
         }
-        ActivePalette::Help => {
-            if let InlineListSelection::SlashCommand(command) = selection {
-                handle.set_input(format!("/{} ", command));
-                renderer.line(
-                    MessageStyle::Info,
-                    &format!("Inserted '/{}' into the input.", command),
-                )?;
-            }
-            renderer.close_modal();
-            Ok(None)
-        }
+
     }
 }
 
@@ -323,9 +276,7 @@ pub(crate) fn handle_palette_cancel(
         ActivePalette::Sessions { .. } => {
             renderer.line(MessageStyle::Info, "Closed session browser.")?;
         }
-        ActivePalette::Help => {
-            renderer.line(MessageStyle::Info, "Dismissed slash command help.")?;
-        }
+
     }
     Ok(())
 }

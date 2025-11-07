@@ -12,6 +12,7 @@
 //! the amount of bespoke glue we have to maintain while aligning the
 //! behaviour with the upstream MCP implementations.
 
+use crate::config::constants::app;
 use crate::config::mcp::{
     McpAllowListConfig, McpClientConfig, McpProviderConfig, McpTransportConfig,
 };
@@ -20,6 +21,7 @@ use async_trait::async_trait;
 use chrono::Local;
 use futures::FutureExt;
 use iana_time_zone::get_timezone;
+use jsonschema::Validator;
 use mcp_types::{
     CallToolRequestParams, CallToolResult, CallToolResultContentItem, ClientCapabilities,
     ClientCapabilitiesRoots, GetPromptRequestParams, GetPromptResult, Implementation,
@@ -41,7 +43,7 @@ use rmcp::transport::child_process::TokioChildProcess;
 use rmcp::transport::streamable_http_client::{
     StreamableHttpClientTransport, StreamableHttpClientTransportConfig,
 };
-use serde_json::{Map, Value};
+use serde_json::{Map, Value, json};
 use std::collections::HashMap;
 use std::env;
 use std::ffi::OsString;
@@ -55,6 +57,8 @@ use tokio::sync::{Mutex, Semaphore};
 use tokio::time;
 use tracing::{debug, error, info, warn};
 use url::Url;
+
+const ELICITATION_SCHEMA_VALIDATION_FLAG: &str = "schemaValidation";
 
 /// Information about an MCP tool exposed by a provider.
 #[derive(Debug, Clone)]
@@ -782,11 +786,21 @@ impl McpClient {
             list_changed: Some(true),
         });
 
+        if self.elicitation_handler.is_some() {
+            let mut elicitation_capability = Map::new();
+            elicitation_capability.insert(
+                ELICITATION_SCHEMA_VALIDATION_FLAG.to_string(),
+                Value::Bool(true),
+            );
+            capabilities.elicitation = elicitation_capability;
+        }
+
         InitializeRequestParams {
             capabilities,
             client_info: Implementation {
                 name: "vtcode".to_string(),
                 version: env!("CARGO_PKG_VERSION").to_string(),
+                title: Some(app::DISPLAY_NAME.to_string()),
             },
             protocol_version: provider.protocol_version.clone(),
         }
@@ -949,11 +963,12 @@ impl McpProvider {
                     None => None,
                 };
 
+                let headers = build_headers(&http.http_headers, &http.env_http_headers);
                 let client = RmcpClient::new_streamable_http_client(
                     config.name.clone(),
                     &http.endpoint,
                     bearer_token,
-                    build_headers(&http.headers)?,
+                    headers,
                     elicitation_handler.clone(),
                 )
                 .await?;
@@ -1399,18 +1414,79 @@ fn schema_requires_field(schema: &Value, field: &str) -> bool {
     }
 }
 
-fn build_headers(headers: &HashMap<String, String>) -> Result<HeaderMap> {
+fn build_headers(
+    static_headers: &HashMap<String, String>,
+    env_headers: &HashMap<String, String>,
+) -> HeaderMap {
     let mut map = HeaderMap::new();
-    for (key, value) in headers {
-        let name = HeaderName::from_bytes(key.as_bytes()).with_context(|| {
-            format!("Invalid HTTP header name '{key}' in MCP provider configuration")
-        })?;
-        let header_value = HeaderValue::from_str(value).with_context(|| {
-            format!("Invalid HTTP header value for '{key}' in MCP provider configuration")
-        })?;
-        map.insert(name, header_value);
+
+    for (key, value) in static_headers {
+        match HeaderName::from_bytes(key.as_bytes()) {
+            Ok(name) => match HeaderValue::from_str(value) {
+                Ok(header_value) => {
+                    map.insert(name, header_value);
+                }
+                Err(err) => {
+                    warn!(
+                        header = key.as_str(),
+                        error = %err,
+                        "Skipping MCP HTTP header with invalid value"
+                    );
+                }
+            },
+            Err(err) => {
+                warn!(
+                    header = key.as_str(),
+                    error = %err,
+                    "Skipping MCP HTTP header with invalid name"
+                );
+            }
+        }
     }
-    Ok(map)
+
+    for (key, env_var) in env_headers {
+        match env::var(env_var) {
+            Ok(value) if !value.trim().is_empty() => match HeaderName::from_bytes(key.as_bytes()) {
+                Ok(name) => match HeaderValue::from_str(&value) {
+                    Ok(header_value) => {
+                        map.insert(name, header_value);
+                    }
+                    Err(err) => {
+                        warn!(
+                            header = key.as_str(),
+                            env_var = env_var.as_str(),
+                            error = %err,
+                            "Skipping MCP HTTP header from environment with invalid value"
+                        );
+                    }
+                },
+                Err(err) => {
+                    warn!(
+                        header = key.as_str(),
+                        env_var = env_var.as_str(),
+                        error = %err,
+                        "Skipping MCP HTTP header from environment with invalid name"
+                    );
+                }
+            },
+            Ok(_) => {
+                debug!(
+                    header = key.as_str(),
+                    env_var = env_var.as_str(),
+                    "Skipping MCP HTTP header from environment because the value is empty"
+                );
+            }
+            Err(_) => {
+                debug!(
+                    header = key.as_str(),
+                    env_var = env_var.as_str(),
+                    "Skipping MCP HTTP header from environment because the variable is unset"
+                );
+            }
+        }
+    }
+
+    map
 }
 
 /// Lightweight adapter around the rmcp transport mirroring Codex' `RmcpClient` API.
@@ -1464,10 +1540,30 @@ impl RmcpClient {
 
         if let Some(stderr) = stderr {
             let program_name = program.to_string_lossy().into_owned();
+            let provider_label = provider_name.clone();
             tokio::spawn(async move {
                 let mut reader = BufReader::new(stderr).lines();
-                while let Ok(Some(line)) = reader.next_line().await {
-                    debug!("MCP server stderr ({program_name}): {line}");
+                loop {
+                    match reader.next_line().await {
+                        Ok(Some(line)) => {
+                            info!(
+                                provider = provider_label.as_str(),
+                                program = program_name.as_str(),
+                                message = line.as_str(),
+                                "MCP server stderr"
+                            );
+                        }
+                        Ok(None) => break,
+                        Err(error) => {
+                            warn!(
+                                provider = provider_label.as_str(),
+                                program = program_name.as_str(),
+                                error = %error,
+                                "Failed to read MCP server stderr"
+                            );
+                            break;
+                        }
+                    }
                 }
             });
         }
@@ -1778,7 +1874,7 @@ impl ClientHandler for LoggingClientHandler {
             };
 
             if let Some(handler) = handler {
-                let schema = match serde_json::to_value(&request.requested_schema) {
+                let schema_value = match serde_json::to_value(&request.requested_schema) {
                     Ok(value) => value,
                     Err(err) => {
                         warn!(
@@ -1789,14 +1885,23 @@ impl ClientHandler for LoggingClientHandler {
                         Value::Null
                     }
                 };
+                let validator = build_elicitation_validator(provider.as_str(), &schema_value);
                 let message = request.message.clone();
                 let payload = McpElicitationRequest {
                     message: message.clone(),
-                    requested_schema: schema,
+                    requested_schema: schema_value.clone(),
                 };
 
                 match handler.handle_elicitation(&provider, payload).await {
                     Ok(response) => {
+                        if let Err(error) = validate_elicitation_payload(
+                            provider.as_str(),
+                            validator.as_ref(),
+                            &response.action,
+                            response.content.as_ref(),
+                        ) {
+                            return Err(error);
+                        }
                         info!(
                             provider = provider.as_str(),
                             message = message.as_str(),
@@ -1956,6 +2061,68 @@ impl ClientHandler for LoggingClientHandler {
     }
 }
 
+fn build_elicitation_validator(provider: &str, schema: &Value) -> Option<Validator> {
+    if schema.is_null() {
+        return None;
+    }
+
+    match Validator::new(schema) {
+        Ok(validator) => Some(validator),
+        Err(err) => {
+            warn!(
+                provider = provider,
+                error = %err,
+                "Failed to build JSON schema validator for MCP elicitation; skipping validation"
+            );
+            None
+        }
+    }
+}
+
+fn validate_elicitation_payload(
+    provider: &str,
+    validator: Option<&Validator>,
+    action: &ElicitationAction,
+    content: Option<&Value>,
+) -> Result<(), rmcp::ErrorData> {
+    if !matches!(action, ElicitationAction::Accept) {
+        return Ok(());
+    }
+
+    let Some(validator) = validator else {
+        return Ok(());
+    };
+
+    let Some(payload) = content else {
+        warn!(
+            provider = provider,
+            "MCP elicitation accept action missing response content"
+        );
+        return Err(rmcp::ErrorData::invalid_params(
+            "Elicitation response missing content for accept action",
+            None,
+        ));
+    };
+
+    if !validator.is_valid(payload) {
+        let messages: Vec<String> = validator
+            .iter_errors(payload)
+            .map(|err| err.to_string())
+            .collect();
+        warn!(
+            provider = provider,
+            errors = ?messages,
+            "MCP elicitation response failed schema validation"
+        );
+        return Err(rmcp::ErrorData::invalid_params(
+            "Elicitation response failed schema validation",
+            Some(json!({ "errors": messages })),
+        ));
+    }
+
+    Ok(())
+}
+
 fn directory_to_file_uri(path: &Path) -> Option<String> {
     Url::from_directory_path(path)
         .ok()
@@ -2094,13 +2261,33 @@ const DEFAULT_ENV_VARS: &[&str] = &[
 
 #[cfg(windows)]
 const DEFAULT_ENV_VARS: &[&str] = &[
+    // Core path resolution
     "PATH",
     "PATHEXT",
+    // Shell and system roots
+    "COMSPEC",
+    "SYSTEMROOT",
+    "SYSTEMDRIVE",
+    // User context and profiles
     "USERNAME",
     "USERDOMAIN",
     "USERPROFILE",
+    "HOMEDRIVE",
+    "HOMEPATH",
+    // Program locations
+    "PROGRAMFILES",
+    "PROGRAMFILES(X86)",
+    "PROGRAMW6432",
+    "PROGRAMDATA",
+    // App data and caches
+    "LOCALAPPDATA",
+    "APPDATA",
+    // Temp locations
     "TEMP",
     "TMP",
+    // Common shells/pwsh hints
+    "POWERSHELL",
+    "PWSH",
 ];
 
 #[cfg(test)]
@@ -2196,11 +2383,20 @@ mod tests {
                 roots: Some(ClientCapabilitiesRoots {
                     list_changed: Some(true),
                 }),
+                elicitation: {
+                    let mut capability = Map::new();
+                    capability.insert(
+                        ELICITATION_SCHEMA_VALIDATION_FLAG.to_string(),
+                        Value::Bool(true),
+                    );
+                    capability
+                },
                 ..Default::default()
             },
             client_info: Implementation {
                 name: "vtcode".to_string(),
                 version: "1.0".to_string(),
+                title: Some(app::DISPLAY_NAME.to_string()),
             },
             protocol_version: mcp_types::LATEST_PROTOCOL_VERSION.to_string(),
         };
@@ -2209,6 +2405,61 @@ mod tests {
             convert_to_rmcp(params.clone()).unwrap();
         let round_trip: InitializeRequestParams = convert_to_mcp(converted).unwrap();
         assert_eq!(round_trip.client_info.name, "vtcode");
+        assert_eq!(
+            round_trip.client_info.title,
+            Some(app::DISPLAY_NAME.to_string())
+        );
+        assert_eq!(
+            round_trip
+                .capabilities
+                .elicitation
+                .get(ELICITATION_SCHEMA_VALIDATION_FLAG),
+            Some(&Value::Bool(true))
+        );
+    }
+
+    #[test]
+    fn validate_elicitation_payload_rejects_invalid_content() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "name": { "type": "string" }
+            },
+            "required": ["name"]
+        });
+        let validator =
+            build_elicitation_validator("test", &schema).expect("schema should compile");
+
+        let result = validate_elicitation_payload(
+            "test",
+            Some(&validator),
+            &ElicitationAction::Accept,
+            Some(&json!({ "name": 42 })),
+        );
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn validate_elicitation_payload_accepts_valid_content() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "email": { "type": "string", "format": "email" }
+            },
+            "required": ["email"]
+        });
+        let validator =
+            build_elicitation_validator("test", &schema).expect("schema should compile");
+
+        let result = validate_elicitation_payload(
+            "test",
+            Some(&validator),
+            &ElicitationAction::Accept,
+            Some(&json!({ "email": "user@example.com" })),
+        );
+
+        assert!(result.is_ok());
     }
 
     #[tokio::test]

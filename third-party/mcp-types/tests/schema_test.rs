@@ -198,6 +198,7 @@ fn test_client_capabilities() {
             list_changed: Some(true),
         }),
         sampling: Default::default(),
+        elicitation: Default::default(),
     };
 
     validate_against_definition(
@@ -278,10 +279,12 @@ fn test_initialize_request() {
                     list_changed: Some(true),
                 }),
                 sampling: Default::default(),
+                elicitation: Default::default(),
             },
             client_info: Implementation {
                 name: "test-client".to_string(),
                 version: "1.0.0".to_string(),
+                title: None,
             },
             protocol_version: "2024-11-05".to_string(),
         },
@@ -312,6 +315,7 @@ fn test_initialize_result() {
         server_info: Implementation {
             name: "test-server".to_string(),
             version: "1.0.0".to_string(),
+            title: None,
         },
         meta: Default::default(),
     };
@@ -856,6 +860,7 @@ fn test_implementation() {
     let implementation = Implementation {
         name: "test-implementation".to_string(),
         version: "1.0.0".to_string(),
+        title: None,
     };
 
     validate_against_definition(

@@ -93,7 +93,7 @@ SlashCommandInfo {
 }
 ```
 
-**Position:** Between `/prompts` and `/update` in help listing
+**Position:** After `/prompt` in help listing
 
 ### Implementation ✅
 

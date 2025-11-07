@@ -9,7 +9,7 @@ use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::ToolRegistry;
-use vtcode_core::ui::slash::{SLASH_COMMANDS, SlashCommandInfo};
+
 use vtcode_core::ui::theme;
 use vtcode_core::ui::tui::{InlineHandle, InlineSession, theme_from_styles};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
@@ -33,7 +33,7 @@ use crate::agent::runloop::unified::mcp_support::{
 };
 use crate::agent::runloop::unified::model_selection::finalize_model_selection;
 use crate::agent::runloop::unified::palettes::{
-    ActivePalette, apply_prompt_style, show_help_palette, show_sessions_palette, show_theme_palette,
+    ActivePalette, apply_prompt_style, show_sessions_palette, show_theme_palette,
 };
 use crate::agent::runloop::unified::state::{CtrlCState, SessionStats};
 use crate::agent::runloop::unified::tool_routing::{ToolPermissionFlow, ensure_tool_permission};
@@ -149,27 +149,7 @@ pub(super) async fn handle_outcome(
             }
             Ok(SlashCommandControl::Continue)
         }
-        SlashCommandOutcome::StartHelpPalette => {
-            if ctx.model_picker_state.is_some() {
-                ctx.renderer.line(
-                    MessageStyle::Error,
-                    "Close the active model picker before opening help.",
-                )?;
-                return Ok(SlashCommandControl::Continue);
-            }
-            if ctx.palette_state.is_some() {
-                ctx.renderer.line(
-                    MessageStyle::Error,
-                    "Another selection modal is already open. Press Esc to dismiss it before starting a new one.",
-                )?;
-                return Ok(SlashCommandControl::Continue);
-            }
-            let commands: Vec<&'static SlashCommandInfo> = SLASH_COMMANDS.iter().collect();
-            if show_help_palette(ctx.renderer, &commands)? {
-                *ctx.palette_state = Some(ActivePalette::Help);
-            }
-            Ok(SlashCommandControl::Continue)
-        }
+
         SlashCommandOutcome::StartFileBrowser { initial_filter } => {
             if ctx.model_picker_state.is_some() {
                 ctx.renderer.line(
