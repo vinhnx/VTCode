@@ -2564,7 +2564,7 @@ dependencies = [
 
 [[package]]
 name = "mcp-types"
-version = "0.42.5"
+version = "0.1.1"
 dependencies = [
  "jsonschema",
  "prettyplease",
