@@ -88,6 +88,7 @@ pub mod models {
         pub const DEFAULT_MODEL: &str = "kimi-k2-turbo-preview";
         pub const SUPPORTED_MODELS: &[&str] = &[
             "kimi-k2-turbo-preview",
+            "kimi-k2-thinking",
             "kimi-k2-0905-preview",
             "kimi-k2-0711-preview",
             "kimi-latest",
@@ -97,6 +98,7 @@ pub mod models {
         ];
 
         pub const KIMI_K2_TURBO_PREVIEW: &str = "kimi-k2-turbo-preview";
+        pub const KIMI_K2_THINKING: &str = "kimi-k2-thinking";
         pub const KIMI_K2_0905_PREVIEW: &str = "kimi-k2-0905-preview";
         pub const KIMI_K2_0711_PREVIEW: &str = "kimi-k2-0711-preview";
         pub const KIMI_LATEST: &str = "kimi-latest";
@@ -270,6 +272,7 @@ pub mod models {
     pub const CLAUDE_SONNET_4_20250514: &str = anthropic::CLAUDE_SONNET_4_20250514;
     pub const MINIMAX_M2: &str = minimax::MINIMAX_M2;
     pub const MOONSHOT_KIMI_K2_TURBO_PREVIEW: &str = moonshot::KIMI_K2_TURBO_PREVIEW;
+    pub const MOONSHOT_KIMI_K2_THINKING: &str = moonshot::KIMI_K2_THINKING;
     pub const MOONSHOT_KIMI_K2_0905_PREVIEW: &str = moonshot::KIMI_K2_0905_PREVIEW;
     pub const MOONSHOT_KIMI_K2_0711_PREVIEW: &str = moonshot::KIMI_K2_0711_PREVIEW;
     pub const MOONSHOT_KIMI_LATEST: &str = moonshot::KIMI_LATEST;

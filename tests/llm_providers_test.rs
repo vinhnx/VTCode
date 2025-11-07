@@ -297,6 +297,7 @@ fn test_provider_supported_models() {
     let moonshot = MoonshotProvider::new("test_key".to_string());
     let moonshot_models = moonshot.supported_models();
     assert!(moonshot_models.contains(&models::MOONSHOT_KIMI_K2_TURBO_PREVIEW.to_string()));
+    assert!(moonshot_models.contains(&models::MOONSHOT_KIMI_K2_THINKING.to_string()));
     assert!(moonshot_models.contains(&models::MOONSHOT_KIMI_K2_0905_PREVIEW.to_string()));
     assert!(moonshot_models.contains(&models::MOONSHOT_KIMI_LATEST_128K.to_string()));
     assert!(moonshot_models.len() >= 3);
