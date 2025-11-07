@@ -17,19 +17,19 @@ NC='\033[0m' # No Color
 
 # Helper functions
 print_step() {
-	echo -e "${BLUE}==>${NC} ${1}"
+	echo -e "${BLUE}==>${NC} ${1}" >&2
 }
 
 print_success() {
-	echo -e "${GREEN}✓${NC} ${1}"
+	echo -e "${GREEN}✓${NC} ${1}" >&2
 }
 
 print_error() {
-	echo -e "${RED}✗${NC} ${1}"
+	echo -e "${RED}✗${NC} ${1}" >&2
 }
 
 print_warning() {
-	echo -e "${YELLOW}⚠${NC} ${1}"
+	echo -e "${YELLOW}⚠${NC} ${1}" >&2
 }
 
 # Check if required tools are installed
