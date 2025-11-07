@@ -26,13 +26,13 @@ const CUSTOM_PROVIDER_BADGE: &str = "Manual";
 const REASONING_BADGE: &str = "Reasoning";
 const REASONING_OFF_BADGE: &str = "No reasoning";
 const CURRENT_BADGE: &str = "Current";
-const CURRENT_REASONING_PREFIX: &str = "Current reasoning effort: ";
+
 pub(super) const KEEP_CURRENT_DESCRIPTION: &str = "Retain the existing reasoning configuration.";
 
 pub(super) fn render_step_one_inline(
     renderer: &mut AnsiRenderer,
     options: &[ModelOption],
-    current_reasoning: ReasoningEffortLevel,
+    _current_reasoning: ReasoningEffortLevel,
     dynamic_models: &DynamicModelRegistry,
 ) -> Result<()> {
     let mut items = Vec::new();
@@ -152,15 +152,10 @@ pub(super) fn render_step_one_inline(
         search_value: Some("custom provider".to_string()),
     });
 
-    let mut lines = vec![
+    let lines = vec![
         "Step 1 – choose a model".to_string(),
         STEP_ONE_NAVIGATION_HINT.to_string(),
     ];
-    lines.push(format!(
-        "{}{}",
-        CURRENT_REASONING_PREFIX,
-        reasoning_level_label(current_reasoning)
-    ));
 
     let search = InlineListSearchConfig {
         label: "Search models or providers".to_string(),

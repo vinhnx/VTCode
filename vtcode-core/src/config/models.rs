@@ -118,7 +118,7 @@ impl Provider {
             }
             Provider::Ollama => models::ollama::REASONING_LEVEL_MODELS.contains(&model),
             Provider::LmStudio => false,
-            Provider::Moonshot => false,
+            Provider::Moonshot => model == models::moonshot::KIMI_K2_THINKING || model == models::moonshot::KIMI_K2_THINKING_HEAVY,
             Provider::XAI => model == models::xai::GROK_4 || model == models::xai::GROK_4_CODE,
             Provider::ZAI => model == models::zai::GLM_4_6,
             Provider::Minimax => model == models::minimax::MINIMAX_M2,
@@ -243,6 +243,8 @@ pub enum ModelId {
     MoonshotKimiK2TurboPreview,
     /// Kimi K2 Thinking - Moonshot reasoning-tier K2 release for long-horizon agentic tasks
     MoonshotKimiK2Thinking,
+    /// Kimi K2 Thinking Heavy - Enhanced reasoning with parallel trajectories (8x) and reflective aggregation
+    MoonshotKimiK2ThinkingHeavy,
     /// Kimi K2 0905 Preview - Flagship 256K K2 release with enhanced coding agents
     MoonshotKimiK20905Preview,
     /// Kimi K2 0711 Preview - Long-context K2 release tuned for balanced workloads
@@ -456,6 +458,7 @@ impl ModelId {
             // Moonshot models
             ModelId::MoonshotKimiK2TurboPreview => models::MOONSHOT_KIMI_K2_TURBO_PREVIEW,
             ModelId::MoonshotKimiK2Thinking => models::MOONSHOT_KIMI_K2_THINKING,
+            ModelId::MoonshotKimiK2ThinkingHeavy => models::MOONSHOT_KIMI_K2_THINKING_HEAVY,
             ModelId::MoonshotKimiK20905Preview => models::MOONSHOT_KIMI_K2_0905_PREVIEW,
             ModelId::MoonshotKimiK20711Preview => models::MOONSHOT_KIMI_K2_0711_PREVIEW,
             ModelId::MoonshotKimiLatest => models::MOONSHOT_KIMI_LATEST,
@@ -654,6 +657,7 @@ impl ModelId {
             // Moonshot models
             ModelId::MoonshotKimiK2TurboPreview => "Kimi K2 Turbo Preview",
             ModelId::MoonshotKimiK2Thinking => "Kimi K2 Thinking",
+            ModelId::MoonshotKimiK2ThinkingHeavy => "Kimi K2 Thinking (Heavy)",
             ModelId::MoonshotKimiK20905Preview => "Kimi K2 0905 Preview",
             ModelId::MoonshotKimiK20711Preview => "Kimi K2 0711 Preview",
             ModelId::MoonshotKimiLatest => "Kimi Latest (auto-tier)",
@@ -754,6 +758,9 @@ impl ModelId {
             }
             ModelId::MoonshotKimiK2Thinking => {
                 "Moonshot reasoning-tier Kimi K2 release optimized for deliberate, multi-step agentic reasoning"
+            }
+            ModelId::MoonshotKimiK2ThinkingHeavy => {
+                "Moonshot enhanced Kimi K2 reasoning with heavy mode (8x parallel trajectories + reflective aggregation)"
             }
             ModelId::MoonshotKimiK20905Preview => {
                 "Latest Kimi K2 0905 flagship with enhanced agentic coding, 256K context, and richer tool support"
@@ -865,6 +872,7 @@ impl ModelId {
             // Moonshot models
             ModelId::MoonshotKimiK2TurboPreview,
             ModelId::MoonshotKimiK2Thinking,
+            ModelId::MoonshotKimiK2ThinkingHeavy,
             ModelId::MoonshotKimiK20905Preview,
             ModelId::MoonshotKimiK20711Preview,
             ModelId::MoonshotKimiLatest,
@@ -1062,7 +1070,7 @@ impl ModelId {
 
     /// Determine whether the model is a reasoning-capable variant
     pub fn is_reasoning_variant(&self) -> bool {
-        if matches!(self, ModelId::MoonshotKimiK2Thinking) {
+        if matches!(self, ModelId::MoonshotKimiK2Thinking | ModelId::MoonshotKimiK2ThinkingHeavy) {
             return true;
         }
         if let Some(meta) = self.openrouter_metadata() {
@@ -1197,6 +1205,7 @@ impl FromStr for ModelId {
                 Ok(ModelId::MoonshotKimiK2TurboPreview)
             }
             s if s == models::MOONSHOT_KIMI_K2_THINKING => Ok(ModelId::MoonshotKimiK2Thinking),
+            s if s == models::MOONSHOT_KIMI_K2_THINKING_HEAVY => Ok(ModelId::MoonshotKimiK2ThinkingHeavy),
             s if s == models::MOONSHOT_KIMI_K2_0905_PREVIEW => {
                 Ok(ModelId::MoonshotKimiK20905Preview)
             }

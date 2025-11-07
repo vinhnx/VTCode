@@ -114,7 +114,7 @@ impl Provider {
             }
             Provider::Ollama => false,
             Provider::LmStudio => false,
-            Provider::Moonshot => false,
+            Provider::Moonshot => model == models::moonshot::KIMI_K2_THINKING,
             Provider::XAI => model == models::xai::GROK_4 || model == models::xai::GROK_4_CODE,
             Provider::ZAI => model == models::zai::GLM_4_6,
         }

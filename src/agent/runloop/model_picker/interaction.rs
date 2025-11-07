@@ -39,7 +39,7 @@ pub(super) enum ModelSelectionListOutcome {
 
 pub(super) fn select_model_with_ratatui_list(
     options: &[ModelOption],
-    current_reasoning: ReasoningEffortLevel,
+    _current_reasoning: ReasoningEffortLevel,
     dynamic_models: &DynamicModelRegistry,
 ) -> Result<ModelSelectionListOutcome> {
     if options.is_empty() {
@@ -195,10 +195,7 @@ pub(super) fn select_model_with_ratatui_list(
 
     let entries: Vec<SelectionEntry> = choices.iter().map(|choice| choice.entry.clone()).collect();
 
-    let instructions = format!(
-        "Current reasoning effort: {}. Models marked with [Reasoning] support adjustable reasoning.",
-        current_reasoning
-    );
+    let instructions = "Models marked with [Reasoning] support adjustable reasoning.".to_string();
 
     let selection = run_interactive_selection("Models", &instructions, &entries, 0)?;
     let selected_index = match selection {
