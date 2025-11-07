@@ -12,7 +12,6 @@
 //! the amount of bespoke glue we have to maintain while aligning the
 //! behaviour with the upstream MCP implementations.
 
-use crate::config::constants::app;
 use crate::config::mcp::{
     McpAllowListConfig, McpClientConfig, McpProviderConfig, McpTransportConfig,
 };
@@ -792,7 +791,10 @@ impl McpClient {
                 ELICITATION_SCHEMA_VALIDATION_FLAG.to_string(),
                 Value::Bool(true),
             );
-            capabilities.elicitation = elicitation_capability;
+            // Use experimental field for elicitation support until it's in the stable published version
+            capabilities
+                .experimental
+                .insert("elicitation".to_string(), elicitation_capability);
         }
 
         InitializeRequestParams {
@@ -800,7 +802,6 @@ impl McpClient {
             client_info: Implementation {
                 name: "vtcode".to_string(),
                 version: env!("CARGO_PKG_VERSION").to_string(),
-                title: Some(app::DISPLAY_NAME.to_string()),
             },
             protocol_version: provider.protocol_version.clone(),
         }
