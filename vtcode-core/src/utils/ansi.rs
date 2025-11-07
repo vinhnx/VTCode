@@ -17,7 +17,7 @@ use ratatui::style::{Color as RatColor, Modifier as RatModifier, Style as Ratatu
 use std::io::{self, Write};
 
 /// Styles available for rendering messages
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum MessageStyle {
     Info,
     Error,
