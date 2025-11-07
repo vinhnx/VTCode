@@ -131,7 +131,7 @@ rmcp = { version = "0.8.3", features = [
     "transport-child-process",
     "transport-streamable-http-client-reqwest",
 ] }
-mcp-types = "0.1.1"
+mcp-types = { path = "../third-party/mcp-types", version = "0.1.1" }
 openai-harmony = "0.0.3"
 url = "2.5"
 jsonschema = "0.29"
