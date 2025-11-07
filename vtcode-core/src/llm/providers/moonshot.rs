@@ -136,7 +136,7 @@ impl MoonshotProvider {
         }
 
         // Apply Heavy Mode configuration specifically for the heavy model variant
-        if request.model == models::moonshot::KIMI_K2_THINKING_HEAVY {
+        if request.model == models::moonshot::KIMI_K2_THINKING_TURBO {
             // Override or add Heavy Mode specific parameters
             payload.insert("heavy_thinking".to_string(), Value::Bool(true));
             payload.insert(
@@ -365,7 +365,7 @@ impl LLMProvider for MoonshotProvider {
         };
 
         requested == models::moonshot::KIMI_K2_THINKING
-            || requested == models::moonshot::KIMI_K2_THINKING_HEAVY
+            || requested == models::moonshot::KIMI_K2_THINKING_TURBO
     }
 
     fn supports_reasoning_effort(&self, model: &str) -> bool {
@@ -376,7 +376,7 @@ impl LLMProvider for MoonshotProvider {
         };
 
         requested == models::moonshot::KIMI_K2_THINKING
-            || requested == models::moonshot::KIMI_K2_THINKING_HEAVY
+            || requested == models::moonshot::KIMI_K2_THINKING_TURBO
     }
 
     async fn generate(&self, mut request: LLMRequest) -> Result<LLMResponse, LLMError> {

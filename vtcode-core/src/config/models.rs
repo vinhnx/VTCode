@@ -120,7 +120,7 @@ impl Provider {
             Provider::LmStudio => false,
             Provider::Moonshot => {
                 model == models::moonshot::KIMI_K2_THINKING
-                    || model == models::moonshot::KIMI_K2_THINKING_HEAVY
+                    || model == models::moonshot::KIMI_K2_THINKING_TURBO
             }
             Provider::XAI => model == models::xai::GROK_4 || model == models::xai::GROK_4_CODE,
             Provider::ZAI => model == models::zai::GLM_4_6,
@@ -466,7 +466,7 @@ impl ModelId {
             // Moonshot models
             ModelId::MoonshotKimiK2TurboPreview => models::MOONSHOT_KIMI_K2_TURBO_PREVIEW,
             ModelId::MoonshotKimiK2Thinking => models::MOONSHOT_KIMI_K2_THINKING,
-            ModelId::MoonshotKimiK2ThinkingHeavy => models::MOONSHOT_KIMI_K2_THINKING_HEAVY,
+            ModelId::MoonshotKimiK2ThinkingHeavy => models::MOONSHOT_KIMI_K2_THINKING_TURBO,
             ModelId::MoonshotKimiK20905Preview => models::MOONSHOT_KIMI_K2_0905_PREVIEW,
             ModelId::MoonshotKimiK20711Preview => models::MOONSHOT_KIMI_K2_0711_PREVIEW,
             ModelId::MoonshotKimiLatest => models::MOONSHOT_KIMI_LATEST,
@@ -1227,7 +1227,7 @@ impl FromStr for ModelId {
                 Ok(ModelId::MoonshotKimiK2TurboPreview)
             }
             s if s == models::MOONSHOT_KIMI_K2_THINKING => Ok(ModelId::MoonshotKimiK2Thinking),
-            s if s == models::MOONSHOT_KIMI_K2_THINKING_HEAVY => {
+            s if s == models::MOONSHOT_KIMI_K2_THINKING_TURBO => {
                 Ok(ModelId::MoonshotKimiK2ThinkingHeavy)
             }
             s if s == models::MOONSHOT_KIMI_K2_0905_PREVIEW => {
