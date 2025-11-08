@@ -525,9 +525,28 @@ save_skill(
 skill = load_skill("filter_test_files")
 ```
 
+## Step 6: Integration Testing (IN PROGRESS)
+
+**Objective**: Validate all 5 steps work together end-to-end, with performance and security testing.
+
+**Key Areas**:
+- Cross-module integration (discovery → execution → filtering → skills)
+- Performance benchmarks (discovery < 50ms, execution < 2s cold)
+- PII protection verification with real patterns
+- Large dataset handling (10k+ results)
+- Skill library composition and reuse
+
+**Current Work**:
+- Integration test scenarios added
+- Performance test framework designed
+- Documentation in `MCP_INTEGRATION_TESTING.md`
+
+**Status**: 🚀 IN PROGRESS - Test suite development
+
 ## References
 
 - Anthropic Engineering Blog: [Code execution with MCP](https://www.anthropic.com/engineering/code-execution-with-mcp)
 - MCP Specification: [Model Context Protocol](https://modelcontextprotocol.io/)
 - vtcode MCP Integration: `vtcode-core/src/mcp/`
 - vtcode Execution: `vtcode-core/src/exec/`
+- Integration Testing: `docs/MCP_INTEGRATION_TESTING.md`
