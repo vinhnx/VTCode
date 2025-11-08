@@ -15,6 +15,7 @@
 use crate::config::mcp::{
     McpAllowListConfig, McpClientConfig, McpProviderConfig, McpTransportConfig,
 };
+use regex::Regex;
 
 pub mod cli;
 pub mod enhanced_config;
@@ -69,6 +70,38 @@ pub struct McpToolInfo {
     pub description: String,
     pub provider: String,
     pub input_schema: Value,
+}
+
+/// Tool detail level for progressive loading
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToolDetailLevel {
+    /// Just the tool name and provider
+    NameOnly,
+    /// Name, provider, and description
+    WithDescription,
+    /// Complete tool definition including schema
+    FullSchema,
+}
+
+/// Filter criteria for tool listing
+#[derive(Debug, Clone, Default)]
+pub struct ToolFilter {
+    /// Filter by provider name
+    pub provider: Option<String>,
+    /// Filter by tool name pattern (supports wildcards)
+    pub name_pattern: Option<String>,
+    /// Filter by description keywords
+    pub description_keywords: Vec<String>,
+    /// Maximum number of results
+    pub limit: Option<usize>,
+    /// Detail level for results
+    pub detail_level: ToolDetailLevel,
+}
+
+impl Default for ToolDetailLevel {
+    fn default() -> Self {
+        Self::FullSchema
+    }
 }
 
 /// Summary of an MCP resource exposed by a provider.
@@ -376,6 +409,134 @@ impl McpClient {
     /// List all tools from all active providers.
     pub async fn list_tools(&self) -> Result<Vec<McpToolInfo>> {
         self.collect_tools(false).await
+    }
+
+    /// List tools with filtering support for progressive loading
+    pub async fn list_tools_filtered(&self, filter: ToolFilter) -> Result<Vec<McpToolInfo>> {
+        let mut tools = self.collect_tools(false).await?;
+
+        // Apply provider filter
+        if let Some(ref provider) = filter.provider {
+            tools.retain(|tool| &tool.provider == provider);
+        }
+
+        // Apply name pattern filter
+        if let Some(ref pattern) = filter.name_pattern {
+            tools.retain(|tool| wildcard_match_mcp(pattern, &tool.name));
+        }
+
+        // Apply description keyword filter
+        if !filter.description_keywords.is_empty() {
+            tools.retain(|tool| {
+                let description_lower = tool.description.to_lowercase();
+                filter
+                    .description_keywords
+                    .iter()
+                    .any(|keyword| description_lower.contains(&keyword.to_lowercase()))
+            });
+        }
+
+        // Apply detail level filtering (strip schema if not needed)
+        match filter.detail_level {
+            ToolDetailLevel::NameOnly => {
+                for tool in &mut tools {
+                    tool.description = String::new();
+                    tool.input_schema = Value::Null;
+                }
+            }
+            ToolDetailLevel::WithDescription => {
+                for tool in &mut tools {
+                    tool.input_schema = Value::Null;
+                }
+            }
+            ToolDetailLevel::FullSchema => {
+                // Keep everything
+            }
+        }
+
+        // Apply limit
+        if let Some(limit) = filter.limit {
+            tools.truncate(limit);
+        }
+
+        Ok(tools)
+    }
+
+    /// Search for tools by query string with fuzzy matching
+    pub async fn search_tools(
+        &self,
+        query: &str,
+        detail_level: ToolDetailLevel,
+    ) -> Result<Vec<McpToolInfo>> {
+        let query_lower = query.to_lowercase();
+        let mut tools = self.collect_tools(false).await?;
+
+        // Score each tool based on relevance
+        let mut scored_tools: Vec<(McpToolInfo, i32)> = tools
+            .into_iter()
+            .filter_map(|tool| {
+                let mut score = 0;
+
+                // Exact name match gets highest score
+                if tool.name.to_lowercase() == query_lower {
+                    score += 100;
+                }
+                // Name contains query
+                else if tool.name.to_lowercase().contains(&query_lower) {
+                    score += 50;
+                }
+                // Description contains query
+                else if tool.description.to_lowercase().contains(&query_lower) {
+                    score += 25;
+                }
+                // Check if query words appear in name or description
+                else {
+                    let query_words: Vec<&str> = query_lower.split_whitespace().collect();
+                    let name_lower = tool.name.to_lowercase();
+                    let desc_lower = tool.description.to_lowercase();
+
+                    for word in query_words {
+                        if name_lower.contains(word) {
+                            score += 10;
+                        }
+                        if desc_lower.contains(word) {
+                            score += 5;
+                        }
+                    }
+                }
+
+                if score > 0 {
+                    Some((tool, score))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        // Sort by score descending
+        scored_tools.sort_by(|a, b| b.1.cmp(&a.1));
+
+        let mut tools: Vec<McpToolInfo> = scored_tools.into_iter().map(|(tool, _)| tool).collect();
+
+        // Apply detail level filtering
+        match detail_level {
+            ToolDetailLevel::NameOnly => {
+                for tool in &mut tools {
+                    tool.description = String::new();
+                    tool.input_schema = Value::Null;
+                }
+            }
+            ToolDetailLevel::WithDescription => {
+                for tool in &mut tools {
+                    tool.input_schema = Value::Null;
+                }
+            }
+            ToolDetailLevel::FullSchema => {
+                // Keep everything
+            }
+        }
+
+        Ok(tools)
     }
 
     /// List all resources exposed by connected MCP providers.
@@ -1418,6 +1579,48 @@ fn schema_requires_field(schema: &Value, field: &str) -> bool {
     }
 }
 
+fn wildcard_match_mcp(pattern: &str, candidate: &str) -> bool {
+    if pattern == "*" {
+        return true;
+    }
+
+    let mut regex_pattern = String::from("^");
+    let mut literal_buffer = String::new();
+
+    for ch in pattern.chars() {
+        match ch {
+            '*' => {
+                if !literal_buffer.is_empty() {
+                    regex_pattern.push_str(&regex::escape(&literal_buffer));
+                    literal_buffer.clear();
+                }
+                regex_pattern.push_str(".*");
+            }
+            '?' => {
+                if !literal_buffer.is_empty() {
+                    regex_pattern.push_str(&regex::escape(&literal_buffer));
+                    literal_buffer.clear();
+                }
+                regex_pattern.push('.');
+            }
+            _ => literal_buffer.push(ch),
+        }
+    }
+
+    if !literal_buffer.is_empty() {
+        regex_pattern.push_str(&regex::escape(&literal_buffer));
+    }
+
+    regex_pattern.push('$');
+
+    // Case-insensitive matching for better usability
+    let regex_pattern = format!("(?i){}", regex_pattern);
+
+    Regex::new(&regex_pattern)
+        .map(|regex| regex.is_match(candidate))
+        .unwrap_or(false)
+}
+
 fn build_headers(
     static_headers: &HashMap<String, String>,
     env_headers: &HashMap<String, String>,
@@ -2179,15 +2382,66 @@ where
 fn create_env_for_mcp_server(
     extra_env: Option<HashMap<String, String>>,
 ) -> HashMap<String, String> {
-    DEFAULT_ENV_VARS
+    let mut env_map: HashMap<String, String> = DEFAULT_ENV_VARS
         .iter()
         .filter_map(|var| {
             std::env::var(var)
                 .ok()
                 .map(|value| (var.to_string(), value))
         })
-        .chain(extra_env.unwrap_or_default())
-        .collect()
+        .collect();
+
+    // Add extra environment variables with variable expansion support
+    if let Some(extra) = extra_env {
+        for (key, value) in extra {
+            let expanded_value = expand_env_variables(&value);
+            env_map.insert(key, expanded_value);
+        }
+    }
+
+    env_map
+}
+
+/// Expand environment variable references in a string
+/// Supports both ${VAR} and $VAR syntax
+fn expand_env_variables(value: &str) -> String {
+    let mut result = value.to_string();
+
+    // Handle ${VAR} syntax
+    while let Some(start) = result.find("${") {
+        if let Some(end) = result[start..].find('}') {
+            let var_name = &result[start + 2..start + end];
+            if let Ok(var_value) = env::var(var_name) {
+                result.replace_range(start..start + end + 1, &var_value);
+            } else {
+                // If variable not found, keep the original syntax
+                debug!(
+                    "Environment variable '{}' not found during expansion",
+                    var_name
+                );
+                break;
+            }
+        } else {
+            break;
+        }
+    }
+
+    // Handle $VAR syntax (word boundaries)
+    let dollar_pattern = Regex::new(r"\$([A-Z_][A-Z0-9_]*)").unwrap();
+    result = dollar_pattern
+        .replace_all(&result, |caps: &regex::Captures| {
+            let var_name = &caps[1];
+            env::var(var_name).unwrap_or_else(|_| {
+                debug!(
+                    "Environment variable '{}' not found during expansion",
+                    var_name
+                );
+                format!("${}", var_name)
+            })
+        })
+        .to_string();
+
+    result
 }
 
 /// Validate MCP configuration settings
@@ -2491,5 +2745,96 @@ mod tests {
         let uri = super::directory_to_file_uri(temp_dir.as_path())
             .expect("should create file uri for temp directory");
         assert!(uri.starts_with("file://"));
+    }
+
+    #[test]
+    fn test_wildcard_match_mcp() {
+        assert!(super::wildcard_match_mcp("*", "anything"));
+        assert!(super::wildcard_match_mcp("get_*", "get_time"));
+        assert!(super::wildcard_match_mcp("get_*", "get_timezone"));
+        assert!(!super::wildcard_match_mcp("get_*", "list_time"));
+        assert!(super::wildcard_match_mcp("convert_?", "convert_a"));
+        assert!(!super::wildcard_match_mcp("convert_?", "convert_ab"));
+
+        // Test case insensitivity
+        assert!(super::wildcard_match_mcp("GET_*", "get_time"));
+        assert!(super::wildcard_match_mcp("get_*", "GET_TIME"));
+    }
+
+    #[test]
+    fn test_tool_filter_basic() {
+        let filter = super::ToolFilter {
+            provider: Some("test".to_string()),
+            name_pattern: Some("get_*".to_string()),
+            description_keywords: vec![],
+            limit: Some(5),
+            detail_level: super::ToolDetailLevel::WithDescription,
+        };
+
+        assert_eq!(filter.provider, Some("test".to_string()));
+        assert_eq!(filter.name_pattern, Some("get_*".to_string()));
+        assert_eq!(filter.limit, Some(5));
+    }
+
+    #[test]
+    fn test_tool_detail_level() {
+        let default_level = super::ToolDetailLevel::default();
+        assert_eq!(default_level, super::ToolDetailLevel::FullSchema);
+
+        let name_only = super::ToolDetailLevel::NameOnly;
+        let with_desc = super::ToolDetailLevel::WithDescription;
+        let full = super::ToolDetailLevel::FullSchema;
+
+        assert_ne!(name_only, with_desc);
+        assert_ne!(with_desc, full);
+        assert_ne!(name_only, full);
+    }
+
+    #[test]
+    fn test_expand_env_variables_brace_syntax() {
+        let _guard = EnvGuard::set("TEST_VAR", "test_value");
+        let result = super::expand_env_variables("prefix_${TEST_VAR}_suffix");
+        assert_eq!(result, "prefix_test_value_suffix");
+    }
+
+    #[test]
+    fn test_expand_env_variables_dollar_syntax() {
+        let _guard = EnvGuard::set("MY_API_KEY", "secret123");
+        let result = super::expand_env_variables("Bearer $MY_API_KEY");
+        assert_eq!(result, "Bearer secret123");
+    }
+
+    #[test]
+    fn test_expand_env_variables_missing_var() {
+        let result = super::expand_env_variables("${NONEXISTENT_VAR}");
+        // Should keep original syntax when variable not found
+        assert_eq!(result, "${NONEXISTENT_VAR}");
+    }
+
+    #[test]
+    fn test_expand_env_variables_multiple() {
+        let _guard1 = EnvGuard::set("VAR1", "value1");
+        let _guard2 = EnvGuard::set("VAR2", "value2");
+        let result = super::expand_env_variables("${VAR1} and ${VAR2}");
+        assert_eq!(result, "value1 and value2");
+    }
+
+    #[test]
+    fn test_expand_env_variables_no_expansion() {
+        let result = super::expand_env_variables("plain text with no variables");
+        assert_eq!(result, "plain text with no variables");
+    }
+
+    #[test]
+    fn test_create_env_for_mcp_server_with_expansion() {
+        let _guard = EnvGuard::set("SOURCE_TOKEN", "token123");
+        let mut extra_env = HashMap::new();
+        extra_env.insert("API_KEY".to_string(), "${SOURCE_TOKEN}".to_string());
+        extra_env.insert("LITERAL".to_string(), "literal_value".to_string());
+
+        let result = super::create_env_for_mcp_server(Some(extra_env));
+
+        assert_eq!(result.get("API_KEY"), Some(&"token123".to_string()));
+        assert_eq!(result.get("LITERAL"), Some(&"literal_value".to_string()));
     }
 }
