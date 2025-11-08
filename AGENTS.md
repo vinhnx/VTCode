@@ -5,107 +5,56 @@
 
 # VT Code - Agent Guide
 
-## Build/Test Commands
+## Commands (Build/Test/Run)
 
--   **Build**: `cargo check` (preferred) or `cargo build --release`
--   **Lint**: `cargo clippy` (must pass before commit)
--   **Format**: `cargo fmt`
--   **Test all**: `cargo test` or `cargo nextest run` (preferred)
--   **Test single**: `cargo test test_name` or `cargo nextest run test_name`
--   **Run**: `./run.sh` (release) or `./run-debug.sh` (debug)
--   **Single query**: `cargo run -- ask "your query"` (headless testing)
+**Build**: `cargo check` | **Lint**: `cargo clippy` | **Format**: `cargo fmt`  
+**Test**: `cargo test` | **Run**: `./run.sh`
 
-## Architecture
+## Architecture Essentials
 
--   **vtcode-core/**: Library code (LLM providers, tools, config, MCP integration)
--   **src/**: CLI binary (Ratatui TUI, PTY execution, slash commands)
--   **Config**: `vtcode.toml` (never hardcode), constants in `vtcode-core/src/config/constants.rs`, model IDs in `docs/models.json`
--   **Key modules**: `llm/` (provider abstraction), `tools/` (trait-based), `config/` (TOML parsing)
--   **Integration**: Tree-sitter parsers (Rust/Python/JS/TS/Go/Java), MCP tools, PTY command execution
+**Codebase**: vtcode-core (lib) → src (CLI) → tools, llm, config, exec  
+**Config**: Read from `vtcode.toml` and `docs/models.json` (never hardcode)  
+**Parsers**: Tree-sitter for Rust/Python/JS/TS/Go/Java  
 
 ## Code Style
 
--   **Error handling**: `anyhow::Result<T>` with `.with_context()` for all fallible functions
--   **Naming**: snake_case (functions/vars), PascalCase (types)
--   **Formatting**: 4 spaces, early returns over nested ifs, descriptive variable names
--   **No emojis, no hardcoded values** (read from vtcode.toml/constants.rs)
--   **Docs**: All .md files in `./docs/` only (not root)
+Error handling: `anyhow::Result<T>` with context | Naming: snake_case / PascalCase  
+Early returns, 4-space indent, no emojis, no magic values
 
-## Tool Usage Guidelines
+## Tool Selection Strategy
 
--   **Essential Tools** (Tier 1): read_file, write_file, list_files, grep_file, PTY sessions
--   **Important Tools** (Tier 2): edit_file, git_diff, update_plan
--   **Specialized Tools** (Tier 3): ast_grep_search, apply_patch, delete_file, curl
--   **Advanced Tools** (Tier 4): execute_code, search_tools, save_skill, load_skill, search_skills
--   **Deprecated Tools**: run_terminal_cmd (use PTY session tools instead)
--   **Command Execution**: Always use PTY sessions (create_pty_session, send_pty_input, read_pty_session) for better control
--   **File Editing**: Use edit_file for surgical changes, write_file for full rewrites, apply_patch for complex diffs
--   **Search**: Use grep_file for text search, ast_grep_search for semantic code search
+**Discovery**: list_files → grep_file → ast_grep_search → read_file  
+**Editing**: edit_file (surgical) → write_file (full rewrite) → apply_patch (diffs)  
+**Execution**: PTY sessions for interactive; `run_terminal_cmd` for one-offs  
+**Code Execution**: execute_code (Python3/JS) + search_tools → save_skill → load_skill  
 
-## Code Execution & Skills (High-Impact Features)
+## Code Execution (90-98% Token Savings)
 
-### When to Use Code Execution
+**Use execute_code() for:**
+- Filtering/aggregating 100+ items locally (vs multiple API calls)
+- Data transformation (map, reduce, group operations)
+- Complex control flow (loops, conditionals, error handling)
+- Chaining multiple operations in one execution
 
-Use `execute_code()` to:
-- **Filter large datasets** (100+ items) locally in Python/JavaScript sandbox
-- **Transform data** before returning (map, reduce, group operations)
-- **Implement complex logic** (loops, conditionals, error handling)
-- **Chain tools together** in single execution (90% token reduction)
-- **Save patterns as skills** for 80%+ reuse on repeated tasks
+**Workflow:**
+1. `search_tools(keyword, detail_level="name-only")` - discover available tools
+2. Write Python3/JavaScript code with tool calls
+3. `execute_code(code, language="python3")` - runs sandboxed, 30s timeout
+4. `save_skill(name, code, language)` - persist for 80%+ reuse
+5. `load_skill(name)` - instant reuse across conversations
 
-### Code Execution Workflow
+**Performance:**
+| Operation | Time | Savings |
+|-----------|------|---------|
+| Python cold | 900-1100ms | - |
+| Python warm | 50-150ms | 95% |
+| JS cold | 450-650ms | - |
+| JS warm | 30-100ms | 97% |
+| Filter 10k items | 1.5s | 98% tokens |
 
-1. **Discover Tools**: `search_tools(keyword="xyz", detail_level="name-only")` - minimal context
-2. **Write Code**: Python 3 or JavaScript calling tools as library functions
-3. **Execute**: `execute_code(code=..., language="python3")` - runs in sandbox
-4. **Save Pattern**: `save_skill(name="...", code=..., language="...")` for future reuse
-5. **Reuse**: `load_skill(name="...")` - instant execution, no re-run
+**Safety:** Sandboxed (no filesystem escape), PII auto-tokenized, 30s timeout, memory/CPU bounded
 
-### Expected Performance
-
-- **Python cold start**: 900-1100ms first run
-- **Python warm**: 50-150ms subsequent runs
-- **JavaScript cold**: 450-650ms first run
-- **JavaScript warm**: 30-100ms subsequent runs
-- **Sandbox timeout**: 30 seconds max
-- **Token savings**: 90-98% vs traditional multi-turn approach
-
-### Safety & Security
-
-- Sandbox isolation: Cannot escape to filesystem beyond WORKSPACE_DIR
-- PII protection: Sensitive data auto-tokenized before return
-- Timeout enforcement: 30-second max execution
-- Resource limits: Memory and CPU bounded
-
-### Example: Filter 1000 Test Files
-
-**Without code execution** (traditional):
-```
-1. List files → 15k tokens
-2. Filter in context → 10k tokens
-3. Format results → 5k tokens
-Total: ~30k tokens, 10-15 seconds
-```
-
-**With code execution** (recommended):
-```python
-files = list_files(path="/workspace", recursive=True)
-test_files = [f for f in files if "test" in f and f.endswith(".rs")]
-result = {"count": len(test_files), "files": test_files[:20]}
-```
-Total: ~500 tokens, 1-2 seconds (98% savings)
-
-### References
-
-- **CODE_EXECUTION_QUICK_START.md**: 5 key patterns
-- **CODE_EXECUTION_AGENT_GUIDE.md**: 30+ real-world examples
-- **MCP_COMPLETE_IMPLEMENTATION_STATUS.md**: Architecture & metrics
-
-### IMPORTANT
-
--   Don't print API KEY print debug and logging what soever. THIS IS IMPORTANT!
--   Always use code execution for 100+ item filtering (massive token savings)
--   Save skills for repeated patterns (80%+ reuse ratio documented)
+**CRITICAL**: Never print API keys/secrets. Always code-execute for 100+ item filtering. Save reusable patterns as skills.
 
 ## Tool Configuration & Verification (Nov 2025)
 
