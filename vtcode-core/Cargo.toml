@@ -137,6 +137,7 @@ mcp-types = { path = "../third-party/mcp-types", version = "0.1.1" }
 openai-harmony = "0.0.3"
 url = "2.5"
 jsonschema = "0.29"
+uuid = { version = "1.8.0", features = ["v4", "fast-rng"] }
 
 [build-dependencies]
 vtcode-config = { path = "../vtcode-config", version = "0.42.17" }

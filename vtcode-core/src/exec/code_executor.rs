@@ -13,14 +13,15 @@
 //!
 //! ```ignore
 //! let executor = CodeExecutor::new(
+//!     Language::Python3,
 //!     sandbox_profile,
 //!     Arc::new(mcp_client),
-//!     Language::Python3,
+//!     PathBuf::from("/workspace"),
 //! );
 //!
 //! // Agent writes Python code
 //! let code = r#"
-//! files = search_files("*.rs", max_results=1000)
+//! files = list_files(path="/workspace", recursive=True)
 //! filtered = [f for f in files if "test" in f]
 //! result = {"count": len(filtered), "files": filtered[:10]}
 //! "#;
@@ -28,12 +29,16 @@
 //! let result = executor.execute(code).await?;
 //! ```
 
+use crate::exec::async_command::{AsyncProcessRunner, ProcessOptions, StreamCaptureConfig};
 use crate::mcp::McpToolExecutor;
 use crate::sandbox::SandboxProfile;
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result};
 use serde_json::Value;
+use std::collections::HashMap;
+use std::ffi::OsString;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Instant;
 use tracing::{debug, info};
 
 /// Supported languages for code execution.
@@ -99,9 +104,9 @@ impl Default for ExecutionConfig {
 }
 
 /// Code executor for running agent code in sandboxed environment.
-#[allow(dead_code)]
 pub struct CodeExecutor {
     language: Language,
+    #[allow(dead_code)]
     sandbox_profile: SandboxProfile,
     mcp_client: Arc<dyn McpToolExecutor>,
     config: ExecutionConfig,
@@ -134,11 +139,13 @@ impl CodeExecutor {
     /// Execute code snippet and return result.
     ///
     /// # Arguments
-    /// * `code` - Code snippet to execute
+    /// * `code` - Code snippet to execute (Python 3 or JavaScript)
     ///
     /// # Returns
     /// Execution result with output, exit code, and optional JSON result
-    #[allow(unused_variables)]
+    ///
+    /// The code can access MCP tools as library functions. Any `result = {...}`
+    /// assignment at the module level will be captured as JSON output.
     pub async fn execute(&self, code: &str) -> Result<ExecutionResult> {
         info!(
             language = self.language.as_str(),
@@ -146,16 +153,135 @@ impl CodeExecutor {
             "Executing code snippet"
         );
 
-        // TODO: Generate SDK wrapper with MCP tools
-        // TODO: Create temporary file in sandbox
-        // TODO: Execute code using PTY manager with sandbox profile
-        // TODO: Parse output and extract JSON result
-        // TODO: Validate resource usage
+        let start = Instant::now();
 
-        // Placeholder: return error indicating not yet implemented
-        Err(anyhow!(
-            "Code execution not yet implemented. Step 2 in progress."
+        // Generate the SDK wrapper
+        let sdk = self.generate_sdk().await
+            .context("failed to generate SDK")?;
+
+        // Prepare the complete code with SDK
+        let complete_code = match self.language {
+            Language::Python3 => self.prepare_python_code(&sdk, code)?,
+            Language::JavaScript => self.prepare_javascript_code(&sdk, code)?,
+        };
+
+        // Write code to temporary file in workspace
+        let code_file = self.workspace_root.join(".vtcode").join("code_temp");
+        tokio::fs::create_dir_all(self.workspace_root.join(".vtcode")).await
+            .context("failed to create .vtcode directory")?;
+        tokio::fs::write(&code_file, &complete_code).await
+            .context("failed to write code file")?;
+
+        debug!(
+            language = self.language.as_str(),
+            code_file = ?code_file,
+            "Wrote code to temporary file"
+        );
+
+        // Execute code via ProcessRunner with timeout
+        let mut env = HashMap::new();
+        
+        // Set workspace path for scripts
+        env.insert(
+            OsString::from("VTCODE_WORKSPACE"),
+            OsString::from(self.workspace_root.to_string_lossy().to_string()),
+        );
+
+        let options = ProcessOptions {
+            program: self.language.interpreter().to_string(),
+            args: vec![code_file.to_string_lossy().to_string()],
+            env,
+            current_dir: Some(self.workspace_root.clone()),
+            timeout: Some(std::time::Duration::from_secs(self.config.timeout_secs)),
+            cancellation_token: None,
+            stdout: StreamCaptureConfig {
+                capture: true,
+                max_bytes: self.config.max_output_bytes,
+            },
+            stderr: StreamCaptureConfig {
+                capture: true,
+                max_bytes: self.config.max_output_bytes,
+            },
+        };
+
+        let process_output = AsyncProcessRunner::run(options).await
+            .context("failed to execute code")?;
+
+        let duration_ms = start.elapsed().as_millis();
+
+        // Parse output
+        let stdout = String::from_utf8_lossy(&process_output.stdout).to_string();
+        let stderr = String::from_utf8_lossy(&process_output.stderr).to_string();
+
+        // Extract JSON result if present
+        let json_result = self.extract_json_result(&stdout, self.language)?;
+
+        // Clean up temp file
+        let _ = tokio::fs::remove_file(&code_file).await;
+
+        debug!(
+            exit_code = process_output.exit_status.code().unwrap_or(-1),
+            duration_ms,
+            has_json_result = json_result.is_some(),
+            "Code execution completed"
+        );
+
+        Ok(ExecutionResult {
+            exit_code: process_output.exit_status.code().unwrap_or(-1),
+            stdout,
+            stderr,
+            json_result,
+            duration_ms,
+        })
+    }
+
+    /// Prepare Python code with SDK and user code.
+    fn prepare_python_code(&self, sdk: &str, user_code: &str) -> Result<String> {
+        Ok(format!(
+            "{}\n\n# User code\n{}\n\n# Capture result\nimport json\nif 'result' in dir():\n    print('__JSON_RESULT__')\n    print(json.dumps(result, default=str))\n    print('__END_JSON__')",
+            sdk, user_code
         ))
+    }
+
+    /// Prepare JavaScript code with SDK and user code.
+    fn prepare_javascript_code(&self, sdk: &str, user_code: &str) -> Result<String> {
+        Ok(format!(
+            "{}\n\n// User code\n(async () => {{\n{}\n\n// Capture result\nif (typeof result !== 'undefined') {{\n  console.log('__JSON_RESULT__');\n  console.log(JSON.stringify(result, null, 2));\n  console.log('__END_JSON__');\n}}\n}})();\n",
+            sdk, user_code
+        ))
+    }
+
+    /// Extract JSON result from stdout between markers.
+    fn extract_json_result(&self, stdout: &str, _language: Language) -> Result<Option<Value>> {
+        if !stdout.contains("__JSON_RESULT__") {
+            return Ok(None);
+        }
+
+        let start_marker = "__JSON_RESULT__";
+        let end_marker = "__END_JSON__";
+
+        let start = match stdout.find(start_marker) {
+            Some(pos) => pos + start_marker.len(),
+            None => return Ok(None),
+        };
+
+        let end = match stdout[start..].find(end_marker) {
+            Some(pos) => start + pos,
+            None => return Ok(None),
+        };
+
+        let json_str = stdout[start..end].trim();
+
+        match serde_json::from_str::<Value>(json_str) {
+            Ok(value) => {
+                debug!("Extracted JSON result from code output");
+                Ok(Some(value))
+            }
+            Err(e) => {
+                debug!(error = %e, "Failed to parse JSON result");
+                Ok(None)
+            }
+        }
     }
 
     /// Generate SDK module imports for the target language.
