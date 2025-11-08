@@ -138,6 +138,7 @@ pub mod http_client;
 pub mod instructions;
 pub mod llm;
 pub mod mcp;
+pub mod metrics;
 pub mod models;
 pub mod project_doc;
 pub mod prompts;
