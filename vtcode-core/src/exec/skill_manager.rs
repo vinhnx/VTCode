@@ -13,6 +13,7 @@ use anyhow::{Context, Result, anyhow};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use tracing::{debug, info};
+use crate::exec::ToolDependency;
 
 /// Metadata about a saved skill.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -35,6 +36,9 @@ pub struct SkillMetadata {
     pub created_at: String,
     /// When the skill was last modified (ISO 8601)
     pub modified_at: String,
+    /// Tool dependencies with version constraints
+    #[serde(default)]
+    pub tool_dependencies: Vec<ToolDependency>,
 }
 
 /// Parameter documentation for a skill.
@@ -215,6 +219,22 @@ impl SkillManager {
         info!(skill_name = %name, "Skill deleted successfully");
 
         Ok(())
+    }
+
+    /// Check if a skill is compatible with given tool versions
+    pub async fn check_skill_compatibility(
+        &self,
+        name: &str,
+        tool_versions: std::collections::HashMap<String, crate::exec::ToolVersion>,
+    ) -> Result<crate::exec::CompatibilityReport> {
+        let skill = self.load_skill(name).await?;
+        let checker = crate::exec::SkillCompatibilityChecker::new(
+            skill.metadata.name.clone(),
+            skill.metadata.tool_dependencies.clone(),
+            tool_versions,
+        );
+        
+        checker.check_compatibility()
     }
 
     /// Generate Markdown documentation for a skill.

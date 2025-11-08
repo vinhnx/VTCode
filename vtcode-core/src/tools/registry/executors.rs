@@ -566,6 +566,7 @@ impl ToolRegistry {
                 tags: parsed.tags.unwrap_or_default(),
                 created_at: chrono::Utc::now().to_rfc3339(),
                 modified_at: chrono::Utc::now().to_rfc3339(),
+                tool_dependencies: vec![],
             };
 
             let skill = Skill {
