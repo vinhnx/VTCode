@@ -751,10 +751,20 @@ snapshots/
 TODO2.md
 
 # START Ruler Generated Files
+/.codex/config.json
+/.codex/config.json.bak
 /.codex/config.toml
 /.codex/config.toml.bak
+/.cursor/mcp.json
+/.cursor/mcp.json.bak
 /.cursor/rules/ruler_cursor_instructions.mdc
 /.cursor/rules/ruler_cursor_instructions.mdc.bak
+/.mcp.json
+/.mcp.json.bak
+/.qwen/settings.json
+/.qwen/settings.json.bak
+/.vscode/mcp.json
+/.vscode/mcp.json.bak
 /AGENTS.md
 /AGENTS.md.bak
 /CLAUDE.md

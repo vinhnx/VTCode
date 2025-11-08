@@ -5,111 +5,82 @@
 
 # VT Code - Agent Guide
 
-## Commands (Build/Test/Run)
+## Build/Test Commands
 
-**Build**: `cargo check` | **Lint**: `cargo clippy` | **Format**: `cargo fmt`  
-**Test**: `cargo test` | **Run**: `./run.sh`
+-   **Build**: `cargo check` (preferred) or `cargo build --release`
+-   **Lint**: `cargo clippy` (must pass before commit)
+-   **Format**: `cargo fmt`
+-   **Test all**: `cargo test` or `cargo nextest run` (preferred)
+-   **Test single**: `cargo test test_name` or `cargo nextest run test_name`
+-   **Run**: `./run.sh` (release) or `./run-debug.sh` (debug)
+-   **Single query**: `cargo run -- ask "your query"` (headless testing)
 
-## Architecture Essentials
+## Architecture
 
-**Codebase**: vtcode-core (lib) → src (CLI) → tools, llm, config, exec  
-**Config**: Read from `vtcode.toml` and `docs/models.json` (never hardcode)  
-**Parsers**: Tree-sitter for Rust/Python/JS/TS/Go/Java  
+-   **vtcode-core/**: Library code (LLM providers, tools, config, MCP integration)
+-   **src/**: CLI binary (Ratatui TUI, PTY execution, slash commands)
+-   **Config**: `vtcode.toml` (never hardcode), constants in `vtcode-core/src/config/constants.rs`, model IDs in `docs/models.json`
+-   **Key modules**: `llm/` (provider abstraction), `tools/` (trait-based), `config/` (TOML parsing)
+-   **Integration**: Tree-sitter parsers (Rust/Python/JS/TS/Go/Java), MCP tools, PTY command execution
 
 ## Code Style
 
-Error handling: `anyhow::Result<T>` with context | Naming: snake_case / PascalCase  
-Early returns, 4-space indent, no emojis, no magic values
+-   **Error handling**: `anyhow::Result<T>` with `.with_context()` for all fallible functions
+-   **Naming**: snake_case (functions/vars), PascalCase (types)
+-   **Formatting**: 4 spaces, early returns over nested ifs, descriptive variable names
+-   **No emojis, no hardcoded values** (read from vtcode.toml/constants.rs)
+-   **Docs**: All .md files in `./docs/` only (not root)
 
-## Tool Selection Strategy
+## Tool Usage Guidelines
 
-**Discovery**: list_files → grep_file → ast_grep_search → read_file  
-**Editing**: edit_file (surgical) → write_file (full rewrite) → apply_patch (diffs)  
-**Execution**: PTY sessions for interactive; `run_terminal_cmd` for one-offs  
-**Code Execution**: execute_code (Python3/JS) + search_tools → save_skill → load_skill  
+-   **Essential Tools** (Tier 1): read_file, write_file, list_files, grep_file, PTY sessions
+-   **Important Tools** (Tier 2): edit_file, git_diff, update_plan
+-   **Specialized Tools** (Tier 3): ast_grep_search, apply_patch, delete_file, curl
+-   **Advanced Tools** (Tier 4): execute_code, search_tools, save_skill, load_skill, search_skills
+-   **Deprecated Tools**: run_terminal_cmd (use PTY session tools instead)
+-   **Command Execution**: Always use PTY sessions (create_pty_session, send_pty_input, read_pty_session) for better control
+-   **File Editing**: Use edit_file for surgical changes, write_file for full rewrites, apply_patch for complex diffs
+-   **Search**: Use grep_file for text search, ast_grep_search for semantic code search
 
-## Code Execution (90-98% Token Savings)
+## Code Execution & Skills (High-Impact Features)
 
-**Use execute_code() for:**
-- Filtering/aggregating 100+ items locally (vs multiple API calls)
-- Data transformation (map, reduce, group operations)
-- Complex control flow (loops, conditionals, error handling)
-- Chaining multiple operations in one execution
+### When to Use Code Execution
 
-**Workflow:**
-1. `search_tools(keyword, detail_level="name-only")` - discover available tools
-2. Write Python3/JavaScript code with tool calls
-3. `execute_code(code, language="python3")` - runs sandboxed, 30s timeout
-4. `save_skill(name, code, language)` - persist for 80%+ reuse
-5. `load_skill(name)` - instant reuse across conversations
+Use `execute_code()` to:
 
-**Performance:**
-| Operation | Time | Savings |
-|-----------|------|---------|
-| Python cold | 900-1100ms | - |
-| Python warm | 50-150ms | 95% |
-| JS cold | 450-650ms | - |
-| JS warm | 30-100ms | 97% |
-| Filter 10k items | 1.5s | 98% tokens |
+-   **Filter large datasets** (100+ items) locally in Python/JavaScript sandbox
+-   **Transform data** before returning (map, reduce, group operations)
+-   **Implement complex logic** (loops, conditionals, error handling)
+-   **Chain tools together** in single execution (90% token reduction)
+-   **Save patterns as skills** for 80%+ reuse on repeated tasks
 
-**Safety:** Sandboxed (no filesystem escape), PII auto-tokenized, 30s timeout, memory/CPU bounded
+### Code Execution Workflow
 
-**CRITICAL**: Never print API keys/secrets. Always code-execute for 100+ item filtering. Save reusable patterns as skills.
+1. **Discover Tools**: `search_tools(keyword="xyz", detail_level="name-only")` - minimal context
+2. **Write Code**: Python 3 or JavaScript calling tools as library functions
+3. **Execute**: `execute_code(code=..., language="python3")` - runs in sandbox
+4. **Save Pattern**: `save_skill(name="...", code=..., language="...")` for future reuse
+5. **Reuse**: `load_skill(name="...")` - instant execution, no re-run
 
-## Tool Configuration & Verification (Nov 2025)
+### Safety & Security
 
-**Status**: ✅ All new tools properly configured and ready
+-   Sandbox isolation: Cannot escape to filesystem beyond WORKSPACE_DIR
+-   PII protection: Sensitive data auto-tokenized before return
+-   Timeout enforcement: 30-second max execution
+-   Resource limits: Memory and CPU bounded
 
-See `.vtcode/TOOL_CONFIG_VERIFICATION.md` for complete verification report.
+### Example: Filter 1000 Test Files
 
-### Newly Configured Tools
+**With code execution** (recommended):
 
-**Step 1**: `search_tools(keyword, detail_level)` - Progressive tool discovery
-- Name-only mode: ~100 tokens (vs ~15k full)
-- Fuzzy matching with relevance scoring
-- Cached results for instant reuse
-
-**Steps 2-5**: Code Execution Suite
-- `execute_code(code, language)` - Python 3 & JavaScript sandbox
-- `save_skill(name, code, language)` - Reusable patterns (80%+ savings)
-- `load_skill(name)` - Instant pattern recovery
-- `search_skills(keyword)` - Find existing solutions
-- Built-in data filtering & PII tokenization
-
-**Steps 7-9**: Advanced Observability
-- Metrics collection (40+ KPIs across all steps)
-- Tool versioning with compatibility checking
-- Agent behavior analysis & optimization
-- Pattern learning & recovery guidance
-
-### All Tools Now Public
-
-All execution tools properly exposed in `vtcode-core/src/lib.rs`:
-```rust
-pub use exec::{
-    CodeExecutor, Skill, SkillManager, SkillMetadata,
-    ToolVersion, SkillCompatibilityChecker,
-    PiiTokenizer, AgentBehaviorAnalyzer,
-};
-pub use metrics::MetricsCollector;
-pub use mcp::ToolDiscovery;
+```python
+files = list_files(path="/workspace", recursive=True)
+test_files = [f for f in files if "test" in f and f.endswith(".rs")]
+result = {"count": len(test_files), "files": test_files[:20]}
 ```
 
-### Tool Policy Status
+### IMPORTANT
 
-`.vtcode/tool-policy.json` updated with proper access controls:
-- `execute_code`: prompt (requires confirmation)
-- `save_skill`: prompt (requires confirmation)
-- `load_skill`: prompt (requires confirmation)
-- `search_tools`: prompt (requires confirmation)
-- All other tools: allow/prompt per security requirements
-
-### Test Status: 64/64 Passing ✅
-
-All integration tests passing with 80%+ code coverage per module:
-- Tool discovery tests
-- Code execution tests  
-- Skill persistence tests
-- PII protection tests
-- Agent optimization tests
-- Performance efficiency tests
+-   Don't print API KEY print debug and logging what soever. THIS IS IMPORTANT!
+-   Always use code execution for 100+ item filtering (massive token savings)
+-   Save skills for repeated patterns (80%+ reuse ratio documented)

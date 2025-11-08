@@ -140,14 +140,10 @@ result = {"test": double_value(21)}
         let text_with_pii = "Email: john@example.com, SSN: 123-45-6789";
 
         let detected = tokenizer.detect_pii(text_with_pii).unwrap();
-        println!("Detected PII: {:?}", detected);
         assert!(!detected.is_empty());
 
         // Step 2: Verify we can tokenize
-        let (tokenized, tokens) = tokenizer.tokenize_string(text_with_pii).unwrap();
-        println!("Original: {}", text_with_pii);
-        println!("Tokenized: {}", tokenized);
-        println!("Tokens: {:?}", tokens);
+        let (tokenized, _tokens) = tokenizer.tokenize_string(text_with_pii).unwrap();
 
         // Step 3: Verify tokenized version doesn't contain plaintext PII
         assert!(!tokenized.contains("john@example.com"));

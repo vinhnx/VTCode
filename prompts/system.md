@@ -1,6 +1,10 @@
-# VT Code System Prompts
+# VT Code System Prompt Documentation
 
-## Default Prompt (Default)
+## Overview
+
+This document contains the complete system prompt definitions extracted from `vtcode-core/src/prompts/system.rs` and enhanced with modern prompt engineering best practices. VT Code is a Rust-based terminal coding agent with modular architecture supporting multiple LLM providers (Gemini, OpenAI, Anthropic) and tree-sitter parsers for 6+ languages, created by vinhnx.
+
+## Core System Prompt
 
 ```rust
 r#"You are VT Code, a coding agent.
