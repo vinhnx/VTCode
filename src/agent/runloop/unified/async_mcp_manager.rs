@@ -252,6 +252,10 @@ impl AsyncMcpManager {
             warn!("MCP configuration validation error: {e}");
         }
 
+        // Get startup timeout from config, default to 30 seconds
+        let startup_timeout_secs = config.startup_timeout_seconds.unwrap_or(30);
+        let startup_timeout = Duration::from_secs(startup_timeout_secs);
+
         let mut client = McpClient::new(config);
 
         // Set up elicitation handler
@@ -259,7 +263,7 @@ impl AsyncMcpManager {
         client.set_elicitation_handler(Arc::new(InteractiveMcpElicitationHandler::new()));
 
         // Initialize with timeout
-        match timeout(Duration::from_secs(30), client.initialize()).await {
+        match timeout(startup_timeout, client.initialize()).await {
             Ok(Ok(())) => {
                 info!("MCP client initialized successfully");
 
@@ -280,7 +284,8 @@ impl AsyncMcpManager {
             }
             Ok(Err(e)) => Err(e).context("MCP client initialization failed"),
             Err(_) => Err(anyhow::anyhow!(
-                "MCP client initialization timed out after 30 seconds"
+                "MCP client initialization timed out after {} seconds",
+                startup_timeout_secs
             )),
         }
     }

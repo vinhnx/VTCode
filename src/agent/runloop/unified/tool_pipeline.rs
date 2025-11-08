@@ -16,7 +16,8 @@ use vtcode_core::tools::registry::{ToolExecutionError, ToolRegistry, ToolTimeout
 
 use super::state::CtrlCState;
 
-const TOOL_TIMEOUT: Duration = Duration::from_secs(300);
+/// Default timeout for tool execution if no policy is configured
+const DEFAULT_TOOL_TIMEOUT: Duration = Duration::from_secs(300);
 const TOOL_TIMEOUT_WARNING_HEADROOM: Duration = Duration::from_secs(5);
 
 /// Status of a tool execution with progress information
@@ -79,6 +80,13 @@ pub(crate) async fn execute_tool_with_timeout(
         local_progress_reporter.as_ref().unwrap()
     };
 
+    // Determine the timeout category for this tool
+    let timeout_category = registry.timeout_category_for(name).await;
+    let timeout_ceiling = registry
+        .timeout_policy()
+        .ceiling_for(timeout_category)
+        .unwrap_or(DEFAULT_TOOL_TIMEOUT);
+
     // Execute with progress tracking
     let result = execute_tool_with_progress(
         registry,
@@ -87,6 +95,7 @@ pub(crate) async fn execute_tool_with_timeout(
         ctrl_c_state,
         ctrl_c_notify,
         progress_reporter,
+        timeout_ceiling,
     )
     .await;
 
@@ -105,12 +114,17 @@ async fn execute_tool_with_progress(
     ctrl_c_state: &Arc<CtrlCState>,
     ctrl_c_notify: &Arc<Notify>,
     progress_reporter: &ProgressReporter,
+    tool_timeout: Duration,
 ) -> ToolExecutionStatus {
     let start_time = std::time::Instant::now();
 
     let warning_cancel_token = CancellationToken::new();
-    let warning_task =
-        spawn_timeout_warning_task(name.to_string(), start_time, warning_cancel_token.clone());
+    let warning_task = spawn_timeout_warning_task(
+        name.to_string(),
+        start_time,
+        warning_cancel_token.clone(),
+        tool_timeout,
+    );
 
     // Phase 1: Preparation (0-15%)
     progress_reporter
@@ -204,7 +218,7 @@ async fn execute_tool_with_progress(
                 }
             }
 
-            result = time::timeout(TOOL_TIMEOUT, exec_future) => ExecutionControl::Completed(result),
+            result = time::timeout(tool_timeout, exec_future) => ExecutionControl::Completed(result),
         };
 
         match control {
@@ -237,7 +251,9 @@ async fn execute_tool_with_progress(
                         progress_reporter
                             .set_message(format!("{} timed out", name))
                             .await;
-                        create_timeout_error(name, ToolTimeoutCategory::Default, Some(TOOL_TIMEOUT))
+                        // Determine timeout category for proper error reporting
+                        let timeout_category = registry.timeout_category_for(name).await;
+                        create_timeout_error(name, timeout_category, Some(tool_timeout))
                     }
                 };
             }
@@ -324,8 +340,9 @@ fn spawn_timeout_warning_task(
     tool_name: String,
     start_time: std::time::Instant,
     cancel_token: CancellationToken,
+    tool_timeout: Duration,
 ) -> Option<JoinHandle<()>> {
-    let warning_delay = TOOL_TIMEOUT
+    let warning_delay = tool_timeout
         .checked_sub(TOOL_TIMEOUT_WARNING_HEADROOM)
         .filter(|delay| !delay.is_zero())?;
 
@@ -334,7 +351,7 @@ fn spawn_timeout_warning_task(
             _ = cancel_token.cancelled() => {}
             _ = tokio::time::sleep(warning_delay) => {
                 let elapsed = start_time.elapsed().as_secs();
-                let timeout_secs = TOOL_TIMEOUT.as_secs();
+                let timeout_secs = tool_timeout.as_secs();
                 let remaining_secs = TOOL_TIMEOUT_WARNING_HEADROOM.as_secs();
                 warn!(
                     "Tool '{}' has run for {} seconds and is approaching the {} second time limit ({} seconds remaining). It will be cancelled soon unless it completes.",
@@ -480,7 +497,8 @@ mod tests {
     //         .await
     //     });
     //
-    //     let warning_delay = TOOL_TIMEOUT
+    //     let default_timeout = Duration::from_secs(300);
+    //     let warning_delay = default_timeout
     //         .checked_sub(TOOL_TIMEOUT_WARNING_HEADROOM)
     //         .expect("warning delay");
     //     advance(warning_delay).await;

@@ -1140,8 +1140,9 @@ pub mod mcp {
     pub const RENDERER_CONTEXT7: &str = "context7";
     pub const RENDERER_SEQUENTIAL_THINKING: &str = "sequential-thinking";
 
-    /// Default startup timeout for MCP servers in milliseconds (30 seconds)
-    pub const DEFAULT_STARTUP_TIMEOUT_MS: u64 = 30_000;
+    /// Default startup timeout for MCP servers in milliseconds (60 seconds)
+    /// Can be overridden via config: mcp.startup_timeout_seconds
+    pub const DEFAULT_STARTUP_TIMEOUT_MS: u64 = 60_000;
 }
 
 pub mod project_doc {

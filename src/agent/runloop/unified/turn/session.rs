@@ -1948,6 +1948,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                             }
                         }
                     }
+                    allow_follow_up = true;
                     continue 'outer;
                 }
 

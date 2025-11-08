@@ -40,6 +40,7 @@ impl WebFetchTool {
 
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(timeout_secs))
+            .user_agent("VTCode/1.0 (compatible; web-fetch tool)")
             .build()?;
 
         let response = client.get(url).send().await?;
