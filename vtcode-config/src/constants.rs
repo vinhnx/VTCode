@@ -680,7 +680,6 @@ pub mod tools {
     pub const CREATE_FILE: &str = "create_file";
     pub const AST_GREP_SEARCH: &str = "ast_grep_search";
     pub const APPLY_PATCH: &str = "apply_patch";
-    pub const GIT_DIFF: &str = "git_diff";
     pub const UPDATE_PLAN: &str = "update_plan";
     pub const WEB_FETCH: &str = "web_fetch";
     pub const SEARCH_TOOLS: &str = "search_tools";

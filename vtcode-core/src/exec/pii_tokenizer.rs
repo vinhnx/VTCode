@@ -111,7 +111,10 @@ impl PiiTokenizer {
         // API key pattern (common format)
         patterns.insert(
             PiiType::ApiKey,
-            Regex::new(r#"(?:api[_-]?key|apikey|API[_-]?KEY)\s*[:=]\s*['"]?[a-zA-Z0-9_-]{32,}['"]?"#).unwrap(),
+            Regex::new(
+                r#"(?:api[_-]?key|apikey|API[_-]?KEY)\s*[:=]\s*['"]?[a-zA-Z0-9_-]{32,}['"]?"#,
+            )
+            .unwrap(),
         );
 
         // Bearer token pattern
@@ -182,10 +185,7 @@ impl PiiTokenizer {
             store.extend(new_tokens.clone());
         }
 
-        debug!(
-            pii_count = detected.len(),
-            "Tokenized PII in string"
-        );
+        debug!(pii_count = detected.len(), "Tokenized PII in string");
 
         Ok((result, new_tokens))
     }
@@ -240,8 +240,7 @@ impl PiiTokenizer {
 
     /// Register custom PII pattern.
     pub fn register_pattern(&mut self, pii_type: PiiType, pattern: &str) -> Result<()> {
-        let regex = Regex::new(pattern)
-            .context("invalid regex pattern for PII detection")?;
+        let regex = Regex::new(pattern).context("invalid regex pattern for PII detection")?;
         self.patterns.insert(pii_type, regex);
         debug!(
             pii_type = pii_type.as_str(),

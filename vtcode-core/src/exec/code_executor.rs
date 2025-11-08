@@ -170,11 +170,14 @@ impl CodeExecutor {
 
         // Set up IPC directory for tool invocation
         let ipc_dir = self.workspace_root.join(".vtcode").join("ipc");
-        tokio::fs::create_dir_all(&ipc_dir).await
+        tokio::fs::create_dir_all(&ipc_dir)
+            .await
             .context("failed to create IPC directory")?;
 
         // Generate the SDK wrapper
-        let sdk = self.generate_sdk().await
+        let sdk = self
+            .generate_sdk()
+            .await
             .context("failed to generate SDK")?;
 
         // Prepare the complete code with SDK
@@ -185,9 +188,11 @@ impl CodeExecutor {
 
         // Write code to temporary file in workspace
         let code_file = self.workspace_root.join(".vtcode").join("code_temp");
-        tokio::fs::create_dir_all(self.workspace_root.join(".vtcode")).await
+        tokio::fs::create_dir_all(self.workspace_root.join(".vtcode"))
+            .await
             .context("failed to create .vtcode directory")?;
-        tokio::fs::write(&code_file, &complete_code).await
+        tokio::fs::write(&code_file, &complete_code)
+            .await
             .context("failed to write code file")?;
 
         debug!(
@@ -198,7 +203,7 @@ impl CodeExecutor {
 
         // Execute code via ProcessRunner with timeout
         let mut env = HashMap::new();
-        
+
         // Set workspace path for scripts
         env.insert(
             OsString::from("VTCODE_WORKSPACE"),
@@ -219,10 +224,10 @@ impl CodeExecutor {
         };
         let mcp_client = self.mcp_client.clone();
         let execution_timeout = Duration::from_secs(self.config.timeout_secs);
-        
+
         let ipc_task: JoinHandle<Result<()>> = tokio::spawn(async move {
             let ipc_start = Instant::now();
-            
+
             while ipc_start.elapsed() < execution_timeout {
                 // Check for tool requests
                 if let Some(mut request) = ipc_handler.read_request().await? {
@@ -246,7 +251,10 @@ impl CodeExecutor {
                     }
 
                     // Execute the tool
-                    let result = match mcp_client.execute_mcp_tool(&request.tool_name, request.args.clone()).await {
+                    let result = match mcp_client
+                        .execute_mcp_tool(&request.tool_name, request.args.clone())
+                        .await
+                    {
                         Ok(result) => {
                             debug!(tool_name = %request.tool_name, "Tool executed successfully");
                             ToolResponse {
@@ -299,7 +307,8 @@ impl CodeExecutor {
             },
         };
 
-        let process_output = AsyncProcessRunner::run(options).await
+        let process_output = AsyncProcessRunner::run(options)
+            .await
             .context("failed to execute code")?;
 
         let duration_ms = start.elapsed().as_millis();
@@ -316,10 +325,7 @@ impl CodeExecutor {
         let _ = tokio::fs::remove_dir_all(&ipc_dir).await;
 
         // Wait for IPC task to complete (with timeout)
-        let ipc_result = tokio::time::timeout(
-            Duration::from_secs(1),
-            ipc_task
-        ).await;
+        let ipc_result = tokio::time::timeout(Duration::from_secs(1), ipc_task).await;
 
         if let Err(e) = ipc_result {
             debug!(error = %e, "IPC handler did not complete in time");
@@ -402,7 +408,8 @@ impl CodeExecutor {
     async fn generate_python_sdk(&self) -> Result<String> {
         debug!("Generating Python SDK for MCP tools");
 
-        let tools = self.mcp_client
+        let tools = self
+            .mcp_client
             .list_mcp_tools()
             .await
             .context("failed to list MCP tools")?;
@@ -489,7 +496,8 @@ mcp = MCPTools()
     async fn generate_javascript_sdk(&self) -> Result<String> {
         debug!("Generating JavaScript SDK for MCP tools");
 
-        let tools = self.mcp_client
+        let tools = self
+            .mcp_client
             .list_mcp_tools()
             .await
             .context("failed to list MCP tools")?;

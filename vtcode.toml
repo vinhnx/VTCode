@@ -183,7 +183,6 @@ close_pty_session = "allow"
 create_pty_session = "allow"
 curl = "prompt"
 edit_file = "allow"
-git_diff = "allow"
 grep_file = "allow"
 list_files = "allow"
 list_pty_sessions = "allow"
@@ -519,7 +518,6 @@ allowed_tools = [
     "resize_pty_session",
     "close_pty_session",
     "update_plan",
-    "git_diff",
     "ast_grep_search",
     "apply_patch",
     "send_pty_input",

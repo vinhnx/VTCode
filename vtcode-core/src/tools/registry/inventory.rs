@@ -7,7 +7,6 @@ use super::registration::ToolRegistration;
 use crate::tools::ast_grep::AstGrepEngine;
 use crate::tools::command::CommandTool;
 use crate::tools::file_ops::FileOpsTool;
-use crate::tools::git_diff::GitDiffTool;
 use crate::tools::grep_file::GrepSearchManager;
 use crate::tools::plan::PlanManager;
 use tracing::warn;
@@ -31,7 +30,6 @@ pub(super) struct ToolInventory {
     file_ops_tool: FileOpsTool,
     command_tool: CommandTool,
     grep_search: Arc<GrepSearchManager>,
-    git_diff_tool: GitDiffTool,
     ast_grep_engine: Option<Arc<AstGrepEngine>>,
     plan_manager: PlanManager,
 }
@@ -41,7 +39,6 @@ impl ToolInventory {
         let grep_search = Arc::new(GrepSearchManager::new(workspace_root.clone()));
         let file_ops_tool = FileOpsTool::new(workspace_root.clone(), grep_search.clone());
         let command_tool = CommandTool::new(workspace_root.clone());
-        let git_diff_tool = GitDiffTool::new(workspace_root.clone());
         let plan_manager = PlanManager::new();
 
         let ast_grep_engine = match AstGrepEngine::new() {
@@ -61,7 +58,6 @@ impl ToolInventory {
             file_ops_tool,
             command_tool,
             grep_search,
-            git_diff_tool,
             ast_grep_engine,
             plan_manager,
         }
@@ -81,10 +77,6 @@ impl ToolInventory {
 
     pub fn command_tool_mut(&mut self) -> &mut CommandTool {
         &mut self.command_tool
-    }
-
-    pub fn git_diff_tool(&self) -> &GitDiffTool {
-        &self.git_diff_tool
     }
 
     pub fn grep_file_manager(&self) -> Arc<GrepSearchManager> {
@@ -171,10 +163,7 @@ impl ToolInventory {
 
     /// Check if a tool is commonly used
     fn is_common_tool(&self, name: &str) -> bool {
-        matches!(
-            name,
-            "file_ops" | "command" | "grep" | "git_diff" | "ast_grep" | "plan"
-        )
+        matches!(name, "file_ops" | "command" | "grep" | "ast_grep" | "plan")
     }
 
     /// Clean up old cache entries if needed

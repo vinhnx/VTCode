@@ -179,7 +179,6 @@ tokio::fs::create_dir_all(path).await?;
 - ✅ `curl_tool.rs`
 - ✅ `file_ops.rs`
 - ✅ `apply_patch.rs`
-- ✅ `git_diff.rs`
 - ✅ And more...
 
 ## Async Patterns Used

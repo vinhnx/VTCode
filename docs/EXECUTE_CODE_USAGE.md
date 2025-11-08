@@ -170,9 +170,6 @@ Inside your code, you can call any registered MCP tool as a function. Common too
 ### Tools Discovery
 - `search_tools(keyword, detail_level)` - Find available MCP tools
 
-### Version Control
-- `git_diff()` - Get git diff
-
 ## Response Structure
 
 Every `execute_code` call returns:

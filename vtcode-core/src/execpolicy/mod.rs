@@ -34,7 +34,7 @@ pub async fn validate_command(
         "sed" => validate_sed(args, workspace_root, working_dir).await,
         "which" => validate_which(args),
         "git" if args.first().map(|s| s.as_str()) == Some("diff") => Err(anyhow!(
-            "command 'git diff' is not permitted by the execution policy. Use the 'git_diff' tool instead for structured diff output."
+            "command 'git diff' is not permitted by the execution policy. Use structured file reading tools instead."
         )),
         other => Err(anyhow!(
             "command '{}' is not permitted by the execution policy",

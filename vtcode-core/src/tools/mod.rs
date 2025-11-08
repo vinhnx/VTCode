@@ -131,7 +131,6 @@ pub mod command;
 pub mod command_policy;
 pub mod editing;
 pub mod file_ops;
-pub mod git_diff;
 pub mod grep_file;
 pub mod names;
 pub mod plan;
@@ -147,7 +146,6 @@ pub use ast_grep_tool::AstGrepTool;
 
 pub use cache::FileCache;
 pub use editing::{Patch, PatchError, PatchHunk, PatchLine, PatchOperation};
-pub use git_diff::GitDiffTool;
 pub use grep_file::GrepSearchManager;
 pub use plan::{
     PlanCompletionState, PlanManager, PlanStep, PlanSummary, PlanUpdateResult, StepStatus,

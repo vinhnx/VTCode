@@ -1,7 +1,7 @@
+use crate::mcp::{DetailLevel, ToolDiscovery};
 use anyhow::{Context, Result, anyhow};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
-use crate::mcp::{DetailLevel, ToolDiscovery};
 use futures::future::BoxFuture;
 use portable_pty::PtySize;
 use serde::Deserialize;
@@ -290,11 +290,6 @@ impl ToolRegistry {
         Box::pin(async move { tool.execute(args).await })
     }
 
-    pub(super) fn git_diff_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        let tool = self.inventory.git_diff_tool().clone();
-        Box::pin(async move { tool.execute(args).await })
-    }
-
     pub(super) fn read_file_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
         let tool = self.inventory.file_ops_tool().clone();
         Box::pin(async move { tool.read_file(args).await })
@@ -368,7 +363,7 @@ impl ToolRegistry {
                     return Err(anyhow!(
                         "Invalid detail_level: '{}'. Must be one of: name-only, name-and-description, full",
                         invalid
-                    ))
+                    ));
                 }
             };
 
@@ -386,10 +381,7 @@ impl ToolRegistry {
                 }));
             }
 
-            let tools_json: Vec<Value> = results
-                .iter()
-                .map(|r| r.to_json(detail_level))
-                .collect();
+            let tools_json: Vec<Value> = results.iter().map(|r| r.to_json(detail_level)).collect();
 
             Ok(json!({
                 "keyword": parsed.keyword,
@@ -425,7 +417,7 @@ impl ToolRegistry {
                     return Err(anyhow!(
                         "Invalid language: '{}'. Must be 'python3' or 'javascript'",
                         invalid
-                    ))
+                    ));
                 }
             };
 
@@ -594,8 +586,8 @@ impl ToolRegistry {
                 name: String,
             }
 
-            let parsed: LoadSkillArgs = serde_json::from_value(args)
-                .context("load_skill requires 'name' field")?;
+            let parsed: LoadSkillArgs =
+                serde_json::from_value(args).context("load_skill requires 'name' field")?;
 
             let manager = SkillManager::new(&workspace_root);
             let skill = manager.load_skill(&parsed.name).await?;
@@ -640,8 +632,8 @@ impl ToolRegistry {
                 query: String,
             }
 
-            let parsed: SearchSkillsArgs = serde_json::from_value(args)
-                .context("search_skills requires 'query' field")?;
+            let parsed: SearchSkillsArgs =
+                serde_json::from_value(args).context("search_skills requires 'query' field")?;
 
             let manager = SkillManager::new(&workspace_root);
             let results = manager.search_skills(&parsed.query).await?;

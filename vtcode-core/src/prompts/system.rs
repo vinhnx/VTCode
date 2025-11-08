@@ -86,8 +86,7 @@ Load only what's necessary. Use search tools first. Summarize results.
 **Tools:**
 **Files:** list_files, read_file, write_file, edit_file
 **Search:** grep_file, ast_grep_search
-**Shell:** run_terminal_cmd
-**Version Control:** git_diff (prefer this over raw `git diff` for structured output)
+**Shell:** run_terminal_cmd, PTY sessions (create_pty_session, send_pty_input, read_pty_session)
 **Code Execution:** search_tools, execute_code (Python3/JavaScript in sandbox), save_skill, load_skill
 
 **Code Execution Quick Tips:**

@@ -6,10 +6,10 @@
 //! - Automatic skill migration
 //! - Compatibility checking
 
+use anyhow::{Result, anyhow};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use anyhow::{anyhow, Result};
 use tracing::debug;
 
 /// Represents a specific version of a tool
@@ -48,11 +48,7 @@ impl ToolVersion {
         if parts.len() != 3 {
             return Err(anyhow!("Invalid version format: {}", s));
         }
-        Ok((
-            parts[0].parse()?,
-            parts[1].parse()?,
-            parts[2].parse()?,
-        ))
+        Ok((parts[0].parse()?, parts[1].parse()?, parts[2].parse()?))
     }
 }
 
@@ -178,7 +174,11 @@ impl SkillCompatibilityChecker {
                 }
                 VersionCompatibility::Warning(msg) => {
                     report.warnings.push(msg);
-                    debug!("Compatibility warning for {}: {}", dep.name, report.warnings.last().unwrap());
+                    debug!(
+                        "Compatibility warning for {}: {}",
+                        dep.name,
+                        report.warnings.last().unwrap()
+                    );
                 }
                 VersionCompatibility::RequiresMigration => {
                     report.compatible = false;
@@ -195,7 +195,11 @@ impl SkillCompatibilityChecker {
                 VersionCompatibility::Incompatible(msg) => {
                     report.compatible = false;
                     report.errors.push(msg);
-                    debug!("Incompatibility error for {}: {}", dep.name, report.errors.last().unwrap());
+                    debug!(
+                        "Incompatibility error for {}: {}",
+                        dep.name,
+                        report.errors.last().unwrap()
+                    );
                 }
             }
         }
@@ -204,7 +208,11 @@ impl SkillCompatibilityChecker {
     }
 
     /// Check semantic version compatibility
-    fn check_version_compatibility(&self, required: &str, available: &str) -> Result<VersionCompatibility> {
+    fn check_version_compatibility(
+        &self,
+        required: &str,
+        available: &str,
+    ) -> Result<VersionCompatibility> {
         // required format: "1.2" (accepts 1.2.x)
         // available format: "1.2.3" (current version)
 
@@ -260,7 +268,7 @@ impl SkillCompatibilityChecker {
     /// Get detailed compatibility errors
     pub fn detailed_report(&self) -> Result<String> {
         let report = self.check_compatibility()?;
-        
+
         let mut output = format!("Skill: {}\n", self.skill_name);
         output.push_str(&format!("Compatible: {}\n", report.compatible));
 
@@ -328,7 +336,10 @@ mod tests {
     #[test]
     fn test_exact_version_compatibility() {
         let mut tools = HashMap::new();
-        tools.insert("read_file".to_string(), create_test_tool("read_file", "1.2.3"));
+        tools.insert(
+            "read_file".to_string(),
+            create_test_tool("read_file", "1.2.3"),
+        );
 
         let deps = vec![ToolDependency {
             name: "read_file".to_string(),
@@ -364,7 +375,10 @@ mod tests {
     fn test_minor_version_upgrade_warning() {
         let mut tools = HashMap::new();
         // Tool is at 1.3.0 but skill requires 1.2
-        tools.insert("list_files".to_string(), create_test_tool("list_files", "1.3.0"));
+        tools.insert(
+            "list_files".to_string(),
+            create_test_tool("list_files", "1.3.0"),
+        );
 
         let deps = vec![ToolDependency {
             name: "list_files".to_string(),
@@ -383,7 +397,10 @@ mod tests {
     fn test_major_version_incompatibility() {
         let mut tools = HashMap::new();
         // Tool upgraded to 2.0.0, skill requires 1.2
-        tools.insert("grep_file".to_string(), create_test_tool("grep_file", "2.0.0"));
+        tools.insert(
+            "grep_file".to_string(),
+            create_test_tool("grep_file", "2.0.0"),
+        );
 
         let deps = vec![ToolDependency {
             name: "grep_file".to_string(),
@@ -401,7 +418,10 @@ mod tests {
     #[test]
     fn test_detailed_report() {
         let mut tools = HashMap::new();
-        tools.insert("read_file".to_string(), create_test_tool("read_file", "1.2.3"));
+        tools.insert(
+            "read_file".to_string(),
+            create_test_tool("read_file", "1.2.3"),
+        );
 
         let deps = vec![ToolDependency {
             name: "read_file".to_string(),
@@ -421,7 +441,10 @@ mod tests {
         // Skill was written for list_files 1.2.0, but 1.2.5 is available
         // Should be compatible (patch version changes are backward compatible)
         let mut tools = HashMap::new();
-        tools.insert("list_files".to_string(), create_test_tool("list_files", "1.2.5"));
+        tools.insert(
+            "list_files".to_string(),
+            create_test_tool("list_files", "1.2.5"),
+        );
 
         let deps = vec![ToolDependency {
             name: "list_files".to_string(),
@@ -432,7 +455,10 @@ mod tests {
         let checker = SkillCompatibilityChecker::new("filter_skill".to_string(), deps, tools);
         let report = checker.check_compatibility().unwrap();
 
-        assert!(report.compatible, "Should be compatible with patch version upgrade");
+        assert!(
+            report.compatible,
+            "Should be compatible with patch version upgrade"
+        );
         assert!(report.errors.is_empty());
     }
 
@@ -440,9 +466,18 @@ mod tests {
     fn test_multiple_tool_dependencies() {
         // Skill depends on multiple tools with different version compatibility
         let mut tools = HashMap::new();
-        tools.insert("read_file".to_string(), create_test_tool("read_file", "1.2.0"));
-        tools.insert("write_file".to_string(), create_test_tool("write_file", "2.0.0"));
-        tools.insert("list_files".to_string(), create_test_tool("list_files", "1.3.0"));
+        tools.insert(
+            "read_file".to_string(),
+            create_test_tool("read_file", "1.2.0"),
+        );
+        tools.insert(
+            "write_file".to_string(),
+            create_test_tool("write_file", "2.0.0"),
+        );
+        tools.insert(
+            "list_files".to_string(),
+            create_test_tool("list_files", "1.3.0"),
+        );
 
         let deps = vec![
             ToolDependency {
@@ -466,7 +501,10 @@ mod tests {
         let report = checker.check_compatibility().unwrap();
 
         // Should be compatible for read_file and list_files, but need migration for write_file
-        assert!(!report.compatible, "Should not be fully compatible due to write_file");
+        assert!(
+            !report.compatible,
+            "Should not be fully compatible due to write_file"
+        );
         assert!(!report.errors.is_empty());
     }
 }

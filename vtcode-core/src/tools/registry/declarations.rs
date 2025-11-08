@@ -543,27 +543,6 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
         },
 
         // ============================================================
-        // GIT OPERATIONS
-        // ============================================================
-        FunctionDeclaration {
-            name: tools::GIT_DIFF.to_string(),
-            description: "Inspect git diffs (files to hunks to lines). Scope with 'paths' array.".to_string(),
-            parameters: json!({
-                "type": "object",
-                "properties": {
-                    "paths": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "File paths to diff"
-                    },
-                    "staged": {"type": "boolean", "description": "Show staged changes", "default": false},
-                    "context_lines": {"type": "integer", "description": "Context lines around hunks", "default": 3},
-                    "max_files": {"type": "integer", "description": "Maximum files in response"}
-                }
-            }),
-        },
-
-        // ============================================================
         // COMMAND EXECUTION
         // ============================================================
         FunctionDeclaration {

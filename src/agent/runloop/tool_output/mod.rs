@@ -1,6 +1,5 @@
 mod commands;
 mod files;
-mod git_diff;
 mod mcp;
 mod panels;
 mod plan;
@@ -19,7 +18,6 @@ use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use commands::render_terminal_command_panel;
 use files::{render_list_dir_output, render_read_file_output, render_write_file_preview};
-use git_diff::render_git_diff;
 use mcp::{
     render_context7_output, render_generic_output, render_sequential_output,
     resolve_renderer_profile,
@@ -42,24 +40,6 @@ pub(crate) fn render_tool_output(
             let git_styles = GitStyles::new();
             let ls_styles = LsStyles::from_env();
             return render_write_file_preview(renderer, val, &git_styles, &ls_styles);
-        }
-        Some(tools::GIT_DIFF) => {
-            let git_styles = GitStyles::new();
-            let ls_styles = LsStyles::from_env();
-            let output_mode = vt_config
-                .map(|cfg| cfg.ui.tool_output_mode)
-                .unwrap_or(ToolOutputMode::Compact);
-            let tail_limit = resolve_stdout_tail_limit(vt_config);
-            return render_git_diff(
-                renderer,
-                val,
-                output_mode,
-                tail_limit,
-                &git_styles,
-                &ls_styles,
-                allow_tool_ansi,
-                vt_config,
-            );
         }
         Some(tools::RUN_COMMAND) => {
             let git_styles = GitStyles::new();

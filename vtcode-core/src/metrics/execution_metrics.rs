@@ -43,7 +43,13 @@ impl ExecutionMetrics {
         // Placeholder for tracking execution start if needed
     }
 
-    pub fn record_complete(&mut self, language: String, duration_ms: u64, memory_mb: u64, success: bool) {
+    pub fn record_complete(
+        &mut self,
+        language: String,
+        duration_ms: u64,
+        memory_mb: u64,
+        success: bool,
+    ) {
         self.total_executions += 1;
         if success {
             self.successful_executions += 1;
@@ -57,7 +63,10 @@ impl ExecutionMetrics {
             self.memory_peak_mb = memory_mb;
         }
 
-        *self.language_distribution.entry(language.clone()).or_insert(0) += 1;
+        *self
+            .language_distribution
+            .entry(language.clone())
+            .or_insert(0) += 1;
 
         let record = ExecutionRecord {
             language,

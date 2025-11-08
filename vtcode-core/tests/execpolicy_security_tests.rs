@@ -145,14 +145,14 @@ async fn test_git_diff_blocked() {
     let root = workspace_root();
     let working_dir = root.clone();
 
-    // Test git diff (should be redirected to dedicated tool)
+    // Test git diff (should be blocked)
     let command = vec!["git".to_string(), "diff".to_string()];
 
     let result = validate_command(&command, &root, &working_dir).await;
     assert!(result.is_err(), "git diff should be blocked");
     assert!(
-        result.unwrap_err().to_string().contains("git_diff"),
-        "error should mention git_diff tool"
+        result.unwrap_err().to_string().contains("git diff"),
+        "error should mention git diff command"
     );
 }
 

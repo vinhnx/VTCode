@@ -112,8 +112,8 @@ impl ToolIpcHandler {
             .await
             .context("failed to read request file")?;
 
-        let request: ToolRequest = serde_json::from_str(&content)
-            .context("failed to parse request JSON")?;
+        let request: ToolRequest =
+            serde_json::from_str(&content).context("failed to parse request JSON")?;
 
         // Clean up request file
         let _ = fs::remove_file(&request_file).await;
@@ -124,13 +124,13 @@ impl ToolIpcHandler {
     /// Process request for PII (tokenize if enabled).
     pub fn process_request_for_pii(&self, request: &mut ToolRequest) -> Result<()> {
         if let Some(tokenizer) = &self.pii_tokenizer {
-            let args_str = serde_json::to_string(&request.args)
-                .context("failed to serialize request args")?;
+            let args_str =
+                serde_json::to_string(&request.args).context("failed to serialize request args")?;
             let (tokenized, _) = tokenizer
                 .tokenize_string(&args_str)
                 .context("PII tokenization failed")?;
-            request.args = serde_json::from_str(&tokenized)
-                .context("failed to parse tokenized args")?;
+            request.args =
+                serde_json::from_str(&tokenized).context("failed to parse tokenized args")?;
         }
         Ok(())
     }
@@ -139,8 +139,8 @@ impl ToolIpcHandler {
     pub fn process_response_for_pii(&self, response: &mut ToolResponse) -> Result<()> {
         if let Some(tokenizer) = &self.pii_tokenizer {
             if let Some(result) = &response.result {
-                let result_str = serde_json::to_string(result)
-                    .context("failed to serialize response result")?;
+                let result_str =
+                    serde_json::to_string(result).context("failed to serialize response result")?;
                 let detokenized = tokenizer
                     .detokenize_string(&result_str)
                     .context("PII de-tokenization failed")?;
@@ -160,8 +160,7 @@ impl ToolIpcHandler {
 
         let response_file = self.ipc_dir.join("response.json");
 
-        let json = serde_json::to_string(&response)
-            .context("failed to serialize response")?;
+        let json = serde_json::to_string(&response).context("failed to serialize response")?;
 
         fs::write(&response_file, json)
             .await

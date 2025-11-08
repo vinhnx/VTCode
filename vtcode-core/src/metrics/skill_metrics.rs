@@ -223,7 +223,7 @@ mod tests {
         let mut metrics = SkillMetrics::new();
         metrics.record_created("popular".to_string(), "python3".to_string());
         metrics.record_created("unpopular".to_string(), "python3".to_string());
-        
+
         for _ in 0..10 {
             metrics.record_execution("popular".to_string(), 100, true);
         }

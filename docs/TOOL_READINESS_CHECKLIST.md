@@ -50,9 +50,8 @@
 - [x] grep_file - Text search
 - [x] create_pty_session - Interactive terminal
 
-**Tier 2 - Important** (3 tools)
+**Tier 2 - Important** (2 tools)
 - [x] edit_file - Targeted file edits
-- [x] git_diff - Version control diff
 - [x] update_plan - Task planning
 
 **Tier 3 - Specialized** (4 tools)
@@ -76,10 +75,9 @@
 - [x] close_pty_session - Close PTY session
 - [x] resize_pty_session - Resize PTY
 
-**Utility Tools** (4 tools)
+**Utility Tools** (3 tools)
 - [x] close_pty_session - PTY management
 - [x] list_pty_sessions - List active sessions
-- [x] git_diff - Version control
 - [x] mcp::fetch::fetch - MCP fetch provider
 
 **Configuration**: `.vtcode/tool-policy.json` (version 1)

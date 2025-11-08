@@ -2,8 +2,7 @@ use std::collections::HashMap;
 
 use anstyle::{AnsiColor, Color, RgbColor, Style as AnsiStyle};
 use vtcode_core::config::constants::tools;
-
-use super::git_diff::DiffLineKind;
+use vtcode_core::utils::diff::DiffLineKind;
 
 pub(crate) struct GitStyles {
     pub(crate) add: Option<AnsiStyle>,

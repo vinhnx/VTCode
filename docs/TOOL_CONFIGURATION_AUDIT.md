@@ -48,18 +48,18 @@
 
 ### Current State (.vtcode/tool-policy.json)
 
-**Available Tools**: 25 registered
+**Available Tools**: 24 registered
 ```json
 [
-  "apply_patch", "ast_grep_search", "close_pty_session",
-  "create_file", "create_pty_session", "delete_file",
-  "edit_file", "execute_code", "git_diff",
-  "grep_file", "list_files", "list_pty_sessions",
-  "list_skills", "load_skill", "mcp::fetch::fetch",
-  "read_file", "read_pty_session", "resize_pty_session",
-  "run_terminal_cmd", "save_skill", "search_skills",
-  "search_tools", "send_pty_input", "update_plan",
-  "web_fetch", "write_file"
+"apply_patch", "ast_grep_search", "close_pty_session",
+"create_file", "create_pty_session", "delete_file",
+"edit_file", "execute_code",
+"grep_file", "list_files", "list_pty_sessions",
+"list_skills", "load_skill", "mcp::fetch::fetch",
+"read_file", "read_pty_session", "resize_pty_session",
+"run_terminal_cmd", "save_skill", "search_skills",
+"search_tools", "send_pty_input", "update_plan",
+"web_fetch", "write_file"
 ]
 ```
 

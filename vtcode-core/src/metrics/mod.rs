@@ -15,17 +15,17 @@ use std::time::Instant;
 
 pub mod discovery_metrics;
 pub mod execution_metrics;
-pub mod sdk_metrics;
 pub mod filtering_metrics;
-pub mod skill_metrics;
+pub mod sdk_metrics;
 pub mod security_metrics;
+pub mod skill_metrics;
 
 pub use discovery_metrics::DiscoveryMetrics;
 pub use execution_metrics::ExecutionMetrics;
-pub use sdk_metrics::SdkMetrics;
 pub use filtering_metrics::FilteringMetrics;
-pub use skill_metrics::SkillMetrics;
+pub use sdk_metrics::SdkMetrics;
 pub use security_metrics::SecurityMetrics;
+pub use skill_metrics::SkillMetrics;
 
 /// Central metrics collector for all MCP execution activities
 #[derive(Clone)]
@@ -68,7 +68,12 @@ impl MetricsCollector {
     // ========== Discovery Metrics ==========
 
     /// Record a tool discovery query
-    pub fn record_discovery_query(&self, keyword: String, result_count: u64, response_time_ms: u64) {
+    pub fn record_discovery_query(
+        &self,
+        keyword: String,
+        result_count: u64,
+        response_time_ms: u64,
+    ) {
         if let Ok(mut metrics) = self.discovery.lock() {
             metrics.record_query(keyword, result_count, response_time_ms);
         }
@@ -385,7 +390,7 @@ mod tests {
     fn test_discovery_metrics_recording() {
         let collector = MetricsCollector::new();
         collector.record_discovery_query("file".to_string(), 5, 50);
-        
+
         let metrics = collector.get_discovery_metrics();
         assert_eq!(metrics.total_queries, 1);
         assert!(metrics.avg_response_time_ms() > 0);
@@ -396,7 +401,7 @@ mod tests {
         let collector = MetricsCollector::new();
         collector.record_execution_start("python3".to_string());
         collector.record_execution_complete("python3".to_string(), 1000, 50);
-        
+
         let metrics = collector.get_execution_metrics();
         assert_eq!(metrics.total_executions, 1);
         assert_eq!(metrics.successful_executions, 1);
@@ -408,7 +413,7 @@ mod tests {
         let collector = MetricsCollector::new();
         collector.record_discovery_query("test".to_string(), 3, 30);
         collector.record_pii_detection("email".to_string());
-        
+
         let summary = collector.get_summary();
         assert!(summary.session_duration_ms >= 0);
         assert_eq!(summary.discovery.total_queries, 1);
@@ -419,7 +424,7 @@ mod tests {
     fn test_prometheus_export() {
         let collector = MetricsCollector::new();
         collector.record_execution_complete("python3".to_string(), 500, 40);
-        
+
         let prometheus = collector.export_prometheus();
         assert!(prometheus.contains("vtcode_execution_total"));
         assert!(prometheus.contains("vtcode_execution_duration_ms"));
@@ -429,7 +434,7 @@ mod tests {
     fn test_json_export() {
         let collector = MetricsCollector::new();
         collector.record_discovery_query("test".to_string(), 2, 25);
-        
+
         let json = collector.export_json().unwrap();
         assert!(json.get("timestamp").is_some());
         assert!(json.get("discovery").is_some());

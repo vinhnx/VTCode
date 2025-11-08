@@ -60,7 +60,10 @@ impl SecurityMetrics {
     }
 
     pub fn get_pattern_count(&self, pattern_type: &str) -> u64 {
-        self.pattern_distribution.get(pattern_type).copied().unwrap_or(0)
+        self.pattern_distribution
+            .get(pattern_type)
+            .copied()
+            .unwrap_or(0)
     }
 
     pub fn get_most_detected_pattern(&self) -> Option<String> {
@@ -138,7 +141,10 @@ mod tests {
         metrics.record_detection("email".to_string());
         metrics.record_detection("ssn".to_string());
 
-        assert_eq!(metrics.get_most_detected_pattern(), Some("email".to_string()));
+        assert_eq!(
+            metrics.get_most_detected_pattern(),
+            Some("email".to_string())
+        );
     }
 
     #[test]

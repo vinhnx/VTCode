@@ -10,8 +10,7 @@
 #[cfg(test)]
 mod tests {
     use crate::exec::{
-        AgentBehaviorAnalyzer, ExecutionConfig, SkillManager, PiiTokenizer,
-        Skill, SkillMetadata,
+        AgentBehaviorAnalyzer, ExecutionConfig, PiiTokenizer, Skill, SkillManager, SkillMetadata,
     };
     use chrono;
     use tempfile;
@@ -28,7 +27,7 @@ mod tests {
         // Note: This test demonstrates the concept but requires proper setup with
         // actual MCP client and sandbox profile. See integration tests documentation
         // for full example with mocked dependencies.
-        
+
         // Step 1: Create execution config
         let config = ExecutionConfig {
             timeout_secs: 5,
@@ -50,7 +49,7 @@ result = {"count": len(filtered), "items": filtered}
 
         // Step 3: In real usage, agent writes code that filters data locally
         // (actual code runs locally, only aggregated result returns to model)
-        
+
         // Step 4: Pattern demonstration
         // The pattern is: write code that processes data locally,
         // returning only filtered/aggregated results to the model
@@ -61,7 +60,7 @@ filtered = [x for x in data if x > 5]
 result = {"count": len(filtered), "items": filtered}
         "#;
         assert!(expected_pattern.contains("result = {"));
-        
+
         // This demonstrates the key benefit: filtering happens in code
         // instead of in prompt context, saving ~98% of tokens
     }
@@ -84,7 +83,7 @@ result = {"count": len(filtered), "items": filtered}
             memory_limit_mb: 256,
             ..Default::default()
         };
-        
+
         // Verify config is valid
         assert_eq!(config.memory_limit_mb, 256);
 
@@ -165,16 +164,16 @@ result = {"test": double_value(21)}
         // Demonstrates data filtering efficiency pattern
         // Instead of returning all 1000 items to the model,
         // the code processes locally and returns only aggregated results
-        
+
         let config = ExecutionConfig {
             timeout_secs: 5,
             memory_limit_mb: 256,
             ..Default::default()
         };
-        
+
         // In real usage with actual executor setup:
         // let executor = CodeExecutor::new(language, sandbox, client, workspace);
-        
+
         // Example code pattern for large dataset filtering
         let code_pattern = r#"
 # Simulate processing large dataset
@@ -195,7 +194,7 @@ result = stats
         assert_eq!(config.timeout_secs, 5);
         assert_eq!(config.memory_limit_mb, 256);
         assert!(code_pattern.contains("# Filter in code"));
-        
+
         // Token efficiency: with traditional approach:
         // - 1000 items × ~100 tokens each = ~100k tokens
         // With code execution approach:
@@ -209,21 +208,21 @@ result = stats
 
     #[test]
     fn test_tool_error_handling_in_code() {
-    // Demonstrates error handling pattern in code execution
-    // Agents can write code with try/except blocks to handle errors
-    // without repeated model calls
-    
-    let config = ExecutionConfig {
-        timeout_secs: 5,
-            memory_limit_mb: 256,
-        ..Default::default()
-    };
-        
-       // In real usage:
-       // let executor = CodeExecutor::new(language, sandbox, client, workspace);
+        // Demonstrates error handling pattern in code execution
+        // Agents can write code with try/except blocks to handle errors
+        // without repeated model calls
 
-       // Example code pattern with error handling
-           let code_pattern = r#"
+        let config = ExecutionConfig {
+            timeout_secs: 5,
+            memory_limit_mb: 256,
+            ..Default::default()
+        };
+
+        // In real usage:
+        // let executor = CodeExecutor::new(language, sandbox, client, workspace);
+
+        // Example code pattern with error handling
+        let code_pattern = r#"
 try:
         # Try to process data
     x = 1 / 0  # This will raise ZeroDivisionError
@@ -234,13 +233,13 @@ try:
     result = {"error": True, "type": type(e).__name__, "message": str(e)}
 "#;
 
-    // Verify config is valid
-    assert_eq!(config.timeout_secs, 5);
-    assert_eq!(config.memory_limit_mb, 256);
-    assert!(code_pattern.contains("try:"));
-    assert!(code_pattern.contains("except"));
-    
-    // This pattern allows agents to handle errors in code
+        // Verify config is valid
+        assert_eq!(config.timeout_secs, 5);
+        assert_eq!(config.memory_limit_mb, 256);
+        assert!(code_pattern.contains("try:"));
+        assert!(code_pattern.contains("except"));
+
+        // This pattern allows agents to handle errors in code
         // without returning every exception to the model
     }
 
@@ -266,7 +265,10 @@ try:
         analyzer.record_tool_failure("grep_tool", "pattern_error");
 
         // Verify statistics
-        assert_eq!(analyzer.tool_stats().usage_frequency.get("list_files"), Some(&2));
+        assert_eq!(
+            analyzer.tool_stats().usage_frequency.get("list_files"),
+            Some(&2)
+        );
         assert_eq!(analyzer.skill_stats().reused_skills, 2);
         assert!(!analyzer.failure_patterns().high_failure_tools.is_empty());
 
@@ -287,16 +289,16 @@ try:
     fn test_scenario_simple_transformation() {
         // Demonstrates simple data transformation pattern
         // Transform data locally and return only the needed results
-        
+
         let config = ExecutionConfig {
             timeout_secs: 5,
             memory_limit_mb: 256,
             ..Default::default()
         };
-        
+
         // In real usage:
         // let executor = CodeExecutor::new(language, sandbox, client, workspace);
-        
+
         let code_pattern = r#"
 # Transform data locally before returning
 data = ["hello", "world", "test"]
@@ -306,20 +308,20 @@ result = {"original_count": len(data), "transformed": transformed}
 
         assert_eq!(config.memory_limit_mb, 256);
         assert!(code_pattern.contains("result = {"));
-        
+
         // This pattern keeps transformations local, reducing context overhead
     }
 
     #[test]
     fn test_javascript_execution() {
         // Demonstrates JavaScript code execution support
-        
+
         let config = ExecutionConfig {
             timeout_secs: 5,
             memory_limit_mb: 256,
             ..Default::default()
         };
-        
+
         // In real usage:
         // let executor = CodeExecutor::new(Language::JavaScript, sandbox, client, workspace);
 
@@ -332,7 +334,7 @@ result = { count: filtered.length, items: filtered };
         assert_eq!(config.timeout_secs, 5);
         assert!(code_pattern.contains("const items"));
         assert!(code_pattern.contains("result ="));
-        
+
         // Agents can write JavaScript code just like Python
     }
 }

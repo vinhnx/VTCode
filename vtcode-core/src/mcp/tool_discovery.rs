@@ -8,10 +8,10 @@
 //!
 //! ```ignore
 //! let discovery = ToolDiscovery::new(mcp_client);
-//! 
+//!
 //! // Search for tools by keyword
 //! let results = discovery.search_tools("file", DetailLevel::NameOnly).await?;
-//! 
+//!
 //! // Get detailed schema for a specific tool
 //! let detail = discovery.get_tool_detail("read_file").await?;
 //! ```
@@ -133,7 +133,11 @@ impl ToolDiscovery {
         }
 
         // Sort by relevance score (highest first)
-        results.sort_by(|a, b| b.relevance_score.partial_cmp(&a.relevance_score).unwrap_or(Ordering::Equal));
+        results.sort_by(|a, b| {
+            b.relevance_score
+                .partial_cmp(&a.relevance_score)
+                .unwrap_or(Ordering::Equal)
+        });
 
         info!(
             keyword = keyword,
@@ -168,7 +172,8 @@ impl ToolDiscovery {
     pub async fn list_tools_by_provider(&self) -> Result<Vec<(String, Vec<ToolDiscoveryResult>)>> {
         let tools = self.mcp_client.list_mcp_tools().await?;
 
-        let mut by_provider: std::collections::HashMap<String, Vec<ToolDiscoveryResult>> = std::collections::HashMap::new();
+        let mut by_provider: std::collections::HashMap<String, Vec<ToolDiscoveryResult>> =
+            std::collections::HashMap::new();
 
         for tool in tools {
             let result = ToolDiscoveryResult {
@@ -179,7 +184,8 @@ impl ToolDiscovery {
                 input_schema: None,
             };
 
-            by_provider.entry(tool.provider.clone())
+            by_provider
+                .entry(tool.provider.clone())
                 .or_default()
                 .push(result);
         }

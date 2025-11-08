@@ -167,14 +167,14 @@ impl AgentBehaviorAnalyzer {
     /// Recommend tools based on usage patterns
     pub fn recommend_tools(&self, query: &str, limit: usize) -> Vec<String> {
         let mut recommendations = vec![];
-        
+
         // Find tools that match the query
         for (tool, _count) in self.tool_stats.usage_frequency.iter().take(limit) {
             if tool.to_lowercase().contains(&query.to_lowercase()) {
                 recommendations.push(tool.clone());
             }
         }
-        
+
         // If no exact matches, return most used tools
         if recommendations.is_empty() {
             let mut by_usage: Vec<_> = self.tool_stats.usage_frequency.iter().collect();
@@ -185,13 +185,14 @@ impl AgentBehaviorAnalyzer {
                 .map(|(tool, _)| tool.to_string())
                 .collect();
         }
-        
+
         recommendations
     }
 
     /// Recommend skills based on effectiveness
     pub fn recommend_skills(&self, limit: usize) -> Vec<String> {
-        self.skill_stats.most_effective_skills
+        self.skill_stats
+            .most_effective_skills
             .iter()
             .take(limit)
             .cloned()
@@ -219,7 +220,8 @@ impl AgentBehaviorAnalyzer {
 
     /// Record tool usage
     pub fn record_tool_usage(&mut self, tool_name: &str) {
-        *self.tool_stats
+        *self
+            .tool_stats
             .usage_frequency
             .entry(tool_name.to_string())
             .or_insert(0) += 1;
@@ -227,12 +229,19 @@ impl AgentBehaviorAnalyzer {
 
     /// Record skill reuse
     pub fn record_skill_reuse(&mut self, skill_name: &str) {
-        if let Some(pos) = self.skill_stats.most_effective_skills.iter().position(|s| s == skill_name) {
+        if let Some(pos) = self
+            .skill_stats
+            .most_effective_skills
+            .iter()
+            .position(|s| s == skill_name)
+        {
             // Move to front
             let skill = self.skill_stats.most_effective_skills.remove(pos);
             self.skill_stats.most_effective_skills.insert(0, skill);
         } else {
-            self.skill_stats.most_effective_skills.insert(0, skill_name.to_string());
+            self.skill_stats
+                .most_effective_skills
+                .insert(0, skill_name.to_string());
         }
         self.skill_stats.reused_skills += 1;
     }
@@ -240,28 +249,46 @@ impl AgentBehaviorAnalyzer {
     /// Record tool failure
     pub fn record_tool_failure(&mut self, tool_name: &str, error_msg: &str) {
         // Add to common errors
-        if let Some(pos) = self.failure_patterns.common_errors.iter().position(|(msg, _)| msg == error_msg) {
+        if let Some(pos) = self
+            .failure_patterns
+            .common_errors
+            .iter()
+            .position(|(msg, _)| msg == error_msg)
+        {
             self.failure_patterns.common_errors[pos].1 += 1;
         } else {
-            self.failure_patterns.common_errors.push((error_msg.to_string(), 1));
+            self.failure_patterns
+                .common_errors
+                .push((error_msg.to_string(), 1));
         }
 
         // Update high failure tools - find count
-        let count = self.failure_patterns
+        let count = self
+            .failure_patterns
             .common_errors
             .iter()
             .find(|(msg, _)| msg == error_msg)
             .map(|(_, c)| *c)
             .unwrap_or(1);
         let failure_rate = count as f64 / (count + 1) as f64; // Approximation
-        
-        if let Some(pos) = self.failure_patterns.high_failure_tools.iter().position(|t| t.0 == tool_name) {
+
+        if let Some(pos) = self
+            .failure_patterns
+            .high_failure_tools
+            .iter()
+            .position(|t| t.0 == tool_name)
+        {
             self.failure_patterns.high_failure_tools[pos].1 = failure_rate;
         } else {
-            self.failure_patterns.high_failure_tools.push((tool_name.to_string(), failure_rate));
+            self.failure_patterns
+                .high_failure_tools
+                .push((tool_name.to_string(), failure_rate));
         }
-        
-        debug!("Recorded failure for {}: {} (failure_rate: {})", tool_name, error_msg, failure_rate);
+
+        debug!(
+            "Recorded failure for {}: {} (failure_rate: {})",
+            tool_name, error_msg, failure_rate
+        );
     }
 
     /// Get analysis summary as string
@@ -270,8 +297,14 @@ impl AgentBehaviorAnalyzer {
         output.push_str("=== Agent Behavior Analysis ===\n\n");
 
         output.push_str("## Skill Statistics\n");
-        output.push_str(&format!("Total skills: {}\n", self.skill_stats.total_skills));
-        output.push_str(&format!("Reused skills: {}\n", self.skill_stats.reused_skills));
+        output.push_str(&format!(
+            "Total skills: {}\n",
+            self.skill_stats.total_skills
+        ));
+        output.push_str(&format!(
+            "Reused skills: {}\n",
+            self.skill_stats.reused_skills
+        ));
         if !self.skill_stats.most_effective_skills.is_empty() {
             output.push_str(&format!(
                 "Top skill: {}\n",
@@ -292,7 +325,11 @@ impl AgentBehaviorAnalyzer {
         if !self.failure_patterns.high_failure_tools.is_empty() {
             output.push_str("\n## High-Risk Tools\n");
             for (tool, rate) in self.failure_patterns.high_failure_tools.iter().take(5) {
-                output.push_str(&format!("- {} (failure rate: {:.1}%)\n", tool, rate * 100.0));
+                output.push_str(&format!(
+                    "- {} (failure rate: {:.1}%)\n",
+                    tool,
+                    rate * 100.0
+                ));
             }
         }
 
@@ -331,7 +368,12 @@ mod tests {
         analyzer.record_skill_reuse("transform_skill");
 
         assert_eq!(analyzer.skill_stats.reused_skills, 3);
-        assert!(analyzer.skill_stats.most_effective_skills.contains(&"filter_skill".to_string()));
+        assert!(
+            analyzer
+                .skill_stats
+                .most_effective_skills
+                .contains(&"filter_skill".to_string())
+        );
     }
 
     #[test]
@@ -360,8 +402,14 @@ mod tests {
     #[test]
     fn test_identify_risky_tools() {
         let mut analyzer = AgentBehaviorAnalyzer::new();
-        analyzer.failure_patterns.high_failure_tools.push(("risky_tool".to_string(), 0.8));
-        analyzer.failure_patterns.high_failure_tools.push(("safe_tool".to_string(), 0.1));
+        analyzer
+            .failure_patterns
+            .high_failure_tools
+            .push(("risky_tool".to_string(), 0.8));
+        analyzer
+            .failure_patterns
+            .high_failure_tools
+            .push(("safe_tool".to_string(), 0.1));
 
         let risky = analyzer.identify_risky_tools(0.5);
         assert_eq!(risky.len(), 1);
@@ -371,12 +419,15 @@ mod tests {
     #[test]
     fn test_recovery_pattern_lookup() {
         let mut analyzer = AgentBehaviorAnalyzer::new();
-        analyzer.failure_patterns.recovery_patterns.push(RecoveryPattern {
-            error_type: "timeout".to_string(),
-            recovery_action: "retry with increased timeout".to_string(),
-            success_rate: 0.85,
-            attempts: 20,
-        });
+        analyzer
+            .failure_patterns
+            .recovery_patterns
+            .push(RecoveryPattern {
+                error_type: "timeout".to_string(),
+                recovery_action: "retry with increased timeout".to_string(),
+                success_rate: 0.85,
+                attempts: 20,
+            });
 
         let recovery = analyzer.get_recovery_strategy("timeout");
         assert!(recovery.is_some());

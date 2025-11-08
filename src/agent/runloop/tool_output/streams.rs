@@ -38,10 +38,6 @@ pub(crate) fn render_stream_section(
     use std::fmt::Write as FmtWrite;
 
     let is_mcp_tool = tool_name.is_some_and(|name| name.starts_with("mcp_"));
-    let is_git_diff = matches!(
-        tool_name,
-        Some(vtcode_core::config::constants::tools::GIT_DIFF)
-    );
     let is_run_command = matches!(
         tool_name,
         Some(vtcode_core::config::constants::tools::RUN_COMMAND)
@@ -114,7 +110,7 @@ pub(crate) fn render_stream_section(
 
         msg_buffer.clear();
         msg_buffer.reserve(128);
-        let prefix = if is_mcp_tool || is_git_diff { "" } else { "  " };
+        let prefix = if is_mcp_tool { "" } else { "  " };
 
         let hidden = total.saturating_sub(tail.len());
         if hidden > 0 {
@@ -157,9 +153,7 @@ pub(crate) fn render_stream_section(
                 msg_buffer.push_str(prefix);
                 msg_buffer.push_str(&display_line);
             }
-            if !is_git_diff
-                && let Some(style) =
-                    select_line_style(tool_name, &display_line, git_styles, ls_styles)
+            if let Some(style) = select_line_style(tool_name, &display_line, git_styles, ls_styles)
             {
                 renderer.line_with_style(style, &msg_buffer)?;
                 continue;
@@ -203,7 +197,7 @@ pub(crate) fn render_stream_section(
         0
     };
     if hidden > 0 {
-        let prefix = if is_mcp_tool || is_git_diff { "" } else { "  " };
+        let prefix = if is_mcp_tool { "" } else { "  " };
         format_buffer.clear();
         format_buffer.push_str(prefix);
         format_buffer.push_str("[... ");
@@ -216,7 +210,7 @@ pub(crate) fn render_stream_section(
         renderer.line(MessageStyle::Info, &format_buffer)?;
     }
 
-    if !is_mcp_tool && !is_git_diff && !is_run_command && !title.is_empty() {
+    if !is_mcp_tool && !is_run_command && !title.is_empty() {
         format_buffer.clear();
         format_buffer.push('[');
         for ch in title.chars() {
@@ -227,7 +221,7 @@ pub(crate) fn render_stream_section(
     }
 
     let mut display_buffer = String::with_capacity(128);
-    let prefix = if is_mcp_tool || is_git_diff { "" } else { "  " };
+    let prefix = if is_mcp_tool { "" } else { "  " };
 
     for line in &lines_vec {
         if line.is_empty() {
@@ -238,9 +232,7 @@ pub(crate) fn render_stream_section(
             display_buffer.push_str(line);
         }
 
-        if !is_git_diff
-            && let Some(style) = select_line_style(tool_name, line, git_styles, ls_styles)
-        {
+        if let Some(style) = select_line_style(tool_name, line, git_styles, ls_styles) {
             renderer.line_with_style(style, &display_buffer)?;
             continue;
         }

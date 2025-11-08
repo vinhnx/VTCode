@@ -164,7 +164,7 @@ enabled = true
 bind_address = "127.0.0.1"
 port = 3030
 transport = "sse"
-exposed_tools = ["git_diff", "read_file"]
+exposed_tools = ["read_file"]
 ```
 
 `vtcode-config` re-exports serde schemas for these tables, making it straightforward to validate

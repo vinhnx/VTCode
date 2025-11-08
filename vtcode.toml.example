@@ -177,7 +177,6 @@ ast_grep_search = "allow"         # AST-based code search (no confirmation neede
 close_pty_session = "allow"        # Close PTY sessions (no confirmation needed)
 create_pty_session = "allow"       # Create PTY sessions (no confirmation needed)
 edit_file = "allow"               # Edit files directly (no confirmation needed)
-git_diff = "allow"                # Git diff operations (no confirmation needed)
 grep_file = "allow"               # Sole content-search tool (ripgrep-backed)
 list_files = "allow"              # List directory contents (no confirmation needed)
 list_pty_sessions = "allow"       # List PTY sessions (no confirmation needed)

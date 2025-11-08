@@ -48,37 +48,31 @@ pub(crate) fn render_tool_call_summary_with_status(
         if let Some(map) = args.as_object() {
             let all_params: Vec<String> = map
                 .iter()
-                .filter_map(|(key, value)| {
-                    match value {
-                        Value::String(s) if !s.is_empty() => {
-                            Some(format!("{}: {}", humanize_key(key), truncate_middle(s, 60)))
-                        }
-                        Value::Bool(true) => {
-                            Some(humanize_key(key))
-                        }
-                        Value::Array(items) => {
-                            let strings: Vec<String> = items
-                                .iter()
-                                .filter_map(|item| item.as_str().map(|s| s.to_string()))
-                                .collect();
-                            if !strings.is_empty() {
-                                Some(format!(
-                                    "{}: {}",
-                                    humanize_key(key),
-                                    summarize_list(&strings, 2, 60)
-                                ))
-                            } else {
-                                None
-                            }
-                        }
-                        Value::Number(num) => {
-                            Some(format!("{}: {}", humanize_key(key), num))
-                        }
-                        _ => None
+                .filter_map(|(key, value)| match value {
+                    Value::String(s) if !s.is_empty() => {
+                        Some(format!("{}: {}", humanize_key(key), truncate_middle(s, 60)))
                     }
+                    Value::Bool(true) => Some(humanize_key(key)),
+                    Value::Array(items) => {
+                        let strings: Vec<String> = items
+                            .iter()
+                            .filter_map(|item| item.as_str().map(|s| s.to_string()))
+                            .collect();
+                        if !strings.is_empty() {
+                            Some(format!(
+                                "{}: {}",
+                                humanize_key(key),
+                                summarize_list(&strings, 2, 60)
+                            ))
+                        } else {
+                            None
+                        }
+                    }
+                    Value::Number(num) => Some(format!("{}: {}", humanize_key(key), num)),
+                    _ => None,
                 })
                 .collect();
-            
+
             if !all_params.is_empty() {
                 line.push_str(" \x1b[2m· ");
                 line.push_str(&all_params.join(" · "));
@@ -119,11 +113,6 @@ pub(crate) fn describe_tool_action(tool_name: &str, args: &Value) -> (String, Ha
             .unwrap_or_else(|| ("Delete file".to_string(), HashSet::new())),
         tool_names::APPLY_PATCH => ("Apply workspace patch".to_string(), HashSet::new()),
         tool_names::UPDATE_PLAN => ("Update task plan".to_string(), HashSet::new()),
-        tool_names::GIT_DIFF => describe_git_diff(args).unwrap_or_else(|| {
-            let mut used = HashSet::new();
-            used.insert("paths".to_string());
-            ("Git diff".to_string(), used)
-        }),
         _ => (
             format!("Use {}", humanize_tool_name(tool_name)),
             HashSet::new(),
@@ -236,38 +225,6 @@ fn describe_path_action(
             return Some((format!("{} {}", verb, summary), used));
         }
     }
-    None
-}
-
-fn describe_git_diff(args: &Value) -> Option<(String, HashSet<String>)> {
-    let mut used = HashSet::new();
-    let staged = args.get("staged").and_then(|v| v.as_bool());
-    if staged == Some(true) {
-        used.insert("staged".to_string());
-    }
-
-    if let Some(paths) = args.get("paths").and_then(|v| v.as_array()) {
-        let names: Vec<String> = paths
-            .iter()
-            .filter_map(|value| value.as_str())
-            .map(|s| s.to_string())
-            .collect();
-        if !names.is_empty() {
-            used.insert("paths".to_string());
-            let display = summarize_list(&names, 2, 60);
-            let summary = if staged == Some(true) {
-                format!("Git diff (staged) {}", display)
-            } else {
-                format!("Git diff {}", display)
-            };
-            return Some((summary, used));
-        }
-    }
-
-    if staged == Some(true) {
-        return Some(("Git diff (staged)".to_string(), used));
-    }
-
     None
 }
 

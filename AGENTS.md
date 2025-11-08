@@ -34,10 +34,10 @@
 ## Tool Usage Guidelines
 
 -   **Essential Tools** (Tier 1): read_file, write_file, list_files, grep_file, PTY sessions
--   **Important Tools** (Tier 2): edit_file, git_diff, update_plan
+-   **Important Tools** (Tier 2): edit_file, update_plan
 -   **Specialized Tools** (Tier 3): ast_grep_search, apply_patch, delete_file, curl
 -   **Advanced Tools** (Tier 4): execute_code, search_tools, save_skill, load_skill, search_skills
--   **Deprecated Tools**: run_terminal_cmd (use PTY session tools instead)
+-   **Deprecated Tools**: git_diff, run_terminal_cmd (use PTY session tools instead)
 -   **Command Execution**: Always use PTY sessions (create_pty_session, send_pty_input, read_pty_session) for better control
 -   **File Editing**: Use edit_file for surgical changes, write_file for full rewrites, apply_patch for complex diffs
 -   **Search**: Use grep_file for text search, ast_grep_search for semantic code search
@@ -84,3 +84,4 @@ result = {"count": len(test_files), "files": test_files[:20]}
 -   Don't print API KEY print debug and logging what soever. THIS IS IMPORTANT!
 -   Always use code execution for 100+ item filtering (massive token savings)
 -   Save skills for repeated patterns (80%+ reuse ratio documented)
+-   Regularly run `cargo clippy` and `cargo fmt` to maintain code quality.

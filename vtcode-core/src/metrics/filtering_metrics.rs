@@ -42,7 +42,10 @@ impl FilteringMetrics {
         self.total_input_bytes += input_size;
         self.total_output_bytes += output_size;
 
-        *self.operation_distribution.entry(operation.clone()).or_insert(0) += 1;
+        *self
+            .operation_distribution
+            .entry(operation.clone())
+            .or_insert(0) += 1;
 
         let record = FilteringRecord {
             operation,
@@ -68,14 +71,19 @@ impl FilteringMetrics {
 
     /// Estimate tokens saved based on rough conversion (1 token ≈ 4 bytes)
     pub fn estimated_tokens_saved(&self) -> u64 {
-        let bytes_saved = self.total_input_bytes.saturating_sub(self.total_output_bytes);
-        bytes_saved / 4  // Rough estimate
+        let bytes_saved = self
+            .total_input_bytes
+            .saturating_sub(self.total_output_bytes);
+        bytes_saved / 4 // Rough estimate
     }
 
     pub fn avg_duration_ms(&self) -> u64 {
         if self.total_operations > 0 {
             let total: u64 = self.recent_operations.iter().map(|r| r.duration_ms).sum();
-            total / self.total_operations.min(self.recent_operations.len() as u64)
+            total
+                / self
+                    .total_operations
+                    .min(self.recent_operations.len() as u64)
         } else {
             0
         }
@@ -108,7 +116,7 @@ mod tests {
         metrics.record_operation("filter".to_string(), 1000, 500, 100);
 
         let ratio = metrics.avg_reduction_ratio();
-        assert!((ratio - 0.5).abs() < 0.01);  // 50% reduction
+        assert!((ratio - 0.5).abs() < 0.01); // 50% reduction
     }
 
     #[test]
@@ -117,7 +125,7 @@ mod tests {
         metrics.record_operation("filter".to_string(), 1000, 500, 100);
 
         let tokens = metrics.estimated_tokens_saved();
-        assert_eq!(tokens, 125);  // (1000 - 500) / 4
+        assert_eq!(tokens, 125); // (1000 - 500) / 4
     }
 
     #[test]
@@ -135,12 +143,7 @@ mod tests {
     fn test_recent_operations_limit() {
         let mut metrics = FilteringMetrics::new();
         for i in 0..150 {
-            metrics.record_operation(
-                format!("op_{}", i % 5),
-                1000 + i as u64,
-                500 + i as u64,
-                50,
-            );
+            metrics.record_operation(format!("op_{}", i % 5), 1000 + i as u64, 500 + i as u64, 50);
         }
 
         assert_eq!(metrics.total_operations, 150);

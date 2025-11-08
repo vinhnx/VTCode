@@ -2220,5 +2220,3 @@ fn detect_textual_run_terminal_cmd(text: &str) -> Option<Value> {
     parsed.as_object()?;
     Some(parsed)
 }
-
-

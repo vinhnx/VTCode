@@ -176,7 +176,6 @@ pub use core::context_compression::{
 pub use core::conversation_summarizer::ConversationSummarizer;
 pub use core::prompt_caching::{CacheStats, PromptCache, PromptCacheConfig, PromptOptimizer};
 pub use core::timeout_detector::TimeoutDetector;
-pub use exec::{CodeExecutor, ExecutionConfig, ExecutionResult, Language};
 pub use exec::events::{
     AgentMessageItem, CommandExecutionItem, CommandExecutionStatus, EVENT_SCHEMA_VERSION,
     ErrorItem, FileChangeItem, FileUpdateChange, ItemCompletedEvent, ItemStartedEvent,
@@ -184,9 +183,13 @@ pub use exec::events::{
     ReasoningItem, ThreadEvent, ThreadItem, ThreadItemDetails, TurnCompletedEvent, TurnFailedEvent,
     TurnStartedEvent, Usage, VersionedThreadEvent, WebSearchItem,
 };
+pub use exec::{CodeExecutor, ExecutionConfig, ExecutionResult, Language};
 pub use gemini::{Content, FunctionDeclaration, Part};
 pub use llm::{AnyClient, make_client};
-pub use mcp::{validate_mcp_config, tool_discovery::{DetailLevel, ToolDiscovery, ToolDiscoveryResult}};
+pub use mcp::{
+    tool_discovery::{DetailLevel, ToolDiscovery, ToolDiscoveryResult},
+    validate_mcp_config,
+};
 pub use prompts::{
     generate_lightweight_instruction, generate_specialized_instruction, generate_system_instruction,
 };

@@ -9,11 +9,11 @@
 //!
 //! Skills can be loaded across conversations and shared with other agents.
 
+use crate::exec::ToolDependency;
 use anyhow::{Context, Result, anyhow};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use tracing::{debug, info};
-use crate::exec::ToolDependency;
 
 /// Metadata about a saved skill.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -77,11 +77,13 @@ impl SkillManager {
     /// * `code` - The skill implementation code
     pub async fn save_skill(&self, skill: Skill) -> Result<()> {
         // Create skills directory
-        tokio::fs::create_dir_all(&self.skills_dir).await
+        tokio::fs::create_dir_all(&self.skills_dir)
+            .await
             .context("failed to create skills directory")?;
 
         let skill_dir = self.skills_dir.join(&skill.metadata.name);
-        tokio::fs::create_dir_all(&skill_dir).await
+        tokio::fs::create_dir_all(&skill_dir)
+            .await
             .context("failed to create skill directory")?;
 
         // Save code file
@@ -92,20 +94,23 @@ impl SkillManager {
         };
 
         let code_path = skill_dir.join(code_filename);
-        tokio::fs::write(&code_path, &skill.code).await
+        tokio::fs::write(&code_path, &skill.code)
+            .await
             .context("failed to write skill code")?;
 
         // Save metadata
         let metadata_path = skill_dir.join("skill.json");
         let metadata_json = serde_json::to_string_pretty(&skill.metadata)
             .context("failed to serialize skill metadata")?;
-        tokio::fs::write(&metadata_path, metadata_json).await
+        tokio::fs::write(&metadata_path, metadata_json)
+            .await
             .context("failed to write skill metadata")?;
 
         // Save documentation
         let doc_path = skill_dir.join("SKILL.md");
         let documentation = Self::generate_markdown(&skill);
-        tokio::fs::write(&doc_path, documentation).await
+        tokio::fs::write(&doc_path, documentation)
+            .await
             .context("failed to write skill documentation")?;
 
         info!(
@@ -137,15 +142,17 @@ impl SkillManager {
         };
 
         // Load code
-        let code = tokio::fs::read_to_string(&code_path).await
+        let code = tokio::fs::read_to_string(&code_path)
+            .await
             .context("failed to read skill code")?;
 
         // Load metadata
         let metadata_path = skill_dir.join("skill.json");
-        let metadata_json = tokio::fs::read_to_string(&metadata_path).await
+        let metadata_json = tokio::fs::read_to_string(&metadata_path)
+            .await
             .context("failed to read skill metadata")?;
-        let metadata: SkillMetadata = serde_json::from_str(&metadata_json)
-            .context("failed to parse skill metadata")?;
+        let metadata: SkillMetadata =
+            serde_json::from_str(&metadata_json).context("failed to parse skill metadata")?;
 
         // Ensure language matches
         if metadata.language != language {
@@ -175,10 +182,13 @@ impl SkillManager {
         }
 
         let mut skills = Vec::new();
-        let mut dir_entries = tokio::fs::read_dir(&self.skills_dir).await
+        let mut dir_entries = tokio::fs::read_dir(&self.skills_dir)
+            .await
             .context("failed to read skills directory")?;
 
-        while let Some(entry) = dir_entries.next_entry().await
+        while let Some(entry) = dir_entries
+            .next_entry()
+            .await
             .context("failed to read directory entry")?
         {
             let path = entry.path();
@@ -205,7 +215,10 @@ impl SkillManager {
             .filter(|skill| {
                 skill.name.to_lowercase().contains(&query_lower)
                     || skill.description.to_lowercase().contains(&query_lower)
-                    || skill.tags.iter().any(|tag| tag.to_lowercase().contains(&query_lower))
+                    || skill
+                        .tags
+                        .iter()
+                        .any(|tag| tag.to_lowercase().contains(&query_lower))
             })
             .collect())
     }
@@ -213,7 +226,8 @@ impl SkillManager {
     /// Delete a skill.
     pub async fn delete_skill(&self, name: &str) -> Result<()> {
         let skill_dir = self.skills_dir.join(name);
-        tokio::fs::remove_dir_all(&skill_dir).await
+        tokio::fs::remove_dir_all(&skill_dir)
+            .await
             .context("failed to delete skill")?;
 
         info!(skill_name = %name, "Skill deleted successfully");
@@ -233,7 +247,7 @@ impl SkillManager {
             skill.metadata.tool_dependencies.clone(),
             tool_versions,
         );
-        
+
         checker.check_compatibility()
     }
 
@@ -256,7 +270,11 @@ impl SkillManager {
         if !skill.metadata.inputs.is_empty() {
             md.push_str("## Inputs\n\n");
             for param in &skill.metadata.inputs {
-                let required = if param.required { "required" } else { "optional" };
+                let required = if param.required {
+                    "required"
+                } else {
+                    "optional"
+                };
                 md.push_str(&format!(
                     "- `{name}` ({type}, {required}): {desc}\n",
                     name = param.name,

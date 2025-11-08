@@ -278,11 +278,11 @@ fn default_tool_enabled() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
     use crate::config::mcp::{
         McpClientConfig, McpProviderConfig, McpServerConfig, McpStdioServerConfig,
         McpTransportConfig,
     };
+    use std::collections::HashMap;
 
     fn create_test_config() -> McpClientConfig {
         McpClientConfig {
