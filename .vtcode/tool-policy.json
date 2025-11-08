@@ -13,7 +13,6 @@
     "grep_file",
     "list_files",
     "list_pty_sessions",
-    "mcp::time::get_current_time",
     "read_file",
     "read_pty_session",
     "resize_pty_session",
@@ -41,7 +40,8 @@
     "grep_file": "allow",
     "create_file": "prompt",
     "delete_file": "prompt",
-    "run_terminal_cmd": "allow"
+    "run_terminal_cmd": "allow",
+    "test_tool": "allow"
   },
   "constraints": {
     "curl": {
