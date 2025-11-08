@@ -40,7 +40,7 @@ impl GeminiProvider {
     pub fn new(api_key: String) -> Self {
         Self::with_model_internal(
             api_key,
-            models::GEMINI_2_5_FLASH_PREVIEW.to_string(),
+            models::google::GEMINI_2_5_FLASH.to_string(),
             None,
             None,
         )
@@ -57,7 +57,7 @@ impl GeminiProvider {
         prompt_cache: Option<PromptCachingConfig>,
     ) -> Self {
         let api_key_value = api_key.unwrap_or_default();
-        let model_value = resolve_model(model, models::GEMINI_2_5_FLASH_PREVIEW);
+        let model_value = resolve_model(model, models::google::GEMINI_2_5_FLASH);
 
         Self::with_model_internal(api_key_value, model_value, prompt_cache, base_url)
     }
@@ -103,8 +103,10 @@ impl LLMProvider for GeminiProvider {
         true
     }
 
-    fn supports_reasoning(&self, _model: &str) -> bool {
-        false
+    fn supports_reasoning(&self, model: &str) -> bool {
+        // Gemini 2.5 models support thinking/reasoning capability
+        // Reference: https://ai.google.dev/gemini-api/docs/models
+        models::google::REASONING_MODELS.contains(&model)
     }
 
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
@@ -131,15 +133,39 @@ impl LLMProvider for GeminiProvider {
             let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
 
-            // Handle specific HTTP status codes
+            // Handle authentication errors
+            if status.as_u16() == 401 || status.as_u16() == 403 {
+                let formatted_error = error_display::format_llm_error(
+                    "Gemini",
+                    &format!(
+                        "Authentication failed: {}. Check your GOOGLE_API_KEY or GEMINI_API_KEY environment variable.",
+                        error_text
+                    ),
+                );
+                return Err(LLMError::Authentication(formatted_error));
+            }
+
+            // Handle rate limit and quota errors
             if status.as_u16() == 429
                 || error_text.contains("insufficient_quota")
+                || error_text.contains("RESOURCE_EXHAUSTED")
                 || error_text.contains("quota")
                 || error_text.contains("rate limit")
+                || error_text.contains("rateLimitExceeded")
             {
                 return Err(LLMError::RateLimit);
             }
 
+            // Handle invalid request errors
+            if status.as_u16() == 400 {
+                let formatted_error = error_display::format_llm_error(
+                    "Gemini",
+                    &format!("Invalid request: {}", error_text),
+                );
+                return Err(LLMError::InvalidRequest(formatted_error));
+            }
+
+            // Generic error for other cases
             let formatted_error = error_display::format_llm_error(
                 "Gemini",
                 &format!("HTTP {}: {}", status, error_text),
@@ -182,22 +208,39 @@ impl LLMProvider for GeminiProvider {
             let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
 
+            // Handle authentication errors
             if status.as_u16() == 401 || status.as_u16() == 403 {
                 let formatted_error = error_display::format_llm_error(
                     "Gemini",
-                    &format!("HTTP {}: {}", status, error_text),
+                    &format!(
+                        "Authentication failed: {}. Check your GOOGLE_API_KEY or GEMINI_API_KEY environment variable.",
+                        error_text
+                    ),
                 );
                 return Err(LLMError::Authentication(formatted_error));
             }
 
+            // Handle rate limit and quota errors
             if status.as_u16() == 429
                 || error_text.contains("insufficient_quota")
+                || error_text.contains("RESOURCE_EXHAUSTED")
                 || error_text.contains("quota")
                 || error_text.contains("rate limit")
+                || error_text.contains("rateLimitExceeded")
             {
                 return Err(LLMError::RateLimit);
             }
 
+            // Handle invalid request errors
+            if status.as_u16() == 400 {
+                let formatted_error = error_display::format_llm_error(
+                    "Gemini",
+                    &format!("Invalid request: {}", error_text),
+                );
+                return Err(LLMError::InvalidRequest(formatted_error));
+            }
+
+            // Generic error for other cases
             let formatted_error = error_display::format_llm_error(
                 "Gemini",
                 &format!("HTTP {}: {}", status, error_text),
@@ -281,10 +324,11 @@ impl LLMProvider for GeminiProvider {
     }
 
     fn supported_models(&self) -> Vec<String> {
-        vec![
-            models::google::GEMINI_2_5_FLASH_PREVIEW.to_string(),
-            models::google::GEMINI_2_5_PRO.to_string(),
-        ]
+        // Order: stable models first, then preview/experimental
+        models::google::SUPPORTED_MODELS
+            .iter()
+            .map(|s| s.to_string())
+            .collect()
     }
 
     fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {
@@ -295,11 +339,65 @@ impl LLMProvider for GeminiProvider {
             );
             return Err(LLMError::InvalidRequest(formatted_error));
         }
+
+        // Validate token limits based on model capabilities
+        if let Some(max_tokens) = request.max_tokens {
+            let model = request.model.as_str();
+            let max_output_tokens = if model.contains("2.5") {
+                65536 // Gemini 2.5 models support 65K output tokens
+            } else if model.contains("2.0") {
+                8192 // Gemini 2.0 models support 8K output tokens
+            } else {
+                8192 // Conservative default
+            };
+
+            if max_tokens > max_output_tokens {
+                let formatted_error = error_display::format_llm_error(
+                    "Gemini",
+                    &format!(
+                        "Requested max_tokens ({}) exceeds model limit ({}) for {}",
+                        max_tokens, max_output_tokens, model
+                    ),
+                );
+                return Err(LLMError::InvalidRequest(formatted_error));
+            }
+        }
+
         Ok(())
     }
 }
 
 impl GeminiProvider {
+    /// Check if model supports context caching
+    pub fn supports_caching(model: &str) -> bool {
+        models::google::CACHING_MODELS.contains(&model)
+    }
+
+    /// Check if model supports code execution
+    pub fn supports_code_execution(model: &str) -> bool {
+        models::google::CODE_EXECUTION_MODELS.contains(&model)
+    }
+
+    /// Get maximum input token limit for a model
+    pub fn max_input_tokens(model: &str) -> usize {
+        if model.contains("2.5") || model.contains("2.0") {
+            1_048_576 // 1M tokens for Gemini 2.x models
+        } else {
+            // Conservative default for unknown models
+            32_768
+        }
+    }
+
+    /// Get maximum output token limit for a model
+    pub fn max_output_tokens(model: &str) -> usize {
+        if model.contains("2.5") {
+            65_536 // 65K tokens for Gemini 2.5 models
+        } else if model.contains("2.0") {
+            8_192 // 8K tokens for Gemini 2.0 models
+        } else {
+            8_192 // Conservative default
+        }
+    }
     fn apply_stream_delta(accumulator: &mut String, chunk: &str) -> Option<String> {
         if chunk.is_empty() {
             return None;
@@ -659,15 +757,41 @@ impl GeminiProvider {
 
 pub fn sanitize_function_parameters(parameters: Value) -> Value {
     match parameters {
-        Value::Object(mut map) => {
-            // Remove ALL unsupported fields for Gemini API to prevent any schema violations
-            map.remove("additionalProperties");
-            map.remove("oneOf");
-            map.remove("anyOf");
-            map.remove("allOf");
-            // Process remaining properties recursively
+        Value::Object(map) => {
+            // List of unsupported fields for Gemini API
+            // Reference: https://ai.google.dev/gemini-api/docs/function-calling
+            const UNSUPPORTED_FIELDS: &[&str] = &[
+                "additionalProperties",
+                "oneOf",
+                "anyOf",
+                "allOf",
+                "exclusiveMaximum",
+                "exclusiveMinimum",
+                "minimum",
+                "maximum",
+                "$schema",
+                "$id",
+                "$ref",
+                "definitions",
+                "patternProperties",
+                "dependencies",
+                "const",
+                "if",
+                "then",
+                "else",
+                "not",
+                "contentMediaType",
+                "contentEncoding",
+            ];
+
+            // Process all properties recursively, removing unsupported fields
             let mut sanitized = Map::new();
             for (key, value) in map {
+                // Skip unsupported fields at this level
+                if UNSUPPORTED_FIELDS.contains(&key.as_str()) {
+                    continue;
+                }
+                // Recursively sanitize nested values
                 sanitized.insert(key, sanitize_function_parameters(value));
             }
             Value::Object(sanitized)
@@ -1034,6 +1158,51 @@ mod tests {
             .and_then(|value| value.as_object())
             .expect("nested object should be preserved");
         assert!(!nested.contains_key("additionalProperties"));
+    }
+
+    #[test]
+    fn sanitize_function_parameters_removes_exclusive_min_max() {
+        // Test case for the bug: exclusiveMaximum and exclusiveMinimum in nested properties
+        let parameters = json!({
+            "type": "object",
+            "properties": {
+                "max_length": {
+                    "type": "integer",
+                    "exclusiveMaximum": 1000000,
+                    "exclusiveMinimum": 0,
+                    "minimum": 1,
+                    "maximum": 999999,
+                    "description": "Maximum number of characters"
+                }
+            }
+        });
+
+        let sanitized = sanitize_function_parameters(parameters);
+        let props = sanitized
+            .get("properties")
+            .and_then(|v| v.as_object())
+            .and_then(|p| p.get("max_length"))
+            .and_then(|v| v.as_object())
+            .expect("max_length property should exist");
+
+        // These unsupported fields should be removed
+        assert!(
+            !props.contains_key("exclusiveMaximum"),
+            "exclusiveMaximum should be removed"
+        );
+        assert!(
+            !props.contains_key("exclusiveMinimum"),
+            "exclusiveMinimum should be removed"
+        );
+        assert!(!props.contains_key("minimum"), "minimum should be removed");
+        assert!(!props.contains_key("maximum"), "maximum should be removed");
+
+        // These supported fields should be preserved
+        assert_eq!(props.get("type").and_then(|v| v.as_str()), Some("integer"));
+        assert_eq!(
+            props.get("description").and_then(|v| v.as_str()),
+            Some("Maximum number of characters")
+        );
     }
 
     #[test]

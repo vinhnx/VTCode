@@ -510,19 +510,57 @@ impl LLMProvider for ZAIProvider {
             let status = response.status();
             let text = response.text().await.unwrap_or_default();
 
-            if status.as_u16() == 429 || text.to_lowercase().contains("rate") {
-                return Err(LLMError::RateLimit);
-            }
-
-            let message = serde_json::from_str::<Value>(&text)
+            // Try to parse the error JSON structure first
+            // Z.AI error format: {"error": {"code": "1302", "message": "..."}}
+            let (error_code, message) = serde_json::from_str::<Value>(&text)
                 .ok()
                 .and_then(|value| {
-                    value
+                    let error_obj = value.get("error")?;
+                    let code = error_obj.get("code").and_then(|c| c.as_str()).unwrap_or("");
+                    let msg = error_obj
                         .get("message")
                         .and_then(|m| m.as_str())
                         .map(|s| s.to_string())
+                        .or_else(|| {
+                            value
+                                .get("message")
+                                .and_then(|m| m.as_str().map(|s| s.to_string()))
+                        })
+                        .unwrap_or_else(|| text.clone());
+                    Some((code.to_string(), msg))
                 })
-                .unwrap_or(text);
+                .unwrap_or_else(|| (String::new(), text.clone()));
+
+            // Check for rate limit errors
+            // 1. HTTP 429 status code (various rate limit scenarios)
+            // 2. Specific Z.AI error codes for rate limiting:
+            //    - 1302: High concurrency usage
+            //    - 1303: High frequency usage
+            //    - 1304: Daily call limit reached
+            //    - 1308: Usage limit reached with reset time
+            //    - 1309: GLM Coding Plan package expired
+            // 3. Fallback to text-based detection for non-JSON responses
+            let text_lower = message.to_lowercase();
+            let is_rate_limit = status.as_u16() == 429
+                || matches!(
+                    error_code.as_str(),
+                    "1302" | "1303" | "1304" | "1308" | "1309"
+                )
+                || text_lower.contains("rate limit")
+                || text_lower.contains("rate_limit")
+                || text_lower.contains("ratelimit")
+                || text_lower.contains("concurrency")
+                || text_lower.contains("frequency")
+                || text_lower.contains("balance exhausted")
+                || text_lower.contains("quota")
+                || text_lower.contains("usage limit")
+                || text_lower.contains("too many requests")
+                || text_lower.contains("daily call limit")
+                || text_lower.contains("package has expired");
+
+            if is_rate_limit {
+                return Err(LLMError::RateLimit);
+            }
 
             let formatted = error_display::format_llm_error(
                 PROVIDER_NAME,
@@ -600,5 +638,95 @@ impl LLMClient for ZAIProvider {
 
     fn model_id(&self) -> &str {
         &self.model
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_rate_limit_error_patterns() {
+        // Test various rate limit error message patterns
+        let test_cases = vec![
+            ("rate limit exceed", true),
+            ("Rate Limit Exceeded", true),
+            ("RATE_LIMIT", true),
+            ("ratelimit error", true),
+            ("High concurrency usage", true),
+            ("High frequency usage", true),
+            ("concurrency exceeded", true),
+            ("balance exhausted", true),
+            ("quota exceeded", true),
+            ("usage limit reached", true),
+            ("too many requests", true),
+            ("daily call limit reached", true),
+            ("GLM Coding Plan package has expired", true),
+            ("invalid api key", false),
+            ("authentication failed", false),
+            ("internal server error", false),
+        ];
+
+        for (message, should_match) in test_cases {
+            let text_lower = message.to_lowercase();
+            let is_rate_limit = text_lower.contains("rate limit")
+                || text_lower.contains("rate_limit")
+                || text_lower.contains("ratelimit")
+                || text_lower.contains("concurrency")
+                || text_lower.contains("frequency")
+                || text_lower.contains("balance exhausted")
+                || text_lower.contains("quota")
+                || text_lower.contains("usage limit")
+                || text_lower.contains("too many requests")
+                || text_lower.contains("daily call limit")
+                || text_lower.contains("package has expired");
+
+            assert_eq!(
+                is_rate_limit,
+                should_match,
+                "Pattern '{}' should {} rate limit",
+                message,
+                if should_match { "match" } else { "not match" }
+            );
+        }
+    }
+
+    #[test]
+    fn test_rate_limit_error_codes() {
+        // Test Z.AI specific error codes for rate limiting
+        let rate_limit_codes = vec!["1302", "1303", "1304", "1308", "1309"];
+        let non_rate_limit_codes = vec!["1000", "1001", "1002", "1210", "1214"];
+
+        for code in rate_limit_codes {
+            assert!(
+                matches!(code, "1302" | "1303" | "1304" | "1308" | "1309"),
+                "Code {} should be recognized as rate limit error",
+                code
+            );
+        }
+
+        for code in non_rate_limit_codes {
+            assert!(
+                !matches!(code, "1302" | "1303" | "1304" | "1308" | "1309"),
+                "Code {} should NOT be recognized as rate limit error",
+                code
+            );
+        }
+    }
+
+    #[test]
+    fn test_error_json_parsing() {
+        // Test Z.AI error JSON structure parsing
+        let error_json =
+            r#"{"error":{"code":"1302","message":"High concurrency usage of this API"}}"#;
+        let value: Value = serde_json::from_str(error_json).unwrap();
+
+        let error_obj = value.get("error").unwrap();
+        let code = error_obj.get("code").and_then(|c| c.as_str()).unwrap();
+        let message = error_obj.get("message").and_then(|m| m.as_str()).unwrap();
+
+        assert_eq!(code, "1302");
+        assert_eq!(message, "High concurrency usage of this API");
+        assert!(matches!(code, "1302" | "1303" | "1304" | "1308" | "1309"));
     }
 }

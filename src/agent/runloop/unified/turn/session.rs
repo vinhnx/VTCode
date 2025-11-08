@@ -29,9 +29,9 @@ use vtcode_core::utils::at_pattern::parse_at_patterns;
 use vtcode_core::utils::session_archive::{SessionArchive, SessionArchiveMetadata, SessionMessage};
 use vtcode_core::utils::transcript;
 
+use crate::agent::agents::is_context_overflow_error;
 use crate::agent::runloop::ResumeSession;
 use crate::agent::runloop::git::confirm_changes_with_git_diff;
-use crate::agent::agents::is_context_overflow_error;
 use crate::agent::runloop::model_picker::{ModelPickerProgress, ModelPickerState};
 use crate::agent::runloop::prompt::refine_user_prompt_if_enabled;
 use crate::agent::runloop::slash_commands::handle_slash_command;
@@ -522,17 +522,20 @@ pub(crate) async fn run_single_agent_loop_unified(
                                                 guard.extend(new_definitions);
                                                 guard.clone()
                                             };
-                                            context_manager.update_tool_catalog(build_curator_tools(
-                                                &updated_snapshot,
-                                            ));
-                                            
+                                            context_manager.update_tool_catalog(
+                                                build_curator_tools(&updated_snapshot),
+                                            );
+
                                             // Store the initial tool names to track changes later
-                                            last_known_mcp_tools = mcp_tools.iter()
+                                            last_known_mcp_tools = mcp_tools
+                                                .iter()
                                                 .map(|t| format!("{}-{}", t.provider, t.name))
                                                 .collect();
                                         }
                                         Err(err) => {
-                                            warn!("Failed to enumerate MCP tools after refresh: {err}");
+                                            warn!(
+                                                "Failed to enumerate MCP tools after refresh: {err}"
+                                            );
                                         }
                                     }
 
@@ -546,7 +549,9 @@ pub(crate) async fn run_single_agent_loop_unified(
                                     renderer.line_if_not_empty(MessageStyle::Output)?;
                                 }
                                 Err(err) => {
-                                    warn!("Failed to refresh MCP tools after initialization: {err}");
+                                    warn!(
+                                        "Failed to refresh MCP tools after initialization: {err}"
+                                    );
                                     renderer.line(
                                         MessageStyle::Error,
                                         &format!("Failed to index MCP tools: {}", err),
@@ -557,34 +562,35 @@ pub(crate) async fn run_single_agent_loop_unified(
                             mcp_catalog_initialized = true;
                         }
                         McpInitStatus::Error { message } => {
-                            renderer
-                                .line(MessageStyle::Error, &format!("⚠️  MCP Error: {}", message))?;
+                            renderer.line(
+                                MessageStyle::Error,
+                                &format!("⚠️  MCP Error: {}", message),
+                            )?;
                             renderer.line_if_not_empty(MessageStyle::Output)?;
                             mcp_catalog_initialized = true;
                         }
                         McpInitStatus::Initializing { .. } | McpInitStatus::Disabled => {}
                     }
-                } 
-                
+                }
+
                 // Dynamic MCP tool refresh - check for new/updated tools after initialization
-                if mcp_catalog_initialized 
-                    && last_mcp_refresh.elapsed() >= MCP_REFRESH_INTERVAL
-                {
+                if mcp_catalog_initialized && last_mcp_refresh.elapsed() >= MCP_REFRESH_INTERVAL {
                     last_mcp_refresh = std::time::Instant::now();
-                    
+
                     if let Ok(known_tools) = tool_registry.list_mcp_tools().await {
                         let current_tool_keys: Vec<String> = known_tools
                             .iter()
                             .map(|t| format!("{}-{}", t.provider, t.name))
                             .collect();
-                        
+
                         // Check if there are new or changed tools
                         if current_tool_keys != last_known_mcp_tools {
                             match tool_registry.refresh_mcp_tools().await {
                                 Ok(()) => {
                                     match tool_registry.list_mcp_tools().await {
                                         Ok(new_mcp_tools) => {
-                                            let new_definitions = build_mcp_tool_definitions(&new_mcp_tools);
+                                            let new_definitions =
+                                                build_mcp_tool_definitions(&new_mcp_tools);
                                             let updated_snapshot = {
                                                 let mut guard = tools.write().await;
                                                 guard.retain(|tool| {
@@ -593,22 +599,29 @@ pub(crate) async fn run_single_agent_loop_unified(
                                                 guard.extend(new_definitions);
                                                 guard.clone()
                                             };
-                                            context_manager.update_tool_catalog(build_curator_tools(
-                                                &updated_snapshot,
-                                            ));
-                                            
-                                            let added_count = new_mcp_tools.len().saturating_sub(last_known_mcp_tools.len());
+                                            context_manager.update_tool_catalog(
+                                                build_curator_tools(&updated_snapshot),
+                                            );
+
+                                            let added_count = new_mcp_tools
+                                                .len()
+                                                .saturating_sub(last_known_mcp_tools.len());
                                             let message = if added_count > 0 {
-                                                format!("Discovered {} new MCP tool{}", 
-                                                       added_count, 
-                                                       if added_count == 1 { "" } else { "s" })
+                                                format!(
+                                                    "Discovered {} new MCP tool{}",
+                                                    added_count,
+                                                    if added_count == 1 { "" } else { "s" }
+                                                )
                                             } else {
                                                 "MCP tools updated".to_string()
                                             };
-                                            
-                                            renderer.line(MessageStyle::Info, &format!("🔄 {}", message))?;
+
+                                            renderer.line(
+                                                MessageStyle::Info,
+                                                &format!("{}", message),
+                                            )?;
                                             renderer.line_if_not_empty(MessageStyle::Output)?;
-                                            
+
                                             // Update the last known tools
                                             last_known_mcp_tools = new_mcp_tools
                                                 .iter()
@@ -616,12 +629,16 @@ pub(crate) async fn run_single_agent_loop_unified(
                                                 .collect();
                                         }
                                         Err(err) => {
-                                            warn!("Failed to enumerate MCP tools after refresh: {err}");
+                                            warn!(
+                                                "Failed to enumerate MCP tools after refresh: {err}"
+                                            );
                                         }
                                     }
                                 }
                                 Err(err) => {
-                                    warn!("Failed to refresh MCP tools during dynamic update: {err}");
+                                    warn!(
+                                        "Failed to refresh MCP tools during dynamic update: {err}"
+                                    );
                                 }
                             }
                         }

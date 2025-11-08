@@ -9,9 +9,7 @@ use vtcode_core::config::constants::tools;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
-use super::streams::{
-    render_stream_section, resolve_stdout_tail_limit, strip_ansi_codes,
-};
+use super::streams::{render_stream_section, resolve_stdout_tail_limit, strip_ansi_codes};
 use super::styles::{GitStyles, LsStyles};
 
 pub(crate) fn render_terminal_command_panel(

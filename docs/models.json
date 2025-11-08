@@ -1,54 +1,99 @@
 {
     "google": {
         "id": "google",
-        "env": ["GOOGLE_API_KEY"],
+        "env": ["GOOGLE_API_KEY", "GEMINI_API_KEY"],
         "api": "https://generativelanguage.googleapis.com/v1beta",
         "name": "Google Gemini",
         "doc": "https://ai.google.dev/gemini-api/docs/models",
+        "default_model": "gemini-2.5-flash",
         "models": {
             "gemini-2.5-flash-preview-05-20": {
                 "id": "gemini-2.5-flash-preview-05-20",
                 "name": "Gemini 2.5 Flash Preview (05-20)",
+                "description": "Preview version of Gemini 2.5 Flash with latest updates (May 2025)",
+                "version": "preview",
                 "reasoning": true,
                 "tool_call": true,
                 "modalities": {
-                    "input": ["text"],
+                    "input": ["text", "image", "video", "audio", "pdf"],
                     "output": ["text"]
                 },
-                "context": 131072
+                "context": 1048576,
+                "output_tokens": 65536,
+                "capabilities": {
+                    "caching": true,
+                    "code_execution": true,
+                    "batch_api": true,
+                    "structured_output": true,
+                    "search_grounding": true,
+                    "url_context": true
+                }
             },
             "gemini-2.5-pro": {
                 "id": "gemini-2.5-pro",
                 "name": "Gemini 2.5 Pro",
+                "description": "State-of-the-art thinking model, capable of reasoning over complex problems in code, math, and STEM",
+                "version": "stable",
                 "reasoning": true,
                 "tool_call": true,
                 "modalities": {
-                    "input": ["text"],
+                    "input": ["text", "image", "video", "audio", "pdf"],
                     "output": ["text"]
                 },
-                "context": 200000
+                "context": 1048576,
+                "output_tokens": 65536,
+                "capabilities": {
+                    "caching": true,
+                    "code_execution": true,
+                    "batch_api": true,
+                    "structured_output": true,
+                    "search_grounding": true,
+                    "url_context": true
+                }
             },
             "gemini-2.5-flash": {
                 "id": "gemini-2.5-flash",
                 "name": "Gemini 2.5 Flash",
-                "reasoning": false,
+                "description": "Best model in terms of price-performance, offering well-rounded capabilities for large scale processing",
+                "version": "stable",
+                "reasoning": true,
                 "tool_call": true,
                 "modalities": {
-                    "input": ["text"],
+                    "input": ["text", "image", "video", "audio"],
                     "output": ["text"]
                 },
-                "context": 131072
+                "context": 1048576,
+                "output_tokens": 65536,
+                "capabilities": {
+                    "caching": true,
+                    "code_execution": true,
+                    "batch_api": true,
+                    "structured_output": true,
+                    "search_grounding": true,
+                    "url_context": true
+                }
             },
             "gemini-2.5-flash-lite": {
                 "id": "gemini-2.5-flash-lite",
                 "name": "Gemini 2.5 Flash Lite",
-                "reasoning": false,
+                "description": "Fastest flash model optimized for cost-efficiency and high throughput",
+                "version": "stable",
+                "reasoning": true,
                 "tool_call": true,
                 "modalities": {
-                    "input": ["text"],
+                    "input": ["text", "image", "video", "audio", "pdf"],
                     "output": ["text"]
                 },
-                "context": 131072
+                "context": 1048576,
+                "output_tokens": 65536,
+                "capabilities": {
+                    "caching": true,
+                    "code_execution": true,
+                    "batch_api": true,
+                    "structured_output": true,
+                    "search_grounding": true,
+                    "url_context": true
+                }
             }
         }
     },

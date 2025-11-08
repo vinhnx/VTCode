@@ -843,6 +843,14 @@ impl AgentRunner {
                         event_recorder.reasoning(reasoning);
                     }
                 }
+                {
+                    runner_println!(
+                        self,
+                        "{} {} received empty response with no tool calls",
+                        agent_prefix,
+                        style("(WARN)").yellow().bold()
+                    );
+                }
 
                 const LOOP_DETECTED_MESSAGE: &str = "A potential loop was detected";
                 if response_text.contains(LOOP_DETECTED_MESSAGE) {
@@ -952,12 +960,11 @@ impl AgentRunner {
 
                                     let tool_result = serde_json::to_string(&result)?;
                                     // For display: use limited version to avoid overwhelming TUI
-                                    let display_text = format_tool_result_for_display(&name, &result);
+                                    let display_text =
+                                        format_tool_result_for_display(&name, &result);
                                     task_state.conversation.push(Content {
                                         role: "user".to_string(),
-                                        parts: vec![Part::Text {
-                                            text: display_text,
-                                        }],
+                                        parts: vec![Part::Text { text: display_text }],
                                     });
                                     // For LLM: use full result
                                     task_state
@@ -1249,12 +1256,11 @@ impl AgentRunner {
 
                                             // Add tool result to conversation
                                             // For display: use limited version to avoid overwhelming TUI
-                                            let display_text = format_tool_result_for_display(name, &result);
+                                            let display_text =
+                                                format_tool_result_for_display(name, &result);
                                             task_state.conversation.push(Content {
                                                 role: "user".to_string(), // Gemini API only accepts "user" and "model"
-                                                parts: vec![Part::Text {
-                                                    text: display_text,
-                                                }],
+                                                parts: vec![Part::Text { text: display_text }],
                                             });
 
                                             // Track what the agent did
@@ -1345,12 +1351,11 @@ impl AgentRunner {
 
                                     // Add tool result to conversation
                                     // For display: use limited version to avoid overwhelming TUI
-                                    let display_text = format_tool_result_for_display(name, &result);
+                                    let display_text =
+                                        format_tool_result_for_display(name, &result);
                                     task_state.conversation.push(Content {
                                         role: "user".to_string(), // Gemini API only accepts "user" and "model"
-                                        parts: vec![Part::Text {
-                                            text: display_text,
-                                        }],
+                                        parts: vec![Part::Text { text: display_text }],
                                     });
 
                                     // Track what the agent did
@@ -1450,12 +1455,11 @@ impl AgentRunner {
 
                                             // Add tool result to conversation
                                             // For display: use limited version to avoid overwhelming TUI
-                                            let display_text = format_tool_result_for_display(&func_name, &result);
+                                            let display_text =
+                                                format_tool_result_for_display(&func_name, &result);
                                             task_state.conversation.push(Content {
                                                 role: "user".to_string(), // Gemini API only accepts "user" and "model"
-                                                parts: vec![Part::Text {
-                                                    text: display_text,
-                                                }],
+                                                parts: vec![Part::Text { text: display_text }],
                                             });
 
                                             // Track what the agent did
@@ -1571,12 +1575,11 @@ impl AgentRunner {
 
                                     // Add tool result to conversation
                                     // For display: use limited version to avoid overwhelming TUI
-                                    let display_text = format_tool_result_for_display(tool_name, &result);
+                                    let display_text =
+                                        format_tool_result_for_display(tool_name, &result);
                                     task_state.conversation.push(Content {
                                         role: "user".to_string(), // Gemini API only accepts "user" and "model"
-                                        parts: vec![Part::Text {
-                                            text: display_text,
-                                        }],
+                                        parts: vec![Part::Text { text: display_text }],
                                     });
 
                                     // Track what the agent did
@@ -2233,11 +2236,11 @@ mod tests {
         });
 
         let display = format_tool_result_for_display(tools::WEB_FETCH, &result);
-        
+
         // Should contain status info
         assert!(display.contains("fetched"));
         assert!(display.contains("content_length"));
-        
+
         // Should NOT contain the full content
         assert!(!display.contains(&"x".repeat(1000)));
     }
@@ -2249,7 +2252,7 @@ mod tests {
         });
 
         let display = format_tool_result_for_display(tools::WEB_FETCH, &result);
-        
+
         // Should contain the error message
         assert!(display.contains("error"));
         assert!(display.contains("timeout"));
@@ -2263,7 +2266,7 @@ mod tests {
         });
 
         let display = format_tool_result_for_display("read_file", &result);
-        
+
         // Should contain the full result for non-web_fetch tools
         assert!(display.contains("ok"));
         assert!(display.contains("some data"));

@@ -45,7 +45,10 @@ impl WebFetchTool {
         let response = client.get(url).send().await?;
 
         if !response.status().is_success() {
-            return Err(anyhow!("HTTP request failed with status: {}", response.status()));
+            return Err(anyhow!(
+                "HTTP request failed with status: {}",
+                response.status()
+            ));
         }
 
         let content_type = response
@@ -68,8 +71,7 @@ impl WebFetchTool {
             ));
         }
 
-        String::from_utf8(bytes.to_vec())
-            .context("Response body is not valid UTF-8")
+        String::from_utf8(bytes.to_vec()).context("Response body is not valid UTF-8")
     }
 
     fn validate_url(&self, url: &str) -> Result<()> {

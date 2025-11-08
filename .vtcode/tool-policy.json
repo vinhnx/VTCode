@@ -206,7 +206,7 @@
     "providers": {
       "fetch": {
         "tools": {
-          "fetch": "prompt"
+          "fetch": "allow"
         }
       }
     }

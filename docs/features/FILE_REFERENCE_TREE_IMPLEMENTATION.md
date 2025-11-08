@@ -17,13 +17,17 @@ All 5 requirements have been successfully implemented and tested.
 ### Phase 1: Critical Fixes (Immediate)
 
 #### 1.1 Relative Path Display ✅
+
 **Status**: Already implemented
-- Display: `@vtcode.toml`
-- Internal: `/full/path/to/vtcode.toml`
+
+-   Display: `@vtcode.toml`
+-   Internal: `/full/path/to/vtcode.toml`
 
 #### 1.2 Ignore Files Support 🔄
+
 **Priority**: CRITICAL
 **Implementation**:
+
 ```rust
 // Add to vtcode-indexer
 use ignore::WalkBuilder;
@@ -35,7 +39,7 @@ pub fn index_directory_with_ignore(&mut self, dir_path: &Path) -> Result<()> {
         .git_global(true)
         .git_exclude(true)
         .build();
-    
+
     for entry in walker {
         let entry = entry?;
         if entry.file_type().map_or(false, |ft| ft.is_file()) {
@@ -47,12 +51,15 @@ pub fn index_directory_with_ignore(&mut self, dir_path: &Path) -> Result<()> {
 ```
 
 **Dependencies**:
-- Add `ignore = "0.4"` to vtcode-indexer/Cargo.toml
-- This crate handles .gitignore, .ignore, .rgignore, etc.
+
+-   Add `ignore = "0.4"` to vtcode-indexer/Cargo.toml
+-   This crate handles .gitignore, .ignore, .rgignore, etc.
 
 #### 1.3 Immediate Modal Display ✅
+
 **Status**: Partially implemented
 **Enhancement Needed**:
+
 ```rust
 // Show modal immediately when @ is typed
 fn check_file_reference_trigger(&mut self) {
@@ -68,12 +75,14 @@ fn check_file_reference_trigger(&mut self) {
 ### Phase 2: Tree Structure (Next)
 
 #### 2.1 Add tui-tree-widget Dependency ✅
+
 ```toml
 [dependencies]
 tui-tree-widget = "0.22"
 ```
 
 #### 2.2 Tree Data Structure
+
 ```rust
 use tui_tree_widget::{Tree, TreeItem, TreeState};
 
@@ -99,32 +108,33 @@ impl FileTreeNode {
             children: Vec::new(),
             expanded: true,
         };
-        
+
         for file in files {
             root.insert_file(&file, workspace);
         }
-        
+
         root.sort_children();
         root
     }
-    
+
     fn insert_file(&mut self, file_path: &str, workspace: &Path) {
         // Split path and insert into tree
         let relative = Path::new(file_path)
             .strip_prefix(workspace)
             .unwrap_or(Path::new(file_path));
-        
+
         let components: Vec<&str> = relative
             .components()
             .filter_map(|c| c.as_os_str().to_str())
             .collect();
-        
+
         self.insert_components(&components, file_path);
     }
 }
 ```
 
 #### 2.3 Tree Rendering
+
 ```rust
 fn render_file_tree(&mut self, frame: &mut Frame<'_>, area: Rect) {
     let tree_items = self.build_tree_items();
@@ -134,12 +144,13 @@ fn render_file_tree(&mut self, frame: &mut Frame<'_>, area: Rect) {
             .title("Files"))
         .highlight_style(self.modal_list_highlight_style())
         .highlight_symbol("▶ ");
-    
+
     frame.render_stateful_widget(tree, area, &mut self.tree_state);
 }
 ```
 
 #### 2.4 Visual Distinction
+
 ```rust
 fn format_tree_item(node: &FileTreeNode) -> String {
     match node {
@@ -163,6 +174,7 @@ fn format_tree_item(node: &FileTreeNode) -> String {
 ### Phase 3: Enhanced UX
 
 #### 3.1 Async Loading State
+
 ```rust
 pub enum LoadingState {
     NotStarted,
@@ -184,27 +196,28 @@ fn render_loading_state(&self, frame: &mut Frame<'_>, area: Rect) {
             format!("Error: {}", err)
         }
     };
-    
+
     // Render with spinner animation
 }
 ```
 
 #### 3.2 Progressive Loading
+
 ```rust
 // Load files in batches and update UI
 async fn load_files_progressive(workspace: PathBuf, handle: InlineHandle) {
     const BATCH_SIZE: usize = 100;
     let mut indexed = 0;
-    
+
     for batch in file_batches {
         indexed += batch.len();
         handle.update_file_palette_progress(indexed);
         handle.add_files_to_palette(batch);
-        
+
         // Allow UI to update
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
-    
+
     handle.complete_file_palette_loading();
 }
 ```
@@ -212,16 +225,19 @@ async fn load_files_progressive(workspace: PathBuf, handle: InlineHandle) {
 ## Implementation Priority
 
 ### Must Have (P0)
+
 1. ✅ Relative path display
-2. 🔄 Ignore files support (.gitignore, etc.)
+2. Ignore files support (.gitignore, etc.)
 3. ✅ Immediate modal display
 
 ### Should Have (P1)
-4. 🔄 Tree structure
-5. 🔄 Visual file/folder distinction
-6. 🔄 Progressive loading
+
+4. Tree structure
+5. Visual file/folder distinction
+6. Progressive loading
 
 ### Nice to Have (P2)
+
 7. File type icons
 8. Folder expansion/collapse
 9. Search within tree
@@ -230,21 +246,25 @@ async fn load_files_progressive(workspace: PathBuf, handle: InlineHandle) {
 ## Technical Challenges
 
 ### Challenge 1: Ignore Files
+
 **Problem**: vtcode-indexer doesn't support .gitignore
 **Solution**: Use `ignore` crate (same as ripgrep)
 **Effort**: Medium (2-3 hours)
 
 ### Challenge 2: Tree Structure
+
 **Problem**: Current flat list needs tree conversion
 **Solution**: Build tree from flat file list
 **Effort**: High (4-6 hours)
 
 ### Challenge 3: Tree Navigation
+
 **Problem**: Tree widget has different navigation
 **Solution**: Adapt keyboard handlers for tree
 **Effort**: Medium (2-3 hours)
 
 ### Challenge 4: Performance
+
 **Problem**: Large trees can be slow
 **Solution**: Lazy loading, virtual scrolling
 **Effort**: High (4-6 hours)
@@ -252,47 +272,54 @@ async fn load_files_progressive(workspace: PathBuf, handle: InlineHandle) {
 ## Recommended Approach
 
 ### Option A: Full Implementation (12-16 hours)
-- Implement all features
-- Tree structure with icons
-- Full ignore support
-- Progressive loading
+
+-   Implement all features
+-   Tree structure with icons
+-   Full ignore support
+-   Progressive loading
 
 ### Option B: Incremental (4-6 hours)
-- Fix ignore files (critical)
-- Keep flat list for now
-- Add visual distinction
-- Defer tree structure
+
+-   Fix ignore files (critical)
+-   Keep flat list for now
+-   Add visual distinction
+-   Defer tree structure
 
 ### Option C: Hybrid (8-10 hours) ⭐ RECOMMENDED
-- Fix ignore files (P0)
-- Implement tree structure (P1)
-- Basic visual distinction (P1)
-- Defer advanced features (P2)
+
+-   Fix ignore files (P0)
+-   Implement tree structure (P1)
+-   Basic visual distinction (P1)
+-   Defer advanced features (P2)
 
 ## Next Steps
 
 1. **Immediate** (30 min):
-   - Add `ignore` crate dependency
-   - Update indexer to respect .gitignore
+
+    - Add `ignore` crate dependency
+    - Update indexer to respect .gitignore
 
 2. **Short Term** (2-3 hours):
-   - Implement tree data structure
-   - Basic tree rendering
-   - File/folder icons
+
+    - Implement tree data structure
+    - Basic tree rendering
+    - File/folder icons
 
 3. **Medium Term** (4-6 hours):
-   - Full tree navigation
-   - Progressive loading
-   - Polish UX
+
+    - Full tree navigation
+    - Progressive loading
+    - Polish UX
 
 4. **Long Term** (optional):
-   - Advanced features
-   - Performance optimization
-   - Additional file type support
+    - Advanced features
+    - Performance optimization
+    - Additional file type support
 
 ## Code Locations
 
 ### Files to Modify
+
 1. `vtcode-indexer/Cargo.toml` - Add ignore crate
 2. `vtcode-indexer/src/lib.rs` - Add gitignore support
 3. `vtcode-core/Cargo.toml` - Add tui-tree-widget
@@ -300,12 +327,14 @@ async fn load_files_progressive(workspace: PathBuf, handle: InlineHandle) {
 5. `vtcode-core/src/ui/tui/session.rs` - Tree rendering
 
 ### New Files to Create
+
 1. `vtcode-core/src/ui/tui/session/file_tree.rs` - Tree logic
 2. `vtcode-core/src/ui/tui/session/file_icons.rs` - Icon mapping
 
 ## Testing Strategy
 
 ### Unit Tests
+
 ```rust
 #[test]
 fn test_tree_building() {
@@ -326,10 +355,11 @@ fn test_gitignore_respected() {
 ```
 
 ### Integration Tests
-- Test with real workspace
-- Verify .gitignore works
-- Test tree navigation
-- Performance benchmarks
+
+-   Test with real workspace
+-   Verify .gitignore works
+-   Test tree navigation
+-   Performance benchmarks
 
 ## Success Criteria
 
@@ -343,11 +373,11 @@ fn test_gitignore_respected() {
 
 ## Timeline Estimate
 
-- **Ignore Files**: 2-3 hours
-- **Tree Structure**: 4-6 hours
-- **Visual Polish**: 2-3 hours
-- **Testing**: 2-3 hours
-- **Total**: 10-15 hours
+-   **Ignore Files**: 2-3 hours
+-   **Tree Structure**: 4-6 hours
+-   **Visual Polish**: 2-3 hours
+-   **Testing**: 2-3 hours
+-   **Total**: 10-15 hours
 
 ## Conclusion
 
