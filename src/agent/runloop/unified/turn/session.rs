@@ -1415,7 +1415,6 @@ pub(crate) async fn run_single_agent_loop_unified(
                                                 .set_progress(progress.progress as u64)
                                                 .await;
                                         }
-                                        allow_follow_up = true;
                                         continue;
                                     }
                                     ToolExecutionStatus::Success {
@@ -1872,7 +1871,6 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         },
                                     );
                                 }
-                                allow_follow_up = true;
                                 continue;
                             }
                             Ok(ToolPermissionFlow::Exit) => {
@@ -1929,12 +1927,10 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         },
                                     );
                                 }
-                                allow_follow_up = true;
                                 continue;
                             }
                         }
                     }
-                    allow_follow_up = true;
                     continue 'outer;
                 }
 

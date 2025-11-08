@@ -132,32 +132,45 @@ impl AnthropicProvider {
         normalized
     }
 
+    /// Determines the TTL string for cache control.
+    /// Anthropic only supports "5m" (5 minutes) or "1h" (1 hour).
+    ///
+    /// Returns:
+    /// - "1h" if extended_ttl_seconds is set and >= 3600 seconds
+    /// - "5m" for default or extended_ttl_seconds < 3600 seconds
+    fn get_cache_ttl(&self) -> &'static str {
+        self.prompt_cache_settings
+            .extended_ttl_seconds
+            .filter(|&ttl| ttl >= 3600)
+            .map(|_| "1h")
+            .unwrap_or("5m")
+    }
+
+    /// Returns the cache control JSON block for Anthropic API.
     fn cache_control_value(&self) -> Option<Value> {
         if !self.prompt_cache_enabled {
             return None;
         }
 
-        if let Some(ttl) = self.prompt_cache_settings.extended_ttl_seconds {
-            Some(json!({
-                "type": "persistent",
-                "ttl": format!("{}s", ttl)
-            }))
-        } else {
-            Some(json!({
-                "type": "ephemeral",
-                "ttl": format!("{}s", self.prompt_cache_settings.default_ttl_seconds)
-            }))
-        }
+        Some(json!({
+            "type": "ephemeral",
+            "ttl": self.get_cache_ttl()
+        }))
     }
 
+    /// Returns the beta header value for Anthropic API prompt caching.
+    /// - Always includes "prompt-caching-2024-07-31"
+    /// - Adds "extended-cache-ttl-2025-04-11" only when using 1h TTL
     fn prompt_cache_beta_header_value(&self) -> Option<String> {
         if !self.prompt_cache_enabled {
             return None;
         }
 
-        let mut betas = vec!["prompt-caching-2024-07-31".to_string()];
-        if self.prompt_cache_settings.extended_ttl_seconds.is_some() {
-            betas.push("extended-cache-ttl-2025-04-11".to_string());
+        let mut betas = vec!["prompt-caching-2024-07-31"];
+
+        // Only add extended TTL beta if we're actually using 1h cache
+        if self.get_cache_ttl() == "1h" {
+            betas.push("extended-cache-ttl-2025-04-11");
         }
 
         Some(betas.join(", "))
@@ -868,10 +881,18 @@ impl LLMProvider for AnthropicProvider {
                 return Err(LLMError::RateLimit);
             }
 
-            let formatted_error = error_display::format_llm_error(
-                "Anthropic",
-                &format!("HTTP {}: {}", status, error_text),
-            );
+            // Provide helpful context for cache-related errors
+            let error_message = if error_text.contains("cache_control") {
+                format!(
+                    "HTTP {} - Cache configuration error: {}. \
+                    Note: Anthropic only supports cache_control with type='ephemeral' and ttl='5m' or '1h'.",
+                    status, error_text
+                )
+            } else {
+                format!("HTTP {}: {}", status, error_text)
+            };
+
+            let formatted_error = error_display::format_llm_error("Anthropic", &error_message);
             return Err(LLMError::Provider(formatted_error));
         }
 
@@ -994,14 +1015,14 @@ mod tests {
             .last()
             .and_then(|value| value.get("cache_control"))
             .expect("tool cache control present");
-        assert_eq!(tool_cache["type"], "persistent");
-        assert_eq!(tool_cache["ttl"], "3600s");
+        assert_eq!(tool_cache["type"], "ephemeral");
+        assert_eq!(tool_cache["ttl"], "1h");
 
         let system = converted["system"].as_array().expect("system array");
         let system_cache = system[0]
             .get("cache_control")
             .expect("system cache control present");
-        assert_eq!(system_cache["type"], "persistent");
+        assert_eq!(system_cache["type"], "ephemeral");
 
         let messages = converted["messages"].as_array().expect("messages array");
         let user_message = messages
@@ -1011,7 +1032,7 @@ mod tests {
         let user_cache = user_message["content"][0]
             .get("cache_control")
             .expect("user cache control present");
-        assert_eq!(user_cache["type"], "persistent");
+        assert_eq!(user_cache["type"], "ephemeral");
     }
 
     #[test]

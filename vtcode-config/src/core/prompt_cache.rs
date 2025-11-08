@@ -124,13 +124,22 @@ pub struct AnthropicPromptCacheSettings {
     #[serde(default = "default_true")]
     pub enabled: bool,
 
+    /// Default TTL in seconds (maps to "5m" in API).
+    /// Default: 300 seconds (5 minutes)
+    /// Note: Anthropic only supports "5m" or "1h" TTL formats.
     #[serde(default = "default_anthropic_default_ttl")]
     pub default_ttl_seconds: u64,
 
-    /// Optional extended TTL (1 hour) for long-lived caches
+    /// Optional extended TTL in seconds (maps to "1h" in API if >= 3600).
+    /// Set to 3600 or higher to use 1-hour caching.
+    /// Set to None or < 3600 to use default 5-minute caching.
+    /// Default: Some(3600) for 1-hour caching
+    /// Note: Using 1h requires the "extended-cache-ttl-2025-04-11" beta header.
     #[serde(default = "default_anthropic_extended_ttl")]
     pub extended_ttl_seconds: Option<u64>,
 
+    /// Maximum number of cache breakpoints to use (max 4 per Anthropic spec).
+    /// Default: 4
     #[serde(default = "default_anthropic_max_breakpoints")]
     pub max_breakpoints: u8,
 

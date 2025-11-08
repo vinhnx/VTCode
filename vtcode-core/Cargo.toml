@@ -124,6 +124,9 @@ vtcode-indexer = { path = "../vtcode-indexer", version = "0.42.16" }
 # Token counting for attention budget management
 tokenizers = { version = "0.22", features = ["http"] }
 
+# Schema generation
+schemars = { version = "0.8", optional = true }
+
 # MCP (Model Context Protocol) support
 rmcp = { version = "0.8.3", features = [
     "client",
@@ -155,6 +158,7 @@ path = "examples/migration_test.rs"
 [features]
 default = []
 swift = ["dep:tree-sitter-swift"]
+schema = ["dep:schemars"]
 
 [dependencies.tree-sitter-swift]
 version = "0.7.1"
