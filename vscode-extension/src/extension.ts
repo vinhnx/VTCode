@@ -3,6 +3,23 @@ import * as vscode from "vscode";
 import { ChatViewProvider } from "./chatView";
 import { registerVtcodeLanguageFeatures } from "./languageFeatures";
 import { VtcodeBackend } from "./vtcodeBackend";
+import { CommandRegistry } from "./commandRegistry";
+import { ParticipantRegistry } from "./participantRegistry";
+import {
+    AskCommand,
+    AskSelectionCommand,
+    AnalyzeCommand,
+    UpdatePlanCommand,
+    OpenConfigCommand,
+    TrustWorkspaceCommand,
+    RefreshCommand,
+} from "./commands";
+import {
+    WorkspaceParticipant,
+    CodeParticipant,
+    TerminalParticipant,
+    GitParticipant,
+} from "./participants";
 import {
     appendMcpProvider,
     loadConfigSummaryFromUri,
@@ -156,6 +173,37 @@ export function activate(context: vscode.ExtensionContext) {
     outputChannel = vscode.window.createOutputChannel("VTCode");
     context.subscriptions.push(outputChannel);
 
+    // Initialize command registry with modular commands
+    const commandRegistry = new CommandRegistry();
+    
+    // Register all modular commands
+    commandRegistry.registerAll([
+        new AskCommand(),
+        new AskSelectionCommand(),
+        new AnalyzeCommand(),
+        new UpdatePlanCommand(),
+        new OpenConfigCommand(),
+        new TrustWorkspaceCommand(),
+        new RefreshCommand(),
+    ]);
+    
+    // Add command registry to disposables
+    context.subscriptions.push(commandRegistry);
+
+    // Initialize participant registry
+    const participantRegistry = new ParticipantRegistry();
+    
+    // Register all built-in participants
+    participantRegistry.registerAll([
+        new WorkspaceParticipant(),
+        new CodeParticipant(),
+        new TerminalParticipant(),
+        new GitParticipant(),
+    ]);
+    
+    // Add participant registry to disposables
+    context.subscriptions.push(participantRegistry);
+
     const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     chatBackend = new VtcodeBackend(
         getConfiguredCommandPath(),
@@ -166,10 +214,14 @@ export function activate(context: vscode.ExtensionContext) {
 
     outputChannel.appendLine("[info] Registering chat view provider...");
     chatViewProviderInstance = new ChatViewProvider(
-        context.extensionUri,
-        chatBackend,
-        outputChannel
-    );
+    context.extensionUri,
+    chatBackend,
+    outputChannel,
+        context
+     );
+    
+    // Register participants with the chat view
+    chatViewProviderInstance.registerParticipants(participantRegistry);
     const viewId = "vtcodeChatView"; // Hardcoded to match package.json
     outputChannel.appendLine(`[info] Registering view with ID: ${viewId}`);
     context.subscriptions.push(
@@ -265,116 +317,74 @@ export function activate(context: vscode.ExtensionContext) {
         );
     }
 
-    const quickActionsCommand = vscode.commands.registerCommand(
+    context.subscriptions.push(
+    vscode.commands.registerCommand(
         "vtcode.openQuickActions",
-        async () => {
-            const actions = createQuickActions(
-                cliAvailable,
-                currentConfigSummary,
-                workspaceTrusted
-            );
-            const pickItems: QuickActionItem[] = actions.map((action) => ({
-                label: `${action.icon ? `$(${action.icon}) ` : ""}${
-                    action.label
-                }`,
-                description: action.description,
-                run: () =>
-                    vscode.commands.executeCommand(
-                        action.command,
-                        ...(action.args ?? [])
-                    ),
-            }));
+    async () => {
+    const actions = createQuickActions(
+        cliAvailable,
+        currentConfigSummary,
+            workspaceTrusted
+        );
+    const pickItems: QuickActionItem[] = actions.map((action) => ({
+    label: `${action.icon ? `$(${action.icon}) ` : ""}${
+            action.label
+        }`,
+        description: action.description,
+    run: () =>
+    vscode.commands.executeCommand(
+        action.command,
+            ...(action.args ?? [])
+                ),
+                 }));
 
-            const selection = await vscode.window.showQuickPick(pickItems, {
-                placeHolder: "Choose a VTCode action to run",
-            });
+    const selection = await vscode.window.showQuickPick(pickItems, {
+            placeHolder: "Choose a VTCode action to run",
+                 });
 
-            if (selection) {
-                await selection.run();
+    if (selection) {
+            await selection.run();
             }
-        }
+            }
+        )
     );
-    const trustWorkspaceCommand = vscode.commands.registerCommand(
-        "vtcode.trustWorkspace",
-        async () => {
-            if (workspaceTrusted) {
-                void vscode.window.showInformationMessage(
-                    "This workspace is already trusted for VTCode automation."
-                );
-                return;
-            }
 
-            const trustedNow = await requestWorkspaceTrust(
-                "allow VTCode to process prompts with human oversight"
-            );
-            if (trustedNow) {
-                void vscode.window.showInformationMessage(
-                    "Workspace trust granted. VTCode can now process prompts with human-in-the-loop safeguards."
-                );
-                return;
-            }
-
-            const selection = await vscode.window.showInformationMessage(
-                "Workspace trust is still required for VTCode. Open the trust management settings?",
-                "Manage Workspace Trust"
-            );
-            if (selection === "Manage Workspace Trust") {
-                await vscode.commands.executeCommand(
-                    "workbench.action.manageTrust"
-                );
-                if (vscode.workspace.isTrusted) {
-                    updateWorkspaceTrustState(true);
-                    void vscode.window.showInformationMessage(
-                        "Workspace trust granted. VTCode can now process prompts with human-in-the-loop safeguards."
-                    );
-                }
-            }
-        }
-    );
     const verifyWorkspaceTrustCommand = vscode.commands.registerCommand(
         "vtcode.verifyWorkspaceTrust",
         async () => {
-            const wasTrusted = workspaceTrusted;
-            if (!wasTrusted) {
-                const granted = await requestWorkspaceTrust(
-                    "allow VTCode to process prompts with human oversight"
-                );
-                if (!granted) {
-                    void vscode.window.showWarningMessage(
-                        "Workspace trust is still disabled. VTCode chat prompts will continue to ask for trust until you approve it."
-                    );
-                    return;
-                }
-            }
-
-            const channel = getOutputChannel();
-            channel.appendLine(
-                "[info] Workspace trust verified. VTCode chat prompts will stream without additional trust confirmations."
-            );
-
-            void vscode.window.showInformationMessage(
-                "Workspace trust verified. VTCode chat prompts no longer show the trust modal; tool executions still require approval.",
-                { modal: false }
-            );
-
-            const hitlEnabled = currentConfigSummary?.humanInTheLoop !== false;
-            if (hitlEnabled) {
-                channel.appendLine(
-                    "[info] Tool execution approvals remain active via the VTCode chat view."
+            // Show current trust status
+            if (vscode.workspace.isTrusted) {
+                void vscode.window.showInformationMessage(
+                    "Workspace is trusted. VTCode chat prompts will avoid the trust modal while tool executions still require approval."
                 );
             } else {
-                channel.appendLine(
-                    "[warn] human_in_the_loop is disabled in vtcode.toml. Tools may execute without an approval prompt."
+                void vscode.window.showWarningMessage(
+                    "Workspace is not trusted. VTCode requires a trusted workspace to execute commands and access tools."
                 );
             }
-
-            void vscode.commands.executeCommand(
-                "setContext",
-                "vtcode.workspaceTrustVerified",
-                true
-            );
+            
+            const outputChannel = getOutputChannel();
+            outputChannel.appendLine(`[info] Workspace trust status: ${vscode.workspace.isTrusted ? "trusted" : "not trusted"}`);
+            
+            // Optionally show workspace trust management
+            if (!vscode.workspace.isTrusted) {
+                const selection = await vscode.window.showInformationMessage(
+                    "Trust is required for VTCode. Would you like to manage workspace trust settings?",
+                    "Manage Trust Settings",
+                    "Learn More"
+                );
+                
+                if (selection === "Manage Trust Settings") {
+                    await vscode.commands.executeCommand("workbench.action.manageTrust");
+                } else if (selection === "Learn More") {
+                    await vscode.env.openExternal(
+                        vscode.Uri.parse("https://code.visualstudio.com/docs/editor/workspace-trust")
+                    );
+                }
+            }
         }
     );
+
     const flushIdeContextCommand = vscode.commands.registerCommand(
         "vtcode.flushIdeContextSnapshot",
         async () => {
@@ -386,137 +396,6 @@ export function activate(context: vscode.ExtensionContext) {
         }
     );
 
-    const askAgent = vscode.commands.registerCommand(
-        "vtcode.askAgent",
-        async () => {
-            if (!(await ensureCliAvailableForCommand())) {
-                return;
-            }
-
-            const question = await vscode.window.showInputBox({
-                prompt: "What would you like the VTCode agent to help with?",
-                placeHolder: "Summarize src/main.rs",
-                ignoreFocusOut: true,
-            });
-
-            if (!question || !question.trim()) {
-                return;
-            }
-
-            try {
-                const promptWithContext = await appendIdeContextToPrompt(
-                    question,
-                    { includeActiveEditor: true }
-                );
-
-                await runVtcodeCommand(["ask", promptWithContext], {
-                    title: "Asking VTCode…",
-                });
-                void vscode.window.showInformationMessage(
-                    "VTCode finished processing your request. Check the VTCode output channel for details."
-                );
-            } catch (error) {
-                handleCommandError("ask", error);
-            }
-        }
-    );
-
-    const askSelection = vscode.commands.registerCommand(
-        "vtcode.askSelection",
-        async () => {
-            const editor = vscode.window.activeTextEditor;
-            if (!editor) {
-                void vscode.window.showWarningMessage(
-                    "Open a text editor to ask VTCode about the current selection."
-                );
-                return;
-            }
-
-            const selection = editor.selection;
-            if (selection.isEmpty) {
-                void vscode.window.showWarningMessage(
-                    "Highlight text first, then run “Ask About Selection with VTCode.”"
-                );
-                return;
-            }
-
-            const selectedText = editor.document.getText(selection);
-            if (!selectedText.trim()) {
-                void vscode.window.showWarningMessage(
-                    "The selected text is empty. Select code or text for VTCode to inspect."
-                );
-                return;
-            }
-
-            if (!(await ensureCliAvailableForCommand())) {
-                return;
-            }
-
-            const defaultQuestion = "Explain the highlighted selection.";
-            const question = await vscode.window.showInputBox({
-                prompt: "How should VTCode help with the highlighted selection?",
-                value: defaultQuestion,
-                valueSelection: [0, defaultQuestion.length],
-                ignoreFocusOut: true,
-            });
-
-            if (question === undefined) {
-                return;
-            }
-
-            const trimmedQuestion = question.trim() || defaultQuestion;
-            const languageId = editor.document.languageId || "text";
-            const rangeLabel = `${selection.start.line + 1}-${
-                selection.end.line + 1
-            }`;
-            const workspaceFolder = vscode.workspace.getWorkspaceFolder(
-                editor.document.uri
-            );
-            const relativePath = workspaceFolder
-                ? vscode.workspace.asRelativePath(editor.document.uri, false)
-                : editor.document.fileName;
-            const normalizedSelection = selectedText.replace(/\r\n/g, "\n");
-            const prompt = `${trimmedQuestion}\n\nFile: ${relativePath}\nLines: ${rangeLabel}\n\n\
-\u0060\u0060\u0060${languageId}\n${normalizedSelection}\n\u0060\u0060\u0060`;
-
-            try {
-                await runVtcodeCommand(["ask", prompt], {
-                    title: "Asking VTCode about the selection…",
-                });
-                void vscode.window.showInformationMessage(
-                    "VTCode processed the highlighted selection. Review the output channel for the response."
-                );
-            } catch (error) {
-                handleCommandError("ask about the selection", error);
-            }
-        }
-    );
-
-    const openConfig = vscode.commands.registerCommand(
-        "vtcode.openConfig",
-        async () => {
-            try {
-                const configUri = await pickVtcodeConfigUri(
-                    currentConfigSummary?.uri
-                );
-                if (!configUri) {
-                    void vscode.window.showWarningMessage(
-                        "No vtcode.toml file was found in this workspace."
-                    );
-                    return;
-                }
-
-                const document = await vscode.workspace.openTextDocument(
-                    configUri
-                );
-                await vscode.window.showTextDocument(document, {
-                    preview: false,
-                });
-            } catch (error) {
-                handleCommandError("open configuration", error);
-            }
-        }
-    );
 
     const openDocumentation = vscode.commands.registerCommand(
         "vtcode.openDocumentation",
@@ -951,88 +830,9 @@ export function activate(context: vscode.ExtensionContext) {
         }
     );
 
-    const runAnalyze = vscode.commands.registerCommand(
-        "vtcode.runAnalyze",
-        async () => {
-            if (!(await ensureCliAvailableForCommand())) {
-                return;
-            }
-
-            try {
-                await runVtcodeCommand(["analyze"], {
-                    title: "Analyzing workspace with VTCode…",
-                });
-                void vscode.window.showInformationMessage(
-                    "VTCode finished analyzing the workspace. Review the VTCode output channel for results."
-                );
-            } catch (error) {
-                handleCommandError("analyze the workspace", error);
-            }
-        }
-    );
-
-    const runUpdatePlanTaskCommand = vscode.commands.registerCommand(
-        "vtcode.runUpdatePlanTask",
-        async () => {
-            if (
-                !(await ensureWorkspaceTrustedForCommand(
-                    "update the VTCode task plan"
-                ))
-            ) {
-                return;
-            }
-
-            if (!(await ensureCliAvailableForCommand())) {
-                return;
-            }
-
-            const tasks = await vscode.tasks.fetchTasks({ type: "vtcode" });
-            const updatePlanTasks = tasks.filter(
-                (task) =>
-                    (task.definition as VtcodeTaskDefinition).command ===
-                    "update-plan"
-            );
-
-            if (updatePlanTasks.length === 0) {
-                void vscode.window.showWarningMessage(
-                    "No VTCode update plan tasks are available. Define a VTCode task in tasks.json to customize the workflow."
-                );
-                return;
-            }
-
-            let taskToRun: vscode.Task | undefined;
-            if (updatePlanTasks.length === 1) {
-                taskToRun = updatePlanTasks[0];
-            } else {
-                const pickItems = updatePlanTasks.map((task) => ({
-                    label: task.name,
-                    task,
-                }));
-                const selection = await vscode.window.showQuickPick(pickItems, {
-                    placeHolder: "Select the VTCode plan task to run",
-                });
-                taskToRun = selection?.task;
-            }
-
-            if (!taskToRun) {
-                return;
-            }
-
-            if (ideContextBridge) {
-                await ideContextBridge.flush();
-            }
-
-            await vscode.tasks.executeTask(taskToRun);
-        }
-    );
-
-    const refreshQuickActions = vscode.commands.registerCommand(
-        "vtcode.refreshQuickActions",
-        async () => {
-            quickActionsProviderInstance?.refresh();
-            await refreshCliAvailability("manual");
-        }
-    );
+    // Note: runAnalyze is registered via CommandRegistry (AnalyzeCommand)
+    // Note: runUpdatePlanTask is registered via CommandRegistry (UpdatePlanCommand)
+    // Note: refreshQuickActions is registered via CommandRegistry (RefreshCommand)
 
     const taskProvider = vscode.tasks.registerTaskProvider("vtcode", {
         provideTasks: provideVtcodeTasks,
@@ -1048,13 +848,8 @@ export function activate(context: vscode.ExtensionContext) {
     );
 
     context.subscriptions.push(
-        quickActionsCommand,
-        trustWorkspaceCommand,
         verifyWorkspaceTrustCommand,
         flushIdeContextCommand,
-        askAgent,
-        askSelection,
-        openConfig,
         openDocumentation,
         openDeepWiki,
         openWalkthrough,
@@ -1065,9 +860,6 @@ export function activate(context: vscode.ExtensionContext) {
         openToolsPolicyConfigCommand,
         configureMcpProvidersCommand,
         launchAgentTerminal,
-        runAnalyze,
-        runUpdatePlanTaskCommand,
-        refreshQuickActions,
         taskProvider,
         configurationWatcher,
         workspaceFolderWatcher

@@ -55,14 +55,89 @@ body {
 }
 
 .chat-status {
-	font-size: 0.7rem;
+	font-size: 0.75rem;
 	color: var(--vscode-descriptionForeground);
-	text-transform: uppercase;
-	letter-spacing: 0.1em;
+	letter-spacing: 0.05em;
+	font-weight: 500;
+	min-height: 1.2em;
+	display: flex;
+	align-items: center;
+	gap: 0.35rem;
+	animation: status-pulse 2s ease-in-out infinite;
 }
 
 .chat-status:empty {
 	display: none;
+}
+
+@keyframes status-pulse {
+	0%, 100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.7;
+	}
+}
+
+.chat-status.idle {
+	animation: none;
+	opacity: 0.6;
+}
+
+.chat-status.error {
+	color: var(--vscode-errorForeground);
+	animation: none;
+}
+
+/* Enhanced status indicators */
+.chat-status-indicators {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	font-size: 0.7rem;
+	color: var(--vscode-descriptionForeground);
+	padding-left: 0.5rem;
+	border-left: 1px solid var(--vscode-panel-border);
+	margin-left: auto;
+}
+
+.status-indicator {
+	display: flex;
+	align-items: center;
+	gap: 0.25rem;
+	white-space: nowrap;
+}
+
+.status-indicator-dot {
+	display: inline-block;
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--vscode-descriptionForeground);
+}
+
+.status-indicator-dot.active {
+	background: var(--vscode-notificationCenterHeader-background);
+	animation: dot-pulse 1.5s ease-in-out infinite;
+}
+
+.status-indicator-dot.success {
+	background: var(--vscode-testing-runAction);
+}
+
+.status-indicator-dot.error {
+	background: var(--vscode-errorForeground);
+}
+
+@keyframes dot-pulse {
+	0%, 100% {
+		opacity: 1;
+		transform: scale(1);
+	}
+	50% {
+		opacity: 0.6;
+		transform: scale(0.8);
+	}
 }
 
 .chat-transcript {
@@ -82,18 +157,244 @@ body {
 	gap: 0.1rem;
 	content-visibility: auto;
 	contain-intrinsic-size: auto 48px;
+	margin-bottom: 0.35rem;
+}
+
+.chat-message-wrapper.user {
+	align-items: flex-end;
+}
+
+.chat-message-wrapper.assistant,
+.chat-message-wrapper.system,
+.chat-message-wrapper.tool {
+	align-items: flex-start;
 }
 
 .chat-message {
 	padding: 0;
 	font-size: 12px;
 	line-height: 1.45;
-	white-space: pre-wrap;
 	word-break: break-word;
 	background: transparent;
 	border: none;
 	color: var(--vscode-foreground);
 	text-align: left;
+}
+
+/* Markdown support */
+.chat-message p {
+	margin: 0.35rem 0;
+	white-space: pre-wrap;
+	word-wrap: break-word;
+	overflow-wrap: break-word;
+	line-height: 1.5;
+}
+
+.chat-message p:first-child {
+	margin-top: 0;
+}
+
+.chat-message p:last-child {
+	margin-bottom: 0;
+}
+
+.chat-message h1,
+.chat-message h2,
+.chat-message h3,
+.chat-message h4,
+.chat-message h5,
+.chat-message h6 {
+	margin: 0.75rem 0 0.35rem 0;
+	font-weight: 600;
+	color: var(--vscode-foreground);
+	line-height: 1.4;
+}
+
+.chat-message h1 { font-size: 1.3rem; }
+.chat-message h2 { font-size: 1.15rem; }
+.chat-message h3 { font-size: 1.05rem; }
+.chat-message h4 { font-size: 1rem; }
+.chat-message h5 { font-size: 0.95rem; }
+.chat-message h6 { font-size: 0.9rem; color: var(--vscode-descriptionForeground); }
+
+.chat-message strong {
+	font-weight: 600;
+	color: var(--vscode-foreground);
+}
+
+.chat-message em {
+	font-style: italic;
+	color: var(--vscode-descriptionForeground);
+}
+
+.chat-message del {
+	text-decoration: line-through;
+	color: var(--vscode-descriptionForeground);
+}
+
+.chat-message code:not(.hljs) {
+	padding: 0.1rem 0.3rem;
+	background: var(--vscode-editorCodeLens-background);
+	border-radius: 3px;
+	font-family: var(--vt-font-mono);
+	font-size: 11px;
+	color: var(--vscode-editor-foreground);
+}
+
+/* Code blocks */
+.chat-message pre {
+	margin: 0.5rem 0;
+	padding: 0.75rem;
+	background: var(--vscode-editor-background);
+	border: 1px solid var(--vscode-panel-border);
+	border-radius: 6px;
+	overflow-x: auto;
+	font-family: var(--vt-font-mono);
+	font-size: 11px;
+	line-height: 1.5;
+	position: relative;
+}
+
+.chat-message pre::before {
+	content: attr(data-language);
+	position: absolute;
+	top: 0.25rem;
+	right: 2.5rem;
+	font-size: 10px;
+	color: var(--vscode-descriptionForeground);
+	opacity: 0;
+	transition: opacity 0.2s;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+}
+
+.chat-message pre:hover::before {
+	opacity: 0.7;
+}
+
+.chat-message pre code {
+	padding: 0;
+	background: transparent;
+	border-radius: 0;
+	color: inherit;
+	display: block;
+}
+
+.chat-message code.hljs {
+	padding: 0;
+	background: transparent;
+	border-radius: 0;
+	overflow: visible;
+}
+
+/* Code block with copy button container */
+.code-block-wrapper {
+	position: relative;
+	margin: 0.5rem 0;
+}
+
+.code-block-wrapper pre {
+	padding-right: 2.75rem;
+}
+
+.code-block-actions {
+	display: flex;
+	gap: 0.25rem;
+	position: absolute;
+	top: 0.35rem;
+	right: 0.35rem;
+	opacity: 0;
+	transition: opacity 0.2s ease-in-out;
+	z-index: 10;
+}
+
+.code-block-wrapper:hover .code-block-actions {
+	opacity: 1;
+}
+
+.code-copy-button,
+.code-block-actions button {
+	padding: 0.35rem 0.5rem;
+	background: var(--vscode-button-background);
+	color: var(--vscode-button-foreground);
+	border: 1px solid transparent;
+	border-radius: 3px;
+	cursor: pointer;
+	font-size: 10px;
+	font-weight: 500;
+	transition: all 0.2s ease;
+	min-width: 40px;
+}
+
+.code-copy-button:hover,
+.code-block-actions button:hover {
+	background: var(--vscode-button-hoverBackground);
+	border-color: var(--vscode-button-border);
+}
+
+.code-copy-button:active,
+.code-block-actions button:active {
+	background: var(--vscode-button-activeBackground);
+	opacity: 0.8;
+}
+
+.code-copy-button.copied {
+	background: var(--vscode-testing-runAction);
+}
+
+/* Lists */
+.chat-message ul,
+.chat-message ol {
+	margin: 0.25rem 0;
+	padding-left: 1.5rem;
+}
+
+.chat-message li {
+	margin: 0.1rem 0;
+}
+
+/* Tables */
+.chat-message table {
+	margin: 0.5rem 0;
+	border-collapse: collapse;
+	font-size: 11px;
+	width: 100%;
+}
+
+.chat-message table th,
+.chat-message table td {
+	padding: 0.5rem;
+	border: 1px solid var(--vscode-panel-border);
+	text-align: left;
+}
+
+.chat-message table th {
+	background: var(--vscode-editorCodeLens-background);
+	font-weight: 600;
+}
+
+.chat-message table tr:nth-child(even) {
+	background: rgba(127, 127, 127, 0.05);
+}
+
+/* Blockquotes */
+.chat-message blockquote {
+	margin: 0.5rem 0;
+	padding-left: 0.75rem;
+	border-left: 3px solid var(--vscode-panel-border);
+	color: var(--vscode-descriptionForeground);
+	font-style: italic;
+}
+
+/* Links */
+.chat-message a {
+	color: var(--vscode-textLink-foreground);
+	text-decoration: none;
+	cursor: pointer;
+}
+
+.chat-message a:hover {
+	text-decoration: underline;
 }
 
 .chat-message--tool {

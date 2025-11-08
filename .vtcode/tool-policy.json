@@ -45,7 +45,7 @@
     "create_file": "prompt",
     "delete_file": "prompt",
     "run_terminal_cmd": "allow",
-    "web_fetch": "allow",
+    "web_fetch": "prompt",
     "execute_code": "prompt",
     "list_skills": "prompt",
     "load_skill": "prompt",
