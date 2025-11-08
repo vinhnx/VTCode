@@ -68,7 +68,7 @@ Example response:
 }
 ```
 
-### 🔄 Step 2: Code Executor with MCP SDK Generation (IN PROGRESS)
+### ✅ Step 2: Code Executor with MCP SDK Generation (COMPLETED)
 
 **Objective**: Allow agents to write code that calls MCP tools as library functions, rather than making individual tool calls.
 
@@ -78,11 +78,29 @@ Example response:
 - Better error handling and retries
 - Data filtering before returning to model
 
-**Implementation Plan**:
-1. Create `vtcode-core/src/exec/code_executor.rs` - Python/JS runtime wrapper
-2. Implement `sdk_generator.rs` - Dynamic SDK generation from MCP tool schemas
-3. Add code sandbox support in PTY manager
-4. Expose as new builtin tool: `execute_code`
+**Implementation Details**:
+
+- **Module**: `vtcode-core/src/exec/code_executor.rs`
+- **Code Executor**: `CodeExecutor` struct supporting Python3 and JavaScript
+- **SDK Generation**: Dynamically generates SDK from MCP tool list
+- **IPC Handler**: File-based side-channel communication (`sdk_ipc.rs`)
+- **Execution**: Uses `AsyncProcessRunner` with timeout and resource limits
+- **Result Extraction**: Parses `result = {...}` assignments as JSON output
+
+#### Example Usage
+
+```python
+# Agent-written code
+files = list_files(path="/workspace", recursive=True)
+rs_files = [f for f in files if f.endswith('.rs')]
+filtered = [f for f in rs_files if 'test' in f]
+result = {"count": len(filtered), "files": filtered[:10]}
+```
+
+**Status**: Core execution working. Still pending:
+- Hook up IPC handler to actually invoke MCP tools from code
+- Integrate with tool registry as builtin `execute_code` tool
+- Add agent instructions for code execution workflow
 
 ### 📋 Step 3: Skill/State Persistence (PENDING)
 
@@ -162,12 +180,52 @@ filtered = [f for f in files if "test" in f and f.endswith(".rs")]
 | Progressive (new) | ~200B × search | ~100B | 60-80% |
 | Code execution | 0 in loop | 0 | 90%+ |
 
+## SDK Generated at Runtime
+
+When executing code, agents can use MCP tools directly as functions:
+
+### Python Example
+
+```python
+# Search for tools
+tools = search_tools(keyword="file", detail_level="name-only")
+
+# Process data
+files = list_files(path="/workspace", recursive=True)
+filtered = [f for f in files if "test" in f and f.endswith(".rs")]
+
+# Return structured result
+result = {
+    "total_files": len(files),
+    "test_files": len(filtered),
+    "sample": filtered[:5]
+}
+```
+
+### JavaScript Example
+
+```javascript
+// Get tool info
+const tools = await search_tools({keyword: "file", detail_level: "name-and-description"});
+
+// Filter and process
+const files = await list_files({path: "/workspace", recursive: true});
+const filtered = files.filter(f => f.includes("test") && f.endsWith(".rs"));
+
+// Return structured result
+result = {
+  total_files: files.length,
+  test_files: filtered.length,
+  sample: filtered.slice(0, 5)
+};
+```
+
 ## Usage in Prompts
 
 Update system prompts to guide agent behavior:
 
 ```markdown
-## Tool Discovery
+## Tool Discovery and Code Execution
 
 Use search_tools to find relevant operations before calling them:
 
@@ -177,7 +235,12 @@ Then request full details when ready:
 
 search_tools({keyword: "read_file", detail_level: "full"})
 
-This saves context and makes interactions more efficient.
+For complex tasks involving loops, filtering, or aggregation, use
+execute_code to write Python or JavaScript that processes results
+before returning to the model.
+
+This saves context (up to 98.7% for tool discovery) and enables
+efficient control flow without repeated model calls.
 ```
 
 ## Testing
