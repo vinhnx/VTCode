@@ -3,6 +3,26 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Version 0.43.0] - 2025-11-09
+# [Version 0.43.1] - 2025-11-09
+
+
+### Features
+    - feat: Implement Agent Communication Protocol (ACP) integration
+
+
+### Documentation
+    - docs: Add release readiness confirmation document
+    - docs: Add release action checklist for v0.43.0
+    - docs: Add comprehensive v0.43.0 release summary
+    - docs: Update ACP implementation summary and usage patterns
+    - docs: Add ACP next steps and release checklist
+    - docs: Add ACP implementation completion summary
+
+
+### Chores
+    - chore: release v0.43.0
+    - chore: bump version to 0.43.0 for ACP release
+    - chore: update npm package.json to v0.42.20 [skip ci]
 
 ### Features
     - feat: Implement Agent Communication Protocol (ACP) integration for multi-agent orchestration
