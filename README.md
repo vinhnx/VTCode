@@ -1,6 +1,9 @@
 <h1 align="center">VT Code</h1>
 
-<p align="center"><code>cargo install vtcode</code> | <code>brew install vtcode</code></p>
+<p align="center"><code>npm install -g @vinhnx/vtcode</code></p>
+<p align="center"><code>npx vtcode</code></p>
+<p align="center"><code>cargo install vtcode</code></p>
+<p align="center"><code>brew install vtcode</code></p>
 <p align="center">
   <a href="./docs/guides/mcp-integration.md">
     <img src="https://img.shields.io/badge/agent%20client%20protocol-black?style=for-the-badge&logo=zedindustries" alt="zed"/>
@@ -60,10 +63,16 @@ Alternatively, if you use [Homebrew](https://brew.sh/):
 brew install vtcode
 ```
 
-Or if you prefer Homebrew:
+Or install via npm:
 
 ```shell
-brew install vtcode
+npm install -g vtcode
+```
+
+Or run directly with npx without installation:
+
+```shell
+npx vtcode
 ```
 
 Then simply run `vtcode` to get started:

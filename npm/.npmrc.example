@@ -1,34 +1,42 @@
-# GitHub Packages NPM Registry Configuration for VT Code
+# NPM Registry Configuration for VT Code
 #
-# This file configures npm to publish the @vinhnx/vtcode package to GitHub Packages
+# This file configures npm to publish the vtcode package to both npmjs.org and GitHub Packages
 #
 # Setup Instructions:
-# 1. Create a GitHub Personal Access Token (PAT) with scopes:
+# 1. For npmjs.org: Create an npm access token with publish scope
+#    See: https://docs.npmjs.com/creating-and-viewing-access-tokens
+#
+# 2. For GitHub Packages: Create a GitHub Personal Access Token (PAT) with scopes:
 #    - write:packages
 #    - read:packages
 #    - repo
 #    See: https://github.com/settings/tokens
 #
-# 2. Configure your local NPM registry:
+# 3. Configure your local NPM registries:
 #    Either use the .npmrc file or run these commands:
 #
-#    # Option 1: Using .npmrc file (recommended)
+#    # For npmjs.org
+#    npm config set //registry.npmjs.org/:_authToken YOUR_NPM_TOKEN
+#
+#    # For GitHub Packages
 #    npm config set //npm.pkg.github.com/:_authToken YOUR_GITHUB_TOKEN
-#    npm config set @vinhnx:registry https://npm.pkg.github.com
 #
-#    # Option 2: Using environment variable during publish
-#    export NODE_AUTH_TOKEN=YOUR_GITHUB_TOKEN
-#    npm publish
+#    # Or use environment variables during publish
+#    export NODE_AUTH_TOKEN=YOUR_NPM_TOKEN  # for npmjs.org
+#    export NODE_AUTH_TOKEN=YOUR_GITHUB_TOKEN  # for GitHub Packages
 #
-# 3. To use this .npmrc file, copy it to your home directory:
+# 4. To use this .npmrc file, copy it to your home directory:
 #    cp npm/.npmrc.example ~/.npmrc
-#    Then add your GitHub token to ~/.npmrc or use the commands above
+#    Then add your tokens to ~/.npmrc or use the commands above
 #
+# Configuration for npmjs.org (default registry)
+//registry.npmjs.org/:_authToken=YOUR_NPM_TOKEN
 # Configuration for GitHub Packages registry
-@vinhnx:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=YOUR_GITHUB_TOKEN
 
 # If using token-based authentication via environment variable,
-# the .npmrc.example file can stay as-is.
-# If using hardcoded token (NOT RECOMMENDED for public repos),
-# add this line with your actual token:
-# //npm.pkg.github.com/:_authToken=YOUR_GITHUB_TOKEN_HERE
+# the .npmrc.example file can stay as-is with placeholder tokens.
+# If using hardcoded tokens (NOT RECOMMENDED for public repos),
+# replace the placeholder tokens with your actual tokens:
+# //registry.npmjs.org/:_authToken=ACTUAL_NPM_TOKEN_HERE
+# //npm.pkg.github.com/:_authToken=ACTUAL_GITHUB_TOKEN_HERE

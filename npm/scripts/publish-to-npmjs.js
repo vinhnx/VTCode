@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 
 /**
- * Script to publish the package to GitHub Packages
- * Usage: node scripts/publish-to-github.js
+ * Script to publish the package to npmjs.com
+ * Usage: node scripts/publish-to-npmjs.js
  *
  * This script will:
- * 1. Check if GITHUB_TOKEN environment variable is set
+ * 1. Check if NPM_TOKEN environment variable is set
  * 2. Verify .npmrc configuration exists
- * 3. Run npm publish to GitHub Packages
+ * 3. Run npm publish to npmjs.com
  */
 
 const fs = require('fs');
@@ -15,52 +15,49 @@ const path = require('path');
 const { execSync } = require('child_process');
 
 function checkEnvironment() {
-  if (!process.env.GITHUB_TOKEN) {
-    console.error('❌ Error: GITHUB_TOKEN environment variable is not set');
+  if (!process.env.NPM_TOKEN) {
+    console.error('❌ Error: NPM_TOKEN environment variable is not set');
     console.error('Please set it before running this script:');
-    console.error('export GITHUB_TOKEN=your_github_personal_access_token_here');
+    console.error('export NPM_TOKEN=your_npm_access_token_here');
     console.error('');
-    console.error('Make sure your GitHub personal access token has the required scopes:');
-    console.error('  - write:packages (to publish packages)');
-    console.error('  - read:packages (to download packages)');
-    console.error('  - repo (to link packages to your repositories)');
+    console.error('Make sure your npm access token has publish scope');
     process.exit(1);
   }
 
-  console.log(' GITHUB_TOKEN environment variable is set');
+  console.log(' NPM_TOKEN environment variable is set');
 }
 
 function checkNpmrc() {
   const npmrcPath = path.join(__dirname, '../.npmrc');
   if (!fs.existsSync(npmrcPath)) {
     console.error('❌ Error: .npmrc file not found in npm directory');
-    console.error('Please create one with the proper GitHub Packages configuration');
+    console.error('Please create one with the proper npmjs.com configuration');
     console.error('See .npmrc.example for reference');
     process.exit(1);
   }
 
   const npmrcContent = fs.readFileSync(npmrcPath, 'utf8');
-  // Check for valid GitHub Packages registry configuration
-  const githubRegistryPattern = /^\/\/npm\.pkg\.github\.com\/?:_authToken=/m;
-  let githubRegistryFound = false;
+  // Check for valid npmjs.com registry configuration
+  const npmjsRegistryPattern = /^\/\/registry\.npmjs\.org\/?:_authToken=/m;
+  let npmjsRegistryFound = false;
   
   for (const line of npmrcContent.split(/\r?\n/)) {
     const trimmed = line.trim();
     if (
       trimmed &&
       !trimmed.startsWith('#') &&
-      githubRegistryPattern.test(trimmed)
+      npmjsRegistryPattern.test(trimmed)
     ) {
-      githubRegistryFound = true;
+      npmjsRegistryFound = true;
       break;
     }
   }
   
-  if (!githubRegistryFound) {
-    console.warn('⚠️  Warning: .npmrc file does not contain a valid GitHub Packages registry configuration');
-    console.warn('Please check that your .npmrc includes: //npm.pkg.github.com/:_authToken=YOUR_TOKEN');
+  if (!npmjsRegistryFound) {
+    console.warn('⚠️  Warning: .npmrc file does not contain a valid npmjs.com registry configuration');
+    console.warn('Please check that your .npmrc includes: //registry.npmjs.org/:_authToken=YOUR_TOKEN');
   } else {
-    console.log(' .npmrc file contains GitHub Packages configuration');
+    console.log(' .npmrc file contains npmjs.com configuration');
   }
 }
 
@@ -78,7 +75,7 @@ function checkPackageJson() {
 }
 
 function runPublish() {
-  console.log('\n🚀 Starting publish process...');
+  console.log('\n🚀 Starting publish process to npmjs.com...');
 
   try {
     // Verify npm configuration
@@ -86,8 +83,8 @@ function runPublish() {
     const npmWhoami = execSync('npm whoami', { encoding: 'utf8' }).trim();
     console.log(`👤 Authenticated as: ${npmWhoami}`);
 
-    // Run npm publish
-    console.log('\n📦 Publishing to GitHub Packages...');
+    // Run npm publish to npmjs.com
+    console.log('\n📦 Publishing to npmjs.com...');
     const publishOutput = execSync('npm publish', {
       cwd: path.join(__dirname, '..'),
       encoding: 'utf8'
@@ -96,8 +93,8 @@ function runPublish() {
     console.log(' Publish output:');
     console.log(publishOutput);
 
-    console.log('\n🎉 Package published successfully to GitHub Packages!');
-    console.log(`🔗 View at: https://github.com/vinhnx/vtcode/pkgs/npm/vtcode`);
+    console.log('\n🎉 Package published successfully to npmjs.com!');
+    console.log(`🔗 View at: https://www.npmjs.com/package/vtcode`);
   } catch (error) {
     console.error('❌ Error during publish:');
     console.error(error.message);
@@ -108,7 +105,7 @@ function runPublish() {
 }
 
 function main() {
-  console.log('📝 Publishing VT Code npm package to GitHub Packages');
+  console.log('📝 Publishing VT Code npm package to npmjs.com');
   console.log('=====================================================');
 
   checkEnvironment();
@@ -118,7 +115,7 @@ function main() {
   console.log('\n📋 Verification complete. Ready to publish:');
   console.log(`   - Package: ${packageJson.name}`);
   console.log(`   - Version: ${packageJson.version}`);
-  console.log(`   - Registry: GitHub Packages (configured in .npmrc)`);
+  console.log(`   - Registry: npmjs.com (configured in .npmrc)`);
 
   // Ask for confirmation
   const readline = require('readline');
@@ -127,7 +124,7 @@ function main() {
     output: process.stdout
   });
 
-  rl.question('\n⚠️  Do you want to proceed with publishing? (y/N): ', (answer) => {
+  rl.question('\n⚠️  Do you want to proceed with publishing to npmjs.com? (y/N): ', (answer) => {
     rl.close();
 
     if (answer.toLowerCase() !== 'y' && answer.toLowerCase() !== 'yes') {

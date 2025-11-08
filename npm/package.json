@@ -1,5 +1,5 @@
 {
-  "name": "@vinhnx/vtcode",
+  "name": "vtcode",
   "version": "0.42.14",
   "description": "A Rust-based terminal coding agent with modular architecture supporting multiple LLM providers",
   "keywords": [
@@ -21,7 +21,7 @@
     "url": "git+https://github.com/vinhnx/vtcode.git"
   },
   "publishConfig": {
-    "@vinhnx:registry": "https://npm.pkg.github.com"
+    "registry": "https://registry.npmjs.org/"
   },
   "readme": "README.md",
   "main": "index.js",
@@ -37,7 +37,9 @@
   "scripts": {
     "postinstall": "node scripts/postinstall.js",
     "preuninstall": "node scripts/preuninstall.js",
-    "publish-github": "node scripts/publish-to-github.js"
+    "publish-github": "node scripts/publish-to-github.js",
+    "publish-npmjs": "npm publish",
+    "publish-github-packages": "npm publish --registry https://npm.pkg.github.com"
   },
   "engines": {
     "node": ">=14.0.0"

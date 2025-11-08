@@ -197,7 +197,7 @@ git push origin v0.40.0
 1. **Never commit tokens** - Always use environment variables or .gitignore
 2. **Token scope** - Use minimal scopes required (avoid admin access)
 3. **Rotate regularly** - Regenerate tokens periodically
-4. **GitHub Packages only** - This package publishes exclusively to GitHub Packages, not to npmjs.org
+4. **Package name** - The package now publishes to both npmjs.org and GitHub Packages using the name "vtcode"
 
 ## References
 

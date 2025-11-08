@@ -367,7 +367,7 @@ trigger_docs_rs_rebuild() {
 publish_npm_package() {
     local version=$1
 
-    print_distribution "Publishing npm package v$version to GitHub Packages..."
+    print_distribution "Publishing npm package v$version to both npmjs.com and GitHub Packages..."
 
     if [[ ! -f 'npm/package.json' ]]; then
         print_warning 'npm package.json not found - skipping npm publish'
@@ -379,31 +379,65 @@ publish_npm_package() {
         return 0
     fi
 
-    # Ensure npm registry is configured for GitHub Packages
-    if [[ -z "${GITHUB_TOKEN:-}" ]]; then
-        print_warning 'GITHUB_TOKEN not set - cannot publish to GitHub Packages'
-        return 1
+    local npm_publish_success=0
+    local github_publish_success=0
+
+    # Publish to npmjs.com first
+    if [[ -n "${NPM_TOKEN:-}" ]]; then
+        print_distribution "Publishing npm package v$version to npmjs.com..."
+        (
+            cd npm || return 1
+
+            # Temporarily configure npm auth for npmjs.com
+            npm config set //registry.npmjs.org/:_authToken "$NPM_TOKEN" || return 1
+
+            if npm publish; then
+                print_success "npm package v$version published to npmjs.com"
+                npm_publish_success=1
+            else
+                print_warning "npm publish to npmjs.com failed"
+                npm_publish_success=0
+            fi
+
+            # Clean up npm config
+            npm config delete //registry.npmjs.org/:_authToken || true
+        )
+    else
+        print_warning 'NPM_TOKEN not set - skipping publish to npmjs.com'
+        npm_publish_success=0
     fi
 
-    # Change to npm directory and publish
-    (
-        cd npm || return 1
-        
-        # Temporarily configure npm auth if GITHUB_TOKEN is set
-        npm config set //npm.pkg.github.com/:_authToken "$GITHUB_TOKEN" || return 1
+    # Publish to GitHub Packages
+    if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+        print_distribution "Publishing npm package v$version to GitHub Packages..."
+        (
+            cd npm || return 1
 
-        if npm publish --registry https://npm.pkg.github.com; then
-            print_success "npm package v$version published to GitHub Packages"
+            # Temporarily configure npm auth for GitHub Packages
+            npm config set //npm.pkg.github.com/:_authToken "$GITHUB_TOKEN" || return 1
+
+            if npm publish --registry https://npm.pkg.github.com; then
+                print_success "npm package v$version published to GitHub Packages"
+                github_publish_success=1
+            else
+                print_warning "npm publish to GitHub Packages failed"
+                github_publish_success=0
+            fi
+
             # Clean up npm config
             npm config delete //npm.pkg.github.com/:_authToken || true
-            return 0
-        else
-            print_warning "npm publish failed - you may need to publish manually"
-            # Clean up npm config even on failure
-            npm config delete //npm.pkg.github.com/:_authToken || true
-            return 1
-        fi
-    )
+        )
+    else
+        print_warning 'GITHUB_TOKEN not set - skipping publish to GitHub Packages'
+        github_publish_success=0
+    fi
+
+    # Return success if at least one registry published successfully
+    if [[ $npm_publish_success -eq 1 || $github_publish_success -eq 1 ]]; then
+        return 0
+    else
+        return 1
+    fi
 }
 
 publish_github_packages() {
@@ -897,10 +931,13 @@ main() {
     
     if [[ "$skip_npm" == 'false' ]]; then
         if [[ $npm_publish_success -eq 1 ]]; then
-            print_success "npm package published to GitHub Packages: https://github.com/vinhnx/vtcode/pkgs/npm/vtcode"
+            print_success "npm package published to both registries:"
+            print_success "  - npmjs.com: https://www.npmjs.com/package/vtcode"
+            print_success "  - GitHub Packages: https://github.com/vinhnx/vtcode/pkgs/npm/vtcode"
         else
             print_warning "npm package may not have been published successfully - check logs above and consider manual publishing"
-            print_info "To publish npm package manually: cd npm && npm publish --registry https://npm.pkg.github.com"
+            print_info "To publish npm package manually to npmjs.com: cd npm && npm publish"
+            print_info "To publish npm package manually to GitHub Packages: cd npm && npm publish --registry https://npm.pkg.github.com"
         fi
     else
         print_info "npm package publishing was skipped as requested"
