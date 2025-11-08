@@ -90,6 +90,12 @@ pub struct AgentConfig {
     #[serde(default)]
     pub refine_prompts_model: String,
 
+    /// Small/lightweight model configuration for efficient operations
+    /// Used for tasks like large file reads, parsing, git history, conversation summarization
+    /// Typically 70-80% cheaper than main model; ~50% of Claude Code's calls use this tier
+    #[serde(default)]
+    pub small_model: AgentSmallModelConfig,
+
     /// Session onboarding and welcome message configuration
     #[serde(default)]
     pub onboarding: AgentOnboardingConfig,
@@ -146,6 +152,7 @@ impl Default for AgentConfig {
             refine_prompts_enabled: default_refine_prompts_enabled(),
             refine_prompts_max_passes: default_refine_max_passes(),
             refine_prompts_model: String::new(),
+            small_model: AgentSmallModelConfig::default(),
             onboarding: AgentOnboardingConfig::default(),
             project_doc_max_bytes: default_project_doc_max_bytes(),
             instruction_max_bytes: default_instruction_max_bytes(),
@@ -568,4 +575,94 @@ fn default_aggressive_compression_threshold() -> usize {
 
 fn default_show_context_optimization_message() -> bool {
     false // Disabled by default - feature is opt-in to avoid surprising users
+}
+
+/// Small/lightweight model configuration for efficient operations
+///
+/// Following Claude Code's pattern, use a smaller model (e.g., Haiku, GPT-4 Mini) for 50%+ of calls:
+/// - Large file reads and parsing (>50KB)
+/// - Web page summarization and analysis
+/// - Git history and commit message processing
+/// - Conversation context compression and summarization
+/// - One-word processing labels and simple classifications
+///
+/// Typically 70-80% cheaper than the main model while maintaining quality for these tasks.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AgentSmallModelConfig {
+    /// Enable small model tier for efficient operations
+    #[serde(default = "default_small_model_enabled")]
+    pub enabled: bool,
+
+    /// Small model to use (e.g., "claude-3-5-haiku", "gpt-4o-mini", "gemini-2.0-flash")
+    /// Leave empty to auto-select a lightweight sibling of the main model
+    #[serde(default)]
+    pub model: String,
+
+    /// Maximum tokens for small model responses
+    #[serde(default = "default_small_model_max_tokens")]
+    pub max_tokens: u32,
+
+    /// Temperature for small model responses
+    #[serde(default = "default_small_model_temperature")]
+    pub temperature: f32,
+
+    /// Enable small model for large file reads (>50KB)
+    #[serde(default = "default_small_model_for_large_reads")]
+    pub use_for_large_reads: bool,
+
+    /// Enable small model for web content summarization
+    #[serde(default = "default_small_model_for_web_summary")]
+    pub use_for_web_summary: bool,
+
+    /// Enable small model for git history processing
+    #[serde(default = "default_small_model_for_git_history")]
+    pub use_for_git_history: bool,
+
+    /// Enable small model for context compression
+    #[serde(default = "default_small_model_for_compression")]
+    pub use_for_compression: bool,
+}
+
+impl Default for AgentSmallModelConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_small_model_enabled(),
+            model: String::new(),
+            max_tokens: default_small_model_max_tokens(),
+            temperature: default_small_model_temperature(),
+            use_for_large_reads: default_small_model_for_large_reads(),
+            use_for_web_summary: default_small_model_for_web_summary(),
+            use_for_git_history: default_small_model_for_git_history(),
+            use_for_compression: default_small_model_for_compression(),
+        }
+    }
+}
+
+fn default_small_model_enabled() -> bool {
+    true // Enable by default following Claude Code pattern
+}
+
+fn default_small_model_max_tokens() -> u32 {
+    1000 // Smaller responses for summary/parse operations
+}
+
+fn default_small_model_temperature() -> f32 {
+    0.3 // More deterministic for parsing/summarization
+}
+
+fn default_small_model_for_large_reads() -> bool {
+    true
+}
+
+fn default_small_model_for_web_summary() -> bool {
+    true
+}
+
+fn default_small_model_for_git_history() -> bool {
+    true
+}
+
+fn default_small_model_for_compression() -> bool {
+    true
 }

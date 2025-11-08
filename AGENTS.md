@@ -5,6 +5,11 @@
 
 # VT Code - Agent Guide
 
+## Quick Start
+
+-   **Start session**: `./run.sh` (release) or `./run-debug.sh` (debug)
+-   **Single query**: `cargo run -- ask "your query"` (headless testing)
+
 ## Build/Test Commands
 
 -   **Build**: `cargo check` (preferred) or `cargo build --release`
@@ -12,8 +17,6 @@
 -   **Format**: `cargo fmt`
 -   **Test all**: `cargo test` or `cargo nextest run` (preferred)
 -   **Test single**: `cargo test test_name` or `cargo nextest run test_name`
--   **Run**: `./run.sh` (release) or `./run-debug.sh` (debug)
--   **Single query**: `cargo run -- ask "your query"` (headless testing)
 
 ## Architecture
 
@@ -31,16 +34,46 @@
 -   **No emojis, no hardcoded values** (read from vtcode.toml/constants.rs)
 -   **Docs**: All .md files in `./docs/` only (not root)
 
+## Tool Selection Decision Tree (Claude Code Pattern)
+
+**Discovery → Context → Execute → Verify → Reply**
+
+```
+┌─ Need information?
+│  ├─ Structure? → list_files
+│  ├─ Text patterns? → grep_file
+│  └─ Code semantics? → ast_grep_search
+├─ Modifying files?
+│  ├─ Surgical edit? → edit_file (preferred)
+│  ├─ Full rewrite? → write_file
+│  └─ Complex diff? → apply_patch
+├─ Running commands?
+│  ├─ Interactive shell? → create_pty_session → send_pty_input → read_pty_session
+│  └─ One-off command? → run_terminal_cmd
+├─ Processing 100+ items?
+│  └─ execute_code (Python/JavaScript) for filtering/aggregation
+└─ Done?
+   └─ ONE decisive reply; stop
+```
+
 ## Tool Usage Guidelines
 
--   **Essential Tools** (Tier 1): read_file, write_file, list_files, grep_file, PTY sessions
--   **Important Tools** (Tier 2): edit_file, update_plan
--   **Specialized Tools** (Tier 3): ast_grep_search, apply_patch, delete_file, curl
--   **Advanced Tools** (Tier 4): execute_code, search_tools, save_skill, load_skill, search_skills
--   **Deprecated Tools**: git_diff, run_terminal_cmd (use PTY session tools instead)
--   **Command Execution**: Always use PTY sessions (create_pty_session, send_pty_input, read_pty_session) for better control
--   **File Editing**: Use edit_file for surgical changes, write_file for full rewrites, apply_patch for complex diffs
--   **Search**: Use grep_file for text search, ast_grep_search for semantic code search
+-   **Tier 1 - Essential**: list_files, read_file, write_file, grep_file, edit_file, run_terminal_cmd
+-   **Tier 2 - Control**: update_plan (TODO list), PTY sessions (create/send/read/close)
+-   **Tier 3 - Semantic**: ast_grep_search, apply_patch, search_tools
+-   **Tier 4 - Data Processing**: execute_code, save_skill, load_skill
+-   **Command Execution Strategy**:
+    -   Interactive work → PTY sessions (create_pty_session → send_pty_input → read_pty_session → close_pty_session)
+    -   One-off commands → run_terminal_cmd
+    -   AVOID: raw grep/find bash (use grep_file instead)
+-   **File Editing Strategy**:
+    -   Exact replacements → edit_file (preferred for speed + precision)
+    -   Whole-file writes → write_file (when many changes)
+    -   Structured diffs → apply_patch (for complex changes)
+-   **Search Strategy**:
+    -   Text patterns → grep_file with ripgrep
+    -   Code semantics → ast_grep_search with tree-sitter
+    -   Tool discovery → search_tools before execute_code
 
 ## Code Execution & Skills (High-Impact Features)
 
@@ -81,7 +114,133 @@ result = {"count": len(test_files), "files": test_files[:20]}
 
 ### IMPORTANT
 
--   Don't print API KEY print debug and logging what soever. THIS IS IMPORTANT!
+-   **DO NOT** print API keys or debug/logging output. THIS IS IMPORTANT!
 -   Always use code execution for 100+ item filtering (massive token savings)
 -   Save skills for repeated patterns (80%+ reuse ratio documented)
--   Regularly run `cargo clippy` and `cargo fmt` to maintain code quality.
+-   Regularly run `cargo clippy` and `cargo fmt` to maintain code quality
+
+## Execution Algorithm (with Decision Points)
+
+### Phase 1: Understanding
+
+1. Parse the request once
+2. Confirm understanding if intent is unclear
+3. DO NOT create TODO lists unless work clearly spans 3+ steps
+4. Immediately search for context
+
+<good-example>
+User: "Add error handling to fetch_user"
+→ Search for fetch_user implementation
+→ Identify current error paths
+→ Add try-catch + logging in 1-2 calls
+→ Reply: "Done. Added error handling for network + parse errors."
+</good-example>
+
+<bad-example>
+User: "Add error handling to fetch_user"
+→ "Let me create a TODO list first"
+→ "Step 1: Find the function. Step 2: Add error handling. Step 3: Test."
+→ [starts implementation]
+→ [keeps asking to re-assess]
+</bad-example>
+
+### Phase 2: Context Gathering
+
+**Algorithm:**
+
+```
+if task is simple (1-2 files affected)
+  → list_files for structure
+  → grep_file to find relevant code
+  → read_file (targeted)
+else
+  → search_tools to discover available tools
+  → ast_grep_search for semantic patterns
+  → read_file only what's needed
+```
+
+**IMPORTANT:** Search BEFORE reading whole files. Never read 5+ files without searching first.
+
+### Phase 3: Execution
+
+-   Consolidate commands: Do 3-4 edits in single turn instead of 3-4 turns
+-   Use code execution for 100+ item processing (don't return raw lists to model)
+-   Verify impactful changes (tests, diffs)
+-   Stop immediately after solution is complete (don't re-call model)
+
+### Phase 4: Reply
+
+-   Single decisive message
+-   No hypothetical plans after work is done
+-   Summarize what was ACTUALLY changed, not what could be changed
+-   Avoid preamble ("Let me explain...") unless user asks
+
+## Tone and Steerability (Claude Code Pattern)
+
+### Tone Guidelines
+
+-   **IMPORTANT:** Do NOT answer with unnecessary preamble or postamble (such as explaining your code or summarizing your action), unless the user asks you to.
+-   Keep answers concise, direct, and free of filler
+-   Prefer direct answers over meta commentary
+-   Only use emojis if the user explicitly requests it
+-   When you cannot help, do NOT explain why or what it could lead to (comes across as preachy)
+
+### Steering the Model
+
+Unfortunately, "IMPORTANT" is still state-of-the-art for steering model behavior:
+
+```
+# Examples of effective steering:
+- IMPORTANT: You must NEVER generate or guess URLs unless confident
+- VERY IMPORTANT: You MUST avoid using bash find/grep; use Grep, Glob, or Task instead
+- IMPORTANT: DO NOT ADD ANY COMMENTS unless asked
+```
+
+### Examples of Good vs Bad Behavior
+
+<good-example>
+User: "Find and update all database queries"
+→ Use ast_grep_search to locate SQL patterns
+→ Use execute_code to aggregate results into summary
+→ Edit affected files in batches (5 files per turn)
+→ Test via PTY session
+→ Reply: "Updated 12 queries. Changed pagination limits from 100 to 50. Tests passing."
+</good-example>
+
+<bad-example>
+User: "Find and update all database queries"
+→ "Let me analyze the codebase to understand the query patterns..."
+→ grep -r "SELECT" (raw bash search returns 500+ results)
+→ "Here's what I found. Should I proceed with updates?"
+→ Waits for user confirmation before continuing
+→ Makes changes one file at a time
+</bad-example>
+
+### When to Use update_plan (TODO List)
+
+**Use update_plan ONLY if:**
+
+-   Work clearly spans 4+ logical steps
+-   Steps have dependencies
+-   User explicitly asked for a plan
+-   Complex refactoring with 5+ files
+
+**Skip update_plan if:**
+
+-   Task is simple (1-3 files, 1-2 steps)
+-   Work can be completed in single turn
+-   User just asked for a quick change
+
+<good-example>
+"Refactor payment module to use async/await"
+→ Task spans multiple logical steps: identify functions, refactor signatures, update callers, test
+→ Use update_plan with 5-6 steps
+→ Reference plan in each subsequent message
+</good-example>
+
+<bad-example>
+"Add a new field to UserModel"
+→ create update_plan("Add username field to UserModel" → 5 steps)
+✗ Overkill for simple field addition
+→ Just do it in 1 turn
+</bad-example>
