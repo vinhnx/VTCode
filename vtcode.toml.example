@@ -586,6 +586,8 @@ enabled = true
 max_concurrent_connections = 5
 request_timeout_seconds = 30
 retry_attempts = 3
+# Timeout (seconds) for initializing MCP servers (default: 60)
+startup_timeout_seconds = 60
 
 # MCP UI configuration
 [mcp.ui]
