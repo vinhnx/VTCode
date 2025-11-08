@@ -3,6 +3,22 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - Latest Improvements# [Version 0.39.5] - 2025-11-03
+# [Version 0.42.16] - 2025-11-08
+
+
+### Bug Fixes
+    - fix: update tool policies and disable time provider in configuration
+
+
+### Documentation
+    - docs: update changelog for v0.42.15 [skip ci]
+
+
+### Chores
+    - chore: update npm package.json to v0.42.15 [skip ci]
+    - chore: release v0.42.15
+    - chore: update package name and publishing instructions for npmjs.com and GitHub Packages
+    - chore: update npm package.json to v0.42.14 [skip ci]
 # [Version 0.42.15] - 2025-11-08
 
 
