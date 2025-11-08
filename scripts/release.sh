@@ -385,51 +385,33 @@ publish_npm_package() {
         return 1
     fi
 
-    # Temporarily configure npm auth if GITHUB_TOKEN is set
-    npm config set //npm.pkg.github.com/:_authToken "$GITHUB_TOKEN" || true
+    # Change to npm directory and publish
+    (
+        cd npm || return 1
+        
+        # Temporarily configure npm auth if GITHUB_TOKEN is set
+        npm config set //npm.pkg.github.com/:_authToken "$GITHUB_TOKEN" || return 1
 
-    if npm publish --cwd npm --registry https://npm.pkg.github.com; then
-        print_success "npm package v$version published to GitHub Packages"
-    else
-        print_warning "npm publish failed - you may need to publish manually"
-        return 1
-    fi
+        if npm publish --registry https://npm.pkg.github.com; then
+            print_success "npm package v$version published to GitHub Packages"
+            # Clean up npm config
+            npm config delete //npm.pkg.github.com/:_authToken || true
+            return 0
+        else
+            print_warning "npm publish failed - you may need to publish manually"
+            # Clean up npm config even on failure
+            npm config delete //npm.pkg.github.com/:_authToken || true
+            return 1
+        fi
+    )
 }
 
 publish_github_packages() {
     local version=$1
 
-    print_distribution "Publishing to GitHub Packages (npm) v$version..."
-
-    if [[ ! -f 'npm/package.json' ]]; then
-        print_warning 'npm package.json not found - skipping GitHub Packages publish'
-        return 0
-    fi
-
-    if ! command -v npm >/dev/null 2>&1; then
-        print_warning 'npm not available - skipping GitHub Packages publish'
-        return 0
-    fi
-
-    # Check for GITHUB_TOKEN
-    if [[ -z "${GITHUB_TOKEN:-}" ]]; then
-        print_warning 'GITHUB_TOKEN not set - GitHub Packages publish will be skipped'
-        print_info 'To enable GitHub Packages publishing, set GITHUB_TOKEN environment variable'
-        return 0
-    fi
-
-    # Run the GitHub Packages publish script
-    if [[ -f 'npm/scripts/publish-to-github.js' ]]; then
-        if node npm/scripts/publish-to-github.js; then
-            print_success "GitHub Packages publish completed for v$version"
-        else
-            print_warning "GitHub Packages publish script failed"
-            return 1
-        fi
-    else
-        print_warning 'GitHub Packages publish script not found'
-        return 0
-    fi
+    # GitHub Packages publishing is now handled by publish_npm_package
+    # This function is kept for backward compatibility
+    return 0
 }
 
 build_and_upload_binaries() {
@@ -801,46 +783,6 @@ main() {
     current_version=$(get_current_version)
     print_info "Current version: $current_version"
 
-    # Update npm package version if not skipping npm
-    if [[ "$skip_npm" == 'false' ]]; then
-        if [[ "$dry_run" != 'true' ]]; then
-            if [[ "$pre_release" == 'true' ]]; then
-                local current_version_parsed
-                current_version_parsed=$(get_current_version)
-                IFS='.' read -ra version_parts <<< "$current_version_parsed"
-                local major=${version_parts[0]}
-                local minor=${version_parts[1]}
-                local patch_part=${version_parts[2]}
-                local patch=$(echo "$patch_part" | sed 's/[^0-9]*$//')
-                local version
-                if [[ "$pre_release_suffix" == "alpha.0" ]]; then
-                    version="${major}.${minor}.$((patch + 1))-alpha.1"
-                else
-                    version="${major}.${minor}.$((patch + 1))-${pre_release_suffix}"
-                fi
-                update_npm_package_version "$version"
-            else
-                local released_version_temp
-                if [[ "$release_argument" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-                    released_version_temp="$release_argument"
-                else
-                    local current_version_parsed
-                    current_version_parsed=$(get_current_version)
-                    IFS='.' read -ra version_parts <<< "$current_version_parsed"
-                    local major=${version_parts[0]}
-                    local minor=${version_parts[1]}
-                    local patch=${version_parts[2]}
-                    case "$release_argument" in
-                        "major") released_version_temp="$((major + 1)).0.0" ;;
-                        "minor") released_version_temp="${major}.$((minor + 1)).0" ;;
-                        *) released_version_temp="${major}.${minor}.$((patch + 1))" ;;
-                    esac
-                fi
-                update_npm_package_version "$released_version_temp"
-            fi
-        fi
-    fi
-
     if [[ "$dry_run" == 'true' ]]; then
         print_warning 'Running in dry-run mode'
     else
@@ -861,6 +803,19 @@ main() {
     local released_version
     released_version=$(get_current_version)
     print_success "Release completed for version $released_version"
+
+    # Update npm package version to match the released version and commit the change
+    if [[ "$skip_npm" == 'false' ]]; then
+        update_npm_package_version "$released_version"
+        # Commit the npm package.json change
+        if [[ "$dry_run" != 'true' ]]; then
+            if [[ -n "$(git status --porcelain npm/package.json)" ]]; then
+                git add npm/package.json
+                git commit -m "chore: update npm package.json to v$released_version [skip ci]" --no-verify
+                print_info "Committed npm package.json with version $released_version"
+            fi
+        fi
+    fi
 
     # Push operations combined into one step - also add a timeout for large pushes
     print_info "Pushing commits and tags to remote..."
@@ -915,9 +870,21 @@ main() {
 
     # Wait for all background processes to complete
     print_info 'Waiting for background processes to complete...'
+    local npm_publish_success=0
     for pid in $pid_docs $pid_npm $pid_github; do
         if [[ -n "$pid" ]]; then
-            wait "$pid" || print_warning "Background process $pid failed"
+            if [[ "$pid" == "$pid_npm" ]]; then
+                # Special handling for npm publish - treat as more critical
+                if wait "$pid"; then
+                    print_success "npm publish completed successfully"
+                    npm_publish_success=1
+                else
+                    print_error "npm publish failed - this may require manual intervention"
+                    npm_publish_success=0
+                fi
+            else
+                wait "$pid" || print_warning "Background process $pid failed"
+            fi
         fi
     done
 
@@ -927,7 +894,17 @@ main() {
     print_success 'Release process finished'
     print_info "GitHub Release should now contain changelog notes generated by cargo-release"
     print_info "All commits, tags, and releases have been pushed to the remote repository"
-    print_info "npm package published to GitHub Packages: https://github.com/vinhnx/vtcode/pkgs/npm/vtcode"
+    
+    if [[ "$skip_npm" == 'false' ]]; then
+        if [[ $npm_publish_success -eq 1 ]]; then
+            print_success "npm package published to GitHub Packages: https://github.com/vinhnx/vtcode/pkgs/npm/vtcode"
+        else
+            print_warning "npm package may not have been published successfully - check logs above and consider manual publishing"
+            print_info "To publish npm package manually: cd npm && npm publish --registry https://npm.pkg.github.com"
+        fi
+    else
+        print_info "npm package publishing was skipped as requested"
+    fi
 }
 
 main "$@"
