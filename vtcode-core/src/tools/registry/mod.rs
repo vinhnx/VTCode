@@ -621,6 +621,7 @@ impl ToolRegistry {
         let mut needs_pty = false;
         let mut tool_exists = false;
         let mut is_mcp_tool = false;
+        let mut mcp_tool_name: Option<String> = None;
         let mut mcp_lookup_error: Option<anyhow::Error> = None;
 
         // Check if it's a standard tool first
@@ -630,23 +631,24 @@ impl ToolRegistry {
         }
         // If not a standard tool, check if it's an MCP tool
         else if let Some(mcp_client) = &self.mcp_client {
-            let resolved_name = if let Some(stripped) = name.strip_prefix("mcp_") {
+            let resolved_mcp_name = if let Some(stripped) = name.strip_prefix("mcp_") {
                 stripped.to_string()
             } else {
                 tool_name.to_string()
             };
 
-            match mcp_client.has_mcp_tool(&resolved_name).await {
+            match mcp_client.has_mcp_tool(&resolved_mcp_name).await {
                 Ok(true) => {
                     needs_pty = true;
                     tool_exists = true;
                     is_mcp_tool = true;
+                    mcp_tool_name = Some(resolved_mcp_name);
                 }
                 Ok(false) => {
                     tool_exists = false;
                 }
                 Err(err) => {
-                    warn!("Error checking MCP tool '{}': {}", resolved_name, err);
+                    warn!("Error checking MCP tool '{}': {}", resolved_mcp_name, err);
                     mcp_lookup_error = Some(err);
                 }
             }
@@ -687,7 +689,9 @@ impl ToolRegistry {
 
         // Execute the appropriate tool based on its type
         let result = if is_mcp_tool {
-            self.execute_mcp_tool(tool_name, args).await
+            let mcp_name =
+                mcp_tool_name.expect("mcp_tool_name should be set when is_mcp_tool is true");
+            self.execute_mcp_tool(&mcp_name, args).await
         } else if let Some(registration) = self.inventory.registration_for(tool_name) {
             // Log deprecation warning if tool is deprecated
             if registration.is_deprecated() {

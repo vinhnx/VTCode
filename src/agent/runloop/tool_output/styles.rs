@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use anstyle::{AnsiColor, Color, RgbColor, Style as AnsiStyle};
 use vtcode_core::config::constants::tools;
 
-
 pub(crate) struct GitStyles {
     pub(crate) add: Option<AnsiStyle>,
     pub(crate) remove: Option<AnsiStyle>,
@@ -30,7 +29,6 @@ impl GitStyles {
             ),
         }
     }
-
 }
 
 pub(crate) struct LsStyles {

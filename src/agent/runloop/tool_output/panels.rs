@@ -17,8 +17,6 @@ impl PanelContentLine {
             override_style: None,
         }
     }
-
-
 }
 
 pub(crate) fn render_panel(

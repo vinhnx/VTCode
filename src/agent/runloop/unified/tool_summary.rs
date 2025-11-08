@@ -28,10 +28,20 @@ pub(crate) fn render_tool_call_summary_with_status(
     line.push_str(status_icon);
     line.push_str("\x1b[0m ");
 
-    // Tool name in brackets with cyan color
-    line.push_str("\x1b[36m[");
-    line.push_str(tool_name);
-    line.push_str("]\x1b[0m ");
+    // Check if this is an MCP tool for special decoration
+    let is_mcp = tool_name.starts_with("mcp::") || tool_name == "fetch";
+
+    if is_mcp {
+        // For MCP tools, use special bracket style with different color
+        line.push_str("\x1b[35m["); // Magenta for MCP tools
+        line.push_str(tool_name);
+        line.push_str("]\x1b[0m ");
+    } else {
+        // Tool name in brackets with cyan color for normal tools
+        line.push_str("\x1b[36m[");
+        line.push_str(tool_name);
+        line.push_str("]\x1b[0m ");
+    }
 
     // Headline in bright white
     line.push_str("\x1b[97m");
@@ -50,7 +60,7 @@ pub(crate) fn render_tool_call_summary_with_status(
                 .iter()
                 .filter_map(|(key, value)| match value {
                     Value::String(s) if !s.is_empty() => {
-                        Some(format!("{}: {}", humanize_key(key), truncate_middle(s, 60)))
+                        Some(format!("{}: {}", humanize_key(key), truncate_middle(s, 40))) // Shorter truncation
                     }
                     Value::Bool(true) => Some(humanize_key(key)),
                     Value::Array(items) => {
@@ -62,7 +72,7 @@ pub(crate) fn render_tool_call_summary_with_status(
                             Some(format!(
                                 "{}: {}",
                                 humanize_key(key),
-                                summarize_list(&strings, 2, 60)
+                                summarize_list(&strings, 1, 30) // Shorter list
                             ))
                         } else {
                             None
@@ -93,28 +103,159 @@ pub(crate) fn render_tool_call_summary_with_status(
 }
 
 pub(crate) fn describe_tool_action(tool_name: &str, args: &Value) -> (String, HashSet<String>) {
-    match tool_name {
-        tool_names::RUN_COMMAND => describe_shell_command(args)
-            .unwrap_or_else(|| ("Run shell command".to_string(), HashSet::new())),
-        tool_names::LIST_FILES => {
-            describe_list_files(args).unwrap_or_else(|| ("List files".to_string(), HashSet::new()))
+    // Check if this is an MCP tool based on the original naming convention
+    let is_mcp_tool =
+        tool_name.starts_with("mcp::") || tool_name.starts_with("mcp_") || tool_name == "fetch";
+
+    // For the actual matching, we need to use the tool name without the "mcp_" prefix
+    let actual_tool_name = if let Some(stripped) = tool_name.strip_prefix("mcp_") {
+        stripped
+    } else if tool_name.starts_with("mcp::") {
+        // For tools in mcp::provider::name format, extract just the tool name
+        tool_name.split("::").last().unwrap_or(tool_name)
+    } else {
+        tool_name
+    };
+
+    match actual_tool_name {
+        actual_name if actual_name == tool_names::RUN_COMMAND => describe_shell_command(args)
+            .map(|(desc, used)| {
+                (
+                    format!("{}{}", if is_mcp_tool { "MCP " } else { "" }, desc),
+                    used,
+                )
+            })
+            .unwrap_or_else(|| {
+                (
+                    format!("{}Run shell command", if is_mcp_tool { "MCP " } else { "" }),
+                    HashSet::new(),
+                )
+            }),
+        actual_name if actual_name == tool_names::LIST_FILES => describe_list_files(args)
+            .map(|(desc, used)| {
+                (
+                    format!("{}{}", if is_mcp_tool { "MCP " } else { "" }, desc),
+                    used,
+                )
+            })
+            .unwrap_or_else(|| {
+                (
+                    format!("{}List files", if is_mcp_tool { "MCP " } else { "" }),
+                    HashSet::new(),
+                )
+            }),
+        actual_name if actual_name == tool_names::GREP_FILE => describe_grep_file(args)
+            .map(|(desc, used)| {
+                (
+                    format!("{}{}", if is_mcp_tool { "MCP " } else { "" }, desc),
+                    used,
+                )
+            })
+            .unwrap_or_else(|| {
+                (
+                    format!("{}Search with grep", if is_mcp_tool { "MCP " } else { "" }),
+                    HashSet::new(),
+                )
+            }),
+        actual_name if actual_name == tool_names::READ_FILE => {
+            describe_path_action(args, "Read file", &["path"])
+                .map(|(desc, used)| {
+                    (
+                        format!("{}{}", if is_mcp_tool { "MCP " } else { "" }, desc),
+                        used,
+                    )
+                })
+                .unwrap_or_else(|| {
+                    (
+                        format!("{}Read file", if is_mcp_tool { "MCP " } else { "" }),
+                        HashSet::new(),
+                    )
+                })
         }
-        tool_names::GREP_FILE => describe_grep_file(args)
-            .unwrap_or_else(|| ("Search with grep".to_string(), HashSet::new())),
-        tool_names::READ_FILE => describe_path_action(args, "Read file", &["path"])
-            .unwrap_or_else(|| ("Read file".to_string(), HashSet::new())),
-        tool_names::WRITE_FILE => describe_path_action(args, "Write file", &["path"])
-            .unwrap_or_else(|| ("Write file".to_string(), HashSet::new())),
-        tool_names::EDIT_FILE => describe_path_action(args, "Edit file", &["path"])
-            .unwrap_or_else(|| ("Edit file".to_string(), HashSet::new())),
-        tool_names::CREATE_FILE => describe_path_action(args, "Create file", &["path"])
-            .unwrap_or_else(|| ("Create file".to_string(), HashSet::new())),
-        tool_names::DELETE_FILE => describe_path_action(args, "Delete file", &["path"])
-            .unwrap_or_else(|| ("Delete file".to_string(), HashSet::new())),
-        tool_names::APPLY_PATCH => ("Apply workspace patch".to_string(), HashSet::new()),
-        tool_names::UPDATE_PLAN => ("Update task plan".to_string(), HashSet::new()),
+        actual_name if actual_name == tool_names::WRITE_FILE => {
+            describe_path_action(args, "Write file", &["path"])
+                .map(|(desc, used)| {
+                    (
+                        format!("{}{}", if is_mcp_tool { "MCP " } else { "" }, desc),
+                        used,
+                    )
+                })
+                .unwrap_or_else(|| {
+                    (
+                        format!("{}Write file", if is_mcp_tool { "MCP " } else { "" }),
+                        HashSet::new(),
+                    )
+                })
+        }
+        actual_name if actual_name == tool_names::EDIT_FILE => {
+            describe_path_action(args, "Edit file", &["path"])
+                .map(|(desc, used)| {
+                    (
+                        format!("{}{}", if is_mcp_tool { "MCP " } else { "" }, desc),
+                        used,
+                    )
+                })
+                .unwrap_or_else(|| {
+                    (
+                        format!("{}Edit file", if is_mcp_tool { "MCP " } else { "" }),
+                        HashSet::new(),
+                    )
+                })
+        }
+        actual_name if actual_name == tool_names::CREATE_FILE => {
+            describe_path_action(args, "Create file", &["path"])
+                .map(|(desc, used)| {
+                    (
+                        format!("{}{}", if is_mcp_tool { "MCP " } else { "" }, desc),
+                        used,
+                    )
+                })
+                .unwrap_or_else(|| {
+                    (
+                        format!("{}Create file", if is_mcp_tool { "MCP " } else { "" }),
+                        HashSet::new(),
+                    )
+                })
+        }
+        actual_name if actual_name == tool_names::DELETE_FILE => {
+            describe_path_action(args, "Delete file", &["path"])
+                .map(|(desc, used)| {
+                    (
+                        format!("{}{}", if is_mcp_tool { "MCP " } else { "" }, desc),
+                        used,
+                    )
+                })
+                .unwrap_or_else(|| {
+                    (
+                        format!("{}Delete file", if is_mcp_tool { "MCP " } else { "" }),
+                        HashSet::new(),
+                    )
+                })
+        }
+        actual_name if actual_name == tool_names::APPLY_PATCH => (
+            format!(
+                "{}Apply workspace patch",
+                if is_mcp_tool { "MCP " } else { "" }
+            ),
+            HashSet::new(),
+        ),
+        actual_name if actual_name == tool_names::UPDATE_PLAN => (
+            format!("{}Update task plan", if is_mcp_tool { "MCP " } else { "" }),
+            HashSet::new(),
+        ),
+        "fetch" | "web_fetch" => {
+            let (desc, used) = describe_fetch_action(args);
+            (
+                format!("{}{}", if is_mcp_tool { "MCP " } else { "" }, desc),
+                used,
+            )
+        }
         _ => (
-            format!("Use {}", humanize_tool_name(tool_name)),
+            format!(
+                "{}Use {}",
+                if is_mcp_tool { "MCP " } else { "" },
+                humanize_tool_name(actual_tool_name)
+            ),
             HashSet::new(),
         ),
     }
@@ -122,6 +263,12 @@ pub(crate) fn describe_tool_action(tool_name: &str, args: &Value) -> (String, Ha
 
 pub(crate) fn humanize_tool_name(name: &str) -> String {
     humanize_key(name)
+}
+
+fn describe_fetch_action(_args: &Value) -> (String, HashSet<String>) {
+    // Return simple description without parameters to avoid duplication
+    // Parameters will be shown in the details section by render_tool_call_summary_with_status
+    ("Use Fetch".to_string(), HashSet::new())
 }
 
 fn describe_shell_command(args: &Value) -> Option<(String, HashSet<String>)> {
