@@ -9,38 +9,45 @@ The Agent Communication Protocol (ACP) integration is fully implemented and test
 ## What Was Implemented
 
 ### 1. Core ACP Client (`vtcode-acp-client`)
-- **Sync/Async RPC Methods**: Both synchronous and asynchronous agent calls
-- **Agent Discovery**: Registry-based agent lookup and capability filtering
-- **Type-Safe Messaging**: Request/Response/Error envelopes with correlation tracking
-- **Error Handling**: Comprehensive error types with context preservation
+
+-   **Sync/Async RPC Methods**: Both synchronous and asynchronous agent calls
+-   **Agent Discovery**: Registry-based agent lookup and capability filtering
+-   **Type-Safe Messaging**: Request/Response/Error envelopes with correlation tracking
+-   **Error Handling**: Comprehensive error types with context preservation
 
 **Files**:
-- `vtcode-acp-client/src/client.rs` - AcpClient with builder pattern
-- `vtcode-acp-client/src/discovery.rs` - AgentRegistry and discovery logic
-- `vtcode-acp-client/src/messages.rs` - Type-safe message protocol
-- `vtcode-acp-client/src/error.rs` - Error types and handling
+
+-   `vtcode-acp-client/src/client.rs` - AcpClient with builder pattern
+-   `vtcode-acp-client/src/discovery.rs` - AgentRegistry and discovery logic
+-   `vtcode-acp-client/src/messages.rs` - Type-safe message protocol
+-   `vtcode-acp-client/src/error.rs` - Error types and handling
 
 ### 2. MCP Tool Integration (`vtcode-tools`)
-- **acp_call**: Execute remote agent operations (sync/async)
-- **acp_discover**: Query agent registry and capabilities
-- **acp_health**: Monitor agent health and status
+
+-   **acp_call**: Execute remote agent operations (sync/async)
+-   **acp_discover**: Query agent registry and capabilities
+-   **acp_health**: Monitor agent health and status
 
 **Files**:
-- `vtcode-tools/src/acp_tool.rs` - MCP tool implementations
+
+-   `vtcode-tools/src/acp_tool.rs` - MCP tool implementations
 
 ### 3. Zed Editor Integration (`src/acp/zed.rs`)
-- Terminal command execution via ACP
-- List files and directory exploration
-- Integrated with VTCode TUI via slash commands
+
+-   Terminal command execution via ACP
+-   List files and directory exploration
+-   Integrated with VTCode TUI via slash commands
 
 ### 4. Documentation
-- **ACP_INTEGRATION.md**: Complete integration guide
-- **ACP_QUICK_REFERENCE.md**: Quick start reference
-- **vtcode-acp-client/README.md**: Client API documentation
-- **Updated AGENTS.md**: Agent communication guidelines
+
+-   **ACP_INTEGRATION.md**: Complete integration guide
+-   **ACP_QUICK_REFERENCE.md**: Quick start reference
+-   **vtcode-acp-client/README.md**: Client API documentation
+-   **Updated AGENTS.md**: Agent communication guidelines
 
 ### 5. Examples
-- `examples/acp_distributed_workflow.rs`: End-to-end workflow example
+
+-   `examples/acp_distributed_workflow.rs`: End-to-end workflow example
 
 ## Test Results
 
@@ -79,21 +86,24 @@ The Agent Communication Protocol (ACP) integration is fully implemented and test
 ## Usage Pattern
 
 ### Discovery
+
 ```rust
 let registry = AgentRegistry::new();
 let agents = registry.find_by_capability("data-processing")?;
 ```
 
 ### Synchronous Call
+
 ```rust
 let client = AcpClient::builder()
     .with_agent_url("http://agent:8080")
     .build();
-    
+
 let response = client.call_sync("task", json!({"data": "..."}), timeout)?;
 ```
 
 ### Asynchronous Call
+
 ```rust
 let message_id = client.call_async("task", json!({"data": "..."}), timeout)?;
 // Returns immediately with message_id for tracking
@@ -102,26 +112,28 @@ let message_id = client.call_async("task", json!({"data": "..."}), timeout)?;
 ## Files Modified
 
 ### New Files (10)
-- `vtcode-acp-client/src/client.rs`
-- `vtcode-acp-client/src/discovery.rs`
-- `vtcode-acp-client/src/error.rs`
-- `vtcode-acp-client/src/messages.rs`
-- `vtcode-tools/src/acp_tool.rs`
-- `docs/ACP_INTEGRATION.md`
-- `docs/ACP_QUICK_REFERENCE.md`
-- `vtcode-acp-client/README.md`
-- `examples/acp_distributed_workflow.rs`
+
+-   `vtcode-acp-client/src/client.rs`
+-   `vtcode-acp-client/src/discovery.rs`
+-   `vtcode-acp-client/src/error.rs`
+-   `vtcode-acp-client/src/messages.rs`
+-   `vtcode-tools/src/acp_tool.rs`
+-   `docs/ACP_INTEGRATION.md`
+-   `docs/ACP_QUICK_REFERENCE.md`
+-   `vtcode-acp-client/README.md`
+-   `examples/acp_distributed_workflow.rs`
 
 ### Modified Files (9)
-- `AGENTS.md` - Added ACP guidelines
-- `src/acp/mod.rs` - ACP module integration
-- `src/acp/zed.rs` - Zed integration updates
-- `vtcode-acp-client/Cargo.toml` - Dependencies
-- `vtcode-tools/Cargo.toml` - ACP tool deps
-- `vtcode-tools/src/lib.rs` - Tool registration
-- `vscode-extension/package.json` - Extension updates
-- `docs/IMPLEMENTATION_SUMMARY.md` - Implementation notes
-- `Cargo.lock` - Updated dependencies
+
+-   `AGENTS.md` - Added ACP guidelines
+-   `src/acp/mod.rs` - ACP module integration
+-   `src/acp/zed.rs` - Zed integration updates
+-   `vtcode-acp-client/Cargo.toml` - Dependencies
+-   `vtcode-tools/Cargo.toml` - ACP tool deps
+-   `vtcode-tools/src/lib.rs` - Tool registration
+-   `vscode-extension/package.json` - Extension updates
+-   `docs/IMPLEMENTATION_SUMMARY.md` - Implementation notes
+-   `Cargo.lock` - Updated dependencies
 
 ## Next Steps
 
@@ -133,11 +145,11 @@ let message_id = client.call_async("task", json!({"data": "..."}), timeout)?;
 
 ## Quality Metrics
 
-- **Code Coverage**: 100% of ACP client code tested
-- **Error Handling**: All error paths covered with context
-- **Documentation**: 3 comprehensive guides + inline comments
-- **Performance**: Sub-100ms latency for local agent calls (async)
-- **Reliability**: Health check monitoring + automatic reconnection
+-   **Code Coverage**: 100% of ACP client code tested
+-   **Error Handling**: All error paths covered with context
+-   **Documentation**: 3 comprehensive guides + inline comments
+-   **Performance**: Sub-100ms latency for local agent calls (async)
+-   **Reliability**: Health check monitoring + automatic reconnection
 
 ## Verification Commands
 
@@ -157,11 +169,11 @@ cargo clippy && cargo fmt --check
 
 ## Integration with VTCode Ecosystem
 
-- ✅ Zed editor integration
-- ✅ VS Code extension support
-- ✅ CLI headless mode compatible
-- ✅ TUI slash command support
-- ✅ MCP tool ecosystem integrated
+-   ✅ Zed editor integration
+-   ✅ VS Code extension support
+-   ✅ CLI headless mode compatible
+-   ✅ TUI slash command support
+-   ✅ MCP tool ecosystem integrated
 
 ## Commit Details
 
@@ -180,4 +192,3 @@ e8171ae5 feat: Implement Agent Communication Protocol (ACP) integration
 
 **Status**: ✅ Complete and tested
 **Ready for**: Next minor version release (0.43.0)
-**Date**: 2024
