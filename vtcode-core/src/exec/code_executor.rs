@@ -30,6 +30,7 @@
 //! ```
 
 use crate::exec::async_command::{AsyncProcessRunner, ProcessOptions, StreamCaptureConfig};
+use crate::exec::sdk_ipc::{ToolIpcHandler, ToolResponse};
 use crate::mcp::McpToolExecutor;
 use crate::sandbox::SandboxProfile;
 use anyhow::{Context, Result};
@@ -38,7 +39,8 @@ use std::collections::HashMap;
 use std::ffi::OsString;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
+use tokio::task::JoinHandle;
 use tracing::{debug, info};
 
 /// Supported languages for code execution.
@@ -155,6 +157,11 @@ impl CodeExecutor {
 
         let start = Instant::now();
 
+        // Set up IPC directory for tool invocation
+        let ipc_dir = self.workspace_root.join(".vtcode").join("ipc");
+        tokio::fs::create_dir_all(&ipc_dir).await
+            .context("failed to create IPC directory")?;
+
         // Generate the SDK wrapper
         let sdk = self.generate_sdk().await
             .context("failed to generate SDK")?;
@@ -187,12 +194,72 @@ impl CodeExecutor {
             OsString::from(self.workspace_root.to_string_lossy().to_string()),
         );
 
+        // Set IPC directory for tool invocation
+        env.insert(
+            OsString::from("VTCODE_IPC_DIR"),
+            OsString::from(ipc_dir.to_string_lossy().to_string()),
+        );
+
+        // Spawn IPC handler task that will process tool requests from code
+        let ipc_handler = ToolIpcHandler::new(ipc_dir.clone());
+        let mcp_client = self.mcp_client.clone();
+        let execution_timeout = Duration::from_secs(self.config.timeout_secs);
+        
+        let ipc_task: JoinHandle<Result<()>> = tokio::spawn(async move {
+            let ipc_start = Instant::now();
+            
+            while ipc_start.elapsed() < execution_timeout {
+                // Check for tool requests
+                if let Some(request) = ipc_handler.read_request().await? {
+                    debug!(
+                        tool_name = %request.tool_name,
+                        request_id = %request.id,
+                        "Processing tool request from code"
+                    );
+
+                    // Execute the tool
+                    let result = match mcp_client.execute_mcp_tool(&request.tool_name, request.args.clone()).await {
+                        Ok(result) => {
+                            debug!(tool_name = %request.tool_name, "Tool executed successfully");
+                            ToolResponse {
+                                id: request.id.clone(),
+                                success: true,
+                                result: Some(result),
+                                error: None,
+                            }
+                        }
+                        Err(e) => {
+                            debug!(
+                                tool_name = %request.tool_name,
+                                error = %e,
+                                "Tool execution failed"
+                            );
+                            ToolResponse {
+                                id: request.id,
+                                success: false,
+                                result: None,
+                                error: Some(e.to_string()),
+                            }
+                        }
+                    };
+
+                    // Write response
+                    ipc_handler.write_response(result).await?;
+                } else {
+                    // No request yet, sleep and retry
+                    tokio::time::sleep(Duration::from_millis(50)).await;
+                }
+            }
+
+            Ok(())
+        });
+
         let options = ProcessOptions {
             program: self.language.interpreter().to_string(),
             args: vec![code_file.to_string_lossy().to_string()],
             env,
             current_dir: Some(self.workspace_root.clone()),
-            timeout: Some(std::time::Duration::from_secs(self.config.timeout_secs)),
+            timeout: Some(Duration::from_secs(self.config.timeout_secs)),
             cancellation_token: None,
             stdout: StreamCaptureConfig {
                 capture: true,
@@ -216,8 +283,19 @@ impl CodeExecutor {
         // Extract JSON result if present
         let json_result = self.extract_json_result(&stdout, self.language)?;
 
-        // Clean up temp file
+        // Clean up temp files
         let _ = tokio::fs::remove_file(&code_file).await;
+        let _ = tokio::fs::remove_dir_all(&ipc_dir).await;
+
+        // Wait for IPC task to complete (with timeout)
+        let ipc_result = tokio::time::timeout(
+            Duration::from_secs(1),
+            ipc_task
+        ).await;
+
+        if let Err(e) = ipc_result {
+            debug!(error = %e, "IPC handler did not complete in time");
+        }
 
         debug!(
             exit_code = process_output.exit_status.code().unwrap_or(-1),
@@ -305,28 +383,63 @@ impl CodeExecutor {
             r#"# MCP Tools SDK - Auto-generated
 import json
 import sys
+import os
+import time
 from typing import Any, Dict, Optional
+from uuid import uuid4
 
 class MCPTools:
-    """Interface to MCP tools from agent code."""
+    """Interface to MCP tools from agent code via file-based IPC."""
+    
+    IPC_DIR = os.environ.get("VTCODE_IPC_DIR", "/tmp/vtcode_ipc")
     
     def __init__(self):
         self._call_count = 0
         self._results = []
+        os.makedirs(self.IPC_DIR, exist_ok=True)
     
     def _call_tool(self, name: str, args: Dict[str, Any]) -> Any:
-        """Call an MCP tool and track execution."""
-        # TODO: Implement tool invocation
-        # Should use a side-channel (e.g., file-based IPC) to call tools
-        raise NotImplementedError(f"Tool {name} not available")
+        """Call an MCP tool via file-based IPC."""
+        request_id = str(uuid4())
+        
+        # Write request
+        request = {
+            "id": request_id,
+            "tool_name": name,
+            "args": args
+        }
+        request_file = os.path.join(self.IPC_DIR, "request.json")
+        with open(request_file, 'w') as f:
+            json.dump(request, f)
+        
+        # Wait for response
+        response_file = os.path.join(self.IPC_DIR, "response.json")
+        timeout = 30
+        start = time.time()
+        while time.time() - start < timeout:
+            if os.path.exists(response_file):
+                with open(response_file, 'r') as f:
+                    response = json.load(f)
+                
+                if response.get("id") == request_id:
+                    # Clean up response
+                    try:
+                        os.remove(response_file)
+                    except:
+                        pass
+                    
+                    if response.get("success"):
+                        return response.get("result")
+                    else:
+                        raise RuntimeError(f"Tool error: {response.get('error', 'unknown error')}")
+            
+            time.sleep(0.1)
+        
+        raise TimeoutError(f"Tool '{name}' timed out after {timeout}s")
     
     def log(self, message: str) -> None:
         """Log a message that will be captured."""
         print(f"[LOG] {message}")
-    
-    def set_result(self, data: Any) -> None:
-        """Set the result to be returned to the agent."""
-        self._results.append(data)
 
 # Initialize tools interface
 mcp = MCPTools()
@@ -355,23 +468,66 @@ mcp = MCPTools()
 
         let mut sdk = String::from(
             r#"// MCP Tools SDK - Auto-generated
+const fs = require('fs');
+const path = require('path');
+const { v4: uuid4 } = require('uuid');
+
 class MCPTools {
   constructor() {
     this.callCount = 0;
     this.results = [];
+    this.ipcDir = process.env.VTCODE_IPC_DIR || '/tmp/vtcode_ipc';
+    if (!fs.existsSync(this.ipcDir)) {
+      fs.mkdirSync(this.ipcDir, { recursive: true });
+    }
   }
 
   async callTool(name, args = {}) {
-    // TODO: Implement tool invocation via side-channel
-    throw new Error(`Tool ${name} not available`);
+    const requestId = uuid4();
+    const request = {
+      id: requestId,
+      tool_name: name,
+      args: args
+    };
+
+    const requestFile = path.join(this.ipcDir, 'request.json');
+    fs.writeFileSync(requestFile, JSON.stringify(request, null, 2));
+
+    // Wait for response
+    const responseFile = path.join(this.ipcDir, 'response.json');
+    const timeout = 30000; // 30s
+    const start = Date.now();
+
+    while (Date.now() - start < timeout) {
+      try {
+        if (fs.existsSync(responseFile)) {
+          const response = JSON.parse(fs.readFileSync(responseFile, 'utf-8'));
+          
+          if (response.id === requestId) {
+            // Clean up response
+            try {
+              fs.unlinkSync(responseFile);
+            } catch (e) {}
+
+            if (response.success) {
+              return response.result;
+            } else {
+              throw new Error(`Tool error: ${response.error || 'unknown error'}`);
+            }
+          }
+        }
+      } catch (e) {
+        if (e.code !== 'ENOENT') throw e;
+      }
+
+      await new Promise(r => setTimeout(r, 100));
+    }
+
+    throw new Error(`Tool '${name}' timed out after ${timeout}ms`);
   }
 
   log(message) {
     console.log(`[LOG] ${message}`);
-  }
-
-  setResult(data) {
-    this.results.push(data);
   }
 }
 
