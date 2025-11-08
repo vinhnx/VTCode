@@ -63,16 +63,22 @@ Alternatively, if you use [Homebrew](https://brew.sh/):
 brew install vtcode
 ```
 
-Or install via npm:
+Or install via npm from GitHub Packages:
 
 ```shell
-npm install -g vtcode
+npm install -g @vinhnx/vtcode
+```
+
+Or install via npm from npmjs.com (alternative package name):
+
+```shell
+npm install -g vtcode-bin
 ```
 
 Or run directly with npx without installation:
 
 ```shell
-npx vtcode
+npx @vinhnx/vtcode
 ```
 
 Then simply run `vtcode` to get started:

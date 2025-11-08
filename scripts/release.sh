@@ -382,17 +382,30 @@ publish_npm_package() {
     local npm_publish_success=0
     local github_publish_success=0
 
-    # Publish to npmjs.com first
+    # Publish to npmjs.com with different package name (if NPM_TOKEN is available)
     if [[ -n "${NPM_TOKEN:-}" ]]; then
         print_distribution "Publishing npm package v$version to npmjs.com..."
+        
+        # Create a temporary copy of package.json with different name for npmjs.com
+        local temp_npm_dir=$(mktemp -d)
+        cp -r npm/* "$temp_npm_dir/"
+        
+        # Modify the package name for npmjs.com (since 'vtcode' is already taken)
+        jq --arg new_name "vtcode-bin" '.name = $new_name' "$temp_npm_dir/package.json" > "$temp_npm_dir/package.json.tmp" && mv "$temp_npm_dir/package.json.tmp" "$temp_npm_dir/package.json"
+        
+        # Remove the scoped registry config for npmjs.com publish
+        if jq 'del(.publishConfig)' "$temp_npm_dir/package.json" > "$temp_npm_dir/package.json.tmp" 2>/dev/null; then
+            mv "$temp_npm_dir/package.json.tmp" "$temp_npm_dir/package.json"
+        fi
+        
         (
-            cd npm || return 1
+            cd "$temp_npm_dir" || return 1
 
             # Temporarily configure npm auth for npmjs.com
             npm config set //registry.npmjs.org/:_authToken "$NPM_TOKEN" || return 1
 
             if npm publish; then
-                print_success "npm package v$version published to npmjs.com"
+                print_success "npm package v$version published to npmjs.com as vtcode-bin"
                 npm_publish_success=1
             else
                 print_warning "npm publish to npmjs.com failed"
@@ -402,12 +415,15 @@ publish_npm_package() {
             # Clean up npm config
             npm config delete //registry.npmjs.org/:_authToken || true
         )
+        
+        # Clean up temporary directory
+        rm -rf "$temp_npm_dir"
     else
         print_warning 'NPM_TOKEN not set - skipping publish to npmjs.com'
         npm_publish_success=0
     fi
 
-    # Publish to GitHub Packages
+    # Publish to GitHub Packages with original package
     if [[ -n "${GITHUB_TOKEN:-}" ]]; then
         print_distribution "Publishing npm package v$version to GitHub Packages..."
         (
@@ -417,7 +433,7 @@ publish_npm_package() {
             npm config set //npm.pkg.github.com/:_authToken "$GITHUB_TOKEN" || return 1
 
             if npm publish --registry https://npm.pkg.github.com; then
-                print_success "npm package v$version published to GitHub Packages"
+                print_success "npm package v$version published to GitHub Packages as @vinhnx/vtcode"
                 github_publish_success=1
             else
                 print_warning "npm publish to GitHub Packages failed"
@@ -932,11 +948,11 @@ main() {
     if [[ "$skip_npm" == 'false' ]]; then
         if [[ $npm_publish_success -eq 1 ]]; then
             print_success "npm package published to both registries:"
-            print_success "  - npmjs.com: https://www.npmjs.com/package/vtcode"
+            print_success "  - npmjs.com: https://www.npmjs.com/package/vtcode-bin"
             print_success "  - GitHub Packages: https://github.com/vinhnx/vtcode/pkgs/npm/vtcode"
         else
             print_warning "npm package may not have been published successfully - check logs above and consider manual publishing"
-            print_info "To publish npm package manually to npmjs.com: cd npm && npm publish"
+            print_info "To publish npm package manually to npmjs.com: cd npm && npm publish (with different package name)"
             print_info "To publish npm package manually to GitHub Packages: cd npm && npm publish --registry https://npm.pkg.github.com"
         fi
     else

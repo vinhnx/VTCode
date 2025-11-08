@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 
 /**
- * Script to publish the package to npmjs.com
+ * Script to publish the package to npmjs.com (with different package name)
  * Usage: node scripts/publish-to-npmjs.js
  *
  * This script will:
  * 1. Check if NPM_TOKEN environment variable is set
- * 2. Verify .npmrc configuration exists
+ * 2. Modify package.json to use a different name for npmjs.com
  * 3. Run npm publish to npmjs.com
  */
 
@@ -61,32 +61,53 @@ function checkNpmrc() {
   }
 }
 
-function checkPackageJson() {
-  const packageJsonPath = path.join(__dirname, '../package.json');
-  if (!fs.existsSync(packageJsonPath)) {
-    console.error('❌ Error: package.json not found in npm directory');
-    process.exit(1);
-  }
-
-  const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
-  console.log(` Package: ${packageJson.name} (v${packageJson.version})`);
-
-  return packageJson;
-}
-
 function runPublish() {
   console.log('\n🚀 Starting publish process to npmjs.com...');
 
+  // Create temporary directory and copy files
+  const os = require('os');
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vtcode-npm-'));
+  const sourceDir = path.join(__dirname, '..');
+  const files = fs.readdirSync(sourceDir);
+  
+  for (const file of files) {
+    if (file !== 'node_modules') { // Don't copy node_modules
+      const src = path.join(sourceDir, file);
+      const dest = path.join(tempDir, file);
+      if (fs.statSync(src).isDirectory()) {
+        const { cp } = require('child_process');
+        cp.execSync(`cp -r "${src}" "${dest}"`);
+      } else {
+        fs.copyFileSync(src, dest);
+      }
+    }
+  }
+
   try {
+    // Read the current package.json and modify the name
+    const packageJsonPath = path.join(tempDir, 'package.json');
+    let packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+    
+    // Change the package name for npmjs.com (since 'vtcode' is taken)
+    packageJson.name = 'vtcode-bin';
+    
+    // Remove the scoped registry config for npmjs.com publish
+    delete packageJson.publishConfig;
+    
+    // Write the modified package.json
+    fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2));
+    
+    console.log(` Package: ${packageJson.name} (v${packageJson.version})`);
+
     // Verify npm configuration
     console.log('\n📋 Checking npm configuration...');
-    const npmWhoami = execSync('npm whoami', { encoding: 'utf8' }).trim();
+    const npmWhoami = execSync('npm whoami', { encoding: 'utf8', cwd: tempDir }).trim();
     console.log(`👤 Authenticated as: ${npmWhoami}`);
 
     // Run npm publish to npmjs.com
     console.log('\n📦 Publishing to npmjs.com...');
     const publishOutput = execSync('npm publish', {
-      cwd: path.join(__dirname, '..'),
+      cwd: tempDir,
       encoding: 'utf8'
     });
 
@@ -94,28 +115,31 @@ function runPublish() {
     console.log(publishOutput);
 
     console.log('\n🎉 Package published successfully to npmjs.com!');
-    console.log(`🔗 View at: https://www.npmjs.com/package/vtcode`);
+    console.log(`🔗 View at: https://www.npmjs.com/package/vtcode-bin`);
   } catch (error) {
     console.error('❌ Error during publish:');
     console.error(error.message);
     if (error.stdout) console.error('STDOUT:', error.stdout);
     if (error.stderr) console.error('STDERR:', error.stderr);
     process.exit(1);
+  } finally {
+    // Clean up temporary directory
+    const { spawn } = require('child_process');
+    const rmProcess = spawn('rm', ['-rf', tempDir]);
+    rmProcess.on('close', () => {
+      console.log(' Cleaned up temporary files.');
+    });
   }
 }
 
 function main() {
-  console.log('📝 Publishing VT Code npm package to npmjs.com');
+  console.log('📝 Publishing VT Code npm package to npmjs.com (with different name)');
   console.log('=====================================================');
 
   checkEnvironment();
   checkNpmrc();
-  const packageJson = checkPackageJson();
 
-  console.log('\n📋 Verification complete. Ready to publish:');
-  console.log(`   - Package: ${packageJson.name}`);
-  console.log(`   - Version: ${packageJson.version}`);
-  console.log(`   - Registry: npmjs.com (configured in .npmrc)`);
+  console.log('\n📋 Ready to publish:');
 
   // Ask for confirmation
   const readline = require('readline');
