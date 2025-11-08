@@ -9,7 +9,7 @@ use vtcode_core::config::mcp::{
     McpAllowListConfig, McpAllowListRules, McpClientConfig, McpProviderConfig,
     McpStdioServerConfig, McpTransportConfig, McpUiConfig, McpUiMode,
 };
-use vtcode_core::mcp_client::{McpClient, McpToolExecutor};
+use vtcode_core::mcp::{McpClient, McpToolExecutor};
 
 #[cfg(test)]
 mod tests {

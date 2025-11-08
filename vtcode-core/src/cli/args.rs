@@ -584,7 +584,7 @@ pub enum Commands {
     #[command(name = "mcp")]
     Mcp {
         #[command(subcommand)]
-        command: crate::cli::mcp_commands::McpCommands,
+        command: crate::mcp::cli::McpCommands,
     },
 
     /// **Manage models and providers** - configure and switch between LLM providers\n\n**Features:**\n• Support for latest models (DeepSeek, etc.)\n• Provider configuration and testing\n• Model performance comparison\n• API key management\n\n**Examples:**\n  vtcode models list\n  vtcode models set-provider deepseek\n  vtcode models set-model deepseek-reasoner

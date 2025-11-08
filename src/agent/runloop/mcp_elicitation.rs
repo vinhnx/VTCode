@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use serde_json::Value;
 use tokio::sync::Mutex;
 
-use vtcode_core::mcp_client::{
+use vtcode_core::mcp::{
     ElicitationAction, McpElicitationHandler, McpElicitationRequest, McpElicitationResponse,
 };
 

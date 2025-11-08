@@ -10,7 +10,7 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::mcp::{
     McpClientConfig, McpProviderConfig, McpStdioServerConfig, McpTransportConfig,
 };
-use vtcode_core::mcp_client::McpClient;
+use vtcode_core::mcp::McpClient;
 use vtcode_core::tools::registry::ToolRegistry;
 
 #[cfg(test)]

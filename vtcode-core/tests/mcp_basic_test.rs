@@ -7,7 +7,7 @@ use vtcode_core::config::mcp::{
     McpClientConfig, McpProviderConfig, McpStdioServerConfig, McpTransportConfig, McpUiConfig,
     McpUiMode,
 };
-use vtcode_core::mcp_client::McpClient;
+use vtcode_core::mcp::McpClient;
 
 #[cfg(test)]
 mod tests {
@@ -142,7 +142,7 @@ mod tests {
 
     #[test]
     fn test_tool_info_creation() {
-        let tool_info = vtcode_core::mcp_client::McpToolInfo {
+        let tool_info = vtcode_core::mcp::McpToolInfo {
             name: "test_tool".to_string(),
             description: "A test tool".to_string(),
             provider: "test_provider".to_string(),

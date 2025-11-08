@@ -1,4 +1,6 @@
-use anstyle::{Color as AnsiColorEnum, Effects, Style as AnsiStyle};
+use anstyle::{AnsiColor, Color as AnsiColorEnum, Effects, RgbColor, Style as AnsiStyle};
+use ratatui::style::{Color, Modifier, Style};
+use unicode_width::UnicodeWidthStr;
 
 use crate::ui::theme;
 
@@ -35,4 +37,47 @@ pub fn theme_from_styles(styles: &theme::ThemeStyles) -> InlineTheme {
         tool_accent: convert_style_color(&styles.tool),
         tool_body: convert_style_color(&styles.tool_detail),
     }
+}
+
+pub fn measure_text_width(text: &str) -> u16 {
+    UnicodeWidthStr::width(text) as u16
+}
+
+pub fn ratatui_color_from_ansi(color: AnsiColorEnum) -> Color {
+    match color {
+        AnsiColorEnum::Ansi(base) => match base {
+            AnsiColor::Black => Color::Black,
+            AnsiColor::Red => Color::Red,
+            AnsiColor::Green => Color::Green,
+            AnsiColor::Yellow => Color::Yellow,
+            AnsiColor::Blue => Color::Blue,
+            AnsiColor::Magenta => Color::Magenta,
+            AnsiColor::Cyan => Color::Cyan,
+            AnsiColor::White => Color::White,
+            AnsiColor::BrightBlack => Color::DarkGray,
+            AnsiColor::BrightRed => Color::LightRed,
+            AnsiColor::BrightGreen => Color::LightGreen,
+            AnsiColor::BrightYellow => Color::LightYellow,
+            AnsiColor::BrightBlue => Color::LightBlue,
+            AnsiColor::BrightMagenta => Color::LightMagenta,
+            AnsiColor::BrightCyan => Color::LightCyan,
+            AnsiColor::BrightWhite => Color::Gray,
+        },
+        AnsiColorEnum::Ansi256(value) => Color::Indexed(value.index()),
+        AnsiColorEnum::Rgb(RgbColor(red, green, blue)) => Color::Rgb(red, green, blue),
+    }
+}
+
+pub fn ratatui_style_from_inline(style: &InlineTextStyle, fallback: Option<AnsiColorEnum>) -> Style {
+    let mut resolved = Style::default();
+    if let Some(color) = style.color.or(fallback) {
+        resolved = resolved.fg(ratatui_color_from_ansi(color));
+    }
+    if style.bold {
+        resolved = resolved.add_modifier(Modifier::BOLD);
+    }
+    if style.italic {
+        resolved = resolved.add_modifier(Modifier::ITALIC);
+    }
+    resolved
 }

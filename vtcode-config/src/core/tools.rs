@@ -36,24 +36,10 @@ pub struct ToolsConfig {
 
 impl Default for ToolsConfig {
     fn default() -> Self {
-        let mut policies = IndexMap::new();
-        policies.insert(tools::GREP_FILE.to_string(), ToolPolicy::Allow);
-        policies.insert(tools::LIST_FILES.to_string(), ToolPolicy::Allow);
-        policies.insert(tools::UPDATE_PLAN.to_string(), ToolPolicy::Allow);
-        policies.insert(tools::READ_FILE.to_string(), ToolPolicy::Allow);
-        policies.insert(tools::GIT_DIFF.to_string(), ToolPolicy::Allow);
-        policies.insert(tools::AST_GREP_SEARCH.to_string(), ToolPolicy::Allow);
-        policies.insert(tools::CLOSE_PTY_SESSION.to_string(), ToolPolicy::Allow);
-        policies.insert(tools::CREATE_PTY_SESSION.to_string(), ToolPolicy::Allow);
-        policies.insert(tools::LIST_PTY_SESSIONS.to_string(), ToolPolicy::Allow);
-        policies.insert(tools::READ_PTY_SESSION.to_string(), ToolPolicy::Allow);
-        policies.insert(tools::RESIZE_PTY_SESSION.to_string(), ToolPolicy::Allow);
-        policies.insert(tools::CURL.to_string(), ToolPolicy::Prompt);
-        policies.insert(tools::RUN_COMMAND.to_string(), ToolPolicy::Prompt);
-        policies.insert(tools::SEND_PTY_INPUT.to_string(), ToolPolicy::Prompt);
-        policies.insert(tools::WRITE_FILE.to_string(), ToolPolicy::Allow);
-        policies.insert(tools::EDIT_FILE.to_string(), ToolPolicy::Allow);
-        policies.insert(tools::APPLY_PATCH.to_string(), ToolPolicy::Prompt);
+        let policies = DEFAULT_TOOL_POLICIES
+            .iter()
+            .map(|(tool, policy)| ((*tool).to_string(), *policy))
+            .collect::<IndexMap<_, _>>();
         Self {
             default_policy: default_tool_policy(),
             policies,
@@ -65,7 +51,7 @@ impl Default for ToolsConfig {
 
 /// Tool execution policy
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum ToolPolicy {
     /// Allow execution without confirmation
@@ -87,3 +73,25 @@ fn default_max_tool_loops() -> usize {
 fn default_max_repeated_tool_calls() -> usize {
     defaults::DEFAULT_MAX_REPEATED_TOOL_CALLS
 }
+
+const DEFAULT_TOOL_POLICIES: &[(&str, ToolPolicy)] = &[
+    (tools::LIST_FILES, ToolPolicy::Allow),
+    (tools::GREP_FILE, ToolPolicy::Allow),
+    (tools::UPDATE_PLAN, ToolPolicy::Allow),
+    (tools::GIT_DIFF, ToolPolicy::Allow),
+    (tools::AST_GREP_SEARCH, ToolPolicy::Allow),
+    (tools::READ_FILE, ToolPolicy::Allow),
+    (tools::WRITE_FILE, ToolPolicy::Allow),
+    (tools::EDIT_FILE, ToolPolicy::Allow),
+    (tools::CREATE_FILE, ToolPolicy::Allow),
+    (tools::APPLY_PATCH, ToolPolicy::Prompt),
+    (tools::DELETE_FILE, ToolPolicy::Prompt),
+    (tools::CREATE_PTY_SESSION, ToolPolicy::Allow),
+    (tools::READ_PTY_SESSION, ToolPolicy::Allow),
+    (tools::LIST_PTY_SESSIONS, ToolPolicy::Allow),
+    (tools::RESIZE_PTY_SESSION, ToolPolicy::Allow),
+    (tools::SEND_PTY_INPUT, ToolPolicy::Prompt),
+    (tools::CLOSE_PTY_SESSION, ToolPolicy::Allow),
+    (tools::CURL, ToolPolicy::Prompt),
+    (tools::RUN_COMMAND, ToolPolicy::Prompt),
+];

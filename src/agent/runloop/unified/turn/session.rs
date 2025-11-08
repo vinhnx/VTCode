@@ -31,7 +31,7 @@ use vtcode_core::utils::transcript;
 
 use crate::agent::runloop::ResumeSession;
 use crate::agent::runloop::git::confirm_changes_with_git_diff;
-use crate::agent::runloop::is_context_overflow_error;
+use crate::agent::agents::is_context_overflow_error;
 use crate::agent::runloop::model_picker::{ModelPickerProgress, ModelPickerState};
 use crate::agent::runloop::prompt::refine_user_prompt_if_enabled;
 use crate::agent::runloop::slash_commands::handle_slash_command;
@@ -90,6 +90,8 @@ enum TurnLoopResult {
         reason: Option<String>,
     },
 }
+
+const SELF_REVIEW_MIN_LENGTH: usize = 240;
 
 pub(crate) async fn run_single_agent_loop_unified(
     config: &CoreAgentConfig,
@@ -451,6 +453,9 @@ pub(crate) async fn run_single_agent_loop_unified(
         let mut queued_inputs: VecDeque<String> = VecDeque::new();
         let mut ctrl_c_notice_displayed = false;
         let mut mcp_catalog_initialized = tool_registry.mcp_client().is_some();
+        let mut last_known_mcp_tools: Vec<String> = Vec::new();
+        let mut last_mcp_refresh = std::time::Instant::now();
+        const MCP_REFRESH_INTERVAL: std::time::Duration = std::time::Duration::from_secs(5);
 
         // Report MCP initialization status if available and there's an error
         if let Some(mcp_manager) = &async_mcp_manager {
@@ -495,64 +500,132 @@ pub(crate) async fn run_single_agent_loop_unified(
 
             let interrupts = InlineInterruptCoordinator::new(ctrl_c_state.as_ref());
 
-            if let Some(mcp_manager) = &async_mcp_manager
-                && !mcp_catalog_initialized
-            {
-                match mcp_manager.get_status().await {
-                    McpInitStatus::Ready { client } => {
-                        tool_registry.set_mcp_client(Arc::clone(&client));
-                        match tool_registry.refresh_mcp_tools().await {
-                            Ok(()) => {
-                                let mut registered_tools = 0usize;
-                                match tool_registry.list_mcp_tools().await {
-                                    Ok(mcp_tools) => {
-                                        let new_definitions =
-                                            build_mcp_tool_definitions(&mcp_tools);
-                                        registered_tools = new_definitions.len();
-                                        let updated_snapshot = {
-                                            let mut guard = tools.write().await;
-                                            guard.retain(|tool| {
-                                                !tool.function.name.starts_with("mcp_")
-                                            });
-                                            guard.extend(new_definitions);
-                                            guard.clone()
-                                        };
-                                        context_manager.update_tool_catalog(build_curator_tools(
-                                            &updated_snapshot,
-                                        ));
+            if let Some(mcp_manager) = &async_mcp_manager {
+                // Handle initial MCP client setup
+                if !mcp_catalog_initialized {
+                    match mcp_manager.get_status().await {
+                        McpInitStatus::Ready { client } => {
+                            tool_registry.set_mcp_client(Arc::clone(&client));
+                            match tool_registry.refresh_mcp_tools().await {
+                                Ok(()) => {
+                                    let mut registered_tools = 0usize;
+                                    match tool_registry.list_mcp_tools().await {
+                                        Ok(mcp_tools) => {
+                                            let new_definitions =
+                                                build_mcp_tool_definitions(&mcp_tools);
+                                            registered_tools = new_definitions.len();
+                                            let updated_snapshot = {
+                                                let mut guard = tools.write().await;
+                                                guard.retain(|tool| {
+                                                    !tool.function.name.starts_with("mcp_")
+                                                });
+                                                guard.extend(new_definitions);
+                                                guard.clone()
+                                            };
+                                            context_manager.update_tool_catalog(build_curator_tools(
+                                                &updated_snapshot,
+                                            ));
+                                            
+                                            // Store the initial tool names to track changes later
+                                            last_known_mcp_tools = mcp_tools.iter()
+                                                .map(|t| format!("{}-{}", t.provider, t.name))
+                                                .collect();
+                                        }
+                                        Err(err) => {
+                                            warn!("Failed to enumerate MCP tools after refresh: {err}");
+                                        }
                                     }
-                                    Err(err) => {
-                                        warn!("Failed to enumerate MCP tools after refresh: {err}");
+
+                                    renderer.line(
+                                            MessageStyle::Info,
+                                            &format!(
+                                                "MCP tools ready ({} registered). Use /mcp tools to inspect the catalog.",
+                                                registered_tools
+                                            ),
+                                        )?;
+                                    renderer.line_if_not_empty(MessageStyle::Output)?;
+                                }
+                                Err(err) => {
+                                    warn!("Failed to refresh MCP tools after initialization: {err}");
+                                    renderer.line(
+                                        MessageStyle::Error,
+                                        &format!("Failed to index MCP tools: {}", err),
+                                    )?;
+                                    renderer.line_if_not_empty(MessageStyle::Output)?;
+                                }
+                            }
+                            mcp_catalog_initialized = true;
+                        }
+                        McpInitStatus::Error { message } => {
+                            renderer
+                                .line(MessageStyle::Error, &format!("⚠️  MCP Error: {}", message))?;
+                            renderer.line_if_not_empty(MessageStyle::Output)?;
+                            mcp_catalog_initialized = true;
+                        }
+                        McpInitStatus::Initializing { .. } | McpInitStatus::Disabled => {}
+                    }
+                } 
+                
+                // Dynamic MCP tool refresh - check for new/updated tools after initialization
+                if mcp_catalog_initialized 
+                    && last_mcp_refresh.elapsed() >= MCP_REFRESH_INTERVAL
+                {
+                    last_mcp_refresh = std::time::Instant::now();
+                    
+                    if let Ok(known_tools) = tool_registry.list_mcp_tools().await {
+                        let current_tool_keys: Vec<String> = known_tools
+                            .iter()
+                            .map(|t| format!("{}-{}", t.provider, t.name))
+                            .collect();
+                        
+                        // Check if there are new or changed tools
+                        if current_tool_keys != last_known_mcp_tools {
+                            match tool_registry.refresh_mcp_tools().await {
+                                Ok(()) => {
+                                    match tool_registry.list_mcp_tools().await {
+                                        Ok(new_mcp_tools) => {
+                                            let new_definitions = build_mcp_tool_definitions(&new_mcp_tools);
+                                            let updated_snapshot = {
+                                                let mut guard = tools.write().await;
+                                                guard.retain(|tool| {
+                                                    !tool.function.name.starts_with("mcp_")
+                                                });
+                                                guard.extend(new_definitions);
+                                                guard.clone()
+                                            };
+                                            context_manager.update_tool_catalog(build_curator_tools(
+                                                &updated_snapshot,
+                                            ));
+                                            
+                                            let added_count = new_mcp_tools.len().saturating_sub(last_known_mcp_tools.len());
+                                            let message = if added_count > 0 {
+                                                format!("Discovered {} new MCP tool{}", 
+                                                       added_count, 
+                                                       if added_count == 1 { "" } else { "s" })
+                                            } else {
+                                                "MCP tools updated".to_string()
+                                            };
+                                            
+                                            renderer.line(MessageStyle::Info, &format!("🔄 {}", message))?;
+                                            renderer.line_if_not_empty(MessageStyle::Output)?;
+                                            
+                                            // Update the last known tools
+                                            last_known_mcp_tools = new_mcp_tools
+                                                .iter()
+                                                .map(|t| format!("{}-{}", t.provider, t.name))
+                                                .collect();
+                                        }
+                                        Err(err) => {
+                                            warn!("Failed to enumerate MCP tools after refresh: {err}");
+                                        }
                                     }
                                 }
-
-                                renderer.line(
-                                        MessageStyle::Info,
-                                        &format!(
-                                            "MCP tools ready ({} registered). Use /mcp tools to inspect the catalog.",
-                                            registered_tools
-                                        ),
-                                    )?;
-                                renderer.line_if_not_empty(MessageStyle::Output)?;
-                            }
-                            Err(err) => {
-                                warn!("Failed to refresh MCP tools after initialization: {err}");
-                                renderer.line(
-                                    MessageStyle::Error,
-                                    &format!("Failed to index MCP tools: {}", err),
-                                )?;
-                                renderer.line_if_not_empty(MessageStyle::Output)?;
+                                Err(err) => {
+                                    warn!("Failed to refresh MCP tools during dynamic update: {err}");
+                                }
                             }
                         }
-                        mcp_catalog_initialized = true;
                     }
-                    McpInitStatus::Error { message } => {
-                        renderer
-                            .line(MessageStyle::Error, &format!("⚠️  MCP Error: {}", message))?;
-                        renderer.line_if_not_empty(MessageStyle::Output)?;
-                        mcp_catalog_initialized = true;
-                    }
-                    McpInitStatus::Initializing { .. } | McpInitStatus::Disabled => {}
                 }
             }
 
@@ -821,7 +894,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                 .filter(|&value| value > 0)
                 .unwrap_or(defaults::DEFAULT_MAX_TOOL_LOOPS);
 
-            let mut loop_guard = 0usize;
+            let mut step_count = 0usize;
+            let mut allow_follow_up = true;
             let mut any_write_effect = false;
             let mut last_tool_stdout: Option<String> = None;
             let mut bottom_gap_applied = false;
@@ -839,11 +913,16 @@ pub(crate) async fn run_single_agent_loop_unified(
                     renderer.line(MessageStyle::Info, "Cancelling current operation...")?;
                     break TurnLoopResult::Cancelled;
                 }
-                if loop_guard == 0 {
+                if step_count > 0 && !allow_follow_up {
+                    ensure_turn_bottom_gap(&mut renderer, &mut bottom_gap_applied)?;
+                    break TurnLoopResult::Completed;
+                }
+                if step_count == 0 {
                     renderer.line_if_not_empty(MessageStyle::Output)?;
                 }
-                loop_guard += 1;
-                if loop_guard >= max_tool_loops {
+                step_count += 1;
+                allow_follow_up = false;
+                if step_count > max_tool_loops {
                     if !bottom_gap_applied {
                         renderer.line(MessageStyle::Output, "")?;
                     }
@@ -930,52 +1009,20 @@ pub(crate) async fn run_single_agent_loop_unified(
                     .unwrap_or(false);
 
                 let conversation_len = working_history.len();
-                let should_compress = if optimization_enabled {
-                    if token_budget_enabled {
+                let should_compress = optimization_enabled
+                    && (if token_budget_enabled {
                         let budget = context_manager.token_budget();
                         let usage_percent = budget.usage_percentage().await;
-
-                        // Trigger at 20 turns OR 85% token usage
-                        let result = conversation_len >= 20 || usage_percent >= 85.0;
-
-                        #[cfg(debug_assertions)]
-                        debug!(
-                            "Context optimization check: enabled={}, conversations={}, token_usage={:.1}%, should_compress={}",
-                            optimization_enabled, conversation_len, usage_percent, result
-                        );
-
-                        result
+                        conversation_len >= 20 || usage_percent >= 85.0
                     } else {
-                        let result = conversation_len >= 20;
-
-                        #[cfg(debug_assertions)]
-                        debug!(
-                            "Context optimization check: enabled={}, conversations={}, should_compress={}",
-                            optimization_enabled, conversation_len, result
-                        );
-
-                        result
-                    }
-                } else {
-                    #[cfg(debug_assertions)]
-                    debug!(
-                        "Context optimization disabled in config (conversations={})",
-                        conversation_len
-                    );
-                    false
-                };
+                        conversation_len >= 20
+                    });
 
                 if should_compress && working_history.len() > 15 {
-                    #[cfg(debug_assertions)]
-                    debug!(
-                        "Compressing context: {} messages → 15 recent + system message",
-                        conversation_len
-                    );
-
                     renderer.line(
                         MessageStyle::Info,
                         &format!(
-                            "⚡ Optimizing context ({} messages → 15 recent)",
+                            "Optimizing context ({} messages -> 15 recent)",
                             conversation_len
                         ),
                     )?;
@@ -989,206 +1036,182 @@ pub(crate) async fn run_single_agent_loop_unified(
                     }
                     compressed.extend(working_history.iter().rev().take(15).rev().cloned());
                     working_history = compressed;
+                }
 
-                    #[cfg(debug_assertions)]
+                let mut request_history = working_history.clone();
+                let _ = context_manager.enforce_context_window(&mut request_history);
+                context_manager.reset_token_budget().await;
+                let system_prompt = context_manager
+                    .build_system_prompt(&request_history, step_count)
+                    .await?;
+
+                let use_streaming = provider_client.supports_streaming();
+                let reasoning_effort = vt_cfg.as_ref().and_then(|cfg| {
+                    if provider_client.supports_reasoning_effort(&active_model) {
+                        Some(cfg.agent.reasoning_effort)
+                    } else {
+                        None
+                    }
+                });
+                let current_tools = tools.read().await.clone();
+                let request = uni::LLMRequest {
+                    messages: request_history.clone(),
+                    system_prompt: Some(system_prompt),
+                    tools: Some(current_tools),
+                    model: active_model.clone(),
+                    max_tokens: max_tokens_opt.or(Some(2000)),
+                    temperature: Some(0.7),
+                    stream: use_streaming,
+                    tool_choice: Some(uni::ToolChoice::auto()),
+                    parallel_tool_calls: None,
+                    parallel_tool_config: if provider_client
+                        .supports_parallel_tool_config(&active_model)
+                    {
+                        parallel_cfg_opt.clone()
+                    } else {
+                        None
+                    },
+                    reasoning_effort,
+                };
+
+                let thinking_spinner = PlaceholderSpinner::new(
+                    &handle,
+                    input_status_state.left.clone(),
+                    input_status_state.right.clone(),
+                    "Thinking...",
+                );
+                task::yield_now().await;
+                #[cfg(debug_assertions)]
+                let request_timer = Instant::now();
+                #[cfg(debug_assertions)]
+                {
+                    let tool_count = request.tools.as_ref().map_or(0, |tools| tools.len());
                     debug!(
-                        "Context compressed successfully: final message count = {}",
-                        working_history.len()
+                        target = "vtcode::agent::llm",
+                        model = %request.model,
+                        streaming = use_streaming,
+                        step = step_count,
+                        messages = request.messages.len(),
+                        tools = tool_count,
+                        "Dispatching provider request"
+                    );
+                }
+                let llm_result = if use_streaming {
+                    stream_and_render_response(
+                        provider_client.as_ref(),
+                        request,
+                        &thinking_spinner,
+                        &mut renderer,
+                        &ctrl_c_state,
+                        &ctrl_c_notify,
+                    )
+                    .await
+                } else {
+                    let provider_name = provider_client.name().to_string();
+
+                    if ctrl_c_state.is_cancel_requested() || ctrl_c_state.is_exit_requested() {
+                        thinking_spinner.finish();
+                        Err(uni::LLMError::Provider(error_display::format_llm_error(
+                            &provider_name,
+                            "Interrupted by user",
+                        )))
+                    } else {
+                        let generate_future = provider_client.generate(request);
+                        tokio::pin!(generate_future);
+                        let cancel_notifier = ctrl_c_notify.notified();
+                        tokio::pin!(cancel_notifier);
+                        let outcome = tokio::select! {
+                            res = &mut generate_future => {
+                                thinking_spinner.finish();
+                                res.map(|resp| (resp, false))
+                            }
+                            _ = &mut cancel_notifier => {
+                                thinking_spinner.finish();
+                                Err(uni::LLMError::Provider(error_display::format_llm_error(
+                                    &provider_name,
+                                    "Interrupted by user",
+                                )))
+                            }
+                        };
+                        outcome
+                    }
+                };
+
+                #[cfg(debug_assertions)]
+                {
+                    debug!(
+                        target = "vtcode::agent::llm",
+                        model = %active_model,
+                        streaming = use_streaming,
+                        step = step_count,
+                        elapsed_ms = request_timer.elapsed().as_millis(),
+                        succeeded = llm_result.is_ok(),
+                        "Provider request finished"
                     );
                 }
 
-                let mut attempt_history = working_history.clone();
-                let mut retry_attempts = 0usize;
-                let (response, response_streamed) = loop {
-                    retry_attempts += 1;
-                    let _ = context_manager.enforce_context_window(&mut attempt_history);
-                    context_manager.reset_token_budget().await;
-                    let system_prompt = context_manager
-                        .build_system_prompt(&attempt_history, retry_attempts)
-                        .await?;
-
-                    let use_streaming = provider_client.supports_streaming();
-                    let reasoning_effort = vt_cfg.as_ref().and_then(|cfg| {
-                        if provider_client.supports_reasoning_effort(&active_model) {
-                            Some(cfg.agent.reasoning_effort)
-                        } else {
-                            None
+                let (response, response_streamed) = match llm_result {
+                    Ok(payload) => {
+                        if ctrl_c_state.is_cancel_requested() {
+                            renderer.line_if_not_empty(MessageStyle::Output)?;
+                            renderer.line(MessageStyle::Info, "Operation cancelled by user.")?;
+                            break 'outer TurnLoopResult::Cancelled;
                         }
-                    });
-                    let current_tools = tools.read().await.clone();
-                    let request = uni::LLMRequest {
-                        messages: attempt_history.clone(),
-                        system_prompt: Some(system_prompt.clone()),
-                        tools: Some(current_tools),
-                        model: active_model.clone(),
-                        max_tokens: max_tokens_opt.or(Some(2000)),
-                        temperature: Some(0.7),
-                        stream: use_streaming,
-                        tool_choice: Some(uni::ToolChoice::auto()),
-                        parallel_tool_calls: None,
-                        parallel_tool_config: if provider_client
-                            .supports_parallel_tool_config(&active_model)
-                        {
-                            parallel_cfg_opt.clone()
-                        } else {
-                            None
-                        },
-                        reasoning_effort,
-                    };
-
-                    let thinking_spinner = PlaceholderSpinner::new(
-                        &handle,
-                        input_status_state.left.clone(),
-                        input_status_state.right.clone(),
-                        "Thinking...",
-                    );
-                    task::yield_now().await;
-                    #[cfg(debug_assertions)]
-                    let request_timer = Instant::now();
-                    #[cfg(debug_assertions)]
-                    {
-                        let tool_count = request.tools.as_ref().map_or(0, |tools| tools.len());
-                        debug!(
-                            target = "vtcode::agent::llm",
-                            model = %request.model,
-                            streaming = use_streaming,
-                            attempt = retry_attempts,
-                            messages = request.messages.len(),
-                            tools = tool_count,
-                            "Dispatching provider request"
-                        );
+                        working_history = request_history;
+                        payload
                     }
-                    let result = if use_streaming {
-                        stream_and_render_response(
-                            provider_client.as_ref(),
-                            request,
-                            &thinking_spinner,
-                            &mut renderer,
-                            &ctrl_c_state,
-                            &ctrl_c_notify,
-                        )
-                        .await
-                    } else {
-                        let provider_name = provider_client.name().to_string();
-
-                        if ctrl_c_state.is_cancel_requested() || ctrl_c_state.is_exit_requested() {
-                            thinking_spinner.finish();
-                            Err(uni::LLMError::Provider(error_display::format_llm_error(
-                                &provider_name,
-                                "Interrupted by user",
-                            )))
-                        } else {
-                            let generate_future = provider_client.generate(request);
-                            tokio::pin!(generate_future);
-                            let cancel_notifier = ctrl_c_notify.notified();
-                            tokio::pin!(cancel_notifier);
-                            let outcome = tokio::select! {
-                                res = &mut generate_future => {
-                                    thinking_spinner.finish();
-                                    res.map(|resp| (resp, false))
-                                }
-                                _ = &mut cancel_notifier => {
-                                    thinking_spinner.finish();
-                                    Err(uni::LLMError::Provider(error_display::format_llm_error(
-                                        &provider_name,
-                                        "Interrupted by user",
-                                    )))
-                                }
-                            };
-                            outcome
+                    Err(error) => {
+                        if ctrl_c_state.is_cancel_requested() {
+                            renderer.line_if_not_empty(MessageStyle::Output)?;
+                            renderer.line(MessageStyle::Info, "Operation cancelled by user.")?;
+                            break 'outer TurnLoopResult::Cancelled;
                         }
-                    };
 
-                    #[cfg(debug_assertions)]
-                    {
-                        debug!(
-                            target = "vtcode::agent::llm",
-                            model = %active_model,
-                            streaming = use_streaming,
-                            attempt = retry_attempts,
-                            elapsed_ms = request_timer.elapsed().as_millis(),
-                            succeeded = result.is_ok(),
-                            "Provider request finished"
-                        );
-                    }
-
-                    match result {
-                        Ok((result, streamed_tokens)) => {
-                            if ctrl_c_state.is_cancel_requested() {
-                                renderer.line_if_not_empty(MessageStyle::Output)?;
-                                renderer
-                                    .line(MessageStyle::Info, "Operation cancelled by user.")?;
-                                break 'outer TurnLoopResult::Cancelled;
-                            }
-                            working_history = attempt_history.clone();
-                            break (result, streamed_tokens);
-                        }
-                        Err(error) => {
-                            if ctrl_c_state.is_cancel_requested() {
-                                renderer.line_if_not_empty(MessageStyle::Output)?;
-                                renderer
-                                    .line(MessageStyle::Info, "Operation cancelled by user.")?;
-                                break 'outer TurnLoopResult::Cancelled;
-                            }
-                            let error_text = error.to_string();
-                            if is_context_overflow_error(&error_text)
-                            && retry_attempts <= vtcode_core::config::constants::context::CONTEXT_ERROR_RETRY_LIMIT
-                        {
+                        let error_text = error.to_string();
+                        if is_context_overflow_error(&error_text) {
                             let removed_tool_messages =
-                                context_manager.prune_tool_responses(&mut attempt_history);
+                                context_manager.prune_tool_responses(&mut working_history);
                             let removed_turns =
-                                context_manager.aggressive_trim(&mut attempt_history);
-                            let total_removed = removed_tool_messages + removed_turns;
-                            if total_removed > 0 {
+                                context_manager.aggressive_trim(&mut working_history);
+                            if removed_tool_messages + removed_turns > 0 {
                                 renderer.line(
                                     MessageStyle::Info,
-                                    &format!(
-                                        "Context overflow detected; removed {} older messages (retry {}/{}).",
-                                        total_removed,
-                                        retry_attempts,
-                                        vtcode_core::config::constants::context::CONTEXT_ERROR_RETRY_LIMIT,
-                                    ),
+                                    "Context overflow detected; trimmed earlier messages and will retry.",
                                 )?;
-                                conversation_history.clone_from(&attempt_history);
-                                continue;
+                                allow_follow_up = true;
+                                continue 'outer;
                             }
                         }
 
-                            // Only treat as successful tool completion if we actually executed
-                            // tools in THIS turn (after the last assistant message), not just
-                            // because there are tool messages somewhere in history
-                            let has_recent_tool = working_history
-                                .iter()
-                                .rev()
-                                .take_while(|msg| msg.role != uni::MessageRole::Assistant)
-                                .any(|msg| msg.role == uni::MessageRole::Tool);
+                        let has_recent_tool = working_history
+                            .iter()
+                            .rev()
+                            .take_while(|msg| msg.role != uni::MessageRole::Assistant)
+                            .any(|msg| msg.role == uni::MessageRole::Tool);
 
-                            if has_recent_tool {
-                                let reply = derive_recent_tool_output(&working_history)
-                                    .unwrap_or_else(|| {
-                                        "Command completed successfully.".to_string()
-                                    });
-                                renderer.line(MessageStyle::Response, &reply)?;
-                                ensure_turn_bottom_gap(&mut renderer, &mut bottom_gap_applied)?;
-                                working_history.push(uni::Message::assistant(reply));
-                                let _ = last_tool_stdout.take();
-                                break 'outer TurnLoopResult::Completed;
-                            } else {
-                                renderer.line(
-                                    MessageStyle::Error,
-                                    &format!("Provider error: {error_text}"),
-                                )?;
-                                ensure_turn_bottom_gap(&mut renderer, &mut bottom_gap_applied)?;
-                                break 'outer TurnLoopResult::Aborted;
-                            }
+                        if has_recent_tool {
+                            let reply = derive_recent_tool_output(&working_history)
+                                .unwrap_or_else(|| "Command completed successfully.".to_string());
+                            renderer.line(MessageStyle::Response, &reply)?;
+                            ensure_turn_bottom_gap(&mut renderer, &mut bottom_gap_applied)?;
+                            working_history.push(uni::Message::assistant(reply));
+                            let _ = last_tool_stdout.take();
+                            break 'outer TurnLoopResult::Completed;
                         }
+
+                        renderer.line(
+                            MessageStyle::Error,
+                            &format!("Provider error: {error_text}"),
+                        )?;
+                        ensure_turn_bottom_gap(&mut renderer, &mut bottom_gap_applied)?;
+                        break 'outer TurnLoopResult::Aborted;
                     }
                 };
 
                 let mut final_text = response.content.clone();
-                let mut tool_calls = response.tool_calls.clone().unwrap_or_default();
+                let mut tool_calls = response.tool_calls.unwrap_or_default();
                 let mut interpreted_textual_call = false;
-                let reasoning_trace = response.reasoning.clone();
+                let assistant_reasoning = response.reasoning.clone();
 
                 // Strip harmony syntax from displayed content if present
                 if let Some(ref text) = final_text
@@ -1205,45 +1228,38 @@ pub(crate) async fn run_single_agent_loop_unified(
                     }
                 }
 
-                if tool_calls.is_empty()
-                    && let Some(text) = final_text.clone()
-                    && let Some((name, args)) = detect_textual_tool_call(&text)
-                {
-                    let args_json =
-                        serde_json::to_string(&args).unwrap_or_else(|_| "{}".to_string());
-                    let code_blocks = extract_code_fence_blocks(&text);
-                    if !code_blocks.is_empty() {
-                        render_code_fence_blocks(&mut renderer, &code_blocks)?;
-                        renderer.line(MessageStyle::Output, "")?;
+                if tool_calls.is_empty() {
+                    if let Some(text) = final_text.clone() {
+                        if !text.trim().is_empty()
+                            && let Some((name, args)) = detect_textual_tool_call(&text)
+                        {
+                            let args_json =
+                                serde_json::to_string(&args).unwrap_or_else(|_| "{}".to_string());
+                            let code_blocks = extract_code_fence_blocks(&text);
+                            if !code_blocks.is_empty() {
+                                render_code_fence_blocks(&mut renderer, &code_blocks)?;
+                                renderer.line(MessageStyle::Output, "")?;
+                            }
+                            let (headline, _) = describe_tool_action(&name, &args);
+                            let notice = if headline.is_empty() {
+                                format!("Detected {} request", humanize_tool_name(&name))
+                            } else {
+                                format!("Detected {headline}")
+                            };
+                            renderer.line(MessageStyle::Info, &notice)?;
+                            let call_id = format!("call_textual_{}", working_history.len());
+                            tool_calls.push(uni::ToolCall::function(
+                                call_id.clone(),
+                                name.clone(),
+                                args_json.clone(),
+                            ));
+                            interpreted_textual_call = true;
+                            final_text = None;
+                        }
                     }
-                    let (headline, _) = describe_tool_action(&name, &args);
-                    let notice = if headline.is_empty() {
-                        format!("Detected {} request", humanize_tool_name(&name))
-                    } else {
-                        format!("Detected {headline}")
-                    };
-                    renderer.line(MessageStyle::Info, &notice)?;
-                    let call_id = format!("call_textual_{}", working_history.len());
-                    tool_calls.push(uni::ToolCall::function(
-                        call_id.clone(),
-                        name.clone(),
-                        args_json.clone(),
-                    ));
-                    interpreted_textual_call = true;
-                    final_text = None;
                 }
 
-                if tool_calls.is_empty()
-                    && let Some(text) = final_text.clone()
-                {
-                    // Display response if it wasn't already streamed
-                    if !response_streamed && !text.trim().is_empty() {
-                        renderer.line(MessageStyle::Response, &text)?;
-                    }
-                    let message =
-                        uni::Message::assistant(text).with_reasoning(reasoning_trace.clone());
-                    working_history.push(message);
-                } else {
+                if !tool_calls.is_empty() {
                     let assistant_text = if interpreted_textual_call {
                         String::new()
                     } else {
@@ -1251,7 +1267,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                     };
                     let message =
                         uni::Message::assistant_with_tools(assistant_text, tool_calls.clone())
-                            .with_reasoning(reasoning_trace.clone());
+                            .with_reasoning(assistant_reasoning.clone());
                     working_history.push(message);
                     // Clear final_text since it was used for assistant_text
                     // This prevents the loop from breaking after tool execution
@@ -1399,6 +1415,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                                 .set_progress(progress.progress as u64)
                                                 .await;
                                         }
+                                        allow_follow_up = true;
                                         continue;
                                     }
                                     ToolExecutionStatus::Success {
@@ -1600,16 +1617,24 @@ pub(crate) async fn run_single_agent_loop_unified(
                                             );
                                         }
 
-                                        if has_more {
-                                            loop_guard = loop_guard.saturating_sub(1);
-                                        }
+                                        let allow_short_circuit = !has_more
+                                            && command_success
+                                            && should_short_circuit_shell(input, name, &args_val);
 
-                                        // Don't short-circuit - let the agent reason about tool output
-                                        // The agent should always have a chance to process and explain results
-                                        let _ = (
-                                            command_success,
-                                            should_short_circuit_shell(input, name, &args_val),
-                                        );
+                                        if allow_short_circuit {
+                                            let reply = derive_recent_tool_output(&working_history)
+                                                .unwrap_or_else(|| {
+                                                    "Command completed successfully.".to_string()
+                                                });
+                                            renderer.line(MessageStyle::Response, &reply)?;
+                                            ensure_turn_bottom_gap(
+                                                &mut renderer,
+                                                &mut bottom_gap_applied,
+                                            )?;
+                                            working_history.push(uni::Message::assistant(reply));
+                                            let _ = last_tool_stdout.take();
+                                            break 'outer TurnLoopResult::Completed;
+                                        }
                                     }
                                     ToolExecutionStatus::Failure { error } => {
                                         tool_spinner.finish();
@@ -1847,6 +1872,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         },
                                     );
                                 }
+                                allow_follow_up = true;
                                 continue;
                             }
                             Ok(ToolPermissionFlow::Exit) => {
@@ -1903,14 +1929,16 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         },
                                     );
                                 }
+                                allow_follow_up = true;
                                 continue;
                             }
                         }
                     }
-                    continue;
+                    allow_follow_up = true;
+                    continue 'outer;
                 }
 
-                if let Some(mut text) = final_text.clone() {
+                if let Some(mut text) = final_text {
                     let do_review = vt_cfg
                         .as_ref()
                         .map(|cfg| cfg.agent.enable_self_review)
@@ -1920,7 +1948,9 @@ pub(crate) async fn run_single_agent_loop_unified(
                         .map(|cfg| cfg.agent.max_review_passes)
                         .unwrap_or(1)
                         .max(1);
-                    if do_review {
+                    let should_run_review =
+                        do_review && (text.len() >= SELF_REVIEW_MIN_LENGTH || text.contains("```"));
+                    if should_run_review {
                         let review_system = "You are the agent's critical code reviewer. Improve clarity, correctness, and add missing test or validation guidance. Return only the improved final answer (no meta commentary).".to_string();
                         for _ in 0..review_passes {
                             let review_req = uni::LLMRequest {
@@ -1960,13 +1990,9 @@ pub(crate) async fn run_single_agent_loop_unified(
                             .map(|stdout| stdout == trimmed)
                             .unwrap_or(false);
 
-                    // If response is empty, continue the loop instead of completing
+                    // Empty responses mean we're done; avoid spinning another iteration.
                     if trimmed.is_empty() {
-                        #[cfg(debug_assertions)]
-                        {
-                            renderer.line(MessageStyle::Info, "Empty response, continuing...")?;
-                        }
-                        continue;
+                        break TurnLoopResult::Completed;
                     }
 
                     let streamed_matches_output = response_streamed
@@ -1980,18 +2006,12 @@ pub(crate) async fn run_single_agent_loop_unified(
                         renderer.line(MessageStyle::Response, &text)?;
                     }
                     ensure_turn_bottom_gap(&mut renderer, &mut bottom_gap_applied)?;
-                    working_history.push(uni::Message::assistant(text));
+                    working_history.push(
+                        uni::Message::assistant(text.clone())
+                            .with_reasoning(assistant_reasoning.clone()),
+                    );
                     let _ = last_tool_stdout.take();
                     break TurnLoopResult::Completed;
-                }
-                // If no final text but tool calls were processed, continue the loop
-                // to let the agent see tool results and decide next steps
-                #[cfg(debug_assertions)]
-                {
-                    renderer.line(
-                        MessageStyle::Info,
-                        "Tools executed, continuing to get model response...",
-                    )?;
                 }
                 continue;
             };

@@ -5,7 +5,7 @@ use tokio::sync::{Mutex, RwLock};
 use tokio::time::{Duration, timeout};
 use tracing::{error, info, warn};
 use vtcode_core::config::mcp::McpClientConfig;
-use vtcode_core::mcp_client::{McpClient, McpClientStatus};
+use vtcode_core::mcp::{McpClient, McpClientStatus};
 
 use crate::agent::runloop::mcp_events::McpEvent;
 
@@ -248,7 +248,7 @@ impl AsyncMcpManager {
         );
 
         // Validate configuration before initializing
-        if let Err(e) = vtcode_core::mcp_client::validate_mcp_config(&config) {
+        if let Err(e) = vtcode_core::mcp::validate_mcp_config(&config) {
             warn!("MCP configuration validation error: {e}");
         }
 

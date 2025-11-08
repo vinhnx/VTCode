@@ -17,7 +17,7 @@ use crate::llm::factory::create_provider_for_model;
 use crate::llm::provider as uni_provider;
 use crate::llm::provider::{FunctionDefinition, LLMRequest, Message, ToolCall, ToolDefinition};
 use crate::llm::{AnyClient, make_client};
-use crate::mcp_client::McpClient;
+use crate::mcp::McpClient;
 use crate::prompts::system::compose_system_instruction_text;
 use crate::tools::{ToolRegistry, build_function_declarations};
 use crate::utils::colors::style;
@@ -604,7 +604,7 @@ impl AgentRunner {
             let mut mcp_client = McpClient::new(vt_cfg.mcp.clone());
 
             // Validate configuration before initializing
-            if let Err(e) = crate::mcp_client::validate_mcp_config(&vt_cfg.mcp) {
+            if let Err(e) = crate::mcp::validate_mcp_config(&vt_cfg.mcp) {
                 warn!("MCP configuration validation error: {e}");
             }
             match timeout(Duration::from_secs(30), mcp_client.initialize()).await {

@@ -8,7 +8,7 @@ use crate::agent::runloop::ResumeSession;
 use super::turn::run_single_agent_loop_unified;
 
 #[derive(Debug, Default, Clone, Copy)]
-pub(crate) struct UnifiedTurnDriver;
+pub struct UnifiedTurnDriver;
 
 #[async_trait]
 impl TurnDriver<ResumeSession> for UnifiedTurnDriver {

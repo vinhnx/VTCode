@@ -4,7 +4,7 @@
 //! improved validation, security features, and better error handling.
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+
 use tracing::{debug, warn};
 
 /// Enhanced security configuration for MCP
@@ -137,7 +137,7 @@ impl ValidatedMcpClientConfig {
         if self.original.server.enabled {
             // Validate port range
             if self.original.server.port == 0 || self.original.server.port > 65535 {
-                errors.push(ValidationError::InvalidPort(self.original.server.port));
+                errors.push(ValidationError::InvalidPort(self.original.server.port.into()));
             }
 
             // Validate bind address

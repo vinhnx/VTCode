@@ -407,7 +407,6 @@ max_repeated_tool_calls = 2
 [tools.policies]
 apply_patch = "prompt"            # Apply code patches (requires confirmation)
 ast_grep_search = "allow"         # AST-based code search (no confirmation needed)
-bash = "prompt"                   # Execute bash commands (requires confirmation)
 close_pty_session = "allow"        # Close PTY sessions (no confirmation needed)
 create_pty_session = "allow"       # Create PTY sessions (no confirmation needed)
 curl = "prompt"                   # HTTP requests (requires confirmation)
@@ -1119,7 +1118,6 @@ mod tests {
     use super::*;
     use crate::defaults::WorkspacePathsDefaults;
     use std::io::Write;
-    use std::path::PathBuf;
     use std::sync::Arc;
     use tempfile::NamedTempFile;
     use vtcode_commons::reference::StaticWorkspacePaths;

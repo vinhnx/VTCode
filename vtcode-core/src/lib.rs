@@ -137,7 +137,7 @@ pub mod gemini;
 pub mod http_client;
 pub mod instructions;
 pub mod llm;
-pub mod mcp_client;
+pub mod mcp;
 pub mod models;
 pub mod project_doc;
 pub mod prompts;
@@ -184,7 +184,7 @@ pub use exec::events::{
 };
 pub use gemini::{Content, FunctionDeclaration, Part};
 pub use llm::{AnyClient, make_client};
-pub use mcp_client::validate_mcp_config;
+pub use mcp::validate_mcp_config;
 pub use prompts::{
     generate_lightweight_instruction, generate_specialized_instruction, generate_system_instruction,
 };

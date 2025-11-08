@@ -6,7 +6,7 @@ use vtcode_core::SimpleIndexer;
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 
-use crate::agent::runloop::apply_runtime_overrides;
+use crate::agent::agents::apply_runtime_overrides;
 
 pub(crate) async fn load_workspace_files(workspace: PathBuf) -> Result<Vec<String>> {
     task::spawn_blocking(move || -> Result<Vec<String>> {

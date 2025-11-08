@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use vtcode_core::config::mcp::{
     McpClientConfig, McpProviderConfig, McpStdioServerConfig, McpTransportConfig,
 };
-use vtcode_core::mcp_client::McpClient;
+use vtcode_core::mcp::McpClient;
 
 #[tokio::test]
 #[ignore]

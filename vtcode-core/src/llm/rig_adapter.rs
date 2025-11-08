@@ -110,7 +110,7 @@ pub fn reasoning_parameters_for(provider: Provider, effort: ReasoningEffortLevel
                     "reasoning_token_budget": 48000
                 }),
                 ReasoningEffortLevel::Medium => json!({
-                    "reasoning_effort": "medium", 
+                    "reasoning_effort": "medium",
                     "reasoning_steps_limit": 120,
                     "reasoning_token_budget": 96000
                 }),
@@ -121,7 +121,7 @@ pub fn reasoning_parameters_for(provider: Provider, effort: ReasoningEffortLevel
                 }),
             };
             Some(reasoning_config)
-        },
+        }
         Provider::Minimax => None,
         Provider::Ollama => None,
         Provider::LmStudio => None,

@@ -11,7 +11,7 @@ provider = "ollama"
 api_key_env = "OLLAMA_API_KEY"
 
 # Default model to use when no specific model is specified
-default_model = "kimi-k2-thinking:cloud"
+default_model = "gpt-oss:120b-cloud"
 
 # Visual theme for the terminal interface
 theme = "ciapre-dark"
@@ -157,7 +157,6 @@ max_repeated_tool_calls = 2
 [tools.policies]
 apply_patch = "prompt"
 ast_grep_search = "allow"
-bash = "prompt"
 close_pty_session = "allow"
 create_pty_session = "allow"
 curl = "prompt"
@@ -174,7 +173,6 @@ run_terminal_cmd = "prompt"
 send_pty_input = "prompt"
 update_plan = "allow"
 write_file = "allow"
-
 # Command security - Define safe and dangerous command patterns
 [commands]
 # Commands that are always allowed without confirmation
@@ -389,15 +387,15 @@ llm_router_model = ""
 # Model mapping for different task types
 [router.models]
 # Model for simple queries
-simple = "kimi-k2-thinking:cloud"
+simple = "gpt-oss:120b-cloud"
 # Model for standard tasks
-standard = "kimi-k2-thinking:cloud"
+standard = "gpt-oss:120b-cloud"
 # Model for complex tasks
-complex = "kimi-k2-thinking:cloud"
+complex = "gpt-oss:120b-cloud"
 # Model for code generation heavy tasks
-codegen_heavy = "kimi-k2-thinking:cloud"
+codegen_heavy = "gpt-oss:120b-cloud"
 # Model for information retrieval heavy tasks
-retrieval_heavy = "kimi-k2-thinking:cloud"
+retrieval_heavy = "gpt-oss:120b-cloud"
 
 # Router budget settings (if applicable)
 [router.budgets]
@@ -492,7 +490,6 @@ allowed_tools = [
     "read_file",
     "list_files",
     "grep_file",
-    "bash",
     "run_terminal_cmd",
     "create_pty_session",
     "run_pty_cmd",

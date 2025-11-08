@@ -3,7 +3,6 @@ use std::time::Duration;
 use anyhow::Result;
 use chrono::Local;
 
-
 use vtcode_core::ui::theme;
 use vtcode_core::ui::tui::{
     InlineHandle, InlineListItem, InlineListSelection, convert_style, theme_from_styles,
@@ -23,7 +22,6 @@ const SESSIONS_HINT_PRIMARY: &str = "Use ↑/↓ to browse sessions.";
 const SESSIONS_HINT_SECONDARY: &str = "Enter to print details • Esc to close.";
 const SESSIONS_LATEST_BADGE: &str = "Latest";
 
-
 #[derive(Clone)]
 pub(crate) enum ActivePalette {
     Theme {
@@ -33,7 +31,6 @@ pub(crate) enum ActivePalette {
         listings: Vec<SessionListing>,
         limit: usize,
     },
-
 }
 
 pub(crate) fn show_theme_palette(
@@ -140,8 +137,6 @@ pub(crate) fn show_sessions_palette(
     Ok(true)
 }
 
-
-
 pub(crate) fn render_session_details(
     renderer: &mut AnsiRenderer,
     listing: &SessionListing,
@@ -241,7 +236,6 @@ pub(crate) async fn handle_palette_selection(
                 Ok(None)
             }
         }
-
     }
 }
 
@@ -259,7 +253,6 @@ pub(crate) fn handle_palette_cancel(
         ActivePalette::Sessions { .. } => {
             renderer.line(MessageStyle::Info, "Closed session browser.")?;
         }
-
     }
     Ok(())
 }

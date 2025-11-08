@@ -242,7 +242,7 @@ static REGISTRY: Lazy<HashMap<&'static str, ThemeDefinition>> = Lazy::new(|| {
             },
         },
     );
-    
+
     // Vitesse themes
     map.insert(
         "vitesse-black",
@@ -319,7 +319,7 @@ static REGISTRY: Lazy<HashMap<&'static str, ThemeDefinition>> = Lazy::new(|| {
             },
         },
     );
-    
+
     register_catppuccin_themes(&mut map);
     map
 });

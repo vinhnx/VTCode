@@ -1216,7 +1216,9 @@ impl FromStr for ModelId {
                 Ok(ModelId::OllamaDeepseekV31671bCloud)
             }
 
-            s if s == models::ollama::KIMI_K2_THINKING_CLOUD => Ok(ModelId::OllamaKimiK2ThinkingCloud),
+            s if s == models::ollama::KIMI_K2_THINKING_CLOUD => {
+                Ok(ModelId::OllamaKimiK2ThinkingCloud)
+            }
             s if s == models::ollama::KIMI_K2_1T_CLOUD => Ok(ModelId::OllamaKimiK21tCloud),
             s if s == models::ollama::QWEN3_CODER_480B_CLOUD => {
                 Ok(ModelId::OllamaQwen3Coder480bCloud)
@@ -1560,7 +1562,10 @@ mod tests {
         assert_eq!(ModelId::OllamaGptOss20b.provider(), Provider::Ollama);
         assert_eq!(ModelId::OllamaGptOss120bCloud.provider(), Provider::Ollama);
         assert_eq!(ModelId::OllamaQwen317b.provider(), Provider::Ollama);
-        assert_eq!(ModelId::OllamaKimiK2ThinkingCloud.provider(), Provider::Ollama);
+        assert_eq!(
+            ModelId::OllamaKimiK2ThinkingCloud.provider(),
+            Provider::Ollama
+        );
         assert_eq!(
             ModelId::LmStudioMetaLlama38BInstruct.provider(),
             Provider::LmStudio

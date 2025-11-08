@@ -15,6 +15,9 @@
 use crate::config::mcp::{
     McpAllowListConfig, McpClientConfig, McpProviderConfig, McpTransportConfig,
 };
+
+pub mod cli;
+pub mod enhanced_config;
 use anyhow::{Context, Result, anyhow, bail};
 use async_trait::async_trait;
 use chrono::Local;

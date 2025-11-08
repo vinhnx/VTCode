@@ -9,7 +9,7 @@ use tokio::{
 
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::mcp::McpTransportConfig;
-use vtcode_core::mcp_client::validate_mcp_config;
+use vtcode_core::mcp::validate_mcp_config;
 use vtcode_core::tools::registry::ToolRegistry;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 

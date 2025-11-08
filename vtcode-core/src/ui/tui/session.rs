@@ -20,10 +20,13 @@ use tui_popup::PopupState;
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
-use super::types::{
-    InlineCommand, InlineEvent, InlineHeaderContext, InlineListItem, InlineListSearchConfig,
-    InlineListSelection, InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme,
-    SecurePromptConfig,
+use super::{
+    style::{measure_text_width, ratatui_color_from_ansi, ratatui_style_from_inline},
+    types::{
+        InlineCommand, InlineEvent, InlineHeaderContext, InlineListItem, InlineListSearchConfig,
+        InlineListSelection, InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme,
+        SecurePromptConfig,
+    },
 };
 use crate::config::constants::{prompts, ui};
 
@@ -64,49 +67,6 @@ const LEGACY_PROMPT_COMMAND_NAME: &str = "prompts";
 const PROMPT_INVOKE_PREFIX: &str = "prompt:";
 const LEGACY_PROMPT_INVOKE_PREFIX: &str = "prompts:";
 const PROMPT_COMMAND_PREFIX: &str = "/prompt:";
-
-fn measure_text_width(text: &str) -> u16 {
-    UnicodeWidthStr::width(text) as u16
-}
-
-fn ratatui_color_from_ansi(color: AnsiColorEnum) -> Color {
-    match color {
-        AnsiColorEnum::Ansi(base) => match base {
-            AnsiColor::Black => Color::Black,
-            AnsiColor::Red => Color::Red,
-            AnsiColor::Green => Color::Green,
-            AnsiColor::Yellow => Color::Yellow,
-            AnsiColor::Blue => Color::Blue,
-            AnsiColor::Magenta => Color::Magenta,
-            AnsiColor::Cyan => Color::Cyan,
-            AnsiColor::White => Color::White,
-            AnsiColor::BrightBlack => Color::DarkGray,
-            AnsiColor::BrightRed => Color::LightRed,
-            AnsiColor::BrightGreen => Color::LightGreen,
-            AnsiColor::BrightYellow => Color::LightYellow,
-            AnsiColor::BrightBlue => Color::LightBlue,
-            AnsiColor::BrightMagenta => Color::LightMagenta,
-            AnsiColor::BrightCyan => Color::LightCyan,
-            AnsiColor::BrightWhite => Color::Gray,
-        },
-        AnsiColorEnum::Ansi256(value) => Color::Indexed(value.index()),
-        AnsiColorEnum::Rgb(RgbColor(red, green, blue)) => Color::Rgb(red, green, blue),
-    }
-}
-
-fn ratatui_style_from_inline(style: &InlineTextStyle, fallback: Option<AnsiColorEnum>) -> Style {
-    let mut resolved = Style::default();
-    if let Some(color) = style.color.or(fallback) {
-        resolved = resolved.fg(ratatui_color_from_ansi(color));
-    }
-    if style.bold {
-        resolved = resolved.add_modifier(Modifier::BOLD);
-    }
-    if style.italic {
-        resolved = resolved.add_modifier(Modifier::ITALIC);
-    }
-    resolved
-}
 
 pub struct Session {
     lines: Vec<MessageLine>,

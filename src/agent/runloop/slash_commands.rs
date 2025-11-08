@@ -119,6 +119,17 @@ pub async fn handle_slash_command(
     }
 
     match command_key.as_str() {
+        "donate" => {
+            renderer.line(
+                MessageStyle::Info,
+                "Your support is invaluable, it enables me to dedicate more time to research, exploration, and creating work that pushes boundaries. Thank you for making this possible.",
+            )?;
+            renderer.line(
+                MessageStyle::Info,
+                "You can donate at: https://buymeacoffee.com/vinhnx",
+            )?;
+            Ok(SlashCommandOutcome::Handled)
+        }
         "prompt" | "prompts" => {
             render_custom_prompt_list(renderer, custom_prompts)?;
             Ok(SlashCommandOutcome::Handled)
@@ -161,8 +172,6 @@ pub async fn handle_slash_command(
             }
             Ok(SlashCommandOutcome::Handled)
         }
-
-
 
         "command" => {
             if args.is_empty() {
@@ -831,16 +840,25 @@ fn format_duration_label(duration: Duration) -> String {
 fn render_theme_list(renderer: &mut AnsiRenderer) -> Result<()> {
     let available_themes = theme::available_themes();
     renderer.line(MessageStyle::Info, "Available themes:")?;
-    
+
     for theme_id in available_themes {
         if let Some(label) = theme::theme_label(theme_id) {
-            renderer.line(MessageStyle::Info, &format!("  /theme {} – {}", theme_id, label))?;
+            renderer.line(
+                MessageStyle::Info,
+                &format!("  /theme {} – {}", theme_id, label),
+            )?;
         } else {
-            renderer.line(MessageStyle::Info, &format!("  /theme {} – {}", theme_id, theme_id))?;
+            renderer.line(
+                MessageStyle::Info,
+                &format!("  /theme {} – {}", theme_id, theme_id),
+            )?;
         }
     }
-    
+
     renderer.line(MessageStyle::Info, "")?;
-    renderer.line(MessageStyle::Info, &format!("Current theme: {}", theme::active_theme_label()))?;
+    renderer.line(
+        MessageStyle::Info,
+        &format!("Current theme: {}", theme::active_theme_label()),
+    )?;
     Ok(())
 }

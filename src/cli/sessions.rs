@@ -9,7 +9,7 @@ use vtcode_core::utils::session_archive::{
     SessionListing, find_session_by_identifier, list_recent_sessions,
 };
 
-use crate::agent::runloop::{self, ResumeSession};
+use crate::agent::agents::ResumeSession;
 use vtcode::startup::SessionResumeMode;
 
 const INTERACTIVE_SESSION_LIMIT: usize = 10;
@@ -181,7 +181,7 @@ async fn run_single_agent_loop(
         }
     }
 
-    runloop::run_single_agent_loop(&resume_config, skip_confirmations, false, Some(resume)).await
+    crate::agent::agents::run_single_agent_loop(&resume_config, skip_confirmations, false, Some(resume)).await
 }
 
 enum ParsedWorkspace {
