@@ -167,9 +167,25 @@ get_current_version() {
 }
 
 # Optimized npm package version update
+update_npm_package_version() {
+    local version=$1
+    local npm_package_file="npm/package.json"
 
+    if [[ ! -f "$npm_package_file" ]]; then
+        print_warning "npm package.json not found at $npm_package_file - skipping npm version update"
+        return 0
+    fi
 
+    print_distribution "Updating npm package version to $version"
 
+    if command -v jq >/dev/null 2>&1; then
+        jq --arg new_version "$version" '.version = $new_version' "$npm_package_file" > "$npm_package_file.tmp" && mv "$npm_package_file.tmp" "$npm_package_file"
+        print_info "npm package version updated to $version"
+        git add "$npm_package_file"
+    else
+        print_warning 'jq not found; skipping npm package version update'
+    fi
+}
 
 load_env_file() {
     if [[ -f '.env' ]]; then
@@ -216,9 +232,25 @@ check_all_auth() {
         print_error 'Cargo is not available'
     fi
 
-    # Skip npm authentication as npm release workflow has been removed
+    # Check npm authentication
     if [[ "$skip_npm" == 'false' ]]; then
-        print_info "npm release workflow has been removed - skipping npm authentication checks"
+        if command -v npm >/dev/null 2>&1; then
+            if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+                local token_config
+                token_config=$(npm config get //npm.pkg.github.com/:_authToken 2>/dev/null || echo "")
+                
+                if [[ -n "$token_config" && "$token_config" != "null" ]]; then
+                    print_success 'npm authentication verified for GitHub Packages'
+                else
+                    print_warning 'npm GitHub Packages token may not be configured.'
+                    print_info 'Set up with: npm config set //npm.pkg.github.com/:_authToken $GITHUB_TOKEN'
+                fi
+            else
+                print_warning 'GITHUB_TOKEN environment variable not set. npm publish will use existing .npmrc configuration.'
+            fi
+        else
+            print_warning 'npm is not available (required for npm publishing)'
+        fi
     fi
 
     if [[ "$skip_github_packages" == 'false' ]]; then
@@ -331,6 +363,74 @@ trigger_docs_rs_rebuild() {
 
 
 
+
+publish_npm_package() {
+    local version=$1
+
+    print_distribution "Publishing npm package v$version to GitHub Packages..."
+
+    if [[ ! -f 'npm/package.json' ]]; then
+        print_warning 'npm package.json not found - skipping npm publish'
+        return 0
+    fi
+
+    if ! command -v npm >/dev/null 2>&1; then
+        print_warning 'npm not available - skipping npm publish'
+        return 0
+    fi
+
+    # Ensure npm registry is configured for GitHub Packages
+    if [[ -z "${GITHUB_TOKEN:-}" ]]; then
+        print_warning 'GITHUB_TOKEN not set - cannot publish to GitHub Packages'
+        return 1
+    fi
+
+    # Temporarily configure npm auth if GITHUB_TOKEN is set
+    npm config set //npm.pkg.github.com/:_authToken "$GITHUB_TOKEN" || true
+
+    if npm publish --cwd npm --registry https://npm.pkg.github.com; then
+        print_success "npm package v$version published to GitHub Packages"
+    else
+        print_warning "npm publish failed - you may need to publish manually"
+        return 1
+    fi
+}
+
+publish_github_packages() {
+    local version=$1
+
+    print_distribution "Publishing to GitHub Packages (npm) v$version..."
+
+    if [[ ! -f 'npm/package.json' ]]; then
+        print_warning 'npm package.json not found - skipping GitHub Packages publish'
+        return 0
+    fi
+
+    if ! command -v npm >/dev/null 2>&1; then
+        print_warning 'npm not available - skipping GitHub Packages publish'
+        return 0
+    fi
+
+    # Check for GITHUB_TOKEN
+    if [[ -z "${GITHUB_TOKEN:-}" ]]; then
+        print_warning 'GITHUB_TOKEN not set - GitHub Packages publish will be skipped'
+        print_info 'To enable GitHub Packages publishing, set GITHUB_TOKEN environment variable'
+        return 0
+    fi
+
+    # Run the GitHub Packages publish script
+    if [[ -f 'npm/scripts/publish-to-github.js' ]]; then
+        if node npm/scripts/publish-to-github.js; then
+            print_success "GitHub Packages publish completed for v$version"
+        else
+            print_warning "GitHub Packages publish script failed"
+            return 1
+        fi
+    else
+        print_warning 'GitHub Packages publish script not found'
+        return 0
+    fi
+}
 
 build_and_upload_binaries() {
     local version=$1
@@ -701,9 +801,44 @@ main() {
     current_version=$(get_current_version)
     print_info "Current version: $current_version"
 
-    # Skip npm package.json update as npm release workflow has been removed
+    # Update npm package version if not skipping npm
     if [[ "$skip_npm" == 'false' ]]; then
-        print_info "npm release workflow has been removed - skipping npm package updates"
+        if [[ "$dry_run" != 'true' ]]; then
+            if [[ "$pre_release" == 'true' ]]; then
+                local current_version_parsed
+                current_version_parsed=$(get_current_version)
+                IFS='.' read -ra version_parts <<< "$current_version_parsed"
+                local major=${version_parts[0]}
+                local minor=${version_parts[1]}
+                local patch_part=${version_parts[2]}
+                local patch=$(echo "$patch_part" | sed 's/[^0-9]*$//')
+                local version
+                if [[ "$pre_release_suffix" == "alpha.0" ]]; then
+                    version="${major}.${minor}.$((patch + 1))-alpha.1"
+                else
+                    version="${major}.${minor}.$((patch + 1))-${pre_release_suffix}"
+                fi
+                update_npm_package_version "$version"
+            else
+                local released_version_temp
+                if [[ "$release_argument" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                    released_version_temp="$release_argument"
+                else
+                    local current_version_parsed
+                    current_version_parsed=$(get_current_version)
+                    IFS='.' read -ra version_parts <<< "$current_version_parsed"
+                    local major=${version_parts[0]}
+                    local minor=${version_parts[1]}
+                    local patch=${version_parts[2]}
+                    case "$release_argument" in
+                        "major") released_version_temp="$((major + 1)).0.0" ;;
+                        "minor") released_version_temp="${major}.$((minor + 1)).0" ;;
+                        *) released_version_temp="${major}.${minor}.$((patch + 1))" ;;
+                    esac
+                fi
+                update_npm_package_version "$released_version_temp"
+            fi
+        fi
     fi
 
     if [[ "$dry_run" == 'true' ]]; then
@@ -737,6 +872,7 @@ main() {
     local pid_npm=""
     local pid_github=""
     local pid_binaries=""
+    local pid_vscode=""
 
     # Trigger docs.rs rebuild in background if not skipped
     if [[ "$skip_crates" == 'false' && "$skip_docs" == 'false' ]]; then
@@ -744,14 +880,16 @@ main() {
         pid_docs=$!
     fi
 
-    # Skip npm publishing as npm release workflow has been removed
+    # Publish to GitHub Packages npm registry in background if not skipped
     if [[ "$skip_npm" == 'false' ]]; then
-        print_info "npm publishing skipped - npm release workflow has been removed"
+        publish_npm_package "$released_version" &
+        pid_npm=$!
     fi
 
-    # Skip GitHub Packages publishing as npm release workflow has been completely removed
+    # Publish to GitHub Packages registry if not skipped
     if [[ "$skip_github_packages" == 'false' ]]; then
-        print_info "GitHub Packages publishing skipped - npm/GitHub Packages release workflow has been completely removed"
+        publish_github_packages "$released_version" &
+        pid_github=$!
     fi
 
     # Build binaries in background if not skipped
@@ -775,8 +913,9 @@ main() {
     # Update extension versions to match main project version
     update_extensions_version "$released_version"
 
-    # Wait for all other background processes to complete
-    for pid in $pid_docs; do
+    # Wait for all background processes to complete
+    print_info 'Waiting for background processes to complete...'
+    for pid in $pid_docs $pid_npm $pid_github; do
         if [[ -n "$pid" ]]; then
             wait "$pid" || print_warning "Background process $pid failed"
         fi
@@ -788,6 +927,7 @@ main() {
     print_success 'Release process finished'
     print_info "GitHub Release should now contain changelog notes generated by cargo-release"
     print_info "All commits, tags, and releases have been pushed to the remote repository"
+    print_info "npm package published to GitHub Packages: https://github.com/vinhnx/vtcode/pkgs/npm/vtcode"
 }
 
 main "$@"

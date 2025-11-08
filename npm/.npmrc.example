@@ -1,0 +1,34 @@
+# GitHub Packages NPM Registry Configuration for VT Code
+#
+# This file configures npm to publish the @vinhnx/vtcode package to GitHub Packages
+#
+# Setup Instructions:
+# 1. Create a GitHub Personal Access Token (PAT) with scopes:
+#    - write:packages
+#    - read:packages
+#    - repo
+#    See: https://github.com/settings/tokens
+#
+# 2. Configure your local NPM registry:
+#    Either use the .npmrc file or run these commands:
+#
+#    # Option 1: Using .npmrc file (recommended)
+#    npm config set //npm.pkg.github.com/:_authToken YOUR_GITHUB_TOKEN
+#    npm config set @vinhnx:registry https://npm.pkg.github.com
+#
+#    # Option 2: Using environment variable during publish
+#    export NODE_AUTH_TOKEN=YOUR_GITHUB_TOKEN
+#    npm publish
+#
+# 3. To use this .npmrc file, copy it to your home directory:
+#    cp npm/.npmrc.example ~/.npmrc
+#    Then add your GitHub token to ~/.npmrc or use the commands above
+#
+# Configuration for GitHub Packages registry
+@vinhnx:registry=https://npm.pkg.github.com
+
+# If using token-based authentication via environment variable,
+# the .npmrc.example file can stay as-is.
+# If using hardcoded token (NOT RECOMMENDED for public repos),
+# add this line with your actual token:
+# //npm.pkg.github.com/:_authToken=YOUR_GITHUB_TOKEN_HERE
