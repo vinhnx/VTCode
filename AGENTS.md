@@ -244,3 +244,104 @@ User: "Find and update all database queries"
 ✗ Overkill for simple field addition
 → Just do it in 1 turn
 </bad-example>
+
+## ACP Inter-Agent Communication
+
+### Overview
+
+VTCode implements Agent Communication Protocol (ACP) for distributed agent orchestration:
+
+-   **Library**: `vtcode-acp-client` - HTTP-based ACP client
+-   **Location**: `vtcode-acp-client/src/{client, discovery, messages, error}.rs`
+-   **Integration**: Exposed via three MCP tools (`acp_call`, `acp_discover`, `acp_health`)
+-   **Purpose**: Enable main agent to orchestrate other agents without blocking
+
+### Architecture
+
+```
+Main Agent (VTCode)
+    │
+    ├─ acp_call       ──► Remote Agent 1
+    ├─ acp_discover   ──► Agent Registry
+    └─ acp_health     ──► Agent Health Check
+```
+
+### Key Components
+
+**AcpClient** - HTTP client for agent communication
+- `call_sync()` - Synchronous RPC (waits for response)
+- `call_async()` - Asynchronous RPC (returns message_id)
+- `ping()` - Health check
+- `discover_agent()` - Metadata discovery
+
+**AgentRegistry** - In-memory registry of available agents
+- `register()` - Add agent
+- `find()` - Get agent by ID
+- `find_by_capability()` - Query by capability
+- `update_status()` - Mark online/offline
+
+**AcpMessage** - Type-safe message protocol
+- Request/Response/Error envelopes
+- Automatic UUID generation
+- Correlation ID tracking
+- Serialization/deserialization
+
+### MCP Tools
+
+1. **acp_call** - Call remote agents
+   - Sync/async methods
+   - Custom timeouts
+   - Result aggregation
+
+2. **acp_discover** - Agent discovery
+   - List all/online agents
+   - Filter by capability
+   - Metadata querying
+
+3. **acp_health** - Agent health monitoring
+   - Ping agents
+   - Track online status
+   - Last seen timestamp
+
+### Usage Pattern
+
+```
+User Query
+    ↓
+Main Agent decides to use remote capability
+    ↓
+Uses acp_discover to find capable agent
+    ↓
+Uses acp_call to invoke remote agent (sync or async)
+    ↓
+Aggregates result with local processing
+    ↓
+Return to user
+```
+
+### When to Use
+
+- ✅ Tasks that can be parallelized across agents
+- ✅ Leveraging specialized agents (data processor, ML trainer, etc.)
+- ✅ Load balancing across multiple instances
+- ✗ Real-time streaming (use WebSockets instead)
+- ✗ Sub-millisecond latency (local tools better)
+
+### Testing
+
+```bash
+# Test ACP client
+cargo test -p vtcode-acp-client
+
+# Run distributed workflow example
+cargo run --example acp_distributed_workflow
+
+# Integration test
+cargo test --test integration_tests -- acp
+```
+
+### Documentation
+
+- **ACP Spec**: [agentcommunicationprotocol.dev](https://agentcommunicationprotocol.dev/)
+- **VTCode Guide**: [docs/ACP_INTEGRATION.md](docs/ACP_INTEGRATION.md)
+- **Client README**: [vtcode-acp-client/README.md](vtcode-acp-client/README.md)

@@ -3,7 +3,7 @@ name = "vtcode-acp-client"
 version = "0.42.20"
 edition = "2024"
 authors = ["vinhnx <vinhnx@users.noreply.github.com>"]
-description = "Shared utilities for managing Agent Client Protocol client connections"
+description = "ACP client implementation for inter-agent communication and orchestration"
 license = "MIT"
 readme = "../README.md"
 repository = "https://github.com/vinhnx/vtcode"
@@ -14,6 +14,16 @@ keywords = ["vtcode", "acp", "agent", "client-connection", "vt"]
 
 [dependencies]
 agent-client-protocol = "0.7.0"
+anyhow = "1.0"
+tokio = { version = "1.48", features = ["full"] }
+reqwest = { version = "0.12", features = ["json"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+async-trait = "0.1.89"
+tracing = "0.1"
+url = "2.5"
+uuid = { version = "1.8.0", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
 
 [package.metadata.docs.rs]
 all-features = true

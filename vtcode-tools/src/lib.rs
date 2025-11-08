@@ -23,6 +23,9 @@ pub mod adapters;
 #[cfg(feature = "policies")]
 pub use adapters::{RegistryBuilder, RegistryEvent};
 
+pub mod acp_tool;
+pub use acp_tool::{AcpDiscoveryTool, AcpHealthTool, AcpTool};
+
 pub use vtcode_core::tools::command;
 pub use vtcode_core::tools::names;
 

@@ -11,7 +11,7 @@ use crate::acp::tooling::{
     TOOL_READ_FILE_PATH_ARG, TOOL_READ_FILE_URI_ARG, ToolDescriptor,
 };
 use crate::acp::workspace::{DefaultWorkspaceTrustSynchronizer, WorkspaceTrustSynchronizer};
-use crate::acp::{acp_client, register_acp_client};
+use crate::acp::{acp_connection, register_acp_connection};
 use agent_client_protocol as acp;
 use agent_client_protocol::{AgentSideConnection, Client};
 use anyhow::{Context, Result};
@@ -330,7 +330,7 @@ pub async fn run_zed_agent(config: &CoreAgentConfig, vt_cfg: &VTCodeConfig) -> R
                     tokio::task::spawn_local(fut);
                 });
             let conn = Arc::new(raw_conn);
-            if let Err(existing) = register_acp_client(Arc::clone(&conn)) {
+            if let Err(existing) = register_acp_connection(Arc::clone(&conn)) {
                 warn!("ACP client already registered; continuing with existing instance");
                 drop(existing);
             }
@@ -513,7 +513,7 @@ impl ZedAgent {
     }
 
     fn client(&self) -> Option<Arc<AgentSideConnection>> {
-        acp_client()
+        acp_connection()
     }
 
     fn tool_definitions(
