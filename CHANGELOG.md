@@ -3,6 +3,25 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - Latest Improvements# [Version 0.39.5] - 2025-11-03
+# [Version 0.42.14] - 2025-11-08
+
+
+### Features
+    - feat: Remove deprecated tool and add test_tool to policy
+    - feat: Implement NPM package publishing for VT Code
+    - feat: add configurable LLM generation parameters in vtcode.toml
+
+
+### Bug Fixes
+    - fix: revert version in package.json to 0.42.13
+
+
+### Documentation
+    - docs: update changelog for v0.42.13 [skip ci]
+
+
+### Chores
+    - chore: release v0.42.13
 # [Version 0.42.13] - 2025-11-08
 
 
