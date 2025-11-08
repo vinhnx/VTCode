@@ -2,8 +2,30 @@
 
 All notable changes to vtcode will be documented in this file.
 
-## [Unreleased] - Latest Improvements# [Version 0.39.5] - 2025-11-03
-# [Version 0.42.20] - 2025-11-09
+## [Version 0.43.0] - 2025-11-09
+
+### Features
+    - feat: Implement Agent Communication Protocol (ACP) integration for multi-agent orchestration
+    - feat: Add ACP client with sync/async RPC methods
+    - feat: Implement agent discovery and registry system
+    - feat: Add type-safe message protocol with correlation ID tracking
+    - feat: Create MCP tools: acp_call, acp_discover, acp_health for agent communication
+    - feat: Integrate ACP with Zed editor for terminal command execution
+    - feat: Support distributed agent workflows via HTTP-based RPC
+
+### Documentation
+    - docs: Add comprehensive ACP integration guide
+    - docs: Add ACP quick reference for developers
+    - docs: Add ACP client API documentation and examples
+    - docs: Add implementation completion summary
+    - docs: Add release checklist and next steps guide
+
+### Testing
+    - test: Add full test coverage for ACP client (6 unit tests)
+    - test: Add ACP tool integration tests
+    - test: Add distributed workflow example
+
+## [Version 0.42.20] - 2025-11-09
 
 
 ### Features
