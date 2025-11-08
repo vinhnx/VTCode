@@ -3,6 +3,28 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - Latest Improvements# [Version 0.39.5] - 2025-11-03
+# [Version 0.42.17] - 2025-11-08
+
+
+### Features
+    - feat: Add comprehensive timeout implementation summary and configuration details
+    - feat: Implement configurable MCP initialization and tool execution timeouts
+    - feat: Add OpenRouter Interleaved Thinking Implementation Plan and Quick Reference
+
+
+### Bug Fixes
+    - fix: update tool policies and disable time provider in configuration
+
+
+### Documentation
+    - docs: update changelog for v0.42.16 [skip ci]
+
+
+### Chores
+    - chore: update documentation and code structure for clarity
+    - chore: update npm package.json to v0.42.16 [skip ci]
+    - chore: release v0.42.16
+    - chore: update npm package.json to v0.42.15 [skip ci]
 # [Version 0.42.16] - 2025-11-08
 
 
