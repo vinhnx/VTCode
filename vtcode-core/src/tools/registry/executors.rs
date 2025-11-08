@@ -400,6 +400,259 @@ impl ToolRegistry {
         })
     }
 
+    pub(super) fn execute_code_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
+        let mcp_client = self.mcp_client.clone();
+        let workspace_root = self.inventory.workspace_root().to_path_buf();
+        Box::pin(async move {
+            use crate::exec::code_executor::{CodeExecutor, Language};
+
+            #[derive(Debug, Deserialize)]
+            struct ExecuteCodeArgs {
+                code: String,
+                language: String,
+                #[serde(default)]
+                timeout_secs: Option<u64>,
+            }
+
+            let parsed: ExecuteCodeArgs = serde_json::from_value(args)
+                .context("execute_code requires 'code' and 'language' fields")?;
+
+            // Validate language
+            let language = match parsed.language.as_str() {
+                "python3" | "python" => Language::Python3,
+                "javascript" | "js" => Language::JavaScript,
+                invalid => {
+                    return Err(anyhow!(
+                        "Invalid language: '{}'. Must be 'python3' or 'javascript'",
+                        invalid
+                    ))
+                }
+            };
+
+            // Get MCP client for code execution
+            let mcp_client = match mcp_client {
+                Some(client) => client,
+                None => {
+                    // Create a no-op executor if MCP client not available
+                    debug!("MCP client not configured, code execution may be limited");
+                    // For now, we'll require MCP client
+                    return Err(anyhow!(
+                        "MCP client not configured. Code execution requires MCP tools access."
+                    ));
+                }
+            };
+
+            // Build execution config
+            let mut config: crate::exec::code_executor::ExecutionConfig = Default::default();
+            if let Some(timeout_secs) = parsed.timeout_secs {
+                config.timeout_secs = timeout_secs;
+            }
+
+            // Create a basic sandbox profile (no sandboxing enforcement yet)
+            // TODO: Integrate with actual sandbox runtime when available
+            let sandbox_profile = crate::sandbox::SandboxProfile::new(
+                "/bin/sh".into(),
+                "/tmp/sandbox_settings.json".into(),
+                workspace_root.join(".vtcode/sandbox"),
+                vec![workspace_root.clone()],
+                crate::sandbox::SandboxRuntimeKind::AnthropicSrt,
+            );
+
+            // Create and configure code executor
+            let executor = CodeExecutor::new(
+                language,
+                sandbox_profile,
+                mcp_client,
+                workspace_root.clone(),
+            )
+            .with_config(config);
+
+            // Execute the code
+            let result = executor
+                .execute(&parsed.code)
+                .await
+                .context("code execution failed")?;
+
+            debug!(
+                exit_code = result.exit_code,
+                duration_ms = result.duration_ms,
+                has_output = !result.stdout.is_empty(),
+                has_error = !result.stderr.is_empty(),
+                has_json_result = result.json_result.is_some(),
+                "Code execution completed"
+            );
+
+            // Build response
+            let mut response = json!({
+                "exit_code": result.exit_code,
+                "duration_ms": result.duration_ms,
+                "stdout": result.stdout,
+                "stderr": result.stderr,
+            });
+
+            // Include JSON result if present
+            if let Some(json_result) = result.json_result {
+                response["result"] = json_result;
+            }
+
+            Ok(response)
+        })
+    }
+
+    pub(super) fn save_skill_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
+        let workspace_root = self.inventory.workspace_root().to_path_buf();
+        Box::pin(async move {
+            use crate::exec::{Skill, SkillManager, SkillMetadata};
+
+            #[derive(Debug, Deserialize)]
+            struct SaveSkillArgs {
+                name: String,
+                code: String,
+                language: String,
+                description: String,
+                #[serde(default)]
+                inputs: Option<Vec<serde_json::Value>>,
+                output: String,
+                #[serde(default)]
+                tags: Option<Vec<String>>,
+                #[serde(default)]
+                examples: Option<Vec<String>>,
+            }
+
+            let parsed: SaveSkillArgs = serde_json::from_value(args)
+                .context("save_skill requires name, code, language, description, and output")?;
+
+            // Parse inputs
+            let inputs = if let Some(input_values) = parsed.inputs {
+                input_values
+                    .iter()
+                    .map(|v| {
+                        let obj = v.as_object().context("input must be an object")?;
+                        Ok(crate::exec::skill_manager::ParameterDoc {
+                            name: obj
+                                .get("name")
+                                .and_then(|v| v.as_str())
+                                .context("input.name required")?
+                                .to_string(),
+                            r#type: obj
+                                .get("type")
+                                .and_then(|v| v.as_str())
+                                .context("input.type required")?
+                                .to_string(),
+                            description: obj
+                                .get("description")
+                                .and_then(|v| v.as_str())
+                                .context("input.description required")?
+                                .to_string(),
+                            required: obj
+                                .get("required")
+                                .and_then(|v| v.as_bool())
+                                .unwrap_or(false),
+                        })
+                    })
+                    .collect::<Result<Vec<_>>>()
+                    .context("failed to parse inputs")?
+            } else {
+                Vec::new()
+            };
+
+            let metadata = SkillMetadata {
+                name: parsed.name.clone(),
+                description: parsed.description,
+                language: parsed.language,
+                inputs,
+                output: parsed.output,
+                examples: parsed.examples.unwrap_or_default(),
+                tags: parsed.tags.unwrap_or_default(),
+                created_at: chrono::Utc::now().to_rfc3339(),
+                modified_at: chrono::Utc::now().to_rfc3339(),
+            };
+
+            let skill = Skill {
+                metadata,
+                code: parsed.code,
+            };
+
+            let manager = SkillManager::new(&workspace_root);
+            manager.save_skill(skill).await?;
+
+            Ok(json!({
+                "success": true,
+                "message": format!("Skill '{}' saved successfully", parsed.name)
+            }))
+        })
+    }
+
+    pub(super) fn load_skill_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
+        let workspace_root = self.inventory.workspace_root().to_path_buf();
+        Box::pin(async move {
+            use crate::exec::SkillManager;
+
+            #[derive(Debug, Deserialize)]
+            struct LoadSkillArgs {
+                name: String,
+            }
+
+            let parsed: LoadSkillArgs = serde_json::from_value(args)
+                .context("load_skill requires 'name' field")?;
+
+            let manager = SkillManager::new(&workspace_root);
+            let skill = manager.load_skill(&parsed.name).await?;
+
+            Ok(json!({
+                "name": skill.metadata.name,
+                "code": skill.code,
+                "language": skill.metadata.language,
+                "description": skill.metadata.description,
+                "inputs": skill.metadata.inputs,
+                "output": skill.metadata.output,
+                "examples": skill.metadata.examples,
+                "tags": skill.metadata.tags,
+                "created_at": skill.metadata.created_at,
+                "modified_at": skill.metadata.modified_at,
+            }))
+        })
+    }
+
+    pub(super) fn list_skills_executor(&mut self, _args: Value) -> BoxFuture<'_, Result<Value>> {
+        let workspace_root = self.inventory.workspace_root().to_path_buf();
+        Box::pin(async move {
+            use crate::exec::SkillManager;
+
+            let manager = SkillManager::new(&workspace_root);
+            let skills = manager.list_skills().await?;
+
+            Ok(json!({
+                "skills": skills,
+                "count": skills.len(),
+            }))
+        })
+    }
+
+    pub(super) fn search_skills_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
+        let workspace_root = self.inventory.workspace_root().to_path_buf();
+        Box::pin(async move {
+            use crate::exec::SkillManager;
+
+            #[derive(Debug, Deserialize)]
+            struct SearchSkillsArgs {
+                query: String,
+            }
+
+            let parsed: SearchSkillsArgs = serde_json::from_value(args)
+                .context("search_skills requires 'query' field")?;
+
+            let manager = SkillManager::new(&workspace_root);
+            let results = manager.search_skills(&parsed.query).await?;
+
+            Ok(json!({
+                "query": parsed.query,
+                "results": results,
+                "count": results.len(),
+            }))
+        })
+    }
+
     pub(super) async fn execute_apply_patch(&self, args: Value) -> Result<Value> {
         let patch_source = args
             .get("input")

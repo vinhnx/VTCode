@@ -264,6 +264,105 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
             }),
         },
 
+        FunctionDeclaration {
+            name: tools::EXECUTE_CODE.to_string(),
+            description: "Execute Python or JavaScript code in a sandboxed environment with access to MCP tools as library functions. Supports loops, conditionals, data filtering, and aggregation. Results are returned as JSON via `result = {...}` assignment.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "code": {"type": "string", "description": "Python 3 or JavaScript code to execute"},
+                    "language": {
+                        "type": "string",
+                        "enum": ["python3", "javascript"],
+                        "description": "Programming language: 'python3' or 'javascript'",
+                        "default": "python3"
+                    },
+                    "timeout_secs": {
+                        "type": "integer",
+                        "description": "Maximum execution time in seconds (default: 30)",
+                        "default": 30
+                    }
+                },
+                "required": ["code", "language"]
+            }),
+        },
+
+        FunctionDeclaration {
+            name: "save_skill".to_string(),
+            description: "Save a reusable skill (code function) to .vtcode/skills/ for later use. Skills can be loaded across conversations.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Skill name in snake_case (e.g., 'filter_test_files')"},
+                    "code": {"type": "string", "description": "Function implementation (Python 3 or JavaScript)"},
+                    "language": {
+                        "type": "string",
+                        "enum": ["python3", "javascript"],
+                        "description": "Programming language"
+                    },
+                    "description": {"type": "string", "description": "Brief description of what the skill does"},
+                    "inputs": {
+                        "type": "array",
+                        "description": "List of input parameters",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string"},
+                                "type": {"type": "string"},
+                                "description": {"type": "string"},
+                                "required": {"type": "boolean"}
+                            }
+                        }
+                    },
+                    "output": {"type": "string", "description": "What the skill returns"},
+                    "tags": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Tags for categorizing skills (e.g., ['files', 'filtering'])"
+                    },
+                    "examples": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Usage examples"
+                    }
+                },
+                "required": ["name", "code", "language", "description", "output"]
+            }),
+        },
+
+        FunctionDeclaration {
+            name: "load_skill".to_string(),
+            description: "Load a saved skill by name and get its code and documentation.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Skill name to load"}
+                },
+                "required": ["name"]
+            }),
+        },
+
+        FunctionDeclaration {
+            name: "list_skills".to_string(),
+            description: "List all available saved skills in the workspace.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {}
+            }),
+        },
+
+        FunctionDeclaration {
+            name: "search_skills".to_string(),
+            description: "Search for skills by keyword or tag.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search term (skill name, description, or tag)"}
+                },
+                "required": ["query"]
+            }),
+        },
+
         // ============================================================
         // FILE OPERATIONS
         // ============================================================

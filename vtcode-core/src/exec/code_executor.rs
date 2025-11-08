@@ -113,6 +113,7 @@ pub struct CodeExecutor {
     mcp_client: Arc<dyn McpToolExecutor>,
     config: ExecutionConfig,
     workspace_root: PathBuf,
+    enable_pii_protection: bool,
 }
 
 impl CodeExecutor {
@@ -129,12 +130,22 @@ impl CodeExecutor {
             mcp_client,
             config: ExecutionConfig::default(),
             workspace_root,
+            enable_pii_protection: false,
         }
     }
 
     /// Set custom execution configuration.
     pub fn with_config(mut self, config: ExecutionConfig) -> Self {
         self.config = config;
+        self
+    }
+
+    /// Enable PII (Personally Identifiable Information) protection.
+    ///
+    /// When enabled, the executor will automatically tokenize sensitive data
+    /// in MCP tool calls to prevent data leakage.
+    pub fn with_pii_protection(mut self, enabled: bool) -> Self {
+        self.enable_pii_protection = enabled;
         self
     }
 
@@ -201,7 +212,11 @@ impl CodeExecutor {
         );
 
         // Spawn IPC handler task that will process tool requests from code
-        let ipc_handler = ToolIpcHandler::new(ipc_dir.clone());
+        let mut ipc_handler = if self.enable_pii_protection {
+            ToolIpcHandler::with_pii_protection(ipc_dir.clone())
+        } else {
+            ToolIpcHandler::new(ipc_dir.clone())
+        };
         let mcp_client = self.mcp_client.clone();
         let execution_timeout = Duration::from_secs(self.config.timeout_secs);
         
@@ -210,12 +225,25 @@ impl CodeExecutor {
             
             while ipc_start.elapsed() < execution_timeout {
                 // Check for tool requests
-                if let Some(request) = ipc_handler.read_request().await? {
+                if let Some(mut request) = ipc_handler.read_request().await? {
                     debug!(
                         tool_name = %request.tool_name,
                         request_id = %request.id,
                         "Processing tool request from code"
                     );
+
+                    // Process request for PII protection (tokenize if enabled)
+                    if let Err(e) = ipc_handler.process_request_for_pii(&mut request) {
+                        debug!(error = %e, "PII tokenization failed");
+                        let response = ToolResponse {
+                            id: request.id,
+                            success: false,
+                            result: None,
+                            error: Some(format!("PII processing error: {}", e)),
+                        };
+                        ipc_handler.write_response(response).await?;
+                        continue;
+                    }
 
                     // Execute the tool
                     let result = match mcp_client.execute_mcp_tool(&request.tool_name, request.args.clone()).await {
@@ -243,7 +271,7 @@ impl CodeExecutor {
                         }
                     };
 
-                    // Write response
+                    // Write response (de-tokenizes if enabled)
                     ipc_handler.write_response(result).await?;
                 } else {
                     // No request yet, sleep and retry

@@ -4,6 +4,10 @@
 //! a sandbox to call MCP tools. The code writes tool requests to a file, and
 //! the executor reads and processes them, writing back results.
 //!
+//! Optionally supports PII (Personally Identifiable Information) protection by
+//! tokenizing sensitive data in requests before tool execution and de-tokenizing
+//! responses before returning to the code.
+//!
 //! # Protocol
 //!
 //! Requests (code → executor):
@@ -31,10 +35,19 @@
 //!   "error": "Tool not found"
 //! }
 //! ```
+//!
+//! # PII Protection
+//!
+//! When enabled, the handler automatically:
+//! 1. Detects PII patterns in request arguments
+//! 2. Tokenizes sensitive data before tool execution
+//! 3. De-tokenizes responses before returning to code
+//! 4. Maintains token mapping for the session
 
 use anyhow::{Context, Result};
 use serde_json::Value;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::fs;
 use tokio::time::sleep;
@@ -62,12 +75,29 @@ pub struct ToolResponse {
 /// IPC handler for tool invocation between code and executor.
 pub struct ToolIpcHandler {
     ipc_dir: PathBuf,
+    pii_tokenizer: Option<Arc<crate::exec::PiiTokenizer>>,
 }
 
 impl ToolIpcHandler {
     /// Create a new IPC handler with the given directory.
     pub fn new(ipc_dir: PathBuf) -> Self {
-        Self { ipc_dir }
+        Self {
+            ipc_dir,
+            pii_tokenizer: None,
+        }
+    }
+
+    /// Create a new IPC handler with PII protection enabled.
+    pub fn with_pii_protection(ipc_dir: PathBuf) -> Self {
+        Self {
+            ipc_dir,
+            pii_tokenizer: Some(Arc::new(crate::exec::PiiTokenizer::new())),
+        }
+    }
+
+    /// Enable PII protection on existing handler.
+    pub fn enable_pii_protection(&mut self) {
+        self.pii_tokenizer = Some(Arc::new(crate::exec::PiiTokenizer::new()));
     }
 
     /// Read a tool request from the code.
@@ -91,8 +121,43 @@ impl ToolIpcHandler {
         Ok(Some(request))
     }
 
+    /// Process request for PII (tokenize if enabled).
+    pub fn process_request_for_pii(&self, request: &mut ToolRequest) -> Result<()> {
+        if let Some(tokenizer) = &self.pii_tokenizer {
+            let args_str = serde_json::to_string(&request.args)
+                .context("failed to serialize request args")?;
+            let (tokenized, _) = tokenizer
+                .tokenize_string(&args_str)
+                .context("PII tokenization failed")?;
+            request.args = serde_json::from_str(&tokenized)
+                .context("failed to parse tokenized args")?;
+        }
+        Ok(())
+    }
+
+    /// Process response for PII (de-tokenize if enabled).
+    pub fn process_response_for_pii(&self, response: &mut ToolResponse) -> Result<()> {
+        if let Some(tokenizer) = &self.pii_tokenizer {
+            if let Some(result) = &response.result {
+                let result_str = serde_json::to_string(result)
+                    .context("failed to serialize response result")?;
+                let detokenized = tokenizer
+                    .detokenize_string(&result_str)
+                    .context("PII de-tokenization failed")?;
+                response.result = Some(
+                    serde_json::from_str(&detokenized)
+                        .context("failed to parse de-tokenized result")?,
+                );
+            }
+        }
+        Ok(())
+    }
+
     /// Write a tool response back to the code.
-    pub async fn write_response(&self, response: ToolResponse) -> Result<()> {
+    pub async fn write_response(&self, mut response: ToolResponse) -> Result<()> {
+        // De-tokenize response before writing back to code
+        self.process_response_for_pii(&mut response)?;
+
         let response_file = self.ipc_dir.join("response.json");
 
         let json = serde_json::to_string(&response)

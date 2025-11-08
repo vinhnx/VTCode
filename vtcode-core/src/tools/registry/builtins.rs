@@ -145,5 +145,35 @@ pub(super) fn builtin_tool_registrations() -> Vec<ToolRegistration> {
             false,
             ToolRegistry::search_tools_executor,
         ),
+        ToolRegistration::new(
+            tools::EXECUTE_CODE,
+            CapabilityLevel::Bash,
+            false,
+            ToolRegistry::execute_code_executor,
+        ),
+        ToolRegistration::new(
+            "save_skill",
+            CapabilityLevel::Bash,
+            false,
+            ToolRegistry::save_skill_executor,
+        ),
+        ToolRegistration::new(
+            "load_skill",
+            CapabilityLevel::Bash,
+            false,
+            ToolRegistry::load_skill_executor,
+        ),
+        ToolRegistration::new(
+            "list_skills",
+            CapabilityLevel::Basic,
+            false,
+            ToolRegistry::list_skills_executor,
+        ),
+        ToolRegistration::new(
+            "search_skills",
+            CapabilityLevel::Basic,
+            false,
+            ToolRegistry::search_skills_executor,
+        ),
     ]
 }
