@@ -9,7 +9,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use anyhow::{anyhow, Result, Context};
+use anyhow::{anyhow, Result};
 use tracing::debug;
 
 /// Represents a specific version of a tool

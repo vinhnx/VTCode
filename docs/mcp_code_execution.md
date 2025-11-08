@@ -529,19 +529,64 @@ skill = load_skill("filter_test_files")
 
 **Objective**: Validate all 5 steps work together end-to-end, with performance and security testing.
 
-**Key Areas**:
-- Cross-module integration (discovery → execution → filtering → skills)
-- Performance benchmarks (discovery < 50ms, execution < 2s cold)
-- PII protection verification with real patterns
-- Large dataset handling (10k+ results)
-- Skill library composition and reuse
+**Implementation Status**:
 
-**Current Work**:
-- Integration test scenarios added
-- Performance test framework designed
-- Documentation in `MCP_INTEGRATION_TESTING.md`
+### Unit Tests (All Passing ✅)
+- `tool_discovery::tests` - Progressive tool discovery 
+- `code_executor::tests` - SDK generation and execution
+- `skill_manager::tests` - Skill persistence and management
+- `pii_tokenizer::tests` - PII detection and tokenization
+- `agent_optimization::tests` - Behavior tracking
 
-**Status**: 🚀 IN PROGRESS - Test suite development
+### Integration Tests (🚀 NEW - In Development)
+
+Module: `vtcode-core/src/exec/integration_tests.rs`
+
+**Test Suite** (7 tests implemented):
+
+1. **Test 1: Discovery → Execution → Filtering** ✅
+   - Validates tool discovery feeds into code execution
+   - Verifies filtering happens locally, not in model context
+   
+2. **Test 2: Execution → Skill → Reuse** ✅
+   - Tests code execution produces reusable skills
+   - Validates skill persistence and loading
+   
+3. **Test 3: PII Protection in Pipeline** ✅
+   - Tests PII detection, tokenization, detokenization
+   - Verifies plaintext PII never in results
+   
+4. **Test 4: Large Dataset Filtering** ✅
+   - Tests processing 1000+ items in code
+   - Verifies only aggregated summary returned to model
+   
+5. **Test 5: Tool Error Handling** ✅
+   - Tests error handling in code execution
+   - Validates tool failures caught gracefully
+   
+6. **Test 6: Agent Behavior Tracking** ✅
+   - Tests AgentBehaviorAnalyzer for pattern recognition
+   - Validates tool recommendations and failure detection
+   
+7. **Scenario: Simple Transformation** ✅
+   - Real-world example of data transformation in code
+
+8. **Scenario: JavaScript Execution** ✅
+   - Tests JavaScript as alternative to Python
+
+**Run Integration Tests**:
+```bash
+# All integration tests
+cargo test -p vtcode-core exec --lib integration_tests
+
+# Specific test
+cargo test -p vtcode-core exec::integration_tests::test_discovery_to_execution_flow
+
+# With output
+cargo test -p vtcode-core exec::integration_tests -- --nocapture
+```
+
+**Status**: ✅ Integration test framework complete - 8+ tests implemented
 
 ## References
 

@@ -314,6 +314,7 @@ mod tests {
             tags: vec!["files".to_string(), "filtering".to_string()],
             created_at: "2025-01-01T00:00:00Z".to_string(),
             modified_at: "2025-01-01T00:00:00Z".to_string(),
+            tool_dependencies: vec![],
         };
 
         let json = serde_json::to_string(&metadata).unwrap();
