@@ -1,9 +1,23 @@
-import * as pty from "node-pty";
 import type { ChildProcess } from "node:child_process";
 import { spawn } from "node:child_process";
 import { createInterface } from "readline";
 import * as vscode from "vscode";
 import type { VtcodeConfigSummary } from "./vtcodeConfig";
+
+// Lazy-load node-pty to avoid bundling native modules
+let ptyModule: any = null;
+function getPtyModule() {
+    if (ptyModule === null) {
+        try {
+            // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
+            ptyModule = require("node-pty");
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            throw new Error(`Failed to load node-pty: ${message}`);
+        }
+    }
+    return ptyModule;
+}
 
 const ANSI_CSI_PATTERN = new RegExp(String.raw`\u001B\[[0-9;]*[A-Za-z]`, "g");
 const ANSI_OSC_PATTERN = new RegExp(String.raw`\u001B][^\u0007]*\u0007`, "g");
@@ -276,7 +290,10 @@ export class VtcodeBackend implements vscode.Disposable {
     }
 
     private shouldUseExec(): boolean {
-        return false;
+        // Use exec mode to enable the full agent loop with reasoning and tool execution
+        // This provides the complete agent experience with planning, tool usage, etc.
+        // Default to true to enable full functionality unless explicitly disabled
+        return this.configSummary?.automationFullAutoEnabled !== false;
     }
 
     private async *streamPromptViaExec(
@@ -1015,6 +1032,7 @@ export class VtcodeBackend implements vscode.Disposable {
             let commandStarted = false;
             const timeout = 30000; // 30 second timeout
 
+            const pty = getPtyModule();
             const ptyProcess = pty.spawn(shell, [], {
                 name: "xterm-256color",
                 cols: 120,

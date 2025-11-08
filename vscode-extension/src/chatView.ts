@@ -6,6 +6,10 @@ import {
     type VtcodeToolExecutionResult,
 } from "./vtcodeBackend";
 import { VtcodeConfigSummary } from "./vtcodeConfig";
+import { ParticipantRegistry } from "./participantRegistry";
+import { ParticipantContext } from "./types/participant";
+import { ConversationManager } from "./conversation/conversationManager";
+import { parseMentions, getUniqueMentionTypes } from "./utils/mentionParser";
 
 interface ChatMessage {
     readonly role: "user" | "assistant" | "system" | "tool" | "error";
@@ -26,12 +30,31 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     private readonly messages: ChatMessage[] = [];
     private workspaceTrusted = vscode.workspace.isTrusted;
     private lastHumanInLoopSetting: boolean | undefined;
+    private participantRegistry: ParticipantRegistry;
+    private conversationManager: ConversationManager;
 
     constructor(
         private readonly extensionUri: vscode.Uri,
         private readonly backend: VtcodeBackend,
-        private readonly output: vscode.OutputChannel
-    ) {}
+        private readonly output: vscode.OutputChannel,
+        private readonly context: vscode.ExtensionContext
+    ) {
+        // Initialize participant registry
+        this.participantRegistry = new ParticipantRegistry();
+        
+        // Initialize conversation manager
+        this.conversationManager = new ConversationManager(context, this.output);
+        
+        // Create initial conversation
+        this.conversationManager.createConversation();
+    }
+
+    /**
+     * Register participants with the chat view
+     */
+    public registerParticipants(participants: ParticipantRegistry): void {
+        this.participantRegistry = participants;
+    }
 
     dispose(): void {
         /* noop */
@@ -127,10 +150,33 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             );
         }
 
+        // Parse @mentions from the message
+        const parsedMessage = parseMentions(text);
+        const mentionTypes = getUniqueMentionTypes(parsedMessage);
+        
+        if (mentionTypes.length > 0) {
+            this.output.appendLine(`[chatView] Detected mentions: ${mentionTypes.join(', ')}`);
+        }
+
+        // Build participant context
+        const participantContext = await this.buildParticipantContext();
+        
+        // Resolve context for mentioned participants only
+        const enhancedText = await this.participantRegistry.resolveContextForMentions(
+            parsedMessage.cleanText,
+            participantContext,
+            mentionTypes
+        );
+
         const userMessage: ChatMessage = {
             role: "user",
-            content: text,
+            content: enhancedText,
             timestamp: Date.now(),
+            metadata: {
+                originalText: text,
+                mentions: mentionTypes,
+                hasMentions: parsedMessage.hasMentions,
+            },
         };
         this.messages.push(userMessage);
         this.postTranscript();
@@ -144,7 +190,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             const context = this.buildConversationContext();
 
             for await (const chunk of this.backend.streamPrompt({
-                prompt: text,
+                prompt: enhancedText,
                 context,
             })) {
                 if (chunk.kind === "text") {
@@ -415,6 +461,62 @@ ${output}`
 
     private setThinking(active: boolean): void {
         this.post({ type: "thinking", active });
+    }
+
+    private async buildParticipantContext(): Promise<ParticipantContext> {
+        const context: ParticipantContext = {};
+
+        // Add workspace context
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (workspaceFolders && workspaceFolders.length > 0) {
+            context.workspace = workspaceFolders[0];
+        }
+
+        // Add active file context
+        const activeEditor = vscode.window.activeTextEditor;
+        if (activeEditor) {
+            const document = activeEditor.document;
+            const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri);
+            
+            context.activeFile = {
+                path: document.fileName,
+                language: document.languageId,
+                selection: activeEditor.selection,
+            };
+
+            // Add file content if it's a reasonable size
+            if (document.lineCount <= 1000) {
+                try {
+                    context.activeFile.content = document.getText();
+                } catch (error) {
+                    // Ignore errors reading file content
+                }
+            }
+        }
+
+        // Add terminal context (simplified - would need extension API integration)
+        const activeTerminal = vscode.window.activeTerminal;
+        if (activeTerminal) {
+            context.terminal = {
+                output: "", // Would need terminal output capture
+                cwd: context.workspace?.uri.fsPath || process.cwd(),
+                shell: undefined, // Would need shell detection
+            };
+        }
+
+        // Add git context (simplified - would need git extension API)
+        if (context.workspace) {
+            context.git = {
+                branch: "main", // Would need actual git branch detection
+                changes: [], // Would need git status parsing
+                repoPath: context.workspace.uri.fsPath,
+            };
+        }
+
+        // Add command history (simplified)
+        context.commandHistory = [];
+
+        return context;
     }
 
     private buildConversationContext(): string {
