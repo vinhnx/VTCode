@@ -29,9 +29,9 @@ use vtcode_core::utils::at_pattern::parse_at_patterns;
 use vtcode_core::utils::session_archive::{SessionArchive, SessionArchiveMetadata, SessionMessage};
 use vtcode_core::utils::transcript;
 
-use crate::agent::agents::is_context_overflow_error;
 use crate::agent::runloop::ResumeSession;
 use crate::agent::runloop::git::confirm_changes_with_git_diff;
+use crate::agent::agents::is_context_overflow_error;
 use crate::agent::runloop::model_picker::{ModelPickerProgress, ModelPickerState};
 use crate::agent::runloop::prompt::refine_user_prompt_if_enabled;
 use crate::agent::runloop::slash_commands::handle_slash_command;
@@ -522,20 +522,17 @@ pub(crate) async fn run_single_agent_loop_unified(
                                                 guard.extend(new_definitions);
                                                 guard.clone()
                                             };
-                                            context_manager.update_tool_catalog(
-                                                build_curator_tools(&updated_snapshot),
-                                            );
-
+                                            context_manager.update_tool_catalog(build_curator_tools(
+                                                &updated_snapshot,
+                                            ));
+                                            
                                             // Store the initial tool names to track changes later
-                                            last_known_mcp_tools = mcp_tools
-                                                .iter()
+                                            last_known_mcp_tools = mcp_tools.iter()
                                                 .map(|t| format!("{}-{}", t.provider, t.name))
                                                 .collect();
                                         }
                                         Err(err) => {
-                                            warn!(
-                                                "Failed to enumerate MCP tools after refresh: {err}"
-                                            );
+                                            warn!("Failed to enumerate MCP tools after refresh: {err}");
                                         }
                                     }
 
@@ -549,9 +546,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                     renderer.line_if_not_empty(MessageStyle::Output)?;
                                 }
                                 Err(err) => {
-                                    warn!(
-                                        "Failed to refresh MCP tools after initialization: {err}"
-                                    );
+                                    warn!("Failed to refresh MCP tools after initialization: {err}");
                                     renderer.line(
                                         MessageStyle::Error,
                                         &format!("Failed to index MCP tools: {}", err),
@@ -563,33 +558,33 @@ pub(crate) async fn run_single_agent_loop_unified(
                         }
                         McpInitStatus::Error { message } => {
                             renderer
-                                .line(MessageStyle::Error, &format!("MCP Error: {}", message))?;
+                                .line(MessageStyle::Error, &format!("⚠️  MCP Error: {}", message))?;
                             renderer.line_if_not_empty(MessageStyle::Output)?;
                             mcp_catalog_initialized = true;
                         }
                         McpInitStatus::Initializing { .. } | McpInitStatus::Disabled => {}
                     }
-                }
-
-                // Dynamic MCP tool refresh - check for new/updated tools after initialization.
-                // We no longer defer startup messages; only summarize tool changes if any.
-                if mcp_catalog_initialized && last_mcp_refresh.elapsed() >= MCP_REFRESH_INTERVAL {
+                } 
+                
+                // Dynamic MCP tool refresh - check for new/updated tools after initialization
+                if mcp_catalog_initialized 
+                    && last_mcp_refresh.elapsed() >= MCP_REFRESH_INTERVAL
+                {
                     last_mcp_refresh = std::time::Instant::now();
-
+                    
                     if let Ok(known_tools) = tool_registry.list_mcp_tools().await {
                         let current_tool_keys: Vec<String> = known_tools
                             .iter()
                             .map(|t| format!("{}-{}", t.provider, t.name))
                             .collect();
-
-                        // Only refresh if the catalog has actually changed.
+                        
+                        // Check if there are new or changed tools
                         if current_tool_keys != last_known_mcp_tools {
                             match tool_registry.refresh_mcp_tools().await {
                                 Ok(()) => {
                                     match tool_registry.list_mcp_tools().await {
                                         Ok(new_mcp_tools) => {
-                                            let new_definitions =
-                                                build_mcp_tool_definitions(&new_mcp_tools);
+                                            let new_definitions = build_mcp_tool_definitions(&new_mcp_tools);
                                             let updated_snapshot = {
                                                 let mut guard = tools.write().await;
                                                 guard.retain(|tool| {
@@ -598,64 +593,35 @@ pub(crate) async fn run_single_agent_loop_unified(
                                                 guard.extend(new_definitions);
                                                 guard.clone()
                                             };
-                                            context_manager.update_tool_catalog(
-                                                build_curator_tools(&updated_snapshot),
-                                            );
-
-                                            // Determine newly added tools for concise notification.
-                                            let new_tool_names: Vec<String> = new_mcp_tools
-                                                .iter()
-                                                .filter(|new_tool| {
-                                                    let tool_key =
-                                                        format!("{}-{}", new_tool.provider, new_tool.name);
-                                                    !last_known_mcp_tools.contains(&tool_key)
-                                                })
-                                                .map(|tool| {
-                                                    format!("{} ({})", tool.name, tool.provider)
-                                                })
-                                                .collect();
-
-                                            if !new_tool_names.is_empty() {
-                                                let added_count = new_tool_names.len();
-                                                let message = if added_count == 1 {
-                                                    format!(
-                                                        "MCP tools updated: new tool {}",
-                                                        new_tool_names[0]
-                                                    )
-                                                } else {
-                                                    format!(
-                                                        "MCP tools updated: {} new tools ({}).",
-                                                        added_count,
-                                                        new_tool_names.join(", ")
-                                                    )
-                                                };
-
-                                                renderer.line(
-                                                    MessageStyle::Info,
-                                                    &message,
-                                                )?;
-                                                renderer.line_if_not_empty(MessageStyle::Output)?;
-                                            }
-
-                                            // Update the last known tools snapshot.
+                                            context_manager.update_tool_catalog(build_curator_tools(
+                                                &updated_snapshot,
+                                            ));
+                                            
+                                            let added_count = new_mcp_tools.len().saturating_sub(last_known_mcp_tools.len());
+                                            let message = if added_count > 0 {
+                                                format!("Discovered {} new MCP tool{}", 
+                                                       added_count, 
+                                                       if added_count == 1 { "" } else { "s" })
+                                            } else {
+                                                "MCP tools updated".to_string()
+                                            };
+                                            
+                                            renderer.line(MessageStyle::Info, &format!("🔄 {}", message))?;
+                                            renderer.line_if_not_empty(MessageStyle::Output)?;
+                                            
+                                            // Update the last known tools
                                             last_known_mcp_tools = new_mcp_tools
                                                 .iter()
-                                                .map(|t| {
-                                                    format!("{}-{}", t.provider, t.name)
-                                                })
+                                                .map(|t| format!("{}-{}", t.provider, t.name))
                                                 .collect();
                                         }
                                         Err(err) => {
-                                            warn!(
-                                                "Failed to enumerate MCP tools after refresh: {err}"
-                                            );
+                                            warn!("Failed to enumerate MCP tools after refresh: {err}");
                                         }
                                     }
                                 }
                                 Err(err) => {
-                                    warn!(
-                                        "Failed to refresh MCP tools during dynamic update: {err}"
-                                    );
+                                    warn!("Failed to refresh MCP tools during dynamic update: {err}");
                                 }
                             }
                         }
@@ -1088,15 +1054,13 @@ pub(crate) async fn run_single_agent_loop_unified(
                     }
                 });
                 let current_tools = tools.read().await.clone();
-                let config_temp = vt_cfg.as_ref().map(|c| c.agent.temperature);
-                let config_max_tokens = vt_cfg.as_ref().map(|c| c.agent.max_tokens);
                 let request = uni::LLMRequest {
                     messages: request_history.clone(),
                     system_prompt: Some(system_prompt),
                     tools: Some(current_tools),
                     model: active_model.clone(),
-                    max_tokens: max_tokens_opt.or(config_max_tokens),
-                    temperature: config_temp,
+                    max_tokens: max_tokens_opt.or(Some(2000)),
+                    temperature: Some(0.7),
                     stream: use_streaming,
                     tool_choice: Some(uni::ToolChoice::auto()),
                     parallel_tool_calls: None,
@@ -1214,6 +1178,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                     MessageStyle::Info,
                                     "Context overflow detected; trimmed earlier messages and will retry.",
                                 )?;
+                                allow_follow_up = true;
                                 continue 'outer;
                             }
                         }
@@ -1450,6 +1415,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                                 .set_progress(progress.progress as u64)
                                                 .await;
                                         }
+                                        allow_follow_up = true;
                                         continue;
                                     }
                                     ToolExecutionStatus::Success {
@@ -1968,6 +1934,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                             }
                         }
                     }
+                    allow_follow_up = true;
                     continue 'outer;
                 }
 
@@ -1986,8 +1953,6 @@ pub(crate) async fn run_single_agent_loop_unified(
                     if should_run_review {
                         let review_system = "You are the agent's critical code reviewer. Improve clarity, correctness, and add missing test or validation guidance. Return only the improved final answer (no meta commentary).".to_string();
                         for _ in 0..review_passes {
-                            let review_temp = vt_cfg.as_ref().map(|c| c.agent.temperature);
-                            let review_max_tokens = vt_cfg.as_ref().map(|c| c.agent.max_tokens);
                             let review_req = uni::LLMRequest {
                                 messages: vec![uni::Message::user(format!(
                                     "Please review and refine the following response. Return only the improved response.\n\n{}",
@@ -1996,8 +1961,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                                 system_prompt: Some(review_system.clone()),
                                 tools: None,
                                 model: config.model.clone(),
-                                max_tokens: review_max_tokens,
-                                temperature: review_temp,
+                                max_tokens: Some(2000),
+                                temperature: Some(0.5),
                                 stream: false,
                                 tool_choice: Some(uni::ToolChoice::none()),
                                 parallel_tool_calls: None,

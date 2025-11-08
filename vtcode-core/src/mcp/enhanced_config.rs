@@ -136,7 +136,7 @@ impl ValidatedMcpClientConfig {
         // Validate server configuration if enabled
         if self.original.server.enabled {
             // Validate port range
-            if self.original.server.port == 0 {
+            if self.original.server.port == 0 || self.original.server.port > 65535 {
                 errors.push(ValidationError::InvalidPort(self.original.server.port.into()));
             }
 
@@ -277,7 +277,6 @@ mod tests {
         McpClientConfig, McpProviderConfig, McpServerConfig, McpStdioServerConfig,
         McpTransportConfig,
     };
-    use std::collections::HashMap;
 
     fn create_test_config() -> McpClientConfig {
         McpClientConfig {

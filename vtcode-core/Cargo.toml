@@ -155,7 +155,6 @@ path = "examples/migration_test.rs"
 
 [features]
 default = []
-schema = []
 swift = ["dep:tree-sitter-swift"]
 
 [dependencies.tree-sitter-swift]
