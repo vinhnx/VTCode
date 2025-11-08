@@ -571,7 +571,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                     }
                 }
 
-                // Dynamic MCP tool refresh - check for new/updated tools after initialization
+                // Dynamic MCP tool refresh - check for new/updated tools after initialization.
+                // We no longer defer startup messages; only summarize tool changes if any.
                 if mcp_catalog_initialized && last_mcp_refresh.elapsed() >= MCP_REFRESH_INTERVAL {
                     last_mcp_refresh = std::time::Instant::now();
 
@@ -581,7 +582,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                             .map(|t| format!("{}-{}", t.provider, t.name))
                             .collect();
 
-                        // Check if there are new or changed tools
+                        // Only refresh if the catalog has actually changed.
                         if current_tool_keys != last_known_mcp_tools {
                             match tool_registry.refresh_mcp_tools().await {
                                 Ok(()) => {
@@ -601,39 +602,47 @@ pub(crate) async fn run_single_agent_loop_unified(
                                                 build_curator_tools(&updated_snapshot),
                                             );
 
-                                            // Determine which tools are newly added
+                                            // Determine newly added tools for concise notification.
                                             let new_tool_names: Vec<String> = new_mcp_tools
                                                 .iter()
                                                 .filter(|new_tool| {
-                                                    let tool_key = format!("{}-{}", new_tool.provider, new_tool.name);
+                                                    let tool_key =
+                                                        format!("{}-{}", new_tool.provider, new_tool.name);
                                                     !last_known_mcp_tools.contains(&tool_key)
                                                 })
-                                                .map(|tool| format!("{} ({})", tool.name, tool.provider))
+                                                .map(|tool| {
+                                                    format!("{} ({})", tool.name, tool.provider)
+                                                })
                                                 .collect();
-                                            
-                                            let added_count = new_tool_names.len();
-                                            let message = if added_count > 0 {
-                                                if added_count == 1 {
-                                                    format!("Discovered new MCP tool: {}", new_tool_names[0])
+
+                                            if !new_tool_names.is_empty() {
+                                                let added_count = new_tool_names.len();
+                                                let message = if added_count == 1 {
+                                                    format!(
+                                                        "MCP tools updated: new tool {}",
+                                                        new_tool_names[0]
+                                                    )
                                                 } else {
-                                                    format!("Discovered {} new MCP tools: {}", 
-                                                           added_count, 
-                                                           new_tool_names.join(", "))
-                                                }
-                                            } else {
-                                                "MCP tools updated".to_string()
-                                            };
+                                                    format!(
+                                                        "MCP tools updated: {} new tools ({}).",
+                                                        added_count,
+                                                        new_tool_names.join(", ")
+                                                    )
+                                                };
 
-                                            renderer.line(
-                                                MessageStyle::Info,
-                                                &format!("{}", message),
-                                            )?;
-                                            renderer.line_if_not_empty(MessageStyle::Output)?;
+                                                renderer.line(
+                                                    MessageStyle::Info,
+                                                    &message,
+                                                )?;
+                                                renderer.line_if_not_empty(MessageStyle::Output)?;
+                                            }
 
-                                            // Update the last known tools
+                                            // Update the last known tools snapshot.
                                             last_known_mcp_tools = new_mcp_tools
                                                 .iter()
-                                                .map(|t| format!("{}-{}", t.provider, t.name))
+                                                .map(|t| {
+                                                    format!("{}-{}", t.provider, t.name)
+                                                })
                                                 .collect();
                                         }
                                         Err(err) => {

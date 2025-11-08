@@ -35,13 +35,12 @@
     "list_pty_sessions": "allow",
     "read_pty_session": "allow",
     "resize_pty_session": "allow",
-    "send_pty_input": "prompt",
+    "send_pty_input": "allow",
     "git_diff": "allow",
     "grep_file": "allow",
     "create_file": "prompt",
     "delete_file": "prompt",
-    "run_terminal_cmd": "allow",
-    "test_tool": "allow"
+    "run_terminal_cmd": "allow"
   },
   "constraints": {
     "curl": {
@@ -203,12 +202,6 @@
         }
       }
     },
-    "providers": {
-      "time": {
-        "tools": {
-          "get_current_time": "allow"
-        }
-      }
-    }
+    "providers": {}
   }
 }
