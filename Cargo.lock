@@ -1326,7 +1326,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -3960,7 +3960,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.4.15",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -3973,7 +3973,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.11.0",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -4678,7 +4678,7 @@ dependencies = [
  "getrandom 0.3.3",
  "once_cell",
  "rustix 1.1.2",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -5528,7 +5528,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode"
-version = "0.42.18"
+version = "0.42.19"
 dependencies = [
  "agent-client-protocol",
  "anstyle",
@@ -5579,14 +5579,14 @@ dependencies = [
 
 [[package]]
 name = "vtcode-acp-client"
-version = "0.42.18"
+version = "0.42.19"
 dependencies = [
  "agent-client-protocol",
 ]
 
 [[package]]
 name = "vtcode-bash-runner"
-version = "0.42.18"
+version = "0.42.19"
 dependencies = [
  "anyhow",
  "assert_fs",
@@ -5600,14 +5600,14 @@ dependencies = [
 
 [[package]]
 name = "vtcode-commons"
-version = "0.42.18"
+version = "0.42.19"
 dependencies = [
  "anyhow",
 ]
 
 [[package]]
 name = "vtcode-config"
-version = "0.42.18"
+version = "0.42.19"
 dependencies = [
  "anyhow",
  "assert_fs",
@@ -5629,7 +5629,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-core"
-version = "0.42.18"
+version = "0.42.19"
 dependencies = [
  "ansi-to-tui",
  "anstream",
@@ -5723,7 +5723,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-exec-events"
-version = "0.42.18"
+version = "0.42.19"
 dependencies = [
  "log",
  "schemars 1.0.4",
@@ -5734,7 +5734,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-indexer"
-version = "0.42.18"
+version = "0.42.19"
 dependencies = [
  "anyhow",
  "ignore",
@@ -5745,7 +5745,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-llm"
-version = "0.42.18"
+version = "0.42.19"
 dependencies = [
  "anyhow",
  "assert_fs",
@@ -5758,7 +5758,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-markdown-store"
-version = "0.42.18"
+version = "0.42.19"
 dependencies = [
  "anyhow",
  "fs2",
@@ -5772,7 +5772,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-tools"
-version = "0.42.18"
+version = "0.42.19"
 dependencies = [
  "anyhow",
  "assert_fs",
@@ -6045,7 +6045,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
