@@ -177,7 +177,7 @@ export class EnhancedChatViewProvider extends ChatViewProvider {
             return;
         }
 
-        this.sendSystemMessage("🔄 Reloading MCP providers...");
+        this.sendSystemMessage("Reloading MCP providers...");
 
         const workspaceFolders = vscode.workspace.workspaceFolders;
         if (!workspaceFolders || workspaceFolders.length === 0) {

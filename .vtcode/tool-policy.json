@@ -13,7 +13,6 @@
     "grep_file",
     "list_files",
     "list_pty_sessions",
-    "mcp::time::convert_time",
     "mcp::time::get_current_time",
     "read_file",
     "read_pty_session",
@@ -37,7 +36,7 @@
     "list_pty_sessions": "allow",
     "read_pty_session": "allow",
     "resize_pty_session": "allow",
-    "send_pty_input": "allow",
+    "send_pty_input": "prompt",
     "git_diff": "allow",
     "grep_file": "allow",
     "create_file": "prompt",
@@ -207,7 +206,6 @@
     "providers": {
       "time": {
         "tools": {
-          "convert_time": "prompt",
           "get_current_time": "allow"
         }
       }

@@ -1337,7 +1337,7 @@ export class EnhancedChatViewProvider implements vscode.WebviewViewProvider {
             }
 
             if (userMessage) {
-                this.sendSystemMessage("🔄 Regenerating response...");
+                this.sendSystemMessage("Regenerating response...");
                 await this.processAgentResponse(userMessage.content);
             }
         }
