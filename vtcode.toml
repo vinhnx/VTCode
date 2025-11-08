@@ -65,6 +65,9 @@ refine_prompts_max_passes = 1
 
 # Optional alternate model for refinement (leave empty to use default)
 refine_prompts_model = ""
+project_doc_max_bytes = 16384
+instruction_max_bytes = 16384
+instruction_files = []
 
 # Small model configuration for efficient operations
 # Following Claude Code's pattern, use a smaller model for 50%+ of calls (large reads, parsing, summarization)
