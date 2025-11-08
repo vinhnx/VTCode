@@ -201,6 +201,7 @@ impl TaskRunState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     #[test]
     fn record_turn_duration_records_once() {
@@ -2220,61 +2221,4 @@ fn detect_textual_run_terminal_cmd(text: &str) -> Option<Value> {
     Some(parsed)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
 
-    #[test]
-    fn test_format_web_fetch_success_result_limits_output() {
-        let result = json!({
-            "url": "https://example.com",
-            "content_length": 50000,
-            "truncated": false,
-            "preview": "This is a preview of the content...",
-            "content": "x".repeat(50000),  // Large content should not be shown
-            "prompt": "Summarize this page"
-        });
-
-        let display = format_tool_result_for_display(tools::WEB_FETCH, &result);
-
-        // Should contain status info
-        assert!(display.contains("fetched"));
-        assert!(display.contains("content_length"));
-
-        // Should NOT contain the full content
-        assert!(!display.contains(&"x".repeat(1000)));
-    }
-
-    #[test]
-    fn test_format_web_fetch_error_result() {
-        let result = json!({
-            "error": "web_fetch: failed to fetch URL 'https://example.com': timeout"
-        });
-
-        let display = format_tool_result_for_display(tools::WEB_FETCH, &result);
-
-        // Should contain the error message
-        assert!(display.contains("error"));
-        assert!(display.contains("timeout"));
-    }
-
-    #[test]
-    fn test_format_other_tools_show_full_result() {
-        let result = json!({
-            "status": "ok",
-            "data": "some data"
-        });
-
-        let display = format_tool_result_for_display("read_file", &result);
-
-        // Should contain the full result for non-web_fetch tools
-        assert!(display.contains("ok"));
-        assert!(display.contains("some data"));
-    }
-
-    #[test]
-    fn test_web_fetch_tool_name() {
-        // Verify the constant exists and is correct
-        assert_eq!(tools::WEB_FETCH, "web_fetch");
-    }
-}

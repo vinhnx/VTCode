@@ -212,7 +212,7 @@ impl CodeExecutor {
         );
 
         // Spawn IPC handler task that will process tool requests from code
-        let mut ipc_handler = if self.enable_pii_protection {
+        let ipc_handler = if self.enable_pii_protection {
             ToolIpcHandler::with_pii_protection(ipc_dir.clone())
         } else {
             ToolIpcHandler::new(ipc_dir.clone())
