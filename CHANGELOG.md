@@ -3,6 +3,36 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - Latest Improvements# [Version 0.39.5] - 2025-11-03
+# [Version 0.42.13] - 2025-11-08
+
+
+### Features
+    - feat: Remove deprecated tool and add test_tool to policy
+    - feat: Implement NPM package publishing for VT Code
+    - feat: add configurable LLM generation parameters in vtcode.toml
+
+
+### Bug Fixes
+    - fix: redirect print functions to stderr to avoid command substitution issues
+    - fix: use temporary file approach with awk for changelog updates on macOS
+    - fix: use perl instead of awk for changelog updates on macOS
+    - fix: use awk instead of sed for changelog updates on macOS
+    - fix: escape newlines properly in sed command for macOS
+
+
+### Refactors
+    - refactor: update tool policies and improve MCP tool handling
+
+
+### Documentation
+    - docs: update changelog for v0.42.12 [skip ci]
+
+
+### Chores
+    - chore: release v0.42.12
+    - chore: release vscode extension v0.42.18
+    - chore: release vscode extension v0.42.17
+    - chore: release vscode extension v0.42.16
 # [Version 0.42.12] - 2025-11-08
 
 
