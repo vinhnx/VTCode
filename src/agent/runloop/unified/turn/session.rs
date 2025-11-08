@@ -1079,15 +1079,13 @@ pub(crate) async fn run_single_agent_loop_unified(
                     }
                 });
                 let current_tools = tools.read().await.clone();
-                let config_temp = vt_cfg.as_ref().map(|c| c.agent.temperature);
-                let config_max_tokens = vt_cfg.as_ref().map(|c| c.agent.max_tokens);
                 let request = uni::LLMRequest {
                     messages: request_history.clone(),
                     system_prompt: Some(system_prompt),
                     tools: Some(current_tools),
                     model: active_model.clone(),
-                    max_tokens: max_tokens_opt.or(config_max_tokens),
-                    temperature: config_temp,
+                    max_tokens: max_tokens_opt.or(Some(2000)),
+                    temperature: Some(0.7),
                     stream: use_streaming,
                     tool_choice: Some(uni::ToolChoice::auto()),
                     parallel_tool_calls: None,
@@ -1977,8 +1975,6 @@ pub(crate) async fn run_single_agent_loop_unified(
                     if should_run_review {
                         let review_system = "You are the agent's critical code reviewer. Improve clarity, correctness, and add missing test or validation guidance. Return only the improved final answer (no meta commentary).".to_string();
                         for _ in 0..review_passes {
-                            let review_temp = vt_cfg.as_ref().map(|c| c.agent.temperature);
-                            let review_max_tokens = vt_cfg.as_ref().map(|c| c.agent.max_tokens);
                             let review_req = uni::LLMRequest {
                                 messages: vec![uni::Message::user(format!(
                                     "Please review and refine the following response. Return only the improved response.\n\n{}",
@@ -1987,8 +1983,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                                 system_prompt: Some(review_system.clone()),
                                 tools: None,
                                 model: config.model.clone(),
-                                max_tokens: review_max_tokens,
-                                temperature: review_temp,
+                                max_tokens: Some(2000),
+                                temperature: Some(0.5),
                                 stream: false,
                                 tool_choice: Some(uni::ToolChoice::none()),
                                 parallel_tool_calls: None,

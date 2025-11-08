@@ -29,28 +29,6 @@ max_conversation_turns = 50
 # Reasoning effort level ("low", "medium", "high") - affects model usage and response speed
 reasoning_effort = "low"
 
-# Temperature for main LLM responses (0.0-1.0)
-# Lower values = more deterministic, higher values = more creative
-# Default: 0.7 provides balanced creativity and consistency
-# Range: 0.0 (deterministic) to 1.0 (maximum randomness)
-temperature = 0.7
-
-# Maximum tokens for main LLM generation responses
-# Default: 2000 for standard tasks
-# Adjust based on model context window:
-# - 16384 for models with 128k context
-# - 32768 for models with 256k context
-max_tokens = 2000
-
-# Temperature for prompt refinement (0.0-1.0)
-# Lower values ensure more deterministic/consistent prompt improvement
-# Default: 0.3 is lower than main temperature for stable refinement
-refine_temperature = 0.3
-
-# Maximum tokens for prompt refinement
-# Prompts are typically shorter, so 800 tokens is usually sufficient
-refine_max_tokens = 800
-
 # Enable self-review loop to check and improve responses (increases API calls)
 enable_self_review = false
 

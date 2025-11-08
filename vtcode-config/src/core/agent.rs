@@ -1,4 +1,4 @@
-use crate::constants::{defaults, instructions, llm_generation, project_doc, prompts};
+use crate::constants::{defaults, instructions, project_doc, prompts};
 use crate::types::{ReasoningEffortLevel, UiSurfacePreference};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -43,32 +43,6 @@ pub struct AgentConfig {
     /// Applies to: Claude, GPT-5, Gemini, Qwen3, DeepSeek with reasoning capability
     #[serde(default = "default_reasoning_effort")]
     pub reasoning_effort: ReasoningEffortLevel,
-
-    /// Temperature for main LLM responses (0.0-1.0)
-    /// Lower values = more deterministic, higher values = more creative
-    /// Recommended: 0.7 for balanced creativity and consistency
-    /// Range: 0.0 (deterministic) to 1.0 (maximum randomness)
-    #[serde(default = "default_temperature")]
-    pub temperature: f32,
-
-    /// Maximum tokens for main LLM generation responses (default: 2000)
-    /// Adjust based on model context window size:
-    /// - 2000 for standard tasks
-    /// - 16384 for models with 128k context
-    /// - 32768 for models with 256k context
-    #[serde(default = "default_max_tokens")]
-    pub max_tokens: u32,
-
-    /// Temperature for prompt refinement (0.0-1.0, default: 0.3)
-    /// Lower values ensure prompt refinement is more deterministic/consistent
-    /// Keep lower than main temperature for stable prompt improvement
-    #[serde(default = "default_refine_temperature")]
-    pub refine_temperature: f32,
-
-    /// Maximum tokens for prompt refinement (default: 800)
-    /// Prompts are typically shorter, so 800 tokens is usually sufficient
-    #[serde(default = "default_refine_max_tokens")]
-    pub refine_max_tokens: u32,
 
     /// Enable an extra self-review pass to refine final responses
     #[serde(default = "default_enable_self_review")]
@@ -137,10 +111,6 @@ impl Default for AgentConfig {
             ui_surface: UiSurfacePreference::default(),
             max_conversation_turns: default_max_conversation_turns(),
             reasoning_effort: default_reasoning_effort(),
-            temperature: default_temperature(),
-            max_tokens: default_max_tokens(),
-            refine_temperature: default_refine_temperature(),
-            refine_max_tokens: default_refine_max_tokens(),
             enable_self_review: default_enable_self_review(),
             max_review_passes: default_max_review_passes(),
             refine_prompts_enabled: default_refine_prompts_enabled(),
@@ -155,35 +125,6 @@ impl Default for AgentConfig {
             checkpointing: AgentCheckpointingConfig::default(),
             smart_summarization: AgentSmartSummarizationConfig::default(),
         }
-    }
-}
-
-impl AgentConfig {
-    /// Validate LLM generation parameters
-    pub fn validate_llm_params(&self) -> Result<(), String> {
-        if !(0.0..=1.0).contains(&self.temperature) {
-            return Err(format!(
-                "temperature must be between 0.0 and 1.0, got {}",
-                self.temperature
-            ));
-        }
-
-        if !(0.0..=1.0).contains(&self.refine_temperature) {
-            return Err(format!(
-                "refine_temperature must be between 0.0 and 1.0, got {}",
-                self.refine_temperature
-            ));
-        }
-
-        if self.max_tokens == 0 {
-            return Err("max_tokens must be greater than 0".to_string());
-        }
-
-        if self.refine_max_tokens == 0 {
-            return Err("refine_max_tokens must be greater than 0".to_string());
-        }
-
-        Ok(())
     }
 }
 
@@ -209,22 +150,6 @@ fn default_max_conversation_turns() -> usize {
 }
 fn default_reasoning_effort() -> ReasoningEffortLevel {
     ReasoningEffortLevel::default()
-}
-
-fn default_temperature() -> f32 {
-    llm_generation::DEFAULT_TEMPERATURE
-}
-
-fn default_max_tokens() -> u32 {
-    llm_generation::DEFAULT_MAX_TOKENS
-}
-
-fn default_refine_temperature() -> f32 {
-    llm_generation::DEFAULT_REFINE_TEMPERATURE
-}
-
-fn default_refine_max_tokens() -> u32 {
-    llm_generation::DEFAULT_REFINE_MAX_TOKENS
 }
 
 fn default_enable_self_review() -> bool {
