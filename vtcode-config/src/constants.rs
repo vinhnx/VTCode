@@ -683,6 +683,7 @@ pub mod tools {
     pub const GIT_DIFF: &str = "git_diff";
     pub const UPDATE_PLAN: &str = "update_plan";
     pub const WEB_FETCH: &str = "web_fetch";
+    pub const SEARCH_TOOLS: &str = "search_tools";
 
     // Special wildcard for full access
     pub const WILDCARD_ALL: &str = "*";

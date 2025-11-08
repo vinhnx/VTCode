@@ -246,6 +246,24 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
             }),
         },
 
+        FunctionDeclaration {
+            name: tools::SEARCH_TOOLS.to_string(),
+            description: "Search available MCP tools by keyword with progressive disclosure. Saves context by returning only tool names, descriptions, or full schemas as needed.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "keyword": {"type": "string", "description": "Search term to find relevant tools (searches name and description)"},
+                    "detail_level": {
+                        "type": "string",
+                        "enum": ["name-only", "name-and-description", "full"],
+                        "description": "Detail level: 'name-only' (minimal context), 'name-and-description' (default), or 'full' (includes input schema)",
+                        "default": "name-and-description"
+                    }
+                },
+                "required": ["keyword"]
+            }),
+        },
+
         // ============================================================
         // FILE OPERATIONS
         // ============================================================

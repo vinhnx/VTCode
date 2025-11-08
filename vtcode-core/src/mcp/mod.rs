@@ -18,6 +18,10 @@ use crate::config::mcp::{
 
 pub mod cli;
 pub mod enhanced_config;
+pub mod tool_discovery;
+
+pub use tool_discovery::{DetailLevel, ToolDiscovery, ToolDiscoveryResult};
+
 use anyhow::{Context, Result, anyhow, bail};
 use async_trait::async_trait;
 use chrono::Local;
