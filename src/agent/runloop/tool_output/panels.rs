@@ -18,25 +18,7 @@ impl PanelContentLine {
         }
     }
 
-    pub(crate) fn with_rendered(rendered: impl Into<String>, style: MessageStyle) -> Self {
-        Self {
-            rendered: rendered.into(),
-            style,
-            override_style: None,
-        }
-    }
 
-    pub(crate) fn with_override(
-        rendered: impl Into<String>,
-        style: MessageStyle,
-        override_style: AnsiStyle,
-    ) -> Self {
-        Self {
-            rendered: rendered.into(),
-            style,
-            override_style: Some(override_style),
-        }
-    }
 }
 
 pub(crate) fn render_panel(
