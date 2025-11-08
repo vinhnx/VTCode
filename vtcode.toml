@@ -66,6 +66,35 @@ refine_prompts_max_passes = 1
 # Optional alternate model for refinement (leave empty to use default)
 refine_prompts_model = ""
 
+# Small model configuration for efficient operations
+# Following Claude Code's pattern, use a smaller model for 50%+ of calls (large reads, parsing, summarization)
+# Typically 70-80% cheaper than main model; same quality for summary/parse tasks
+[agent.small_model]
+# Enable small model tier
+enabled = true
+
+# Small model ID (e.g., "claude-3-5-haiku", "gpt-4o-mini", "gemini-2.0-flash")
+# Leave empty to auto-select lightweight sibling of main model
+model = ""
+
+# Maximum tokens for small model responses (use smaller value for summaries/parsing)
+max_tokens = 1000
+
+# Temperature for small model (lower = more deterministic for parsing)
+temperature = 0.3
+
+# Use small model for large file reads (>50KB) - significant token savings
+use_for_large_reads = true
+
+# Use small model for web content summarization
+use_for_web_summary = true
+
+# Use small model for git history processing
+use_for_git_history = true
+
+# Use small model for conversation context compression
+use_for_compression = true
+
 # Maximum size of project documentation to include in context (in bytes)
 project_doc_max_bytes = 16384
 
