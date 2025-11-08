@@ -3,6 +3,41 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - Latest Improvements# [Version 0.39.5] - 2025-11-03
+# [Version 0.42.20] - 2025-11-09
+
+
+### Features
+    - feat: Implement tool approval dialog with enhanced UX and risk assessment
+    - feat: Step 8 - Implement tool versioning and compatibility checking
+    - feat: Step 7 - Observability & Metrics system for MCP execution
+    - feat: implement all 5 MCP code execution steps from Anthropic recommendations
+    - feat: Step 2 Phase 2 - IPC handler integration for tool invocation
+    - feat: Step 2 - Code executor with SDK generation and IPC
+
+
+### Bug Fixes
+    - fix: Resolve compilation warnings and duplicate test module
+    - fix: remove unused import in code_executor
+
+
+### Documentation
+    - docs: update changelog for v0.42.19 [skip ci]
+    - docs: update changelog for v0.42.18 [skip ci]
+    - docs: add comprehensive tool configuration status document
+    - docs: add agent prompt optimization summary
+    - docs: Add MCP quick reference guide for fast lookup
+    - docs: Add comprehensive MCP implementation status report
+    - docs: Complete 9-step MCP code execution roadmap with Steps 8-9 designs
+    - docs: Add Step 6 integration testing guide and test scenarios
+    - docs: Update Step 2 completion status and add SDK examples
+
+
+### Chores
+    - chore: update npm package.json to v0.42.19 [skip ci]
+    - chore: release v0.42.19
+    - chore: release v0.42.18
+    - chore: finalize tool configuration and system prompt updates
+    - chore: update npm package.json to v0.42.17 [skip ci]
 # [Version 0.42.19] - 2025-11-08
 
 
