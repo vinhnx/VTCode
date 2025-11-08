@@ -589,18 +589,17 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
         // NETWORK OPERATIONS
         // ============================================================
         FunctionDeclaration {
-            name: tools::CURL.to_string(),
-            description: "Fetch HTTPS content (public hosts only). Size-limited responses.".to_string(),
+            name: tools::WEB_FETCH.to_string(),
+            description: "Fetches content from a specified URL and processes it using an AI model. Takes a URL and a prompt as input, fetches the URL content, converts HTML to markdown, processes the content with the prompt using a small, fast model, and returns the model's response about the content. Use this tool when you need to retrieve and analyze web content.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
-                    "url": {"type": "string", "description": "HTTPS URL (public hosts)"},
-                    "method": {"type": "string", "description": "GET|HEAD", "default": "GET"},
-                    "max_bytes": {"type": "integer", "description": "Max response bytes", "default": 65536},
-                    "timeout_secs": {"type": "integer", "description": "Timeout (max 30 seconds)", "default": 10},
-                    "save_response": {"type": "boolean", "description": "Save to /tmp/vtcode-curl", "default": false}
+                    "url": {"type": "string", "format": "uri", "description": "The URL to fetch content from"},
+                    "prompt": {"type": "string", "description": "The prompt to run on the fetched content"},
+                    "max_bytes": {"type": "integer", "description": "Maximum bytes to fetch", "default": 500000},
+                    "timeout_secs": {"type": "integer", "description": "Timeout in seconds", "default": 30}
                 },
-                "required": ["url"]
+                "required": ["url", "prompt"]
             }),
         },
 

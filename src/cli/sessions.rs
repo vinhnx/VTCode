@@ -181,7 +181,13 @@ async fn run_single_agent_loop(
         }
     }
 
-    crate::agent::agents::run_single_agent_loop(&resume_config, skip_confirmations, false, Some(resume)).await
+    crate::agent::agents::run_single_agent_loop(
+        &resume_config,
+        skip_confirmations,
+        false,
+        Some(resume),
+    )
+    .await
 }
 
 enum ParsedWorkspace {

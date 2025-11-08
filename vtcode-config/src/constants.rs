@@ -650,9 +650,9 @@ pub mod tools {
     pub const CREATE_FILE: &str = "create_file";
     pub const AST_GREP_SEARCH: &str = "ast_grep_search";
     pub const APPLY_PATCH: &str = "apply_patch";
-    pub const CURL: &str = "curl";
     pub const GIT_DIFF: &str = "git_diff";
     pub const UPDATE_PLAN: &str = "update_plan";
+    pub const WEB_FETCH: &str = "web_fetch";
 
     // Special wildcard for full access
     pub const WILDCARD_ALL: &str = "*";
@@ -706,7 +706,7 @@ pub mod bash {
 
     /// Network commands that require sandbox to be enabled
     pub const NETWORK_COMMANDS: &[&str] = &[
-        "curl", "wget", "ftp", "scp", "rsync", "ssh", "telnet", "nc", "ncat", "socat",
+        "wget", "ftp", "scp", "rsync", "ssh", "telnet", "nc", "ncat", "socat",
     ];
 
     /// Commands that are always allowed (safe development tools)

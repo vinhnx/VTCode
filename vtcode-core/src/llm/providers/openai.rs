@@ -1483,7 +1483,6 @@ impl OpenAIProvider {
             "repo_browser.write_file" | "write_file" => "write_file".to_string(),
             "container.exec" | "exec" => "run_terminal_cmd".to_string(),
             "bash" => "bash".to_string(),
-            "curl" => "curl".to_string(),
             "grep" => "grep_file".to_string(),
             _ => {
                 // Try to extract the function name after the last dot

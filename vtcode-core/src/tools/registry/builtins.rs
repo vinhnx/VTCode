@@ -85,10 +85,10 @@ pub(super) fn builtin_tool_registrations() -> Vec<ToolRegistration> {
             ToolRegistry::resize_pty_session_executor,
         ),
         ToolRegistration::new(
-            tools::CURL,
+            tools::WEB_FETCH,
             CapabilityLevel::Bash,
             false,
-            ToolRegistry::curl_executor,
+            ToolRegistry::web_fetch_executor,
         ),
         ToolRegistration::new(
             tools::READ_FILE,

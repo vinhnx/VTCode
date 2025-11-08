@@ -2,7 +2,6 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 use anyhow::{Result, anyhow};
-use reqwest::Url;
 use serde_json::{Value, json};
 
 use crate::config::constants::tools;
@@ -132,64 +131,7 @@ impl ToolPolicyGateway {
                         }
                     }
                 }
-                n if n == tools::CURL => {
-                    if let Some(cap) = constraints.max_response_bytes {
-                        let requested = obj
-                            .get("max_bytes")
-                            .and_then(|v| v.as_u64())
-                            .unwrap_or(cap as u64) as usize;
-                        if requested > cap {
-                            obj.insert("max_bytes".to_string(), json!(cap));
-                            obj.insert(
-                                "_policy_note".to_string(),
-                                json!(format!("Capped max_bytes to {} bytes by policy", cap)),
-                            );
-                        }
-                    }
 
-                    let url_value = obj
-                        .get("url")
-                        .and_then(|v| v.as_str())
-                        .ok_or_else(|| anyhow!("curl tool requires a 'url' parameter"))?;
-
-                    let parsed = Url::parse(url_value)
-                        .map_err(|err| anyhow!(format!("Invalid URL '{}': {}", url_value, err)))?;
-
-                    if let Some(allowed) = constraints.allowed_url_schemes.as_ref() {
-                        let scheme = parsed.scheme();
-                        if !allowed
-                            .iter()
-                            .any(|candidate| candidate.eq_ignore_ascii_case(scheme))
-                        {
-                            return Err(anyhow!(format!(
-                                "Scheme '{}' is not allowed for curl tool. Allowed schemes: {}",
-                                scheme,
-                                allowed.join(", ")
-                            )));
-                        }
-                    }
-
-                    if let Some(denied_hosts) = constraints.denied_url_hosts.as_ref()
-                        && let Some(host_str) = parsed.host_str()
-                    {
-                        let lowered = host_str.to_lowercase();
-                        let blocked = denied_hosts.iter().any(|pattern| {
-                            let normalized = pattern.to_lowercase();
-                            if normalized.starts_with('.') {
-                                lowered.ends_with(&normalized)
-                            } else {
-                                lowered == normalized
-                                    || lowered.ends_with(&format!(".{}", normalized))
-                            }
-                        });
-                        if blocked {
-                            return Err(anyhow!(format!(
-                                "URL host '{}' is blocked by policy",
-                                host_str
-                            )));
-                        }
-                    }
-                }
                 _ => {}
             }
         }

@@ -627,6 +627,15 @@ max_concurrent_requests = 3
 
 [mcp.providers.env]
 
+[[mcp.providers]]
+name = "fetch"
+command = "uvx"
+args = ["mcp-server-fetch"]
+enabled = true
+max_concurrent_requests = 3
+
+[mcp.providers.env]
+
 
 
 # Agent Client Protocol (ACP) - IDE integration

@@ -34,7 +34,6 @@ const AUTO_ALLOW_TOOLS: &[&str] = &[
     tools::AST_GREP_SEARCH,
     tools::RUN_COMMAND,
 ];
-const DEFAULT_CURL_MAX_RESPONSE_BYTES: usize = 64 * 1024;
 
 /// Tool execution policy
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -472,30 +471,8 @@ impl ToolPolicyManager {
         Self::ensure_network_constraints(config);
     }
 
-    fn ensure_network_constraints(config: &mut ToolPolicyConfig) {
-        let entry = config
-            .constraints
-            .entry(tools::CURL.to_string())
-            .or_insert_with(ToolConstraints::default);
-
-        if entry.max_response_bytes.is_none() {
-            entry.max_response_bytes = Some(DEFAULT_CURL_MAX_RESPONSE_BYTES);
-        }
-        if entry.allowed_url_schemes.is_none() {
-            entry.allowed_url_schemes = Some(vec!["https".to_string()]);
-        }
-        if entry.denied_url_hosts.is_none() {
-            entry.denied_url_hosts = Some(vec![
-                "localhost".to_string(),
-                "127.0.0.1".to_string(),
-                "0.0.0.0".to_string(),
-                "::1".to_string(),
-                ".localhost".to_string(),
-                ".local".to_string(),
-                ".internal".to_string(),
-                ".lan".to_string(),
-            ]);
-        }
+    fn ensure_network_constraints(_config: &mut ToolPolicyConfig) {
+        // Network constraints removed with curl tool removal
     }
 
     async fn reset_to_default(config_path: &PathBuf) -> Result<ToolPolicyConfig> {

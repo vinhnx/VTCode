@@ -6,7 +6,6 @@ use std::time::{Duration, Instant};
 use super::registration::ToolRegistration;
 use crate::tools::ast_grep::AstGrepEngine;
 use crate::tools::command::CommandTool;
-use crate::tools::curl_tool::CurlTool;
 use crate::tools::file_ops::FileOpsTool;
 use crate::tools::git_diff::GitDiffTool;
 use crate::tools::grep_file::GrepSearchManager;
@@ -31,7 +30,6 @@ pub(super) struct ToolInventory {
     // Common tools that are used frequently
     file_ops_tool: FileOpsTool,
     command_tool: CommandTool,
-    curl_tool: CurlTool,
     grep_search: Arc<GrepSearchManager>,
     git_diff_tool: GitDiffTool,
     ast_grep_engine: Option<Arc<AstGrepEngine>>,
@@ -43,7 +41,6 @@ impl ToolInventory {
         let grep_search = Arc::new(GrepSearchManager::new(workspace_root.clone()));
         let file_ops_tool = FileOpsTool::new(workspace_root.clone(), grep_search.clone());
         let command_tool = CommandTool::new(workspace_root.clone());
-        let curl_tool = CurlTool::new();
         let git_diff_tool = GitDiffTool::new(workspace_root.clone());
         let plan_manager = PlanManager::new();
 
@@ -63,7 +60,6 @@ impl ToolInventory {
             last_cache_cleanup: Instant::now(),
             file_ops_tool,
             command_tool,
-            curl_tool,
             grep_search,
             git_diff_tool,
             ast_grep_engine,
@@ -85,10 +81,6 @@ impl ToolInventory {
 
     pub fn command_tool_mut(&mut self) -> &mut CommandTool {
         &mut self.command_tool
-    }
-
-    pub fn curl_tool(&self) -> &CurlTool {
-        &self.curl_tool
     }
 
     pub fn git_diff_tool(&self) -> &GitDiffTool {
@@ -181,7 +173,7 @@ impl ToolInventory {
     fn is_common_tool(&self, name: &str) -> bool {
         matches!(
             name,
-            "file_ops" | "command" | "curl" | "grep" | "git_diff" | "ast_grep" | "plan"
+            "file_ops" | "command" | "grep" | "git_diff" | "ast_grep" | "plan"
         )
     }
 

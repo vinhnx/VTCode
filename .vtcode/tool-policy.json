@@ -6,25 +6,25 @@
     "close_pty_session",
     "create_file",
     "create_pty_session",
-    "curl",
     "delete_file",
     "edit_file",
     "git_diff",
     "grep_file",
     "list_files",
     "list_pty_sessions",
+    "mcp::fetch::fetch",
     "read_file",
     "read_pty_session",
     "resize_pty_session",
     "run_terminal_cmd",
     "send_pty_input",
     "update_plan",
+    "web_fetch",
     "write_file"
   ],
   "policies": {
     "list_files": "allow",
     "update_plan": "allow",
-    "curl": "prompt",
     "read_file": "allow",
     "write_file": "allow",
     "edit_file": "allow",
@@ -40,7 +40,8 @@
     "grep_file": "allow",
     "create_file": "prompt",
     "delete_file": "prompt",
-    "run_terminal_cmd": "allow"
+    "run_terminal_cmd": "allow",
+    "web_fetch": "prompt"
   },
   "constraints": {
     "curl": {
@@ -202,6 +203,12 @@
         }
       }
     },
-    "providers": {}
+    "providers": {
+      "fetch": {
+        "tools": {
+          "fetch": "prompt"
+        }
+      }
+    }
   }
 }

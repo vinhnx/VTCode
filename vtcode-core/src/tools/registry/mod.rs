@@ -1018,7 +1018,6 @@ mod tests {
 
         assert!(available.contains(&tools::READ_FILE.to_string()));
         assert!(available.contains(&tools::RUN_COMMAND.to_string()));
-        assert!(available.contains(&tools::CURL.to_string()));
         Ok(())
     }
 

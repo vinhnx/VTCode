@@ -283,8 +283,9 @@ impl ToolRegistry {
         Box::pin(async move { self.execute_resize_pty_session(args).await })
     }
 
-    pub(super) fn curl_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        let tool = self.inventory.curl_tool().clone();
+    pub(super) fn web_fetch_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
+        use crate::tools::web_fetch::WebFetchTool;
+        let tool = WebFetchTool::new();
         Box::pin(async move { tool.execute(args).await })
     }
 

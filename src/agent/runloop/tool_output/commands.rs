@@ -10,8 +10,7 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::streams::{
-    render_stream_section, resolve_stdout_tail_limit, select_stream_lines_streaming,
-    spool_output_if_needed, strip_ansi_codes, tail_lines_streaming,
+    render_stream_section, resolve_stdout_tail_limit, strip_ansi_codes,
 };
 use super::styles::{GitStyles, LsStyles};
 
@@ -79,79 +78,6 @@ pub(crate) fn render_terminal_command_panel(
         MessageStyle::Info,
         "─────────────────────────────────────────────────────────────────────────────",
     )?;
-
-    Ok(())
-}
-
-pub(crate) fn render_curl_result(
-    renderer: &mut AnsiRenderer,
-    val: &Value,
-    mode: ToolOutputMode,
-    tail_limit: usize,
-    allow_ansi: bool,
-    config: Option<&VTCodeConfig>,
-) -> Result<()> {
-    use std::fmt::Write as FmtWrite;
-
-    if let Some(status) = val.get("status").and_then(|v| v.as_u64()) {
-        let status_style = if (200..300).contains(&status) {
-            MessageStyle::Response
-        } else if status >= 400 {
-            MessageStyle::Error
-        } else {
-            MessageStyle::Info
-        };
-        let mut msg_buffer = String::with_capacity(128);
-        msg_buffer.clear();
-        let _ = write!(&mut msg_buffer, "  HTTP {}", status);
-        renderer.line(status_style, &msg_buffer)?;
-    }
-
-    if let Some(content_type) = val.get("content_type").and_then(|v| v.as_str()) {
-        let mut msg_buffer = String::with_capacity(128);
-        let _ = write!(&mut msg_buffer, "  Content-Type: {}", content_type);
-        renderer.line(MessageStyle::Info, &msg_buffer)?;
-    }
-
-    if let Some(body) = val.get("body").and_then(Value::as_str)
-        && !body.trim().is_empty()
-    {
-        let normalized_body = if allow_ansi {
-            Cow::Borrowed(body)
-        } else {
-            strip_ansi_codes(body)
-        };
-
-        if let Ok(Some(log_path)) =
-            spool_output_if_needed(normalized_body.as_ref(), tools::CURL, config)
-        {
-            let (tail, total) = tail_lines_streaming(normalized_body.as_ref(), 20);
-            let mut msg_buffer = String::with_capacity(256);
-            let _ = write!(
-                &mut msg_buffer,
-                "Response body too large ({} bytes, {} lines), spooled to: {}",
-                body.len(),
-                total,
-                log_path.display()
-            );
-            renderer.line(MessageStyle::Info, &msg_buffer)?;
-            renderer.line(MessageStyle::Info, "Last 20 lines:")?;
-            for line in &tail {
-                renderer.line(MessageStyle::Response, line.trim_end())?;
-            }
-            return Ok(());
-        }
-
-        let prefer_full = renderer.prefers_untruncated_output();
-        let (lines, _total, _truncated) =
-            select_stream_lines_streaming(normalized_body.as_ref(), mode, tail_limit, prefer_full);
-
-        for line in &lines {
-            renderer.line(MessageStyle::Response, line.trim_end())?;
-        }
-    } else {
-        renderer.line(MessageStyle::Info, "(no response body)")?;
-    }
 
     Ok(())
 }

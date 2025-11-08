@@ -68,7 +68,10 @@ pub fn ratatui_color_from_ansi(color: AnsiColorEnum) -> Color {
     }
 }
 
-pub fn ratatui_style_from_inline(style: &InlineTextStyle, fallback: Option<AnsiColorEnum>) -> Style {
+pub fn ratatui_style_from_inline(
+    style: &InlineTextStyle,
+    fallback: Option<AnsiColorEnum>,
+) -> Style {
     let mut resolved = Style::default();
     if let Some(color) = style.color.or(fallback) {
         resolved = resolved.fg(ratatui_color_from_ansi(color));

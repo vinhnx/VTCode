@@ -159,8 +159,6 @@ impl Default for CommandsConfig {
                 "dd if=/dev/random".to_string(),
                 "dd if=/dev/urandom".to_string(),
                 "wget --no-check-certificate".to_string(),
-                "curl --insecure".to_string(),
-                "curl -k".to_string(),
                 ":(){ :|:& };:".to_string(), // Fork bomb
                 "nohup bash -i".to_string(),
                 "exec bash -i".to_string(),

@@ -136,8 +136,10 @@ impl ValidatedMcpClientConfig {
         // Validate server configuration if enabled
         if self.original.server.enabled {
             // Validate port range
-            if self.original.server.port == 0 || self.original.server.port > 65535 {
-                errors.push(ValidationError::InvalidPort(self.original.server.port.into()));
+            if self.original.server.port == 0 {
+                errors.push(ValidationError::InvalidPort(
+                    self.original.server.port.into(),
+                ));
             }
 
             // Validate bind address
@@ -225,7 +227,10 @@ impl std::fmt::Display for ValidationError {
                 write!(f, "Server bind address cannot be empty")
             }
             ValidationError::MissingApiKeyEnv => {
-                write!(f, "API key environment variable must be set when auth is enabled")
+                write!(
+                    f,
+                    "API key environment variable must be set when auth is enabled"
+                )
             }
             ValidationError::InvalidStartupTimeout(timeout) => {
                 write!(f, "Startup timeout cannot exceed 300 seconds: {}", timeout)

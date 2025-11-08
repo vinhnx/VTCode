@@ -17,7 +17,7 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::mcp::McpRendererProfile;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
-use commands::{render_curl_result, render_terminal_command_panel};
+use commands::render_terminal_command_panel;
 use files::{render_list_dir_output, render_read_file_output, render_write_file_preview};
 use git_diff::render_git_diff;
 use mcp::{
@@ -73,19 +73,8 @@ pub(crate) fn render_tool_output(
                 allow_tool_ansi,
             );
         }
-        Some(tools::CURL) => {
-            let output_mode = vt_config
-                .map(|cfg| cfg.ui.tool_output_mode)
-                .unwrap_or(ToolOutputMode::Compact);
-            let tail_limit = resolve_stdout_tail_limit(vt_config);
-            return render_curl_result(
-                renderer,
-                val,
-                output_mode,
-                tail_limit,
-                allow_tool_ansi,
-                vt_config,
-            );
+        Some(tools::WEB_FETCH) => {
+            return render_generic_output(renderer, val);
         }
         Some(tools::LIST_FILES) => {
             let ls_styles = LsStyles::from_env();

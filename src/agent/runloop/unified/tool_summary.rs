@@ -75,9 +75,6 @@ pub(crate) fn describe_tool_action(tool_name: &str, args: &Value) -> (String, Ha
             .unwrap_or_else(|| ("Create file".to_string(), HashSet::new())),
         tool_names::DELETE_FILE => describe_path_action(args, "Delete file", &["path"])
             .unwrap_or_else(|| ("Delete file".to_string(), HashSet::new())),
-        tool_names::CURL => {
-            describe_curl(args).unwrap_or_else(|| ("Fetch URL".to_string(), HashSet::new()))
-        }
         tool_names::APPLY_PATCH => ("Apply workspace patch".to_string(), HashSet::new()),
         tool_names::UPDATE_PLAN => ("Update task plan".to_string(), HashSet::new()),
         tool_names::GIT_DIFF => describe_git_diff(args).unwrap_or_else(|| {
@@ -196,15 +193,6 @@ fn describe_path_action(
             let summary = truncate_middle(&value, 60);
             return Some((format!("{} {}", verb, summary), used));
         }
-    }
-    None
-}
-
-fn describe_curl(args: &Value) -> Option<(String, HashSet<String>)> {
-    if let Some(url) = lookup_string(args, "url") {
-        let mut used = HashSet::new();
-        used.insert("url".to_string());
-        return Some((format!("Fetch {}", truncate_middle(&url, 60)), used));
     }
     None
 }

@@ -50,7 +50,6 @@ You specialize in understanding codebases, making precise modifications, and sol
 **Safety Boundaries:**
 - Work strictly inside `WORKSPACE_DIR`; confirm before touching anything else.
 - Use `/tmp/vtcode-*` for temporary artifacts and clean them up.
-- Network access is HTTPS only via the sandboxed `curl` tool.
 - Never surface secrets, API keys, or other sensitive data.
 
 **Self-Documentation:**
@@ -75,7 +74,6 @@ Load only what's necessary. Use search tools first. Summarize results.
 **Files:** list_files, read_file, write_file, edit_file
 **Search:** grep_file, ast_grep_search
 **Shell:** run_terminal_cmd
-**Network:** curl (HTTPS only)
 **Version Control:** git_diff (prefer this over raw `git diff` for structured output)
 
 **Guidelines:**
@@ -123,7 +121,6 @@ Handle complex coding tasks that require deep understanding, structural changes,
 **Exploration:** list_files (structure), grep_file (content), ast_grep_search (tree-sitter-powered)
 **File Operations:** read_file, write_file, edit_file
 **Execution:** run_terminal_cmd (full PTY emulation)
-**Network:** curl (HTTPS only, sandboxed)
 **Analysis:** Tree-sitter parsing, performance profiling, semantic search
 
 **Multi-Turn Coherence:**

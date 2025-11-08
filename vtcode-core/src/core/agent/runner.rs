@@ -37,6 +37,41 @@ macro_rules! runner_println {
     };
 }
 
+/// Format tool result for display in the TUI.
+/// Limits verbose output from web_fetch to avoid overwhelming the terminal.
+pub fn format_tool_result_for_display(tool_name: &str, result: &Value) -> String {
+    if tool_name == tools::WEB_FETCH {
+        // For web_fetch, show minimal info instead of the full content
+        if let Some(obj) = result.as_object() {
+            if obj.contains_key("error") {
+                // Error case - show the error message only
+                format!(
+                    "Tool {} result: {{\"error\": {}}}",
+                    tool_name,
+                    obj.get("error")
+                        .map(|v| v.to_string())
+                        .unwrap_or_else(|| "unknown error".to_string())
+                )
+            } else {
+                // Success case - show status info without the full content
+                let status = serde_json::json!({
+                    "status": "fetched",
+                    "content_length": obj.get("content_length"),
+                    "truncated": obj.get("truncated"),
+                    "url": obj.get("url")
+                });
+                format!("Tool {} result: {}", tool_name, status.to_string())
+            }
+        } else {
+            // Fallback if result structure is unexpected
+            format!("Tool {} result: {}", tool_name, result.to_string())
+        }
+    } else {
+        // For all other tools, show the full result
+        format!("Tool {} result: {}", tool_name, result.to_string())
+    }
+}
+
 fn record_turn_duration(
     turn_durations: &mut Vec<u128>,
     recorded: &mut bool,
@@ -738,11 +773,18 @@ impl AgentRunner {
             };
 
             let supports_streaming = self.provider_client.supports_streaming();
+
+            // NOTE: Do NOT perform complex MessageContent introspection here.
+            // WebFetch already returns a `next_action_hint` telling the model to analyze
+            // `content` with `prompt`. The router-level model selection can be extended
+            // separately to map such follow-ups to a small/fast model.
+            let effective_model = self.model.clone();
+
             let request = LLMRequest {
                 messages: request_messages,
                 system_prompt: Some(system_instruction.clone()),
                 tools: Some(tools.clone()),
-                model: self.model.clone(),
+                model: effective_model,
                 max_tokens: Some(2000),
                 temperature: Some(0.7),
                 stream: supports_streaming,
@@ -909,12 +951,15 @@ impl AgentRunner {
                                     );
 
                                     let tool_result = serde_json::to_string(&result)?;
+                                    // For display: use limited version to avoid overwhelming TUI
+                                    let display_text = format_tool_result_for_display(&name, &result);
                                     task_state.conversation.push(Content {
                                         role: "user".to_string(),
                                         parts: vec![Part::Text {
-                                            text: format!("Tool {} result: {}", name, tool_result),
+                                            text: display_text,
                                         }],
                                     });
+                                    // For LLM: use full result
                                     task_state
                                         .conversation_messages
                                         .push(Message::tool_response(
@@ -1203,14 +1248,12 @@ impl AgentRunner {
                                             );
 
                                             // Add tool result to conversation
-                                            let tool_result = serde_json::to_string(&result)?;
+                                            // For display: use limited version to avoid overwhelming TUI
+                                            let display_text = format_tool_result_for_display(name, &result);
                                             task_state.conversation.push(Content {
                                                 role: "user".to_string(), // Gemini API only accepts "user" and "model"
                                                 parts: vec![Part::Text {
-                                                    text: format!(
-                                                        "Tool {} result: {}",
-                                                        name, tool_result
-                                                    ),
+                                                    text: display_text,
                                                 }],
                                             });
 
@@ -1301,11 +1344,12 @@ impl AgentRunner {
                                     );
 
                                     // Add tool result to conversation
-                                    let tool_result = serde_json::to_string(&result)?;
+                                    // For display: use limited version to avoid overwhelming TUI
+                                    let display_text = format_tool_result_for_display(name, &result);
                                     task_state.conversation.push(Content {
                                         role: "user".to_string(), // Gemini API only accepts "user" and "model"
                                         parts: vec![Part::Text {
-                                            text: format!("Tool {} result: {}", name, tool_result),
+                                            text: display_text,
                                         }],
                                     });
 
@@ -1405,14 +1449,12 @@ impl AgentRunner {
                                             );
 
                                             // Add tool result to conversation
-                                            let tool_result = serde_json::to_string(&result)?;
+                                            // For display: use limited version to avoid overwhelming TUI
+                                            let display_text = format_tool_result_for_display(&func_name, &result);
                                             task_state.conversation.push(Content {
                                                 role: "user".to_string(), // Gemini API only accepts "user" and "model"
                                                 parts: vec![Part::Text {
-                                                    text: format!(
-                                                        "Tool {} result: {}",
-                                                        func_name, tool_result
-                                                    ),
+                                                    text: display_text,
                                                 }],
                                             });
 
@@ -1528,14 +1570,12 @@ impl AgentRunner {
                                     );
 
                                     // Add tool result to conversation
-                                    let tool_result = serde_json::to_string(&result)?;
+                                    // For display: use limited version to avoid overwhelming TUI
+                                    let display_text = format_tool_result_for_display(tool_name, &result);
                                     task_state.conversation.push(Content {
                                         role: "user".to_string(), // Gemini API only accepts "user" and "model"
                                         parts: vec![Part::Text {
-                                            text: format!(
-                                                "Tool {} result: {}",
-                                                tool_name, tool_result
-                                            ),
+                                            text: display_text,
                                         }],
                                     });
 
@@ -2175,4 +2215,63 @@ fn detect_textual_run_terminal_cmd(text: &str) -> Option<Value> {
         .ok()?;
     parsed.as_object()?;
     Some(parsed)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_format_web_fetch_success_result_limits_output() {
+        let result = json!({
+            "url": "https://example.com",
+            "content_length": 50000,
+            "truncated": false,
+            "preview": "This is a preview of the content...",
+            "content": "x".repeat(50000),  // Large content should not be shown
+            "prompt": "Summarize this page"
+        });
+
+        let display = format_tool_result_for_display(tools::WEB_FETCH, &result);
+        
+        // Should contain status info
+        assert!(display.contains("fetched"));
+        assert!(display.contains("content_length"));
+        
+        // Should NOT contain the full content
+        assert!(!display.contains(&"x".repeat(1000)));
+    }
+
+    #[test]
+    fn test_format_web_fetch_error_result() {
+        let result = json!({
+            "error": "web_fetch: failed to fetch URL 'https://example.com': timeout"
+        });
+
+        let display = format_tool_result_for_display(tools::WEB_FETCH, &result);
+        
+        // Should contain the error message
+        assert!(display.contains("error"));
+        assert!(display.contains("timeout"));
+    }
+
+    #[test]
+    fn test_format_other_tools_show_full_result() {
+        let result = json!({
+            "status": "ok",
+            "data": "some data"
+        });
+
+        let display = format_tool_result_for_display("read_file", &result);
+        
+        // Should contain the full result for non-web_fetch tools
+        assert!(display.contains("ok"));
+        assert!(display.contains("some data"));
+    }
+
+    #[test]
+    fn test_web_fetch_tool_name() {
+        // Verify the constant exists and is correct
+        assert_eq!(tools::WEB_FETCH, "web_fetch");
+    }
 }

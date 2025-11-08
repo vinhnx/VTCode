@@ -129,7 +129,6 @@ pub mod ast_grep_tool;
 pub mod cache;
 pub mod command;
 pub mod command_policy;
-pub mod curl_tool;
 pub mod editing;
 pub mod file_ops;
 pub mod git_diff;
@@ -141,12 +140,12 @@ pub mod registry;
 pub mod traits;
 pub mod tree_sitter;
 pub mod types;
+pub mod web_fetch;
 
 // Re-export main types and traits for backward compatibility
 pub use ast_grep_tool::AstGrepTool;
 
 pub use cache::FileCache;
-pub use curl_tool::CurlTool;
 pub use editing::{Patch, PatchError, PatchHunk, PatchLine, PatchOperation};
 pub use git_diff::GitDiffTool;
 pub use grep_file::GrepSearchManager;
@@ -158,6 +157,7 @@ pub use pty::{PtyCommandRequest, PtyCommandResult, PtyManager};
 pub use registry::{ToolRegistration, ToolRegistry};
 pub use traits::{Tool, ToolExecutor};
 pub use types::*;
+pub use web_fetch::WebFetchTool;
 
 // Re-export function declarations for external use
 pub use registry::build_function_declarations;

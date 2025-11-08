@@ -129,7 +129,6 @@ fn is_known_textual_tool(name: &str) -> bool {
             | tools::EDIT_FILE
             | tools::READ_FILE
             | tools::RUN_COMMAND
-            | tools::CURL
             | tools::GREP_FILE
             | tools::LIST_FILES
             | tools::UPDATE_PLAN
@@ -445,7 +444,6 @@ fn parse_tool_name_from_reference(tool_ref: &str) -> &str {
         "repo_browser.read_file" | "read_file" => "read_file",
         "repo_browser.write_file" | "write_file" => "write_file",
         "container.exec" | "exec" | "bash" => "run_terminal_cmd",
-        "curl" => "curl",
         "grep" => "grep_file",
         _ => {
             // Try to extract the function name after the last dot

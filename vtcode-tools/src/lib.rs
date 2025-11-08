@@ -70,14 +70,6 @@ pub mod search {
 #[cfg(feature = "search")]
 pub use search::{AstGrepTool, GrepSearchManager};
 
-#[cfg(feature = "net")]
-pub mod net {
-    pub use vtcode_core::tools::curl_tool::CurlTool;
-}
-
-#[cfg(feature = "net")]
-pub use net::CurlTool;
-
 #[cfg(feature = "planner")]
 pub mod planner {
     pub use vtcode_core::tools::plan::{
