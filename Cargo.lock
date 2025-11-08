@@ -1204,7 +1204,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -1326,7 +1326,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -1967,7 +1967,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.62.2",
+ "windows-core",
 ]
 
 [[package]]
@@ -2706,7 +2706,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -3918,7 +3918,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.11.0",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -4623,7 +4623,7 @@ dependencies = [
  "getrandom 0.3.4",
  "once_cell",
  "rustix 1.1.2",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -5473,7 +5473,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode"
-version = "0.43.0"
+version = "0.43.1"
 dependencies = [
  "agent-client-protocol",
  "anstyle",
@@ -5524,7 +5524,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-acp-client"
-version = "0.43.0"
+version = "0.43.1"
 dependencies = [
  "agent-client-protocol",
  "anyhow",
@@ -5541,7 +5541,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-bash-runner"
-version = "0.43.0"
+version = "0.43.1"
 dependencies = [
  "anyhow",
  "assert_fs",
@@ -5555,14 +5555,14 @@ dependencies = [
 
 [[package]]
 name = "vtcode-commons"
-version = "0.43.0"
+version = "0.43.1"
 dependencies = [
  "anyhow",
 ]
 
 [[package]]
 name = "vtcode-config"
-version = "0.43.0"
+version = "0.43.1"
 dependencies = [
  "anyhow",
  "assert_fs",
@@ -5584,7 +5584,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-core"
-version = "0.43.0"
+version = "0.43.1"
 dependencies = [
  "ansi-to-tui",
  "anstream",
@@ -5678,7 +5678,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-exec-events"
-version = "0.43.0"
+version = "0.43.1"
 dependencies = [
  "log",
  "schemars 1.1.0",
@@ -5689,7 +5689,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-indexer"
-version = "0.43.0"
+version = "0.43.1"
 dependencies = [
  "anyhow",
  "ignore",
@@ -5700,7 +5700,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-llm"
-version = "0.43.0"
+version = "0.43.1"
 dependencies = [
  "anyhow",
  "assert_fs",
@@ -5713,7 +5713,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-markdown-store"
-version = "0.43.0"
+version = "0.43.1"
 dependencies = [
  "anyhow",
  "fs2",
@@ -5727,7 +5727,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-tools"
-version = "0.43.0"
+version = "0.43.1"
 dependencies = [
  "anyhow",
  "assert_fs",
@@ -5979,7 +5979,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -5995,7 +5995,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9babd3a767a4c1aef6900409f85f5d53ce2544ccdfaa86dad48c91782c6d6893"
 dependencies = [
  "windows-collections",
- "windows-core 0.61.2",
+ "windows-core",
  "windows-future",
  "windows-link 0.1.3",
  "windows-numerics",
@@ -6007,7 +6007,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3beeceb5e5cfd9eb1d76b381630e82c4241ccd0d27f1a39ed41b2760b255c5e8"
 dependencies = [
- "windows-core 0.61.2",
+ "windows-core",
 ]
 
 [[package]]
@@ -6019,21 +6019,8 @@ dependencies = [
  "windows-implement",
  "windows-interface",
  "windows-link 0.1.3",
- "windows-result 0.3.4",
- "windows-strings 0.4.2",
-]
-
-[[package]]
-name = "windows-core"
-version = "0.62.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b8e83a14d34d0623b51dce9581199302a221863196a1dde71a7663a4c2be9deb"
-dependencies = [
- "windows-implement",
- "windows-interface",
- "windows-link 0.2.1",
- "windows-result 0.4.1",
- "windows-strings 0.5.1",
+ "windows-result",
+ "windows-strings",
 ]
 
 [[package]]
@@ -6042,7 +6029,7 @@ version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc6a41e98427b19fe4b73c550f060b59fa592d7d686537eebf9385621bfbad8e"
 dependencies = [
- "windows-core 0.61.2",
+ "windows-core",
  "windows-link 0.1.3",
  "windows-threading",
 ]
@@ -6087,7 +6074,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9150af68066c4c5c07ddc0ce30421554771e528bde427614c61038bc2c92c2b1"
 dependencies = [
- "windows-core 0.61.2",
+ "windows-core",
  "windows-link 0.1.3",
 ]
 
@@ -6098,8 +6085,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b8a9ed28765efc97bbc954883f4e6796c33a06546ebafacbabee9696967499e"
 dependencies = [
  "windows-link 0.1.3",
- "windows-result 0.3.4",
- "windows-strings 0.4.2",
+ "windows-result",
+ "windows-strings",
 ]
 
 [[package]]
@@ -6112,30 +6099,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "windows-result"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7781fa89eaf60850ac3d2da7af8e5242a5ea78d1a11c49bf2910bb5a73853eb5"
-dependencies = [
- "windows-link 0.2.1",
-]
-
-[[package]]
 name = "windows-strings"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56e6c93f3a0c3b36176cb1327a4958a0353d5d166c2a35cb268ace15e91d3b57"
 dependencies = [
  "windows-link 0.1.3",
-]
-
-[[package]]
-name = "windows-strings"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7837d08f69c77cf6b07689544538e017c1bfcf57e34b4c0ff58e6c2cd3b37091"
-dependencies = [
- "windows-link 0.2.1",
 ]
 
 [[package]]
