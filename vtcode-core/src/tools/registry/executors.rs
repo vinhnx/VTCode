@@ -1950,7 +1950,7 @@ fn strip_ansi(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use base64::Engine as _;
+
     use base64::engine::general_purpose::STANDARD as BASE64;
     use serde_json::{Map, json};
 

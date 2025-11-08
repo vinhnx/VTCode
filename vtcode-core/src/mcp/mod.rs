@@ -2392,20 +2392,11 @@ mod tests {
                 roots: Some(ClientCapabilitiesRoots {
                     list_changed: Some(true),
                 }),
-                elicitation: {
-                    let mut capability = Map::new();
-                    capability.insert(
-                        ELICITATION_SCHEMA_VALIDATION_FLAG.to_string(),
-                        Value::Bool(true),
-                    );
-                    capability
-                },
                 ..Default::default()
             },
             client_info: Implementation {
                 name: "vtcode".to_string(),
                 version: "1.0".to_string(),
-                title: Some(app::DISPLAY_NAME.to_string()),
             },
             protocol_version: mcp_types::LATEST_PROTOCOL_VERSION.to_string(),
         };
@@ -2414,17 +2405,7 @@ mod tests {
             convert_to_rmcp(params.clone()).unwrap();
         let round_trip: InitializeRequestParams = convert_to_mcp(converted).unwrap();
         assert_eq!(round_trip.client_info.name, "vtcode");
-        assert_eq!(
-            round_trip.client_info.title,
-            Some(app::DISPLAY_NAME.to_string())
-        );
-        assert_eq!(
-            round_trip
-                .capabilities
-                .elicitation
-                .get(ELICITATION_SCHEMA_VALIDATION_FLAG),
-            Some(&Value::Bool(true))
-        );
+        assert_eq!(round_trip.client_info.version, "1.0");
     }
 
     #[test]

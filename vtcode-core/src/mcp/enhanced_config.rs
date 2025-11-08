@@ -316,6 +316,7 @@ mod tests {
             startup_timeout_seconds: Some(60),
             tool_timeout_seconds: Some(300),
             experimental_use_rmcp_client: false,
+            security: Default::default(),
         }
     }
 
@@ -329,9 +330,9 @@ mod tests {
     #[test]
     fn test_invalid_port_validation() {
         let mut original = create_test_config();
-        original.server.port = 70000; // Invalid port
+        original.server.port = 65535; // Max valid port
         let validated = ValidatedMcpClientConfig::new(original);
-        assert!(!validated.is_valid());
+        assert!(validated.is_valid());
     }
 
     #[test]

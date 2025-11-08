@@ -38,11 +38,53 @@ pub(crate) fn render_tool_call_summary_with_status(
     line.push_str(&headline);
     line.push_str("\x1b[0m");
 
-    // Details in dim gray if present
+    // Details in dim gray if present - these are the call parameters
     if !details.is_empty() {
         line.push_str(" \x1b[2m· ");
         line.push_str(&details.join(" · "));
         line.push_str("\x1b[0m");
+    } else {
+        // Even if no specific highlights were extracted, show all parameters if available
+        if let Some(map) = args.as_object() {
+            let all_params: Vec<String> = map
+                .iter()
+                .filter_map(|(key, value)| {
+                    match value {
+                        Value::String(s) if !s.is_empty() => {
+                            Some(format!("{}: {}", humanize_key(key), truncate_middle(s, 60)))
+                        }
+                        Value::Bool(true) => {
+                            Some(humanize_key(key))
+                        }
+                        Value::Array(items) => {
+                            let strings: Vec<String> = items
+                                .iter()
+                                .filter_map(|item| item.as_str().map(|s| s.to_string()))
+                                .collect();
+                            if !strings.is_empty() {
+                                Some(format!(
+                                    "{}: {}",
+                                    humanize_key(key),
+                                    summarize_list(&strings, 2, 60)
+                                ))
+                            } else {
+                                None
+                            }
+                        }
+                        Value::Number(num) => {
+                            Some(format!("{}: {}", humanize_key(key), num))
+                        }
+                        _ => None
+                    }
+                })
+                .collect();
+            
+            if !all_params.is_empty() {
+                line.push_str(" \x1b[2m· ");
+                line.push_str(&all_params.join(" · "));
+                line.push_str("\x1b[0m");
+            }
+        }
     }
 
     // Exit code at the end if available (colored based on success)

@@ -73,7 +73,7 @@ impl Session {
         self.header_height_from_lines(width, &lines)
     }
 
-    fn header_block_title(&self) -> Line<'static> {
+    pub fn header_block_title(&self) -> Line<'static> {
         let fallback = InlineHeaderContext::default();
         let version = if self.header_context.version.trim().is_empty() {
             fallback.version
@@ -102,7 +102,7 @@ impl Session {
         ])
     }
 
-    fn header_title_line(&self) -> Line<'static> {
+    pub fn header_title_line(&self) -> Line<'static> {
         // First line: badge-style provider + model + reasoning summary
         let mut spans = Vec::new();
 
@@ -169,7 +169,7 @@ impl Session {
         }
     }
 
-    fn header_mode_short_label(&self) -> String {
+    pub fn header_mode_short_label(&self) -> String {
         let full = self.header_mode_label();
         let value = full.trim();
         if value.eq_ignore_ascii_case(ui::HEADER_MODE_AUTO) {
@@ -202,28 +202,28 @@ impl Session {
         }
     }
 
-    fn header_provider_short_value(&self) -> String {
+    pub fn header_provider_short_value(&self) -> String {
         let value = self.header_provider_value();
         Self::strip_prefix(&value, ui::HEADER_PROVIDER_PREFIX)
             .trim()
             .to_string()
     }
 
-    fn header_model_short_value(&self) -> String {
+    pub fn header_model_short_value(&self) -> String {
         let value = self.header_model_value();
         Self::strip_prefix(&value, ui::HEADER_MODEL_PREFIX)
             .trim()
             .to_string()
     }
 
-    fn header_reasoning_short_value(&self) -> String {
+    pub fn header_reasoning_short_value(&self) -> String {
         let value = self.header_reasoning_value().unwrap_or_else(String::new);
         Self::strip_prefix(&value, ui::HEADER_REASONING_PREFIX)
             .trim()
             .to_string()
     }
 
-    fn header_chain_values(&self) -> Vec<String> {
+    pub fn header_chain_values(&self) -> Vec<String> {
         let defaults = InlineHeaderContext::default();
         let fields = [
             (
@@ -272,7 +272,7 @@ impl Session {
             .collect()
     }
 
-    fn header_meta_line(&self) -> Line<'static> {
+    pub fn header_meta_line(&self) -> Line<'static> {
         let mut spans = Vec::new();
 
         let mut first_section = true;
