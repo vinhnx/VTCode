@@ -3,6 +3,53 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Version 0.43.0] - 2025-11-09
+# [Version 0.43.3] - 2025-11-09
+
+
+### Features
+    - feat: Add Git color configuration support and theme management
+    - feat: Add Styling Quick Start Guide and Refactor Completion Report
+    - feat: add theme_parser module for Git/LS_COLORS configuration parsing
+    - feat: complete phase 1 anstyle integration - effects and background colors
+    - feat: Integrate anstyle-parse for ANSI escape sequence handling
+    - feat: implement styling refactor - centralize color palettes and style helpers
+
+
+### Bug Fixes
+    - fix: redirect logging to stderr to prevent stdout pollution in install script
+    - fix: optimize list_files tool for improved pagination and reduce default page size
+    - fix: update LLM provider and models to use Ollama
+    - fix: revert extension.toml to valid Zed format
+
+
+### Refactors
+    - refactor(styling): implement central style helpers and diff color palette
+    - refactor: improve styling consistency with bold_color() and ColorPalette
+    - refactor: implement styling suggestions from STYLING_REFACTOR_GUIDE
+    - refactor: implement styling refactor from guide - centralize color/style management
+    - refactor: integrate CommandBuilder throughout commands module
+    - refactor: restructure zed-extension to modular architecture with comprehensive error handling and caching
+
+
+### Documentation
+    - docs: add comprehensive styling documentation index
+    - docs: add Phase 2 planning and implementation guides for advanced styling features
+    - docs: add session summary for phase 1 styling integration completion
+    - docs: add phase 1 completion summary - all criteria met
+    - docs: add styling implementation completion status
+    - docs: add styling implementation completion status
+    - docs: update installation guides with CDN caching troubleshooting and fix details
+    - docs: update changelog for v0.43.2 [skip ci]
+    - docs: add file listing output behavior pattern to AGENTS.md
+    - docs: add comprehensive final improvements summary
+    - docs: update STATUS with improvements session results
+
+
+### Chores
+    - chore: update install script to log messages to stderr and bump version to 0.43.2
+    - chore: update npm package.json to v0.43.2 [skip ci]
+    - chore: release v0.43.2
+    - chore: update npm package.json to v0.43.1 [skip ci]
 # [Version 0.43.2] - 2025-11-09
 
 
