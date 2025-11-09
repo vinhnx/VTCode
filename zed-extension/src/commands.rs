@@ -1,8 +1,8 @@
-/// VTCode Command Implementations
-///
-/// This module implements all VTCode commands that are exposed through
-/// Zed's command palette.
-use crate::executor::execute_command;
+//! VTCode Command Implementations
+//!
+//! This module implements all VTCode commands that are exposed through
+//! Zed's command palette. Uses CommandBuilder for cleaner construction.
+use crate::command_builder::CommandBuilder;
 
 /// Response from a VTCode command operation
 #[derive(Debug, Clone)]
@@ -32,7 +32,7 @@ impl CommandResponse {
 
 /// Ask the VTCode agent an arbitrary question
 pub fn ask_agent(query: &str) -> CommandResponse {
-    match execute_command("ask", &["--query", query]) {
+    match CommandBuilder::ask(query).execute() {
         Ok(result) => {
             if result.is_success() {
                 CommandResponse::ok(result.output())
@@ -46,22 +46,19 @@ pub fn ask_agent(query: &str) -> CommandResponse {
 
 /// Ask about a code selection
 pub fn ask_about_selection(code: &str, language: Option<&str>) -> CommandResponse {
-    let mut args = vec!["--query", "Analyze this code:"];
-
-    if let Some(lang) = language {
-        args.extend_from_slice(&["--language", lang]);
-    }
-
-    // Note: This would need to pipe the code as stdin or use a temp file
-    // For now, we'll construct a query that includes the code
-    let query = format!("Analyze this {} code:\n{}", language.unwrap_or(""), code);
+    // Construct a query that includes the code and optional language
+    let query = format!(
+        "Analyze this {} code:\n{}",
+        language.unwrap_or(""),
+        code
+    );
 
     ask_agent(&query)
 }
 
 /// Analyze the entire workspace
 pub fn analyze_workspace() -> CommandResponse {
-    match execute_command("analyze", &[]) {
+    match CommandBuilder::analyze().execute() {
         Ok(result) => {
             if result.is_success() {
                 CommandResponse::ok(result.output())
@@ -75,7 +72,7 @@ pub fn analyze_workspace() -> CommandResponse {
 
 /// Launch an interactive chat session
 pub fn launch_chat() -> CommandResponse {
-    match execute_command("chat", &[]) {
+    match CommandBuilder::chat().execute() {
         Ok(result) => {
             if result.is_success() {
                 CommandResponse::ok(result.output())
@@ -89,7 +86,7 @@ pub fn launch_chat() -> CommandResponse {
 
 /// Check VTCode CLI installation and status
 pub fn check_status() -> CommandResponse {
-    match execute_command("--version", &[]) {
+    match CommandBuilder::version().execute() {
         Ok(result) => {
             if result.is_success() {
                 CommandResponse::ok(format!("VTCode CLI is available\n{}", result.stdout))
