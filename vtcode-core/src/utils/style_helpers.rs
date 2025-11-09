@@ -10,6 +10,7 @@ pub struct ColorPalette {
     pub warning: Color,      // Yellow
     pub info: Color,         // Cyan
     pub accent: Color,       // Blue
+    pub primary: Color,      // White
     pub muted: Color,        // Gray
 }
 
@@ -21,6 +22,7 @@ impl ColorPalette {
             warning: Color::Ansi(AnsiColor::Yellow),
             info: Color::Ansi(AnsiColor::Cyan),
             accent: Color::Ansi(AnsiColor::Blue),
+            primary: Color::Ansi(AnsiColor::White),
             muted: Color::Ansi(AnsiColor::White),
         }
     }
@@ -75,6 +77,8 @@ mod tests {
         let palette = ColorPalette::default();
         assert!(matches!(palette.success, Color::Ansi(AnsiColor::Green)));
         assert!(matches!(palette.error, Color::Ansi(AnsiColor::Red)));
+        assert!(matches!(palette.info, Color::Ansi(AnsiColor::Cyan)));
+        assert!(matches!(palette.primary, Color::Ansi(AnsiColor::White)));
     }
 
     #[test]

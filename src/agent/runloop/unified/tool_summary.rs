@@ -32,29 +32,21 @@ pub(crate) fn render_tool_call_summary_with_status(
     // Check if this is an MCP tool for special decoration
     let is_mcp = tool_name.starts_with("mcp::") || tool_name == "fetch";
 
-    if is_mcp {
-        // For MCP tools, use special bracket style with magenta
-        line.push_str(&render_styled(
-            &format!("[{}]", tool_name),
-            anstyle::Color::Ansi(anstyle::AnsiColor::Magenta),
-            None,
-        ));
+    // Use magenta for MCP tools, cyan for normal tools
+    let tool_bracket_color = if is_mcp {
+        anstyle::Color::Ansi(anstyle::AnsiColor::Magenta)
     } else {
-        // Tool name in brackets with cyan color for normal tools
-        line.push_str(&render_styled(
-            &format!("[{}]", tool_name),
-            palette.info,
-            None,
-        ));
-    }
+        palette.info
+    };
+    line.push_str(&render_styled(
+        &format!("[{}]", tool_name),
+        tool_bracket_color,
+        None,
+    ));
     line.push(' ');
 
     // Headline in bright white
-    line.push_str(&render_styled(
-        &headline,
-        anstyle::Color::Ansi(anstyle::AnsiColor::White),
-        None,
-    ));
+    line.push_str(&render_styled(&headline, palette.primary, None));
 
     // Details in dim gray if present - these are the call parameters
     if !details.is_empty() {
