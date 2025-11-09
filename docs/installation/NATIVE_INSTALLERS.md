@@ -44,6 +44,7 @@ chmod +x install.sh
    - Downloads binary from GitHub releases
    - Extracts to temporary directory
    - Verifies binary exists
+   - All logging output redirected to stderr to prevent stdout pollution
 
 4. **Installation**
    - Tries multiple paths: `/usr/local/bin` → `/opt/local/bin` → `~/.local/bin`
@@ -311,6 +312,26 @@ ldd /usr/local/bin/vtcode
 ---
 
 ## Known Issues
+
+### Installation fails with "No such file or directory"
+
+If you see an error like:
+```
+cp: [log message] /var/folders/.../vtcode: No such file or directory
+```
+
+This usually indicates a CDN caching issue where the installer script hasn't been updated on GitHub's raw content servers. Try:
+
+```bash
+# Force fresh download (skip cache)
+curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.sh | bash
+
+# Or use GitHub API (always fresh)
+curl -fsSL "https://api.github.com/repos/vinhnx/vtcode/contents/scripts/install.sh?ref=main" | jq -r '.content' | base64 -d | bash
+
+# Or wait 5 minutes for CDN to sync
+sleep 300 && curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.sh | bash
+```
 
 ### macOS M1/M2: Command not found
 

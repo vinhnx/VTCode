@@ -48,6 +48,13 @@ npm uninstall -g @vinhnx/vtcode
 vtcode --version
 ```
 
+## Troubleshooting
+
+```bash
+# If install fails with "No such file or directory", use the GitHub API endpoint
+curl -fsSL "https://api.github.com/repos/vinhnx/vtcode/contents/scripts/install.sh?ref=main" | jq -r '.content' | base64 -d | bash
+```
+
 ## API Keys
 
 ```bash
