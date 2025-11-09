@@ -140,15 +140,37 @@ pub(crate) fn render_list_dir_output(
         renderer.line(MessageStyle::Info, &format!("  {}", path))?;
     }
 
-    if let Some(page) = val.get("page").and_then(|v| v.as_u64())
-        && let Some(total) = val.get("total_items").and_then(|v| v.as_u64())
-    {
-        renderer.line(
-            MessageStyle::Info,
-            &format!("  Page {} ({} items total)", page, total),
-        )?;
+    // Show pagination summary
+    let count = val.get("count").and_then(|v| v.as_u64()).unwrap_or(0);
+    let total = val.get("total").and_then(|v| v.as_u64()).unwrap_or(0);
+    let page = val.get("page").and_then(|v| v.as_u64()).unwrap_or(1);
+    let has_more = val
+        .get("has_more")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    if count > 0 || total > 0 {
+        let summary = if total > count {
+            // Multi-page results
+            if has_more {
+                format!(
+                    "  Page {} of ~{} ({} items per page, {} total)",
+                    page,
+                    (total + count - 1) / count, // Estimate total pages
+                    count,
+                    total
+                )
+            } else {
+                format!("  Page {} ({} items, {} total)", page, count, total)
+            }
+        } else {
+            // Single page with all results
+            format!("  {} items", count)
+        };
+        renderer.line(MessageStyle::Info, &summary)?;
     }
 
+    // Render items
     if let Some(items) = val.get("items").and_then(|v| v.as_array()) {
         if items.is_empty() {
             renderer.line(MessageStyle::Info, "  (empty directory)")?;
@@ -176,12 +198,21 @@ pub(crate) fn render_list_dir_output(
         }
     }
 
-    if val
-        .get("has_more")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false)
+    // Show pagination instructions if more results available
+    if has_more {
+        renderer.line(
+            MessageStyle::Info,
+            "  Use page=N to view other pages (e.g., page=2, page=3)",
+        )?;
+    }
+
+    // Show any additional guidance message from the tool
+    if let Some(message) = val
+        .get("message")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
     {
-        renderer.line(MessageStyle::Info, "  ... more items available")?;
+        renderer.line(MessageStyle::Info, &format!("  {}", message))?;
     }
 
     Ok(())
