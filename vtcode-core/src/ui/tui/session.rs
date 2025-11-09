@@ -39,11 +39,13 @@ mod modal;
 mod navigation;
 mod prompt_palette;
 mod queue;
+mod scroll;
 mod slash;
 mod slash_palette;
 mod transcript;
 
 use self::file_palette::{FilePalette, extract_file_reference};
+use self::input_manager::InputManager;
 use self::message::{MessageLabels, MessageLine};
 use self::modal::{
     ModalBodyContext, ModalKeyModifiers, ModalListKeyResult, ModalListLayout, ModalListState,
@@ -52,6 +54,7 @@ use self::modal::{
 };
 use self::prompt_palette::{PromptPalette, extract_prompt_reference};
 use self::queue::QueueOverlay;
+use self::scroll::ScrollManager;
 use self::slash_palette::SlashPalette;
 use self::transcript::{CachedMessage, TranscriptReflowCache};
 #[cfg(test)]
@@ -70,19 +73,37 @@ const LEGACY_PROMPT_INVOKE_PREFIX: &str = "prompts:";
 const PROMPT_COMMAND_PREFIX: &str = "/prompt:";
 
 pub struct Session {
+    // --- Managers (Phase 2) ---
+    /// Manages user input, cursor, and command history
+    input_manager: InputManager,
+    /// Manages scroll state and viewport metrics
+    scroll_manager: ScrollManager,
+
+    // --- Message Management ---
     lines: Vec<MessageLine>,
     theme: InlineTheme,
     header_context: InlineHeaderContext,
     header_rows: u16,
     labels: MessageLabels,
+
+    // --- Prompt/Input Display ---
     prompt_prefix: String,
     prompt_style: InlineTextStyle,
     placeholder: Option<String>,
     placeholder_style: Option<InlineTextStyle>,
     input_status_left: Option<String>,
     input_status_right: Option<String>,
+
+    // --- DEPRECATED: Use input_manager instead ---
+    // These will be removed in a future phase when all code is migrated to use input_manager
     input: String,
     cursor: usize,
+    input_history: Vec<String>,
+    input_history_index: Option<usize>,
+    input_history_draft: Option<String>,
+    last_escape_time: Option<Instant>,
+
+    // --- UI State ---
     slash_palette: SlashPalette,
     navigation_state: ListState,
     input_enabled: bool,
@@ -92,12 +113,17 @@ pub struct Session {
     should_exit: bool,
     view_rows: u16,
     input_height: u16,
+
+    // --- DEPRECATED: Use scroll_manager instead ---
+    // These will be removed in a future phase when all code is migrated to use scroll_manager
     scroll_offset: usize,
     transcript_rows: u16,
     transcript_width: u16,
     transcript_view_top: usize,
     cached_max_scroll_offset: usize,
     scroll_metrics_dirty: bool,
+
+    // --- Rendering ---
     transcript_cache: Option<TranscriptReflowCache>,
     queued_inputs: Vec<String>,
     queue_overlay_cache: Option<QueueOverlay>,
@@ -107,10 +133,8 @@ pub struct Session {
     plan: TaskPlan,
     line_revision_counter: u64,
     in_tool_code_fence: bool,
-    input_history: Vec<String>,
-    input_history_index: Option<usize>,
-    input_history_draft: Option<String>,
-    last_escape_time: Option<Instant>,
+
+    // --- Palette Management ---
     custom_prompts: Option<CustomPromptRegistry>,
     file_palette: Option<FilePalette>,
     file_palette_active: bool,
@@ -136,19 +160,35 @@ impl Session {
         let initial_header_rows = ui::INLINE_HEADER_HEIGHT;
         let reserved_rows = initial_header_rows + Self::input_block_height_for_lines(1);
         let initial_transcript_rows = resolved_rows.saturating_sub(reserved_rows).max(1);
+        
         let mut session = Self {
+            // --- Managers (Phase 2) ---
+            input_manager: InputManager::new(),
+            scroll_manager: ScrollManager::new(initial_transcript_rows),
+            
+            // --- Message Management ---
             lines: Vec::new(),
             theme,
             header_context: InlineHeaderContext::default(),
             labels: MessageLabels::default(),
+            
+            // --- Prompt/Input Display ---
             prompt_prefix: USER_PREFIX.to_string(),
             prompt_style: InlineTextStyle::default(),
             placeholder,
             placeholder_style: None,
             input_status_left: None,
             input_status_right: None,
+            
+            // --- DEPRECATED: Input fields (for gradual migration) ---
             input: String::new(),
             cursor: 0,
+            input_history: Vec::new(),
+            input_history_index: None,
+            input_history_draft: None,
+            last_escape_time: None,
+            
+            // --- UI State ---
             slash_palette: SlashPalette::new(),
             navigation_state: ListState::default(),
             input_enabled: true,
@@ -158,12 +198,16 @@ impl Session {
             should_exit: false,
             view_rows: resolved_rows,
             input_height: Self::input_block_height_for_lines(1),
+            
+            // --- DEPRECATED: Scroll fields (for gradual migration) ---
             scroll_offset: 0,
             transcript_rows: initial_transcript_rows,
             transcript_width: 0,
             transcript_view_top: 0,
             cached_max_scroll_offset: 0,
             scroll_metrics_dirty: true,
+            
+            // --- Rendering ---
             transcript_cache: None,
             queued_inputs: Vec::new(),
             queue_overlay_cache: None,
@@ -174,9 +218,8 @@ impl Session {
             header_rows: initial_header_rows,
             line_revision_counter: 0,
             in_tool_code_fence: false,
-            input_history: Vec::new(),
-            input_history_index: None,
-            input_history_draft: None,
+            
+            // --- Palette Management ---
             custom_prompts: None,
             file_palette: None,
             file_palette_active: false,
@@ -184,7 +227,6 @@ impl Session {
             prompt_palette: None,
             prompt_palette_active: false,
             deferred_prompt_browser_trigger: false,
-            last_escape_time: None,
         };
         session.ensure_prompt_style_color();
         session
