@@ -1716,8 +1716,8 @@ impl Session {
     }
 
     pub fn clear_input(&mut self) {
-        self.input.clear();
-        self.cursor = 0;
+        self.input_manager.clear();
+        self.sync_input_from_manager();
         self.scroll_offset = 0;
         self.reset_history_navigation();
         self.update_slash_suggestions();
@@ -2556,8 +2556,10 @@ impl Session {
     }
 
     fn reset_history_navigation(&mut self) {
-        self.input_history_index = None;
-        self.input_history_draft = None;
+        self.input_manager.reset_history_navigation();
+        // Keep legacy fields in sync for now
+    self.input_history_index = None;
+    self.input_history_draft = None;
     }
 
     fn move_left(&mut self) {
