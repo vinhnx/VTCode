@@ -1,7 +1,6 @@
-// vtcode-core/src/utils/style_helpers.rs
-//! Centralized styling helpers to reduce hardcoded colors and repeated patterns
+// Central styling helpers to avoid hardcoded ANSI codes and repeated patterns
 
-use anstyle::{AnsiColor, Color, Style, Effects};
+use anstyle::{AnsiColor, Color, Effects, Style};
 
 /// Standard color palette with semantic names
 #[derive(Debug, Clone, Copy)]
@@ -11,7 +10,7 @@ pub struct ColorPalette {
     pub warning: Color,      // Yellow
     pub info: Color,         // Cyan
     pub accent: Color,       // Blue
-    pub muted: Color,        // Gray/Dim
+    pub muted: Color,        // Gray
 }
 
 impl ColorPalette {
@@ -22,7 +21,7 @@ impl ColorPalette {
             warning: Color::Ansi(AnsiColor::Yellow),
             info: Color::Ansi(AnsiColor::Cyan),
             accent: Color::Ansi(AnsiColor::Blue),
-            muted: Color::Ansi(AnsiColor::White), // Will be dimmed
+            muted: Color::Ansi(AnsiColor::White),
         }
     }
 }
@@ -92,15 +91,15 @@ mod tests {
     }
 
     #[test]
-    fn test_style_from_color_name_case_insensitive() {
+    fn test_color_name_case_insensitive() {
         let style1 = style_from_color_name("RED");
         let style2 = style_from_color_name("red");
         assert_eq!(style1.to_string(), style2.to_string());
     }
 
     #[test]
-    fn test_bold_color_contains_bold() {
-        let style = bold_color(AnsiColor::Green);
-        assert!(style.to_string().contains("\x1b"));
+    fn test_unknown_color_returns_empty_style() {
+        let style = style_from_color_name("nonexistent");
+        assert_eq!(style.to_string(), Style::new().to_string());
     }
 }
