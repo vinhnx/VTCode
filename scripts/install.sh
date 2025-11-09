@@ -48,13 +48,13 @@ download() {
   URL="https://github.com/vinhnx/vtcode/releases/download/v${VERSION}/vtcode-v${VERSION}-${PLATFORM}.tar.gz"
   ARCHIVE="$TEMP_DIR/vtcode.tar.gz"
   
-  log "Downloading..."
+  log "Downloading..." >&2
   curl -fsSL "$URL" -o "$ARCHIVE" || { error "Download failed"; rm -rf "$TEMP_DIR"; exit 1; }
   
   tar -xzf "$ARCHIVE" -C "$TEMP_DIR" || { error "Extract failed"; rm -rf "$TEMP_DIR"; exit 1; }
   [ -f "$TEMP_DIR/vtcode" ] || { error "Binary not found"; rm -rf "$TEMP_DIR"; exit 1; }
   
-  success "Downloaded"
+  success "Downloaded" >&2
   echo "$TEMP_DIR"
 }
 
@@ -75,13 +75,13 @@ get_install_path() {
 # Install
 install_binary() {
   INSTALL_PATH=$(get_install_path)
-  log "Installing to $INSTALL_PATH..."
+  log "Installing to $INSTALL_PATH..." >&2
   
   cp "$1/vtcode" "$INSTALL_PATH/vtcode" || { error "Install failed"; exit 1; }
   chmod +x "$INSTALL_PATH/vtcode"
   rm -rf "$1"
   
-  success "Installed"
+  success "Installed" >&2
   
   # Verify
   if ! command -v vtcode &>/dev/null; then
