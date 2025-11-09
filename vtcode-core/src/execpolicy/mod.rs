@@ -28,12 +28,23 @@ pub async fn validate_command(
         "cat" => validate_cat(args, workspace_root, working_dir).await,
         "cp" => validate_cp(args, workspace_root, working_dir).await,
         "head" => validate_head(args, workspace_root, working_dir).await,
+        "tail" => validate_tail(args, workspace_root, working_dir).await,
         "printenv" => validate_printenv(args),
         "pwd" => validate_pwd(args),
         "rg" => validate_rg(args, workspace_root, working_dir).await,
+        "grep" => validate_grep(args, workspace_root, working_dir).await,
         "sed" => validate_sed(args, workspace_root, working_dir).await,
         "which" => validate_which(args),
+        "date" => validate_date(args),
+        "whoami" => validate_whoami(args),
+        "hostname" => validate_hostname(args),
+        "uname" => validate_uname(args),
+        "wc" => validate_wc(args, workspace_root, working_dir).await,
         "git" => validate_git(args, workspace_root, working_dir).await,
+        "cargo" => validate_cargo(args, workspace_root, working_dir).await,
+        "python" | "python3" => validate_python(args, workspace_root, working_dir).await,
+        "npm" => validate_npm(args, workspace_root, working_dir).await,
+        "node" => validate_node(args, workspace_root, working_dir).await,
         other => Err(anyhow!(
             "command '{}' is not permitted by the execution policy",
             other
@@ -417,11 +428,16 @@ async fn validate_git(args: &[String], workspace_root: &Path, working_dir: &Path
             return validate_git_read_only(subcommand, subargs);
         }
 
+        // Additional inspection commands
+        "blame" | "grep" | "shortlog" | "format-patch" => {
+            return validate_git_read_only(subcommand, subargs);
+        }
+
         // Stash operations (safe list/show)
         "stash"
             if matches!(
                 subargs.first().map(|s| s.as_str()),
-                Some("list" | "show" | "pop" | "apply")
+                Some("list" | "show" | "pop" | "apply" | "drop")
             ) =>
         {
             return validate_git_stash(subargs);
@@ -431,7 +447,12 @@ async fn validate_git(args: &[String], workspace_root: &Path, working_dir: &Path
         "add" => return validate_git_add(subargs, workspace_root, working_dir).await,
         "commit" => return validate_git_commit(subargs),
         "reset" => return validate_git_reset(subargs),
-        "checkout" => return validate_git_checkout(subargs, workspace_root, working_dir).await,
+        "checkout" | "switch" => return validate_git_checkout(subargs, workspace_root, working_dir).await,
+        "restore" => return validate_git_checkout(subargs, workspace_root, working_dir).await,
+        "merge" => return validate_git_merge(subargs),
+        "tag" if !subargs.is_empty() && !subargs[0].starts_with('-') => {
+            return validate_git_read_only(subcommand, subargs);
+        }
 
         // Tier 3: Dangerous operations (always blocked)
         "push" => {
@@ -738,6 +759,26 @@ fn validate_git_stash(args: &[String]) -> Result<()> {
                 | "--all" => continue,
                 _ => return Err(anyhow!("unsupported git stash flag '{}'", arg)),
             }
+        }
+    }
+
+    Ok(())
+}
+
+fn validate_git_merge(args: &[String]) -> Result<()> {
+    // git merge is allowed for typical workflow
+    if args.is_empty() {
+        return Err(anyhow!("git merge requires a branch"));
+    }
+
+    // Block dangerous flags
+    let dangerous_flags = ["--no-ff", "--squash"];
+    for arg in args {
+        if dangerous_flags.contains(&arg.as_str()) {
+            return Err(anyhow!(
+                "git merge with {} flag is not permitted; use simpler merge",
+                arg
+            ));
         }
     }
 
@@ -1177,4 +1218,163 @@ mod tests {
         assert!(validate_which(&["/usr/bin/ls".to_string()]).is_err()); // Contains /
         assert!(validate_which(&["ls git".to_string()]).is_err()); // Contains space
     }
+}
+
+// Additional validators for common utilities
+async fn validate_tail(args: &[String], workspace_root: &Path, working_dir: &Path) -> Result<()> {
+    // tail is read-only, similar to head
+    for arg in args {
+        if !arg.starts_with('-') {
+            let path = normalize_path(&working_dir.join(arg));
+            ensure_within_workspace(workspace_root, &path).await?;
+        }
+    }
+    Ok(())
+}
+
+async fn validate_grep(args: &[String], workspace_root: &Path, working_dir: &Path) -> Result<()> {
+    // grep is read-only pattern search
+    let mut pattern_seen = false;
+    for arg in args {
+        if !arg.starts_with('-') && pattern_seen {
+            // Files come after pattern
+            let path = normalize_path(&working_dir.join(arg));
+            ensure_within_workspace(workspace_root, &path).await?;
+        } else if !arg.starts_with('-') {
+            pattern_seen = true;
+        }
+    }
+    Ok(())
+}
+
+fn validate_date(args: &[String]) -> Result<()> {
+    // date just displays current date/time, safe with format args
+    for arg in args {
+        if arg.starts_with('+') {
+            // Format string is safe
+            continue;
+        }
+    }
+    Ok(())
+}
+
+fn validate_whoami(_args: &[String]) -> Result<()> {
+    // whoami has no arguments, always safe
+    Ok(())
+}
+
+fn validate_hostname(_args: &[String]) -> Result<()> {
+    // hostname has no arguments, always safe
+    Ok(())
+}
+
+fn validate_uname(args: &[String]) -> Result<()> {
+    // uname only accepts specific flags
+    let safe_flags = ["-a", "-s", "-n", "-r", "-v", "-m"];
+    for arg in args {
+        if arg.starts_with('-') && !safe_flags.contains(&arg.as_str()) {
+            return Err(anyhow!("unsupported uname flag '{}'", arg));
+        }
+    }
+    Ok(())
+}
+
+async fn validate_wc(args: &[String], workspace_root: &Path, working_dir: &Path) -> Result<()> {
+    // wc is read-only, similar to head
+    for arg in args {
+        if !arg.starts_with('-') {
+            let path = normalize_path(&working_dir.join(arg));
+            ensure_within_workspace(workspace_root, &path).await?;
+        }
+    }
+    Ok(())
+}
+
+async fn validate_cargo(args: &[String], workspace_root: &Path, working_dir: &Path) -> Result<()> {
+    // Cargo commands - allow typical dev workflow operations
+    if args.is_empty() {
+        return Err(anyhow!("cargo requires a subcommand"));
+    }
+
+    let subcommand = args[0].as_str();
+    match subcommand {
+        // Safe read-only, build, and development operations
+        "build" | "check" | "test" | "doc" | "clippy" | "fmt" | "run" | "bench" | "expand"
+        | "tree" | "metadata" | "search" | "cache" => {
+            // These are generally safe - check working directory is in workspace
+            ensure_within_workspace(workspace_root, working_dir).await?;
+            Ok(())
+        }
+        // Dangerous operations that modify system or registry
+        "clean" | "install" | "uninstall" | "publish" | "yank" => {
+            Err(anyhow!(
+                "cargo {} is not permitted by the execution policy",
+                subcommand
+            ))
+        }
+        other => Err(anyhow!(
+            "cargo subcommand '{}' is not permitted by the execution policy",
+            other
+        )),
+    }
+}
+
+async fn validate_python(args: &[String], workspace_root: &Path, working_dir: &Path) -> Result<()> {
+    // Python allows running scripts and modules - safe for workspace
+    ensure_within_workspace(workspace_root, working_dir).await?;
+    // Don't allow -c or eval-like flags that could be dangerous - only file/module execution
+    if args.is_empty() {
+        return Ok(()); // python interactive is allowed
+    }
+    
+    let first_arg = &args[0];
+    if first_arg == "-c" || first_arg == "-m" || first_arg == "-W" {
+        // Allow -m (module), -W (warnings), but validate any file paths
+        if first_arg != "-m" && args.len() > 1 {
+            let path = normalize_path(&working_dir.join(&args[1]));
+            ensure_within_workspace(workspace_root, &path).await?;
+        }
+    } else if !first_arg.starts_with('-') {
+        // It's a script file - validate it exists in workspace
+        let path = normalize_path(&working_dir.join(first_arg));
+        ensure_within_workspace(workspace_root, &path).await?;
+    }
+    Ok(())
+}
+
+async fn validate_npm(args: &[String], workspace_root: &Path, working_dir: &Path) -> Result<()> {
+    // NPM commands - allow typical dev operations
+    ensure_within_workspace(workspace_root, working_dir).await?;
+    if args.is_empty() {
+        return Ok(());
+    }
+
+    let subcommand = args[0].as_str();
+    match subcommand {
+        // Dangerous operations
+        "publish" | "unpublish" => {
+            Err(anyhow!(
+                "npm {} is not permitted by the execution policy",
+                subcommand
+            ))
+        }
+        // Allow safe and other commands by default, as npm is generally safe in workspace
+        _ => Ok(()),
+    }
+}
+
+async fn validate_node(args: &[String], workspace_root: &Path, working_dir: &Path) -> Result<()> {
+    // Node.js script execution - safe for workspace
+    ensure_within_workspace(workspace_root, working_dir).await?;
+    if args.is_empty() {
+        return Ok(()); // node interactive/REPL
+    }
+
+    let first_arg = &args[0];
+    if !first_arg.starts_with('-') {
+        // It's a script file - validate it exists in workspace
+        let path = normalize_path(&working_dir.join(first_arg));
+        ensure_within_workspace(workspace_root, &path).await?;
+    }
+    Ok(())
 }

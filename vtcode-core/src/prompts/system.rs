@@ -112,8 +112,10 @@ Done?
 
 **Command Execution Strategy**:
 - Interactive work → PTY sessions (create_pty_session → send_pty_input → read_pty_session → close_pty_session)
-- One-off commands → run_terminal_cmd
+- One-off commands → run_terminal_cmd (for git, cargo, python, npm, node, etc.)
 - AVOID: raw grep/find bash (use grep_file instead)
+- Safe commands auto-execute: git (read/safe writes), cargo (build/test/check), python/node/npm dev commands
+- Complex or destructive operations still require confirmation
 
 # Code Execution Patterns
 

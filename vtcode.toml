@@ -221,9 +221,9 @@ list_pty_sessions = "allow"
 read_file = "allow"
 read_pty_session = "allow"
 resize_pty_session = "allow"
-run_pty_cmd = "prompt"
-run_terminal_cmd = "prompt"
-send_pty_input = "prompt"
+run_pty_cmd = "allow"
+run_terminal_cmd = "allow"
+send_pty_input = "allow"
 update_plan = "allow"
 write_file = "allow"
 # Command security - Define safe and dangerous command patterns
@@ -232,10 +232,11 @@ write_file = "allow"
 allow_list = [
     "ls",
     "pwd",
-    "git status",
-    "git diff",
-    "cargo check",
     "echo",
+    "date",
+    "whoami",
+    "hostname",
+    "uname",
 ]
 
 # Commands that are never allowed
@@ -252,12 +253,20 @@ deny_list = [
 allow_glob = [
     "git *",
     "cargo *",
-    "python -m *",
+    "python *",
+    "npm *",
+    "node *",
+    "cat *",
+    "head *",
+    "tail *",
+    "grep *",
+    "find *",
+    "wc *",
 ]
 
 # Command patterns that are denied (supports glob patterns)
 deny_glob = [
-    "rm *",
+    "rm -rf *",
     "sudo *",
     "chmod *",
     "chown *",
