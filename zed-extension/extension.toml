@@ -1,58 +1,7 @@
-schema_version = 1
 id = "vtcode"
-name = "vtcode"
-version = "0.37.1"
-description = "VT Code packaged as a Zed Agent Server Extension. Integrates Rust-based terminal coding agent with LLM and tree-sitter support."
+name = "VTCode"
+version = "0.2.0"
+schema_version = 1
+authors = ["Vinh Nguyen <vinh@example.com>"]
+description = "AI coding assistant for Zed editor - A Rust-based terminal coding agent with semantic code intelligence and multi-provider AI support"
 repository = "https://github.com/vinhnx/vtcode"
-readme = "README.md"
-authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
-categories = ["AI", "Agents", "Productivity", "Testing"]
-keywords = [
-    "ai",
-    "agent",
-    "llm",
-    "terminal",
-    "coding",
-    "assistant",
-    "mcp",
-    "model context protocol",
-    "automation",
-]
-
-[agent_servers.vtcode]
-name = "VT Code"
-icon = "icons/vtcode.svg"
-
-[slash_commands.logs]
-description = "Open VT trajectory logs"
-requires_argument = false
-
-[slash_commands.status]
-description = "Show VT Code status information"
-requires_argument = false
-
-[slash_commands.doctor]
-description = "Run VT Code diagnostics"
-requires_argument = false
-
-[context_servers.vtcode]
-name = "VT Code"
-icon = "icons/vtcode.svg"
-
-[agent_servers.vtcode.env]
-VT_ACP_ENABLED = "1"
-VT_ACP_ZED_ENABLED = "1"
-VT_ACP_ZED_TOOLS_READ_FILE_ENABLED = "1"
-VT_ACP_ZED_TOOLS_LIST_FILES_ENABLED = "1"
-
-[agent_servers.vtcode.targets.darwin-aarch64]
-archive = "https://github.com/vinhnx/vtcode/releases/download/v0.37.1/vtcode-v0.37.1-aarch64-apple-darwin.tar.gz"
-cmd = "./vtcode"
-args = ["acp"]
-sha256 = "b8132619b0dbbaa62326b52ecf7bdacf6b589b33f82ca85a82cbcae0bb7c3125"
-
-[agent_servers.vtcode.targets.darwin-x86_64]
-archive = "https://github.com/vinhnx/vtcode/releases/download/v0.37.1/vtcode-v0.37.1-x86_64-apple-darwin.tar.gz"
-cmd = "./vtcode"
-args = ["acp"]
-sha256 = "cdf59c45c13da137cb5783eb5d78ae35b982e87af647d4779b9fd2543f017a3c"

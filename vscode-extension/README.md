@@ -64,6 +64,10 @@ The extension contributes the following settings:
 
 -   `vtcode.commandPath`: Path to the VTCode executable (default: `vtcode`)
 
+For comprehensive VTCode configuration options, see the [configuration documentation](./docs/config.md). You can also use the example configuration files provided:
+- [vtcode.toml](./vtcode.toml) - Basic configuration example
+- [vtcode.toml.example](./vtcode.toml.example) - Comprehensive configuration with all options
+
 ## Requirements
 
 -   VS Code version 1.87.0 or higher

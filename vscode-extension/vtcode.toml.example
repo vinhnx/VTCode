@@ -1,0 +1,296 @@
+# VTCode Comprehensive Configuration Example
+#
+# This file demonstrates all available configuration options for VTCode.
+# For detailed explanations of each option, see the complete documentation:
+# - Local copy: ./docs/config.md in your project
+# - Online: https://github.com/vinhnx/vtcode/blob/main/docs/config.md
+#
+# Configuration files like this can be placed in your project root directory
+# to customize VTCode behavior for specific projects.
+
+# ================
+# AGENT SETTINGS
+# ================
+# Configure which AI provider and model to use
+[agent]
+provider = "openai"        # Available: openai, anthropic, google, together, fireworks, ollama
+default_model = "gpt-4o"   # Model to use by default
+
+# Provider-specific settings for different AI services
+[agent.provider_settings.openai]
+name = "OpenAI"
+base_url = "https://api.openai.com/v1"
+env_key = "OPENAI_API_KEY"
+
+[agent.provider_settings.anthropic]
+name = "Anthropic"
+base_url = "https://api.anthropic.com/v1"
+env_key = "ANTHROPIC_API_KEY"
+
+[agent.provider_settings.google]
+name = "Google Gemini"
+base_url = "https://generativelanguage.googleapis.com/v1beta"
+env_key = "GOOGLE_GEMINI_API_KEY"
+# Note: Google's API uses a different format
+query_params = { key = "$GOOGLE_GEMINI_API_KEY" }
+
+[agent.provider_settings.ollama]
+name = "Ollama"
+base_url = "http://localhost:11434/v1"
+# No API key required for local Ollama instance
+
+# Model-specific settings
+[agent.model_settings]
+context_window = 128000    # Context window size in tokens
+max_output_tokens = 4096   # Maximum tokens for model output
+temperature = 0.7          # Model temperature (0.0-2.0)
+top_p = 0.9                # Top-P sampling parameter
+
+# ================
+# FEATURE FLAGS
+# ================
+# Toggle optional and experimental capabilities
+[features]
+streaming = true                    # Enable streaming responses
+human_in_the_loop = true            # Enable human-in-the-loop tool approval
+participant_context = true          # Include participant context in messages
+terminal_integration = true         # Enable terminal integration features
+mcp_enabled = false                 # Enable Model Context Protocol integrations
+
+# ================
+# SECURITY & APPROVALS
+# ================
+# Security settings to control potentially dangerous operations
+[security]
+# Enable human-in-the-loop approval for tool calls
+human_in_the_loop = true
+
+# Default policy for tool execution (options: "ask", "allow", "deny")
+default_tool_policy = "ask"
+
+# Whether trusted workspaces can bypass some security checks
+trusted_workspace_mode = true
+
+# Define specific policies for different tools
+[tools.policies]
+shell_exec = "ask"        # Policy for shell execution tools
+write_file = "ask"        # Policy for writing files
+read_file = "allow"       # Policy for reading files
+web_search = "ask"        # Policy for web searching
+
+# Control automation behavior
+[automation]
+# Enable full automation mode (bypasses human approval) - USE WITH CAUTION
+full_auto = false
+
+[automation.full_auto]
+enabled = false
+# List of tools that are allowed in full automation mode
+allowed_tools = ["read_file", "web_search"]
+
+# ================
+# PARTICIPANT SYSTEM
+# ================
+# Controls the behavior of the participant system that provides context augmentation
+[participants]
+# Enable participant system for @mention support
+enabled = true
+
+# Default participants to always include
+default_participants = ["@workspace", "@code"]
+
+# Timeout for participant context resolution (in seconds)
+timeout = 15
+
+# Whether to cache participant context between messages
+cache_context = true
+
+# Maximum size of context that each participant can provide
+max_context_size = 524288  # 512KB
+
+# Individual settings for different participants
+[participants.workspace]
+# Include file statistics in workspace context
+include_file_stats = true
+# Include git status in workspace context
+include_git_status = true
+# Maximum number of files to list
+max_files_to_list = 100
+
+[participants.code]
+# Include syntax highlighting information
+include_syntax_info = true
+# Maximum file size to send for code context (in bytes)
+max_file_size = 262144  # 256KB
+
+[participants.terminal]
+# Include recent terminal commands
+include_recent_commands = true
+# Number of recent commands to include
+recent_commands_limit = 10
+
+[participants.git]
+# Include git repository information
+include_repo_info = true
+# Include git diff information
+include_diff = false
+
+# ================
+# EXECUTION ENVIRONMENT
+# ================
+# Workspace-specific settings
+[workspace]
+# Use the root config file for workspace settings
+use_root_config = true
+# Include workspace context in messages
+include_context = true
+# Maximum size of context to include (in bytes)
+max_context_size = 1048576  # 1MB
+
+# Timeout settings for various operations
+[execution]
+# Timeout for tool executions in seconds
+tool_timeout = 300  # 5 minutes
+# Timeout for API calls in seconds
+api_timeout = 120   # 2 minutes
+# Maximum time for participant context resolution
+participant_timeout = 30  # 30 seconds
+
+# ================
+# MCP INTEGRATION
+# ================
+# Model Context Protocol configuration for external tools/services
+[mcp]
+# Enable MCP integration
+enabled = false
+
+# List of MCP providers to use
+[[mcp.providers]]
+name = "context7"
+command = "npx"
+args = ["-y", "context7", "serve", "api"]
+enabled = true
+
+[[mcp.providers]]
+name = "figma"
+command = "figma-mcp-server"
+args = ["--port", "4000"]
+enabled = false  # Disabled by default
+
+[[mcp.providers]]
+name = "github"
+command = "github-mcp-server"
+enabled = true
+
+# ================
+# OBSERVABILITY
+# ================
+# Telemetry settings
+[telemetry]
+# Enable telemetry collection (disabled by default for privacy)
+enabled = false
+# Whether to include usage analytics
+analytics = false
+# Whether to report errors to the development team
+report_errors = true
+# Level of detail for telemetry data
+# Options: "minimal", "basic", "detailed"
+level = "minimal"
+
+# Logging configuration
+[logging]
+# Enable detailed logging (useful for debugging)
+enabled = false
+# Log level: "error", "warn", "info", "debug", "trace"
+level = "info"
+# Whether to include sensitive information in logs (never enabled by default)
+include_sensitive = false
+# Maximum size of log files before rotation (in bytes)
+max_log_size = 10485760  # 10MB
+
+# ================
+# AUTHENTICATION
+# ================
+# Authentication settings
+[auth]
+# Whether to store credentials securely in the OS keychain
+secure_storage = true
+# Whether to validate API keys on startup
+validate_keys = true
+# Timeout for authentication requests
+timeout = 30  # seconds
+
+# ================
+# PROFILES
+# ================
+# Define different profiles for different contexts or projects
+
+# Profile for development work
+[profiles.development]
+[profiles.development.agent]
+provider = "openai"
+default_model = "gpt-4o"
+
+[profiles.development.security]
+human_in_the_loop = true
+default_tool_policy = "ask"
+
+[profiles.development.participants]
+default_participants = ["@workspace", "@code", "@git"]
+
+# Profile for research work
+[profiles.research]
+[profiles.research.agent]
+provider = "anthropic"
+default_model = "claude-3-5-sonnet-latest"
+
+[profiles.research.tools.policies]
+web_search = "allow"
+read_file = "allow"
+shell_exec = "deny"
+
+# Profile for local development with Ollama
+[profiles.local]
+[profiles.local.agent.provider_settings.ollama]
+enabled = true
+
+[profiles.local.agent]
+provider = "ollama"
+default_model = "llama3.1"
+
+[profiles.local.security]
+human_in_the_loop = false
+default_tool_policy = "allow"
+
+# ================
+# WORKSPACE-SPECIFIC OVERRIDES
+# ================
+# Settings for specific types of workspaces
+
+# Settings for any workspace containing a package.json
+[workspace.nodejs]
+[workspace.nodejs.agent]
+default_model = "gpt-4-turbo"
+
+[workspace.nodejs.participants]
+default_participants = ["@workspace", "@code", "@terminal"]
+
+# Settings for any workspace containing a Cargo.toml
+[workspace.rust]
+[workspace.rust.agent]
+default_model = "claude-3-5-sonnet-latest"
+
+[workspace.rust.participants]
+default_participants = ["@workspace", "@code", "@terminal", "@git"]
+
+# ================
+# COMMAND SYSTEM
+# ================
+# Configure which commands are available in the VS Code extension
+[commands]
+# Whether to enable the ask agent command
+ask_agent_enabled = true
+# Whether to enable the analyze workspace command
+analyze_enabled = true
+# Timeout for command execution (in seconds)
+command_timeout = 300

@@ -2,6 +2,14 @@ import * as vscode from "vscode";
 import { ICommand, CommandContext } from "./types/command";
 
 /**
+ * VTCode Command Registry
+ * 
+ * This registry manages all VTCode commands available in the extension.
+ * For configuration options and examples, see the documentation:
+ * - docs/config.md - Complete configuration reference
+ * - vtcode.toml - Basic example configuration
+ * - vtcode.toml.example - Comprehensive example with all options
+ * 
  * Registry for managing VTCode commands
  */
 export class CommandRegistry {
