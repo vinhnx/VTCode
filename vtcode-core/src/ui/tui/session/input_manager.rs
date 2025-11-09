@@ -97,6 +97,12 @@ impl InputManager {
         self.cursor = self.content.len();
     }
 
+    /// Inserts a single character at the current cursor position
+    pub fn insert_char(&mut self, ch: char) {
+        self.content.insert(self.cursor, ch);
+        self.cursor += ch.len_utf8();
+    }
+
     /// Inserts text at the current cursor position
     pub fn insert_text(&mut self, text: &str) {
         self.content.insert_str(self.cursor, text);

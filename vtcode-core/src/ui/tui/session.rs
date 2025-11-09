@@ -334,10 +334,9 @@ impl Session {
                 self.update_slash_suggestions();
             }
             InlineCommand::SetInput(content) => {
-                self.input = content;
-                self.cursor = self.input.len();
-                self.scroll_offset = 0;
-                self.reset_history_navigation();
+                self.input_manager.set_content(content);
+                self.scroll_manager.set_offset(0);
+                self.sync_input_from_manager();
                 self.update_slash_suggestions();
             }
             InlineCommand::ClearInput => {
@@ -460,8 +459,8 @@ impl Session {
         if self.deferred_file_browser_trigger {
             self.deferred_file_browser_trigger = false;
             // Insert @ to trigger file browser now that slash modal is gone
-            self.input.insert(self.cursor, '@');
-            self.cursor += 1;
+            self.input_manager.insert_char('@');
+            self.sync_input_from_manager();
             self.check_file_reference_trigger();
             self.mark_dirty(); // Ensure UI updates
         }
@@ -470,8 +469,8 @@ impl Session {
         if self.deferred_prompt_browser_trigger {
             self.deferred_prompt_browser_trigger = false;
             // Insert # to trigger prompt browser now that slash modal is gone
-            self.input.insert(self.cursor, '#');
-            self.cursor += 1;
+            self.input_manager.insert_char('#');
+            self.sync_input_from_manager();
             self.check_prompt_reference_trigger();
             self.mark_dirty(); // Ensure UI updates
         }
@@ -1684,8 +1683,8 @@ impl Session {
                 styles: &styles,
                 secure_prompt: modal.secure_prompt.as_ref(),
                 search: modal.search.as_ref(),
-                input: &self.input,
-                cursor: self.cursor,
+                input: self.input_manager.content(),
+                cursor: self.input_manager.cursor(),
             },
         );
     }
@@ -1717,16 +1716,15 @@ impl Session {
 
     pub fn clear_input(&mut self) {
         self.input_manager.clear();
+        self.scroll_manager.set_offset(0);
         self.sync_input_from_manager();
-        self.scroll_offset = 0;
-        self.reset_history_navigation();
         self.update_slash_suggestions();
         self.mark_dirty();
     }
 
     fn clear_screen(&mut self) {
         self.lines.clear();
-        self.scroll_offset = 0;
+        self.scroll_manager.set_offset(0);
         self.invalidate_transcript_cache();
         self.invalidate_scroll_metrics();
         self.needs_full_clear = true;
@@ -1743,7 +1741,7 @@ impl Session {
 
         self.custom_prompts = Some(custom_prompts);
         // Update slash palette if we're currently viewing slash commands
-        if self.input.starts_with('/') {
+        if self.input_manager.content().starts_with('/') {
             self.update_slash_suggestions();
         }
     }
@@ -1758,7 +1756,7 @@ impl Session {
 
     fn check_file_reference_trigger(&mut self) {
         if let Some(palette) = self.file_palette.as_mut() {
-            if let Some((_, _, query)) = extract_file_reference(&self.input, self.cursor) {
+            if let Some((_, _, query)) = extract_file_reference(self.input_manager.content(), self.input_manager.cursor()) {
                 // Reset selection and clear previous state when opening
                 palette.reset();
                 palette.set_filter(query);
@@ -1885,7 +1883,7 @@ impl Session {
         }
 
         if let Some(palette) = self.prompt_palette.as_mut() {
-            if let Some((_, _, query)) = extract_prompt_reference(&self.input, self.cursor) {
+            if let Some((_, _, query)) = extract_prompt_reference(self.input_manager.content(), self.input_manager.cursor()) {
                 // Reset selection and clear previous state when opening
                 palette.reset();
                 palette.set_filter(query);
@@ -1968,8 +1966,9 @@ impl Session {
         command.push_str(prompt_name);
         command.push(' ');
 
-        self.input = command;
-        self.cursor = self.input.len();
+        self.input_manager.set_content(command);
+        self.input_manager.move_cursor_to_end();
+        self.sync_input_from_manager();
         self.update_slash_suggestions();
     }
 
@@ -2040,21 +2039,15 @@ impl Session {
                     None
                 } else {
                     // Handle double escape to clear input
-                    let now = Instant::now();
-                    let is_double_escape = if let Some(last_time) = self.last_escape_time {
-                        now.duration_since(last_time).as_millis() < 500 // 500ms timeout for double escape
-                    } else {
-                        false
-                    };
+                    let is_double_escape = self.input_manager.check_escape_double_tap();
 
-                    if is_double_escape && !self.input.is_empty() {
+                    if is_double_escape && !self.input_manager.content().is_empty() {
                         // Double escape detected - clear the input
                         self.clear_input();
                         self.mark_dirty();
                         None // Don't send an event, just clear the input
                     } else {
-                        // Single escape - either send cancel event or update last escape time
-                        self.last_escape_time = Some(now);
+                        // Single escape - send cancel event
                         self.mark_dirty();
                         Some(InlineEvent::Cancel)
                     }
@@ -2130,9 +2123,10 @@ impl Session {
                     return None;
                 }
 
-                let submitted = std::mem::take(&mut self.input);
-                self.cursor = 0;
-                self.scroll_offset = 0;
+                let submitted = self.input_manager.content().to_string();
+                self.input_manager.clear();
+                self.scroll_manager.set_offset(0);
+                self.sync_input_from_manager();
                 // Input is handled with standard paragraph, not TextArea
                 self.update_slash_suggestions();
 
@@ -2288,8 +2282,8 @@ impl Session {
         if ch == '\n' && !self.can_insert_newline() {
             return;
         }
-        self.input.insert(self.cursor, ch);
-        self.cursor += ch.len_utf8();
+        self.input_manager.insert_char(ch);
+        self.sync_input_from_manager();
         self.update_slash_suggestions();
     }
 
@@ -2313,25 +2307,31 @@ impl Session {
         if sanitized.is_empty() {
             return;
         }
-        self.input.insert_str(self.cursor, &sanitized);
-        self.cursor += sanitized.len();
+        self.input_manager.insert_text(&sanitized);
+        self.sync_input_from_manager();
         self.update_slash_suggestions();
     }
 
     fn insert_file_reference(&mut self, file_path: &str) {
-        if let Some((start, end, _)) = extract_file_reference(&self.input, self.cursor) {
+        self.sync_input_to_manager();
+        if let Some((start, end, _)) = extract_file_reference(self.input_manager.content(), self.input_manager.cursor()) {
             let replacement = format!("@{}", file_path);
-            self.input.replace_range(start..end, &replacement);
-            self.cursor = start + replacement.len();
-            self.input.insert(self.cursor, ' ');
-            self.cursor += 1;
+            let content = self.input_manager.content().to_string();
+            let mut new_content = String::new();
+            new_content.push_str(&content[..start]);
+            new_content.push_str(&replacement);
+            new_content.push_str(&content[end..]);
+            self.input_manager.set_content(new_content);
+            self.input_manager.set_cursor(start + replacement.len());
+            self.input_manager.insert_char(' ');
+            self.sync_input_from_manager();
         }
     }
 
     fn remaining_newline_capacity(&self) -> usize {
         ui::INLINE_INPUT_MAX_LINES
             .saturating_sub(1)
-            .saturating_sub(self.input.matches('\n').count())
+            .saturating_sub(self.input_manager.content().matches('\n').count())
     }
 
     fn can_insert_newline(&self) -> bool {
@@ -2339,45 +2339,26 @@ impl Session {
     }
 
     fn delete_char(&mut self) {
-        if self.cursor == 0 {
-            return;
-        }
-        if let Some((index, _)) = self
-            .input
-            .char_indices()
-            .take_while(|(idx, _)| *idx < self.cursor)
-            .last()
-        {
-            self.input.drain(index..self.cursor);
-            self.cursor = index;
-            self.update_slash_suggestions();
-        }
+        self.input_manager.backspace();
+        self.sync_input_from_manager();
+        self.update_slash_suggestions();
     }
 
     fn delete_char_forward(&mut self) {
-        if self.cursor >= self.input.len() {
-            return;
-        }
-
-        if let Some((index, _)) = self
-            .input
-            .char_indices()
-            .find(|(idx, _)| *idx >= self.cursor)
-        {
-            self.input.drain(index..(index + 1));
-            // cursor stays the same as characters shift left
-            self.update_slash_suggestions();
-        }
+        self.input_manager.delete();
+        self.sync_input_from_manager();
+        self.update_slash_suggestions();
     }
 
     fn delete_word_backward(&mut self) {
-        if self.cursor == 0 {
+        self.sync_input_to_manager();
+        if self.input_manager.cursor() == 0 {
             return;
         }
 
         // Find the start of the current word by moving backward (same logic as move_left_word)
         let graphemes: Vec<(usize, &str)> =
-            self.input[..self.cursor].grapheme_indices(true).collect();
+            self.input_manager.content()[..self.input_manager.cursor()].grapheme_indices(true).collect();
 
         if graphemes.is_empty() {
             return;
@@ -2412,19 +2393,25 @@ impl Session {
         };
 
         // Delete from delete_start to cursor
-        if delete_start < self.cursor {
-            self.input.drain(delete_start..self.cursor);
-            self.cursor = delete_start;
+        if delete_start < self.input_manager.cursor() {
+            let content = self.input_manager.content().to_string();
+            let mut new_content = String::new();
+            new_content.push_str(&content[..delete_start]);
+            new_content.push_str(&content[self.input_manager.cursor()..]);
+            self.input_manager.set_content(new_content);
+            self.input_manager.set_cursor(delete_start);
+            self.sync_input_from_manager();
             self.update_slash_suggestions();
         }
     }
 
     fn delete_sentence_backward(&mut self) {
-        if self.cursor == 0 {
+        self.sync_input_to_manager();
+        if self.input_manager.cursor() == 0 {
             return;
         }
 
-        let input_before_cursor = &self.input[..self.cursor];
+        let input_before_cursor = &self.input_manager.content()[..self.input_manager.cursor()];
         let chars: Vec<(usize, char)> = input_before_cursor.char_indices().collect();
 
         if chars.is_empty() {
@@ -2442,9 +2429,9 @@ impl Session {
             if matches!(ch, '.' | '!' | '?') {
                 // Check if this punctuation is followed by whitespace or we're at the end
                 // Since we're looking at input before cursor, we check the original full input
-                if pos + ch.len_utf8() < self.input.len() {
+                if pos + ch.len_utf8() < self.input_manager.content().len() {
                     // Check the character after the punctuation in the full input string
-                    let after_punct = &self.input[pos + ch.len_utf8()..self.cursor];
+                    let after_punct = &self.input_manager.content()[pos + ch.len_utf8()..self.input_manager.cursor()];
                     if !after_punct.is_empty() {
                         let next_char = after_punct.chars().next().unwrap();
                         if next_char.is_whitespace() {
@@ -2471,84 +2458,58 @@ impl Session {
         }
 
         // Delete from delete_start to cursor
-        if delete_start < self.cursor {
-            self.input.drain(delete_start..self.cursor);
-            self.cursor = delete_start;
+        if delete_start < self.input_manager.cursor() {
+            let content = self.input_manager.content().to_string();
+            let mut new_content = String::new();
+            new_content.push_str(&content[..delete_start]);
+            new_content.push_str(&content[self.input_manager.cursor()..]);
+            self.input_manager.set_content(new_content);
+            self.input_manager.set_cursor(delete_start);
+            self.sync_input_from_manager();
             self.update_slash_suggestions();
         }
     }
 
     fn remember_submitted_input(&mut self, submitted: &str) {
-        self.reset_history_navigation();
-        if submitted.trim().is_empty() {
-            return;
-        }
-
-        if self
-            .input_history
-            .last()
-            .map_or(false, |last| last == submitted)
-        {
-            return;
-        }
-
-        self.input_history.push(submitted.to_string());
+        self.input_manager.add_to_history(submitted.to_string());
+        self.sync_input_to_manager();
     }
 
     fn navigate_history_previous(&mut self) -> bool {
-        if self.input_history.is_empty() {
-            return false;
-        }
-
-        if let Some(index) = self.input_history_index {
-            if index == 0 {
-                self.apply_history_entry(index);
-            } else {
-                let new_index = index.saturating_sub(1);
-                self.apply_history_entry(new_index);
-            }
+        if let Some(entry) = self.input_manager.go_to_previous_history() {
+            self.input_manager.set_content(entry);
+            self.sync_input_from_manager();
+            self.mark_dirty();
             true
         } else {
-            let new_index = self.input_history.len().saturating_sub(1);
-            self.input_history_draft = Some(self.input.clone());
-            self.apply_history_entry(new_index);
-            true
+            false
         }
     }
 
     fn navigate_history_next(&mut self) -> bool {
-        let Some(index) = self.input_history_index else {
-            return false;
-        };
-
-        if index + 1 < self.input_history.len() {
-            let new_index = index + 1;
-            self.apply_history_entry(new_index);
-        } else {
-            let draft = self.input_history_draft.take().unwrap_or_default();
-            if self.input != draft {
-                self.input = draft;
-                self.cursor = self.input.len();
-                self.scroll_offset = 0;
-                // Don't update slash suggestions during history navigation to prevent popup from showing
-                // Slash suggestions will be updated when user starts typing normally
-            }
-            self.input_history_index = None;
+        if let Some(entry) = self.input_manager.go_to_next_history() {
+            self.input_manager.set_content(entry);
+            self.sync_input_from_manager();
             self.mark_dirty();
+            true
+        } else {
+            false
         }
-        true
     }
 
     fn apply_history_entry(&mut self, index: usize) {
         if let Some(entry) = self.input_history.get(index) {
-            if self.input != *entry {
-                self.input = entry.clone();
-                self.cursor = self.input.len();
-                self.scroll_offset = 0;
+            if self.input_manager.content() != *entry {
+                self.input_manager.set_content(entry.clone());
+                self.input_manager.move_cursor_to_end();
+                self.scroll_manager.set_offset(0);
+                self.sync_input_from_manager();
+                self.sync_scroll_from_manager();
                 // Don't update slash suggestions during history navigation to prevent popup from showing
                 // Slash suggestions will be updated when user starts typing normally
             } else {
-                self.cursor = self.input.len();
+                self.input_manager.move_cursor_to_end();
+                self.sync_input_from_manager();
             }
             self.mark_dirty();
             self.input_history_index = Some(index);
@@ -2563,44 +2524,29 @@ impl Session {
     }
 
     fn move_left(&mut self) {
-        if self.cursor == 0 {
-            return;
-        }
-        if let Some((index, _)) = self
-            .input
-            .char_indices()
-            .take_while(|(idx, _)| *idx < self.cursor)
-            .last()
-        {
-            self.cursor = index;
-            self.update_slash_suggestions();
-        }
+        self.input_manager.move_cursor_left();
+        self.sync_input_from_manager();
+        self.update_slash_suggestions();
     }
 
     fn move_right(&mut self) {
-        if self.cursor >= self.input.len() {
-            return;
-        }
-        let slice = &self.input[self.cursor..];
-        if let Some((_, ch)) = slice.char_indices().next() {
-            self.cursor += ch.len_utf8();
-            self.update_slash_suggestions();
-        } else {
-            self.cursor = self.input.len();
-            self.update_slash_suggestions();
-        }
+        self.input_manager.move_cursor_right();
+        self.sync_input_from_manager();
+        self.update_slash_suggestions();
     }
 
     fn move_left_word(&mut self) {
-        if self.cursor == 0 {
+        self.sync_input_to_manager();
+        if self.input_manager.cursor() == 0 {
             return;
         }
 
         let graphemes: Vec<(usize, &str)> =
-            self.input[..self.cursor].grapheme_indices(true).collect();
+            self.input_manager.content()[..self.input_manager.cursor()].grapheme_indices(true).collect();
 
         if graphemes.is_empty() {
-            self.cursor = 0;
+            self.input_manager.set_cursor(0);
+            self.sync_input_from_manager();
             return;
         }
 
@@ -2624,22 +2570,25 @@ impl Session {
         }
 
         if index < graphemes.len() {
-            self.cursor = graphemes[index].0;
+            self.input_manager.set_cursor(graphemes[index].0);
         } else {
-            self.cursor = 0;
+            self.input_manager.set_cursor(0);
         }
+        self.sync_input_from_manager();
     }
 
     fn move_right_word(&mut self) {
-        if self.cursor >= self.input.len() {
+        self.sync_input_to_manager();
+        if self.input_manager.cursor() >= self.input_manager.content().len() {
             return;
         }
 
         let graphemes: Vec<(usize, &str)> =
-            self.input[self.cursor..].grapheme_indices(true).collect();
+            self.input_manager.content()[self.input_manager.cursor()..].grapheme_indices(true).collect();
 
         if graphemes.is_empty() {
-            self.cursor = self.input.len();
+            self.input_manager.set_cursor(self.input_manager.content().len());
+            self.sync_input_from_manager();
             return;
         }
 
@@ -2657,12 +2606,14 @@ impl Session {
         }
 
         if index >= graphemes.len() {
-            self.cursor = self.input.len();
+            self.input_manager.set_cursor(self.input_manager.content().len());
+            self.sync_input_from_manager();
             return;
         }
 
         if skipped_whitespace {
-            self.cursor += graphemes[index].0;
+            self.input_manager.set_cursor(self.input_manager.cursor() + graphemes[index].0);
+            self.sync_input_from_manager();
             return;
         }
 
@@ -2675,18 +2626,21 @@ impl Session {
         }
 
         if index < graphemes.len() {
-            self.cursor += graphemes[index].0;
+            self.input_manager.set_cursor(self.input_manager.cursor() + graphemes[index].0);
         } else {
-            self.cursor = self.input.len();
+            self.input_manager.set_cursor(self.input_manager.content().len());
         }
+        self.sync_input_from_manager();
     }
 
     fn move_to_start(&mut self) {
-        self.cursor = 0;
+        self.input_manager.move_cursor_to_start();
+        self.sync_input_from_manager();
     }
 
     fn move_to_end(&mut self) {
-        self.cursor = self.input.len();
+        self.input_manager.move_cursor_to_end();
+        self.sync_input_from_manager();
     }
 
     fn prefix_text(&self, kind: InlineMessageKind) -> Option<String> {
@@ -2917,57 +2871,40 @@ impl Session {
     }
 
     fn scroll_line_up(&mut self) {
-        let previous = self.scroll_offset;
-        if self.scroll_metrics_dirty {
-            self.scroll_offset = self.scroll_offset.saturating_add(1);
-        } else if self.cached_max_scroll_offset == 0 {
-            self.scroll_offset = 0;
-        } else {
-            self.scroll_offset = min(self.scroll_offset + 1, self.cached_max_scroll_offset);
-        }
-        if self.scroll_offset != previous {
+        let previous = self.scroll_manager.offset();
+        self.scroll_manager.scroll_up(1);
+        if self.scroll_manager.offset() != previous {
             self.needs_full_clear = true;
         }
+        self.sync_scroll_from_manager();
     }
 
     fn scroll_line_down(&mut self) {
-        let previous = self.scroll_offset;
-        if self.scroll_offset > 0 {
-            self.scroll_offset -= 1;
-        }
-        if self.scroll_offset != previous {
+        let previous = self.scroll_manager.offset();
+        self.scroll_manager.scroll_down(1);
+        if self.scroll_manager.offset() != previous {
             self.needs_full_clear = true;
         }
+        self.sync_scroll_from_manager();
     }
 
     fn scroll_page_up(&mut self) {
-        let previous = self.scroll_offset;
-        if self.scroll_metrics_dirty {
-            self.scroll_offset = self
-                .scroll_offset
-                .saturating_add(self.viewport_height().max(1));
-        } else if self.cached_max_scroll_offset == 0 {
-            self.scroll_offset = 0;
-        } else {
-            let page = self.viewport_height().max(1);
-            self.scroll_offset = min(self.scroll_offset + page, self.cached_max_scroll_offset);
-        }
-        if self.scroll_offset != previous {
+        let previous = self.scroll_manager.offset();
+        self.scroll_manager.scroll_up(self.viewport_height().max(1));
+        if self.scroll_manager.offset() != previous {
             self.needs_full_clear = true;
         }
+        self.sync_scroll_from_manager();
     }
 
     fn scroll_page_down(&mut self) {
-        let previous = self.scroll_offset;
+        let previous = self.scroll_manager.offset();
         let page = self.viewport_height().max(1);
-        if self.scroll_offset > page {
-            self.scroll_offset -= page;
-        } else {
-            self.scroll_offset = 0;
-        }
-        if self.scroll_offset != previous {
+        self.scroll_manager.scroll_down(page);
+        if self.scroll_manager.offset() != previous {
             self.needs_full_clear = true;
         }
+        self.sync_scroll_from_manager();
     }
 
     fn viewport_height(&self) -> usize {
