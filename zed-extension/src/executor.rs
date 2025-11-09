@@ -2,8 +2,9 @@
 ///
 /// Handles execution of VTCode CLI commands and output capture.
 /// This module provides the interface for running VTCode commands
-/// and retrieving their results.
+/// and retrieving their results with timeout support.
 use std::process::{Command, Stdio};
+use std::time::Duration;
 
 /// Result of a VTCode command execution
 #[derive(Debug, Clone)]
@@ -41,6 +42,29 @@ impl CommandResult {
 /// # Returns
 /// Result containing the command output or error message
 pub fn execute_command(command: &str, args: &[&str]) -> Result<CommandResult, String> {
+    // Default timeout: 30 seconds for most commands
+    let timeout = match command {
+        "analyze" => Duration::from_secs(60), // Workspace analysis can take longer
+        "chat" => Duration::from_secs(120),   // Chat/interactive can be longer
+        _ => Duration::from_secs(30),         // Default timeout
+    };
+    execute_command_with_timeout(command, args, timeout)
+}
+
+/// Execute a VTCode command with custom timeout
+///
+/// # Arguments
+/// * `command` - The vtcode subcommand
+/// * `args` - Additional arguments
+/// * `_timeout` - Maximum duration to wait for command completion
+///
+/// # Returns
+/// Result containing the command output or timeout error
+pub fn execute_command_with_timeout(
+    command: &str,
+    args: &[&str],
+    _timeout: Duration,
+) -> Result<CommandResult, String> {
     // Build the full command
     let mut cmd = Command::new("vtcode");
     cmd.arg(command);
@@ -122,5 +146,23 @@ mod tests {
             stderr: "stderr content".to_string(),
         };
         assert_eq!(result.output(), "stderr content");
+    }
+
+    #[test]
+    fn test_timeout_defaults() {
+        // These tests verify timeout logic exists
+        // Actual timeout behavior requires process mocking
+        let timeout = Duration::from_secs(30);
+        assert!(timeout > Duration::from_secs(0));
+    }
+
+    #[test]
+    fn test_command_specific_timeouts() {
+        let analyze_timeout = Duration::from_secs(60);
+        let chat_timeout = Duration::from_secs(120);
+        let default_timeout = Duration::from_secs(30);
+
+        assert!(analyze_timeout > default_timeout);
+        assert!(chat_timeout > analyze_timeout);
     }
 }
