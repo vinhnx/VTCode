@@ -74,6 +74,39 @@
     -   Text patterns → grep_file with ripgrep
     -   Code semantics → ast_grep_search with tree-sitter
     -   Tool discovery → search_tools before execute_code
+-   **File Listing Strategy**:
+    -   list_files with `mode='list'`: Single-directory listing
+    -   list_files with `mode='recursive'` + `name_pattern`: Glob-style file search
+    -   list_files with `mode='find_name'`: Find by exact name
+    -   list_files with `mode='find_content'`: Find files containing pattern
+    -   **IMPORTANT**: Tool returns sampled output (first N items) to prevent buffer overflow, but internally captures all matches. Use pagination (`page`, `per_page`) to access full results
+
+## File Listing Output Behavior (Smart Sampling)
+
+When using `list_files` or file discovery tools:
+
+1. **Full Internal Processing**: Tool processes ALL matching files internally
+2. **Output Sampling**: Response shows only first page (default 50 items) or configured `per_page` limit
+3. **No Data Loss**: Complete file count provided in `total` field and pagination metadata
+4. **Pagination Support**: Use `page` parameter to access additional results:
+   ```
+   → list_files(path="src", mode="recursive", name_pattern="*.rs", page=2, per_page=50)
+   ```
+5. **Token Efficiency**: Agent replies with concise samples; response is truncated gracefully in output
+
+**Example Flow:**
+
+```
+Agent calls: list_files(path="src", mode="recursive", name_pattern="*", max_items=1000)
+↓
+Tool finds 342 TypeScript files internally
+↓
+Response returns: { "items": [first 50], "total": 342, "has_more": true }
+↓
+Agent uses complete internal list for filtering/searching
+↓
+If needed, agent calls again with page=2 to fetch next batch
+```
 
 ## Code Execution & Skills (High-Impact Features)
 
@@ -177,6 +210,28 @@ else
 -   Summarize what was ACTUALLY changed, not what could be changed
 -   Avoid preamble ("Let me explain...") unless user asks
 
+## File Listing Agent Behavior (Implementation Pattern)
+
+### Smart Sampling in Agent Responses
+
+**Pattern for all agents using list_files tools:**
+
+1. **Call the tool** with full parameters (max_items, pagination, filters)
+2. **Receive sampled response** (first N items + metadata)
+3. **Show small sample in output** (5-10 items) to prevent buffer overflow
+4. **Maintain full context internally** - the tool has already processed complete file list
+5. **Reference total count** in your reply: `"Found 342 files. Sample: [list 5], ..."`
+6. **Use pagination for depth** if needed: `page=2, per_page=50`
+
+**Example Agent Pattern:**
+```
+User: "Find all Rust test files"
+→ Call: list_files(path=".", mode="recursive", name_pattern="*.rs", max_items=1000)
+→ Tool returns: 156 files (shows first 50 in items array)
+→ Agent replies: "Found 156 Rust files. Sample: main.rs, lib.rs, ... (10 items shown)"
+→ If needed for subsequent operations, agent uses complete file list internally
+```
+
 ## Tone and Steerability (Claude Code Pattern)
 
 ### Tone Guidelines
@@ -196,6 +251,7 @@ Unfortunately, "IMPORTANT" is still state-of-the-art for steering model behavior
 - IMPORTANT: You must NEVER generate or guess URLs unless confident
 - VERY IMPORTANT: You MUST avoid using bash find/grep; use Grep, Glob, or Task instead
 - IMPORTANT: DO NOT ADD ANY COMMENTS unless asked
+- IMPORTANT: When listing files, show only 5-10 samples in output but work with complete list internally
 ```
 
 ### Examples of Good vs Bad Behavior
