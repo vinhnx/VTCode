@@ -35,7 +35,7 @@ impl LsStyles {
         classes.insert("di".to_string(), bold_color(AnsiColor::Blue));
         classes.insert("ln".to_string(), bold_color(AnsiColor::Cyan));
         classes.insert("ex".to_string(), bold_color(AnsiColor::Green));
-        classes.insert("pi".to_string(), AnsiStyle::new().fg_color(Some(AnsiColor::Yellow.into())));
+        classes.insert("pi".to_string(), bold_color(AnsiColor::Yellow));
         classes.insert("so".to_string(), bold_color(AnsiColor::Magenta));
         classes.insert("bd".to_string(), bold_color(AnsiColor::Yellow));
         classes.insert("cd".to_string(), bold_color(AnsiColor::Yellow));
@@ -180,9 +180,9 @@ mod tests {
     #[test]
     fn detects_ls_styles_for_directories_and_executables() {
         let git = GitStyles::new();
-        let dir_style = AnsiStyle::new().bold();
-        let exec_style =
-            AnsiStyle::new().fg_color(Some(anstyle::Color::Ansi(AnsiColor::Green.into())));
+        use vtcode_core::utils::style_helpers::bold_color;
+        let dir_style = bold_color(AnsiColor::Blue);
+        let exec_style = bold_color(AnsiColor::Green);
         let mut classes = HashMap::new();
         classes.insert("di".to_string(), dir_style);
         classes.insert("ex".to_string(), exec_style);
@@ -204,10 +204,11 @@ mod tests {
     #[test]
     fn applies_extension_based_styles() {
         let git = GitStyles::new();
+        use vtcode_core::utils::style_helpers::bold_color;
         let mut suffixes = Vec::new();
         suffixes.push((
             ".rs".to_string(),
-            AnsiStyle::new().fg_color(Some(anstyle::AnsiColor::Red.into())),
+            bold_color(AnsiColor::Red),
         ));
         let ls = LsStyles::from_components(HashMap::new(), suffixes);
         let styled = select_line_style(Some("run_terminal_cmd"), "main.rs", &git, &ls);
@@ -217,10 +218,11 @@ mod tests {
     #[test]
     fn extension_matching_requires_dot_boundary() {
         let git = GitStyles::new();
+        use vtcode_core::utils::style_helpers::bold_color;
         let mut suffixes = Vec::new();
         suffixes.push((
             ".rs".to_string(),
-            AnsiStyle::new().fg_color(Some(anstyle::AnsiColor::Green.into())),
+            bold_color(AnsiColor::Green),
         ));
         let ls = LsStyles::from_components(HashMap::new(), suffixes);
 
