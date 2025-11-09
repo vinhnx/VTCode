@@ -33,6 +33,7 @@ use crate::config::constants::{prompts, ui};
 mod file_palette;
 mod header;
 mod input;
+mod input_manager;
 mod message;
 mod modal;
 mod navigation;
