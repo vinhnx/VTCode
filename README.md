@@ -1,9 +1,8 @@
 <h1 align="center">VT Code</h1>
 
-<p align="center"><code>npm install -g @vinhnx/vtcode</code></p>
-<p align="center"><code>npx vtcode</code></p>
-<p align="center"><code>cargo install vtcode</code></p>
 <p align="center"><code>brew install vtcode</code></p>
+<p align="center"><code>cargo install vtcode</code></p>
+<p align="center"><code>npx vtcode</code></p>
 <p align="center">
   <a href="./docs/guides/mcp-integration.md">
     <img src="https://img.shields.io/badge/agent%20client%20protocol-black?style=for-the-badge&logo=zedindustries" alt="zed"/>
