@@ -9,9 +9,6 @@ pub(super) fn register_builtin_tools(inventory: &mut ToolInventory, todo_plannin
         if !todo_planning_enabled && registration.name() == tools::UPDATE_PLAN {
             continue;
         }
-        if registration.name() == tools::AST_GREP_SEARCH && inventory.ast_grep_engine().is_none() {
-            continue;
-        }
 
         let tool_name = registration.name();
         if let Err(err) = inventory.register_tool(registration) {
@@ -119,12 +116,6 @@ pub(super) fn builtin_tool_registrations() -> Vec<ToolRegistration> {
             CapabilityLevel::Editing,
             false,
             ToolRegistry::edit_file_executor,
-        ),
-        ToolRegistration::new(
-            tools::AST_GREP_SEARCH,
-            CapabilityLevel::CodeSearch,
-            false,
-            ToolRegistry::ast_grep_executor,
         ),
         ToolRegistration::new(
             tools::APPLY_PATCH,

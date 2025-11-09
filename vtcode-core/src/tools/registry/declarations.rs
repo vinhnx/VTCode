@@ -700,31 +700,6 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
         },
 
         // ============================================================
-        // CODE ANALYSIS & TRANSFORMATION
-        // ============================================================
-        FunctionDeclaration {
-            name: tools::AST_GREP_SEARCH.to_string(),
-            description: "Syntax-aware code search/refactoring. Operations: search|transform|lint|refactor.".to_string(),
-            parameters: json!({
-                "type": "object",
-                "properties": {
-                    "operation": {"type": "string", "description": "search|transform|lint|refactor", "default": "search"},
-                    "pattern": {"type": "string", "description": "AST-grep pattern"},
-                    "path": {"type": "string", "description": "File or directory", "default": "."},
-                    "language": {"type": "string", "description": "Language (auto-detect if omitted)"},
-                    "replacement": {"type": "string", "description": "Replacement pattern"},
-                    "refactor_type": {"type": "string", "description": "Refactor type (e.g. extract_function)"},
-                    "context_lines": {"type": "integer", "description": "Context lines", "default": 0},
-                    "max_results": {"type": "integer", "description": "Max results", "default": 100},
-                    "preview_only": {"type": "boolean", "description": "Preview without applying", "default": true},
-                    "update_all": {"type": "boolean", "description": "Apply all matches", "default": false},
-                    "interactive": {"type": "boolean", "description": "Interactive mode", "default": false},
-                    "severity_filter": {"type": "string", "description": "Lint severity filter"}
-                },
-                "required": ["pattern", "path"]
-            }),
-        },
-        // ============================================================
         // PLANNING
         // ============================================================
         FunctionDeclaration {

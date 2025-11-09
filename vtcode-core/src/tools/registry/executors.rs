@@ -314,10 +314,6 @@ impl ToolRegistry {
         Box::pin(async move { self.edit_file(args).await })
     }
 
-    pub(super) fn ast_grep_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move { self.execute_ast_grep(args).await })
-    }
-
     pub(super) fn apply_patch_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move { self.execute_apply_patch(args).await })
     }

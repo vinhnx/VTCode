@@ -4,12 +4,10 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use super::registration::ToolRegistration;
-use crate::tools::ast_grep::AstGrepEngine;
 use crate::tools::command::CommandTool;
 use crate::tools::file_ops::FileOpsTool;
 use crate::tools::grep_file::GrepSearchManager;
 use crate::tools::plan::PlanManager;
-use tracing::warn;
 
 #[derive(Debug, Clone)]
 struct ToolCacheEntry {
@@ -30,7 +28,6 @@ pub(super) struct ToolInventory {
     file_ops_tool: FileOpsTool,
     command_tool: CommandTool,
     grep_search: Arc<GrepSearchManager>,
-    ast_grep_engine: Option<Arc<AstGrepEngine>>,
     plan_manager: PlanManager,
 }
 
@@ -41,14 +38,6 @@ impl ToolInventory {
         let command_tool = CommandTool::new(workspace_root.clone());
         let plan_manager = PlanManager::new();
 
-        let ast_grep_engine = match AstGrepEngine::new() {
-            Ok(engine) => Some(Arc::new(engine)),
-            Err(err) => {
-                warn!("Failed to initialize AST-grep engine: {err}");
-                None
-            }
-        };
-
         Self {
             workspace_root: workspace_root.clone(),
             tools: HashMap::new(),
@@ -58,7 +47,6 @@ impl ToolInventory {
             file_ops_tool,
             command_tool,
             grep_search,
-            ast_grep_engine,
             plan_manager,
         }
     }
@@ -81,14 +69,6 @@ impl ToolInventory {
 
     pub fn grep_file_manager(&self) -> Arc<GrepSearchManager> {
         self.grep_search.clone()
-    }
-
-    pub fn ast_grep_engine(&self) -> Option<&Arc<AstGrepEngine>> {
-        self.ast_grep_engine.as_ref()
-    }
-
-    pub fn set_ast_grep_engine(&mut self, engine: Arc<AstGrepEngine>) {
-        self.ast_grep_engine = Some(engine);
     }
 
     pub fn plan_manager(&self) -> PlanManager {
@@ -163,7 +143,7 @@ impl ToolInventory {
 
     /// Check if a tool is commonly used
     fn is_common_tool(&self, name: &str) -> bool {
-        matches!(name, "file_ops" | "command" | "grep" | "ast_grep" | "plan")
+        matches!(name, "file_ops" | "command" | "grep" | "plan")
     }
 
     /// Clean up old cache entries if needed

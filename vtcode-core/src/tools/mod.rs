@@ -122,9 +122,6 @@
 //! the monolithic implementation into focused, reusable components.
 
 pub mod apply_patch;
-pub mod ast_grep;
-pub mod ast_grep_format;
-pub mod ast_grep_tool;
 
 pub mod cache;
 pub mod command;
@@ -142,8 +139,6 @@ pub mod types;
 pub mod web_fetch;
 
 // Re-export main types and traits for backward compatibility
-pub use ast_grep_tool::AstGrepTool;
-
 pub use cache::FileCache;
 pub use editing::{Patch, PatchError, PatchHunk, PatchLine, PatchOperation};
 pub use grep_file::GrepSearchManager;

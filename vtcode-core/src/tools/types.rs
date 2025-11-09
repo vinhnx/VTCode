@@ -66,8 +66,6 @@ pub struct Input {
     #[serde(default)]
     pub encoding: Option<String>,
     #[serde(default)]
-    pub ast_grep_pattern: Option<String>,
-    #[serde(default)]
     pub chunk_lines: Option<usize>,
     #[serde(default)]
     pub max_lines: Option<usize>,
@@ -91,10 +89,6 @@ pub struct WriteInput {
     pub encoding: Option<String>,
     #[serde(default = "default_write_mode", alias = "write_mode")]
     pub mode: String,
-    #[serde(default)]
-    pub ast_grep_lint: bool,
-    #[serde(default)]
-    pub ast_grep_refactor: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -132,8 +126,6 @@ pub struct EditInput {
     pub new_str: String,
     #[serde(default)]
     pub encoding: Option<String>,
-    #[serde(default)]
-    pub ast_grep_pattern: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -153,8 +145,6 @@ pub struct ListInput {
     pub response_format: Option<String>,
     #[serde(default)]
     pub include_hidden: bool,
-    #[serde(default)]
-    pub ast_grep_pattern: Option<String>,
     // Enhanced file discovery parameters
     #[serde(default)]
     pub mode: Option<String>, // "list", "recursive", "find_name", "find_content", "largest"

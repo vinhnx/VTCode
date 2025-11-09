@@ -31,8 +31,6 @@ const AUTO_ALLOW_TOOLS: &[&str] = &[
     tools::RUN_COMMAND,
     tools::READ_FILE,
     tools::EDIT_FILE,
-    tools::AST_GREP_SEARCH,
-    tools::RUN_COMMAND,
 ];
 
 /// Tool execution policy

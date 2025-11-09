@@ -202,11 +202,6 @@ const SECTION_KEYS: Record<string, Record<string, KeyMetadata>> = {
             documentation: 'Control whether apply_patch requires approval.',
             insertText: 'apply_patch = "${1|allow,prompt,deny|}"'
         },
-        ast_grep_search: {
-            detail: 'ast_grep_search policy',
-            documentation: 'Policy override for AST-based search tool.',
-            insertText: 'ast_grep_search = "${1|allow,prompt,deny|}"'
-        },
         bash: {
             detail: 'bash policy',
             documentation: 'Policy override for shell execution.',

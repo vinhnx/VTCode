@@ -14,7 +14,7 @@ For installation instructions and download links for other IDEs, visit our [IDE 
 -   **Quick Actions**: Easily send questions and get responses without leaving your editor
 -   **Code Analysis**: Analyze your workspace with semantic code intelligence
 -   **Configuration Management**: Edit your `vtcode.toml` configuration files with syntax highlighting
--   **Context Awareness**: Leverages Tree-sitter and ast-grep for deep code understanding
+-   **Context Awareness**: Leverages Tree-sitter for deep code understanding with enhanced regex search
 -   **Multi-Provider AI**: Supports OpenAI, Anthropic, Google, xAI, DeepSeek, and more
 -   **Security First**: Built-in safeguards with human-in-the-loop controls
 

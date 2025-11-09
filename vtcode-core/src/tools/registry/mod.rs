@@ -1,6 +1,5 @@
 //! Tool registry and function declarations
 
-mod astgrep;
 mod builtins;
 mod cache;
 mod declarations;
@@ -32,7 +31,6 @@ use utils::normalize_tool_output;
 use crate::config::constants::tools;
 use crate::config::{CommandsConfig, PtyConfig, TimeoutsConfig, ToolsConfig};
 use crate::tool_policy::{ToolPolicy, ToolPolicyManager};
-use crate::tools::ast_grep::AstGrepEngine;
 use crate::tools::file_ops::FileOpsTool;
 use crate::tools::grep_file::GrepSearchManager;
 use crate::tools::names::{canonical_tool_name, tool_aliases};
@@ -415,18 +413,8 @@ impl ToolRegistry {
         false
     }
 
-    pub async fn with_ast_grep(mut self, engine: Arc<AstGrepEngine>) -> Self {
-        self.inventory.set_ast_grep_engine(engine);
-        self.sync_policy_catalog().await;
-        self
-    }
-
     pub fn workspace_root(&self) -> &PathBuf {
         self.inventory.workspace_root()
-    }
-
-    pub fn ast_grep_engine(&self) -> Option<&Arc<AstGrepEngine>> {
-        self.inventory.ast_grep_engine()
     }
 
     pub fn file_ops_tool(&self) -> &FileOpsTool {
