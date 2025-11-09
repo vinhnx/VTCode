@@ -2,12 +2,14 @@ use std::sync::Arc;
 use zed_extension_api as zed;
 
 mod cache;
+mod command_builder;
 mod commands;
 mod config;
 mod context;
 mod editor;
 mod error_handling;
 mod executor;
+mod metrics;
 mod output;
 mod validation;
 mod workspace;
@@ -16,6 +18,7 @@ pub use cache::{
     CacheEntry, CacheStats, CommandResultCache, FileContentCache, WorkspaceAnalysisCache,
     WorkspaceAnalysisData,
 };
+pub use command_builder::CommandBuilder;
 pub use commands::{
     analyze_workspace, ask_about_selection, ask_agent, check_status, launch_chat, CommandResponse,
 };
@@ -25,7 +28,10 @@ pub use editor::{EditorState, StatusIndicator};
 pub use error_handling::{
     ErrorCode, ErrorSeverity, ExtensionError, ExtensionResult, RecoveryStrategy,
 };
-pub use executor::{check_vtcode_available, execute_command, get_vtcode_version};
+pub use executor::{
+    check_vtcode_available, execute_command, execute_command_with_timeout, get_vtcode_version,
+};
+pub use metrics::{CommandTimer, MetricStats, MetricsCollector};
 pub use output::{MessageType, OutputChannel, OutputMessage};
 pub use validation::{validate_config, ValidationError, ValidationResult};
 pub use workspace::{
