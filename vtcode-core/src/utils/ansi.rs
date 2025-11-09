@@ -965,8 +965,8 @@ mod tests {
         let sink = InlineSink::new(InlineHandle { sender });
         let fallback = InlineTextStyle {
             color: Some(AnsiColorEnum::Ansi(AnsiColor::Green)),
-            bold: false,
-            italic: false,
+            bg_color: None,
+            effects: Effects::new(),
         };
 
         let (converted, plain) =

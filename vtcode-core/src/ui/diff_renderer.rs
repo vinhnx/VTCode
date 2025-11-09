@@ -1,6 +1,7 @@
 use anstyle::{Reset, Style};
 use std::path::Path;
 use crate::utils::style_helpers::style_from_color_name;
+use crate::ui::git_config::GitColorConfig;
 
 struct GitDiffPalette {
     bullet: Style,
@@ -36,6 +37,26 @@ impl GitDiffPalette {
             line_context: parse("white"),
             line_header: parse("cyan"),
             line_number: parse("yellow"),
+        }
+    }
+
+    /// Create palette from Git config colors
+    fn from_git_config(config: &GitColorConfig, use_colors: bool) -> Self {
+        if !use_colors {
+            return Self::new(false);
+        }
+
+        Self {
+            bullet: style_from_color_name("yellow"),
+            label: style_from_color_name("white"),
+            path: style_from_color_name("white"),
+            stat_added: config.diff_new,
+            stat_removed: config.diff_old,
+            line_added: config.diff_new,
+            line_removed: config.diff_old,
+            line_context: config.diff_context,
+            line_header: config.diff_header,
+            line_number: style_from_color_name("yellow"),
         }
     }
 }
@@ -86,6 +107,21 @@ impl DiffRenderer {
             context_lines,
             use_colors,
             palette: GitDiffPalette::new(use_colors),
+        }
+    }
+
+    /// Create renderer with colors from Git config
+    pub fn with_git_config(
+        show_line_numbers: bool,
+        context_lines: usize,
+        use_colors: bool,
+        config: &GitColorConfig,
+    ) -> Self {
+        Self {
+            show_line_numbers,
+            context_lines,
+            use_colors,
+            palette: GitDiffPalette::from_git_config(config, use_colors),
         }
     }
 
@@ -298,6 +334,23 @@ impl DiffChatRenderer {
     pub fn new(show_line_numbers: bool, context_lines: usize, use_colors: bool) -> Self {
         Self {
             diff_renderer: DiffRenderer::new(show_line_numbers, context_lines, use_colors),
+        }
+    }
+
+    /// Create renderer with colors from Git config
+    pub fn with_git_config(
+        show_line_numbers: bool,
+        context_lines: usize,
+        use_colors: bool,
+        config: &GitColorConfig,
+    ) -> Self {
+        Self {
+            diff_renderer: DiffRenderer::with_git_config(
+                show_line_numbers,
+                context_lines,
+                use_colors,
+                config,
+            ),
         }
     }
 

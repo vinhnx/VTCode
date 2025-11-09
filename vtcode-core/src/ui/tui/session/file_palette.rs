@@ -2,6 +2,8 @@ use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config, Matcher, Utf32Str};
 use std::path::{Path, PathBuf};
 
+use crate::ui::FileColorizer;
+
 const PAGE_SIZE: usize = 20;
 
 #[derive(Debug, Clone)]
@@ -20,6 +22,7 @@ pub struct FilePalette {
     filter_query: String,
     workspace_root: PathBuf,
     filter_cache: std::collections::HashMap<String, Vec<FileEntry>>,
+    file_colorizer: FileColorizer,
 }
 
 impl FilePalette {
@@ -32,6 +35,7 @@ impl FilePalette {
             filter_query: String::new(),
             workspace_root,
             filter_cache: std::collections::HashMap::new(),
+            file_colorizer: FileColorizer::new(),
         }
     }
 
@@ -389,6 +393,12 @@ impl FilePalette {
     pub fn has_more_items(&self) -> bool {
         let end = ((self.current_page + 1) * PAGE_SIZE).min(self.filtered_files.len());
         end < self.filtered_files.len()
+    }
+
+    /// Get the appropriate style for a file entry based on its path and type
+    pub fn style_for_entry(&self, entry: &FileEntry) -> Option<anstyle::Style> {
+        let path = Path::new(&entry.path);
+        self.file_colorizer.style_for_path(path)
     }
 }
 

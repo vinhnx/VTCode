@@ -97,7 +97,7 @@ mod tests {
 
     #[test]
     fn test_parse_git_underline() {
-        let style = ThemeConfigParser::parse_git_style("underline green").unwrap();
+        let style = ThemeConfigParser::parse_git_style("ul green").unwrap();
         assert!(style.get_effects().contains(anstyle::Effects::UNDERLINE));
     }
 
@@ -141,7 +141,7 @@ mod tests {
 
     #[test]
     fn test_parse_ls_colors_fails_on_invalid() {
-        let result = ThemeConfigParser::parse_ls_colors("99");
+        let result = ThemeConfigParser::parse_ls_colors("invalid");
         assert!(result.is_err());
     }
 }

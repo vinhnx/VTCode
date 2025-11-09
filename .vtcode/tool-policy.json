@@ -49,8 +49,7 @@
     "load_skill": "prompt",
     "save_skill": "prompt",
     "search_skills": "prompt",
-    "search_tools": "prompt",
-    "run_command": "allow"
+    "search_tools": "prompt"
   },
   "constraints": {
     "curl": {
