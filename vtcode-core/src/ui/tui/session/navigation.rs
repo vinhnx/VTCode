@@ -247,9 +247,11 @@ impl Session {
     }
 
     fn navigation_label_style(&self, kind: InlineMessageKind) -> Style {
-        let mut style = InlineTextStyle::default();
-        style.color = self.text_fallback(kind).or(self.theme.foreground);
-        style.bold = matches!(kind, InlineMessageKind::Agent | InlineMessageKind::User);
+        let mut style = InlineTextStyle::default()
+            .with_color(self.text_fallback(kind).or(self.theme.foreground));
+        if matches!(kind, InlineMessageKind::Agent | InlineMessageKind::User) {
+            style = style.bold();
+        }
         ratatui_style_from_inline(&style, self.theme.foreground)
     }
 

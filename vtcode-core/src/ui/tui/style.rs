@@ -18,15 +18,16 @@ fn convert_style_color(style: &AnsiStyle) -> Option<AnsiColorEnum> {
     style.get_fg_color().and_then(convert_ansi_color)
 }
 
+fn convert_style_bg_color(style: &AnsiStyle) -> Option<AnsiColorEnum> {
+    style.get_bg_color().and_then(convert_ansi_color)
+}
+
 pub fn convert_style(style: AnsiStyle) -> InlineTextStyle {
-    let mut converted = InlineTextStyle {
+    InlineTextStyle {
         color: convert_style_color(&style),
-        ..InlineTextStyle::default()
-    };
-    let effects = style.get_effects();
-    converted.bold = effects.contains(Effects::BOLD);
-    converted.italic = effects.contains(Effects::ITALIC);
-    converted
+        bg_color: convert_style_bg_color(&style),
+        effects: style.get_effects(),
+    }
 }
 
 pub fn theme_from_styles(styles: &theme::ThemeStyles) -> InlineTheme {
@@ -73,14 +74,30 @@ pub fn ratatui_style_from_inline(
     fallback: Option<AnsiColorEnum>,
 ) -> Style {
     let mut resolved = Style::default();
+    
+    // Foreground color
     if let Some(color) = style.color.or(fallback) {
         resolved = resolved.fg(ratatui_color_from_ansi(color));
     }
-    if style.bold {
+    
+    // Background color
+    if let Some(color) = style.bg_color {
+        resolved = resolved.bg(ratatui_color_from_ansi(color));
+    }
+    
+    // Effects bitmask
+    if style.effects.contains(Effects::BOLD) {
         resolved = resolved.add_modifier(Modifier::BOLD);
     }
-    if style.italic {
+    if style.effects.contains(Effects::ITALIC) {
         resolved = resolved.add_modifier(Modifier::ITALIC);
     }
+    if style.effects.contains(Effects::UNDERLINE) {
+        resolved = resolved.add_modifier(Modifier::UNDERLINED);
+    }
+    if style.effects.contains(Effects::DIMMED) {
+        resolved = resolved.add_modifier(Modifier::DIM);
+    }
+    
     resolved
 }

@@ -1,7 +1,7 @@
 use std::{cmp::min, mem, time::Instant};
 
 use ansi_to_tui::IntoText;
-use anstyle::{AnsiColor, Color as AnsiColorEnum, RgbColor};
+use anstyle::{AnsiColor, Color as AnsiColorEnum, Effects, RgbColor};
 use crossterm::event::{
     Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent,
     MouseEventKind,
@@ -986,17 +986,17 @@ impl Session {
                 } else {
                     combined.trim().to_string()
                 };
-                let mut label_style = InlineTextStyle::default();
-                label_style.color = self.theme.primary.or(self.theme.foreground);
-                label_style.bold = true;
+                let label_style = InlineTextStyle::default()
+                    .with_color(self.theme.primary.or(self.theme.foreground))
+                    .bold();
                 spans.push(Span::styled(
                     format!("[{}]", ui::INLINE_PTY_HEADER_LABEL),
                     ratatui_style_from_inline(&label_style, self.theme.foreground),
                 ));
                 spans.push(Span::raw(" "));
-                let mut body_style = InlineTextStyle::default();
-                body_style.color = self.theme.foreground;
-                body_style.bold = true;
+                let body_style = InlineTextStyle::default()
+                    .with_color(self.theme.foreground)
+                    .bold();
                 // Parse ANSI escape sequences in PTY output for color support
                 // Limit to last 30 lines for performance and readability
                 let output_text = if header_text.lines().count() > 30 {
@@ -1164,9 +1164,8 @@ impl Session {
             if parts.len() > 1 {
                 // Format as "action → description · parameter1 · parameter2"
                 let action = parts[0];
-                let mut body_style = InlineTextStyle::default();
-                body_style.color = self.theme.tool_body.or(self.theme.foreground);
-                body_style.bold = false;
+                let body_style = InlineTextStyle::default()
+                    .with_color(self.theme.tool_body.or(self.theme.foreground));
 
                 // Parse and style the action text with special highlighting
                 self.render_styled_action_text(&mut spans, action, &body_style);
@@ -1199,9 +1198,9 @@ impl Session {
                         ));
 
                         // Parameter value (after colon) - highlighted with different color
-                        let mut value_style = InlineTextStyle::default();
-                        value_style.color = Some(AnsiColor::Green.into()); // Green for argument values
-                        value_style.bold = true;
+                        let value_style = InlineTextStyle::default()
+                            .with_color(Some(AnsiColor::Green.into())) // Green for argument values
+                            .bold();
                         spans.push(Span::styled(
                             param_parts[1].to_string(),
                             ratatui_style_from_inline(&value_style, self.theme.foreground),
@@ -1215,9 +1214,8 @@ impl Session {
                 }
             } else {
                 // Fallback for original formatting
-                let mut body_style = InlineTextStyle::default();
-                body_style.color = self.theme.tool_body.or(self.theme.foreground);
-                body_style.italic = false;
+                let body_style = InlineTextStyle::default()
+                    .with_color(self.theme.tool_body.or(self.theme.foreground));
 
                 // Simplify common tool call patterns for human readability
                 let mut simplified_text = self.simplify_tool_display(trimmed_tail);
@@ -1250,9 +1248,9 @@ impl Session {
 
             if *word == "in" {
                 // Style "in" with italic and different color (cyan)
-                let mut in_style = InlineTextStyle::default();
-                in_style.color = Some(AnsiColor::Cyan.into());
-                in_style.italic = true;
+                let in_style = InlineTextStyle::default()
+                    .with_color(Some(AnsiColor::Cyan.into()))
+                    .italic();
                 spans.push(Span::styled(
                     word.to_string(),
                     ratatui_style_from_inline(&in_style, self.theme.foreground),
@@ -1266,9 +1264,9 @@ impl Session {
                     || word.starts_with("Run"))
             {
                 // Highlight the main action verb (first 1-2 words) with bold and accent color
-                let mut action_style = InlineTextStyle::default();
-                action_style.color = self.theme.tool_accent.or(Some(AnsiColor::Yellow.into()));
-                action_style.bold = true;
+                let action_style = InlineTextStyle::default()
+                    .with_color(self.theme.tool_accent.or(Some(AnsiColor::Yellow.into())))
+                    .bold();
                 spans.push(Span::styled(
                     word.to_string(),
                     ratatui_style_from_inline(&action_style, self.theme.foreground),
@@ -1375,10 +1373,7 @@ impl Session {
 
     fn tool_inline_style(&self, tool_name: &str) -> InlineTextStyle {
         let normalized_name = self.normalize_tool_name(tool_name);
-        let mut style = InlineTextStyle::default();
-
-        // Set bold as default for all tools
-        style.bold = true;
+        let mut style = InlineTextStyle::default().bold();
 
         // Assign distinctive colors based on normalized tool type
         style.color = match normalized_name.to_lowercase().as_str() {
@@ -3195,7 +3190,7 @@ impl Session {
             ratatui_style_from_inline(&self.tool_border_style(), self.theme.foreground);
         border_style = border_style.add_modifier(Modifier::DIM);
 
-        let is_detail = line.segments.iter().any(|segment| segment.style.italic);
+        let is_detail = line.segments.iter().any(|segment| segment.style.effects.contains(Effects::ITALIC));
         let next_is_tool = self
             .lines
             .get(index + 1)
@@ -3331,9 +3326,9 @@ impl Session {
         let mut border_style = ratatui_style_from_inline(&border_inline, self.theme.foreground);
         border_style = border_style.add_modifier(Modifier::DIM);
 
-        let mut header_inline = InlineTextStyle::default();
-        header_inline.color = self.theme.primary.or(self.theme.foreground);
-        header_inline.bold = true;
+        let header_inline = InlineTextStyle::default()
+            .with_color(self.theme.primary.or(self.theme.foreground))
+            .bold();
         let header_style = ratatui_style_from_inline(&header_inline, self.theme.foreground);
 
         let mut body_inline = InlineTextStyle::default();
@@ -3392,9 +3387,9 @@ impl Session {
                 header_style.clone(),
             ));
             header_spans.push(Span::raw(" "));
-            let mut running_style = InlineTextStyle::default();
-            running_style.color = self.theme.secondary.or(self.theme.foreground);
-            running_style.italic = true;
+            let running_style = InlineTextStyle::default()
+                .with_color(self.theme.secondary.or(self.theme.foreground))
+                .italic();
             header_spans.push(Span::styled(
                 ui::INLINE_PTY_RUNNING_LABEL.to_string(),
                 ratatui_style_from_inline(&running_style, self.theme.foreground),
@@ -4815,8 +4810,7 @@ mod tests {
     fn tool_detail_renders_with_border_and_body_style() {
         let theme = themed_inline_colors();
         let mut session = Session::new(theme, None, VIEW_ROWS, true);
-        let mut detail_style = InlineTextStyle::default();
-        detail_style.italic = true;
+        let detail_style = InlineTextStyle::default().italic();
         session.push_line(
             InlineMessageKind::Tool,
             vec![InlineSegment {

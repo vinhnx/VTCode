@@ -375,9 +375,9 @@ impl Session {
     }
 
     fn slash_name_style(&self) -> Style {
-        let mut style = InlineTextStyle::default();
-        style.bold = true;
-        style.color = self.theme.primary.or(self.theme.foreground);
+        let style = InlineTextStyle::default()
+            .bold()
+            .with_color(self.theme.primary.or(self.theme.foreground));
         ratatui_style_from_inline(&style, self.theme.foreground)
     }
 

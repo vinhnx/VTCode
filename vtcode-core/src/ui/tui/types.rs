@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use anstyle::{Color as AnsiColorEnum, Style as AnsiStyle};
+use anstyle::{Color as AnsiColorEnum, Effects, Style as AnsiStyle};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::config::{constants::ui, types::ReasoningEffortLevel};
@@ -81,11 +81,23 @@ pub struct InlineHeaderHighlight {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct InlineTextStyle {
     pub color: Option<AnsiColorEnum>,
-    pub bold: bool,
-    pub italic: bool,
+    pub bg_color: Option<AnsiColorEnum>,
+    pub effects: Effects,
 }
 
 impl InlineTextStyle {
+    #[must_use]
+    pub fn with_color(mut self, color: Option<AnsiColorEnum>) -> Self {
+        self.color = color;
+        self
+    }
+
+    #[must_use]
+    pub fn with_bg_color(mut self, color: Option<AnsiColorEnum>) -> Self {
+        self.bg_color = color;
+        self
+    }
+
     #[must_use]
     pub fn merge_color(mut self, fallback: Option<AnsiColorEnum>) -> Self {
         if self.color.is_none() {
@@ -95,16 +107,60 @@ impl InlineTextStyle {
     }
 
     #[must_use]
+    pub fn merge_bg_color(mut self, fallback: Option<AnsiColorEnum>) -> Self {
+        if self.bg_color.is_none() {
+            self.bg_color = fallback;
+        }
+        self
+    }
+
+    #[must_use]
+    pub fn bold(mut self) -> Self {
+        self.effects = self.effects | Effects::BOLD;
+        self
+    }
+
+    #[must_use]
+    pub fn italic(mut self) -> Self {
+        self.effects = self.effects | Effects::ITALIC;
+        self
+    }
+
+    #[must_use]
+    pub fn underline(mut self) -> Self {
+        self.effects = self.effects | Effects::UNDERLINE;
+        self
+    }
+
+    #[must_use]
+    pub fn dim(mut self) -> Self {
+        self.effects = self.effects | Effects::DIMMED;
+        self
+    }
+
+
+
+    #[must_use]
     pub fn to_ansi_style(&self, fallback: Option<AnsiColorEnum>) -> AnsiStyle {
         let mut style = AnsiStyle::new();
         if let Some(color) = self.color.or(fallback) {
             style = style.fg_color(Some(color));
         }
-        if self.bold {
+        if let Some(bg) = self.bg_color {
+            style = style.bg_color(Some(bg));
+        }
+        // Apply effects
+        if self.effects.contains(Effects::BOLD) {
             style = style.bold();
         }
-        if self.italic {
+        if self.effects.contains(Effects::ITALIC) {
             style = style.italic();
+        }
+        if self.effects.contains(Effects::UNDERLINE) {
+            style = style.underline();
+        }
+        if self.effects.contains(Effects::DIMMED) {
+            style = style.dimmed();
         }
         style
     }

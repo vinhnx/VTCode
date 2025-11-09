@@ -85,6 +85,8 @@ vte = "0.15"
 anstyle-parse = "0.2"
 # ANSI styling
 anstyle = "1.0"
+anstyle-git = "1.1"
+anstyle-ls = "1.0"
 anstyle-crossterm = "4.0"
 anstyle-query = "1.0"
 anstream = "0.6"

@@ -1,7 +1,7 @@
 use super::{PLACEHOLDER_COLOR, Session, measure_text_width, ratatui_style_from_inline};
 use crate::config::constants::ui;
 use crate::ui::tui::types::InlineTextStyle;
-use anstyle::Color as AnsiColorEnum;
+use anstyle::{Color as AnsiColorEnum, Effects};
 use ratatui::{
     Frame,
     layout::Rect,
@@ -228,8 +228,8 @@ impl Session {
                         .clone()
                         .unwrap_or_else(|| InlineTextStyle {
                             color: Some(AnsiColorEnum::Rgb(PLACEHOLDER_COLOR)),
-                            italic: true,
-                            ..InlineTextStyle::default()
+                            bg_color: None,
+                            effects: Effects::ITALIC,
                         });
                 let style = ratatui_style_from_inline(
                     &placeholder_style,

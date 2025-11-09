@@ -10,7 +10,7 @@ use crate::ui::tui::{
 use crate::utils::transcript;
 use ansi_to_tui::IntoText;
 use anstream::{AutoStream, ColorChoice};
-use anstyle::{Ansi256Color, AnsiColor, Color as AnsiColorEnum, Reset, RgbColor, Style};
+use anstyle::{Ansi256Color, AnsiColor, Color as AnsiColorEnum, Effects, Reset, RgbColor, Style};
 use anstyle_query::{clicolor, clicolor_force, no_color, term_supports_color};
 use anyhow::{Result, anyhow};
 use ratatui::style::{Color as RatColor, Modifier as RatModifier, Style as RatatuiStyle};
@@ -532,18 +532,13 @@ impl InlineSink {
         }
 
         let added = style.add_modifier;
-        let removed = style.sub_modifier;
 
         if added.contains(RatModifier::BOLD) {
-            resolved.bold = true;
-        } else if removed.contains(RatModifier::BOLD) {
-            resolved.bold = false;
+            resolved.effects = resolved.effects | Effects::BOLD;
         }
 
         if added.contains(RatModifier::ITALIC) {
-            resolved.italic = true;
-        } else if removed.contains(RatModifier::ITALIC) {
-            resolved.italic = false;
+            resolved.effects = resolved.effects | Effects::ITALIC;
         }
 
         resolved
@@ -592,8 +587,10 @@ impl InlineSink {
                 if let Some(color) = converted.color {
                     inline_style.color = Some(color);
                 }
-                inline_style.bold = converted.bold;
-                inline_style.italic = converted.italic;
+                if let Some(bg) = converted.bg_color {
+                    inline_style.bg_color = Some(bg);
+                }
+                inline_style.effects = converted.effects;
                 plain_line.push_str(&segment.text);
                 segments.push(InlineSegment {
                     text: segment.text,

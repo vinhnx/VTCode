@@ -137,6 +137,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "anstyle-git"
+version = "1.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2a1da81c7387a775af8ff61320a736554f73c8a1ecc315debea27f868dbccd93"
+dependencies = [
+ "anstyle",
+]
+
+[[package]]
+name = "anstyle-ls"
+version = "1.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bcfa448ec5bda20742b0b6276cd05c7285d6f393cf943b0c260f8624be4ee06c"
+dependencies = [
+ "anstyle",
+]
+
+[[package]]
 name = "anstyle-parse"
 version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5601,6 +5619,8 @@ dependencies = [
  "anstream",
  "anstyle",
  "anstyle-crossterm",
+ "anstyle-git",
+ "anstyle-ls",
  "anstyle-parse",
  "anstyle-query",
  "anstyle-syntect",
