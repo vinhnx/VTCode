@@ -138,8 +138,6 @@ impl InlineTextStyle {
         self
     }
 
-
-
     #[must_use]
     pub fn to_ansi_style(&self, fallback: Option<AnsiColorEnum>) -> AnsiStyle {
         let mut style = AnsiStyle::new();

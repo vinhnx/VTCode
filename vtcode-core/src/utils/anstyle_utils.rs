@@ -36,7 +36,7 @@ pub fn ansi_color_to_ratatui_color(color: &AnsiColorType) -> Color {
 /// Convert anstyle Effects to ratatui Modifiers
 pub fn ansi_effects_to_ratatui_modifiers(effects: Effects) -> Modifier {
     let mut modifier = Modifier::empty();
-    
+
     if effects.contains(Effects::BOLD) {
         modifier.insert(Modifier::BOLD);
     }
@@ -61,7 +61,7 @@ pub fn ansi_effects_to_ratatui_modifiers(effects: Effects) -> Modifier {
     if effects.contains(Effects::STRIKETHROUGH) {
         modifier.insert(Modifier::CROSSED_OUT);
     }
-    
+
     modifier
 }
 
@@ -116,10 +116,22 @@ mod tests {
 
     #[test]
     fn test_ansi_color_conversion() {
-        assert_eq!(ansi_color_to_ratatui_color(&AnsiColorEnum::Ansi(AnsiColor::Red)), Color::Red);
-        assert_eq!(ansi_color_to_ratatui_color(&AnsiColorEnum::Ansi(AnsiColor::Green)), Color::Green);
-        assert_eq!(ansi_color_to_ratatui_color(&AnsiColorEnum::Ansi(AnsiColor::Blue)), Color::Blue);
-        assert_eq!(ansi_color_to_ratatui_color(&AnsiColorEnum::Ansi(AnsiColor::White)), Color::White);
+        assert_eq!(
+            ansi_color_to_ratatui_color(&AnsiColorEnum::Ansi(AnsiColor::Red)),
+            Color::Red
+        );
+        assert_eq!(
+            ansi_color_to_ratatui_color(&AnsiColorEnum::Ansi(AnsiColor::Green)),
+            Color::Green
+        );
+        assert_eq!(
+            ansi_color_to_ratatui_color(&AnsiColorEnum::Ansi(AnsiColor::Blue)),
+            Color::Blue
+        );
+        assert_eq!(
+            ansi_color_to_ratatui_color(&AnsiColorEnum::Ansi(AnsiColor::White)),
+            Color::White
+        );
     }
 
     #[test]
@@ -134,7 +146,7 @@ mod tests {
     fn test_effects_conversion() {
         let effects = Effects::BOLD | Effects::ITALIC | Effects::UNDERLINE;
         let modifiers = ansi_effects_to_ratatui_modifiers(effects);
-        
+
         assert!(modifiers.contains(Modifier::BOLD));
         assert!(modifiers.contains(Modifier::ITALIC));
         assert!(modifiers.contains(Modifier::UNDERLINED));
@@ -170,8 +182,17 @@ mod tests {
 
     #[test]
     fn test_bright_colors() {
-        assert_eq!(ansi_color_to_ratatui_color(&AnsiColorEnum::Ansi(AnsiColor::BrightRed)), Color::LightRed);
-        assert_eq!(ansi_color_to_ratatui_color(&AnsiColorEnum::Ansi(AnsiColor::BrightGreen)), Color::LightGreen);
-        assert_eq!(ansi_color_to_ratatui_color(&AnsiColorEnum::Ansi(AnsiColor::BrightBlue)), Color::LightBlue);
+        assert_eq!(
+            ansi_color_to_ratatui_color(&AnsiColorEnum::Ansi(AnsiColor::BrightRed)),
+            Color::LightRed
+        );
+        assert_eq!(
+            ansi_color_to_ratatui_color(&AnsiColorEnum::Ansi(AnsiColor::BrightGreen)),
+            Color::LightGreen
+        );
+        assert_eq!(
+            ansi_color_to_ratatui_color(&AnsiColorEnum::Ansi(AnsiColor::BrightBlue)),
+            Color::LightBlue
+        );
     }
 }

@@ -554,3 +554,14 @@ mod tests {
         assert_eq!(items[2].1.name, "zebra");
     }
 }
+
+/// Implement PaletteItem trait for PromptEntry to support generic PaletteRenderer
+impl super::palette_renderer::PaletteItem for PromptEntry {
+    fn display_name(&self) -> String {
+        self.name.clone()
+    }
+
+    fn display_icon(&self) -> Option<String> {
+        Some("  · ".to_string())
+    }
+}

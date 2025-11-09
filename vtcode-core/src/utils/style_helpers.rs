@@ -6,13 +6,13 @@ use anstyle::{AnsiColor, Color, Style};
 /// Standard color palette with semantic names
 #[derive(Debug, Clone, Copy)]
 pub struct ColorPalette {
-    pub success: Color,  // Green
-    pub error: Color,    // Red
-    pub warning: Color,  // Yellow
-    pub info: Color,     // Cyan
-    pub accent: Color,   // Blue
-    pub primary: Color,  // Bright white
-    pub muted: Color,    // Gray/Dim
+    pub success: Color, // Green
+    pub error: Color,   // Red
+    pub warning: Color, // Yellow
+    pub info: Color,    // Cyan
+    pub accent: Color,  // Blue
+    pub primary: Color, // Bright white
+    pub muted: Color,   // Gray/Dim
 }
 
 impl ColorPalette {
@@ -60,16 +60,12 @@ pub fn style_from_color_name(name: &str) -> Style {
 
 /// Create a bold colored style from AnsiColor
 pub fn bold_color(color: AnsiColor) -> Style {
-    Style::new()
-        .bold()
-        .fg_color(Some(Color::Ansi(color)))
+    Style::new().bold().fg_color(Some(Color::Ansi(color)))
 }
 
 /// Create a dimmed colored style from AnsiColor
 pub fn dimmed_color(color: AnsiColor) -> Style {
-    Style::new()
-        .dimmed()
-        .fg_color(Some(Color::Ansi(color)))
+    Style::new().dimmed().fg_color(Some(Color::Ansi(color)))
 }
 
 #[cfg(test)]

@@ -1,4 +1,4 @@
-use std::{cmp::min, mem, time::Instant};
+use std::{cmp::min, mem};
 
 use ansi_to_tui::IntoText;
 use anstyle::{AnsiColor, Color as AnsiColorEnum, Effects, RgbColor};
@@ -37,6 +37,7 @@ mod input_manager;
 mod message;
 mod modal;
 mod navigation;
+mod palette_renderer;
 mod prompt_palette;
 mod queue;
 mod scroll;
@@ -52,6 +53,7 @@ use self::modal::{
     ModalRenderStyles, ModalSearchState, ModalState, compute_modal_area, modal_content_width,
     render_modal_body,
 };
+
 use self::prompt_palette::{PromptPalette, extract_prompt_reference};
 use self::queue::QueueOverlay;
 use self::scroll::ScrollManager;
@@ -94,15 +96,6 @@ pub struct Session {
     input_status_left: Option<String>,
     input_status_right: Option<String>,
 
-    // --- DEPRECATED: Use input_manager instead ---
-    // These will be removed in a future phase when all code is migrated to use input_manager
-    input: String,
-    cursor: usize,
-    input_history: Vec<String>,
-    input_history_index: Option<usize>,
-    input_history_draft: Option<String>,
-    last_escape_time: Option<Instant>,
-
     // --- UI State ---
     slash_palette: SlashPalette,
     navigation_state: ListState,
@@ -113,15 +106,9 @@ pub struct Session {
     should_exit: bool,
     view_rows: u16,
     input_height: u16,
-
-    // --- DEPRECATED: Use scroll_manager instead ---
-    // These will be removed in a future phase when all code is migrated to use scroll_manager
-    scroll_offset: usize,
     transcript_rows: u16,
     transcript_width: u16,
     transcript_view_top: usize,
-    cached_max_scroll_offset: usize,
-    scroll_metrics_dirty: bool,
 
     // --- Rendering ---
     transcript_cache: Option<TranscriptReflowCache>,
@@ -160,18 +147,18 @@ impl Session {
         let initial_header_rows = ui::INLINE_HEADER_HEIGHT;
         let reserved_rows = initial_header_rows + Self::input_block_height_for_lines(1);
         let initial_transcript_rows = resolved_rows.saturating_sub(reserved_rows).max(1);
-        
+
         let mut session = Self {
             // --- Managers (Phase 2) ---
             input_manager: InputManager::new(),
             scroll_manager: ScrollManager::new(initial_transcript_rows),
-            
+
             // --- Message Management ---
             lines: Vec::new(),
             theme,
             header_context: InlineHeaderContext::default(),
             labels: MessageLabels::default(),
-            
+
             // --- Prompt/Input Display ---
             prompt_prefix: USER_PREFIX.to_string(),
             prompt_style: InlineTextStyle::default(),
@@ -179,15 +166,7 @@ impl Session {
             placeholder_style: None,
             input_status_left: None,
             input_status_right: None,
-            
-            // --- DEPRECATED: Input fields (for gradual migration) ---
-            input: String::new(),
-            cursor: 0,
-            input_history: Vec::new(),
-            input_history_index: None,
-            input_history_draft: None,
-            last_escape_time: None,
-            
+
             // --- UI State ---
             slash_palette: SlashPalette::new(),
             navigation_state: ListState::default(),
@@ -198,15 +177,10 @@ impl Session {
             should_exit: false,
             view_rows: resolved_rows,
             input_height: Self::input_block_height_for_lines(1),
-            
-            // --- DEPRECATED: Scroll fields (for gradual migration) ---
-            scroll_offset: 0,
             transcript_rows: initial_transcript_rows,
             transcript_width: 0,
             transcript_view_top: 0,
-            cached_max_scroll_offset: 0,
-            scroll_metrics_dirty: true,
-            
+
             // --- Rendering ---
             transcript_cache: None,
             queued_inputs: Vec::new(),
@@ -218,7 +192,7 @@ impl Session {
             header_rows: initial_header_rows,
             line_revision_counter: 0,
             in_tool_code_fence: false,
-            
+
             // --- Palette Management ---
             custom_prompts: None,
             file_palette: None,
@@ -230,37 +204,6 @@ impl Session {
         };
         session.ensure_prompt_style_color();
         session
-    }
-
-    // --- Helper Methods for Gradual Manager Integration ---
-    // These methods facilitate the transition from direct field access to manager use.
-    // They maintain backward compatibility while allowing piecemeal migration.
-
-    /// Syncs input from the input_manager to legacy fields
-    /// DEPRECATED: Only used during gradual migration. Will be removed.
-    fn sync_input_from_manager(&mut self) {
-        self.input = self.input_manager.content().to_string();
-        self.cursor = self.input_manager.cursor();
-        self.input_enabled = self.input_manager.is_enabled();
-    }
-
-    /// Syncs input from legacy fields to the input_manager
-    /// DEPRECATED: Only used during gradual migration. Will be removed.
-    fn sync_input_to_manager(&mut self) {
-        self.input_manager.set_content(self.input.clone());
-        self.input_manager.set_enabled(self.input_enabled);
-    }
-
-    /// Syncs scroll from the scroll_manager to legacy fields
-    /// DEPRECATED: Only used during gradual migration. Will be removed.
-    fn sync_scroll_from_manager(&mut self) {
-        self.scroll_offset = self.scroll_manager.offset();
-    }
-
-    /// Syncs scroll from legacy fields to the scroll_manager
-    /// DEPRECATED: Only used during gradual migration. Will be removed.
-    fn sync_scroll_to_manager(&mut self) {
-        self.scroll_manager.set_offset(self.scroll_offset);
     }
 
     pub fn should_exit(&self) -> bool {
@@ -336,7 +279,6 @@ impl Session {
             InlineCommand::SetInput(content) => {
                 self.input_manager.set_content(content);
                 self.scroll_manager.set_offset(0);
-                self.sync_input_from_manager();
                 self.update_slash_suggestions();
             }
             InlineCommand::ClearInput => {
@@ -392,31 +334,16 @@ impl Session {
                 // Repeat events can cause characters to be inserted multiple times
                 if matches!(key.kind, KeyEventKind::Press) {
                     if let Some(outbound) = self.process_key(key) {
-                        if let Some(cb) = callback {
-                            cb(&outbound);
-                        }
-                        let _ = events.send(outbound);
+                        self.emit_inline_event(&outbound, events, callback);
                     }
                 }
             }
             CrosstermEvent::Mouse(MouseEvent { kind, .. }) => match kind {
                 MouseEventKind::ScrollDown => {
-                    self.scroll_line_down();
-                    self.mark_dirty();
-                    let event = InlineEvent::ScrollLineDown;
-                    if let Some(cb) = callback {
-                        cb(&event);
-                    }
-                    let _ = events.send(event);
+                    self.handle_scroll_down(events, callback);
                 }
                 MouseEventKind::ScrollUp => {
-                    self.scroll_line_up();
-                    self.mark_dirty();
-                    let event = InlineEvent::ScrollLineUp;
-                    if let Some(cb) = callback {
-                        cb(&event);
-                    }
-                    let _ = events.send(event);
+                    self.handle_scroll_up(events, callback);
                 }
                 _ => {}
             },
@@ -443,6 +370,59 @@ impl Session {
         }
     }
 
+    /// Emits an InlineEvent through the event channel and callback
+    ///
+    /// This helper consolidates the common pattern of:
+    /// 1. Calling the callback if present
+    /// 2. Sending the event through the channel
+    ///
+    /// # Arguments
+    /// * `event` - The InlineEvent to emit
+    /// * `events` - The unbounded sender for the event channel
+    /// * `callback` - Optional callback to invoke with the event
+    #[inline]
+    fn emit_inline_event(
+        &self,
+        event: &InlineEvent,
+        events: &UnboundedSender<InlineEvent>,
+        callback: Option<&(dyn Fn(&InlineEvent) + Send + Sync + 'static)>,
+    ) {
+        if let Some(cb) = callback {
+            cb(event);
+        }
+        let _ = events.send(event.clone());
+    }
+
+    /// Handles scroll down event from mouse input
+    ///
+    /// Scrolls the transcript down by one line, marks the session as needing
+    /// redraw, and emits the ScrollLineDown event.
+    #[inline]
+    fn handle_scroll_down(
+        &mut self,
+        events: &UnboundedSender<InlineEvent>,
+        callback: Option<&(dyn Fn(&InlineEvent) + Send + Sync + 'static)>,
+    ) {
+        self.scroll_line_down();
+        self.mark_dirty();
+        self.emit_inline_event(&InlineEvent::ScrollLineDown, events, callback);
+    }
+
+    /// Handles scroll up event from mouse input
+    ///
+    /// Scrolls the transcript up by one line, marks the session as needing
+    /// redraw, and emits the ScrollLineUp event.
+    #[inline]
+    fn handle_scroll_up(
+        &mut self,
+        events: &UnboundedSender<InlineEvent>,
+        callback: Option<&(dyn Fn(&InlineEvent) + Send + Sync + 'static)>,
+    ) {
+        self.scroll_line_up();
+        self.mark_dirty();
+        self.emit_inline_event(&InlineEvent::ScrollLineUp, events, callback);
+    }
+
     pub fn render(&mut self, frame: &mut Frame<'_>) {
         let viewport = frame.area();
         if viewport.height == 0 || viewport.width == 0 {
@@ -460,7 +440,6 @@ impl Session {
             self.deferred_file_browser_trigger = false;
             // Insert @ to trigger file browser now that slash modal is gone
             self.input_manager.insert_char('@');
-            self.sync_input_from_manager();
             self.check_file_reference_trigger();
             self.mark_dirty(); // Ensure UI updates
         }
@@ -470,7 +449,6 @@ impl Session {
             self.deferred_prompt_browser_trigger = false;
             // Insert # to trigger prompt browser now that slash modal is gone
             self.input_manager.insert_char('#');
-            self.sync_input_from_manager();
             self.check_prompt_reference_trigger();
             self.mark_dirty(); // Ensure UI updates
         }
@@ -621,7 +599,7 @@ impl Session {
         let total_rows = self.total_transcript_rows(content_width) + effective_padding;
         let (top_offset, _clamped_total_rows) =
             self.prepare_transcript_scroll(total_rows, viewport_rows);
-        let vertical_offset = top_offset.min(self.cached_max_scroll_offset);
+        let vertical_offset = top_offset.min(self.scroll_manager.max_offset());
         self.transcript_view_top = vertical_offset;
 
         let visible_start = vertical_offset;
@@ -730,8 +708,9 @@ impl Session {
                 let mut style = if let Some(file_palette) = self.file_palette.as_ref() {
                     if let Some(file_style) = file_palette.style_for_entry(entry) {
                         // Convert anstyle::Style to ratatui::Style using anstyle_utils
-                        let anstyle_converted = crate::utils::anstyle_utils::ansi_style_to_ratatui_style(file_style);
-                        
+                        let anstyle_converted =
+                            crate::utils::anstyle_utils::ansi_style_to_ratatui_style(file_style);
+
                         let mut ratatui_style = base_style;
                         if let Some(fg) = anstyle_converted.fg {
                             ratatui_style = ratatui_style.fg(fg);
@@ -740,7 +719,7 @@ impl Session {
                             ratatui_style = ratatui_style.bg(bg);
                         }
                         ratatui_style = ratatui_style.add_modifier(anstyle_converted.add_modifier);
-                        
+
                         ratatui_style
                     } else {
                         base_style
@@ -1717,7 +1696,6 @@ impl Session {
     pub fn clear_input(&mut self) {
         self.input_manager.clear();
         self.scroll_manager.set_offset(0);
-        self.sync_input_from_manager();
         self.update_slash_suggestions();
         self.mark_dirty();
     }
@@ -1756,7 +1734,9 @@ impl Session {
 
     fn check_file_reference_trigger(&mut self) {
         if let Some(palette) = self.file_palette.as_mut() {
-            if let Some((_, _, query)) = extract_file_reference(self.input_manager.content(), self.input_manager.cursor()) {
+            if let Some((_, _, query)) =
+                extract_file_reference(self.input_manager.content(), self.input_manager.cursor())
+            {
                 // Reset selection and clear previous state when opening
                 palette.reset();
                 palette.set_filter(query);
@@ -1883,7 +1863,9 @@ impl Session {
         }
 
         if let Some(palette) = self.prompt_palette.as_mut() {
-            if let Some((_, _, query)) = extract_prompt_reference(self.input_manager.content(), self.input_manager.cursor()) {
+            if let Some((_, _, query)) =
+                extract_prompt_reference(self.input_manager.content(), self.input_manager.cursor())
+            {
                 // Reset selection and clear previous state when opening
                 palette.reset();
                 palette.set_filter(query);
@@ -1968,7 +1950,6 @@ impl Session {
 
         self.input_manager.set_content(command);
         self.input_manager.move_cursor_to_end();
-        self.sync_input_from_manager();
         self.update_slash_suggestions();
     }
 
@@ -2126,7 +2107,6 @@ impl Session {
                 let submitted = self.input_manager.content().to_string();
                 self.input_manager.clear();
                 self.scroll_manager.set_offset(0);
-                self.sync_input_from_manager();
                 // Input is handled with standard paragraph, not TextArea
                 self.update_slash_suggestions();
 
@@ -2283,7 +2263,6 @@ impl Session {
             return;
         }
         self.input_manager.insert_char(ch);
-        self.sync_input_from_manager();
         self.update_slash_suggestions();
     }
 
@@ -2308,13 +2287,13 @@ impl Session {
             return;
         }
         self.input_manager.insert_text(&sanitized);
-        self.sync_input_from_manager();
         self.update_slash_suggestions();
     }
 
     fn insert_file_reference(&mut self, file_path: &str) {
-        self.sync_input_to_manager();
-        if let Some((start, end, _)) = extract_file_reference(self.input_manager.content(), self.input_manager.cursor()) {
+        if let Some((start, end, _)) =
+            extract_file_reference(self.input_manager.content(), self.input_manager.cursor())
+        {
             let replacement = format!("@{}", file_path);
             let content = self.input_manager.content().to_string();
             let mut new_content = String::new();
@@ -2324,7 +2303,6 @@ impl Session {
             self.input_manager.set_content(new_content);
             self.input_manager.set_cursor(start + replacement.len());
             self.input_manager.insert_char(' ');
-            self.sync_input_from_manager();
         }
     }
 
@@ -2340,25 +2318,24 @@ impl Session {
 
     fn delete_char(&mut self) {
         self.input_manager.backspace();
-        self.sync_input_from_manager();
         self.update_slash_suggestions();
     }
 
     fn delete_char_forward(&mut self) {
         self.input_manager.delete();
-        self.sync_input_from_manager();
         self.update_slash_suggestions();
     }
 
     fn delete_word_backward(&mut self) {
-        self.sync_input_to_manager();
         if self.input_manager.cursor() == 0 {
             return;
         }
 
         // Find the start of the current word by moving backward (same logic as move_left_word)
-        let graphemes: Vec<(usize, &str)> =
-            self.input_manager.content()[..self.input_manager.cursor()].grapheme_indices(true).collect();
+        let graphemes: Vec<(usize, &str)> = self.input_manager.content()
+            [..self.input_manager.cursor()]
+            .grapheme_indices(true)
+            .collect();
 
         if graphemes.is_empty() {
             return;
@@ -2400,13 +2377,11 @@ impl Session {
             new_content.push_str(&content[self.input_manager.cursor()..]);
             self.input_manager.set_content(new_content);
             self.input_manager.set_cursor(delete_start);
-            self.sync_input_from_manager();
             self.update_slash_suggestions();
         }
     }
 
     fn delete_sentence_backward(&mut self) {
-        self.sync_input_to_manager();
         if self.input_manager.cursor() == 0 {
             return;
         }
@@ -2431,7 +2406,8 @@ impl Session {
                 // Since we're looking at input before cursor, we check the original full input
                 if pos + ch.len_utf8() < self.input_manager.content().len() {
                     // Check the character after the punctuation in the full input string
-                    let after_punct = &self.input_manager.content()[pos + ch.len_utf8()..self.input_manager.cursor()];
+                    let after_punct = &self.input_manager.content()
+                        [pos + ch.len_utf8()..self.input_manager.cursor()];
                     if !after_punct.is_empty() {
                         let next_char = after_punct.chars().next().unwrap();
                         if next_char.is_whitespace() {
@@ -2465,20 +2441,17 @@ impl Session {
             new_content.push_str(&content[self.input_manager.cursor()..]);
             self.input_manager.set_content(new_content);
             self.input_manager.set_cursor(delete_start);
-            self.sync_input_from_manager();
             self.update_slash_suggestions();
         }
     }
 
     fn remember_submitted_input(&mut self, submitted: &str) {
         self.input_manager.add_to_history(submitted.to_string());
-        self.sync_input_to_manager();
     }
 
     fn navigate_history_previous(&mut self) -> bool {
         if let Some(entry) = self.input_manager.go_to_previous_history() {
             self.input_manager.set_content(entry);
-            self.sync_input_from_manager();
             self.mark_dirty();
             true
         } else {
@@ -2489,7 +2462,6 @@ impl Session {
     fn navigate_history_next(&mut self) -> bool {
         if let Some(entry) = self.input_manager.go_to_next_history() {
             self.input_manager.set_content(entry);
-            self.sync_input_from_manager();
             self.mark_dirty();
             true
         } else {
@@ -2498,55 +2470,46 @@ impl Session {
     }
 
     fn apply_history_entry(&mut self, index: usize) {
-        if let Some(entry) = self.input_history.get(index) {
-            if self.input_manager.content() != *entry {
+        if let Some(entry) = self.input_manager.history().get(index) {
+            if self.input_manager.content() != entry {
                 self.input_manager.set_content(entry.clone());
                 self.input_manager.move_cursor_to_end();
                 self.scroll_manager.set_offset(0);
-                self.sync_input_from_manager();
-                self.sync_scroll_from_manager();
-                // Don't update slash suggestions during history navigation to prevent popup from showing
-                // Slash suggestions will be updated when user starts typing normally
+            // Don't update slash suggestions during history navigation to prevent popup from showing
+            // Slash suggestions will be updated when user starts typing normally
             } else {
                 self.input_manager.move_cursor_to_end();
-                self.sync_input_from_manager();
             }
             self.mark_dirty();
-            self.input_history_index = Some(index);
         }
     }
 
     fn reset_history_navigation(&mut self) {
         self.input_manager.reset_history_navigation();
-        // Keep legacy fields in sync for now
-    self.input_history_index = None;
-    self.input_history_draft = None;
     }
 
     fn move_left(&mut self) {
         self.input_manager.move_cursor_left();
-        self.sync_input_from_manager();
         self.update_slash_suggestions();
     }
 
     fn move_right(&mut self) {
         self.input_manager.move_cursor_right();
-        self.sync_input_from_manager();
         self.update_slash_suggestions();
     }
 
     fn move_left_word(&mut self) {
-        self.sync_input_to_manager();
         if self.input_manager.cursor() == 0 {
             return;
         }
 
-        let graphemes: Vec<(usize, &str)> =
-            self.input_manager.content()[..self.input_manager.cursor()].grapheme_indices(true).collect();
+        let graphemes: Vec<(usize, &str)> = self.input_manager.content()
+            [..self.input_manager.cursor()]
+            .grapheme_indices(true)
+            .collect();
 
         if graphemes.is_empty() {
             self.input_manager.set_cursor(0);
-            self.sync_input_from_manager();
             return;
         }
 
@@ -2574,21 +2537,21 @@ impl Session {
         } else {
             self.input_manager.set_cursor(0);
         }
-        self.sync_input_from_manager();
     }
 
     fn move_right_word(&mut self) {
-        self.sync_input_to_manager();
         if self.input_manager.cursor() >= self.input_manager.content().len() {
             return;
         }
 
-        let graphemes: Vec<(usize, &str)> =
-            self.input_manager.content()[self.input_manager.cursor()..].grapheme_indices(true).collect();
+        let graphemes: Vec<(usize, &str)> = self.input_manager.content()
+            [self.input_manager.cursor()..]
+            .grapheme_indices(true)
+            .collect();
 
         if graphemes.is_empty() {
-            self.input_manager.set_cursor(self.input_manager.content().len());
-            self.sync_input_from_manager();
+            self.input_manager
+                .set_cursor(self.input_manager.content().len());
             return;
         }
 
@@ -2606,14 +2569,14 @@ impl Session {
         }
 
         if index >= graphemes.len() {
-            self.input_manager.set_cursor(self.input_manager.content().len());
-            self.sync_input_from_manager();
+            self.input_manager
+                .set_cursor(self.input_manager.content().len());
             return;
         }
 
         if skipped_whitespace {
-            self.input_manager.set_cursor(self.input_manager.cursor() + graphemes[index].0);
-            self.sync_input_from_manager();
+            self.input_manager
+                .set_cursor(self.input_manager.cursor() + graphemes[index].0);
             return;
         }
 
@@ -2626,21 +2589,20 @@ impl Session {
         }
 
         if index < graphemes.len() {
-            self.input_manager.set_cursor(self.input_manager.cursor() + graphemes[index].0);
+            self.input_manager
+                .set_cursor(self.input_manager.cursor() + graphemes[index].0);
         } else {
-            self.input_manager.set_cursor(self.input_manager.content().len());
+            self.input_manager
+                .set_cursor(self.input_manager.content().len());
         }
-        self.sync_input_from_manager();
     }
 
     fn move_to_start(&mut self) {
         self.input_manager.move_cursor_to_start();
-        self.sync_input_from_manager();
     }
 
     fn move_to_end(&mut self) {
         self.input_manager.move_cursor_to_end();
-        self.sync_input_from_manager();
     }
 
     fn prefix_text(&self, kind: InlineMessageKind) -> Option<String> {
@@ -2876,7 +2838,6 @@ impl Session {
         if self.scroll_manager.offset() != previous {
             self.needs_full_clear = true;
         }
-        self.sync_scroll_from_manager();
     }
 
     fn scroll_line_down(&mut self) {
@@ -2885,7 +2846,6 @@ impl Session {
         if self.scroll_manager.offset() != previous {
             self.needs_full_clear = true;
         }
-        self.sync_scroll_from_manager();
     }
 
     fn scroll_page_up(&mut self) {
@@ -2894,7 +2854,6 @@ impl Session {
         if self.scroll_manager.offset() != previous {
             self.needs_full_clear = true;
         }
-        self.sync_scroll_from_manager();
     }
 
     fn scroll_page_down(&mut self) {
@@ -2904,7 +2863,6 @@ impl Session {
         if self.scroll_manager.offset() != previous {
             self.needs_full_clear = true;
         }
-        self.sync_scroll_from_manager();
     }
 
     fn viewport_height(&self) -> usize {
@@ -2913,18 +2871,18 @@ impl Session {
 
     fn current_max_scroll_offset(&mut self) -> usize {
         self.ensure_scroll_metrics();
-        self.cached_max_scroll_offset
+        self.scroll_manager.max_offset()
     }
 
     fn enforce_scroll_bounds(&mut self) {
         let max_offset = self.current_max_scroll_offset();
-        if self.scroll_offset > max_offset {
-            self.scroll_offset = max_offset;
+        if self.scroll_manager.offset() > max_offset {
+            self.scroll_manager.set_offset(max_offset);
         }
     }
 
     fn invalidate_scroll_metrics(&mut self) {
-        self.scroll_metrics_dirty = true;
+        self.scroll_manager.invalidate_metrics();
         self.invalidate_transcript_cache();
     }
 
@@ -2933,23 +2891,21 @@ impl Session {
     }
 
     fn ensure_scroll_metrics(&mut self) {
-        if !self.scroll_metrics_dirty {
+        if self.scroll_manager.metrics_valid() {
             return;
         }
 
         let viewport_rows = self.viewport_height();
         if self.transcript_width == 0 || viewport_rows == 0 {
-            self.cached_max_scroll_offset = self.lines.len().saturating_sub(viewport_rows.max(1));
-            self.scroll_metrics_dirty = false;
+            let total_rows = self.lines.len().saturating_sub(viewport_rows.max(1));
+            self.scroll_manager.set_total_rows(total_rows);
             return;
         }
 
         let padding = usize::from(ui::INLINE_TRANSCRIPT_BOTTOM_PADDING);
         let effective_padding = padding.min(viewport_rows.saturating_sub(1));
         let total_rows = self.total_transcript_rows(self.transcript_width) + effective_padding;
-        let max_offset = total_rows.saturating_sub(viewport_rows);
-        self.cached_max_scroll_offset = max_offset;
-        self.scroll_metrics_dirty = false;
+        self.scroll_manager.set_total_rows(total_rows);
     }
 
     fn ensure_reflow_cache(&mut self, width: u16) -> &mut TranscriptReflowCache {
@@ -2958,71 +2914,51 @@ impl Session {
             .take()
             .unwrap_or_else(|| TranscriptReflowCache::new(width));
 
-        let width_changed = cache.width != width;
-        if width_changed {
-            cache.width = width;
+        // Update width if needed and handle width changes
+        if cache.width != width {
+            cache.set_width(width);
         }
 
-        if cache.messages.len() > self.lines.len() {
-            cache.messages.truncate(self.lines.len());
-        } else if cache.messages.len() < self.lines.len() {
-            cache
-                .messages
-                .resize_with(self.lines.len(), CachedMessage::default);
+        // Resize message cache to match current line count
+        while cache.messages.len() > self.lines.len() {
+            cache.messages.pop();
+        }
+        while cache.messages.len() < self.lines.len() {
+            cache.messages.push(CachedMessage::default());
         }
 
-        if cache.row_offsets.len() > self.lines.len() {
-            cache.row_offsets.truncate(self.lines.len());
-        } else if cache.row_offsets.len() < self.lines.len() {
-            cache.row_offsets.resize(self.lines.len(), 0);
-        }
+        // Process any dirty messages (those that need reflow)
+        let mut first_dirty = self.lines.len(); // Start with all clean
 
-        if width_changed {
-            for entry in &mut cache.messages {
-                entry.revision = 0;
+        // Find the first message that needs reflow
+        for (index, line) in self.lines.iter().enumerate() {
+            if cache.needs_reflow(index, line.revision) {
+                first_dirty = index;
+                break;
             }
         }
 
-        let mut dirty_start = if width_changed { 0 } else { self.lines.len() };
-        if dirty_start != 0 {
-            for (index, line) in self.lines.iter().enumerate() {
-                if cache.messages[index].revision != line.revision {
-                    dirty_start = index;
-                    break;
-                }
-            }
-        }
-
-        if dirty_start == self.lines.len() {
-            cache.total_rows = if let Some(last_index) = self.lines.len().checked_sub(1) {
-                cache.row_offsets[last_index] + cache.messages[last_index].lines.len()
-            } else {
-                0
-            };
+        // If no messages need reflow, just return existing cache
+        if first_dirty == self.lines.len() {
+            // Still need to ensure row offsets are correct
+            cache.update_row_offsets();
             self.transcript_cache = Some(cache);
             return self.transcript_cache.as_mut().unwrap();
         }
 
-        let mut total_rows = if dirty_start == 0 {
-            0
-        } else {
-            let prev_index = dirty_start - 1;
-            cache.row_offsets[prev_index] + cache.messages[prev_index].lines.len()
-        };
-
-        for index in dirty_start..self.lines.len() {
-            let line = &self.lines[index];
-            if cache.messages[index].revision != line.revision {
-                let new_lines = self.reflow_message_lines(index, width);
-                let entry = &mut cache.messages[index];
-                entry.lines = new_lines;
-                entry.revision = line.revision;
+        // Update all messages from the first dirty one onwards
+        for index in first_dirty..self.lines.len() {
+            if index < self.lines.len() {
+                let line = &self.lines[index];
+                if cache.needs_reflow(index, line.revision) {
+                    let new_lines = self.reflow_message_lines(index, width);
+                    cache.update_message(index, line.revision, new_lines);
+                }
             }
-            cache.row_offsets[index] = total_rows;
-            total_rows += cache.messages[index].lines.len();
         }
 
-        cache.total_rows = total_rows;
+        // Update row offsets and total row count
+        cache.update_row_offsets();
         self.transcript_cache = Some(cache);
         self.transcript_cache.as_mut().unwrap()
     }
@@ -3032,7 +2968,7 @@ impl Session {
             return 0;
         }
         let cache = self.ensure_reflow_cache(width);
-        cache.total_rows
+        cache.total_rows()
     }
 
     fn collect_transcript_window(
@@ -3045,47 +2981,9 @@ impl Session {
             return Vec::new();
         }
         let cache = self.ensure_reflow_cache(width);
-        if cache.total_rows == 0 || start_row >= cache.total_rows {
-            return Vec::new();
-        }
 
-        let mut remaining = max_rows.min(cache.total_rows - start_row);
-        let mut output = Vec::with_capacity(remaining);
-        if cache.messages.is_empty() {
-            return output;
-        }
-
-        let mut message_index = match cache.row_offsets.binary_search(&start_row) {
-            Ok(idx) => idx,
-            Err(0) => 0,
-            Err(pos) => pos - 1,
-        };
-
-        let mut row = start_row;
-        while message_index < cache.messages.len() && remaining > 0 {
-            let message_start = cache.row_offsets[message_index];
-            let entry = &cache.messages[message_index];
-            if entry.lines.is_empty() {
-                message_index += 1;
-                continue;
-            }
-            let skip = row.saturating_sub(message_start);
-            if skip >= entry.lines.len() {
-                message_index += 1;
-                continue;
-            }
-            for line in entry.lines.iter().skip(skip) {
-                if remaining == 0 {
-                    break;
-                }
-                output.push(line.clone());
-                remaining -= 1;
-                row += 1;
-            }
-            message_index += 1;
-        }
-
-        output
+        // Use the optimized method from the new TranscriptReflowCache
+        cache.get_visible_range(start_row, max_rows)
     }
 
     #[cfg(test)]
@@ -3224,7 +3122,10 @@ impl Session {
             ratatui_style_from_inline(&self.tool_border_style(), self.theme.foreground);
         border_style = border_style.add_modifier(Modifier::DIM);
 
-        let is_detail = line.segments.iter().any(|segment| segment.style.effects.contains(Effects::ITALIC));
+        let is_detail = line
+            .segments
+            .iter()
+            .any(|segment| segment.style.effects.contains(Effects::ITALIC));
         let next_is_tool = self
             .lines
             .get(index + 1)
@@ -3738,24 +3639,28 @@ impl Session {
     ) -> (usize, usize) {
         let viewport = viewport_rows.max(1);
         let clamped_total = total_rows.max(1);
-        let max_offset = clamped_total.saturating_sub(viewport);
-        if self.scroll_offset > max_offset {
-            self.scroll_offset = max_offset;
-        }
-        self.cached_max_scroll_offset = max_offset;
-        self.scroll_metrics_dirty = false;
+        self.scroll_manager.set_total_rows(clamped_total);
+        self.scroll_manager.set_viewport_rows(viewport as u16);
+        let max_offset = self.scroll_manager.max_offset();
 
-        let top_offset = max_offset.saturating_sub(self.scroll_offset);
+        if self.scroll_manager.offset() > max_offset {
+            self.scroll_manager.set_offset(max_offset);
+        }
+
+        let top_offset = max_offset.saturating_sub(self.scroll_manager.offset());
         (top_offset, clamped_total)
     }
 
     fn adjust_scroll_after_change(&mut self, previous_max_offset: usize) {
         let new_max_offset = self.current_max_scroll_offset();
-        if self.scroll_offset >= previous_max_offset && new_max_offset > previous_max_offset {
-            self.scroll_offset = new_max_offset;
-        } else if self.scroll_offset > 0 && new_max_offset > previous_max_offset {
+        let current_offset = self.scroll_manager.offset();
+
+        if current_offset >= previous_max_offset && new_max_offset > previous_max_offset {
+            self.scroll_manager.set_offset(new_max_offset);
+        } else if current_offset > 0 && new_max_offset > previous_max_offset {
             let delta = new_max_offset - previous_max_offset;
-            self.scroll_offset = min(self.scroll_offset + delta, new_max_offset);
+            self.scroll_manager
+                .set_offset(min(current_offset + delta, new_max_offset));
         }
         self.enforce_scroll_bounds();
     }
@@ -3841,8 +3746,8 @@ mod tests {
 
     fn session_with_input(input: &str, cursor: usize) -> Session {
         let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
-        session.input = input.to_string();
-        session.cursor = cursor;
+        session.set_input(input.to_string());
+        session.set_cursor(cursor);
         session
     }
 
@@ -3893,10 +3798,10 @@ mod tests {
         let mut session = session_with_input(text, text.len());
 
         session.move_left_word();
-        assert_eq!(session.cursor, 6);
+        assert_eq!(session.input_manager.cursor(), 6);
 
         session.move_left_word();
-        assert_eq!(session.cursor, 0);
+        assert_eq!(session.input_manager.cursor(), 0);
     }
 
     #[test]
@@ -3905,57 +3810,57 @@ mod tests {
         let mut session = session_with_input(text, text.len());
 
         session.move_left_word();
-        assert_eq!(session.cursor, 7);
+        assert_eq!(session.input_manager.cursor(), 7);
     }
 
     #[test]
     fn arrow_keys_navigate_input_history() {
         let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
 
-        session.input = "first message".to_string();
-        session.cursor = session.input.len();
+        session.set_input("first message".to_string());
         let submit_first = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
         assert!(
             matches!(submit_first, Some(InlineEvent::Submit(value)) if value == "first message")
         );
 
-        session.input = "second".to_string();
-        session.cursor = session.input.len();
+        session.set_input("second".to_string());
         let submit_second = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
         assert!(matches!(submit_second, Some(InlineEvent::Submit(value)) if value == "second"));
 
-        assert_eq!(session.input_history.len(), 2);
-        assert!(session.input.is_empty());
+        assert_eq!(session.input_manager.history().len(), 2);
+        assert!(session.input_manager.content().is_empty());
 
         let up_latest = session.process_key(KeyEvent::new(KeyCode::Up, KeyModifiers::ALT));
         assert!(up_latest.is_none());
-        assert_eq!(session.input, "second");
+        assert_eq!(session.input_manager.content(), "second");
 
         let up_previous = session.process_key(KeyEvent::new(KeyCode::Up, KeyModifiers::ALT));
         assert!(up_previous.is_none());
-        assert_eq!(session.input, "first message");
+        assert_eq!(session.input_manager.content(), "first message");
 
         let down_forward = session.process_key(KeyEvent::new(KeyCode::Down, KeyModifiers::ALT));
         assert!(down_forward.is_none());
-        assert_eq!(session.input, "second");
+        assert_eq!(session.input_manager.content(), "second");
 
         let down_restore = session.process_key(KeyEvent::new(KeyCode::Down, KeyModifiers::ALT));
         assert!(down_restore.is_none());
-        assert!(session.input.is_empty());
-        assert!(session.input_history_index.is_none());
+        assert!(session.input_manager.content().is_empty());
+        assert!(session.input_manager.history_index().is_none());
     }
 
     #[test]
     fn shift_enter_inserts_newline() {
         let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
 
-        session.input = "queued".to_string();
-        session.cursor = session.input.len();
+        session.input_manager.set_content("queued".to_string());
 
         let result = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::SHIFT));
         assert!(result.is_none());
-        assert_eq!(session.input, "queued\n");
-        assert_eq!(session.cursor, session.input.len());
+        assert_eq!(session.input_manager.content(), "queued\n");
+        assert_eq!(
+            session.input_manager.cursor(),
+            session.input_manager.content().len()
+        );
     }
 
     #[test]
@@ -3969,15 +3874,17 @@ mod tests {
         }]);
         session.prompt_palette = Some(palette);
         session.prompt_palette_active = true;
-        session.input = "#vt".to_string();
-        session.cursor = session.input.len();
+        session.set_input("#vt".to_string());
 
         let handled =
             session.handle_prompt_palette_key(&KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
         assert!(handled);
 
-        assert_eq!(session.input, "/prompt:vtcode ");
-        assert_eq!(session.cursor, session.input.len());
+        assert_eq!(session.input_manager.content(), "/prompt:vtcode ");
+        assert_eq!(
+            session.input_manager.cursor(),
+            session.input_manager.content().len()
+        );
         assert!(!session.prompt_palette_active);
     }
 
@@ -3985,8 +3892,7 @@ mod tests {
     fn control_enter_queues_submission() {
         let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
 
-        session.input = "queued".to_string();
-        session.cursor = session.input.len();
+        session.set_input("queued".to_string());
 
         let queued = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::CONTROL));
         assert!(matches!(queued, Some(InlineEvent::QueueSubmit(value)) if value == "queued"));
@@ -3996,8 +3902,7 @@ mod tests {
     fn command_enter_queues_submission() {
         let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
 
-        session.input = "queued".to_string();
-        session.cursor = session.input.len();
+        session.set_input("queued".to_string());
 
         let queued = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::SUPER));
         assert!(matches!(queued, Some(InlineEvent::QueueSubmit(value)) if value == "queued"));
@@ -4007,17 +3912,15 @@ mod tests {
     fn consecutive_duplicate_submissions_not_stored_twice() {
         let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
 
-        session.input = "repeat".to_string();
-        session.cursor = session.input.len();
+        session.set_input("repeat".to_string());
         let first = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
         assert!(matches!(first, Some(InlineEvent::Submit(value)) if value == "repeat"));
 
-        session.input = "repeat".to_string();
-        session.cursor = session.input.len();
+        session.set_input("repeat".to_string());
         let second = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
         assert!(matches!(second, Some(InlineEvent::Submit(value)) if value == "repeat"));
 
-        assert_eq!(session.input_history.len(), 1);
+        assert_eq!(session.input_manager.history().len(), 1);
     }
 
     #[test]
@@ -4028,7 +3931,7 @@ mod tests {
         let event = KeyEvent::new(KeyCode::Left, KeyModifiers::ALT);
         session.process_key(event);
 
-        assert_eq!(session.cursor, 6);
+        assert_eq!(session.input_manager.cursor(), 6);
     }
 
     #[test]
@@ -4039,7 +3942,7 @@ mod tests {
         let event = KeyEvent::new(KeyCode::Char('b'), KeyModifiers::ALT);
         session.process_key(event);
 
-        assert_eq!(session.cursor, 6);
+        assert_eq!(session.input_manager.cursor(), 6);
     }
 
     #[test]
@@ -4138,9 +4041,9 @@ mod tests {
         let mut iterations = 0;
         loop {
             transcripts.push(visible_transcript(&mut session));
-            let previous_offset = session.scroll_offset;
+            let previous_offset = session.scroll_manager.offset();
             session.scroll_page_up();
-            if session.scroll_offset == previous_offset {
+            if session.scroll_manager.offset() == previous_offset {
                 break;
             }
             iterations += 1;
@@ -4164,7 +4067,7 @@ mod tests {
 
         assert!(top_view.iter().any(|line| line.contains(&first_label)));
         assert!(top_view.iter().all(|line| !line.contains(&last_label)));
-        let scroll_offset = session.scroll_offset;
+        let scroll_offset = session.scroll_manager.offset();
         let max_offset = session.current_max_scroll_offset();
         assert_eq!(scroll_offset, max_offset);
     }
@@ -4188,7 +4091,7 @@ mod tests {
                 + 2,
         );
 
-        assert_eq!(session.scroll_offset, 0);
+        assert_eq!(session.scroll_manager.offset(), 0);
         let max_offset = session.current_max_scroll_offset();
         assert_eq!(max_offset, 0);
     }
@@ -4209,20 +4112,20 @@ mod tests {
 
         for _ in 0..total {
             session.scroll_page_up();
-            if session.scroll_offset == session.current_max_scroll_offset() {
+            if session.scroll_manager.offset() == session.current_max_scroll_offset() {
                 break;
             }
         }
-        assert!(session.scroll_offset > 0);
+        assert!(session.scroll_manager.offset() > 0);
 
         for _ in 0..total {
             session.scroll_page_down();
-            if session.scroll_offset == 0 {
+            if session.scroll_manager.offset() == 0 {
                 break;
             }
         }
 
-        assert_eq!(session.scroll_offset, 0);
+        assert_eq!(session.scroll_manager.offset(), 0);
 
         let view = visible_transcript(&mut session);
         let expected_tail = format!("{LABEL_PREFIX}-{total}-continued");
@@ -4271,8 +4174,10 @@ mod tests {
         session.header_context.tools =
             format!("{}allow 11 · prompt 7 · deny 0", ui::HEADER_TOOLS_PREFIX);
         session.header_context.mcp = format!("{}enabled", ui::HEADER_MCP_PREFIX);
-        session.input = "notes".to_string();
-        session.cursor = session.input.len();
+        session.input_manager.set_content("notes".to_string());
+        session
+            .input_manager
+            .set_cursor(session.input_manager.content().len());
 
         let title_line = session.header_title_line();
         let title_text: String = title_line
@@ -4323,8 +4228,10 @@ mod tests {
                 lines: vec!["- Keep tasks focused".to_string()],
             },
         ];
-        session.input = "notes".to_string();
-        session.cursor = session.input.len();
+        session.input_manager.set_content("notes".to_string());
+        session
+            .input_manager
+            .set_cursor(session.input_manager.content().len());
 
         let lines = session.header_lines();
         assert_eq!(lines.len(), 3);
@@ -4352,8 +4259,10 @@ mod tests {
             title: "Details".to_string(),
             lines: vec![long_entry.clone()],
         }];
-        session.input = "notes".to_string();
-        session.cursor = session.input.len();
+        session.input_manager.set_content("notes".to_string());
+        session
+            .input_manager
+            .set_cursor(session.input_manager.content().len());
 
         let lines = session.header_lines();
         assert_eq!(lines.len(), 3);
@@ -4387,8 +4296,10 @@ mod tests {
                 "  - Escape Cancel input".to_string(),
             ],
         }];
-        session.input = "notes".to_string();
-        session.cursor = session.input.len();
+        session.input_manager.set_content("notes".to_string());
+        session
+            .input_manager
+            .set_cursor(session.input_manager.content().len());
 
         let lines = session.header_lines();
         assert_eq!(lines.len(), 3);
@@ -4431,8 +4342,10 @@ mod tests {
                 "- Keep responses focused".to_string(),
             ],
         }];
-        session.input = "notes".to_string();
-        session.cursor = session.input.len();
+        session.input_manager.set_content("notes".to_string());
+        session
+            .input_manager
+            .set_cursor(session.input_manager.content().len());
 
         let wide = session.header_height_for_width(120);
         let narrow = session.header_height_for_width(40);
@@ -4633,7 +4546,7 @@ mod tests {
 
         for _ in 0..200 {
             session.scroll_page_up();
-            if session.scroll_offset == session.current_max_scroll_offset() {
+            if session.scroll_manager.offset() == session.current_max_scroll_offset() {
                 break;
             }
         }

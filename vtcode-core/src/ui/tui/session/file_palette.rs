@@ -802,3 +802,22 @@ mod tests {
         }
     }
 }
+
+/// Implement PaletteItem trait for FileEntry to support generic PaletteRenderer
+impl super::palette_renderer::PaletteItem for FileEntry {
+    fn display_name(&self) -> String {
+        self.display_name.clone()
+    }
+
+    fn display_icon(&self) -> Option<String> {
+        if self.is_dir {
+            Some("↳  ".to_string())
+        } else {
+            Some("  · ".to_string())
+        }
+    }
+
+    fn is_directory(&self) -> bool {
+        self.is_dir
+    }
+}

@@ -4,10 +4,10 @@
 //! repeated parsing overhead, especially useful for theme parsing and
 //! frequently used style configurations.
 
-use std::collections::HashMap;
-use std::sync::RwLock;
 use anstyle::Style as AnsiStyle;
 use anyhow::{Context, Result};
+use std::collections::HashMap;
+use std::sync::RwLock;
 
 /// Thread-safe cached parser for Git and LS_COLORS style strings
 pub struct CachedStyleParser {
@@ -115,7 +115,7 @@ mod tests {
     fn test_parse_git_style() {
         let parser = CachedStyleParser::new();
         let result = parser.parse_git_style("bold red").unwrap();
-        
+
         assert!(result.get_effects().contains(anstyle::Effects::BOLD));
     }
 
@@ -123,7 +123,7 @@ mod tests {
     fn test_parse_ls_colors() {
         let parser = CachedStyleParser::new();
         let result = parser.parse_ls_colors("34").unwrap(); // Blue
-        
+
         assert!(result.get_fg_color().is_some());
     }
 
@@ -131,7 +131,7 @@ mod tests {
     fn test_parse_flexible_git_first() {
         let parser = CachedStyleParser::new();
         let result = parser.parse_flexible("bold green").unwrap();
-        
+
         assert!(result.get_effects().contains(anstyle::Effects::BOLD));
     }
 
@@ -139,18 +139,18 @@ mod tests {
     fn test_parse_flexible_ls_fallback() {
         let parser = CachedStyleParser::new();
         let result = parser.parse_flexible("01;34").unwrap(); // Bold blue in ANSI codes
-        
+
         assert!(result.get_effects().contains(anstyle::Effects::BOLD));
     }
 
     #[test]
     fn test_caching_behavior() {
         let parser = CachedStyleParser::new();
-        
+
         // Parse same string twice - should use cache on second call
         let _result1 = parser.parse_git_style("red").unwrap();
         let _result2 = parser.parse_git_style("red").unwrap();
-        
+
         let (git_count, _) = parser.cache_stats();
         assert_eq!(git_count, 1); // Only one cached entry for "red"
     }
@@ -159,11 +159,11 @@ mod tests {
     fn test_cache_clear() {
         let parser = CachedStyleParser::new();
         let _result = parser.parse_git_style("blue").unwrap();
-        
+
         assert_eq!(parser.cache_stats().0, 1); // One cached entry
-        
+
         parser.clear_cache();
-        
+
         assert_eq!(parser.cache_stats().0, 0); // Cache cleared
     }
 
@@ -173,9 +173,9 @@ mod tests {
         let _result1 = parser.parse_git_style("bold red").unwrap();
         let _result2 = parser.parse_git_style("italic green").unwrap();
         let _result3 = parser.parse_ls_colors("34").unwrap();
-        
+
         let (git_count, ls_count) = parser.cache_stats();
         assert_eq!(git_count, 2); // Two Git style entries
-        assert_eq!(ls_count, 1);  // One LS_COLORS entry
+        assert_eq!(ls_count, 1); // One LS_COLORS entry
     }
 }

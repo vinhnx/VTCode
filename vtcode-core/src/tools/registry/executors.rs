@@ -1,4 +1,12 @@
+use crate::config::PtyConfig;
 use crate::mcp::{DetailLevel, ToolDiscovery};
+use crate::tools::apply_patch::Patch;
+use crate::tools::grep_file::GrepSearchInput;
+use crate::tools::traits::Tool;
+use crate::tools::types::{EnhancedTerminalInput, VTCodePtySession};
+use crate::tools::{
+    PlanUpdateResult, PtyCommandRequest, PtyCommandResult, PtyManager, UpdatePlanArgs,
+};
 use anyhow::{Context, Result, anyhow};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
@@ -15,14 +23,6 @@ use std::{
 };
 use tokio::time::sleep;
 use tracing::{debug, trace, warn};
-use crate::config::PtyConfig;
-use crate::tools::apply_patch::Patch;
-use crate::tools::grep_file::GrepSearchInput;
-use crate::tools::traits::Tool;
-use crate::tools::types::{EnhancedTerminalInput, VTCodePtySession};
-use crate::tools::{
-    PlanUpdateResult, PtyCommandRequest, PtyCommandResult, PtyManager, UpdatePlanArgs,
-};
 
 const DEFAULT_TERMINAL_TIMEOUT_SECS: u64 = 30;
 const DEFAULT_PTY_TIMEOUT_SECS: u64 = 300;

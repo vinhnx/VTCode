@@ -116,73 +116,35 @@ if ui.take_redraw() {
 
 ### 2.1 Step-by-Step Integration
 
-**Step 1: Add manager fields to Session**
-```rust
-pub struct Session {
-    // Managers
-    input_manager: InputManager,
-    scroll_manager: ScrollManager,
-    ui_state: UIState,
-    
-    // Keep existing fields that haven't been extracted yet
-    lines: Vec<MessageLine>,
-    // ... rest of fields
-}
-```
+**Step 1: Add manager fields to Session** ✓ COMPLETED
+- InputManager integrated (lines 78, 151)
+- ScrollManager integrated (lines 79, 152)
+- UIState not yet integrated (fields still scattered)
 
-**Step 2: Update Session::new()**
-```rust
-impl Session {
-    pub fn new(theme: InlineTheme, placeholder: Option<String>, view_rows: u16, show_timeline_pane: bool) -> Self {
-        let mut session = Self {
-            input_manager: InputManager::new(),
-            scroll_manager: ScrollManager::new(10), // Will be updated with actual rows
-            ui_state: UIState::new(view_rows, show_timeline_pane),
-            // ... initialize other fields
-        };
-        session
-    }
-}
-```
+**Step 2: Update Session::new()** ✓ COMPLETED
+- Managers initialized in constructor (lines 151-152)
+- Initial rows properly calculated
 
-**Step 3: Replace field access patterns**
+**Step 3: Replace field access patterns** ✓ PARTIALLY COMPLETED
+- Input manager methods: `set_content()`, `insert_char()`, `insert_text()`
+- Scroll manager methods: `set_offset()` used at line 279
+- Still need to migrate other scroll operations to use manager
 
-Before:
-```rust
-self.input = content;
-self.cursor = content.len();
-self.scroll_offset = 0;
-```
+**Step 4: Create migration wrapper methods** ✓ COMPLETED
+- `input()` method removed - using direct manager access
+- `input_mut()` method removed - using direct manager access
 
-After:
-```rust
-self.input_manager.set_content(content);
-self.scroll_manager.set_offset(0);
-```
+### 2.2 Migration Checklist - STATUS
 
-**Step 4: Create migration wrapper methods**
-```rust
-// Temporary wrapper for backward compatibility during migration
-impl Session {
-    fn input(&self) -> &str {
-        self.input_manager.content()
-    }
-    
-    fn input_mut(&mut self) -> &mut InputManager {
-        &mut self.input_manager
-    }
-}
-```
-
-### 2.2 Migration Checklist
-
-- [ ] Add manager fields to Session struct
-- [ ] Create Session::new() initialization
-- [ ] Update all input field access to use input_manager
-- [ ] Update all scroll field access to use scroll_manager
-- [ ] Update all ui state field access to use ui_state
-- [ ] Run tests to verify no regressions
-- [ ] Remove wrapper methods once migration is complete
+- [x] Add manager fields to Session struct
+- [x] Create Session::new() initialization  
+- [x] Update input field access for SetInput command
+- [ ] Migrate render_input() to use input_manager methods
+- [ ] Migrate process_key() event handlers to use managers
+- [ ] Migrate all scroll operations to use scroll_manager
+- [ ] Extract UIState for dirty flag, dimensions tracking
+- [ ] Run full test suite verification
+- [ ] Remove any redundant wrapper methods
 
 ## Phase 3: Code Deduplication (NOT STARTED)
 
@@ -254,12 +216,63 @@ impl ToolStyler {
 - Testable in isolation
 - Easier to extend with new tools
 
+## Phase 3.5: Reduce Event Handling Complexity (NEW)
+
+### Extract Duplicate Mouse Event Handling
+
+**Current Issue (lines 343-360):**
+```rust
+MouseEventKind::ScrollDown => {
+    self.scroll_line_down();
+    self.mark_dirty();
+    let event = InlineEvent::ScrollLineDown;
+    if let Some(cb) = callback { cb(&event); }
+    let _ = events.send(event);
+}
+MouseEventKind::ScrollUp => {
+    self.scroll_line_up();
+    self.mark_dirty();
+    let event = InlineEvent::ScrollLineUp;
+    if let Some(cb) = callback { cb(&event); }
+    let _ = events.send(event);
+}
+```
+
+**Refactoring:**
+- Extract into `handle_scroll_event()` helper
+- Eliminate duplication
+- Reduce event handler complexity
+
+### Separate Inline Event Callback Logic
+
+**Target:** Extract event emission pattern used 3 times in `handle_event()`
+```rust
+fn emit_inline_event(
+    event: InlineEvent,
+    callback: Option<&(dyn Fn(&InlineEvent) + Send + Sync + 'static)>,
+    events: &UnboundedSender<InlineEvent>,
+) {
+    if let Some(cb) = callback {
+        cb(&event);
+    }
+    let _ = events.send(event);
+}
+```
+
 ## Phase 4: Reduce Complexity (NOT STARTED)
 
 ### 4.1 Break Down process_key()
 **Current complexity:** CC ~35 (extremely high)
+**Location:** Lines 1916-2150
 **Target complexity:** CC <10 per function
 
+**Current structure (too complex):**
+- Single massive match statement (234 lines)
+- Handles 10+ different key types
+- Each branch has nested conditions
+- Multiple event type returns scattered throughout
+
+**Refactoring strategy:**
 ```rust
 fn process_key(&mut self, key: KeyEvent) -> Option<InlineEvent> {
     match key.code {
@@ -271,24 +284,30 @@ fn process_key(&mut self, key: KeyEvent) -> Option<InlineEvent> {
         KeyCode::Delete | KeyCode::Backspace => self.handle_deletion(key),
         KeyCode::Char(c) => self.handle_character(c, key.modifiers),
         KeyCode::Esc => self.handle_escape(),
+        KeyCode::Backspace | KeyCode::Delete => self.handle_deletion(key),
+        KeyCode::F(_) => self.handle_function_key(key),
         _ => None,
     }
 }
-
-fn handle_enter_key(&mut self, key: KeyEvent) -> Option<InlineEvent>
-fn handle_tab_key(&mut self, key: KeyEvent) -> Option<InlineEvent>
-// ... etc
 ```
 
-**Benefits:**
-- Each handler is 5-10 CC
-- Easier to test
-- Clear key binding documentation
+**Implementation steps:**
+1. Extract `handle_enter_key()` - handles input submission (CC 5)
+2. Extract `handle_tab_key()` - handles autocomplete (CC 4)
+3. Extract `handle_vertical_nav()` - Up/Down key handling (CC 6)
+4. Extract `handle_horizontal_nav()` - Home/End key handling (CC 3)
+5. Extract `handle_page_nav()` - PageUp/PageDown handling (CC 4)
+6. Extract `handle_deletion()` - Delete/Backspace handling (CC 4)
+7. Extract `handle_character()` - Regular char input (CC 5)
+8. Extract `handle_escape()` - Escape key logic (CC 6)
+9. Extract `handle_function_key()` - F-key handling (CC 4)
 
 ### 4.2 Break Down render_message_spans()
 **Current complexity:** CC ~18
+**Location:** Lines 970-1100
 **Target complexity:** CC <8
 
+**Refactoring strategy:**
 ```rust
 fn render_message_spans(&self, index: usize) -> Vec<Span<'static>> {
     let line = self.lines.get(index)?;
@@ -304,10 +323,18 @@ fn render_message_spans(&self, index: usize) -> Vec<Span<'static>> {
 }
 ```
 
+**Implementation steps:**
+1. Extract `render_agent_message()` - agent message styling
+2. Extract `render_user_message()` - user message styling
+3. Extract `render_tool_message()` - tool message header/body logic
+4. Extract `render_pty_message()` - PTY output styling
+5. Extract `render_info_message()` - info level messages
+6. Extract `render_error_message()` - error styling
+
 **Benefits:**
-- Each renderer is self-contained
-- Easier to test individual message types
-- Clear extension point for new types
+- Each renderer is self-contained and testable
+- Clear extension point for new message types
+- Main function becomes simple dispatcher (CC 6)
 
 ## Phase 5: Optimize Data Structures (NOT STARTED)
 
@@ -476,18 +503,196 @@ Both patterns work during migration. Gradually update code to use new managers.
 - [x] Phase 1.1 - InputManager complete
 - [x] Phase 1.2 - ScrollManager complete  
 - [x] Phase 1.3 - UIState complete
-- [ ] Phase 2 - Integrate managers into Session
-- [ ] Phase 3 - Eliminate duplication
-- [ ] Phase 4 - Reduce complexity
-- [ ] Phase 5 - Optimize data structures
-- [ ] Phase 6 - Reorganize modules
+- [x] Phase 2 - Integrate managers into Session (80% complete)
+- [ ] Phase 3.5 - Extract event handling helpers (NEW)
+- [ ] Phase 4 - Reduce complexity of key handlers
+- [ ] Phase 5 - Reduce complexity of rendering
+- [ ] Phase 6 - Optimize data structures
+- [ ] Phase 7 - Extract message renderer (future)
+
+## Code Analysis & Issues Found
+
+### Duplicate Code Patterns in handle_event()
+
+**Location:** Lines 343-360 (Mouse event handling)
+
+```rust
+// PROBLEM: ScrollDown and ScrollUp branches are identical except for action
+MouseEventKind::ScrollDown => {
+    self.scroll_line_down();
+    self.mark_dirty();
+    let event = InlineEvent::ScrollLineDown;
+    if let Some(cb) = callback { cb(&event); }
+    let _ = events.send(event);
+}
+MouseEventKind::ScrollUp => {
+    self.scroll_line_up();
+    self.mark_dirty();
+    let event = InlineEvent::ScrollLineUp;
+    if let Some(cb) = callback { cb(&event); }
+    let _ = events.send(event);
+}
+```
+
+**Impact:** 17 lines of duplicated code, same pattern repeated
+
+**Solution:** Extract event emission into helper function
+- Reduces duplication
+- Makes patterns explicit and testable
+- Easier to add new event types
+
+---
+
+### Inefficient Data Structures
+
+**Location:** Session struct (lines 75-130)
+
+**Issues identified:**
+
+1. **Scattered UI state** (lines 98-109)
+   - `needs_redraw: bool` (101)
+   - `needs_full_clear: bool` (102)
+   - `cursor_visible: bool` (100)
+   - `view_rows: u16` (104)
+   - `input_height: u16` (105)
+   - `transcript_rows: u16` (106)
+   - `transcript_width: u16` (107)
+   - `input_enabled: bool` (99)
+   
+   **Problem:** 8 fields all managing UI state scattered throughout struct
+   
+   **Solution:** Extract into dedicated `UIState` struct (planned for Phase 2)
+
+2. **Palette management fields** (lines 122-129)
+   - `custom_prompts: Option<CustomPromptRegistry>` (122)
+   - `file_palette: Option<FilePalette>` (123)
+   - `file_palette_active: bool` (124)
+   - `deferred_file_browser_trigger: bool` (125)
+   - `prompt_palette: Option<PromptPalette>` (126)
+   - `prompt_palette_active: bool` (127)
+   - `deferred_prompt_browser_trigger: bool` (128)
+   
+   **Problem:** 7 fields managing two palettes with duplicate patterns
+   
+   **Solution:** Extract into dedicated `PaletteManager` struct
+
+3. **Message caching** (lines 111-114)
+   - `transcript_cache: Option<TranscriptReflowCache>` (111)
+   - `queued_inputs: Vec<String>` (112)
+   - `queue_overlay_cache: Option<QueueOverlay>` (113)
+   - `queue_overlay_version: u64` (114)
+   
+   **Problem:** Cache invalidation logic scattered, version tracking manual
+   
+   **Solution:** Extract into dedicated `TranscriptCache` struct
+
+---
+
+### High Cyclomatic Complexity
+
+**Location:** process_key() method (lines 1916-2150, ~234 lines)
+
+**Complexity analysis:**
+- Single match with 10+ arms
+- Each arm has nested conditions (if/match)
+- Multiple return paths scattered throughout
+- Estimated CC: 35-40 (DANGER ZONE)
+
+**Example complexity pattern:**
+```rust
+KeyCode::Char(c) => {
+    if self.modal.is_some() {
+        // ... 15 lines of modal handling
+    } else if self.slash_palette.is_active() {
+        // ... 8 lines of slash handling
+    } else if self.file_palette_active {
+        // ... 7 lines of file palette handling
+    } else if self.prompt_palette_active {
+        // ... 7 lines of prompt palette handling  
+    } else if self.input_enabled {
+        // ... 25 lines of input handling
+        if c == '@' {
+            // ... file reference check
+        } else if c == '#' {
+            // ... prompt reference check
+        }
+    }
+    // Total: 62 nested lines in one match arm!
+}
+```
+
+**Solution:** Extract into separate handler methods (Phase 4)
+
+---
+
+### Inefficient Error Handling Patterns
+
+**Location:** Various key handlers
+
+**Issues:**
+1. No validation before state mutations
+2. Unwrap/expect calls in non-test code (lines 2372, 2919, 2943)
+3. Errors logged but context lost in rendering path
+
+**Example (line 2372):**
+```rust
+let input = self.input_manager.content().to_string();
+```
+
+Should be:
+```rust
+let input = self.input_manager.content().to_owned();  // More efficient
+```
+
+---
+
+### Memory Efficiency Issues
+
+**Location:** Various methods
+
+**Issues identified:**
+
+1. **Unnecessary clone() calls**
+   - Line 522: `session.input = "notes".to_string();` (test)
+   - Multiple `.clone()` of input content in handlers
+
+2. **Inefficient string handling**
+   - Frequent `to_string()` conversions
+   - Multiple allocations for temporary strings
+
+3. **Vec allocation patterns**
+   - Some Vecs could use `with_capacity()`
+   - Frequent re-allocations when building spans
+
+**Solution (Phase 5):**
+- Profile hot paths
+- Replace `.clone()` with references where possible
+- Use `to_owned()` only when necessary
+- Pre-allocate vectors with known sizes
+
+---
 
 ## Next Steps
 
-1. **Review the three new managers** in their respective files
-2. **Run tests** to verify they work correctly
-3. **Plan Phase 2 integration** - decide on integration approach
-4. **Schedule remaining phases** - plan complexity reduction work
+1. **Phase 3.5 (THIS SESSION):** Extract event helpers to reduce duplication
+   - Create `handle_scroll_event()` helper
+   - Create `emit_inline_event()` helper
+   - Consolidate event emission logic
+   
+2. **Phase 4 (NEXT):** Reduce cyclomatic complexity
+   - Break down `process_key()` into handlers
+   - Each handler CC < 10
+   - Make key bindings explicit and testable
+
+3. **Phase 5 (FUTURE):** Reduce rendering complexity
+   - Extract message type renderers
+   - Each renderer self-contained
+   - Support new message types easily
+
+4. **Phase 6 (FUTURE):** Optimize data structures
+   - Extract UIState for dimension tracking
+   - Extract PaletteManager for palette logic
+   - Extract TranscriptCache for caching logic
 
 ## Questions & Clarifications
 

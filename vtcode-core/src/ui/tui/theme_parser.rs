@@ -1,8 +1,8 @@
 //! Parse theme configuration from multiple syntaxes (Git, LS_COLORS, custom).
 
-use anyhow::{Context, Result, anyhow};
-use anstyle::Style as AnsiStyle;
 use crate::utils::CachedStyleParser;
+use anstyle::Style as AnsiStyle;
+use anyhow::{Context, Result, anyhow};
 
 /// Parses color configuration strings in different syntaxes.
 ///

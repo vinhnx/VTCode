@@ -67,10 +67,7 @@ pub async fn ensure_workspace_trust(
             persist_trust_decision(&workspace_key, WorkspaceTrustLevel::FullAuto).await?;
             let msg = "Workspace marked as trusted with full auto capabilities.";
             let palette = ColorPalette::default();
-            println!(
-                "{}",
-                render_styled(msg, palette.success, None)
-            );
+            println!("{}", render_styled(msg, palette.success, None));
             Ok(WorkspaceTrustGateResult::Trusted(
                 WorkspaceTrustLevel::FullAuto,
             ))
@@ -79,22 +76,13 @@ pub async fn ensure_workspace_trust(
             persist_trust_decision(&workspace_key, WorkspaceTrustLevel::ToolsPolicy).await?;
             let msg = "Workspace marked as trusted with tools policy safeguards.";
             let palette = ColorPalette::default();
-            println!(
-                "{}",
-                render_styled(msg, palette.success, None)
-            );
+            println!("{}", render_styled(msg, palette.success, None));
             if full_auto_requested {
                 let msg1 = "Full-auto mode requires the full auto trust option.";
-                println!(
-                    "{}",
-                    render_styled(msg1, palette.warning, None)
-                );
+                println!("{}", render_styled(msg1, palette.warning, None));
                 let msg2 =
                     "Rerun with --full-auto after upgrading trust or start without --full-auto.";
-                println!(
-                    "{}",
-                    render_styled(msg2, palette.warning, None)
-                );
+                println!("{}", render_styled(msg2, palette.warning, None));
                 return Ok(WorkspaceTrustGateResult::Aborted);
             }
             Ok(WorkspaceTrustGateResult::Trusted(
@@ -104,10 +92,7 @@ pub async fn ensure_workspace_trust(
         TrustSelection::Quit => {
             let msg = "Workspace not trusted. Exiting chat session.";
             let palette = ColorPalette::default();
-            println!(
-                "{}",
-                render_styled(msg, palette.warning, None)
-            );
+            println!("{}", render_styled(msg, palette.warning, None));
             Ok(WorkspaceTrustGateResult::Aborted)
         }
     }
@@ -270,7 +255,7 @@ enum PromptTone {
 
 fn print_prompt_line(message: &str, tone: PromptTone) {
     use anstyle::{Color, Style};
-    
+
     let style = match tone {
         PromptTone::Heading => {
             let color = Color::Ansi256(Ansi256Color(rgb_to_ansi256(
@@ -278,14 +263,12 @@ fn print_prompt_line(message: &str, tone: PromptTone) {
                 WARNING_RGB.1,
                 WARNING_RGB.2,
             )));
-            Style::new()
-                .fg_color(Some(color))
-                .effects(Effects::BOLD)
+            Style::new().fg_color(Some(color)).effects(Effects::BOLD)
         }
         PromptTone::Body => {
-            let color = Color::Ansi256(Ansi256Color(
-                rgb_to_ansi256(INFO_RGB.0, INFO_RGB.1, INFO_RGB.2),
-            ));
+            let color = Color::Ansi256(Ansi256Color(rgb_to_ansi256(
+                INFO_RGB.0, INFO_RGB.1, INFO_RGB.2,
+            )));
             Style::new().fg_color(Some(color))
         }
     };

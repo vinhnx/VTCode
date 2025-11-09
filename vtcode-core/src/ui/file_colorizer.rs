@@ -3,10 +3,10 @@
 //! Parses LS_COLORS environment variable and applies system file type colors.
 //! This allows vtcode to respect user's file listing color preferences.
 
+use anstyle::Style as AnsiStyle;
 use std::collections::HashMap;
 use std::env;
 use std::path::Path;
-use anstyle::Style as AnsiStyle;
 
 /// Manages LS_COLORS parsing and file type styling
 #[derive(Debug, Clone)]
@@ -77,7 +77,7 @@ impl FileColorizer {
         }
 
         // Finally try the fallback file type
-        self.get_style("fi")  // fi = regular file
+        self.get_style("fi") // fi = regular file
     }
 
     /// Get style from the map with fallbacks
@@ -88,7 +88,8 @@ impl FileColorizer {
 
         // For extension patterns, also try general file type
         if key.starts_with("*.") {
-            if let Some(style) = self.ls_colors_map.get("fi") {  // regular file
+            if let Some(style) = self.ls_colors_map.get("fi") {
+                // regular file
                 return Some(*style);
             }
         }
@@ -103,24 +104,25 @@ impl FileColorizer {
         // Check if path ends with a directory separator (indicates directory)
         let path_str = path.to_string_lossy();
         if path_str.ends_with('/') || path_str.ends_with('\\') {
-            return "di".to_string();  // directory
+            return "di".to_string(); // directory
         }
 
         // Check for common executable patterns
         if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-            if name.ends_with(".sh") || 
-               name.ends_with(".py") || 
-               name.ends_with(".rb") || 
-               name.ends_with(".pl") || 
-               name.ends_with(".php") { 
-                return "ex".to_string();  // executable
+            if name.ends_with(".sh")
+                || name.ends_with(".py")
+                || name.ends_with(".rb")
+                || name.ends_with(".pl")
+                || name.ends_with(".php")
+            {
+                return "ex".to_string(); // executable
             }
         }
 
         // Check for special file types based on name
         match path.file_name().and_then(|n| n.to_str()) {
-            Some(name) if name.starts_with('.') => "so".to_string(),  // socket/file (special)
-            _ => "fi".to_string(),  // regular file
+            Some(name) if name.starts_with('.') => "so".to_string(), // socket/file (special)
+            _ => "fi".to_string(),                                   // regular file
         }
     }
 }
@@ -141,7 +143,7 @@ mod tests {
         // We'll test the parsing function directly rather than modifying global env
         let ls_colors_val = std::env::var("LS_COLORS").unwrap_or_default();
         let colorizer = FileColorizer::new();
-        
+
         // If LS_COLORS was not set originally, map should be empty
         if ls_colors_val.is_empty() {
             assert!(!colorizer.has_ls_colors);
@@ -153,7 +155,7 @@ mod tests {
     fn test_parse_ls_colors() {
         let ls_colors = "di=01;34:ln=01;36:ex=01;32:*rs=00;35";
         let map = FileColorizer::parse_ls_colors(ls_colors);
-        
+
         assert_eq!(map.len(), 4);
         assert!(map.contains_key("di"));
         assert!(map.contains_key("ln"));
@@ -168,10 +170,10 @@ mod tests {
             ls_colors_map: HashMap::new(),
             has_ls_colors: false,
         };
-        
+
         let path = Path::new("/tmp/test.rs");
         let style = colorizer.style_for_path(path);
-        
+
         assert!(style.is_none());
     }
 
@@ -186,10 +188,13 @@ mod tests {
             },
             has_ls_colors: true,
         };
-        
+
         // This test checks the logic in style_for_path which calls determine_file_type_key internally
         // For directory paths, it should try to match with "di" key
-        assert_eq!(colorizer.determine_file_type_key(Path::new("/tmp/dir/")), "di");
+        assert_eq!(
+            colorizer.determine_file_type_key(Path::new("/tmp/dir/")),
+            "di"
+        );
     }
 
     #[test]
@@ -210,7 +215,7 @@ mod tests {
 
         let txt_path = Path::new("/tmp/test.txt");
         let txt_style = colorizer.style_for_path(txt_path);
-        assert!(txt_style.is_some());  // Should fall back to 'fi' style
+        assert!(txt_style.is_some()); // Should fall back to 'fi' style
     }
 
     #[test]
@@ -224,8 +229,17 @@ mod tests {
             has_ls_colors: true,
         };
 
-        assert_eq!(colorizer.determine_file_type_key(Path::new("/tmp/script.sh")), "ex");
-        assert_eq!(colorizer.determine_file_type_key(Path::new("/tmp/main.py")), "ex");
-        assert_eq!(colorizer.determine_file_type_key(Path::new("/tmp/main.rb")), "ex");
+        assert_eq!(
+            colorizer.determine_file_type_key(Path::new("/tmp/script.sh")),
+            "ex"
+        );
+        assert_eq!(
+            colorizer.determine_file_type_key(Path::new("/tmp/main.py")),
+            "ex"
+        );
+        assert_eq!(
+            colorizer.determine_file_type_key(Path::new("/tmp/main.rb")),
+            "ex"
+        );
     }
 }

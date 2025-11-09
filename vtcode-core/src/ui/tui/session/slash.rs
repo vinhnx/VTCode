@@ -122,7 +122,9 @@ impl Session {
             return;
         }
 
-        let Some(prefix) = command_prefix(&self.input, self.cursor) else {
+        let Some(prefix) =
+            command_prefix(self.input_manager.content(), self.input_manager.cursor())
+        else {
             self.clear_slash_suggestions();
             return;
         };
@@ -198,11 +200,12 @@ impl Session {
         let Some(command) = self.slash_palette.selected_command() else {
             return;
         };
-        let Some(range) = command_range(&self.input, self.cursor) else {
+        let Some(range) = command_range(self.input_manager.content(), self.input_manager.cursor())
+        else {
             return;
         };
 
-        let current_input = self.input.clone();
+        let current_input = self.input_manager.content().to_string();
         let prefix = &current_input[..range.start];
         let suffix = &current_input[range.end..];
 
@@ -219,21 +222,24 @@ impl Session {
             new_input.push_str(suffix);
         }
 
-        self.input = new_input;
-        self.cursor = cursor_position.min(self.input.len());
+        self.input_manager.set_content(new_input.clone());
+        self.input_manager
+            .set_cursor(cursor_position.min(new_input.len()));
         self.mark_dirty();
     }
 
     pub(super) fn apply_selected_slash_suggestion(&mut self) -> bool {
         if let Some(custom_prompt) = self.slash_palette.selected_custom_prompt() {
-            let Some(range) = command_range(&self.input, self.cursor) else {
+            let input_content = self.input_manager.content();
+            let cursor_pos = self.input_manager.cursor();
+            let Some(range) = command_range(input_content, cursor_pos) else {
                 return false;
             };
 
             let mut new_input = String::from(PROMPT_COMMAND_PREFIX);
             new_input.push_str(&custom_prompt.name);
 
-            let suffix = &self.input[range.end..];
+            let suffix = &input_content[range.end..];
             if !suffix.is_empty() {
                 if !suffix.chars().next().map_or(false, char::is_whitespace) {
                     new_input.push(' ');
@@ -245,8 +251,8 @@ impl Session {
 
             let cursor_position = new_input.len();
 
-            self.input = new_input;
-            self.cursor = cursor_position;
+            self.input_manager.set_content(new_input);
+            self.input_manager.set_cursor(cursor_position);
             self.clear_slash_suggestions();
             self.mark_dirty();
             return true;
@@ -258,11 +264,13 @@ impl Session {
 
         let command_name = command.name.to_string();
 
-        let Some(range) = command_range(&self.input, self.cursor) else {
+        let input_content = self.input_manager.content();
+        let cursor_pos = self.input_manager.cursor();
+        let Some(range) = command_range(input_content, cursor_pos) else {
             return false;
         };
 
-        let suffix = self.input[range.end..].to_string();
+        let suffix = input_content[range.end..].to_string();
         let mut new_input = format!("/{}", command_name);
 
         let cursor_position = if suffix.is_empty() {
@@ -277,8 +285,8 @@ impl Session {
             position
         };
 
-        self.input = new_input;
-        self.cursor = cursor_position;
+        self.input_manager.set_content(new_input);
+        self.input_manager.set_cursor(cursor_position);
 
         if command_name == "files" {
             self.clear_slash_suggestions();

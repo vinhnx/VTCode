@@ -96,7 +96,7 @@ impl Session {
     }
 
     pub(super) fn desired_input_lines(&self, inner_width: u16) -> u16 {
-        if inner_width == 0 || self.input.is_empty() {
+        if inner_width == 0 || self.input_manager.content().is_empty() {
             return 1;
         }
 
@@ -129,10 +129,12 @@ impl Session {
         let secure_prompt_active = self.secure_prompt_active();
         let mut cursor_line_idx = 0usize;
         let mut cursor_column = prompt_display_width;
-        let mut cursor_set = self.cursor == 0;
+        let input_content = self.input_manager.content();
+        let cursor_pos = self.input_manager.cursor();
+        let mut cursor_set = cursor_pos == 0;
 
-        for (idx, ch) in self.input.char_indices() {
-            if !cursor_set && self.cursor == idx {
+        for (idx, ch) in input_content.char_indices() {
+            if !cursor_set && cursor_pos == idx {
                 if let Some(current) = buffers.last() {
                     cursor_line_idx = buffers.len() - 1;
                     cursor_column = current.prefix_width + current.text_width;
@@ -146,7 +148,7 @@ impl Session {
                     indent_prefix.clone(),
                     prompt_display_width,
                 ));
-                if !cursor_set && self.cursor == end {
+                if !cursor_set && cursor_pos == end {
                     cursor_line_idx = buffers.len() - 1;
                     cursor_column = prompt_display_width;
                     cursor_set = true;
@@ -176,7 +178,7 @@ impl Session {
             }
 
             let end = idx + ch.len_utf8();
-            if !cursor_set && self.cursor == end {
+            if !cursor_set && cursor_pos == end {
                 if let Some(current) = buffers.last() {
                     cursor_line_idx = buffers.len() - 1;
                     cursor_column = current.prefix_width + current.text_width;
@@ -218,7 +220,7 @@ impl Session {
         let prompt_width = UnicodeWidthStr::width(self.prompt_prefix.as_str()) as u16;
         let prompt_display_width = prompt_width.min(width);
 
-        if self.input.is_empty() {
+        if self.input_manager.content().is_empty() {
             let mut spans = Vec::new();
             spans.push(Span::styled(self.prompt_prefix.clone(), prompt_style));
 

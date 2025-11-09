@@ -190,11 +190,7 @@ pub fn bg_color(color: anstyle::Color) -> Style {
 /// );
 /// ```
 pub fn fg_bg_colors(fg: anstyle::Color, bg: anstyle::Color) -> Style {
-    anstyle_to_ratatui(
-        AnstyleStyle::new()
-            .fg_color(Some(fg))
-            .bg_color(Some(bg)),
-    )
+    anstyle_to_ratatui(AnstyleStyle::new().fg_color(Some(fg)).bg_color(Some(bg)))
 }
 
 /// Create a ratatui Style with effects/modifiers
@@ -226,11 +222,7 @@ pub fn with_effects(effects: anstyle::Effects) -> Style {
 /// );
 /// ```
 pub fn colored_with_effects(color: anstyle::Color, effects: anstyle::Effects) -> Style {
-    anstyle_to_ratatui(
-        AnstyleStyle::new()
-            .fg_color(Some(color))
-            .effects(effects),
-    )
+    anstyle_to_ratatui(AnstyleStyle::new().fg_color(Some(color)).effects(effects))
 }
 
 /// Create a ratatui Style with background color and effects
@@ -248,11 +240,7 @@ pub fn colored_with_effects(color: anstyle::Color, effects: anstyle::Effects) ->
 /// );
 /// ```
 pub fn bg_colored_with_effects(color: anstyle::Color, effects: anstyle::Effects) -> Style {
-    anstyle_to_ratatui(
-        AnstyleStyle::new()
-            .bg_color(Some(color))
-            .effects(effects),
-    )
+    anstyle_to_ratatui(AnstyleStyle::new().bg_color(Some(color)).effects(effects))
 }
 
 /// Create a complete ratatui Style from anstyle colors and effects
@@ -395,7 +383,8 @@ mod tests {
 
     #[test]
     fn test_dark_grey_color_mapping() {
-        let anstyle = AnstyleStyle::new().fg_color(Some(AnstyleColor::Ansi(AnsiColor::BrightBlack)));
+        let anstyle =
+            AnstyleStyle::new().fg_color(Some(AnstyleColor::Ansi(AnsiColor::BrightBlack)));
         let ratatui_style = anstyle_to_ratatui(anstyle);
         // Dark/bright black should map to DarkGray
         assert_eq!(ratatui_style.fg, Some(RatatuiColor::DarkGray));

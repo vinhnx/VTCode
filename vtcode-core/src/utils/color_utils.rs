@@ -23,7 +23,7 @@ pub fn color_from_hex(hex: &str) -> Option<Color> {
 pub fn blend_colors(color1: &Color, color2: &Color, ratio: f32) -> Option<Color> {
     let rgb1 = color_to_rgb(color1)?;
     let rgb2 = color_to_rgb(color2)?;
-    
+
     let r = (rgb1.r() as f32 * (1.0 - ratio) + rgb2.r() as f32 * ratio) as u8;
     let g = (rgb1.g() as f32 * (1.0 - ratio) + rgb2.g() as f32 * ratio) as u8;
     let b = (rgb1.b() as f32 * (1.0 - ratio) + rgb2.b() as f32 * ratio) as u8;
@@ -36,7 +36,7 @@ fn color_to_rgb(color: &Color) -> Option<RgbColor> {
     match color {
         Color::Rgb(rgb) => Some(*rgb),
         Color::Ansi(ansi_color) => ansi_to_rgb(*ansi_color),
-        Color::Ansi256(ansi256_color) => ansi256_to_rgb(*ansi256_color), 
+        Color::Ansi256(ansi256_color) => ansi256_to_rgb(*ansi256_color),
     }
 }
 
@@ -97,36 +97,28 @@ fn ansi256_to_rgb(ansi256_color: anstyle::Ansi256Color) -> Option<RgbColor> {
 /// Create a style with enhanced effects
 pub fn enhanced_style(fg: Option<Color>, bg: Option<Color>, effects: Effects) -> AnsiStyle {
     let mut style = AnsiStyle::new();
-    
+
     if let Some(fg_color) = fg {
         style = style.fg_color(Some(fg_color));
     }
-    
+
     if let Some(bg_color) = bg {
         style = style.bg_color(Some(bg_color));
     }
-    
+
     style = style.effects(effects);
-    
+
     style
 }
 
 /// Create a bold underline style for highlighting
 pub fn bold_underline(fg: Option<Color>) -> AnsiStyle {
-    enhanced_style(
-        fg,
-        None,
-        Effects::BOLD | Effects::UNDERLINE,
-    )
+    enhanced_style(fg, None, Effects::BOLD | Effects::UNDERLINE)
 }
 
 /// Create a dim italic style for secondary text
 pub fn dim_italic(fg: Option<Color>) -> AnsiStyle {
-    enhanced_style(
-        fg,
-        None,
-        Effects::DIMMED | Effects::ITALIC,
-    )
+    enhanced_style(fg, None, Effects::DIMMED | Effects::ITALIC)
 }
 
 /// Create a style with inverted colors
@@ -165,20 +157,16 @@ pub fn desaturate_color(color: &Color, amount: f32) -> Option<Color> {
     let r = rgb.r() as f32;
     let g = rgb.g() as f32;
     let b = rgb.b() as f32;
-    
+
     // Calculate grayscale using luminance
     let gray = 0.299 * r + 0.587 * g + 0.114 * b;
-    
+
     // Blend original with grayscale based on amount (0.0 = original, 1.0 = grayscale)
     let r_new = r * (1.0 - amount) + gray * amount;
     let g_new = g * (1.0 - amount) + gray * amount;
     let b_new = b * (1.0 - amount) + gray * amount;
-    
-    Some(Color::Rgb(RgbColor(
-        r_new as u8,
-        g_new as u8,
-        b_new as u8,
-    )))
+
+    Some(Color::Rgb(RgbColor(r_new as u8, g_new as u8, b_new as u8)))
 }
 
 #[cfg(test)]
@@ -213,7 +201,7 @@ mod tests {
         let blue = Color::Rgb(RgbColor(0, 0, 255));
         let blended = blend_colors(&red, &blue, 0.5).unwrap();
         let rgb = color_to_rgb(&blended).unwrap();
-        
+
         // Should be roughly purple (127, 0, 127) after blending
         assert!((rgb.r() as i32 - 127).abs() < 2);
         assert!((rgb.g() as i32 - 0).abs() < 2);
@@ -231,7 +219,7 @@ mod tests {
     fn test_is_light_color() {
         let light = Color::Rgb(RgbColor(255, 255, 255));
         let dark = Color::Rgb(RgbColor(0, 0, 0));
-        
+
         assert!(is_light_color(&light));
         assert!(!is_light_color(&dark));
     }
@@ -240,11 +228,17 @@ mod tests {
     fn test_contrasting_color() {
         let light = Color::Rgb(RgbColor(255, 255, 255));
         let dark = Color::Rgb(RgbColor(0, 0, 0));
-        
+
         // For light color, contrasting should be dark
-        assert_eq!(contrasting_color(&light), Color::Ansi(anstyle::AnsiColor::Black));
-        // For dark color, contrasting should be light  
-        assert_eq!(contrasting_color(&dark), Color::Ansi(anstyle::AnsiColor::White));
+        assert_eq!(
+            contrasting_color(&light),
+            Color::Ansi(anstyle::AnsiColor::Black)
+        );
+        // For dark color, contrasting should be light
+        assert_eq!(
+            contrasting_color(&dark),
+            Color::Ansi(anstyle::AnsiColor::White)
+        );
     }
 
     #[test]
@@ -252,7 +246,7 @@ mod tests {
         let red = Color::Rgb(RgbColor(255, 0, 0));
         let desaturated = desaturate_color(&red, 1.0).unwrap(); // Fully desaturated
         let rgb = color_to_rgb(&desaturated).unwrap();
-        
+
         // Should be some shade of gray
         assert_eq!(rgb.r(), rgb.g());
         assert_eq!(rgb.g(), rgb.b());
@@ -263,9 +257,9 @@ mod tests {
         let style = enhanced_style(
             Some(Color::Ansi(anstyle::AnsiColor::Green)),
             Some(Color::Ansi(anstyle::AnsiColor::Blue)),
-            Effects::BOLD | Effects::ITALIC
+            Effects::BOLD | Effects::ITALIC,
         );
-        
+
         assert!(style.get_fg_color().is_some());
         assert!(style.get_bg_color().is_some());
         assert!(style.get_effects().contains(Effects::BOLD));
@@ -291,14 +285,14 @@ mod tests {
         let fg = Color::Rgb(RgbColor(255, 0, 0)); // Red
         let bg = Color::Rgb(RgbColor(0, 0, 255)); // Blue
         let inverted_style = inverted(Some(fg), Some(bg));
-        
+
         // Inverted should swap fg and bg
         let inverted_fg = inverted_style.get_fg_color().unwrap();
         let inverted_bg = inverted_style.get_bg_color().unwrap();
-        
+
         let fg_rgb = color_to_rgb(&inverted_fg).unwrap();
         let bg_rgb = color_to_rgb(&inverted_bg).unwrap();
-        
+
         assert_eq!(fg_rgb, RgbColor(0, 0, 255)); // Original bg
         assert_eq!(bg_rgb, RgbColor(255, 0, 0)); // Original fg
     }
