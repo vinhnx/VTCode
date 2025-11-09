@@ -3,6 +3,33 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Version 0.43.0] - 2025-11-09
+# [Version 0.43.2] - 2025-11-09
+
+
+### Bug Fixes
+    - fix: optimize list_files tool for improved pagination and reduce default page size
+    - fix: update LLM provider and models to use Ollama
+    - fix: revert extension.toml to valid Zed format
+
+
+### Refactors
+    - refactor: integrate CommandBuilder throughout commands module
+    - refactor: restructure zed-extension to modular architecture with comprehensive error handling and caching
+
+
+### Documentation
+    - docs: add file listing output behavior pattern to AGENTS.md
+    - docs: add comprehensive final improvements summary
+    - docs: update STATUS with improvements session results
+    - docs: update changelog for v0.43.1 [skip ci]
+    - docs: Add release readiness confirmation document
+    - docs: Add release action checklist for v0.43.0
+    - docs: Add comprehensive v0.43.0 release summary
+
+
+### Chores
+    - chore: update npm package.json to v0.43.1 [skip ci]
+    - chore: release v0.43.1
 # [Version 0.43.1] - 2025-11-09
 
 
