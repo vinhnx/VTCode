@@ -2,7 +2,6 @@
   "version": 1,
   "available_tools": [
     "apply_patch",
-    "ast_grep_search",
     "close_pty_session",
     "create_file",
     "create_pty_session",
@@ -14,6 +13,7 @@
     "list_pty_sessions",
     "list_skills",
     "load_skill",
+    "mcp::fetch::fetch",
     "read_file",
     "read_pty_session",
     "resize_pty_session",
@@ -32,7 +32,6 @@
     "read_file": "allow",
     "write_file": "allow",
     "edit_file": "allow",
-    "ast_grep_search": "allow",
     "apply_patch": "prompt",
     "close_pty_session": "allow",
     "create_pty_session": "allow",

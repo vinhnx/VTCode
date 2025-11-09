@@ -110,7 +110,7 @@ impl FileOpsTool {
         let capped_total = all_items.len().min(input.max_items);
         let (page, per_page) = (
             input.page.unwrap_or(1).max(1),
-            input.per_page.unwrap_or(50).max(1),
+            input.per_page.unwrap_or(20).max(1),
         );
         let start = (page - 1).saturating_mul(per_page);
         let end = (start + per_page).min(capped_total);
