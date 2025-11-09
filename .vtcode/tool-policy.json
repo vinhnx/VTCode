@@ -14,7 +14,6 @@
     "list_pty_sessions",
     "list_skills",
     "load_skill",
-    "mcp::fetch::fetch",
     "read_file",
     "read_pty_session",
     "resize_pty_session",
