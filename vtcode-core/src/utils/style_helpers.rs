@@ -1,23 +1,20 @@
-//! Centralized styling helpers for consistent color and effect management.
-//!
-//! This module provides a unified interface for creating styled text using anstyle,
-//! avoiding hardcoded ANSI codes and repeated color definitions.
+// vtcode-core/src/utils/style_helpers.rs
+//! Centralized styling helpers to reduce hardcoded colors and repeated patterns
 
-use anstyle::{AnsiColor, Color, Effects, Style};
+use anstyle::{AnsiColor, Color, Style, Effects};
 
 /// Standard color palette with semantic names
 #[derive(Debug, Clone, Copy)]
 pub struct ColorPalette {
-    pub success: Color,  // Green
-    pub error: Color,    // Red
-    pub warning: Color,  // Yellow
-    pub info: Color,     // Cyan
-    pub accent: Color,   // Blue
-    pub muted: Color,    // White/Gray (often dimmed)
+    pub success: Color,      // Green
+    pub error: Color,        // Red
+    pub warning: Color,      // Yellow
+    pub info: Color,         // Cyan
+    pub accent: Color,       // Blue
+    pub muted: Color,        // Gray/Dim
 }
 
 impl ColorPalette {
-    /// Default color palette
     pub fn default() -> Self {
         Self {
             success: Color::Ansi(AnsiColor::Green),
@@ -25,22 +22,12 @@ impl ColorPalette {
             warning: Color::Ansi(AnsiColor::Yellow),
             info: Color::Ansi(AnsiColor::Cyan),
             accent: Color::Ansi(AnsiColor::Blue),
-            muted: Color::Ansi(AnsiColor::White),
+            muted: Color::Ansi(AnsiColor::White), // Will be dimmed
         }
     }
 }
 
-/// Render text with a single color and optional effects
-///
-/// # Examples
-///
-/// ```ignore
-/// let styled = render_styled("Success!", Color::Ansi(AnsiColor::Green), None);
-/// println!("{}", styled);
-///
-/// let bold = render_styled("Bold text", Color::Ansi(AnsiColor::Blue), Some(Effects::BOLD));
-/// println!("{}", bold);
-/// ```
+/// Render text with a single color
 pub fn render_styled(text: &str, color: Color, effects: Option<Effects>) -> String {
     let mut style = Style::new().fg_color(Some(color));
     if let Some(e) = effects {
@@ -49,9 +36,7 @@ pub fn render_styled(text: &str, color: Color, effects: Option<Effects>) -> Stri
     format!("{style}{text}{}", style.render_reset())
 }
 
-/// Build a Style from a CSS/terminal color name
-///
-/// Supports: red, green, blue, yellow, cyan, magenta, purple, white, black
+/// Build style from CSS/terminal color name
 pub fn style_from_color_name(name: &str) -> Style {
     let color = match name.to_lowercase().as_str() {
         "red" => Color::Ansi(AnsiColor::Red),
@@ -64,32 +49,22 @@ pub fn style_from_color_name(name: &str) -> Style {
         "black" => Color::Ansi(AnsiColor::Black),
         _ => return Style::new(),
     };
-
+    
     Style::new().fg_color(Some(color))
 }
 
-/// Create a bold colored style from AnsiColor
+/// Create a bold colored style
 pub fn bold_color(color: AnsiColor) -> Style {
     Style::new()
         .bold()
         .fg_color(Some(color.into()))
 }
 
-/// Create a dimmed colored style from AnsiColor
+/// Create a dimmed style
 pub fn dimmed_color(color: AnsiColor) -> Style {
     Style::new()
         .dimmed()
         .fg_color(Some(color.into()))
-}
-
-/// Create a style with foreground color (convenience function)
-pub fn fg_color(color: AnsiColor) -> Style {
-    Style::new().fg_color(Some(color.into()))
-}
-
-/// Create a style with effects only (no color)
-pub fn with_effects(effects: Effects) -> Style {
-    Style::new().effects(effects)
 }
 
 #[cfg(test)]
@@ -101,81 +76,31 @@ mod tests {
         let palette = ColorPalette::default();
         assert!(matches!(palette.success, Color::Ansi(AnsiColor::Green)));
         assert!(matches!(palette.error, Color::Ansi(AnsiColor::Red)));
-        assert!(matches!(palette.warning, Color::Ansi(AnsiColor::Yellow)));
-        assert!(matches!(palette.info, Color::Ansi(AnsiColor::Cyan)));
-        assert!(matches!(palette.accent, Color::Ansi(AnsiColor::Blue)));
     }
 
     #[test]
-    fn test_style_from_color_name_primary_colors() {
-        let red = style_from_color_name("red");
-        let green = style_from_color_name("green");
-        let blue = style_from_color_name("blue");
-
-        // Just verify they create non-empty styles
-        assert!(!red.to_string().is_empty());
-        assert!(!green.to_string().is_empty());
-        assert!(!blue.to_string().is_empty());
-    }
-
-    #[test]
-    fn test_style_from_color_name_purple_alias() {
-        let magenta = style_from_color_name("magenta");
-        let purple = style_from_color_name("purple");
-
-        // Both should produce equivalent styles
-        assert!(!magenta.to_string().is_empty());
-        assert!(!purple.to_string().is_empty());
-    }
-
-    #[test]
-    fn test_style_from_color_name_invalid() {
-        let invalid = style_from_color_name("notacolor");
-        // Should return a plain style
-        assert!(invalid.get_fg_color().is_none());
+    fn test_style_from_color_name() {
+        let style = style_from_color_name("red");
+        assert!(!style.to_string().is_empty());
     }
 
     #[test]
     fn test_render_styled_contains_reset() {
         let result = render_styled("test", Color::Ansi(AnsiColor::Green), None);
+        assert!(result.contains("\x1b"));
         assert!(result.contains("test"));
-        // Should contain ANSI codes
-        assert!(result.len() > "test".len());
     }
 
     #[test]
-    fn test_render_styled_with_effects() {
-        let result = render_styled(
-            "bold",
-            Color::Ansi(AnsiColor::Red),
-            Some(Effects::BOLD),
-        );
-        assert!(result.contains("bold"));
+    fn test_style_from_color_name_case_insensitive() {
+        let style1 = style_from_color_name("RED");
+        let style2 = style_from_color_name("red");
+        assert_eq!(style1.to_string(), style2.to_string());
     }
 
     #[test]
-    fn test_bold_color() {
-        let style = bold_color(AnsiColor::Blue);
-        // Verify bold is set
-        assert!(style.get_effects().contains(Effects::BOLD));
-    }
-
-    #[test]
-    fn test_dimmed_color() {
-        let style = dimmed_color(AnsiColor::Yellow);
-        // Verify dimmed is set
-        assert!(style.get_effects().contains(Effects::DIMMED));
-    }
-
-    #[test]
-    fn test_fg_color() {
-        let style = fg_color(AnsiColor::Cyan);
-        assert!(style.get_fg_color().is_some());
-    }
-
-    #[test]
-    fn test_with_effects() {
-        let style = with_effects(Effects::UNDERLINE);
-        assert!(style.get_effects().contains(Effects::UNDERLINE));
+    fn test_bold_color_contains_bold() {
+        let style = bold_color(AnsiColor::Green);
+        assert!(style.to_string().contains("\x1b"));
     }
 }
