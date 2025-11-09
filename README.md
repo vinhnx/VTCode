@@ -46,74 +46,42 @@
 
 ---
 
-## Quickstart
+## Installation
 
-### Installing and running VT Code
-
-Install globally with your preferred package manager. If you use Cargo:
-
-```shell
-cargo install vtcode
+**macOS & Linux:**
+```bash
+curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.sh | bash
 ```
 
-Alternatively, if you use [Homebrew](https://brew.sh/):
-
-```shell
-brew install vtcode
+**Windows (PowerShell):**
+```powershell
+irm https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.ps1 | iex
 ```
 
-Or install via npm from GitHub Packages:
-
-```shell
-npm install -g @vinhnx/vtcode
+**Package Managers:**
+```bash
+brew install vtcode          # Homebrew
+cargo install vtcode         # Cargo
+npm install -g @vinhnx/vtcode  # npm
 ```
 
-Or install via npm from npmjs.com (alternative package name):
+**See [Installation Guide](./docs/installation/) for more options and troubleshooting.**
 
-```shell
-npm install -g vtcode-bin
-```
-
-Or run directly with npx without installation:
-
-```shell
-npx @vinhnx/vtcode
-```
-
-Then simply run `vtcode` to get started:
-
-```shell
-vtcode
-```
-
-### Using VT Code with your preferred provider
-
-Set your API key environment variable and run VT Code:
+## Usage
 
 ```bash
 # Set your API key
-export OPENAI_API_KEY="your_api_key_here"
+export OPENAI_API_KEY="sk-..."
 
 # Launch VT Code
 vtcode
 ```
 
-### Available providers
+### Supported Providers
 
-VT Code supports multiple providers including OpenAI, Anthropic, xAI, DeepSeek, Gemini, Z.AI, Moonshot AI, OpenRouter, and Ollama (local).
+VT Code works with OpenAI, Anthropic, Google Gemini, xAI, DeepSeek, OpenRouter, Z.AI, Moonshot AI, MiniMax, and Ollama (local).
 
-Set your preferred API key environment variable:
-
-```bash
-export OPENAI_API_KEY="sk-..."           # OpenAI
-export ANTHROPIC_API_KEY="sk-ant-..."    # Anthropic
-export GEMINI_API_KEY="AIza..."          # Google Gemini
-export XAI_API_KEY="xai-..."             # xAI
-export DEEPSEEK_API_KEY="sk-..."         # DeepSeek
-export ZAI_API_KEY="zai-..."             # Z.AI
-export MOONSHOT_API_KEY="sk-..."         # Moonshot AI
-export OPENROUTER_API_KEY="sk-or-..."    # OpenRouter
-```
+Set the corresponding environment variable for your provider (see [Installation Guide](./docs/installation/#supported-ai-providers) for all options).
 
 ### Agent Client Protocol (ACP)
 
@@ -160,11 +128,14 @@ See [Security Model](./docs/SECURITY_MODEL.md) for details.
 
 ### Docs & Examples
 
+-   [**Installation**](./docs/installation/README.md)
+     -   [Native Installers](./docs/installation/NATIVE_INSTALLERS.md)
+     -   [Quick Reference](./docs/installation/QUICK_REFERENCE.md)
 -   [**Getting started**](./docs/user-guide/getting-started.md)
-    -   [Interactive mode](./docs/user-guide/interactive-mode.md)
-    -   [Command line interface](./docs/user-guide/commands.md)
-    -   [Custom prompts](./docs/user-guide/custom-prompts.md)
-    -   [Configuration](./docs/config/CONFIGURATION_PRECEDENCE.md)
+     -   [Interactive mode](./docs/user-guide/interactive-mode.md)
+     -   [Command line interface](./docs/user-guide/commands.md)
+     -   [Custom prompts](./docs/user-guide/custom-prompts.md)
+     -   [Configuration](./docs/config/CONFIGURATION_PRECEDENCE.md)
 -   [**Context Engineering**](./docs/context_engineering.md)
     -   [Token budget management](./docs/context_engineering_implementation.md#token-budget-tracking--attention-management)
     -   [Dynamic context curation](./docs/context_engineering_implementation.md#phase-2-dynamic-context-curation)
