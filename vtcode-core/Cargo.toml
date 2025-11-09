@@ -84,6 +84,7 @@ tracing = "0.1"
 vte = "0.15"
 # ANSI styling
 anstyle = "1.0"
+anstyle-crossterm = "4.0"
 anstyle-query = "1.0"
 anstream = "0.6"
 anstyle-syntect = "1.0"

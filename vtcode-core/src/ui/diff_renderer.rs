@@ -1,5 +1,6 @@
-use anstyle::{AnsiColor, Reset, Style};
+use anstyle::{Reset, Style};
 use std::path::Path;
+use crate::utils::style_helpers::style_from_color_name;
 
 struct GitDiffPalette {
     bullet: Style,
@@ -18,14 +19,7 @@ impl GitDiffPalette {
     fn new(use_colors: bool) -> Self {
         let parse = |spec: &str| -> Style {
             if use_colors {
-                match spec {
-                    "yellow" => Style::new().fg_color(Some(AnsiColor::Yellow.into())),
-                    "white" => Style::new().fg_color(Some(AnsiColor::White.into())),
-                    "green" => Style::new().fg_color(Some(AnsiColor::Green.into())),
-                    "red" => Style::new().fg_color(Some(AnsiColor::Red.into())),
-                    "cyan" => Style::new().fg_color(Some(AnsiColor::Cyan.into())),
-                    _ => Style::new(),
-                }
+                style_from_color_name(spec)
             } else {
                 Style::new()
             }

@@ -5,6 +5,7 @@ use serde_json::Value;
 
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_core::utils::style_helpers::{ColorPalette, render_styled};
 
 pub(crate) fn render_tool_call_summary_with_status(
     renderer: &mut AnsiRenderer,
@@ -15,44 +16,50 @@ pub(crate) fn render_tool_call_summary_with_status(
 ) -> Result<()> {
     let (headline, highlights) = describe_tool_action(tool_name, args);
     let details = collect_highlight_details(args, &highlights);
+    let palette = ColorPalette::default();
 
     let mut line = String::new();
 
     // Status icon with color based on exit code
-    let status_color = if let Some(code) = exit_code {
-        if code == 0 { "\x1b[32m" } else { "\x1b[31m" } // Green for success, red for error
-    } else {
-        "\x1b[36m" // Cyan for in-progress/no exit code
+    let status_color = match exit_code {
+        Some(0) => palette.success,
+        Some(_) => palette.error,
+        None => palette.info,
     };
-    line.push_str(status_color);
-    line.push_str(status_icon);
-    line.push_str("\x1b[0m ");
+    line.push_str(&render_styled(status_icon, status_color, None));
+    line.push(' ');
 
     // Check if this is an MCP tool for special decoration
     let is_mcp = tool_name.starts_with("mcp::") || tool_name == "fetch";
 
     if is_mcp {
-        // For MCP tools, use special bracket style with different color
-        line.push_str("\x1b[35m["); // Magenta for MCP tools
-        line.push_str(tool_name);
-        line.push_str("]\x1b[0m ");
+        // For MCP tools, use special bracket style with magenta
+        line.push_str(&render_styled(
+            &format!("[{}]", tool_name),
+            anstyle::Color::Ansi(anstyle::AnsiColor::Magenta),
+            None,
+        ));
     } else {
         // Tool name in brackets with cyan color for normal tools
-        line.push_str("\x1b[36m[");
-        line.push_str(tool_name);
-        line.push_str("]\x1b[0m ");
+        line.push_str(&render_styled(
+            &format!("[{}]", tool_name),
+            palette.info,
+            None,
+        ));
     }
+    line.push(' ');
 
     // Headline in bright white
-    line.push_str("\x1b[97m");
-    line.push_str(&headline);
-    line.push_str("\x1b[0m");
+    line.push_str(&render_styled(
+        &headline,
+        anstyle::Color::Ansi(anstyle::AnsiColor::White),
+        None,
+    ));
 
     // Details in dim gray if present - these are the call parameters
     if !details.is_empty() {
-        line.push_str(" \x1b[2m· ");
-        line.push_str(&details.join(" · "));
-        line.push_str("\x1b[0m");
+        line.push_str(" ");
+        line.push_str(&render_styled(&format!("· {}", details.join(" · ")), palette.muted, None));
     } else {
         // Even if no specific highlights were extracted, show all parameters if available
         if let Some(map) = args.as_object() {
@@ -84,17 +91,21 @@ pub(crate) fn render_tool_call_summary_with_status(
                 .collect();
 
             if !all_params.is_empty() {
-                line.push_str(" \x1b[2m· ");
-                line.push_str(&all_params.join(" · "));
-                line.push_str("\x1b[0m");
+                line.push_str(" ");
+                line.push_str(&render_styled(
+                    &format!("· {}", all_params.join(" · ")),
+                    palette.muted,
+                    None,
+                ));
             }
         }
     }
 
     // Exit code at the end if available (colored based on success)
     if let Some(code) = exit_code {
-        let code_color = if code == 0 { "\x1b[32m" } else { "\x1b[31m" };
-        line.push_str(&format!(" {}(exit: {})\x1b[0m", code_color, code));
+        let code_color = if code == 0 { palette.success } else { palette.error };
+        line.push_str(" ");
+        line.push_str(&render_styled(&format!("(exit: {})", code), code_color, None));
     }
 
     renderer.line(MessageStyle::Info, &line)?;

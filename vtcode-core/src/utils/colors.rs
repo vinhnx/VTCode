@@ -2,6 +2,7 @@
 //!
 //! This module provides color manipulation capabilities using anstyle,
 //! which offers low-level ANSI styling with RGB and 256-color support.
+//! Integration with ratatui TUI is provided through the ratatui_styles module.
 
 use anstyle::{AnsiColor, Color, Effects, RgbColor, Style};
 

@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 
-use anstyle::{AnsiColor, Color, RgbColor, Style as AnsiStyle};
+use anstyle::{AnsiColor, Style as AnsiStyle};
 use vtcode_core::config::constants::tools;
+use vtcode_core::utils::diff_styles::DiffColorPalette;
+use vtcode_core::utils::style_helpers::bold_color;
 
 pub(crate) struct GitStyles {
     pub(crate) add: Option<AnsiStyle>,
@@ -11,22 +13,11 @@ pub(crate) struct GitStyles {
 
 impl GitStyles {
     pub(crate) fn new() -> Self {
+        let palette = DiffColorPalette::default();
         Self {
-            add: Some(
-                AnsiStyle::new()
-                    .fg_color(Some(Color::Rgb(RgbColor(200, 255, 200))))
-                    .bg_color(Some(Color::Rgb(RgbColor(0, 64, 0)))),
-            ),
-            remove: Some(
-                AnsiStyle::new()
-                    .fg_color(Some(Color::Rgb(RgbColor(255, 200, 200))))
-                    .bg_color(Some(Color::Rgb(RgbColor(64, 0, 0)))),
-            ),
-            header: Some(
-                AnsiStyle::new()
-                    .bold()
-                    .fg_color(Some(AnsiColor::Yellow.into())),
-            ),
+            add: Some(palette.added_style()),
+            remove: Some(palette.removed_style()),
+            header: Some(bold_color(AnsiColor::Yellow)),
         }
     }
 }
@@ -41,46 +32,13 @@ impl LsStyles {
         let mut classes: HashMap<String, AnsiStyle> = HashMap::new();
         let suffixes: Vec<(String, AnsiStyle)> = Vec::new();
 
-        classes.insert(
-            "di".to_string(),
-            AnsiStyle::new()
-                .bold()
-                .fg_color(Some(AnsiColor::Blue.into())),
-        );
-        classes.insert(
-            "ln".to_string(),
-            AnsiStyle::new()
-                .bold()
-                .fg_color(Some(AnsiColor::Cyan.into())),
-        );
-        classes.insert(
-            "ex".to_string(),
-            AnsiStyle::new()
-                .bold()
-                .fg_color(Some(AnsiColor::Green.into())),
-        );
-        classes.insert(
-            "pi".to_string(),
-            AnsiStyle::new().fg_color(Some(AnsiColor::Yellow.into())),
-        );
-        classes.insert(
-            "so".to_string(),
-            AnsiStyle::new()
-                .bold()
-                .fg_color(Some(AnsiColor::Magenta.into())),
-        );
-        classes.insert(
-            "bd".to_string(),
-            AnsiStyle::new()
-                .bold()
-                .fg_color(Some(AnsiColor::Yellow.into())),
-        );
-        classes.insert(
-            "cd".to_string(),
-            AnsiStyle::new()
-                .bold()
-                .fg_color(Some(AnsiColor::Yellow.into())),
-        );
+        classes.insert("di".to_string(), bold_color(AnsiColor::Blue));
+        classes.insert("ln".to_string(), bold_color(AnsiColor::Cyan));
+        classes.insert("ex".to_string(), bold_color(AnsiColor::Green));
+        classes.insert("pi".to_string(), AnsiStyle::new().fg_color(Some(AnsiColor::Yellow.into())));
+        classes.insert("so".to_string(), bold_color(AnsiColor::Magenta));
+        classes.insert("bd".to_string(), bold_color(AnsiColor::Yellow));
+        classes.insert("cd".to_string(), bold_color(AnsiColor::Yellow));
 
         LsStyles { classes, suffixes }
     }

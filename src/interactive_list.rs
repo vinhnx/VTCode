@@ -11,7 +11,7 @@ use crossterm::terminal::{
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Constraint, Direction, Layout};
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{
     Block, BorderType, Borders, List, ListDirection, ListItem, ListState, Paragraph, Wrap,
@@ -20,6 +20,29 @@ use ratatui::widgets::{
 const CONTROLS_HINT: &str =
     "Use ↑/↓ or j/k to move • Home/End to jump • Enter to confirm • Esc to cancel";
 const NUMBER_JUMP_HINT: &str = "Tip: type a number to jump directly to an option.";
+
+/// Ratatui style definitions for interactive list UI
+mod styles {
+    use ratatui::style::{Color, Modifier, Style};
+
+    /// Item number in bright blue bold
+    pub const ITEM_NUMBER: Style = Style::new()
+        .fg(Color::LightBlue)
+        .add_modifier(Modifier::BOLD);
+
+    /// Description text in gray
+    pub const DESCRIPTION: Style = Style::new()
+        .fg(Color::Gray);
+
+    /// Default list text in white
+    pub const DEFAULT_TEXT: Style = Style::new()
+        .fg(Color::White);
+
+    /// Highlighted selection in cyan bold reversed
+    pub const HIGHLIGHT: Style = Style::new()
+        .fg(Color::Cyan)
+        .add_modifier(Modifier::BOLD.union(Modifier::REVERSED));
+}
 
 #[derive(Debug, Clone)]
 pub struct SelectionEntry {
@@ -110,69 +133,63 @@ pub fn run_interactive_selection(
                     frame.render_widget(instructions_widget, layout[0]);
 
                     let items: Vec<ListItem> = entries
-                        .iter()
-                        .enumerate()
-                        .map(|(idx, entry)| {
-                            let mut lines = vec![Line::from(vec![
-                                Span::styled(
-                                    format!("{:>2}. ", idx + 1),
-                                    Style::default()
-                                        .fg(Color::LightBlue)
-                                        .add_modifier(Modifier::BOLD),
-                                ),
-                                Span::raw(entry.title.clone()),
-                            ])];
-                            if let Some(description) = entry.description.as_ref()
-                                && !description.is_empty()
-                                && description != &entry.title
-                            {
-                                lines.push(Line::from(Span::styled(
-                                    description.clone(),
-                                    Style::default().fg(Color::Gray),
-                                )));
-                            }
-                            ListItem::new(lines)
-                        })
-                        .collect();
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, entry)| {
+                    let mut lines = vec![Line::from(vec![
+                    Span::styled(
+                    format!("{:>2}. ", idx + 1),
+                    styles::ITEM_NUMBER,
+                    ),
+                    Span::raw(entry.title.clone()),
+                    ])];
+                    if let Some(description) = entry.description.as_ref()
+                        && !description.is_empty()
+                        && description != &entry.title
+                    {
+                    lines.push(Line::from(Span::styled(
+                            description.clone(),
+                        styles::DESCRIPTION,
+                    )));
+                    }
+                    ListItem::new(lines)
+                    })
+                    .collect();
 
                     let list = List::new(items)
-                        .block(
-                            Block::default()
-                                .title(title)
-                                .borders(Borders::ALL)
-                                .border_type(BorderType::Rounded),
-                        )
-                        .style(Style::default().fg(Color::White))
-                        .highlight_style(
-                            Style::default()
-                                .fg(Color::Cyan)
-                                .add_modifier(Modifier::BOLD | Modifier::REVERSED),
-                        )
-                        .highlight_symbol("> ")
-                        .repeat_highlight_symbol(true)
-                        .direction(ListDirection::TopToBottom)
-                        .scroll_padding(1);
+                    .block(
+                    Block::default()
+                    .title(title)
+                    .borders(Borders::ALL)
+                    .border_type(BorderType::Rounded),
+                    )
+                    .style(styles::DEFAULT_TEXT)
+                    .highlight_style(styles::HIGHLIGHT)
+                    .highlight_symbol("> ")
+                    .repeat_highlight_symbol(true)
+                    .direction(ListDirection::TopToBottom)
+                    .scroll_padding(1);
 
                     frame.render_stateful_widget(list, layout[1], &mut list_state);
 
                     let current = &entries[selected_index];
                     let mut summary_lines = vec![Line::from(Span::styled(
-                        format!("Selected: {}", current.title),
-                        Style::default().add_modifier(Modifier::BOLD),
+                    format!("Selected: {}", current.title),
+                    Style::default().add_modifier(Modifier::BOLD),
                     ))];
                     if let Some(description) = current.description.as_ref()
-                        && !description.is_empty()
-                        && description != &current.title
+                    && !description.is_empty()
+                    && description != &current.title
                     {
-                        summary_lines.push(Line::from(Span::styled(
-                            description.clone(),
-                            Style::default().fg(Color::Gray),
-                        )));
+                    summary_lines.push(Line::from(Span::styled(
+                    description.clone(),
+                    styles::DESCRIPTION,
+                    )));
                     }
                     summary_lines.push(Line::from(Span::raw(CONTROLS_HINT)));
                     summary_lines.push(Line::from(Span::styled(
-                        NUMBER_JUMP_HINT,
-                        Style::default().fg(Color::Gray),
+                    NUMBER_JUMP_HINT,
+                    styles::DESCRIPTION,
                     )));
 
                     let footer = Paragraph::new(summary_lines)

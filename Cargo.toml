@@ -125,6 +125,7 @@ async-trait = "0.1.89"
 dotenvy = "0.15"
 # ANSI styling
 anstyle = "1.0"
+anstyle-crossterm = "4.0"
 sysinfo = "0.37.2"
 colorchoice = "1.0"
 agent-client-protocol = "0.7.0"

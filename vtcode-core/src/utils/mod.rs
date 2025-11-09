@@ -15,10 +15,11 @@
 //! - **Command Sanitization**: Safe command execution
 //! - **Input Validation**: User input sanitization
 //!
-//! ### ANSI and Colors (`ansi`, `colors`)
+//! ### ANSI and Colors (`ansi`, `colors`, `ratatui_styles`)
 //! - **Terminal Colors**: ANSI color codes and styling
 //! - **Color Management**: Theme support and color schemes
 //! - **Cross-platform**: Works on different terminal types
+//! - **TUI Integration**: Convert anstyle to ratatui styles seamlessly via anstyle-crossterm
 //!
 //! ### Git Integration (`vtcodegitignore`)
 //! - **Gitignore Management**: Automatic `.vtcodegitignore` creation
@@ -95,10 +96,13 @@ pub mod ansi;
 pub mod at_pattern;
 pub mod colors;
 pub mod diff;
+pub mod diff_styles;
 pub mod dot_config;
 pub mod image_processing;
+pub mod ratatui_styles;
 pub mod safety;
 pub mod session_archive;
+pub mod style_helpers;
 pub mod transcript;
 pub mod utils;
 pub mod vtcodegitignore;

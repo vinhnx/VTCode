@@ -2,12 +2,13 @@ use std::io::{self, Write};
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use anstyle::{Ansi256Color, Color, Effects, Style};
+use anstyle::{Ansi256Color, Effects};
 use anyhow::{Context, Result};
 use tracing::warn;
 use vtcode_core::utils::dot_config::{
     WorkspaceTrustLevel, WorkspaceTrustRecord, get_dot_manager, load_user_config,
 };
+use vtcode_core::utils::style_helpers::{ColorPalette, render_styled};
 
 const WARNING_RGB: (u8, u8, u8) = (166, 51, 51);
 const INFO_RGB: (u8, u8, u8) = (217, 154, 78);
@@ -65,14 +66,10 @@ pub async fn ensure_workspace_trust(
         TrustSelection::FullAuto => {
             persist_trust_decision(&workspace_key, WorkspaceTrustLevel::FullAuto).await?;
             let msg = "Workspace marked as trusted with full auto capabilities.";
+            let palette = ColorPalette::default();
             println!(
                 "{}",
-                Style::new()
-                    .fg_color(Some(Color::Ansi(anstyle::AnsiColor::Green)))
-                    .render()
-                    .to_string()
-                    + msg
-                    + &Style::new().render_reset().to_string()
+                render_styled(msg, palette.success, None)
             );
             Ok(WorkspaceTrustGateResult::Trusted(
                 WorkspaceTrustLevel::FullAuto,
@@ -81,36 +78,22 @@ pub async fn ensure_workspace_trust(
         TrustSelection::ToolsPolicy => {
             persist_trust_decision(&workspace_key, WorkspaceTrustLevel::ToolsPolicy).await?;
             let msg = "Workspace marked as trusted with tools policy safeguards.";
+            let palette = ColorPalette::default();
             println!(
                 "{}",
-                Style::new()
-                    .fg_color(Some(Color::Ansi(anstyle::AnsiColor::Green)))
-                    .render()
-                    .to_string()
-                    + msg
-                    + &Style::new().render_reset().to_string()
+                render_styled(msg, palette.success, None)
             );
             if full_auto_requested {
                 let msg1 = "Full-auto mode requires the full auto trust option.";
                 println!(
                     "{}",
-                    Style::new()
-                        .fg_color(Some(Color::Ansi(anstyle::AnsiColor::Yellow)))
-                        .render()
-                        .to_string()
-                        + msg1
-                        + &Style::new().render_reset().to_string()
+                    render_styled(msg1, palette.warning, None)
                 );
                 let msg2 =
                     "Rerun with --full-auto after upgrading trust or start without --full-auto.";
                 println!(
                     "{}",
-                    Style::new()
-                        .fg_color(Some(Color::Ansi(anstyle::AnsiColor::Yellow)))
-                        .render()
-                        .to_string()
-                        + msg2
-                        + &Style::new().render_reset().to_string()
+                    render_styled(msg2, palette.warning, None)
                 );
                 return Ok(WorkspaceTrustGateResult::Aborted);
             }
@@ -120,14 +103,10 @@ pub async fn ensure_workspace_trust(
         }
         TrustSelection::Quit => {
             let msg = "Workspace not trusted. Exiting chat session.";
+            let palette = ColorPalette::default();
             println!(
                 "{}",
-                Style::new()
-                    .fg_color(Some(Color::Ansi(anstyle::AnsiColor::Yellow)))
-                    .render()
-                    .to_string()
-                    + msg
-                    + &Style::new().render_reset().to_string()
+                render_styled(msg, palette.warning, None)
             );
             Ok(WorkspaceTrustGateResult::Aborted)
         }
@@ -290,17 +269,25 @@ enum PromptTone {
 }
 
 fn print_prompt_line(message: &str, tone: PromptTone) {
+    use anstyle::{Color, Style};
+    
     let style = match tone {
-        PromptTone::Heading => Style::new()
-            .fg_color(Some(Color::Ansi256(Ansi256Color(rgb_to_ansi256(
+        PromptTone::Heading => {
+            let color = Color::Ansi256(Ansi256Color(rgb_to_ansi256(
                 WARNING_RGB.0,
                 WARNING_RGB.1,
                 WARNING_RGB.2,
-            )))))
-            .effects(Effects::BOLD),
-        PromptTone::Body => Style::new().fg_color(Some(Color::Ansi256(Ansi256Color(
-            rgb_to_ansi256(INFO_RGB.0, INFO_RGB.1, INFO_RGB.2),
-        )))),
+            )));
+            Style::new()
+                .fg_color(Some(color))
+                .effects(Effects::BOLD)
+        }
+        PromptTone::Body => {
+            let color = Color::Ansi256(Ansi256Color(
+                rgb_to_ansi256(INFO_RGB.0, INFO_RGB.1, INFO_RGB.2),
+            ));
+            Style::new().fg_color(Some(color))
+        }
     };
     println!("{}{}{}", style.render(), message, style.render_reset());
 }

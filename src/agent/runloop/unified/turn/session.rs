@@ -27,6 +27,7 @@ use vtcode_core::ui::tui::{InlineEvent, InlineEventCallback, spawn_session, them
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::at_pattern::parse_at_patterns;
 use vtcode_core::utils::session_archive::{SessionArchive, SessionArchiveMetadata, SessionMessage};
+use vtcode_core::utils::style_helpers::{ColorPalette, render_styled};
 use vtcode_core::utils::transcript;
 
 use crate::agent::agents::is_context_overflow_error;
@@ -1661,10 +1662,13 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         session_stats.record_tool(name);
 
                                         // Display failure indicator with clear messaging
-                                        renderer.line(
-                                            MessageStyle::Error,
-                                            &format!("\x1b[31m✗\x1b[0m Tool '{}' failed", name),
-                                        )?;
+                                        let palette = ColorPalette::default();
+                                        let failure_msg = format!(
+                                            "{} Tool '{}' failed",
+                                            render_styled("✗", palette.error, None),
+                                            name
+                                        );
+                                        renderer.line(MessageStyle::Error, &failure_msg)?;
 
                                         traj.log_tool_call(
                                             working_history.len(),
