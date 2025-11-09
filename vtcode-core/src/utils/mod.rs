@@ -93,6 +93,7 @@
 //! ```
 
 pub mod ansi;
+pub mod ansi_parser;
 pub mod at_pattern;
 pub mod colors;
 pub mod diff;

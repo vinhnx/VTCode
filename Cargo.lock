@@ -5601,6 +5601,7 @@ dependencies = [
  "anstream",
  "anstyle",
  "anstyle-crossterm",
+ "anstyle-parse",
  "anstyle-query",
  "anstyle-syntect",
  "anyhow",

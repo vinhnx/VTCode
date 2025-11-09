@@ -15,8 +15,6 @@ use std::{
 };
 use tokio::time::sleep;
 use tracing::{debug, trace, warn};
-use vte::{Parser, Perform};
-
 use crate::config::PtyConfig;
 use crate::tools::apply_patch::Patch;
 use crate::tools::grep_file::GrepSearchInput;
@@ -1872,67 +1870,7 @@ fn snapshot_to_map(
 }
 
 fn strip_ansi(text: &str) -> String {
-    struct AnsiStripper {
-        output: String,
-    }
-
-    impl AnsiStripper {
-        fn new(capacity: usize) -> Self {
-            Self {
-                output: String::with_capacity(capacity),
-            }
-        }
-    }
-
-    impl Perform for AnsiStripper {
-        fn print(&mut self, c: char) {
-            self.output.push(c);
-        }
-
-        fn execute(&mut self, byte: u8) {
-            match byte {
-                b'\n' => self.output.push('\n'),
-                b'\r' => self.output.push('\r'),
-                b'\t' => self.output.push('\t'),
-                _ => {}
-            }
-        }
-
-        fn hook(
-            &mut self,
-            _params: &vte::Params,
-            _intermediates: &[u8],
-            _ignore: bool,
-            _action: char,
-        ) {
-        }
-
-        fn put(&mut self, _byte: u8) {}
-
-        fn unhook(&mut self) {}
-
-        fn osc_dispatch(&mut self, _params: &[&[u8]], _bell_terminated: bool) {}
-
-        fn csi_dispatch(
-            &mut self,
-            _params: &vte::Params,
-            _intermediates: &[u8],
-            _ignore: bool,
-            _action: char,
-        ) {
-        }
-
-        fn esc_dispatch(&mut self, _intermediates: &[u8], _ignore: bool, _action: u8) {}
-    }
-
-    let mut performer = AnsiStripper::new(text.len());
-    let mut parser = Parser::new();
-
-    for byte in text.as_bytes() {
-        parser.advance(&mut performer, std::slice::from_ref(byte));
-    }
-
-    performer.output
+    crate::utils::ansi_parser::strip_ansi(text)
 }
 
 #[cfg(test)]

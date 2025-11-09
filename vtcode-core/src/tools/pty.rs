@@ -164,43 +164,7 @@ fn build_failure(pattern: &[u8]) -> Vec<usize> {
 }
 
 fn parse_ansi_sequence(text: &str) -> Option<usize> {
-    let bytes = text.as_bytes();
-    if bytes.len() < 2 || bytes[0] != 0x1b {
-        return None;
-    }
-
-    let kind = bytes[1];
-    match kind {
-        b'[' => {
-            for (index, byte) in bytes.iter().enumerate().skip(2) {
-                if (0x40..=0x7e).contains(byte) {
-                    return Some(index + 1);
-                }
-            }
-            None
-        }
-        b']' => {
-            for index in 2..bytes.len() {
-                match bytes[index] {
-                    0x07 => return Some(index + 1),
-                    0x1b if index + 1 < bytes.len() && bytes[index + 1] == b'\\' => {
-                        return Some(index + 2);
-                    }
-                    _ => {}
-                }
-            }
-            None
-        }
-        b'P' | b'^' | b'_' => {
-            for index in 2..bytes.len() {
-                if bytes[index] == 0x1b && index + 1 < bytes.len() && bytes[index + 1] == b'\\' {
-                    return Some(index + 2);
-                }
-            }
-            None
-        }
-        _ => Some(2),
-    }
+    crate::utils::ansi_parser::parse_ansi_sequence(text)
 }
 
 struct PtyScrollback {
