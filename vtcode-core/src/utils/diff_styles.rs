@@ -1,4 +1,5 @@
-// Centralized diff color palette to eliminate hardcoded RGB values
+// Diff color palette for consistent git diff styling
+// Centralizes RGB color values for additions/deletions
 
 use anstyle::{AnsiColor, Color, RgbColor, Style};
 
@@ -48,27 +49,35 @@ mod tests {
     fn test_diff_palette_defaults() {
         let palette = DiffColorPalette::default();
         assert_eq!(palette.added_fg, RgbColor(200, 255, 200));
+        assert_eq!(palette.added_bg, RgbColor(0, 64, 0));
         assert_eq!(palette.removed_fg, RgbColor(255, 200, 200));
+        assert_eq!(palette.removed_bg, RgbColor(64, 0, 0));
     }
 
     #[test]
-    fn test_added_style_renders() {
+    fn test_added_style() {
         let palette = DiffColorPalette::default();
         let style = palette.added_style();
         assert!(!style.to_string().is_empty());
     }
 
     #[test]
-    fn test_removed_style_renders() {
+    fn test_removed_style() {
         let palette = DiffColorPalette::default();
         let style = palette.removed_style();
         assert!(!style.to_string().is_empty());
     }
 
     #[test]
-    fn test_header_style_uses_cyan() {
+    fn test_header_style() {
         let palette = DiffColorPalette::default();
         let style = palette.header_style();
-        assert!(matches!(palette.header_color, AnsiColor::Cyan));
+        assert!(!style.to_string().is_empty());
+    }
+
+    #[test]
+    fn test_header_color_is_cyan() {
+        let palette = DiffColorPalette::default();
+        assert_eq!(palette.header_color, AnsiColor::Cyan);
     }
 }
