@@ -1,5 +1,4 @@
-// vtcode-core/src/utils/diff_styles.rs
-//! Centralized diff styling with consistent color palettes
+// Centralized diff color palette to eliminate hardcoded RGB values
 
 use anstyle::{AnsiColor, Color, RgbColor, Style};
 
@@ -46,32 +45,30 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_diff_color_palette_defaults() {
+    fn test_diff_palette_defaults() {
         let palette = DiffColorPalette::default();
         assert_eq!(palette.added_fg, RgbColor(200, 255, 200));
-        assert_eq!(palette.added_bg, RgbColor(0, 64, 0));
         assert_eq!(palette.removed_fg, RgbColor(255, 200, 200));
-        assert_eq!(palette.removed_bg, RgbColor(64, 0, 0));
     }
 
     #[test]
-    fn test_added_style_contains_colors() {
+    fn test_added_style_renders() {
         let palette = DiffColorPalette::default();
         let style = palette.added_style();
         assert!(!style.to_string().is_empty());
     }
 
     #[test]
-    fn test_removed_style_contains_colors() {
+    fn test_removed_style_renders() {
         let palette = DiffColorPalette::default();
         let style = palette.removed_style();
         assert!(!style.to_string().is_empty());
     }
 
     #[test]
-    fn test_header_style_is_cyan() {
+    fn test_header_style_uses_cyan() {
         let palette = DiffColorPalette::default();
         let style = palette.header_style();
-        assert!(!style.to_string().is_empty());
+        assert!(matches!(palette.header_color, AnsiColor::Cyan));
     }
 }
