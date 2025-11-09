@@ -1,211 +1,256 @@
-use std::{
-    env,
-    path::{Path, PathBuf},
-};
-
+use std::sync::Arc;
 use zed_extension_api as zed;
 
-struct VTCodeExtension;
+mod cache;
+mod commands;
+mod config;
+mod context;
+mod editor;
+mod error_handling;
+mod executor;
+mod output;
+mod validation;
+mod workspace;
+
+pub use cache::{
+    CacheEntry, CacheStats, CommandResultCache, FileContentCache, WorkspaceAnalysisCache,
+    WorkspaceAnalysisData,
+};
+pub use commands::{
+    analyze_workspace, ask_about_selection, ask_agent, check_status, launch_chat, CommandResponse,
+};
+pub use config::{find_config, load_config, Config};
+pub use context::{Diagnostic, DiagnosticSeverity, EditorContext, QuickFix};
+pub use editor::{EditorState, StatusIndicator};
+pub use error_handling::{
+    ErrorCode, ErrorSeverity, ExtensionError, ExtensionResult, RecoveryStrategy,
+};
+pub use executor::{check_vtcode_available, execute_command, get_vtcode_version};
+pub use output::{MessageType, OutputChannel, OutputMessage};
+pub use validation::{validate_config, ValidationError, ValidationResult};
+pub use workspace::{
+    DirectoryNode, FileContentContext, OpenBuffer, OpenBuffersContext, ProjectStructure,
+    WorkspaceContext, WorkspaceFile,
+};
+
+/// VTCode extension for Zed editor
+/// Provides integration with the VTCode AI coding assistant
+pub struct VTCodeExtension {
+    config: Option<Config>,
+    vtcode_available: bool,
+    output_channel: Arc<OutputChannel>,
+    editor_state: Arc<EditorState>,
+}
 
 impl zed::Extension for VTCodeExtension {
     fn new() -> Self {
-        Self
+        let vtcode_available = check_vtcode_available();
+        let extension = Self {
+            config: None,
+            vtcode_available,
+            output_channel: Arc::new(OutputChannel::new()),
+            editor_state: Arc::new(EditorState::new()),
+        };
+
+        // Update status based on CLI availability
+        if vtcode_available {
+            let _ = extension.editor_state.set_status(StatusIndicator::Ready);
+        }
+
+        extension
+    }
+}
+
+impl VTCodeExtension {
+    /// Initialize the extension with workspace configuration
+    pub fn initialize(&mut self, workspace_root: &str) -> Result<(), String> {
+        // Try to load configuration from workspace
+        let path = std::path::Path::new(workspace_root);
+        if let Some(config) = find_config(path) {
+            self.config = Some(config);
+        }
+
+        // Verify VTCode CLI is available
+        if !self.vtcode_available {
+            return Err("VTCode CLI not found in PATH".to_string());
+        }
+
+        Ok(())
     }
 
-    fn run_slash_command(
+    /// Get the current configuration
+    pub fn config(&self) -> Option<&Config> {
+        self.config.as_ref()
+    }
+
+    /// Check if VTCode CLI is available
+    pub fn is_vtcode_available(&self) -> bool {
+        self.vtcode_available
+    }
+
+    /// Execute "Ask the Agent" command
+    pub fn ask_agent_command(&self, query: &str) -> CommandResponse {
+        ask_agent(query)
+    }
+
+    /// Execute "Ask About Selection" command
+    pub fn ask_about_selection_command(
         &self,
-        command: zed::SlashCommand,
-        _args: Vec<String>,
-        worktree: Option<&zed::Worktree>,
-    ) -> zed::Result<zed::SlashCommandOutput> {
-        match command.name.as_str() {
-            "logs" => {
-                let Some(worktree) = worktree else {
-                    return Err("No workspace available".to_string());
-                };
-                let root = PathBuf::from(worktree.root_path());
-                let log_paths = [
-                    ("trajectory", ".vtcode/logs/trajectory.jsonl"),
-                    ("sandbox", ".vtcode/logs/sandbox.jsonl"),
-                    ("agent", ".vtcode/logs/agent.log"),
-                ];
+        code: &str,
+        language: Option<&str>,
+    ) -> CommandResponse {
+        ask_about_selection(code, language)
+    }
 
-                let mut sections = Vec::with_capacity(log_paths.len());
-                let mut text = String::new();
+    /// Execute "Analyze Workspace" command
+    pub fn analyze_workspace_command(&self) -> CommandResponse {
+        analyze_workspace()
+    }
 
-                for (label, relative) in log_paths {
-                    let absolute = root.join(relative);
-                    let absolute_str = absolute.display().to_string();
-                    let start = text.len();
-                    text.push_str(&absolute_str);
-                    text.push('\n');
+    /// Execute "Launch Chat" command
+    pub fn launch_chat_command(&self) -> CommandResponse {
+        launch_chat()
+    }
 
-                    sections.push(zed::SlashCommandOutputSection {
-                        range: (start..start + absolute_str.len()).into(),
-                        label: format!("{} log", label),
-                    });
-                }
+    /// Execute "Check Status" command
+    pub fn check_status_command(&self) -> CommandResponse {
+        check_status()
+    }
 
-                Ok(zed::SlashCommandOutput { sections, text })
-            }
-            "status" => {
-                let binary_hint = env::var("VT_CODE_BINARY")
-                    .ok()
-                    .unwrap_or_else(|| "vtcode".to_string());
-                let mut text = String::from("VT Code Agent: ready\n");
-                text.push_str("ACP Mode: enabled\n");
-                text.push_str("Log Dir: .vtcode/logs\n");
-                text.push_str(&format!("Binary: {}\n", binary_hint));
+    /// Get the output channel
+    pub fn output_channel(&self) -> Arc<OutputChannel> {
+        Arc::clone(&self.output_channel)
+    }
 
-                Ok(zed::SlashCommandOutput {
-                    sections: vec![zed::SlashCommandOutputSection {
-                        range: (0..text.len()).into(),
-                        label: "Status".to_string(),
-                    }],
-                    text,
-                })
-            }
-            "doctor" => Ok(run_doctor(worktree)?),
-            other => Err(format!("Unknown slash command: {other}")),
+    /// Log a command execution to the output channel
+    pub fn log_command_execution(&self, command: &str, response: &CommandResponse) {
+        if response.success {
+            self.output_channel.success(format!(
+                "Command '{}' completed:\n{}",
+                command, response.output
+            ));
+        } else {
+            self.output_channel.error(format!(
+                "Command '{}' failed: {}",
+                command,
+                response
+                    .error
+                    .as_ref()
+                    .unwrap_or(&"Unknown error".to_string())
+            ));
         }
     }
 
-    fn context_server_command(
-        &mut self,
-        context_server_id: &zed::ContextServerId,
-        project: &zed::Project,
-    ) -> zed::Result<zed::Command> {
-        if context_server_id.as_ref() != "vtcode" {
-            return Err(format!("Unsupported context server: {context_server_id}"));
-        }
-        let _ = project;
-        let command = resolve_vtcode_binary()?;
+    /// Get the editor state
+    pub fn editor_state(&self) -> Arc<EditorState> {
+        Arc::clone(&self.editor_state)
+    }
 
-        Ok(zed::Command {
-            command,
-            args: vec!["acp".to_string()],
-            env: vec![
-                ("VT_ACP_ENABLED".to_string(), "1".to_string()),
-                ("VT_ACP_ZED_ENABLED".to_string(), "1".to_string()),
-                (
-                    "VT_ACP_ZED_TOOLS_READ_FILE_ENABLED".to_string(),
-                    "1".to_string(),
-                ),
-                (
-                    "VT_ACP_ZED_TOOLS_LIST_FILES_ENABLED".to_string(),
-                    "1".to_string(),
-                ),
-            ],
-        })
+    /// Update editor context from current selection
+    pub fn update_editor_context(&self, context: EditorContext) {
+        let _ = self.editor_state.set_context(context);
+    }
+
+    /// Execute a command and update status
+    pub fn execute_with_status(&self, command: &str, query: &str) -> CommandResponse {
+        // Set executing status
+        let _ = self.editor_state.set_status(StatusIndicator::Executing);
+        self.output_channel.info(format!("Executing: {}", command));
+
+        // Execute command
+        let response = ask_agent(query);
+
+        // Update status based on result
+        if response.success {
+            let _ = self.editor_state.set_status(StatusIndicator::Ready);
+            self.output_channel
+                .success(format!("Command '{}' completed successfully", command));
+        } else {
+            let _ = self.editor_state.set_status(StatusIndicator::Error);
+            self.output_channel.error(format!(
+                "Command '{}' failed: {}",
+                command,
+                response
+                    .error
+                    .as_ref()
+                    .unwrap_or(&"Unknown error".to_string())
+            ));
+        }
+
+        response
+    }
+
+    /// Add an inline diagnostic
+    pub fn add_diagnostic(&self, diagnostic: Diagnostic) {
+        let _ = self.editor_state.add_diagnostic(diagnostic);
+    }
+
+    /// Clear all diagnostics
+    pub fn clear_diagnostics(&self) {
+        let _ = self.editor_state.clear_diagnostics();
+    }
+
+    /// Add a quick fix suggestion
+    pub fn add_quick_fix(&self, fix: QuickFix) {
+        let _ = self.editor_state.add_quick_fix(fix);
+    }
+
+    /// Get diagnostic summary for status bar
+    pub fn diagnostic_summary(&self) -> String {
+        self.editor_state
+            .diagnostic_summary()
+            .unwrap_or_else(|_| "Error retrieving diagnostics".to_string())
+    }
+
+    /// Validate the current configuration
+    pub fn validate_current_config(&self) -> ValidationResult {
+        match &self.config {
+            Some(config) => validate_config(config),
+            None => ValidationResult::ok()
+                .with_warning("No configuration file found, using defaults".to_string()),
+        }
+    }
+
+    /// Log configuration validation results
+    pub fn log_validation(&self, result: &ValidationResult) {
+        if result.valid {
+            self.output_channel.success(format!(
+                "Configuration validation passed\n{}",
+                result.format()
+            ));
+        } else {
+            self.output_channel.error(format!(
+                "Configuration validation failed\n{}",
+                result.format()
+            ));
+        }
     }
 }
 
 zed::register_extension!(VTCodeExtension);
 
-fn resolve_vtcode_binary() -> zed::Result<String> {
-    let (path, _) = locate_vtcode_binary()?;
-    Ok(path)
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use zed_extension_api::Extension;
 
-fn validate_binary_path(path: &Path) -> bool {
-    path.exists() && path.is_file()
-}
-
-fn normalize(path: PathBuf) -> String {
-    if path.is_absolute() {
-        path.display().to_string()
-    } else {
-        match std::env::current_dir() {
-            Ok(current) => current.join(path).display().to_string(),
-            Err(_) => path.display().to_string(),
-        }
-    }
-}
-
-fn locate_vtcode_binary() -> Result<(String, &'static str), String> {
-    if let Ok(path) = env::var("VT_CODE_BINARY") {
-        let candidate = PathBuf::from(&path);
-        if validate_binary_path(&candidate) {
-            return Ok((normalize(candidate), "VT_CODE_BINARY"));
-        }
-
-        return Err(format!(
-            "VT_CODE_BINARY points to a missing binary: {}",
-            path
-        ));
+    #[test]
+    fn test_extension_creation() {
+        let ext = VTCodeExtension::new();
+        assert!(ext.config.is_none());
+        // vtcode_available depends on system, don't assert
     }
 
-    let packaged_candidates = ["vtcode", "./vtcode", "bin/vtcode", "dist/vtcode"];
-    for candidate in packaged_candidates {
-        let path = PathBuf::from(candidate);
-        if validate_binary_path(&path) {
-            return Ok((normalize(path), candidate));
-        }
+    #[test]
+    fn test_config_getter() {
+        let ext = VTCodeExtension::new();
+        assert!(ext.config().is_none());
     }
 
-    Err("Unable to locate vtcode binary. Install the agent server targets or set VT_CODE_BINARY.".to_string())
-}
-
-fn run_doctor(worktree: Option<&zed::Worktree>) -> zed::Result<zed::SlashCommandOutput> {
-    let mut text = String::new();
-    let mut sections = Vec::new();
-
-    push_report_line(&mut sections, &mut text, "Summary", "VT Code Doctor Report");
-    text.push('\n');
-
-    match locate_vtcode_binary() {
-        Ok((path, source)) => {
-            let line = format!("Binary: OK ({path}) [source: {source}]");
-            push_report_line(&mut sections, &mut text, "Binary", &line);
-        }
-        Err(err) => {
-            let line = format!("Binary: ERROR ({err})");
-            push_report_line(&mut sections, &mut text, "Binary", &line);
-        }
+    #[test]
+    fn test_vtcode_availability_check() {
+        let ext = VTCodeExtension::new();
+        // Just verify the method exists and returns a bool
+        let _ = ext.is_vtcode_available();
     }
-
-    match worktree {
-        Some(worktree) => {
-            let root = PathBuf::from(worktree.root_path());
-            let log_dir = root.join(".vtcode/logs");
-            let line = if log_dir.exists() {
-                format!("Logs: OK ({})", log_dir.display())
-            } else {
-                format!("Logs: MISSING ({})", log_dir.display())
-            };
-            push_report_line(&mut sections, &mut text, "Logs", &line);
-        }
-        None => {
-            push_report_line(
-                &mut sections,
-                &mut text,
-                "Logs",
-                "Logs: UNKNOWN (open a workspace to verify)",
-            );
-        }
-    }
-
-    push_report_line(
-        &mut sections,
-        &mut text,
-        "Context",
-        "Context Server: enable VT Code under Settings -> Agents and ensure it is running",
-    );
-
-    Ok(zed::SlashCommandOutput { sections, text })
-}
-
-fn push_report_line(
-    sections: &mut Vec<zed::SlashCommandOutputSection>,
-    text: &mut String,
-    label: &str,
-    line: &str,
-) {
-    let start = text.len();
-    text.push_str(line);
-    text.push('\n');
-    sections.push(zed::SlashCommandOutputSection {
-        range: (start..start + line.len()).into(),
-        label: label.to_string(),
-    });
 }

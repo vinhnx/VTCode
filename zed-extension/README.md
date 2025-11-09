@@ -1,112 +1,88 @@
-# VT Code Zed Agent Server Extension
+# VTCode Zed Extension
 
-This directory packages VT Code as a Zed Agent Server Extension so users can install the binary directly from Zed's marketplace or as a local dev extension. It also ships lightweight VT-branded icon and color themes.
+An AI coding assistant for the Zed editor - A Rust-based terminal coding agent with semantic code intelligence and multi-provider AI support.
 
-## Quick Start
+## Features
 
-1. Install the extension from Zed's marketplace or load it as a development extension
-2. Enable **VT Code** under _Settings → Agents_
-3. Use the integrated slash commands to interact with VT Code from the Zed Assistant
+- **AI Coding Assistant**: Access the VTCode agent directly from Zed
+- **Code Analysis**: Analyze your workspace with semantic code intelligence
+- **Configuration Support**: Syntax highlighting and autocomplete for `vtcode.toml`
+- **Context Awareness**: Leverages Tree-sitter and ast-grep for deep code understanding
+- **Multi-Provider AI**: Supports OpenAI, Anthropic, Google, xAI, DeepSeek, and more
+- **Security First**: Built-in safeguards with human-in-the-loop controls
 
-## Required Settings & Configuration
+## Installation
 
-### Binary Configuration
+1. Install the VTCode CLI:
+```bash
+# Install with Cargo (recommended)
+cargo install vtcode
 
-- **Binary selection**: By default, the extension uses the bundled VT Code executable, but you can override this by setting the `VT_CODE_BINARY` environment variable to point to a custom VT Code executable.
-  - Example: `VT_CODE_BINARY=/path/to/your/vtcode/binary`
+# Or with Homebrew
+brew install vtcode
 
-### Environment Variables
+# Or with NPM
+npm install -g vtcode-ai
+```
 
-The extension automatically sets the following environment variables for proper MCP (Model Context Protocol) connectivity:
-- `VT_ACP_ENABLED=1` - Enables ACP mode
-- `VT_ACP_ZED_ENABLED=1` - Enables Zed-specific ACP features
-- `VT_ACP_ZED_TOOLS_READ_FILE_ENABLED=1` - Enables file reading tools
-- `VT_ACP_ZED_TOOLS_LIST_FILES_ENABLED=1` - Enables file listing tools
+2. Install this extension in Zed:
+   - Open Extensions in Zed
+   - Search for "vtcode"
+   - Click "Install"
 
-## Available Slash Commands
+## Usage
 
-All slash commands are available from the Assistant input:
+### Ask the Agent
 
-- `/logs` – Lists absolute paths to `trajectory.jsonl`, `sandbox.jsonl`, and `agent.log` so you can open them quickly.
-- `/status` – Summarizes ACP enablement, the log directory, and the resolved launch binary.
-- `/doctor` – Performs basic diagnostics (binary path, MCP connectivity, log directory health, context server status) to help troubleshoot issues.
+Use the command palette to invoke VTCode commands:
+- `vtcode: Ask the Agent` - Send a question to the VTCode agent
+- `vtcode: Analyze Workspace` - Run workspace analysis
+- `vtcode: Launch Chat` - Open an interactive chat session
+- `vtcode: Open Configuration` - Edit your `vtcode.toml`
 
-## Contents
+### Configuration
 
--   `extension.toml` – Manifest that registers the VT Code agent server with Zed (top-level `schema_version`, `id`, `name`, `version`, and metadata fields).
--   `icons/` – Brand assets for the agent server (`vtcode.svg`).
--   `languages/` – `vt-trajectory/` configures syntax highlighting for VT trajectory logs (`trajectory.jsonl`, `sandbox.jsonl`).
--   `slash_commands` are registered in `extension.toml` (`/logs`, `/status`, `/doctor`) with behavior implemented in `src/lib.rs`.
--   `context_servers` – `vtcode` MCP server entry launches the VT Code binary in ACP mode, preferring `VT_CODE_BINARY` and falling back to the packaged executable (`./vtcode`).
+VTCode reads your workspace `vtcode.toml` configuration file. The extension provides:
 
-## Troubleshooting with /doctor
+- Syntax highlighting for TOML format
+- Validation of vtcode.toml structure
+- Inline documentation for common settings
 
-Use the `/doctor` slash command to diagnose common issues:
+## Configuration Options
 
-1. Run `/doctor` in the Zed Assistant
-2. The command will check:
-   - VT Code binary availability and location
-   - Log directory status
-   - Context server configuration
-   - MCP connectivity status
+Set these in your `vtcode.toml`:
 
-## Updating for a New Release
+```toml
+[ai]
+provider = "anthropic"  # or "openai", "gemini", etc.
+model = "claude-3-5-sonnet-20241022"
 
-1. Build and upload platform archives via `./scripts/release.sh` (or manually produce the `dist/` artifacts).
-2. Update the `version` field in `extension.toml` to match the new tag.
-3. Replace the `archive` URLs so they point at the freshly published GitHub release assets.
-4. Run `./scripts/release.sh` to execute the automated release workflow. It rebuilds binaries, uploads release assets, and rewrites `extension.toml` with fresh SHA-256 checksums for every available target.
-5. Commit the updated files and include them in the release PR.
+[workspace]
+analyze_on_startup = false
+max_tokens = 8000
 
-## Local Testing
+[security]
+human_in_the_loop = true
+tool_policies_enabled = true
+```
 
-1. From Zed, run the Command Palette command `zed: install dev extension` and select this directory.
-2. Choose **VT Code** from the Agent panel and confirm the download succeeds.
-3. Exercise ACP features (tool calls, cancellations) to verify the packaged binary works as expected.
-4. Open `.vtcode/logs/trajectory.jsonl` (or `sandbox.jsonl`) to confirm the VT Trajectory Log language is detected with JSON-derived highlighting.
-5. In the Assistant, run `/logs`, `/status`, and `/doctor` to ensure all slash commands return VT-specific context.
-6. Open the Agent panel, choose **VT Code** (context server) and confirm the binary starts successfully (set `VT_CODE_BINARY` or rely on the packaged `./vtcode` fallback).
+## Requirements
 
-After verification, push the manifest changes and publish the release so the extension can be listed publicly.
+- Zed editor
+- VTCode CLI installed and in your PATH
+- A workspace with `vtcode.toml` file
 
-## Next Steps
+## Getting Started
 
--   When you add Linux or Windows builds, extend `extension.toml` with the appropriate target tables and rerun the release script so their checksums are captured automatically.
--   Re-run `zed: install dev extension` after each release to confirm download, checksum validation, and ACP negotiation succeed with the updated manifest.
+1. Create a `vtcode.toml` in your workspace root
+2. Configure your AI provider and preferences
+3. Open the command palette and search for "vtcode" commands
+4. Start collaborating with the AI agent
 
+## Support
 
-## Troubleshooting Development Installation
+For issues and feature requests, visit the [VTCode GitHub repository](https://github.com/vinhnx/vtcode).
 
-If you encounter build errors when installing the development extension in Zed:
+## License
 
-1. Make sure you have the correct Rust version installed (check rust-toolchain.toml):
-   ```bash
-   rustup show
-   ```
-
-2. Ensure the required WASM target is installed:
-   ```bash
-   rustup target add wasm32-wasip2
-   ```
-
-3. Build the extension for the WASM target:
-   ```bash
-   cd zed-extension
-   cargo build --target wasm32-wasip2 --release
-   ```
-
-4. Verify the extension.wasm file exists and is up-to-date:
-   ```bash
-   ls -la extension.wasm
-   ```
-
-5. If needed, copy the built WASM file to the extension root:
-   ```bash
-   cp target/wasm32-wasip2/release/vtcode_zed_extension.wasm extension.wasm
-   ```
-
-6. Clean any cached build artifacts if you continue to have issues:
-   ```bash
-   cargo clean
-   ```
-
+MIT License - See LICENSE file for details

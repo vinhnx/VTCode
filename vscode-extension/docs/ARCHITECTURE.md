@@ -383,6 +383,7 @@ participantRegistry.register(new MyParticipant())
 - [VS Code Chat API](https://code.visualstudio.com/api/references/vscode-api#chat)
 - [Model Context Protocol](https://modelcontextprotocol.io/)
 - [VTCode CLI Documentation](https://github.com/vinhnx/vtcode)
+- [VTCode Configuration Guide](./config.md)
 
 ---
 
