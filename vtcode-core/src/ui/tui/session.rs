@@ -232,6 +232,37 @@ impl Session {
         session
     }
 
+    // --- Helper Methods for Gradual Manager Integration ---
+    // These methods facilitate the transition from direct field access to manager use.
+    // They maintain backward compatibility while allowing piecemeal migration.
+
+    /// Syncs input from the input_manager to legacy fields
+    /// DEPRECATED: Only used during gradual migration. Will be removed.
+    fn sync_input_from_manager(&mut self) {
+        self.input = self.input_manager.content().to_string();
+        self.cursor = self.input_manager.cursor();
+        self.input_enabled = self.input_manager.is_enabled();
+    }
+
+    /// Syncs input from legacy fields to the input_manager
+    /// DEPRECATED: Only used during gradual migration. Will be removed.
+    fn sync_input_to_manager(&mut self) {
+        self.input_manager.set_content(self.input.clone());
+        self.input_manager.set_enabled(self.input_enabled);
+    }
+
+    /// Syncs scroll from the scroll_manager to legacy fields
+    /// DEPRECATED: Only used during gradual migration. Will be removed.
+    fn sync_scroll_from_manager(&mut self) {
+        self.scroll_offset = self.scroll_manager.offset();
+    }
+
+    /// Syncs scroll from legacy fields to the scroll_manager
+    /// DEPRECATED: Only used during gradual migration. Will be removed.
+    fn sync_scroll_to_manager(&mut self) {
+        self.scroll_manager.set_offset(self.scroll_offset);
+    }
+
     pub fn should_exit(&self) -> bool {
         self.should_exit
     }
