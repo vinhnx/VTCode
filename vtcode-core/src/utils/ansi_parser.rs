@@ -86,10 +86,10 @@ pub fn strip_ansi(text: &str) -> String {
 }
 
 /// Parse and determine the length of the ANSI escape sequence at the start of text
-/// 
+///
 /// This function is used to identify how many bytes an escape sequence occupies
 /// at the beginning of a text string.
-/// 
+///
 /// # Example
 ///
 /// ```
@@ -241,11 +241,11 @@ mod tests {
         let input = "Checking \x1b[0m\x1b[1m\x1b[32mvtcode\x1b[0m";
         assert_eq!(strip_ansi(input), "Checking vtcode");
     }
-    
+
     #[test]
     fn test_parse_ansi_sequence_basic() {
-        assert_eq!(parse_ansi_sequence("\x1b[0m"), Some(4));   // ESC[0m = 4 bytes
-        assert_eq!(parse_ansi_sequence("\x1b[31m"), Some(5));  // ESC[31m = 5 bytes (\x1b[3 + '1' + 'm')
+        assert_eq!(parse_ansi_sequence("\x1b[0m"), Some(4)); // ESC[0m = 4 bytes
+        assert_eq!(parse_ansi_sequence("\x1b[31m"), Some(5)); // ESC[31m = 5 bytes (\x1b[3 + '1' + 'm')
         assert_eq!(parse_ansi_sequence("\x1b[1;32m"), Some(7)); // ESC[1;32m = 7 bytes (\x1b[ + '1' + ';' + '3' + '2' + 'm')
     }
 

@@ -407,7 +407,7 @@ impl Session {
     /// Determine if suggestions should be shown in the header
     fn should_show_suggestions(&self) -> bool {
         // Show suggestions when input is empty or starts with /
-        self.input.is_empty() || self.input.starts_with('/')
+        self.input_manager.content().is_empty() || self.input_manager.content().starts_with('/')
     }
 
     /// Generate header line with slash command and keyboard shortcut suggestions

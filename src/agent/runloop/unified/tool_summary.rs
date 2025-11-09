@@ -51,7 +51,11 @@ pub(crate) fn render_tool_call_summary_with_status(
     // Details in dim gray if present - these are the call parameters
     if !details.is_empty() {
         line.push_str(" ");
-        line.push_str(&render_styled(&format!("· {}", details.join(" · ")), palette.muted, None));
+        line.push_str(&render_styled(
+            &format!("· {}", details.join(" · ")),
+            palette.muted,
+            None,
+        ));
     } else {
         // Even if no specific highlights were extracted, show all parameters if available
         if let Some(map) = args.as_object() {
@@ -95,9 +99,17 @@ pub(crate) fn render_tool_call_summary_with_status(
 
     // Exit code at the end if available (colored based on success)
     if let Some(code) = exit_code {
-        let code_color = if code == 0 { palette.success } else { palette.error };
+        let code_color = if code == 0 {
+            palette.success
+        } else {
+            palette.error
+        };
         line.push_str(" ");
-        line.push_str(&render_styled(&format!("(exit: {})", code), code_color, None));
+        line.push_str(&render_styled(
+            &format!("(exit: {})", code),
+            code_color,
+            None,
+        ));
     }
 
     renderer.line(MessageStyle::Info, &line)?;

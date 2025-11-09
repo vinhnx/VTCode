@@ -2,7 +2,6 @@
 ///
 /// Encapsulates user input state, including text editing, cursor movement,
 /// and command history navigation.
-
 use std::time::Instant;
 
 /// Manages user input state including text, cursor, and history

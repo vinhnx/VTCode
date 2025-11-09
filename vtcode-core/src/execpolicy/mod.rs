@@ -447,7 +447,9 @@ async fn validate_git(args: &[String], workspace_root: &Path, working_dir: &Path
         "add" => return validate_git_add(subargs, workspace_root, working_dir).await,
         "commit" => return validate_git_commit(subargs),
         "reset" => return validate_git_reset(subargs),
-        "checkout" | "switch" => return validate_git_checkout(subargs, workspace_root, working_dir).await,
+        "checkout" | "switch" => {
+            return validate_git_checkout(subargs, workspace_root, working_dir).await;
+        }
         "restore" => return validate_git_checkout(subargs, workspace_root, working_dir).await,
         "merge" => return validate_git_merge(subargs),
         "tag" if !subargs.is_empty() && !subargs[0].starts_with('-') => {
@@ -1306,12 +1308,10 @@ async fn validate_cargo(args: &[String], workspace_root: &Path, working_dir: &Pa
             Ok(())
         }
         // Dangerous operations that modify system or registry
-        "clean" | "install" | "uninstall" | "publish" | "yank" => {
-            Err(anyhow!(
-                "cargo {} is not permitted by the execution policy",
-                subcommand
-            ))
-        }
+        "clean" | "install" | "uninstall" | "publish" | "yank" => Err(anyhow!(
+            "cargo {} is not permitted by the execution policy",
+            subcommand
+        )),
         other => Err(anyhow!(
             "cargo subcommand '{}' is not permitted by the execution policy",
             other
@@ -1326,7 +1326,7 @@ async fn validate_python(args: &[String], workspace_root: &Path, working_dir: &P
     if args.is_empty() {
         return Ok(()); // python interactive is allowed
     }
-    
+
     let first_arg = &args[0];
     if first_arg == "-c" || first_arg == "-m" || first_arg == "-W" {
         // Allow -m (module), -W (warnings), but validate any file paths
@@ -1352,12 +1352,10 @@ async fn validate_npm(args: &[String], workspace_root: &Path, working_dir: &Path
     let subcommand = args[0].as_str();
     match subcommand {
         // Dangerous operations
-        "publish" | "unpublish" => {
-            Err(anyhow!(
-                "npm {} is not permitted by the execution policy",
-                subcommand
-            ))
-        }
+        "publish" | "unpublish" => Err(anyhow!(
+            "npm {} is not permitted by the execution policy",
+            subcommand
+        )),
         // Allow safe and other commands by default, as npm is generally safe in workspace
         _ => Ok(()),
     }

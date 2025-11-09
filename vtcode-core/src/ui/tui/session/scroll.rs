@@ -2,7 +2,6 @@
 ///
 /// Handles viewport scrolling, metrics caching, and bounds enforcement
 /// for transcript content that may exceed the visible area.
-
 use std::cmp::min;
 
 /// Manages scrolling state for a transcript or list view

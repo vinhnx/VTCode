@@ -4,12 +4,14 @@
 //! in both CLI output and TUI widgets.
 
 use anstyle::{AnsiColor, Color, Effects, Style};
-use crossterm::terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen};
+use crossterm::terminal::{
+    EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
+};
+use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
-use ratatui::Terminal;
 use std::io;
 use vtcode_core::utils::ratatui_styles::anstyle_to_ratatui;
 
@@ -38,8 +40,7 @@ impl AppTheme {
             error: Style::new()
                 .fg_color(Some(Color::Ansi(AnsiColor::Red)))
                 .effects(Effects::BOLD),
-            info: Style::new()
-                .fg_color(Some(Color::Ansi(AnsiColor::Blue))),
+            info: Style::new().fg_color(Some(Color::Ansi(AnsiColor::Blue))),
             highlight: Style::new()
                 .fg_color(Some(Color::Ansi(AnsiColor::Magenta)))
                 .effects(Effects::UNDERLINE),
@@ -48,12 +49,7 @@ impl AppTheme {
 
     /// Render text for CLI using ANSI escape codes
     fn render_cli(&self, text: &str, style: &Style) -> String {
-        format!(
-            "{}{}{}",
-            style.render(),
-            text,
-            style.render_reset()
-        )
+        format!("{}{}{}", style.render(), text, style.render_reset())
     }
 
     /// Render text for TUI using ratatui styles
@@ -68,9 +64,18 @@ fn main() -> io::Result<()> {
 
     // Demonstrate CLI rendering
     println!("\n=== CLI Output Example ===\n");
-    println!("{}", theme.render_cli("Welcome to VTCode Styling!", &theme.title));
-    println!("{}", theme.render_cli("✓ Operation successful", &theme.success));
-    println!("{}", theme.render_cli("⚠ Warning: Check configuration", &theme.warning));
+    println!(
+        "{}",
+        theme.render_cli("Welcome to VTCode Styling!", &theme.title)
+    );
+    println!(
+        "{}",
+        theme.render_cli("✓ Operation successful", &theme.success)
+    );
+    println!(
+        "{}",
+        theme.render_cli("⚠ Warning: Check configuration", &theme.warning)
+    );
     println!("{}", theme.render_cli("✗ Error encountered", &theme.error));
     println!("{}", theme.render_cli("ℹ Info: System ready", &theme.info));
 
@@ -130,12 +135,9 @@ fn main() -> io::Result<()> {
             ]),
         ];
 
-        let status_block = Block::default()
-            .title(" Status ")
-            .borders(Borders::ALL);
+        let status_block = Block::default().title(" Status ").borders(Borders::ALL);
 
-        let status = Paragraph::new(status_lines)
-            .block(status_block);
+        let status = Paragraph::new(status_lines).block(status_block);
 
         f.render_widget(status, chunks[1]);
 
@@ -148,14 +150,13 @@ fn main() -> io::Result<()> {
             Span::raw(" are unified across CLI and TUI"),
         ]);
 
-        let help = Paragraph::new(help_text)
-            .alignment(Alignment::Center);
+        let help = Paragraph::new(help_text).alignment(Alignment::Center);
 
         f.render_widget(help, chunks[2]);
     })?;
 
     // Wait for input
-    use crossterm::event::{read, Event, KeyCode};
+    use crossterm::event::{Event, KeyCode, read};
     loop {
         if let Event::Key(key) = read()? {
             if key.code == KeyCode::Char('q') {
@@ -166,19 +167,13 @@ fn main() -> io::Result<()> {
 
     // Cleanup
     disable_raw_mode()?;
-    crossterm::execute!(
-        terminal.backend_mut(),
-        LeaveAlternateScreen
-    )?;
+    crossterm::execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
     terminal.show_cursor()?;
 
     println!("\n=== Demonstration Complete ===\n");
     println!(
         "{}",
-        theme.render_cli(
-            "Styling integration working seamlessly!",
-            &theme.success
-        )
+        theme.render_cli("Styling integration working seamlessly!", &theme.success)
     );
 
     Ok(())

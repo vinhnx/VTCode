@@ -1,3 +1,4 @@
+use anstyle::Style;
 /// Git configuration color parsing
 ///
 /// Parses [color "..."] sections from .git/config and converts them to anstyle::Style objects.
@@ -11,9 +12,7 @@
 /// let config = GitColorConfig::from_git_config(Path::new(".git/config"))?;
 /// let diff_style = config.diff_new;
 /// ```
-
 use anyhow::{Context, Result};
-use anstyle::Style;
 use std::path::Path;
 
 /// Parsed Git configuration colors for diff, status, and branch visualization
@@ -31,7 +30,7 @@ pub struct GitColorConfig {
     pub diff_meta: Style,
     /// Color for stat +++ markers (default: green)
     pub diff_frag: Style,
-    
+
     /// Color for added files in status (default: green)
     pub status_added: Style,
     /// Color for modified files in status (default: red)
@@ -40,7 +39,7 @@ pub struct GitColorConfig {
     pub status_deleted: Style,
     /// Color for untracked files in status (default: none)
     pub status_untracked: Style,
-    
+
     /// Color for current branch (default: none)
     pub branch_current: Style,
     /// Color for local branches (default: none)
@@ -145,31 +144,29 @@ impl GitColorConfig {
     fn extract_git_color(content: &str, section: &str, key: &str) -> Option<Style> {
         // Pattern: [color "section"]
         let section_pattern = format!(r#"\[color "{}"\]"#, regex::escape(section));
-        
+
         // Find the section
         let section_re = regex::Regex::new(&section_pattern).ok()?;
         let section_start = section_re.find(content)?.end();
-        
+
         // Find the next section or end of file
-        let section_end = if let Some(next_section) = regex::Regex::new(r"\[").ok()
+        let section_end = if let Some(next_section) = regex::Regex::new(r"\[")
+            .ok()
             .and_then(|re| re.find(&content[section_start..]))
         {
             section_start + next_section.start()
         } else {
             content.len()
         };
-        
+
         let section_content = &content[section_start..section_end];
-        
+
         // Pattern: key = value
         let key_pattern = format!(r"{}\s*=\s*(.+?)(?:\r?\n|$)", regex::escape(key));
         let key_re = regex::Regex::new(&key_pattern).ok()?;
-        
-        let value = key_re.captures(section_content)?
-            .get(1)?
-            .as_str()
-            .trim();
-        
+
+        let value = key_re.captures(section_content)?.get(1)?.as_str().trim();
+
         // Try to parse with anstyle_git directly
         anstyle_git::parse(value).ok()
     }
@@ -206,7 +203,7 @@ mod tests {
     context = white
 "#;
         let config = create_test_git_config(config_text).expect("Failed to parse test config");
-        
+
         // Should have parsed colors
         assert_ne!(config.diff_new, Style::new());
         assert_ne!(config.diff_old, Style::new());
@@ -222,7 +219,7 @@ mod tests {
     untracked = magenta
 "#;
         let config = create_test_git_config(config_text).expect("Failed to parse test config");
-        
+
         // Should have parsed status colors
         assert_ne!(config.status_added, Style::new());
         assert_ne!(config.status_modified, Style::new());
@@ -236,7 +233,7 @@ mod tests {
     old = #ff0000
 "#;
         let config = create_test_git_config(config_text).expect("Failed to parse test config");
-        
+
         // Should have parsed hex colors
         assert_ne!(config.diff_new, Style::new());
         assert_ne!(config.diff_old, Style::new());
@@ -252,7 +249,7 @@ mod tests {
     fn test_parse_git_config_empty_file() {
         let config_text = "";
         let config = create_test_git_config(config_text).expect("Failed to parse empty config");
-        
+
         // Should fall back to defaults
         assert_ne!(config.diff_new, Style::new());
         assert_ne!(config.diff_old, Style::new());
@@ -267,7 +264,7 @@ mod tests {
     remote = red
 "#;
         let config = create_test_git_config(config_text).expect("Failed to parse test config");
-        
+
         // Should have parsed branch colors
         assert_ne!(config.branch_current, Style::new());
     }
@@ -287,7 +284,7 @@ mod tests {
     current = cyan bold
 "#;
         let config = create_test_git_config(config_text).expect("Failed to parse test config");
-        
+
         // Should have parsed colors from all sections
         assert_ne!(config.diff_new, Style::new());
         assert_ne!(config.status_added, Style::new());

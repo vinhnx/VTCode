@@ -74,17 +74,17 @@ pub fn ratatui_style_from_inline(
     fallback: Option<AnsiColorEnum>,
 ) -> Style {
     let mut resolved = Style::default();
-    
+
     // Foreground color
     if let Some(color) = style.color.or(fallback) {
         resolved = resolved.fg(ratatui_color_from_ansi(color));
     }
-    
+
     // Background color
     if let Some(color) = style.bg_color {
         resolved = resolved.bg(ratatui_color_from_ansi(color));
     }
-    
+
     // Effects bitmask
     if style.effects.contains(Effects::BOLD) {
         resolved = resolved.add_modifier(Modifier::BOLD);
@@ -98,6 +98,6 @@ pub fn ratatui_style_from_inline(
     if style.effects.contains(Effects::DIMMED) {
         resolved = resolved.add_modifier(Modifier::DIM);
     }
-    
+
     resolved
 }
