@@ -656,63 +656,17 @@ impl Session {
                 // Get system file color from LS_COLORS if available
                 let mut style = if let Some(file_palette) = self.file_palette.as_ref() {
                     if let Some(file_style) = file_palette.style_for_entry(entry) {
-                        // Convert anstyle::Style to ratatui::Style
-                        let fg_color = file_style.get_fg_color()
-                            .and_then(|c| {
-                                match c {
-                                    anstyle::Color::Ansi(ansi_color) => {
-                                        // anstyle::Color::Ansi is already the right type
-                                        Some(ratatui_color_from_ansi(anstyle::Color::Ansi(ansi_color)))
-                                    },
-                                    anstyle::Color::Rgb(rgb_color) => Some(ratatui::style::Color::Rgb(rgb_color.r(), rgb_color.g(), rgb_color.b())),
-                                    _ => None,
-                                }
-                            });
-                        
-                        let bg_color = file_style.get_bg_color()
-                            .and_then(|c| {
-                                match c {
-                                    anstyle::Color::Ansi(ansi_color) => {
-                                        // anstyle::Color::Ansi is already the right type
-                                        Some(ratatui_color_from_ansi(anstyle::Color::Ansi(ansi_color)))
-                                    },
-                                    anstyle::Color::Rgb(rgb_color) => Some(ratatui::style::Color::Rgb(rgb_color.r(), rgb_color.g(), rgb_color.b())),
-                                    _ => None,
-                                }
-                            });
+                        // Convert anstyle::Style to ratatui::Style using anstyle_utils
+                        let anstyle_converted = crate::utils::anstyle_utils::ansi_style_to_ratatui_style(file_style);
                         
                         let mut ratatui_style = base_style;
-                        if let Some(fg) = fg_color {
+                        if let Some(fg) = anstyle_converted.fg {
                             ratatui_style = ratatui_style.fg(fg);
                         }
-                        if let Some(bg) = bg_color {
+                        if let Some(bg) = anstyle_converted.bg {
                             ratatui_style = ratatui_style.bg(bg);
                         }
-                        
-                        // Apply effects
-                        let effects = file_style.get_effects();
-                        if effects.contains(anstyle::Effects::BOLD) {
-                            ratatui_style = ratatui_style.add_modifier(Modifier::BOLD);
-                        }
-                        if effects.contains(anstyle::Effects::ITALIC) {
-                            ratatui_style = ratatui_style.add_modifier(Modifier::ITALIC);
-                        }
-                        if effects.contains(anstyle::Effects::UNDERLINE) {
-                            ratatui_style = ratatui_style.add_modifier(Modifier::UNDERLINED);
-                        }
-                        if effects.contains(anstyle::Effects::DIMMED) {
-                            ratatui_style = ratatui_style.add_modifier(Modifier::DIM);
-                        }
-                        if effects.contains(anstyle::Effects::INVERT) {
-                            ratatui_style = ratatui_style.add_modifier(Modifier::REVERSED);
-                        }
-                        if effects.contains(anstyle::Effects::BLINK) {
-                            // Ratatui doesn't have a blink modifier, so we'll skip it for now
-                        }
-                        if effects.contains(anstyle::Effects::STRIKETHROUGH) {
-                            // Ratatui has strikethrough support
-                            ratatui_style = ratatui_style.add_modifier(Modifier::CROSSED_OUT);
-                        }
+                        ratatui_style = ratatui_style.add_modifier(anstyle_converted.add_modifier);
                         
                         ratatui_style
                     } else {

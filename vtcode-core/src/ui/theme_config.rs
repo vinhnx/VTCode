@@ -7,7 +7,7 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use anstyle::Style as AnsiStyle;
 use serde::{Deserialize, Serialize};
-use crate::ui::tui::ThemeConfigParser;
+use crate::utils::CachedStyleParser;
 
 /// Theme configuration that can be loaded from a .vtcode/theme.toml file
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -255,54 +255,58 @@ fn default_file_regular() -> String { "".to_string() }
 impl ThemeConfig {
     /// Convert CLI colors to anstyle::Style
     pub fn parse_cli_styles(&self) -> Result<ParsedCliColors> {
+        let parser = CachedStyleParser::default();
         Ok(ParsedCliColors {
-            success: ThemeConfigParser::parse_flexible(&self.cli.success)?,
-            error: ThemeConfigParser::parse_flexible(&self.cli.error)?,
-            warning: ThemeConfigParser::parse_flexible(&self.cli.warning)?,
-            info: ThemeConfigParser::parse_flexible(&self.cli.info)?,
-            prompt: ThemeConfigParser::parse_flexible(&self.cli.prompt)?,
+            success: parser.parse_flexible(&self.cli.success)?,
+            error: parser.parse_flexible(&self.cli.error)?,
+            warning: parser.parse_flexible(&self.cli.warning)?,
+            info: parser.parse_flexible(&self.cli.info)?,
+            prompt: parser.parse_flexible(&self.cli.prompt)?,
         })
     }
     
     /// Convert diff colors to anstyle::Style
     pub fn parse_diff_styles(&self) -> Result<ParsedDiffColors> {
+        let parser = CachedStyleParser::default();
         Ok(ParsedDiffColors {
-            new: ThemeConfigParser::parse_flexible(&self.diff.new)?,
-            old: ThemeConfigParser::parse_flexible(&self.diff.old)?,
-            context: ThemeConfigParser::parse_flexible(&self.diff.context)?,
-            header: ThemeConfigParser::parse_flexible(&self.diff.header)?,
-            meta: ThemeConfigParser::parse_flexible(&self.diff.meta)?,
-            frag: ThemeConfigParser::parse_flexible(&self.diff.frag)?,
+            new: parser.parse_flexible(&self.diff.new)?,
+            old: parser.parse_flexible(&self.diff.old)?,
+            context: parser.parse_flexible(&self.diff.context)?,
+            header: parser.parse_flexible(&self.diff.header)?,
+            meta: parser.parse_flexible(&self.diff.meta)?,
+            frag: parser.parse_flexible(&self.diff.frag)?,
         })
     }
     
     /// Convert status colors to anstyle::Style
     pub fn parse_status_styles(&self) -> Result<ParsedStatusColors> {
+        let parser = CachedStyleParser::default();
         Ok(ParsedStatusColors {
-            added: ThemeConfigParser::parse_flexible(&self.status.added)?,
-            modified: ThemeConfigParser::parse_flexible(&self.status.modified)?,
-            deleted: ThemeConfigParser::parse_flexible(&self.status.deleted)?,
-            untracked: ThemeConfigParser::parse_flexible(&self.status.untracked)?,
-            current: ThemeConfigParser::parse_flexible(&self.status.current)?,
-            local: ThemeConfigParser::parse_flexible(&self.status.local)?,
-            remote: ThemeConfigParser::parse_flexible(&self.status.remote)?,
+            added: parser.parse_flexible(&self.status.added)?,
+            modified: parser.parse_flexible(&self.status.modified)?,
+            deleted: parser.parse_flexible(&self.status.deleted)?,
+            untracked: parser.parse_flexible(&self.status.untracked)?,
+            current: parser.parse_flexible(&self.status.current)?,
+            local: parser.parse_flexible(&self.status.local)?,
+            remote: parser.parse_flexible(&self.status.remote)?,
         })
     }
     
     /// Convert file colors to anstyle::Style
     pub fn parse_file_styles(&self) -> Result<ParsedFileColors> {
+        let parser = CachedStyleParser::default();
         let mut extension_styles = std::collections::HashMap::new();
         for (ext, color_str) in &self.files.extensions {
-            let style = ThemeConfigParser::parse_flexible(color_str)
+            let style = parser.parse_flexible(color_str)
                 .with_context(|| format!("Failed to parse style for extension '{}': {}", ext, color_str))?;
             extension_styles.insert(ext.clone(), style);
         }
         
         Ok(ParsedFileColors {
-            directory: ThemeConfigParser::parse_flexible(&self.files.directory)?,
-            symlink: ThemeConfigParser::parse_flexible(&self.files.symlink)?,
-            executable: ThemeConfigParser::parse_flexible(&self.files.executable)?,
-            regular: ThemeConfigParser::parse_flexible(&self.files.regular)?,
+            directory: parser.parse_flexible(&self.files.directory)?,
+            symlink: parser.parse_flexible(&self.files.symlink)?,
+            executable: parser.parse_flexible(&self.files.executable)?,
+            regular: parser.parse_flexible(&self.files.regular)?,
             extensions: extension_styles,
         })
     }

@@ -170,10 +170,8 @@ impl GitColorConfig {
             .as_str()
             .trim();
         
-        // Try to parse with anstyle_git, fall back to our parser
-        anstyle_git::parse(value)
-            .ok()
-            .or_else(|| crate::ui::tui::ThemeConfigParser::parse_git_style(value).ok())
+        // Try to parse with anstyle_git directly
+        anstyle_git::parse(value).ok()
     }
 }
 
