@@ -1,4 +1,3 @@
-# VTCode Extension Manifest
 id = "vtcode"
 name = "VTCode"
 version = "0.3.0"
@@ -6,33 +5,3 @@ schema_version = 1
 authors = ["Vinh Nguyen <vinh@example.com>"]
 description = "AI coding assistant for Zed editor - A Rust-based terminal coding agent with semantic code intelligence and multi-provider AI support"
 repository = "https://github.com/vinhnx/vtcode"
-
-# Extension capabilities
-[capabilities]
-# Command palette integration for VTCode commands
-commands = ["ask_agent", "ask_about_selection", "analyze_workspace", "launch_chat", "check_status"]
-
-# Configuration and workspace context
-workspace = true
-configuration = true
-
-# Language support for syntax highlighting
-languages = ["toml"]
-
-# Zed API version compatibility
-min_zed_version = "0.140.0"
-max_zed_version = "0.999.0"
-
-# Features
-features = [
-    "multi_provider_ai",
-    "workspace_analysis",
-    "configuration_management",
-    "error_recovery",
-    "performance_metrics",
-    "command_builder",
-    "timeout_handling"
-]
-
-# Keywords for discovery
-keywords = ["ai", "assistant", "coding", "agent", "llm"]
