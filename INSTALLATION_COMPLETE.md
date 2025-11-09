@@ -90,6 +90,16 @@ cargo install vtcode
 npm install -g @vinhnx/vtcode
 ```
 
+## Recent Fixes
+
+### v0.43.2+ - Installer CDN Caching Fix
+- Fixed stdout pollution in shell installer by redirecting all logging to stderr
+- Resolves "No such file or directory" errors from log messages interfering with variable capture
+- If installation fails, use GitHub API endpoint for always-fresh script:
+  ```bash
+  curl -fsSL "https://api.github.com/repos/vinhnx/vtcode/contents/scripts/install.sh?ref=main" | jq -r '.content' | base64 -d | bash
+  ```
+
 ## File Structure
 
 ```

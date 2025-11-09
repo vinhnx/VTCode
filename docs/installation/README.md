@@ -82,6 +82,18 @@ source ~/.zshrc     # zsh
 **Windows:**
 Restart PowerShell or Command Prompt.
 
+### Installation fails with "No such file or directory"
+
+This typically indicates a network or CDN caching issue. Try one of:
+
+```bash
+# Force fresh download
+curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.sh | bash
+
+# Or use GitHub API (always fresh)
+curl -fsSL "https://api.github.com/repos/vinhnx/vtcode/contents/scripts/install.sh?ref=main" | jq -r '.content' | base64 -d | bash
+```
+
 ### Permission denied
 
 **macOS/Linux:**
@@ -97,6 +109,7 @@ Run PowerShell as Administrator.
 1. Check internet connection: `curl https://api.github.com`
 2. Verify GitHub is accessible
 3. Try again in a fresh terminal
+4. Check [GitHub status](https://www.githubstatus.com/)
 
 ### Still stuck?
 
