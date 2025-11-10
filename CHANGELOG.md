@@ -3,6 +3,55 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Version 0.43.0] - 2025-11-09
+# [Version 0.43.4] - 2025-11-10
+
+
+### Features
+    - feat: Implement permission system with command resolution, audit logging, and caching
+    - feat: Add Git color configuration support and theme management
+    - feat: Add Styling Quick Start Guide and Refactor Completion Report
+    - feat: add theme_parser module for Git/LS_COLORS configuration parsing
+    - feat: complete phase 1 anstyle integration - effects and background colors
+    - feat: Integrate anstyle-parse for ANSI escape sequence handling
+    - feat: implement styling refactor - centralize color palettes and style helpers
+
+
+### Bug Fixes
+    - fix: redirect logging to stderr to prevent stdout pollution in install script
+
+
+### Refactors
+    - refactor: Remove unused audit log and history navigation methods
+    - refactor: Remove references to ast_grep_search from documentation and tool policies
+    - refactor: Phase 2 Step 4 - migrate remaining input methods and word navigation
+    - refactor: Phase 2 Step 3 - migrate clear_input() and reset_history_navigation()
+    - refactor: Phase 2 Step 2 - add manager sync helper methods
+    - refactor: Phase 2 Step 1 - add manager fields to Session struct
+    - refactor: extract input history navigation logic fix in InputManager
+    - refactor(styling): implement central style helpers and diff color palette
+    - refactor: improve styling consistency with bold_color() and ColorPalette
+    - refactor: implement styling suggestions from STYLING_REFACTOR_GUIDE
+    - refactor: implement styling refactor from guide - centralize color/style management
+
+
+### Documentation
+    - docs: update Phase 2 progress - Step 4 complete with all input methods migrated
+    - docs: add VT Code execution policy documentation and update command validation
+    - docs: update changelog for v0.43.3 [skip ci]
+    - docs: add comprehensive styling documentation index
+    - docs: add Phase 2 planning and implementation guides for advanced styling features
+    - docs: add session summary for phase 1 styling integration completion
+    - docs: add phase 1 completion summary - all criteria met
+    - docs: add styling implementation completion status
+    - docs: add styling implementation completion status
+    - docs: update installation guides with CDN caching troubleshooting and fix details
+
+
+### Chores
+    - chore: update npm package.json to v0.43.3 [skip ci]
+    - chore: release v0.43.3
+    - chore: update install script to log messages to stderr and bump version to 0.43.2
+    - chore: update npm package.json to v0.43.2 [skip ci]
 # [Version 0.43.3] - 2025-11-09
 
 
