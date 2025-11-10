@@ -130,7 +130,7 @@ impl<T: PaletteItem> PaletteRenderer<T> {
         viewport: Rect,
         default_style: Style,
         highlight_style: Style,
-        accent_style: Style,
+        _accent_style: Style,
         border_style: Style,
     ) {
         if viewport.height == 0 || viewport.width == 0 {

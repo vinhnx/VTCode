@@ -563,6 +563,7 @@ pub mod ui {
     pub const HEADER_INPUT_LABEL: &str = "Input";
     pub const HEADER_INPUT_ENABLED: &str = "Enabled";
     pub const HEADER_INPUT_DISABLED: &str = "Disabled";
+    pub const INLINE_USER_PREFIX: &str = "> ";
     pub const CHAT_INPUT_PLACEHOLDER_BOOTSTRAP: &str = "Describe your next task (@ for file picker, # for custom prompts, / for slash commands) or run /init to rerun workspace setup.";
     pub const CHAT_INPUT_PLACEHOLDER_FOLLOW_UP: &str =
         "Command (@ for file picker, # for custom prompts, / for slash commands)";

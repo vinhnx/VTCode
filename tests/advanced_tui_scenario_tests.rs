@@ -5,6 +5,7 @@
 //!
 //! To update snapshots, run: `cargo insta review`
 
+use anstyle::Effects;
 use insta::assert_snapshot;
 use ratatui::{Terminal, backend::TestBackend};
 use vtcode_core::ui::tui::{
@@ -197,9 +198,9 @@ fn test_ui_styling_variations() {
             InlineSegment {
                 text: "This is plain text".to_string(),
                 style: InlineTextStyle {
-                    bold: false,
-                    italic: false,
                     color: None,
+                    bg_color: None,
+                    effects: Effects::empty(),
                 },
             },
         ),
@@ -208,9 +209,9 @@ fn test_ui_styling_variations() {
             InlineSegment {
                 text: "This is bold text".to_string(),
                 style: InlineTextStyle {
-                    bold: true,
-                    italic: false,
                     color: None,
+                    bg_color: None,
+                    effects: Effects::BOLD,
                 },
             },
         ),
@@ -219,9 +220,9 @@ fn test_ui_styling_variations() {
             InlineSegment {
                 text: "This is italic text".to_string(),
                 style: InlineTextStyle {
-                    bold: false,
-                    italic: true,
                     color: None,
+                    bg_color: None,
+                    effects: Effects::ITALIC,
                 },
             },
         ),
@@ -230,9 +231,9 @@ fn test_ui_styling_variations() {
             InlineSegment {
                 text: "This is bold and italic text".to_string(),
                 style: InlineTextStyle {
-                    bold: true,
-                    italic: true,
                     color: None,
+                    bg_color: None,
+                    effects: Effects::BOLD | Effects::ITALIC,
                 },
             },
         ),

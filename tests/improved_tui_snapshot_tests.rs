@@ -5,6 +5,7 @@
 //!
 //! To update snapshots, run: `cargo insta review`
 
+use anstyle::Effects;
 use insta::assert_snapshot;
 use ratatui::{Terminal, backend::TestBackend};
 use vtcode_core::ui::tui::{
@@ -46,9 +47,9 @@ fn test_ui_component_serialization() {
     let normal_segment = InlineSegment {
         text: "Normal text".to_string(),
         style: InlineTextStyle {
-            bold: false,
-            italic: false,
             color: None,
+            bg_color: None,
+            effects: Effects::empty(),
         },
     };
     assert_snapshot!("normal_segment", format!("{:?}", normal_segment));
@@ -56,9 +57,9 @@ fn test_ui_component_serialization() {
     let bold_segment = InlineSegment {
         text: "Bold text".to_string(),
         style: InlineTextStyle {
-            bold: true,
-            italic: false,
             color: None,
+            bg_color: None,
+            effects: Effects::BOLD,
         },
     };
     assert_snapshot!("bold_segment", format!("{:?}", bold_segment));
@@ -66,9 +67,9 @@ fn test_ui_component_serialization() {
     let italic_segment = InlineSegment {
         text: "Italic text".to_string(),
         style: InlineTextStyle {
-            bold: false,
-            italic: true,
             color: None,
+            bg_color: None,
+            effects: Effects::ITALIC,
         },
     };
     assert_snapshot!("italic_segment", format!("{:?}", italic_segment));

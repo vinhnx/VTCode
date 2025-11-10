@@ -10,9 +10,11 @@ use anyhow::{Context, Result, anyhow};
 use parking_lot::Mutex;
 use portable_pty::{Child, CommandBuilder, MasterPty, PtySize, native_pty_system};
 use shell_words::join;
+use tokio::sync::Mutex as TokioMutex;
 use tracing::{debug, warn};
 use vt100::Parser;
 
+use crate::audit::PermissionAuditLog;
 use crate::config::PtyConfig;
 use crate::sandbox::SandboxProfile;
 use crate::tools::types::VTCodePtySession;
@@ -23,6 +25,7 @@ pub struct PtyManager {
     config: PtyConfig,
     inner: Arc<PtyState>,
     sandbox_profile: Arc<Mutex<Option<SandboxProfile>>>,
+    audit_log: Option<Arc<TokioMutex<PermissionAuditLog>>>,
 }
 
 #[derive(Default)]
@@ -372,7 +375,13 @@ impl PtyManager {
             config,
             inner: Arc::new(PtyState::default()),
             sandbox_profile: Arc::new(Mutex::new(None)),
+            audit_log: None,
         }
+    }
+
+    pub fn with_audit_log(mut self, audit_log: Arc<TokioMutex<PermissionAuditLog>>) -> Self {
+        self.audit_log = Some(audit_log);
+        self
     }
 
     pub fn config(&self) -> &PtyConfig {
@@ -925,6 +934,12 @@ fn set_command_environment(
     workspace_root: &Path,
     sandbox_profile: Option<&SandboxProfile>,
 ) {
+    // Inherit environment from parent process to preserve PATH and other important variables
+    for (key, value) in std::env::vars() {
+        builder.env(&key, &value);
+    }
+
+    // Override or set specific environment variables for TTY
     builder.env("TERM", "xterm-256color");
     builder.env("PAGER", "cat");
     builder.env("GIT_PAGER", "cat");

@@ -4,7 +4,8 @@ pub mod bootstrap;
 use crate::acp::AgentClientProtocolConfig;
 use crate::context::ContextFeaturesConfig;
 use crate::core::{
-    AgentConfig, AutomationConfig, CommandsConfig, PromptCachingConfig, SecurityConfig, ToolsConfig,
+    AgentConfig, AutomationConfig, CommandsConfig, PermissionsConfig, PromptCachingConfig,
+    SecurityConfig, ToolsConfig,
 };
 use crate::defaults::{self, ConfigDefaultsProvider, SyntaxHighlightingDefaults};
 use crate::hooks::HooksConfig;
@@ -109,6 +110,10 @@ pub struct VTCodeConfig {
     /// Unix command permissions
     #[serde(default)]
     pub commands: CommandsConfig,
+
+    /// Permission system settings (resolution, audit logging, caching)
+    #[serde(default)]
+    pub permissions: PermissionsConfig,
 
     /// Security settings
     #[serde(default)]

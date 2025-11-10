@@ -279,6 +279,31 @@ allow_regex = []
 # Regular expression patterns for denied commands (if needed)
 deny_regex = []
 
+# Permission system enhancements - Command resolution, audit logging, and caching
+[permissions]
+# Enable command resolution to actual paths (helps identify suspicious commands)
+resolve_commands = true
+
+# Enable audit logging of all permission decisions
+audit_enabled = true
+
+# Directory for audit logs (created if not exists)
+# Uses ~/.vtcode/audit by default
+audit_directory = "~/.vtcode/audit"
+
+# What permission decisions to log
+log_allowed_commands = true
+log_denied_commands = true
+log_permission_prompts = true
+log_sandbox_events = true
+
+# Permission decision caching settings
+# Avoids redundant policy evaluations for repeated commands
+cache_enabled = true
+
+# Cache time-to-live in seconds (default: 5 minutes = 300 seconds)
+cache_ttl_seconds = 300
+
 # Security configuration - Safety settings for automated operations
 [security]
 # Require human confirmation for potentially dangerous actions

@@ -133,7 +133,7 @@ impl TranscriptReflowCache {
         }
 
         let mut result = Vec::with_capacity(max_rows.min(self.total_rows - start_row));
-        let mut current_row = start_row;
+        let current_row = start_row;
         let remaining_rows = max_rows.min(self.total_rows - start_row);
 
         // Find the starting message index using binary search on row_offsets
@@ -157,7 +157,7 @@ impl TranscriptReflowCache {
                 0
             };
 
-            for (line_idx, line) in msg.lines.iter().enumerate().skip(skip_lines) {
+            for (_line_idx, line) in msg.lines.iter().enumerate().skip(skip_lines) {
                 if result.len() >= remaining_rows {
                     break;
                 }

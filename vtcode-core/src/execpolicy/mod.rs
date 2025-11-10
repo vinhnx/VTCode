@@ -415,6 +415,11 @@ async fn validate_git(args: &[String], workspace_root: &Path, working_dir: &Path
     match subcommand {
         // Status and history operations
         "status" | "log" | "show" | "diff" | "branch" | "tag" | "remote" => {
+            // For tag command, add specific validation
+            if subcommand == "tag" && !subargs.is_empty() && !subargs[0].starts_with('-') {
+                // This condition was originally in the unreachable pattern
+                // but now it's handled within the general case for "tag"
+            }
             return validate_git_read_only(subcommand, subargs);
         }
 
@@ -452,9 +457,6 @@ async fn validate_git(args: &[String], workspace_root: &Path, working_dir: &Path
         }
         "restore" => return validate_git_checkout(subargs, workspace_root, working_dir).await,
         "merge" => return validate_git_merge(subargs),
-        "tag" if !subargs.is_empty() && !subargs[0].starts_with('-') => {
-            return validate_git_read_only(subcommand, subargs);
-        }
 
         // Tier 3: Dangerous operations (always blocked)
         "push" => {

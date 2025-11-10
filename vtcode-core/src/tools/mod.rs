@@ -125,7 +125,9 @@ pub mod apply_patch;
 
 pub mod cache;
 pub mod command;
+pub mod command_cache;
 pub mod command_policy;
+pub mod command_resolver;
 pub mod editing;
 pub mod file_ops;
 pub mod grep_file;
@@ -140,6 +142,8 @@ pub mod web_fetch;
 
 // Re-export main types and traits for backward compatibility
 pub use cache::FileCache;
+pub use command_cache::PermissionCache;
+pub use command_resolver::CommandResolver;
 pub use editing::{Patch, PatchError, PatchHunk, PatchLine, PatchOperation};
 pub use grep_file::GrepSearchManager;
 pub use plan::{

@@ -27,8 +27,8 @@ pub use api_keys::ApiKeySources;
 pub use context::{ContextFeaturesConfig, LedgerConfig};
 pub use core::{
     AgentConfig, AgentCustomPromptsConfig, AgentOnboardingConfig, AutomationConfig, CommandsConfig,
-    FullAutoConfig, PromptCachingConfig, ProviderPromptCachingConfig, SecurityConfig, ToolPolicy,
-    ToolsConfig,
+    FullAutoConfig, PermissionsConfig, PromptCachingConfig, ProviderPromptCachingConfig,
+    SecurityConfig, ToolPolicy, ToolsConfig,
 };
 pub use defaults::{
     ConfigDefaultsProvider, ContextStoreDefaults, PerformanceDefaults, ScenarioDefaults,

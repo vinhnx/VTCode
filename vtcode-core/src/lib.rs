@@ -124,6 +124,7 @@
 //! including tool implementations, LLM integration, and utility functions.
 
 // Public modules
+pub mod audit;
 pub mod bash_runner;
 pub mod cli;
 pub mod code;

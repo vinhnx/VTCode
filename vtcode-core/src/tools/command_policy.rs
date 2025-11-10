@@ -1,6 +1,12 @@
+use crate::audit::PermissionDecision;
 use crate::config::CommandsConfig;
+use crate::tools::command_cache::PermissionCache;
+use crate::tools::command_resolver::CommandResolver;
 use regex::Regex;
 use std::env;
+use std::path::PathBuf;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 use tracing::warn;
 
 #[derive(Clone)]
@@ -13,6 +19,9 @@ pub struct CommandPolicyEvaluator {
     deny_glob_regexes: Vec<Regex>,
     allow_regexes_empty: bool,
     allow_globs_empty: bool,
+    // NEW: Command resolution and caching for improved security visibility
+    resolver: Arc<Mutex<CommandResolver>>,
+    cache: Arc<Mutex<PermissionCache>>,
 }
 
 impl CommandPolicyEvaluator {
@@ -41,7 +50,19 @@ impl CommandPolicyEvaluator {
             deny_glob_regexes,
             allow_regexes_empty: allow_regex_patterns.is_empty(),
             allow_globs_empty: allow_glob_patterns.is_empty(),
+            resolver: Arc::new(Mutex::new(CommandResolver::new())),
+            cache: Arc::new(Mutex::new(PermissionCache::new())),
         }
+    }
+
+    /// Get a mutable reference to the resolver for external initialization
+    pub fn resolver_mut(&self) -> Arc<Mutex<CommandResolver>> {
+        Arc::clone(&self.resolver)
+    }
+
+    /// Get a mutable reference to the cache for external access
+    pub fn cache_mut(&self) -> Arc<Mutex<PermissionCache>> {
+        Arc::clone(&self.cache)
     }
 
     pub fn allows(&self, command: &[String]) -> bool {
@@ -75,6 +96,71 @@ impl CommandPolicyEvaluator {
         self.matches_prefix(cmd, &self.allow_prefixes)
             || Self::matches_any(&self.allow_regexes, cmd)
             || Self::matches_any(&self.allow_glob_regexes, cmd)
+    }
+
+    /// Enhanced async evaluation with command resolution and caching
+    /// Returns (allowed, resolved_path, reason, decision)
+    pub async fn evaluate_with_resolution(
+        &self,
+        command_text: &str,
+    ) -> (bool, Option<PathBuf>, String, PermissionDecision) {
+        let cmd = command_text.trim();
+
+        // Check cache first
+        {
+            let cache = self.cache.lock().await;
+            if let Some(allowed) = cache.get(cmd) {
+                let reason = if allowed {
+                    "Cached allow decision".to_string()
+                } else {
+                    "Cached deny decision".to_string()
+                };
+                return (allowed, None, reason, PermissionDecision::Cached);
+            }
+        }
+
+        // Resolve command to actual path
+        let resolved_path = {
+            let mut resolver = self.resolver.lock().await;
+            let resolution = resolver.resolve(cmd);
+            resolution.resolved_path.clone()
+        };
+
+        // Evaluate policy
+        let allowed = self.allows_text(cmd);
+
+        // Determine reason
+        let reason = if allowed {
+            if self.matches_prefix(cmd, &self.allow_prefixes) {
+                format!("allow_list match: {}", cmd)
+            } else if Self::matches_any(&self.allow_glob_regexes, cmd) {
+                "allow_glob match".to_string()
+            } else {
+                "allow_regex match".to_string()
+            }
+        } else {
+            if self.matches_prefix(cmd, &self.deny_prefixes) {
+                format!("deny_list match: {}", cmd)
+            } else if Self::matches_any(&self.deny_glob_regexes, cmd) {
+                "deny_glob match".to_string()
+            } else {
+                "deny_regex match".to_string()
+            }
+        };
+
+        // Cache the result
+        {
+            let mut cache = self.cache.lock().await;
+            cache.put(cmd, allowed, &reason);
+        }
+
+        let decision = if allowed {
+            PermissionDecision::Allowed
+        } else {
+            PermissionDecision::Denied
+        };
+
+        (allowed, resolved_path, reason, decision)
     }
 
     fn matches_prefix(&self, value: &str, prefixes: &[String]) -> bool {

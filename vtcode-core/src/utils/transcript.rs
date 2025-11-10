@@ -4,7 +4,7 @@ use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use crate::ui::tui::{InlineHandle, InlineMessageKind, InlineSegment, InlineTextStyle};
+use crate::ui::{InlineHandle, InlineMessageKind, InlineSegment, InlineTextStyle};
 use crate::utils::ansi::MessageStyle;
 
 const MAX_LINES: usize = 4000;
