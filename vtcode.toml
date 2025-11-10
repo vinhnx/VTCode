@@ -65,8 +65,14 @@ refine_prompts_max_passes = 1
 
 # Optional alternate model for refinement (leave empty to use default)
 refine_prompts_model = ""
+
+# Maximum size of project documentation to include in context (in bytes)
 project_doc_max_bytes = 16384
+
+# Maximum size of instruction files to process (in bytes)
 instruction_max_bytes = 16384
+
+# List of additional instruction files to include in context
 instruction_files = []
 
 # Small model configuration for efficient operations
@@ -94,18 +100,6 @@ use_for_web_summary = true
 
 # Use small model for git history processing
 use_for_git_history = true
-
-# Use small model for conversation context compression
-use_for_compression = true
-
-# Maximum size of project documentation to include in context (in bytes)
-project_doc_max_bytes = 16384
-
-# Maximum size of instruction files to process (in bytes)
-instruction_max_bytes = 16384
-
-# List of additional instruction files to include in context
-instruction_files = []
 
 # Onboarding configuration - Customize the startup experience
 [agent.onboarding]
@@ -178,18 +172,7 @@ max_snapshots = 50
 # Maximum age of checkpoints to keep (in days)
 max_age_days = 30
 
-[agent.smart_summarization]
-enabled = false
-min_summary_interval_secs = 30
-max_concurrent_tasks = 4
-min_turns_threshold = 20
-token_threshold_percent = 0.6
-max_turn_content_length = 2000
-aggressive_compression_threshold = 15000
-# Enable context optimization and show "⚡ Optimizing context" message
-# When disabled (default), context will NOT be automatically compressed
-# Enable this to compress context at 20+ turns or 85% token usage
-show_context_optimization_message = false
+
 
 # Tool security configuration
 [tools]
@@ -210,10 +193,8 @@ max_repeated_tool_calls = 2
 # Specific tool policies - Override default policy for individual tools
 [tools.policies]
 apply_patch = "prompt"
-ast_grep_search = "allow"
 close_pty_session = "allow"
 create_pty_session = "allow"
-curl = "prompt"
 edit_file = "allow"
 grep_file = "allow"
 list_files = "allow"
@@ -414,8 +395,7 @@ max_entries = 12
 # Include ledger summary in model prompts
 include_in_prompt = true
 
-# Preserve ledger during context compression
-preserve_in_compression = true
+
 
 # Token budget management - Track and limit token usage
 [context.token_budget]
@@ -584,7 +564,6 @@ allowed_tools = [
     "resize_pty_session",
     "close_pty_session",
     "update_plan",
-    "ast_grep_search",
     "apply_patch",
     "send_pty_input",
 ]

@@ -26,7 +26,7 @@ This directory contains VHS (Video Hosting System) showcases for VT Code, demons
 - `demo-tools.tape` - Focuses on tool usage and integration (original version):
   - Shell command execution (`pwd`, `ls`)
   - File operations (create, read)
-  - Slash commands (`/command`, `/help`)
+  - Slash commands (`/help`)
   - Tree-sitter code analysis
   - Verbose mode showing tool interactions
 - `demo-tools.gif` - Generated GIF highlighting tool usage
@@ -50,7 +50,7 @@ This directory contains VHS (Video Hosting System) showcases for VT Code, demons
 ### Agentic Capabilities
 - **Autonomous Navigation**: Using tools to discover current directory and file structure
 - **File Operations**: Creating, reading, and modifying files autonomously
-- **Command Execution**: Running shell commands via `run_terminal_cmd` and `/command`
+- **Command Execution**: Running shell commands via `run_terminal_cmd`
 - **Code Analysis**: Tree-sitter powered code structure analysis
 - **Tool Integration**: Using built-in tools for various operations
 
@@ -59,7 +59,7 @@ This directory contains VHS (Video Hosting System) showcases for VT Code, demons
 - Multi-provider LLM support (OpenAI, Anthropic, Gemini, etc.)
 - Tree-sitter code analysis
 - Advanced context management
-- Slash commands with `/exit`, `/help`, `/command`
+- Slash commands with `/exit`, `/help`
 - Real-time PTY integration
 
 ## Prerequisites
@@ -121,7 +121,7 @@ For more information about VHS syntax, visit [github.com/charmbracelet/vhs](http
 - "Can you show me the README.md file?" - File reading operation
 
 ### Tool Usage Examples:
-- Running shell commands with `/command pwd` and `/command ls -la`
+- Running shell commands with `run_terminal_cmd`
 - Creating and reading files with content verification
 - Using tree-sitter for code analysis
 - Tool-based problem solving and verification

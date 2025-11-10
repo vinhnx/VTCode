@@ -49,15 +49,7 @@ Type "Can you read the content of tool_demo.txt to verify it was created?"
 Enter
 Sleep 8s
 
-# Show how to use slash commands for tools
-Type "/command pwd"
-Enter
-Sleep 3s
 
-# Show how to use slash commands for file listing
-Type "/command ls -la"
-Enter
-Sleep 3s
 
 # Show tree-sitter code analysis tool
 Type "Can you analyze the structure of any Rust file in this project?"

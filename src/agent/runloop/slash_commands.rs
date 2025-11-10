@@ -1,6 +1,6 @@
 use anyhow::Result;
 use chrono::Local;
-use serde_json::{Map, Value};
+use serde_json::Value;
 use shell_words::split as shell_split;
 use std::time::Duration;
 use vtcode_core::prompts::{CustomPrompt, CustomPromptRegistry, PromptInvocation};
@@ -173,43 +173,7 @@ pub async fn handle_slash_command(
             Ok(SlashCommandOutcome::Handled)
         }
 
-        "command" => {
-            if args.is_empty() {
-                renderer.line(MessageStyle::Error, "Usage: /command <program> [args...]")?;
-                return Ok(SlashCommandOutcome::Handled);
-            }
-            let tokens = match shell_split(args) {
-                Ok(tokens) => tokens,
-                Err(err) => {
-                    renderer.line(
-                        MessageStyle::Error,
-                        &format!("Failed to parse arguments: {}", err),
-                    )?;
-                    return Ok(SlashCommandOutcome::Handled);
-                }
-            };
 
-            if tokens.is_empty() {
-                renderer.line(MessageStyle::Error, "Usage: /command <program> [args...]")?;
-                return Ok(SlashCommandOutcome::Handled);
-            }
-
-            let mut command_vec = Vec::new();
-            command_vec.push(Value::String(tokens[0].clone()));
-            command_vec.extend(
-                tokens
-                    .iter()
-                    .skip(1)
-                    .map(|segment| Value::String(segment.clone())),
-            );
-
-            let mut args_map = Map::new();
-            args_map.insert("command".to_string(), Value::Array(command_vec));
-            Ok(SlashCommandOutcome::ExecuteTool {
-                name: "run_command".to_string(),
-                args: Value::Object(args_map),
-            })
-        }
         "init" => {
             let mut force = false;
             for flag in args.split_whitespace() {

@@ -59,19 +59,7 @@ Sleep 2s
 # Wait for file reading and verification
 Sleep 10s
 
-# Show how to use slash commands for tools
-Type "/command pwd"
-Enter
-Sleep 2s
-# Wait for slash command execution
-Sleep 6s
 
-# Show how to use slash commands for file listing
-Type "/command ls -la"
-Enter
-Sleep 2s
-# Wait for command output
-Sleep 8s
 
 # Show tree-sitter code analysis tool
 Type "Can you analyze the structure of any Rust file in this project?"
