@@ -7,6 +7,7 @@ use crate::core::{
     AgentConfig, AutomationConfig, CommandsConfig, PermissionsConfig, PromptCachingConfig,
     SecurityConfig, ToolsConfig,
 };
+use crate::debug::DebugConfig;
 use crate::defaults::{self, ConfigDefaultsProvider, SyntaxHighlightingDefaults};
 use crate::hooks::HooksConfig;
 use crate::mcp::McpClientConfig;
@@ -126,6 +127,10 @@ pub struct VTCodeConfig {
     /// PTY settings
     #[serde(default)]
     pub pty: PtyConfig,
+
+    /// Debug and tracing settings
+    #[serde(default)]
+    pub debug: DebugConfig,
 
     /// Context features (e.g., Decision Ledger)
     #[serde(default)]

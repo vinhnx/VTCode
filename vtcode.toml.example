@@ -329,6 +329,18 @@ trim_to_percent = 60
 # Number of recent conversation turns to always preserve
 preserve_recent_turns = 6
 
+# Enable semantic-aware context compression using structural analysis
+semantic_compression = false
+
+# Retain tool outputs longer when related actions are in progress
+tool_aware_retention = false
+
+# Maximum AST depth to preserve when semantic compression is active
+max_structural_depth = 3
+
+# Number of recent tool responses to keep when tool-aware retention is enabled
+preserve_recent_tools = 5
+
 # Decision ledger configuration - Track important decisions
 [context.ledger]
 # Enable decision tracking and persistence

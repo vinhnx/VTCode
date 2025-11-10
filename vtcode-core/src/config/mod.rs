@@ -17,6 +17,8 @@ pub mod models;
 pub mod router;
 pub mod telemetry;
 pub mod types;
+pub mod validation;
+pub mod validator;
 
 pub use acp::{
     AgentClientProtocolConfig, AgentClientProtocolTransport, AgentClientProtocolZedConfig,
@@ -47,6 +49,8 @@ pub use models::{ModelId, OpenRouterMetadata};
 pub use router::{ComplexityModelMap, HeuristicSettings, ResourceBudget, RouterConfig};
 pub use telemetry::TelemetryConfig;
 pub use types::{ReasoningEffortLevel, UiSurfacePreference};
+pub use validation::{validate_config, validate_model_exists, ValidationResult};
+pub use validator::{ConfigValidator, ModelsDatabase, ValidationResult as ConfigValidationResult};
 pub use vtcode_config::TimeoutsConfig;
 pub use vtcode_config::root::{
     PtyConfig, StatusLineConfig, StatusLineMode, ToolOutputMode, UiConfig,

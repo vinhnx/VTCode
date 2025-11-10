@@ -123,6 +123,7 @@
 //! including tool implementations, LLM integration, and utility functions.
 
 // Public modules
+pub mod acp;
 pub mod audit;
 pub mod bash_runner;
 pub mod cli;

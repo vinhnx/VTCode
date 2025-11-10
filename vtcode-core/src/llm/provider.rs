@@ -301,6 +301,10 @@ pub struct Message {
     pub reasoning_details: Option<Vec<serde_json::Value>>,
     pub tool_calls: Option<Vec<ToolCall>>,
     pub tool_call_id: Option<String>,
+    /// Optional origin tool name for tracking which tool generated this message
+    /// Used in tool-aware context retention to preserve results from recently-active tools
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin_tool: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -392,6 +396,7 @@ impl Message {
             reasoning_details: None,
             tool_calls: None,
             tool_call_id: None,
+            origin_tool: None,
         }
     }
 
@@ -404,6 +409,7 @@ impl Message {
             reasoning_details: None,
             tool_calls: None,
             tool_call_id: None,
+            origin_tool: None,
         }
     }
 
@@ -416,6 +422,7 @@ impl Message {
             reasoning_details: None,
             tool_calls: None,
             tool_call_id: None,
+            origin_tool: None,
         }
     }
 
@@ -428,6 +435,7 @@ impl Message {
             reasoning_details: None,
             tool_calls: None,
             tool_call_id: None,
+            origin_tool: None,
         }
     }
 
@@ -441,6 +449,7 @@ impl Message {
             reasoning_details: None,
             tool_calls: Some(tool_calls),
             tool_call_id: None,
+            origin_tool: None,
         }
     }
 
@@ -456,6 +465,7 @@ impl Message {
             reasoning_details: None,
             tool_calls: Some(tool_calls),
             tool_call_id: None,
+            origin_tool: None,
         }
     }
 
@@ -473,6 +483,7 @@ impl Message {
             reasoning_details,
             tool_calls: Some(tool_calls),
             tool_call_id: None,
+            origin_tool: None,
         }
     }
 
@@ -485,6 +496,7 @@ impl Message {
             reasoning_details: None,
             tool_calls: None,
             tool_call_id: None,
+            origin_tool: None,
         }
     }
 
@@ -505,6 +517,7 @@ impl Message {
             reasoning_details: None,
             tool_calls: None,
             tool_call_id: Some(tool_call_id),
+            origin_tool: None,
         }
     }
 
@@ -517,6 +530,24 @@ impl Message {
     ) -> Self {
         // We can store the function name in the content metadata or handle it provider-specifically
         Self::tool_response(tool_call_id, content)
+    }
+
+    /// Create a tool response message with origin tool tracking
+    /// The origin_tool field helps with tool-aware context retention
+    pub fn tool_response_with_origin(
+        tool_call_id: String,
+        content: String,
+        origin_tool: String,
+    ) -> Self {
+        Self {
+            role: MessageRole::Tool,
+            content: MessageContent::Text(content),
+            reasoning: None,
+            reasoning_details: None,
+            tool_calls: None,
+            tool_call_id: Some(tool_call_id),
+            origin_tool: Some(origin_tool),
+        }
     }
 
     /// Create a user message with an image from a local file
@@ -951,6 +982,22 @@ pub trait LLMProvider: Send + Sync {
     /// Whether the provider understands parallel tool configuration payloads
     fn supports_parallel_tool_config(&self, _model: &str) -> bool {
         false
+    }
+
+    /// Whether the provider supports structured output (JSON schema guarantees)
+    fn supports_structured_output(&self, _model: &str) -> bool {
+        false
+    }
+
+    /// Whether the provider supports prompt/context caching
+    fn supports_context_caching(&self, _model: &str) -> bool {
+        false
+    }
+
+    /// Get the effective context window size for a model
+    fn effective_context_size(&self, _model: &str) -> usize {
+        // Default to 128k context window (common baseline)
+        128_000
     }
 
     /// Generate completion

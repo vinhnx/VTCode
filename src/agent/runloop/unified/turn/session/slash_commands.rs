@@ -81,6 +81,8 @@ pub(super) struct SlashCommandContext<'a> {
     pub default_placeholder: &'a Option<String>,
     pub lifecycle_hooks: Option<&'a LifecycleHookEngine>,
     pub full_auto: bool,
+    pub approval_recorder: Option<&'a vtcode_core::tools::ApprovalRecorder>,
+    pub tool_permission_cache: &'a Arc<RwLock<vtcode_core::acp::ToolPermissionCache>>,
 }
 
 pub(super) async fn handle_outcome(
@@ -382,6 +384,10 @@ pub(super) async fn handle_outcome(
                 ctx.ctrl_c_state,
                 ctx.ctrl_c_notify,
                 ctx.lifecycle_hooks,
+                None, // justification from agent
+                ctx.approval_recorder,
+                Some(ctx.decision_ledger),
+                Some(ctx.tool_permission_cache),
             )
             .await
             {

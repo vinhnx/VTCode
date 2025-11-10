@@ -22,6 +22,8 @@ use vtcode_core::core::router::{Router, TaskClass};
 use vtcode_core::llm::error_display;
 use vtcode_core::llm::provider::{self as uni};
 use vtcode_core::tools::registry::{ToolErrorType, ToolExecutionError, classify_error};
+use vtcode_core::tools::{ApprovalRecorder, result_cache::CacheKey};
+use vtcode_core::tools::error_context::ToolErrorContext;
 use vtcode_core::ui::theme;
 use vtcode_core::ui::tui::{InlineEvent, InlineEventCallback, spawn_session, theme_from_styles};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
@@ -140,6 +142,9 @@ pub(crate) async fn run_single_agent_loop_unified(
             mut mcp_panel_state,
             token_budget,
             token_budget_enabled,
+            token_counter,
+            tool_result_cache,
+            tool_permission_cache,
             custom_prompts,
             mut sandbox,
         } = initialize_session(&config, vt_cfg.as_ref(), full_auto, resume_ref).await?;
@@ -445,6 +450,11 @@ pub(crate) async fn run_single_agent_loop_unified(
         }
 
         let mut session_stats = SessionStats::default();
+        let cache_dir = std::env::var("HOME")
+            .ok()
+            .map(|home| PathBuf::from(home).join(".vtcode").join("cache"))
+            .unwrap_or_else(|| PathBuf::from(".vtcode/cache"));
+        let approval_recorder = Arc::new(ApprovalRecorder::new(cache_dir));
         let mut linked_directories: Vec<LinkedDirectory> = Vec::new();
         let mut model_picker_state: Option<ModelPickerState> = None;
         let mut palette_state: Option<ActivePalette> = None;
@@ -734,6 +744,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                                 default_placeholder: &default_placeholder,
                                 lifecycle_hooks: lifecycle_hooks.as_ref(),
                                 full_auto,
+                                approval_recorder: Some(&approval_recorder),
+                                tool_permission_cache: &tool_permission_cache,
                             },
                         )
                         .await?;
@@ -1290,6 +1302,10 @@ pub(crate) async fn run_single_agent_loop_unified(
                             &ctrl_c_state,
                             &ctrl_c_notify,
                             lifecycle_hooks.as_ref(),
+                            None, // justification from agent - TODO: extract from context
+                            Some(&approval_recorder),
+                            Some(&decision_ledger),
+                            Some(&tool_permission_cache),
                         )
                         .await
                         {
@@ -1307,6 +1323,16 @@ pub(crate) async fn run_single_agent_loop_unified(
                                     )?;
                                     break 'outer TurnLoopResult::Cancelled;
                                 }
+
+                                // Check if this is a read-only tool that can be cached
+                                let is_read_only_tool = matches!(
+                                    name,
+                                    "read_file"
+                                        | "list_files"
+                                        | "grep_search"
+                                        | "find_files"
+                                        | "tree_sitter_analyze"
+                                );
 
                                 // Create a progress reporter for the tool execution
                                 let progress_reporter = ProgressReporter::new();
@@ -1326,18 +1352,77 @@ pub(crate) async fn run_single_agent_loop_unified(
                                     Some(&progress_reporter),
                                 );
 
-                                // Force TUI refresh to ensure display stability
-                                safe_force_redraw(&handle, &mut last_forced_redraw);
-
-                                let pipeline_outcome = execute_tool_with_timeout(
-                                    &mut tool_registry,
+                                // Try to get from cache first for read-only tools
+                                let mut cache_hit = false;
+                                let params_str = serde_json::to_string(&args_val).unwrap_or_default();
+                                let cache_key = CacheKey::new(
                                     name,
-                                    args_val.clone(),
-                                    &ctrl_c_state,
-                                    &ctrl_c_notify,
-                                    Some(&progress_reporter),
-                                )
-                                .await;
+                                    &params_str,
+                                    "", // No specific file path for generic tools
+                                );
+                                
+                                let pipeline_outcome = if is_read_only_tool {
+                                    let mut tool_cache = tool_result_cache.write().await;
+                                    if let Some(cached_output) = tool_cache.get(&cache_key) {
+                                        cache_hit = true;
+                                        #[cfg(debug_assertions)]
+                                        debug!("Cache hit for tool: {}", name);
+
+                                        // Return cached result wrapped as tool success
+                                        let cached_json: serde_json::Value =
+                                            serde_json::from_str(&cached_output)
+                                                .unwrap_or(serde_json::json!({}));
+                                        ToolExecutionStatus::Success {
+                                            output: cached_json,
+                                            stdout: None,
+                                            modified_files: vec![],
+                                            command_success: true,
+                                            has_more: false,
+                                        }
+                                    } else {
+                                        drop(tool_cache);
+                                        // Force TUI refresh to ensure display stability
+                                        safe_force_redraw(&handle, &mut last_forced_redraw);
+
+                                        let result = execute_tool_with_timeout(
+                                            &mut tool_registry,
+                                            name,
+                                            args_val.clone(),
+                                            &ctrl_c_state,
+                                            &ctrl_c_notify,
+                                            Some(&progress_reporter),
+                                        )
+                                        .await;
+
+                                        // Cache successful read-only results
+                                        if let ToolExecutionStatus::Success {
+                                            ref output,
+                                            ..
+                                        } = result
+                                        {
+                                            let output_json = serde_json::to_string(output)
+                                                .unwrap_or_else(|_| "{}".to_string());
+                                            let mut cache = tool_result_cache.write().await;
+                                            cache.insert(cache_key, output_json);
+                                        }
+
+                                        result
+                                    }
+                                } else {
+                                    // Non-cached path for write tools
+                                    // Force TUI refresh to ensure display stability
+                                    safe_force_redraw(&handle, &mut last_forced_redraw);
+
+                                    execute_tool_with_timeout(
+                                        &mut tool_registry,
+                                        name,
+                                        args_val.clone(),
+                                        &ctrl_c_state,
+                                        &ctrl_c_notify,
+                                        Some(&progress_reporter),
+                                    )
+                                    .await
+                                };
 
                                 match pipeline_outcome {
                                     ToolExecutionStatus::Progress(progress) => {
@@ -1432,6 +1517,12 @@ pub(crate) async fn run_single_agent_loop_unified(
                                             )?;
                                             turn_modified_files
                                                 .extend(modified_files.iter().map(PathBuf::from));
+                                            
+                                            // Invalidate cache for modified files
+                                            for file_path in &modified_files {
+                                                let mut cache = tool_result_cache.write().await;
+                                                cache.invalidate_for_path(file_path);
+                                            }
                                         } else if !modified_files.is_empty() {
                                             renderer
                                                 .line(MessageStyle::Info, "Changes discarded.")?;
@@ -1465,9 +1556,22 @@ pub(crate) async fn run_single_agent_loop_unified(
 
                                         let content = serde_json::to_string(&output)
                                             .unwrap_or_else(|_| "{}".to_string());
-                                        working_history.push(uni::Message::tool_response(
+                                        
+                                        // Track token usage for this tool result
+                                        {
+                                            let mut counter = token_counter.write().await;
+                                            let content_type = if cache_hit {
+                                                "tool_output"
+                                            } else {
+                                                "tool_output"
+                                            };
+                                            counter.count_with_profiling(content_type, &content);
+                                        }
+                                        
+                                        working_history.push(uni::Message::tool_response_with_origin(
                                             call.id.clone(),
                                             content,
+                                            name.to_string(),
                                         ));
 
                                         let mut hook_block_reason: Option<String> = None;
@@ -1637,45 +1741,52 @@ pub(crate) async fn run_single_agent_loop_unified(
                                             mcp_panel_state.add_event(mcp_event);
                                         }
 
-                                        // Display error details
-                                        renderer.line(
-                                            MessageStyle::Error,
-                                            &format!("Error: {}", error_message),
-                                        )?;
+                                        // Create structured error context for better diagnostics
+                                        let error_ctx = ToolErrorContext::new(
+                                            name.to_string(),
+                                            error_message.clone(),
+                                        )
+                                        .with_auto_recovery();
+
+                                        // Display user-friendly error
+                                        renderer.line(MessageStyle::Error, &error_ctx.format_for_user())?;
 
                                         // Display error type for better understanding
                                         let error_type_msg = match classified_clone {
-                                            ToolErrorType::InvalidParameters => {
-                                                "Invalid parameters provided"
-                                            }
-                                            ToolErrorType::ToolNotFound => "Tool not found",
-                                            ToolErrorType::ResourceNotFound => "Resource not found",
-                                            ToolErrorType::PermissionDenied => "Permission denied",
-                                            ToolErrorType::ExecutionError => "Execution error",
-                                            ToolErrorType::PolicyViolation => "Policy violation",
-                                            ToolErrorType::Timeout => "Operation timed out",
-                                            ToolErrorType::NetworkError => "Network error",
+                                        ToolErrorType::InvalidParameters => {
+                                           "Invalid parameters provided"
+                                        }
+                                        ToolErrorType::ToolNotFound => "Tool not found",
+                                        ToolErrorType::ResourceNotFound => "Resource not found",
+                                        ToolErrorType::PermissionDenied => "Permission denied",
+                                           ToolErrorType::ExecutionError => "Execution error",
+                                           ToolErrorType::PolicyViolation => "Policy violation",
+                                        ToolErrorType::Timeout => "Operation timed out",
+                                        ToolErrorType::NetworkError => "Network error",
                                         };
                                         renderer.line(
-                                            MessageStyle::Info,
-                                            &format!("Type: {}", error_type_msg),
+                                           MessageStyle::Info,
+                                           &format!("Type: {}", error_type_msg),
                                         )?;
-
-                                        // Encourage retry with helpful message
-                                        renderer.line(
-                                        MessageStyle::Info,
-                                        "💡 Tip: Review the error and try again with corrected parameters",
-                                    )?;
                                         render_tool_output(
                                             &mut renderer,
                                             Some(name),
                                             &error_json,
                                             vt_cfg.as_ref(),
                                         )?;
-                                        working_history.push(uni::Message::tool_response(
+                                        let error_content = serde_json::to_string(&error_json)
+                                            .unwrap_or_else(|_| "{}".to_string());
+                                        
+                                        // Track error token usage
+                                        {
+                                            let mut counter = token_counter.write().await;
+                                            counter.count_with_profiling("tool_output", &error_content);
+                                        }
+                                        
+                                        working_history.push(uni::Message::tool_response_with_origin(
                                             call.id.clone(),
-                                            serde_json::to_string(&error_json)
-                                                .unwrap_or_else(|_| "{}".to_string()),
+                                            error_content,
+                                            name.to_string(),
                                         ));
                                         let _ = last_tool_stdout.take();
                                         {
@@ -1711,10 +1822,19 @@ pub(crate) async fn run_single_agent_loop_unified(
 
                                         let err_json = error.to_json_value();
                                         let error_message = error.message.clone();
-                                        working_history.push(uni::Message::tool_response(
+                                        let timeout_content = serde_json::to_string(&err_json)
+                                            .unwrap_or_else(|_| "{}".to_string());
+                                        
+                                        // Track timeout error token usage
+                                        {
+                                            let mut counter = token_counter.write().await;
+                                            counter.count_with_profiling("tool_output", &timeout_content);
+                                        }
+                                        
+                                        working_history.push(uni::Message::tool_response_with_origin(
                                             call.id.clone(),
-                                            serde_json::to_string(&err_json)
-                                                .unwrap_or_else(|_| "{}".to_string()),
+                                            timeout_content,
+                                            name.to_string(),
                                         ));
                                         let _ = last_tool_stdout.take();
                                         {
@@ -1748,10 +1868,11 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         );
                                         let err_json = cancel_error.to_json_value();
 
-                                        working_history.push(uni::Message::tool_response(
+                                        working_history.push(uni::Message::tool_response_with_origin(
                                             call.id.clone(),
                                             serde_json::to_string(&err_json)
                                                 .unwrap_or_else(|_| "{}".to_string()),
+                                            name.to_string(),
                                         ));
                                         let _ = last_tool_stdout.take();
 
@@ -1793,7 +1914,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                 let content =
                                     serde_json::to_string(&denial).unwrap_or("{}".to_string());
                                 working_history
-                                    .push(uni::Message::tool_response(call.id.clone(), content));
+                                    .push(uni::Message::tool_response_with_origin(call.id.clone(), content, name.to_string()));
                                 {
                                     let mut ledger = decision_ledger.write().await;
                                     ledger.record_outcome(
@@ -1845,9 +1966,10 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         name, err
                                     )
                                 });
-                                working_history.push(uni::Message::tool_response(
+                                working_history.push(uni::Message::tool_response_with_origin(
                                     call.id.clone(),
                                     err_json.to_string(),
+                                    name.to_string(),
                                 ));
                                 let _ = last_tool_stdout.take();
                                 {

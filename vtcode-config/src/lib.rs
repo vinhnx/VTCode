@@ -28,6 +28,7 @@ pub mod api_keys;
 pub mod constants;
 pub mod context;
 pub mod core;
+pub mod debug;
 pub mod defaults;
 pub mod hooks;
 pub mod loader;
@@ -48,6 +49,7 @@ pub use acp::{
 };
 pub use api_keys::ApiKeySources;
 pub use context::{ContextFeaturesConfig, LedgerConfig};
+pub use debug::{DebugConfig, TraceLevel};
 pub use core::{
     AgentConfig, AgentCustomPromptsConfig, AgentOnboardingConfig, AutomationConfig, CommandsConfig,
     FullAutoConfig, PromptCachingConfig, ProviderPromptCachingConfig, SecurityConfig, ToolPolicy,

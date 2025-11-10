@@ -20,7 +20,9 @@ use vtcode_core::core::token_budget::{
     TokenBudgetConfig as RuntimeTokenBudgetConfig, TokenBudgetManager,
 };
 use vtcode_core::core::trajectory::TrajectoryLogger;
-use vtcode_core::llm::{factory::create_provider_with_config, provider as uni};
+use vtcode_core::llm::{factory::create_provider_with_config, provider as uni, TokenCounter};
+use vtcode_core::tools::ToolResultCache;
+use vtcode_core::acp::ToolPermissionCache;
 use vtcode_core::mcp::{McpClient, McpToolInfo};
 use vtcode_core::models::ModelId;
 use vtcode_core::prompts::CustomPromptRegistry;
@@ -42,6 +44,9 @@ pub(crate) struct SessionState {
     pub mcp_panel_state: mcp_events::McpPanelState,
     pub token_budget: Arc<TokenBudgetManager>,
     pub token_budget_enabled: bool,
+    pub token_counter: Arc<RwLock<TokenCounter>>,
+    pub tool_result_cache: Arc<RwLock<ToolResultCache>>,
+    pub tool_permission_cache: Arc<RwLock<ToolPermissionCache>>,
 
     pub custom_prompts: CustomPromptRegistry,
     pub sandbox: SandboxCoordinator,
@@ -293,6 +298,9 @@ pub(crate) async fn initialize_session(
     });
 
     let sandbox = SandboxCoordinator::new(config.workspace.clone());
+    let token_counter = Arc::new(RwLock::new(TokenCounter::new()));
+    let tool_result_cache = Arc::new(RwLock::new(ToolResultCache::new(128))); // 128-entry cache
+    let tool_permission_cache = Arc::new(RwLock::new(ToolPermissionCache::new())); // Session-scoped
 
     Ok(SessionState {
         session_bootstrap,
@@ -309,6 +317,9 @@ pub(crate) async fn initialize_session(
         mcp_panel_state,
         token_budget,
         token_budget_enabled,
+        token_counter,
+        tool_result_cache,
+        tool_permission_cache,
         custom_prompts,
         sandbox,
     })

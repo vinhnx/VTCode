@@ -1206,6 +1206,30 @@ pub mod context {
     /// Maximum number of recent turns to keep when aggressively reducing context
     pub const AGGRESSIVE_PRESERVE_RECENT_TURNS: usize = 8;
 
+    /// Enable semantic-aware compression heuristics by default
+    pub const DEFAULT_SEMANTIC_COMPRESSION_ENABLED: bool = false;
+
+    /// Enable tool-aware retention heuristics by default
+    pub const DEFAULT_TOOL_AWARE_RETENTION_ENABLED: bool = false;
+
+    /// Default maximum structural depth to preserve during semantic pruning
+    pub const DEFAULT_MAX_STRUCTURAL_DEPTH: usize = 3;
+
+    /// Default number of recent tool results to preserve when tool-aware retention is enabled
+    pub const DEFAULT_PRESERVE_RECENT_TOOLS: usize = 5;
+
+    /// Minimum structural depth allowed for semantic pruning
+    pub const MIN_STRUCTURAL_DEPTH: usize = 1;
+
+    /// Maximum structural depth allowed for semantic pruning to prevent runaway retention
+    pub const MAX_STRUCTURAL_DEPTH: usize = 12;
+
+    /// Minimum number of tool outputs to preserve when tool-aware retention is enabled
+    pub const MIN_PRESERVE_RECENT_TOOLS: usize = 1;
+
+    /// Maximum number of tool outputs to preserve when tool-aware retention is enabled
+    pub const MAX_PRESERVE_RECENT_TOOLS: usize = 24;
+
     /// Maximum number of retry attempts when the provider signals context overflow
     pub const CONTEXT_ERROR_RETRY_LIMIT: usize = 2;
 }

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
-use tokio::sync::Notify;
+use tokio::sync::{Notify, RwLock};
 use tokio::task;
 
 use serde_json::Value;
@@ -11,6 +11,8 @@ use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::core::interfaces::ui::UiSession;
 use vtcode_core::tool_policy::ToolPolicy;
 use vtcode_core::tools::registry::{ToolPermissionDecision, ToolRegistry};
+use vtcode_core::tools::{JustificationExtractor, ToolRiskScorer, ToolRiskContext, ToolSource, WorkspaceTrust};
+use vtcode_core::acp::{ToolPermissionCache, PermissionGrant};
 use vtcode_core::ui::tui::{InlineEvent, InlineHandle};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
@@ -49,6 +51,8 @@ pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
     ctrl_c_state: &Arc<CtrlCState>,
     ctrl_c_notify: &Arc<Notify>,
     default_placeholder: Option<String>,
+    justification: Option<&vtcode_core::tools::ToolJustification>,
+    approval_recorder: Option<&vtcode_core::tools::ApprovalRecorder>,
 ) -> Result<HitlDecision> {
     use vtcode_core::ui::tui::{InlineListItem, InlineListSelection};
 
@@ -78,6 +82,20 @@ pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
         }
         if obj.len() > 3 {
             description_lines.push(format!("  ... and {} more arguments", obj.len() - 3));
+        }
+    }
+
+    // Add agent justification if available
+    if let Some(just) = justification {
+        let just_lines = just.format_for_dialog();
+        description_lines.extend(just_lines);
+    }
+
+    // Add approval suggestion if available
+    if let Some(recorder) = approval_recorder {
+        if let Some(suggestion) = recorder.get_auto_approval_suggestion(tool_name).await {
+            description_lines.push(String::new());
+            description_lines.push(format!("💡 {}", suggestion));
         }
     }
 
@@ -265,7 +283,27 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
     ctrl_c_state: &Arc<CtrlCState>,
     ctrl_c_notify: &Arc<Notify>,
     hooks: Option<&LifecycleHookEngine>,
+    justification: Option<&vtcode_core::tools::ToolJustification>,
+    approval_recorder: Option<&vtcode_core::tools::ApprovalRecorder>,
+    decision_ledger: Option<&Arc<tokio::sync::RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>>,
+    tool_permission_cache: Option<&Arc<RwLock<ToolPermissionCache>>>,
 ) -> Result<ToolPermissionFlow> {
+    // Check tool permission cache for previously granted permissions
+    if let Some(cache) = tool_permission_cache {
+        let permission_cache = cache.read().await;
+        
+        // Check if tool access is denied
+        if permission_cache.is_denied(tool_name) {
+            return Ok(ToolPermissionFlow::Denied);
+        }
+        
+        // Check if we have cached permission that can be reused
+        if permission_cache.can_use_cached(tool_name) {
+            tracing::debug!("Using cached ACP permission for tool: {}", tool_name);
+            return Ok(ToolPermissionFlow::Approved);
+        }
+    }
+    
     let mut hook_requires_prompt = false;
 
     if let Some(hooks) = hooks {
@@ -302,6 +340,20 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         return Ok(ToolPermissionFlow::Approved);
     }
 
+    // Check approval patterns for auto-approval before prompting
+    if !hook_requires_prompt {
+        if let Some(recorder) = approval_recorder {
+            if recorder.should_auto_approve(tool_name).await {
+                tool_registry.mark_tool_preapproved(tool_name);
+                tracing::debug!(
+                    "Auto-approved tool '{}' based on approval pattern history",
+                    tool_name
+                );
+                return Ok(ToolPermissionFlow::Approved);
+            }
+        }
+    }
+
     if !hook_requires_prompt && tool_name == tool_names::RUN_COMMAND {
         tool_registry.mark_tool_preapproved(tool_name);
         if let Ok(manager) = tool_registry.policy_manager_mut()
@@ -325,6 +377,30 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         headline
     };
 
+    // Extract justification from decision ledger if not provided
+    let extracted_justification = if justification.is_none() && decision_ledger.is_some() {
+        let ledger = decision_ledger.unwrap().read().await;
+        if let Some(latest) = ledger.latest_decision() {
+            // Calculate risk level for this tool
+            let mut risk_context = ToolRiskContext::new(
+                tool_name.to_string(),
+                ToolSource::Internal,
+                WorkspaceTrust::Untrusted,
+            );
+            if let Some(args) = tool_args {
+                risk_context.command_args = vec![args.to_string()];
+            }
+            let risk_level = ToolRiskScorer::calculate_risk(&risk_context);
+            JustificationExtractor::extract_from_decision(&latest, tool_name, &risk_level)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    let final_justification = justification.or(extracted_justification.as_ref());
+
     let decision = prompt_tool_permission(
         &prompt_label,
         tool_name,
@@ -335,22 +411,54 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         ctrl_c_state,
         ctrl_c_notify,
         default_placeholder,
+        final_justification,
+        approval_recorder,
     )
     .await?;
     match decision {
         HitlDecision::Approved => {
             // One-time approval - mark as preapproved for this execution but don't persist
             tool_registry.mark_tool_preapproved(tool_name);
+            
+            // Cache permission grant for this session
+            if let Some(cache) = tool_permission_cache {
+                let mut perm_cache = cache.write().await;
+                perm_cache.cache_grant(tool_name, PermissionGrant::Once);
+            }
+            
+            // Record approval decision for pattern learning
+            if let Some(recorder) = approval_recorder {
+                let _ = recorder.record_approval(tool_name, true, None).await;
+            }
+            
             Ok(ToolPermissionFlow::Approved)
         }
         HitlDecision::ApprovedSession => {
             // Session-only approval - mark as preapproved but don't persist
             tool_registry.mark_tool_preapproved(tool_name);
+            
+            // Cache permission grant for this session
+            if let Some(cache) = tool_permission_cache {
+                let mut perm_cache = cache.write().await;
+                perm_cache.cache_grant(tool_name, PermissionGrant::Session);
+            }
+            
+            // Record approval decision for pattern learning
+            if let Some(recorder) = approval_recorder {
+                let _ = recorder.record_approval(tool_name, true, None).await;
+            }
+            
             Ok(ToolPermissionFlow::Approved)
         }
         HitlDecision::ApprovedPermanent => {
             // Permanent approval - mark and persist to policy
             tool_registry.mark_tool_preapproved(tool_name);
+            
+            // Cache permission grant permanently
+            if let Some(cache) = tool_permission_cache {
+                let mut perm_cache = cache.write().await;
+                perm_cache.cache_grant(tool_name, PermissionGrant::Permanent);
+            }
 
             // Try to persist to policy manager first
             if let Ok(manager) = tool_registry.policy_manager_mut()
@@ -375,9 +483,21 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
                 );
             }
 
+            // Record approval decision for pattern learning
+            if let Some(recorder) = approval_recorder {
+                let _ = recorder.record_approval(tool_name, true, None).await;
+            }
+
             Ok(ToolPermissionFlow::Approved)
         }
-        HitlDecision::Denied => Ok(ToolPermissionFlow::Denied),
+        HitlDecision::Denied => {
+            // Record denial decision for pattern learning
+            if let Some(recorder) = approval_recorder {
+                let _ = recorder.record_approval(tool_name, false, None).await;
+            }
+            
+            Ok(ToolPermissionFlow::Denied)
+        }
         HitlDecision::Exit => Ok(ToolPermissionFlow::Exit),
         HitlDecision::Interrupt => Ok(ToolPermissionFlow::Interrupted),
     }

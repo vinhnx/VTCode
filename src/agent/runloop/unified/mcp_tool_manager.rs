@@ -88,7 +88,7 @@ impl McpToolManager {
 
     /// Enumerate MCP tools after initial setup, identify newly added ones, and update the tool registry  
     pub async fn enumerate_mcp_tools_after_initial_setup(
-        tool_registry: &mut vtcode_core::tools::ToolRegistry,
+        _tool_registry: &mut vtcode_core::tools::ToolRegistry,
         tools: &tokio::sync::RwLock<Vec<uni::ToolDefinition>>,
         mcp_tools: Vec<McpToolInfo>, // Passed in from initial setup
         last_known_mcp_tools: &mut Vec<String>, // This becomes the new current tool list

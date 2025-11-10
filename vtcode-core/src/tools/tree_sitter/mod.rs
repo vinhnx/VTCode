@@ -14,6 +14,7 @@
 
 pub mod analysis;
 pub mod analyzer;
+pub mod cache;
 pub mod highlighting;
 pub mod languages;
 pub mod navigation;
@@ -21,6 +22,7 @@ pub mod refactoring;
 
 pub use analysis::*;
 pub use analyzer::*;
+pub use cache::*;
 pub use highlighting::*;
 pub use languages::*;
 pub use navigation::*;

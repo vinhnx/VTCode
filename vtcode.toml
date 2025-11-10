@@ -372,8 +372,43 @@ scrollback_lines = 400
 # Preferred shell program for PTY sessions (defaults to $SHELL or auto-detect)
 # preferred_shell = "/bin/zsh"
 
+# Debug and tracing configuration - Development and troubleshooting
+[debug]
+# Enable structured logging for development and troubleshooting
+enable_tracing = false
+
+# Trace level: "error", "warn", "info", "debug", "trace"
+# Lower levels (error) are more selective; higher levels (trace) are verbose
+trace_level = "info"
+
+# Comma-separated list of tracing targets (modules to trace)
+# Examples: "vtcode_core::agent", "vtcode_core::tools", "vtcode::*"
+# Leave empty to trace all targets
+trace_targets = []
+
+# Directory for debug logs (created if not exists)
+debug_log_dir = "~/.vtcode/debug"
+
+# Maximum size of debug logs before rotating (in MB)
+max_debug_log_size_mb = 50
+
+# Maximum age of debug logs to keep (in days)
+max_debug_log_age_days = 7
+
 # Context management configuration - Controls conversation memory
 [context]
+# Enable semantic-aware context compression using structural analysis
+semantic_compression = false
+
+# Retain tool outputs longer when related actions are in progress
+tool_aware_retention = false
+
+# Maximum AST depth to preserve when semantic compression is active
+max_structural_depth = 3
+
+# Number of recent tool responses to keep when tool-aware retention is enabled
+preserve_recent_tools = 5
+
 # Decision ledger configuration - Track important decisions
 [context.ledger]
 # Enable decision tracking and persistence

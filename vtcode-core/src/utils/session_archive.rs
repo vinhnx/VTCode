@@ -113,6 +113,7 @@ impl From<&SessionMessage> for Message {
             reasoning_details: None,
             tool_calls: None,
             tool_call_id: message.tool_call_id.clone(),
+            origin_tool: None,
         }
     }
 }

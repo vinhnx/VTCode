@@ -967,6 +967,7 @@ impl OpenRouterProvider {
                             reasoning_details: None,
                             tool_calls: Some(calls),
                             tool_call_id: None,
+                            origin_tool: None,
                         }
                     } else {
                         Message::assistant(text_content)
@@ -995,6 +996,7 @@ impl OpenRouterProvider {
                         reasoning_details: None,
                         tool_calls: None,
                         tool_call_id,
+                        origin_tool: None,
                     });
                 }
                 _ => {

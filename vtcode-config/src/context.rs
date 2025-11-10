@@ -148,6 +148,14 @@ pub struct ContextFeaturesConfig {
     pub trim_to_percent: u8,
     #[serde(default = "default_preserve_recent_turns")]
     pub preserve_recent_turns: usize,
+    #[serde(default = "default_semantic_compression_enabled")]
+    pub semantic_compression: bool,
+    #[serde(default = "default_tool_aware_retention_enabled")]
+    pub tool_aware_retention: bool,
+    #[serde(default = "default_max_structural_depth")]
+    pub max_structural_depth: usize,
+    #[serde(default = "default_preserve_recent_tools")]
+    pub preserve_recent_tools: usize,
 }
 
 impl Default for ContextFeaturesConfig {
@@ -158,6 +166,10 @@ impl Default for ContextFeaturesConfig {
             max_context_tokens: default_max_context_tokens(),
             trim_to_percent: default_trim_to_percent(),
             preserve_recent_turns: default_preserve_recent_turns(),
+            semantic_compression: default_semantic_compression_enabled(),
+            tool_aware_retention: default_tool_aware_retention_enabled(),
+            max_structural_depth: default_max_structural_depth(),
+            preserve_recent_tools: default_preserve_recent_tools(),
         }
     }
 }
@@ -184,6 +196,23 @@ impl ContextFeaturesConfig {
             "Context features preserve_recent_turns must be greater than zero"
         );
 
+        ensure!(
+            (context_defaults::MIN_STRUCTURAL_DEPTH..=context_defaults::MAX_STRUCTURAL_DEPTH)
+                .contains(&self.max_structural_depth),
+            "Context features max_structural_depth must be between {} and {}",
+            context_defaults::MIN_STRUCTURAL_DEPTH,
+            context_defaults::MAX_STRUCTURAL_DEPTH,
+        );
+
+        ensure!(
+            (context_defaults::MIN_PRESERVE_RECENT_TOOLS
+                ..=context_defaults::MAX_PRESERVE_RECENT_TOOLS)
+                .contains(&self.preserve_recent_tools),
+            "Context features preserve_recent_tools must be between {} and {}",
+            context_defaults::MIN_PRESERVE_RECENT_TOOLS,
+            context_defaults::MAX_PRESERVE_RECENT_TOOLS,
+        );
+
         Ok(())
     }
 }
@@ -198,4 +227,20 @@ fn default_trim_to_percent() -> u8 {
 
 fn default_preserve_recent_turns() -> usize {
     context_defaults::DEFAULT_PRESERVE_RECENT_TURNS
+}
+
+fn default_semantic_compression_enabled() -> bool {
+    context_defaults::DEFAULT_SEMANTIC_COMPRESSION_ENABLED
+}
+
+fn default_tool_aware_retention_enabled() -> bool {
+    context_defaults::DEFAULT_TOOL_AWARE_RETENTION_ENABLED
+}
+
+fn default_max_structural_depth() -> usize {
+    context_defaults::DEFAULT_MAX_STRUCTURAL_DEPTH
+}
+
+fn default_preserve_recent_tools() -> usize {
+    context_defaults::DEFAULT_PRESERVE_RECENT_TOOLS
 }

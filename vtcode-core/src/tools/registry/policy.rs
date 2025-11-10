@@ -10,6 +10,7 @@ use crate::tool_policy::{ToolPolicy, ToolPolicyManager};
 use crate::tools::names::canonical_tool_name;
 
 use super::ToolPermissionDecision;
+use super::risk_scorer::{ToolRiskScorer, ToolRiskContext, RiskLevel, ToolSource, WorkspaceTrust};
 
 #[derive(Clone, Default)]
 pub(super) struct ToolPolicyGateway {
@@ -287,7 +288,14 @@ impl ToolPolicyGateway {
                 }
                 ToolPolicy::Deny => Ok(ToolPermissionDecision::Deny),
                 ToolPolicy::Prompt => {
-                    if ToolPolicyManager::is_auto_allow_tool(normalized) {
+                    // Check if low-risk by using risk scorer
+                    if Self::should_auto_approve_by_risk(normalized) {
+                        policy_manager
+                            .set_policy(normalized, ToolPolicy::Allow)
+                            .await?;
+                        self.preapproved_tools.insert(normalized.to_string());
+                        Ok(ToolPermissionDecision::Allow)
+                    } else if ToolPolicyManager::is_auto_allow_tool(normalized) {
                         policy_manager
                             .set_policy(normalized, ToolPolicy::Allow)
                             .await?;
@@ -302,6 +310,19 @@ impl ToolPolicyGateway {
             self.preapproved_tools.insert(normalized.to_string());
             Ok(ToolPermissionDecision::Allow)
         }
+    }
+
+    /// Determine if a tool should be auto-approved based on risk level
+    /// Low-risk read-only tools are auto-approved to reduce approval friction
+    fn should_auto_approve_by_risk(tool_name: &str) -> bool {
+        let ctx = ToolRiskContext::new(
+            tool_name.to_string(),
+            ToolSource::Internal,
+            WorkspaceTrust::Trusted,
+        );
+        let risk = ToolRiskScorer::calculate_risk(&ctx);
+        // Auto-approve only low-risk tools
+        matches!(risk, RiskLevel::Low)
     }
 
     pub fn take_preapproved(&mut self, name: &str) -> bool {

@@ -222,6 +222,16 @@ impl DecisionTracker {
         &self.current_context
     }
 
+    /// Get the latest decision made
+    pub fn latest_decision(&self) -> Option<&Decision> {
+        self.decisions.last()
+    }
+
+    /// Get the N most recent decisions
+    pub fn recent_decisions(&self, count: usize) -> Vec<&Decision> {
+        self.decisions.iter().rev().take(count).collect()
+    }
+
     /// Convenience: record a user goal/intention for this turn
     pub fn record_goal(&mut self, content: String) -> String {
         self.record_decision(

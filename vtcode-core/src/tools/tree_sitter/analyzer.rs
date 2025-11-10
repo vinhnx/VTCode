@@ -3,6 +3,7 @@
 use crate::tools::tree_sitter::analysis::{
     CodeAnalysis, CodeMetrics, DependencyInfo, DependencyKind,
 };
+use crate::tools::tree_sitter::cache::AstCache;
 use crate::tools::tree_sitter::highlighting::{HighlightResult, TreeSitterInjectionHighlighter};
 use crate::tools::tree_sitter::languages::*;
 use anyhow::Result;
@@ -97,6 +98,8 @@ pub struct TreeSitterAnalyzer {
     supported_languages: Vec<LanguageSupport>,
     current_file: String,
     highlighter: Option<TreeSitterInjectionHighlighter>,
+    /// Optional AST cache for performance optimization
+    cache: Option<AstCache>,
 }
 
 impl TreeSitterAnalyzer {
@@ -132,6 +135,33 @@ impl TreeSitterAnalyzer {
             supported_languages: languages,
             current_file: String::new(),
             highlighter: TreeSitterInjectionHighlighter::new().ok(),
+            cache: Some(AstCache::new(256)), // Initialize with 256-entry LRU cache
+        })
+    }
+
+    /// Enable AST caching for performance optimization
+    pub fn with_cache(mut self, capacity: usize) -> Self {
+        self.cache = Some(AstCache::new(capacity));
+        self
+    }
+
+    /// Disable AST caching
+    pub fn without_cache(mut self) -> Self {
+        self.cache = None;
+        self
+    }
+
+    /// Get cache statistics if cache is enabled
+    pub fn cache_stats(&self) -> Option<String> {
+        self.cache.as_ref().map(|cache| {
+            let stats = cache.stats();
+            format!(
+                "Cache: {} hits, {} misses, {:.1}% hit rate, {} entries",
+                stats.hits,
+                stats.misses,
+                stats.hit_rate(),
+                stats.size,
+            )
         })
     }
 
@@ -173,7 +203,7 @@ impl TreeSitterAnalyzer {
         }
     }
 
-    /// Parse source code into a syntax tree
+    /// Parse source code into a syntax tree with optional caching
     pub fn parse(&mut self, source_code: &str, language: LanguageSupport) -> Result<Tree> {
         let parser = self
             .parsers
@@ -183,6 +213,11 @@ impl TreeSitterAnalyzer {
         let tree = parser.parse(source_code, None).ok_or_else(|| {
             TreeSitterError::ParseError("Failed to parse source code".to_string())
         })?;
+
+        // Record the parse in cache if enabled (for statistics and future cache lookups)
+        if let Some(cache) = &mut self.cache {
+            cache.record_parse(source_code, language);
+        }
 
         Ok(tree)
     }
