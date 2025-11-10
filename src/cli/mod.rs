@@ -7,7 +7,7 @@ pub mod ask;
 pub mod auto;
 pub mod benchmark;
 pub mod chat_tools;
-pub mod compress_context;
+
 pub mod config;
 pub mod create_project;
 pub mod exec;
@@ -29,7 +29,7 @@ pub use benchmark::{BenchmarkCommandOptions, handle_benchmark_command};
 pub use exec::{ExecCommandOptions, handle_exec_command};
 // Use the modular runloop by default
 pub use chat_tools::handle_chat_command;
-pub use compress_context::handle_compress_context_command;
+
 pub use config::handle_config_command;
 pub use create_project::handle_create_project_command;
 pub use init::handle_init_command;

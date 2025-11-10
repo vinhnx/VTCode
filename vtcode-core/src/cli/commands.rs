@@ -78,20 +78,7 @@ pub struct StatsCommand {
     pub include_performance: bool,
 }
 
-/// Context compression command configuration
-pub struct CompressContextCommand {
-    pub input_file: Option<std::path::PathBuf>,
-    pub output_file: Option<std::path::PathBuf>,
-    pub compression_level: CompressionLevel,
-    pub preserve_decisions: bool,
-}
 
-#[derive(Debug, Clone)]
-pub enum CompressionLevel {
-    Light,      // 20-30% reduction
-    Medium,     // 40-50% reduction
-    Aggressive, // 60-70% reduction
-}
 
 /// Single prompt command configuration
 pub struct AskCommand {

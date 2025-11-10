@@ -22,7 +22,6 @@ pub struct ExecutionError {
 pub enum ErrorType {
     ToolExecution,
     ApiCall,
-    ContextCompression,
     FileSystem,
     Network,
     Validation,
@@ -58,9 +57,7 @@ pub enum RecoveryStrategy {
         delay_ms: u64,
         attempt_number: usize,
     },
-    ContextCompression {
-        compression_ratio: f64,
-    },
+
     SimplifyRequest {
         removed_parameters: Vec<String>,
     },
@@ -99,9 +96,6 @@ impl ErrorRecoveryManager {
                     original_tool: "".to_string(),
                     alternative_tool: "".to_string(),
                 },
-                RecoveryStrategy::ContextCompression {
-                    compression_ratio: 0.5,
-                },
             ],
         );
 
@@ -112,20 +106,10 @@ impl ErrorRecoveryManager {
                     delay_ms: 2000,
                     attempt_number: 1,
                 },
-                RecoveryStrategy::ContextCompression {
-                    compression_ratio: 0.7,
-                },
                 RecoveryStrategy::ContextReset {
                     preserved_data: IndexMap::new(),
                 },
             ],
-        );
-
-        recovery_strategies.insert(
-            ErrorType::ContextCompression,
-            vec![RecoveryStrategy::ContextReset {
-                preserved_data: IndexMap::new(),
-            }],
         );
 
         // Map error types to operation types for timeout detector integration

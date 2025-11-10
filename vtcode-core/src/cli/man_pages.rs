@@ -66,7 +66,7 @@ impl ManPageGenerator {
             .text([roman("Enable performance monitoring and metrics")])
             .control("TP", [])
             .text([bold("--research-preview")])
-            .text([roman("Enable research-preview features including context compression")])
+            .text([roman("Enable research-preview features")])
             .control("TP", [])
             .text([bold("--debug")])
             .text([roman("Enable debug output")])
@@ -126,8 +126,7 @@ impl ManPageGenerator {
             .text([bold("create-project"), roman(" "), italic("name"), roman(" "), italic("features")])
             .text([roman("Create complete Rust project with advanced features")])
             .control("TP", [])
-            .text([bold("compress-context")])
-            .text([roman("Compress conversation context for long-running sessions")])
+
             .control("TP", [])
             .text([bold("revert"), roman(" "), italic("turn")])
             .text([roman("Revert agent to a previous snapshot")])
@@ -629,7 +628,7 @@ impl ManPageGenerator {
             .text([roman("• trajectory - Pretty-print trajectory logs and analytics")])
             .text([roman("• benchmark - SWE-bench evaluation framework")])
             .text([roman("• create-project - Create complete Rust project with features")])
-            .text([roman("• compress-context - Compress conversation context")])
+
             .text([roman("• revert - Revert agent to a previous snapshot")])
             .text([roman("• snapshots - List available snapshots")])
             .text([roman("• cleanup-snapshots - Clean up old snapshots")])

@@ -11,7 +11,7 @@ use std::path::PathBuf;
     name = "vtcode",
     version,
     about = "Advanced coding agent with Decision Ledger\n\nFeatures:\n• Single-agent architecture with Decision Ledger for reliable task execution\n• Tree-sitter powered code analysis (Rust, Python, JavaScript, TypeScript, Go, Java)\n• Multi-provider LLM support (Gemini, OpenAI, Anthropic, DeepSeek, xAI, Z.AI, Moonshot AI, OpenRouter, Ollama)
-• Prompt caching and token-efficient context management\n• Real-time performance monitoring and benchmarking\n• Enhanced security with tool policies and sandboxing\n• Research-preview context management and conversation compression\n\nQuick Start:\n  export GEMINI_API_KEY=\"your_key\"\n  vtcode chat",
+• Prompt caching and token-efficient context management\n• Real-time performance monitoring and benchmarking\n• Enhanced security with tool policies and sandboxing\n• Research-preview context management\n\nQuick Start:\n  export GEMINI_API_KEY=\"your_key\"\n  vtcode chat",
     color = ColorChoice::Auto
 )]
 pub struct Cli {
@@ -422,16 +422,7 @@ pub enum Commands {
     /// Example: vtcode create-project myapp web,auth,db
     CreateProject { name: String, features: Vec<String> },
 
-    /// **Compress conversation context** for long-running sessions
-    ///
-    /// Benefits:
-    ///   • Reduced token usage
-    ///   • Faster responses
-    ///   • Memory optimization
-    ///   • Context preservation
-    ///
-    /// Usage: vtcode compress-context
-    CompressContext,
+
 
     /// **Revert agent to a previous snapshot
     ///
@@ -702,8 +693,6 @@ pub struct ToolConfig {
 #[derive(Debug, serde::Deserialize)]
 pub struct ContextConfig {
     pub max_context_length: Option<usize>,
-    pub compression_threshold: Option<usize>,
-    pub summarization_interval: Option<usize>,
 }
 
 /// Logging configuration

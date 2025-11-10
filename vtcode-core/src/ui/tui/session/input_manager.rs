@@ -184,8 +184,6 @@ impl InputManager {
         self.history_draft = None;
     }
 
-
-
     /// Updates last escape time and returns true if double-tap (within 300ms)
     pub fn check_escape_double_tap(&mut self) -> bool {
         let now = Instant::now();

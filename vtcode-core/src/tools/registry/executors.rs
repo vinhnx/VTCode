@@ -434,13 +434,17 @@ impl ToolRegistry {
                 config.timeout_secs = timeout_secs;
             }
 
-            // Create a basic sandbox profile (no sandboxing enforcement yet)
-            // TODO: Integrate with actual sandbox runtime when available
+            // Create a safe sandbox profile with workspace isolation
+            // The sandbox enforces these restrictions:
+            // - Shell: Auto-detected (pwsh/bash on supported systems, cmd.exe on Windows)
+            // - Working directory: .vtcode/sandbox in workspace
+            // - Allowed paths: workspace root + /tmp (temporary files)
+            // - Runtime: AnthropicSrt for code execution monitoring
             let sandbox_profile = crate::sandbox::SandboxProfile::new(
-                "/bin/sh".into(),
-                "/tmp/sandbox_settings.json".into(),
+                resolve_shell_candidate(),
+                workspace_root.join(".vtcode/sandbox/settings.json"),
                 workspace_root.join(".vtcode/sandbox"),
-                vec![workspace_root.clone()],
+                vec![workspace_root.clone(), std::path::PathBuf::from("/tmp")],
                 crate::sandbox::SandboxRuntimeKind::AnthropicSrt,
             );
 
@@ -704,51 +708,70 @@ impl ToolRegistry {
                 "Emitting destructive operation telemetry"
             );
 
-            // TODO: Add confirmation prompt for destructive operations
-            //
-            // Implementation should:
-            // 1. Check if running in interactive mode (not --skip-confirmations)
-            // 2. Check if running in TUI mode vs CLI mode
-            // 3. In CLI mode: Use dialoguer for confirmation prompt
-            // 4. In TUI mode: Use modal confirmation (handled by runloop)
-            // 5. Show affected files and backup status in prompt
-            // 6. Allow user to abort operation
-            //
-            // Example implementation:
-            // ```rust
-            // if !self.skip_confirmations && !has_git_backup {
-            //     let prompt_msg = format!(
-            //         "apply_patch will delete and recreate {} file(s):\n{}\n\n\
-            //          No git backup detected. Continue?",
-            //         affected_files.len(),
-            //         affected_files.join("\n")
-            //     );
-            //
-            //     // CLI mode confirmation
-            //     if !std::env::var("VTCODE_TUI_MODE").is_ok() {
-            //         let confirmed = dialoguer::Confirm::new()
-            //             .with_prompt(prompt_msg)
-            //             .default(false)
-            //             .interact()?;
-            //         if !confirmed {
-            //             return Ok(json!({
-            //                 "success": false,
-            //                 "error": "Operation cancelled by user"
-            //             }));
-            //         }
-            //     }
-            //     // TUI mode: Return special status code for runloop to handle
-            //     else {
-            //         return Err(anyhow!(
-            //             "CONFIRMATION_REQUIRED: {}",
-            //             prompt_msg
-            //         ));
-            //     }
-            // }
-            // ```
-            //
-            // Reference: docs/research/codex_issue_review.md - Confirmation prompts
-            // Related: src/agent/runloop/unified/tool_routing.rs - ensure_tool_permission()
+            // Check if confirmation is needed (destructive operations without backup)
+            let skip_confirmations = env::var("VTCODE_SKIP_CONFIRMATIONS")
+                .ok()
+                .and_then(|v| v.parse::<bool>().ok())
+                .unwrap_or(false);
+
+            // Always prompt for confirmation if no git backup and not skipping confirmations
+            let requires_confirmation = !skip_confirmations && !has_git_backup;
+
+            if requires_confirmation {
+                let file_list = affected_files
+                    .iter()
+                    .take(10) // Show first 10 files; truncate if more
+                    .map(|f| format!("  - {}", f))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+
+                let file_count_suffix = if affected_files.len() > 10 {
+                    format!("\n  ... and {} more file(s)", affected_files.len() - 10)
+                } else {
+                    String::new()
+                };
+
+                let backup_warning = if has_git_backup {
+                    "\nGit backup detected - can be recovered if needed."
+                } else {
+                    "\n⚠️  No git backup detected - deletion is permanent!"
+                };
+
+                let prompt_msg = format!(
+                    "apply_patch will delete and recreate {} file(s):{}{}{}\n\nContinue?",
+                    affected_files.len(),
+                    file_list,
+                    file_count_suffix,
+                    backup_warning
+                );
+
+                // Check if running in TUI mode
+                let in_tui_mode = env::var("VTCODE_TUI_MODE").is_ok();
+
+                if in_tui_mode {
+                    // TUI mode: Return error for runloop to handle with modal confirmation
+                    return Err(anyhow!("CONFIRMATION_REQUIRED: {}", prompt_msg));
+                } else {
+                    // CLI mode: Use dialoguer for confirmation prompt
+                    let confirmed = dialoguer::Confirm::new()
+                        .with_prompt(prompt_msg)
+                        .default(false)
+                        .interact()
+                        .context("Failed to get user confirmation")?;
+
+                    if !confirmed {
+                        return Ok(json!({
+                            "success": false,
+                            "error": "Operation cancelled by user",
+                            "affected_files": affected_files,
+                            "cancelled_at": std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .ok()
+                                .map(|d| d.as_secs())
+                        }));
+                    }
+                }
+            }
         }
 
         // Generate diff preview
@@ -2476,6 +2499,26 @@ fn resolve_shell_preference(explicit: Option<&str>, config: &PtyConfig) -> Optio
                 .and_then(|value| sanitize_shell_candidate(&value))
         })
         .or_else(detect_posix_shell_candidate)
+}
+
+fn resolve_shell_candidate() -> PathBuf {
+    // Resolve the preferred shell for sandbox execution
+    // Detects available shells based on platform
+    if cfg!(windows) {
+        // Windows: prefer PowerShell if available, fall back to cmd.exe
+        if Path::new("C:\\Windows\\System32\\pwsh.exe").exists() {
+            PathBuf::from("C:\\Windows\\System32\\pwsh.exe")
+        } else if Path::new("C:\\Program Files\\PowerShell\\7\\pwsh.exe").exists() {
+            PathBuf::from("C:\\Program Files\\PowerShell\\7\\pwsh.exe")
+        } else {
+            PathBuf::from("cmd.exe")
+        }
+    } else {
+        // POSIX systems: use detected shell or default to /bin/sh
+        detect_posix_shell_candidate()
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("/bin/sh"))
+    }
 }
 
 fn sanitize_shell_candidate(shell: &str) -> Option<String> {

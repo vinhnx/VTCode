@@ -37,10 +37,7 @@ pub enum Action {
         content: String,
         response_type: ResponseType,
     },
-    ContextCompression {
-        reason: String,
-        compression_ratio: f64,
-    },
+
     ErrorRecovery {
         error_type: String,
         recovery_strategy: String,
@@ -147,7 +144,6 @@ impl DecisionTracker {
         let action_summary = match &action {
             Action::ToolCall { name, .. } => format!("tool_call:{}", name),
             Action::Response { response_type, .. } => format!("response:{:?}", response_type),
-            Action::ContextCompression { .. } => "context_compression".to_string(),
             Action::ErrorRecovery { .. } => "error_recovery".to_string(),
         };
         self.current_context.previous_actions.push(action_summary);
@@ -276,15 +272,6 @@ impl DecisionTracker {
                     format!(
                         "- [turn {}] response:{:?} {} (t={})",
                         turn, response_type, preview, ts
-                    )
-                }
-                Action::ContextCompression {
-                    reason,
-                    compression_ratio,
-                } => {
-                    format!(
-                        "- [turn {}] compression {:.2} reason={} (t={})",
-                        turn, compression_ratio, reason, ts
                     )
                 }
                 Action::ErrorRecovery {

@@ -430,6 +430,7 @@ impl ContextCurator {
     }
 
     /// Compress context if needed
+    #[allow(dead_code)]
     fn compress_context(&self, mut context: CuratedContext, budget: usize) -> CuratedContext {
         if context.estimated_tokens <= budget {
             return context;
@@ -558,10 +559,9 @@ impl ContextCurator {
         context.add_tools(relevant_tools.clone());
         debug!("Added {} relevant tools", relevant_tools.len());
 
-        // Check budget and compress if needed
-        if context.estimated_tokens > budget {
-            context = self.compress_context(context, budget);
-        }
+        // Context compression is disabled for now as it doesn't improve token efficiency
+        // and can potentially lose important information. Will be revisited when better
+        // compression strategies are available.
 
         info!(
             "Curated context: {} tokens (budget: {}), phase: {:?}",

@@ -339,18 +339,6 @@ impl RecoveryStrategy {
         .add_step("Retry analysis".to_string())
     }
 
-    /// Strategy for context overflow
-    pub fn context_compression() -> Self {
-        Self::new(
-            "Compress context".to_string(),
-            "Context size exceeds token limits".to_string(),
-            "Context compressed to fit within limits".to_string(),
-        )
-        .add_step("Select key files only".to_string())
-        .add_step("Remove low-priority buffers".to_string())
-        .add_step("Summarize large files".to_string())
-    }
-
     /// Format recovery strategy for display
     pub fn format_display(&self) -> String {
         let mut output = format!(
@@ -542,12 +530,7 @@ mod tests {
         assert!(recovery.name.contains("Limit"));
     }
 
-    #[test]
-    fn test_context_compression_recovery() {
-        let recovery = RecoveryStrategy::context_compression();
-        assert_eq!(recovery.steps.len(), 3);
-        assert!(recovery.name.contains("Compress"));
-    }
+
 
     #[test]
     fn test_recovery_strategy_format() {
