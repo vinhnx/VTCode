@@ -1,8 +1,8 @@
 //! # VT Code - Terminal Coding Agent
 //!
 //! VT Code is a Rust-based terminal coding agent that pairs a streamlined
-//! crossterm-powered interface with semantic code understanding backed by tree-sitter and
-//! ast-grep. It is designed for developers who need precise context handling,
+//! crossterm-powered interface with semantic code understanding backed by tree-sitter.
+//! It is designed for developers who need precise context handling,
 //! secure tool execution, and configurable multi-provider AI workflows.
 //!
 //! ## Highlights
@@ -10,8 +10,7 @@
 //! - **Multi-provider agent**: integrations for OpenAI, Anthropic, xAI,
 //!   DeepSeek, Gemini, OpenRouter, and Ollama (local) with automatic failover and spend guards.
 //! - **Semantic code intelligence**: tree-sitter parsers for Rust, Python,
-//!   JavaScript, TypeScript, Go, and Java combined with ast-grep structural
-//!   search and refactoring.
+//!   JavaScript, TypeScript, Go, and Java.
 //! - **Modern terminal experience**: inline renderer with streaming PTY output,
 //!   slash commands, and customizable Ciapre-inspired theming.
 //! - **Workspace-aware automation**: git-aware fuzzy navigation, workspace

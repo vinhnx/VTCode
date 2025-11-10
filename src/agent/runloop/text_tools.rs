@@ -132,7 +132,6 @@ fn is_known_textual_tool(name: &str) -> bool {
             | tools::GREP_FILE
             | tools::LIST_FILES
             | tools::UPDATE_PLAN
-            | tools::AST_GREP_SEARCH
             | tools::APPLY_PATCH
             | tools::READ_PTY_SESSION
             | tools::SEND_PTY_INPUT

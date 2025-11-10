@@ -78,7 +78,6 @@ const DEFAULT_TOOL_POLICIES: &[(&str, ToolPolicy)] = &[
     (tools::LIST_FILES, ToolPolicy::Allow),
     (tools::GREP_FILE, ToolPolicy::Allow),
     (tools::UPDATE_PLAN, ToolPolicy::Allow),
-    (tools::AST_GREP_SEARCH, ToolPolicy::Allow),
     (tools::READ_FILE, ToolPolicy::Allow),
     (tools::WRITE_FILE, ToolPolicy::Allow),
     (tools::EDIT_FILE, ToolPolicy::Allow),

@@ -369,7 +369,6 @@ impl ContextCurator {
                     if tool.name.contains("grep")
                         || tool.name.contains("list")
                         || tool.name.contains("search")
-                        || tool.name.contains("ast_grep")
                     {
                         selected.push(tool.clone());
                         if selected.len() >= max_tools {

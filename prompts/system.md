@@ -66,8 +66,7 @@ When gathering context:
 ```
 Need information?
 ├─ Structure? → list_files
-├─ Text patterns? → grep_file
-└─ Code semantics? → ast_grep_search
+└─ Text patterns? → grep_file
 
 Modifying files?
 ├─ Surgical edit? → edit_file (preferred)
@@ -92,13 +91,12 @@ Done?
 
 **Tier 2 - Control**: update_plan (TODO list), PTY sessions (create/send/read/close)
 
-**Tier 3 - Semantic**: ast_grep_search, apply_patch, search_tools
+**Tier 3 - Semantic**: apply_patch, search_tools
 
 **Tier 4 - Data Processing**: execute_code, save_skill, load_skill
 
 **Search Strategy**:
 - Text patterns → grep_file with ripgrep
-- Code semantics → ast_grep_search with tree-sitter
 - Tool discovery → search_tools before execute_code
 
 **File Editing Strategy**:

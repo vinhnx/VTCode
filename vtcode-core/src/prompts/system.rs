@@ -70,8 +70,7 @@ When gathering context:
 ```
 Need information?
 ├─ Structure? → list_files
-├─ Text patterns? → grep_file
-└─ Code semantics? → ast_grep_search
+└─ Text patterns? → grep_file
 
 Modifying files?
 ├─ Surgical edit? → edit_file (preferred)
@@ -96,13 +95,12 @@ Done?
 
 **Tier 2 - Control**: update_plan (TODO list), PTY sessions (create/send/read/close)
 
-**Tier 3 - Semantic**: ast_grep_search, apply_patch, search_tools
+**Tier 3 - Semantic**: apply_patch, search_tools
 
 **Tier 4 - Data Processing**: execute_code, save_skill, load_skill
 
 **Search Strategy**:
 - Text patterns → grep_file with ripgrep
-- Code semantics → ast_grep_search with tree-sitter
 - Tool discovery → search_tools before execute_code
 
 **File Editing Strategy**:
@@ -206,7 +204,7 @@ Load only what's necessary. Use search tools first. Summarize results.
 
 **Tools:**
 **Files:** list_files, read_file, write_file, edit_file
-**Search:** grep_file, ast_grep_search
+**Search:** grep_file
 **Shell:** run_terminal_cmd, PTY sessions (create_pty_session, send_pty_input, read_pty_session)
 **Code Execution:** search_tools, execute_code (Python3/JavaScript in sandbox), save_skill, load_skill
 
@@ -238,7 +236,7 @@ Handle complex coding tasks that require deep understanding, structural changes,
 
 **Context Management:**
 - Minimize attention budget usage through strategic tool selection
-- Use discovery/search tools (`list_files` for structure, `grep_file` for content, `ast_grep_search` for syntax) before reading to identify relevant code
+- Use discovery/search tools (`list_files` for structure, `grep_file` for content) before reading to identify relevant code
 - Build understanding layer-by-layer with progressive disclosure
 - Maintain working memory of recent decisions, changes, and outcomes
 - Reference past tool results without re-executing
@@ -246,7 +244,6 @@ Handle complex coding tasks that require deep understanding, structural changes,
 - Use code execution for data-heavy operations: filtering, aggregation, transformation
 
 **Advanced Guidelines:**
-- For refactoring, use ast_grep_search with transform mode to preview changes
 - When multiple files need updates, identify all affected files first, then modify in dependency order
 - Preserve architectural patterns and naming conventions
 - Consider performance implications of changes
@@ -261,17 +258,17 @@ Handle complex coding tasks that require deep understanding, structural changes,
 - **Skills:** Use load_skill to retrieve and reuse saved patterns across conversations
 
 **Tool Selection Strategy:**
-- **Exploration Phase:** list_files → grep_file → ast_grep_search → read_file
+- **Exploration Phase:** list_files → grep_file → read_file
 - **Implementation Phase:** edit_file (preferred) or write_file → run_terminal_cmd (validate)
-- **Analysis Phase:** ast_grep_search (structural) → tree-sitter parsing → code execution for data analysis
+- **Analysis Phase:** tree-sitter parsing → code execution for data analysis
 - **Data Processing Phase:** execute_code (Python3/JavaScript) for local filtering/aggregation
 
 **Advanced Tools:**
-**Exploration:** list_files (structure), grep_file (content), ast_grep_search (tree-sitter-powered)
+**Exploration:** list_files (structure), grep_file (content)
 **File Operations:** read_file, write_file, edit_file
 **Execution:** run_terminal_cmd (full PTY emulation), execute_code (Python3/JavaScript sandbox)
 **Code Execution:** search_tools, execute_code, save_skill, load_skill
-**Analysis:** Tree-sitter parsing, performance profiling, semantic search
+**Analysis:** Tree-sitter parsing, performance profiling
 
 **Multi-Turn Coherence:**
 - Build on previous context rather than starting fresh each turn

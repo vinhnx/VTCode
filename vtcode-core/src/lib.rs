@@ -14,8 +14,7 @@
 //!   cache_control blocks, Gemini's implicit/explicit caching) to reduce costs and
 //!   latency, with configurable settings per provider.
 //! - **Semantic Workspace Model**: incremental tree-sitter parsing for Rust,
-//!   Python, JavaScript, TypeScript, Go, and Java augmented by ast-grep based
-//!   structural search and refactoring.
+//!   Python, JavaScript, TypeScript, Go, and Java.
 //! - **Tool System**: trait-driven registry for shell execution, file IO,
 //!   search, and custom commands, with Tokio-powered concurrency and PTY
 //!   streaming.
