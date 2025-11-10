@@ -17,11 +17,11 @@ VTCode has successfully implemented advanced context engineering principles base
 
 Token budget tracking with Hugging Face `tokenizers`
 Component-level token monitoring
-Configurable warning (75%) and compaction (85%) thresholds
+Configurable warning (75%) thresholds
 Optimized system prompts following "Right Altitude" principles
 Concise tool descriptions with token management guidance
 Decision ledger for multi-turn coherence
-Intelligent context compression
+
 MCP server initialization bug fixed
 
 ## Understanding Context Engineering
@@ -320,14 +320,14 @@ Phase::Validation => "run_terminal_cmd: Validate changes with tests"
 enabled = true
 model = "gpt-5-nano"
 warning_threshold = 0.75
-compaction_threshold = 0.85
+
 detailed_tracking = false
 
 [context.ledger]
 enabled = true
 max_entries = 12
 include_in_prompt = true
-preserve_in_compression = true
+
 ```
 
 ### Recommended Additional Configuration
@@ -388,7 +388,7 @@ include_multi_turn_guidance = true
 1.  Curate every turn (iterative!)
 2.  Prioritize: Recent > Active > Historical
 3.  Monitor budget continuously
-4.  Compress intelligently
+4.  Summarize intelligently
 5.  Track coherence signals
 
 ### Tool Design

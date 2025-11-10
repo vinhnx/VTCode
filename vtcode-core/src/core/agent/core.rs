@@ -4,7 +4,7 @@ use crate::config::core::PromptCachingConfig;
 use crate::config::models::{ModelId, Provider};
 use crate::config::types::*;
 use crate::core::agent::bootstrap::{AgentComponentBuilder, AgentComponentSet};
-use crate::core::agent::compaction::CompactionEngine;
+
 use crate::core::agent::snapshots::{
     DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
 };
@@ -28,7 +28,6 @@ pub struct Agent {
     error_recovery: ErrorRecoveryManager,
 
     tree_sitter_analyzer: TreeSitterAnalyzer,
-    compaction_engine: Arc<CompactionEngine>,
     session_info: SessionInfo,
     start_time: std::time::Instant,
 }
@@ -53,7 +52,6 @@ impl Agent {
             decision_tracker: components.decision_tracker,
             error_recovery: components.error_recovery,
             tree_sitter_analyzer: components.tree_sitter_analyzer,
-            compaction_engine: components.compaction_engine,
             session_info: components.session_info,
             start_time: std::time::Instant::now(),
         }
@@ -168,66 +166,6 @@ impl Agent {
         &mut self.tree_sitter_analyzer
     }
 
-    /// Get compaction engine reference
-    pub fn compaction_engine(&self) -> Arc<CompactionEngine> {
-        Arc::clone(&self.compaction_engine)
-    }
-
-    /// Make intelligent compaction decision using context analysis
-    pub async fn make_intelligent_compaction_decision(
-        &self,
-    ) -> Result<crate::core::agent::intelligence::CompactionDecision> {
-        let stats = self.compaction_engine.get_statistics().await?;
-        let should_compact = self.compaction_engine.should_compact().await?;
-        let strategy = if should_compact {
-            crate::core::agent::intelligence::CompactionStrategy::Aggressive
-        } else {
-            crate::core::agent::intelligence::CompactionStrategy::Conservative
-        };
-        let reasoning = if should_compact {
-            format!("{} messages exceed thresholds", stats.total_messages)
-        } else {
-            "within configured thresholds".to_string()
-        };
-
-        Ok(crate::core::agent::intelligence::CompactionDecision {
-            should_compact,
-            strategy,
-            reasoning,
-            estimated_benefit: stats.total_memory_usage,
-        })
-    }
-
-    /// Check if compaction is needed
-    pub async fn should_compact(&self) -> Result<bool> {
-        self.compaction_engine.should_compact().await
-    }
-
-    /// Perform intelligent message compaction
-    pub async fn compact_messages(&self) -> Result<crate::core::agent::types::CompactionResult> {
-        self.compaction_engine
-            .compact_messages_intelligently()
-            .await
-    }
-
-    /// Perform context compaction
-    pub async fn compact_context(
-        &self,
-        context_key: &str,
-        context_data: &mut std::collections::HashMap<String, serde_json::Value>,
-    ) -> Result<crate::core::agent::types::CompactionResult> {
-        self.compaction_engine
-            .compact_context(context_key, context_data)
-            .await
-    }
-
-    /// Get compaction statistics
-    pub async fn get_compaction_stats(
-        &self,
-    ) -> Result<crate::core::agent::types::CompactionStatistics> {
-        self.compaction_engine.get_statistics().await
-    }
-
     /// Analyze a file using tree-sitter
     pub fn analyze_file_with_tree_sitter(
         &mut self,
@@ -288,10 +226,7 @@ impl Agent {
         self.session_info.error_count = errors;
     }
 
-    /// Check if context compression is needed
-    pub fn should_compress_context(&self, context_size: usize) -> bool {
-        self.error_recovery.should_compress_context(context_size)
-    }
+    // Removed: Context compression check has been removed as part of complete context optimization feature removal
 
     /// Generate context preservation plan
     pub fn generate_context_plan(
@@ -381,8 +316,6 @@ impl Agent {
                 "  {:.1} average recovery attempts per error",
                 style(error_stats.avg_recovery_attempts).yellow()
             );
-
-
         } else {
             // Brief summary for non-verbose mode
             println!("{}", style(format!("  ↳ Session complete: {} decisions, {} successful ({}% success rate), {} errors",

@@ -87,8 +87,8 @@ let tokens = manager.count_tokens_for_component(
 ).await?;
 
 // Check thresholds
-if manager.is_compaction_threshold_exceeded().await {
-    // Trigger compaction
+if manager.is_alert_threshold_exceeded().await {
+    // Issue alert/warning
 }
 ```
 
@@ -96,7 +96,7 @@ if manager.is_compaction_threshold_exceeded().await {
 
 -   Real-time token counting using Hugging Face `tokenizers`
 -   Component-level tracking (system prompt, user messages, tool results, etc.)
--   Configurable warning and compaction thresholds
+-   Configurable warning thresholds
 -   Automatic deduction after context cleanup
 
 ### 4. **Decision Ledger (Structured Note-Taking)**
@@ -139,29 +139,8 @@ To prevent context pollution from verbose tool outputs:
 
 -   **Auto-Truncation**: Command outputs >10k lines show first 5k + last 5k
 -   **Concise Formats**: Tools default to `response_format="concise"`
--   **Summarization**: Old tool results can be compressed during context compaction
 
-### 6. **Intelligent Context Compaction**
 
-When context approaches limits, we compress older messages while preserving critical information:
-
-**Preservation Rules:**
-
--   Recent messages (last N turns, configurable)
--   Decision ledger entries
--   Error messages and debugging context
--   Tool calls with active results
--   System-critical messages
-
-**Compaction Strategy:**
-
-```rust
-// Triggered at 85% context usage (configurable)
-let compressed = compactor.compact_messages_intelligently().await?;
-
-// Summarizes older content
-// Preserves: recent turns, errors, decisions, active tool results
-```
 
 ### 7. **Tool Design for Efficiency**
 
@@ -195,7 +174,7 @@ enabled = true
 # Examples: "gpt-5-mini", "gpt-5-nano", "claude-sonnet-4", "grok-4", "deepseek-chat"
 model = "gpt-5-nano"
 warning_threshold = 0.75  # Warn at 75% usage
-compaction_threshold = 0.85  # Compact at 85% usage
+
 detailed_tracking = false  # Enable for debugging
 ```
 
@@ -296,7 +275,7 @@ for (component, tokens) in breakdown {
 1. **Sub-Agent Architecture**: Specialized agents with focused context windows
 2. **Semantic Chunking**: Content-aware splitting for better preservation
 3. **Context Swapping**: Hot-swap between task-specific contexts
-4. **Adaptive Thresholds**: Learn optimal compaction points per task type
+4. **Adaptive Thresholds**: Learn optimal warning points per task type
 5. **Multi-Model Support**: Per-provider tokenizers (Claude, Gemini)
 
 ## References

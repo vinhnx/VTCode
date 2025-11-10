@@ -6,7 +6,7 @@ use tempfile::Builder;
 
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
 use vtcode_core::config::loader::VTCodeConfig;
-use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
+use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, UiSurfacePreference};
 use vtcode_core::llm::factory::create_provider_with_config;
 use vtcode_core::llm::provider::LLMProvider;
 use vtcode_core::llm::rig_adapter::{reasoning_parameters_for, verify_model_with_rig};
@@ -16,7 +16,6 @@ use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use crate::agent::runloop::model_picker::{ModelPickerState, ModelSelectionResult};
 use crate::agent::runloop::welcome::SessionBootstrap;
 
-use super::curator::resolve_mode_label;
 use crate::agent::runloop::ui::build_inline_header_context;
 
 #[allow(clippy::too_many_arguments)]
@@ -122,7 +121,13 @@ pub(crate) async fn finalize_model_selection(
     }
 
     let reasoning_label = selection.reasoning.as_str().to_string();
-    let mode_label = resolve_mode_label(config.ui_surface, full_auto);
+    let mode_label = match (config.ui_surface, full_auto) {
+        (UiSurfacePreference::Inline, true) => "auto".to_string(),
+        (UiSurfacePreference::Inline, false) => "inline".to_string(),
+        (UiSurfacePreference::Alternate, _) => "alt".to_string(),
+        (UiSurfacePreference::Auto, true) => "auto".to_string(),
+        (UiSurfacePreference::Auto, false) => "std".to_string(),
+    };
     let header_context = build_inline_header_context(
         config,
         session_bootstrap,

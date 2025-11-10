@@ -70,7 +70,7 @@ files until you've identified relevant matches."
 
 -   Real-time token counting using Hugging Face `tokenizers`
 -   Component-level tracking (system prompt, messages, tool results, ledger)
--   Configurable warning (75%) and compaction (85%) thresholds
+-   Configurable warning (75%) thresholds
 -   Token deduction after context cleanup
 -   Detailed budget reporting
 -   Model-specific tokenizer selection
@@ -90,8 +90,8 @@ let tokens = manager.count_tokens_for_component(
 ).await?;
 
 // Check thresholds
-if manager.is_compaction_threshold_exceeded().await {
-    trigger_compaction().await?;
+if manager.is_alert_threshold_exceeded().await {
+    // trigger alert or other action
 }
 
 // Generate report
@@ -105,7 +105,7 @@ println!("{}", manager.generate_report().await);
 enabled = true
 model = "gpt-5"
 warning_threshold = 0.75
-compaction_threshold = 0.85
+
 detailed_tracking = false
 ```
 
@@ -126,7 +126,7 @@ detailed_tracking = false
 -   Core principles (minimal tokens, just-in-time loading, budget tracking)
 -   Decision ledger for structured notes
 -   Tool result clearing strategies
--   Intelligent compaction rules
+
 -   Tool design for efficiency
 -   Configuration examples
 -   Best practices for users and developers
@@ -172,14 +172,7 @@ VTCode already had several features aligned with Anthropic's principles:
 -   `vtcode-core/src/core/decision_tracker.rs`
 -   Tracks decisions with reasoning and outcomes
 -   Generates compact summaries (`render_ledger_brief`)
--   Preserved during compaction
 
-### Context Compression
-
--   `vtcode-core/src/core/context_compression.rs`
--   `vtcode-core/src/core/agent/compaction.rs`
--   Preserves recent messages, errors, and tool calls
--   Configurable thresholds
 
 ### Auto-Chunking
 
@@ -198,7 +191,7 @@ VTCode already had several features aligned with Anthropic's principles:
 ### High Priority
 
 1. **Just-in-Time Context Loading** - Implement lazy file loading patterns
-2. **Improved Compaction Heuristics** - Better preservation rules
+
 3. **Tool Result Clearing** - Auto-clear old tool outputs
 
 ### Medium Priority
@@ -209,7 +202,7 @@ VTCode already had several features aligned with Anthropic's principles:
 ### Low Priority
 
 6. **Sub-Agent Architecture** - Specialized agents with focused contexts
-7. **Adaptive Thresholds** - Learn optimal compaction points
+7. **Adaptive Thresholds** - Learn optimal warning points
 
 ## Integration Points
 
@@ -230,27 +223,6 @@ if self.token_budget.is_warning_threshold_exceeded().await {
           self.token_budget.usage_percentage().await);
 }
 
-// Trigger compaction if needed
-if self.token_budget.is_compaction_threshold_exceeded().await {
-    self.compact_context().await?;
-}
-```
-
-### For Tool Execution
-
-```rust
-// Track tool result tokens
-let result_tokens = self.token_budget.count_tokens_for_component(
-    &tool_result,
-    ContextComponent::ToolResult,
-    Some(&tool_call_id)
-).await?;
-
-// After compaction, deduct cleared tokens
-self.token_budget.deduct_tokens(
-    ContextComponent::ToolResult,
-    cleared_tokens
-).await;
 ```
 
 ## Testing
@@ -265,7 +237,7 @@ self.token_budget.deduct_tokens(
 ### Manual Testing Needed
 
 1. End-to-end token tracking in live agent sessions
-2. Compaction trigger at threshold
+2. Threshold monitoring
 3. Token budget report accuracy
 4. Performance impact measurement
 
@@ -297,7 +269,7 @@ self.token_budget.deduct_tokens(
 2. Initialize manager with config
 3. Track tokens before context operations
 4. Check thresholds before adding to context
-5. Deduct after removal/compaction
+5. Deduct after removal
 
 ## References
 

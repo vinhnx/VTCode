@@ -720,12 +720,28 @@ export class EnhancedChatViewProvider implements vscode.WebviewViewProvider {
         args: Record<string, unknown>
     ): Promise<unknown> {
         // This will be overridden by subclasses or use ChatView implementation
-        // For now, return a basic response
-        return {
-            success: true,
-            message: `Tool ${toolName} executed`,
-            args,
-        };
+        // Use the actual backend for tool execution
+        if (this.backend) {
+            try {
+                const result = await this.backend.executeTool({
+                    name: toolName,
+                    args: args
+                });
+                return result;
+            } catch (error) {
+                return {
+                    success: false,
+                    message: `Error executing tool ${toolName}: ${(error as Error).message}`,
+                    args,
+                };
+            }
+        } else {
+            return {
+                success: false,
+                message: `Backend not available for tool ${toolName}`,
+                args,
+            };
+        }
     }
 
     /**

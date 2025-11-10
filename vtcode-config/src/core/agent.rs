@@ -126,8 +126,6 @@ pub struct AgentConfig {
     /// Checkpointing configuration for automatic turn snapshots
     #[serde(default)]
     pub checkpointing: AgentCheckpointingConfig,
-
-
 }
 
 impl Default for AgentConfig {
@@ -456,8 +454,6 @@ fn default_recommended_actions() -> Vec<String> {
     ]
 }
 
-
-
 /// Small/lightweight model configuration for efficient operations
 ///
 /// Following Claude Code's pattern, use a smaller model (e.g., Haiku, GPT-4 Mini) for 50%+ of calls:
@@ -498,8 +494,6 @@ pub struct AgentSmallModelConfig {
     /// Enable small model for git history processing
     #[serde(default = "default_small_model_for_git_history")]
     pub use_for_git_history: bool,
-
-
 }
 
 impl Default for AgentSmallModelConfig {
@@ -539,5 +533,3 @@ fn default_small_model_for_web_summary() -> bool {
 fn default_small_model_for_git_history() -> bool {
     true
 }
-
-

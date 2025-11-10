@@ -74,12 +74,6 @@ async fn test_snapshot_creation_and_loading() {
             latest_summary: None,
             summary_history: Vec::new(),
         },
-        compaction_engine: CompactionEngineSnapshot {
-            total_compactions: 0,
-            memory_saved: 0,
-            compression_ratio: 1.0,
-            compaction_suggestions: Vec::new(),
-        },
         tree_sitter_state: TreeSitterSnapshot {
             supported_languages: vec!["rust".to_string(), "python".to_string()],
             cache_size: 100,
@@ -194,12 +188,6 @@ async fn test_checksum_verification() {
             total_summaries: 0,
             latest_summary: None,
             summary_history: Vec::new(),
-        },
-        compaction_engine: CompactionEngineSnapshot {
-            total_compactions: 0,
-            memory_saved: 0,
-            compression_ratio: 1.0,
-            compaction_suggestions: Vec::new(),
         },
         tree_sitter_state: TreeSitterSnapshot {
             supported_languages: vec!["rust".to_string()],

@@ -374,16 +374,6 @@ scrollback_lines = 400
 
 # Context management configuration - Controls conversation memory
 [context]
-# Maximum number of tokens to keep in context (affects model cost and performance)
-# Higher values preserve more context but cost more and may hit token limits
-max_context_tokens = 90000
-
-# Percentage to trim context to when it gets too large
-trim_to_percent = 60
-
-# Number of recent conversation turns to always preserve
-preserve_recent_turns = 6
-
 # Decision ledger configuration - Track important decisions
 [context.ledger]
 # Enable decision tracking and persistence
@@ -394,51 +384,6 @@ max_entries = 12
 
 # Include ledger summary in model prompts
 include_in_prompt = true
-
-
-
-# Token budget management - Track and limit token usage
-[context.token_budget]
-# Enable token usage tracking and budget enforcement
-enabled = false
-
-# Model to use for token counting (must match your actual model)
-model = "gpt-5"
-
-# Percentage threshold to warn about token usage (0.75 = 75%)
-warning_threshold = 0.75
-
-# Percentage threshold to trigger context compaction (0.85 = 85%)
-compaction_threshold = 0.85
-
-# Enable detailed component-level token tracking (increases overhead)
-detailed_tracking = false
-
-# Context curation - Intelligent context management
-[context.curation]
-# Enable automatic context curation (filters and optimizes context)
-enabled = false
-
-# Maximum tokens to allow per turn after curation
-max_tokens_per_turn = 50000
-
-# Number of recent messages to always preserve
-preserve_recent_messages = 5
-
-# Maximum number of tool descriptions to keep in context
-max_tool_descriptions = 10
-
-# Include decision ledger in curation
-include_ledger = true
-
-# Maximum ledger entries to include in curation
-ledger_max_entries = 12
-
-# Include recent error messages in context
-include_recent_errors = true
-
-# Maximum recent errors to include
-max_recent_errors = 3
 
 # AI model routing - Intelligent model selection
 [router]

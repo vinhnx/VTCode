@@ -85,11 +85,26 @@ fn ansi256_to_rgb(ansi256_color: anstyle::Ansi256Color) -> Option<RgbColor> {
         13 => Some(RgbColor(255, 85, 255)),
         14 => Some(RgbColor(85, 255, 255)),
         15 => Some(RgbColor(255, 255, 255)),
+        n if n >= 16 && n <= 231 => {
+            // 6x6x6 color cube: 16 + 36*r + 6*g + b where r,g,b in [0,5]
+            let adjusted = n - 16;
+            let r = (adjusted / 36) as u8; // Red: 0-5
+            let g = ((adjusted % 36) / 6) as u8; // Green: 0-5
+            let b = (adjusted % 6) as u8; // Blue: 0-5
+
+            // Convert 0-5 scale to 0-255 RGB values
+            let scale = |x: u8| -> u8 { if x == 0 { 0 } else { 55 + x * 40 } };
+
+            Some(RgbColor(scale(r), scale(g), scale(b)))
+        }
+        n if n >= 232 => {
+            // Grayscale: n-232, then scale to 0-255 range
+            let gray = 8 + (n - 232) * 10;
+            Some(RgbColor(gray, gray, gray))
+        }
         _ => {
-            // For other ANSI256 codes, we'd typically use a lookup table
-            // For now, just return the RGB equivalent if it exists in the 0-255 range
-            // This is a simplified conversion
-            Some(RgbColor(code, code, code)) // Just as a default fallback
+            // Fallback for invalid codes
+            Some(RgbColor(128, 128, 128)) // Gray fallback
         }
     }
 }

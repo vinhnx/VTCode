@@ -170,30 +170,10 @@ async fn process_items_batch(
 }
 ```
 
-### Pattern 3: Conditional Compression
+### Pattern 3: Removed Context Compression
 
 ```rust
-async fn maybe_compress_context(
-    conversation: &[Message],
-    config: &AgentConfig,
-) -> Result<Option<String>> {
-    if conversation.len() < 20 {
-        return Ok(None);
-    }
-    
-    if !config.agent.small_model.use_for_compression {
-        return Ok(None);
-    }
-    
-    let summary = llm_client.complete(
-        &config.agent.small_model.model,
-        format!("Summarize key decisions: {}", format_messages(conversation)),
-        config.agent.small_model.max_tokens,
-        0.2, // Even lower temperature for consistency
-    ).await?;
-    
-    Ok(Some(summary))
-}
+// Removed: Context compression functionality has been removed from the system
 ```
 
 ## Cost Analysis

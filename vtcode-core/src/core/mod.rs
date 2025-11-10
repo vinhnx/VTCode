@@ -34,7 +34,7 @@
 
 //!
 pub mod agent;
-pub mod context_curator;
+
 pub mod decision_tracker;
 pub mod error_recovery;
 pub mod interfaces;

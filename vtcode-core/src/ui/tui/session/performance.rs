@@ -142,8 +142,15 @@ mod tests {
         cache.clear_expired();
         
         // This test is a bit tricky since we need to adjust the expiration time
-        // For now, just verify the method doesn't crash
+        // Test that the method properly handles expired entries
+        let initial_size = cache.size();
         cache.clear_expired();
+        
+        // Verify the method doesn't crash and returns the cache to a valid state
+        assert!(cache.size() <= initial_size);
+        
+        // Test that we can still use the cache after clearing expired items
+        assert!(cache.get(&"key1").is_none()); // Should be expired and cleared
     }
 
     #[test]

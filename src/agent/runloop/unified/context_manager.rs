@@ -2,22 +2,17 @@ use std::sync::Arc;
 
 use anyhow::Result;
 
-use vtcode_core::core::context_curator::{ContextCurator, ToolDefinition as CuratorToolDefinition};
-use vtcode_core::core::token_budget::{ContextComponent, TokenBudgetManager};
-use vtcode_core::llm::provider as uni;
-
-use super::curator::{build_curated_sections, build_curator_messages};
 use crate::agent::runloop::context::{
     ContextTrimConfig, ContextTrimOutcome, apply_aggressive_trim_unified,
     enforce_unified_context_window, prune_unified_tool_responses,
 };
+use vtcode_core::core::token_budget::{ContextComponent, TokenBudgetManager};
+use vtcode_core::llm::provider as uni;
 
 pub(crate) struct ContextManager {
     trim_config: ContextTrimConfig,
     token_budget: Arc<TokenBudgetManager>,
     token_budget_enabled: bool,
-    curator: ContextCurator,
-    tool_catalog: Vec<CuratorToolDefinition>,
     base_system_prompt: String,
 }
 
@@ -27,15 +22,11 @@ impl ContextManager {
         trim_config: ContextTrimConfig,
         token_budget: Arc<TokenBudgetManager>,
         token_budget_enabled: bool,
-        curator: ContextCurator,
-        tool_catalog: Vec<CuratorToolDefinition>,
     ) -> Self {
         Self {
             trim_config,
             token_budget,
             token_budget_enabled,
-            curator,
-            tool_catalog,
             base_system_prompt,
         }
     }
@@ -73,32 +64,11 @@ impl ContextManager {
         apply_aggressive_trim_unified(history, self.trim_config)
     }
 
-    pub(crate) fn clear_curator_state(&mut self) {
-        self.curator.clear_active_files();
-        self.curator.clear_errors();
-    }
-
-    pub(crate) fn update_tool_catalog(&mut self, tool_catalog: Vec<CuratorToolDefinition>) {
-        self.tool_catalog = tool_catalog;
-    }
-
     pub(crate) async fn build_system_prompt(
         &mut self,
-        attempt_history: &[uni::Message],
+        _attempt_history: &[uni::Message],
         retry_attempts: usize,
     ) -> Result<String> {
-        let curator_messages = build_curator_messages(
-            attempt_history,
-            &self.token_budget,
-            self.token_budget_enabled,
-        )
-        .await?;
-        let curated_context = self
-            .curator
-            .curate_context(&curator_messages, &self.tool_catalog)
-            .await?;
-        let curated_sections = build_curated_sections(&curated_context);
-
         let mut system_prompt = self.base_system_prompt.clone();
         if self.token_budget_enabled {
             self.token_budget
@@ -108,29 +78,6 @@ impl ContextManager {
                     Some(&format!("base_system_{}", retry_attempts)),
                 )
                 .await?;
-        }
-
-        if !curated_sections.is_empty() {
-            system_prompt.push_str("\n\n[Curated Context]\n");
-            for (idx, section) in curated_sections.iter().enumerate() {
-                let body = section.body.trim();
-                if body.is_empty() {
-                    continue;
-                }
-                system_prompt.push_str(section.heading);
-                system_prompt.push('\n');
-                system_prompt.push_str(section.body.trim_end());
-                system_prompt.push('\n');
-                if self.token_budget_enabled {
-                    self.token_budget
-                        .count_tokens_for_component(
-                            body,
-                            section.component,
-                            Some(&format!("section_{}_{}", retry_attempts, idx)),
-                        )
-                        .await?;
-                }
-            }
         }
 
         Ok(system_prompt)

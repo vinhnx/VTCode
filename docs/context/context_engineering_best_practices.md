@@ -192,7 +192,6 @@ drill down as needed. Maintain a mental model of your recent actions for coheren
 **Dynamic adjustment:**
 - Monitor token usage with budget tracker
 - Trigger summarization at 75% threshold
-- Trigger compaction at 85% threshold
 - Preserve critical context during compression
 ```
 
@@ -345,11 +344,6 @@ impl ContextCurator {
         let relevant_tools = self.select_relevant_tools(available_tools, &context);
         context.add_tools(relevant_tools);
 
-        // Check budget and compress if needed
-        if context.estimated_tokens() > budget {
-            context = self.compress_context(context, budget);
-        }
-
         context
     }
 }
@@ -461,7 +455,6 @@ include_multi_turn_guidance = true
 
 -   Token budget tracking implemented
 -   Decision ledger for key decisions
--   Context compression available
 -   Could benefit from dynamic per-turn curation
 
 **Tool Design**: 9/10 ⭐⭐⭐⭐⭐⭐⭐⭐⭐

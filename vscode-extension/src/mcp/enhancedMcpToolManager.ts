@@ -555,8 +555,9 @@ export class EnhancedMcpToolManager extends McpToolManager {
      */
     private getProviders(): Map<string, McpProvider> {
         // Access base class providers (would need to be protected in base class)
-        // For now, we'll use a workaround
-        return (this as any).providers || new Map();
+        // Using bracket notation and verification to make the access safer
+        const providers = (this as any)['providers'];
+        return providers instanceof Map ? providers : new Map<string, McpProvider>();
     }
 
     /**
@@ -564,9 +565,9 @@ export class EnhancedMcpToolManager extends McpToolManager {
      */
     private setTool(name: string, tool: McpTool): void {
         // Access base class tools (would need to be protected in base class)
-        // For now, we'll use a workaround
-        if ((this as any).tools) {
-            (this as any).tools.set(name, tool);
+        const tools = (this as any)['tools'];
+        if (tools instanceof Map) {
+            tools.set(name, tool);
         }
     }
 }
