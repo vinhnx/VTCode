@@ -7,28 +7,33 @@ VTCode implements context engineering principles based on [Anthropic's research]
 ## Context Engineering vs Prompt Engineering
 
 ### Single-Turn Prompt Engineering
+
 Traditional prompt engineering focuses on crafting a single prompt for discrete tasks:
-- **Input**: System prompt + User message
-- **Output**: Assistant message
-- **Process**: One-shot, static
+
+-   **Input**: System prompt + User message
+-   **Output**: Assistant message
+-   **Process**: One-shot, static
 
 ### Multi-Turn Context Engineering (Agents)
+
 Context engineering is about **iterative curation** - deciding what context to pass to the model on each turn:
 
 **Available Context:**
-- Documentation, tools, memory files
-- Comprehensive instructions, domain knowledge
-- Message history, previous tool results
+
+-   Documentation, tools, memory files
+-   Comprehensive instructions, domain knowledge
+-   Message history, previous tool results
 
 ↓ **Curation (happens each turn)** ↓
 
 **Selected Context:**
-- System prompt
-- Relevant docs (not all docs)
-- Memory file summary
-- Relevant tools (not all tools)
-- User message
-- Recent message history (not full history)
+
+-   System prompt
+-   Relevant docs (not all docs)
+-   Memory file summary
+-   Relevant tools (not all tools)
+-   User message
+-   Recent message history (not full history)
 
 → [Model] → Assistant message → Tool call → Tool result → **Next turn curation**
 
@@ -40,14 +45,15 @@ Context engineering is about **iterative curation** - deciding what context to p
 
 Our system prompts strike a balance between specificity and flexibility:
 
-- **Concise Instructions**: Clear guidance without prescriptive micromanagement
-- **Progressive Disclosure**: Load information layer-by-layer as needed
-- **Heuristics Over Rules**: Provide strong patterns rather than exhaustive edge cases
+-   **Concise Instructions**: Clear guidance without prescriptive micromanagement
+-   **Progressive Disclosure**: Load information layer-by-layer as needed
+-   **Heuristics Over Rules**: Provide strong patterns rather than exhaustive edge cases
 
 Example from our default prompt:
+
 ```
 ## Context Strategy
-- Use search tools (rg, ast-grep) to find relevant code before reading files
+- Use search tools (rg, grep, ripgrep) to find relevant code before reading files
 - Load file metadata (paths, sizes) as references; read content only when necessary
 - Summarize tool outputs; avoid echoing large results
 - Preserve recent decisions and errors in your working memory
@@ -57,10 +63,10 @@ Example from our default prompt:
 
 Instead of pre-loading everything, we use lightweight references:
 
-- **File Paths as Metadata**: List files first, read content only when relevant
-- **Search Before Read**: Use `grep_file` or `ast_grep_search` to identify relevant files
-- **Chunked Reading**: Auto-truncate large files (>2000 lines) to first/last portions
-- **Pagination**: Tools support `per_page` and `page` parameters for large results
+-   **File Paths as Metadata**: List files first, read content only when relevant
+-   **Search Before Read**: Use `grep_file` to identify relevant files
+-   **Chunked Reading**: Auto-truncate large files (>2000 lines) to first/last portions
+-   **Pagination**: Tools support `per_page` and `page` parameters for large results
 
 ### 3. **Token Budget Management**
 
@@ -87,10 +93,11 @@ if manager.is_compaction_threshold_exceeded().await {
 ```
 
 **Token Budget Features:**
-- Real-time token counting using Hugging Face `tokenizers`
-- Component-level tracking (system prompt, user messages, tool results, etc.)
-- Configurable warning and compaction thresholds
-- Automatic deduction after context cleanup
+
+-   Real-time token counting using Hugging Face `tokenizers`
+-   Component-level tracking (system prompt, user messages, tool results, etc.)
+-   Configurable warning and compaction thresholds
+-   Automatic deduction after context cleanup
 
 ### 4. **Decision Ledger (Structured Note-Taking)**
 
@@ -130,22 +137,24 @@ preserve_in_compression = true
 
 To prevent context pollution from verbose tool outputs:
 
-- **Auto-Truncation**: Command outputs >10k lines show first 5k + last 5k
-- **Concise Formats**: Tools default to `response_format="concise"`
-- **Summarization**: Old tool results can be compressed during context compaction
+-   **Auto-Truncation**: Command outputs >10k lines show first 5k + last 5k
+-   **Concise Formats**: Tools default to `response_format="concise"`
+-   **Summarization**: Old tool results can be compressed during context compaction
 
 ### 6. **Intelligent Context Compaction**
 
 When context approaches limits, we compress older messages while preserving critical information:
 
 **Preservation Rules:**
-- Recent messages (last N turns, configurable)
-- Decision ledger entries
-- Error messages and debugging context
-- Tool calls with active results
-- System-critical messages
+
+-   Recent messages (last N turns, configurable)
+-   Decision ledger entries
+-   Error messages and debugging context
+-   Tool calls with active results
+-   System-critical messages
 
 **Compaction Strategy:**
+
 ```rust
 // Triggered at 85% context usage (configurable)
 let compressed = compactor.compact_messages_intelligently().await?;
@@ -159,18 +168,21 @@ let compressed = compactor.compact_messages_intelligently().await?;
 Our tools are designed with context efficiency in mind:
 
 #### Search Tools
-- **grep_file**: Fast pattern matching with `max_results` limits
-- **ast_grep_search**: Syntax-aware search with `max_results` and `context_lines`
-- Return metadata first (file paths, line numbers) before content
+
+-   **grep_file**: Fast pattern matching with `max_results` limits
+-   **grep_file**: Syntax-aware search with `max_results` and `context_lines`
+-   Return metadata first (file paths, line numbers) before content
 
 #### File Operations
-- **list_files**: Pagination support, metadata-only by default
-- **read_file**: Auto-chunking for large files
-- **edit_file**: Precise replacements avoid rewriting entire files
+
+-   **list_files**: Pagination support, metadata-only by default
+-   **read_file**: Auto-chunking for large files
+-   **edit_file**: Precise replacements avoid rewriting entire files
 
 #### Command Execution
-- **run_terminal_cmd**: Auto-truncation, timeout limits
-- Streaming mode for long-running commands
+
+-   **run_terminal_cmd**: Auto-truncation, timeout limits
+-   Streaming mode for long-running commands
 
 ## Configuration
 
@@ -229,6 +241,7 @@ println!("{}", report);
 ```
 
 Output:
+
 ```
 Token Budget Report
 ==================
@@ -265,16 +278,16 @@ for (component, tokens) in breakdown {
 
 ### Token Counting Overhead
 
-- Uses Hugging Face `tokenizers` with heuristic fallback when pretrained assets are unavailable
-- ~10μs per message for typical sizes
-- Caching minimizes repeated tokenization
-- Disable `detailed_tracking` in production for best performance
+-   Uses Hugging Face `tokenizers` with heuristic fallback when pretrained assets are unavailable
+-   ~10μs per message for typical sizes
+-   Caching minimizes repeated tokenization
+-   Disable `detailed_tracking` in production for best performance
 
 ### Memory Efficiency
 
-- LRU caches for tokenizer instances
-- Incremental tracking (no full recount needed)
-- Deduplication of identical content
+-   LRU caches for tokenizer instances
+-   Incremental tracking (no full recount needed)
+-   Deduplication of identical content
 
 ## Future Enhancements
 
@@ -288,13 +301,13 @@ for (component, tokens) in breakdown {
 
 ## References
 
-- [Anthropic: Effective Context Engineering for AI Agents](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)
-- [Hugging Face tokenizers Documentation](https://huggingface.co/docs/tokenizers/index)
-- [Context Rot Research (Chroma)](https://research.trychroma.com/context-rot)
+-   [Anthropic: Effective Context Engineering for AI Agents](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)
+-   [Hugging Face tokenizers Documentation](https://huggingface.co/docs/tokenizers/index)
+-   [Context Rot Research (Chroma)](https://research.trychroma.com/context-rot)
 
 ## Related Documentation
 
-- [Configuration Guide](./config/README.md)
-- [Tool Development Guide](./tools/README.md)
-- [Decision Tracking](./features/decision_tracking.md)
-- [Performance Optimization](./performance/optimization.md)
+-   [Configuration Guide](./config/README.md)
+-   [Tool Development Guide](./tools/README.md)
+-   [Decision Tracking](./features/decision_tracking.md)
+-   [Performance Optimization](./performance/optimization.md)

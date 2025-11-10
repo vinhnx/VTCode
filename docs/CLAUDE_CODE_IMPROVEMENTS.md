@@ -92,7 +92,7 @@ Completely restructured the system prompt to match Claude Code's approach:
 
 #### 3. Tool Selection Examples
 Shows concrete good/bad examples:
-- **Good**: Use `ast_grep_search` + `execute_code` to group TODO comments efficiently
+- **Good**: Use `grep_file` + `execute_code` to group TODO comments efficiently
 - **Bad**: Use raw `grep -r` and return all 500 results to model
 
 #### 4. Code Execution Patterns
@@ -136,7 +136,7 @@ Enhanced the project's agent guide with:
 ┌─ Need information?
 │  ├─ Structure? → list_files
 │  ├─ Text patterns? → grep_file
-│  └─ Code semantics? → ast_grep_search
+│  └─ Code semantics? → grep_file
 ├─ Modifying files?
 │  ├─ Surgical edit? → edit_file (preferred)
 │  ├─ Full rewrite? → write_file
@@ -162,7 +162,7 @@ Enhanced the project's agent guide with:
 Simple task (1-2 files)?
   → list_files → grep_file → read_file
 Complex task?
-  → search_tools → ast_grep_search → read_file (targeted)
+  → search_tools → grep_file → read_file (targeted)
 ```
 **Rule:** Search BEFORE reading whole files. Never read 5+ files without searching.
 
@@ -305,7 +305,7 @@ cargo run -- ask "simple question"
 Based on the Claude Code analysis, potential next steps:
 
 1. **Implement Small Model Selection Logic** - Add code to routing layer to use small model for appropriate tasks
-2. **Add LLM Search Patterns** - Enhance grep/ast_grep_search with more sophisticated ripgrep patterns
+2. **Add LLM Search Patterns** - Enhance grep/grep_file with more sophisticated ripgrep patterns
 3. **Extend Tool Examples** - Add more good/bad examples to system prompt for common patterns
 4. **Monitor Token Usage** - Track which tasks benefit most from small model tier
 5. **Optimize Prompt Caching** - Leverage small model for prompt caching operations

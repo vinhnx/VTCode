@@ -106,7 +106,7 @@ Deploying VT Code in production? Focus on enterprise features:
 ### Advanced Code Intelligence
 
 -   **Tree-Sitter Integration** - Syntax-aware parsing for Rust, Python, JavaScript, TypeScript, Go, Java
--   **Intelligent Search** - Ripgrep and AST-grep powered code analysis
+-   **Intelligent Search** - Ripgrep and Tree-sitter powered code analysis
 -   **Fuzzy File Discovery** - Git-aware traversal using `ignore` with `nucleo-matcher` scoring
 -   **Symbol Analysis** - Function, class, and variable extraction
 -   **Dependency Mapping** - Import relationship analysis

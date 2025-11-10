@@ -15,7 +15,7 @@ This document captures the results of a quick architectural survey of VTCode wit
 | Candidate crate         | Source modules                                                  | Core capability                                                                                                                            | Key dependencies                                          | Reuse potential                                                                                                                                                                |
 | ----------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `vtcode-llm`            | `vtcode-core/src/llm`                                           | Unified async client abstraction over Gemini, OpenAI, Anthropic, xAI, DeepSeek, and Z.AI providers (streaming, function calling, retries). | `anyhow`, `futures`, provider SDKs, config loader.        | High – provides a ready-made multi-provider facade with streaming and function-call support.【F:vtcode-core/src/llm/mod.rs†L1-L160】                                           |
-| `vtcode-tools`          | `vtcode-core/src/tools`                                         | Registry-driven tool execution framework with safety policies, PTY integration, AST/grep search utilities.                                 | `async_trait`, `serde_json`, `tokio`, tree-sitter crates. | High – modular tool runtime could power other agents or CLI automation surfaces.【F:vtcode-core/src/tools/mod.rs†L1-L160】                                                     |
+| `vtcode-tools`          | `vtcode-core/src/tools`                                         | Registry-driven tool execution framework with safety policies, PTY integration, and search utilities.                                     | `async_trait`, `serde_json`, `tokio`, tree-sitter crates. | High – modular tool runtime could power other agents or CLI automation surfaces.【F:vtcode-core/src/tools/mod.rs†L1-L160】                                                     |
 | `vtcode-commons`        | New shared crate                                                | Foundational traits for workspace paths, telemetry sinks, and error reporting shared across extracted crates.                              | `anyhow`.                                                 | High – keeps downstream integrations consistent without depending on VTCode's binary or storage defaults.                                                                      |
 | `vtcode-config`         | `vtcode-core/src/config/loader/mod.rs` plus `config` submodules | Typed loader for TOML configuration with defaults covering agent, tools, security, UI, MCP/ACP, telemetry, syntax highlighting.            | `serde`, `toml`, `anyhow`.                                | Medium – valuable for other terminal agents; requires separating VTCode-specific defaults and paths.【F:vtcode-core/src/config/loader/mod.rs†L1-L200】                         |
 | `vtcode-markdown-store` | `vtcode-core/src/markdown_storage.rs`, `project.rs`             | Markdown-backed storage, project management, simple cache/kv utilities.                                                                    | `serde_json`, `serde_yaml`, `indexmap`.                   | Medium – lightweight alternative to database-backed state useful for offline tooling.【F:vtcode-core/src/markdown_storage.rs†L1-L200】【F:vtcode-core/src/project.rs†L1-L200】 |
@@ -43,7 +43,7 @@ This document captures the results of a quick architectural survey of VTCode wit
 **What it offers:**
 
 -   Registry pattern (`ToolRegistry`, `ToolRegistration`) with async execution and serde-based parameter schemas.【F:vtcode-core/src/tools/mod.rs†L18-L159】
--   Rich catalogue of built-in tools (bash, AST-grep, srgn, curl, planners) bundled behind module boundaries.
+-   Rich catalogue of built-in tools (bash,  srgn, curl, planners) bundled behind module boundaries.
 -   Safety policies: workspace path validation, command allow/deny lists, execution logging.【F:vtcode-core/src/tools/mod.rs†L42-L85】
 
 **Decoupling tasks:**
@@ -189,7 +189,7 @@ This document captures the results of a quick architectural survey of VTCode wit
 -   **Registry core**: Keep registry types and lightweight tools (`fs_inspect`, `echo`, `metadata`) enabled in the default feature set.
 -   **Heavyweight tools**:
     -   `bash` – shell execution and sandboxing utilities.
-    -   `search` – AST-grep, ripgrep, and srgn integrations that require tree-sitter crates.
+    -   `search` – Tree-sitter integration, ripgrep, and srgn integrations that require tree-sitter crates.
     -   `net` – curl/httpie style tooling that pulls in `reqwest` and TLS stacks.
     -   `planner` – planning/analysis helpers that depend on LLM streaming callbacks.
 -   **Telemetry and policies**: Provide a `policies` feature to re-export VTCode’s policy wiring (path guards, command allowlists) while letting consumers define their own implementations when the feature is disabled.
@@ -232,7 +232,7 @@ This document captures the results of a quick architectural survey of VTCode wit
 ## License Compatibility Review
 
 -   Conducted a targeted license audit for the dependencies bundled (or planned) with the prototype crates to ensure compatibility with VTCode's MIT licensing strategy.
--   `vtcode-tools` heavy dependencies (tree-sitter grammars, AST/grep helpers) all publish under the MIT license, which is permissive and compatible for redistribution.
+-   `vtcode-tools` heavy dependencies (tree-sitter grammars) all publish under the MIT license, which is permissive and compatible for redistribution.
 -   Core runtime crates that power both `vtcode-llm` and `vtcode-tools` (`tokio`, `reqwest`, `serde`, `serde_json`, `anyhow`) are dual-licensed MIT/Apache-2.0, aligning with VTCode's licensing.
 -   No provider-specific Rust SDKs are currently vendored—requests are issued via `reqwest`—so there are no additional license obligations beyond HTTP API terms of service. Document future additions in the TODO tracker to keep this audit current.
 

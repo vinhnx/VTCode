@@ -1024,7 +1024,7 @@ All notable changes to vtcode will be documented in this file.
     - refactor: update tool policy and improve command handling; streamline error messages and enhance telemetry logging
     - refactor: update extension ID and name for consistency
     - refactor: remove unused imports and streamline timeout error handling
-    - refactor: improve logging for AST-grep engine initialization
+    
 
 
 ### Documentation
@@ -1058,7 +1058,7 @@ All notable changes to vtcode will be documented in this file.
     - refactor: update tool policy and improve command handling; streamline error messages and enhance telemetry logging
     - refactor: update extension ID and name for consistency
     - refactor: remove unused imports and streamline timeout error handling
-    - refactor: improve logging for AST-grep engine initialization
+    
 
 
 ### Documentation
@@ -2473,7 +2473,7 @@ All notable changes to vtcode will be documented in this file.
 
 - **Enhanced Tool Execution & Output Handling**: Improved tool execution with better error handling and output formatting for enhanced reliability and user experience
 - **Enhanced Timeout Detection & Token Budget Management**: Improved timeout handling and more sophisticated token budget management with better attention management for enhanced performance
-- **AST-Grep Code Grep Functionality**: Enhanced AST-based search capabilities with improved formatting, limits, and custom match extraction
+
 - **Improved Output Rendering**: Enhanced syntax highlighting for JSON, XML, and YAML outputs with better error messaging
 - **Enhanced Bash Runner & Telemetry**: Added dry-run capabilities and feature-gated executors for shell operations with integrated telemetry
 - **Ollama Integration Improvements**: Better support for local models with configurable base URLs and improved tool call handling
@@ -2596,7 +2596,7 @@ detailed_tracking = false
 - **67-82% Token Reduction**: System prompts streamlined from ~600 tokens to ~200 tokens
 - **80% Tool Description Efficiency**: Average tool description reduced from ~400 to ~80 tokens
 - **"Right Altitude" Principles**: Concise, actionable guidance over verbose instructions
-- **Progressive Disclosure**: Emphasize search-first approach with `grep_file` and `ast_grep_search`
+- **Progressive Disclosure**: Emphasize search-first approach with `grep_file`
 - **Clear Tool Purposes**: Eliminated capability overlap in tool descriptions
 - **Token Management Guidance**: Built-in advice for efficient context usage (e.g., `max_results` parameters)
 

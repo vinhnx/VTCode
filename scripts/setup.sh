@@ -85,8 +85,7 @@ install_dev_tools() {
         "cargo-tarpaulin:Code coverage"
         "cargo-bench:Performance benchmarking"
         "ripgrep:Fast text search tool"
-        "ast-grep:Structural code search and transformation"
-    )
+        )
 
     for tool_info in "${tools[@]}"; do
         local tool=$(echo "$tool_info" | cut -d: -f1)

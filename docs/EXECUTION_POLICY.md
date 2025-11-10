@@ -45,7 +45,6 @@ The execution policy is designed to allow engineers typical software development
 | `edit_file` | Allow | Surgical edits |
 | `create_file` | Allow | File creation |
 | `grep_file` | Allow | Pattern search |
-| `ast_grep_search` | Allow | Semantic search |
 | `update_plan` | Allow | TODO planning |
 | `create_pty_session` | Allow | Terminal session |
 | `read_pty_session` | Allow | Read terminal |

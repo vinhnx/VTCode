@@ -56,7 +56,6 @@ pub trait CacheableTool: Tool {
 
 -   `grep_file.rs` is the single source of truth for content search
 -   Higher-level helpers were removed; use `ToolRegistry::grep_file_executor`
--   AST-aware discovery continues to rely on `tools::ast_grep`
 -   `list_files` remains a discovery/metadata tool; defer all content scanning to `grep_file`
 
 ### FileOpsTool

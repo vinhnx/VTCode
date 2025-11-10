@@ -58,7 +58,7 @@
 
 ## Dependencies & Coordination
 
--   Confirm upcoming feature work on agent runner to avoid merge conflicts; coordinate with contributors active on `codex/enhance-ast-grep-code-grep-functionality`.
+-   Confirm upcoming feature work on agent runner to avoid merge conflicts; coordinate with contributors active on `codex/code-grep-enhancement`.
 -   Determine availability of mocked LLM provider utilities for integration testing; if missing, schedule follow-up task to build lightweight mocks.
 -   Ensure documentation updates (developer guide, prompts) remain synchronized with new helper modules.
 

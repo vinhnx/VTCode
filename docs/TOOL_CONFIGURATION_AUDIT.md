@@ -48,10 +48,10 @@
 
 ### Current State (.vtcode/tool-policy.json)
 
-**Available Tools**: 24 registered
+**Available Tools**: 23 registered
 ```json
 [
-"apply_patch", "ast_grep_search", "close_pty_session",
+"apply_patch", "close_pty_session",
 "create_file", "create_pty_session", "delete_file",
 "edit_file", "execute_code",
 "grep_file", "list_files", "list_pty_sessions",
@@ -165,7 +165,7 @@ Explore code efficiently, make targeted changes, validate outcomes, and maintain
 
 **Response Framework:**
 1. **Assess the situation** – Understand what the user needs; ask clarifying questions if ambiguous
-2. **Gather context efficiently** – Use search tools (grep_file and ast-grep) to locate relevant code before reading files
+2. **Gather context efficiently** – Use search tools (grep_file) to locate relevant code before reading files
 3. **Make precise changes** – Prefer targeted edits (edit_file) over full rewrites; preserve existing patterns
 4. **Verify outcomes** – Test changes with appropriate commands; check for errors
 5. **Confirm completion** – Summarize what was done and verify user satisfaction
@@ -187,7 +187,7 @@ Example: Filter 1000+ items locally vs making multiple API calls (90% token savi
 - When context approaches limits, summarize completed work and preserve active tasks
 
 **Tools Available:**
-**Exploration**: list_files, grep_file, ast_grep_search, search_tools()
+**Exploration**: list_files, grep_file, search_tools()
 **File Operations**: read_file, write_file, edit_file
 **Code Execution**: execute_code, search_tools, save_skill, load_skill, list_skills, search_skills
 **Execution**: run_terminal_cmd (with PTY support)

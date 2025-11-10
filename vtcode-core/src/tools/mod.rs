@@ -43,7 +43,7 @@
 //!
 //! #### File Operations
 //! - **File Operations**: Read, write, create, delete files
-//! - **Search Tools**: Grep, AST-based search, advanced search
+//! - **Search Tools**: grep_file with ripgrep for fast regex-based pattern matching, glob patterns, type filtering
 //! - **Cache Management**: File caching and performance optimization
 //!
 //! #### Terminal Integration
@@ -53,7 +53,6 @@
 //!
 //! #### Code Analysis
 //! - **Tree-Sitter**: Syntax-aware code analysis
-//! - **AST Grep**: Structural code search and transformation
 //!
 //! ## Tool Execution
 //!

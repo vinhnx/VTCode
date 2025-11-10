@@ -53,7 +53,7 @@ files until you've identified relevant matches."
 -   `read_file`: Highlighted auto-chunking for large files
 -   `write_file` / `edit_file`: Clarified distinct use cases
 -   `run_terminal_cmd`: Noted auto-truncation behavior
--   `ast_grep_search`: Positioned as syntax-aware alternative
+-   `grep_file`: Positioned as syntax-aware alternative
 -   `curl`: Emphasized sandboxing and size limits
 
 **Files Modified**:

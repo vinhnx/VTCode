@@ -71,17 +71,11 @@ echo "=============================="
 # Test 2: Check if ripgrep is available
 run_test "Ripgrep Available" "which rg" "rg"
 
-# Test 3: Check if ast-grep is available
-run_test "AST Grep Available" "which ast-grep" "ast-grep"
-
 echo -e "\n🧪 Testing Tool Functionality"
 echo "============================="
 
-# Test 4: Test ripgrep directly
+# Test 3: Test ripgrep directly
 run_test "Ripgrep Direct Test" "echo 'test content' > /tmp/test_file.txt && rg 'test' /tmp/test_file.txt" "test content"
-
-# Test 5: Test ast-grep directly
-run_test "AST Grep Direct Test" "echo 'fn test() {}' > /tmp/test.rs && ast-grep --lang rust --pattern 'fn \$A() {}' /tmp/test.rs" "fn test()"
 
 echo -e "\n✦ Test Results"
 echo "==============="

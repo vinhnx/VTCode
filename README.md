@@ -32,7 +32,7 @@
   <a href="https://deepwiki.com/vinhnx/vtcode"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
 </p>
 
-<p align="center"><strong>VT Code</strong> is a Rust-based terminal coding agent with semantic code intelligence via Tree-sitter and ast-grep. Supports multiple LLM providers with automatic failover and efficient context management.</p>
+<p align="center"><strong>VT Code</strong> is a Rust-based terminal coding agent with semantic code intelligence via Tree-sitter. Supports multiple LLM providers with automatic failover and efficient context management.</p>
 
 <h6 align="center">> Development blog: <a href="https://buymeacoffee.com/vinhnx/vt-code">Lessons from Building VT Code: An Open-Source CLI AI Coding Agent</a><</h6>
 
@@ -104,7 +104,6 @@ For full configuration options, see [Configuration](./docs/config/CONFIGURATION_
 -   **Smart Tools**: Built-in code analysis, file operations, terminal commands, and refactoring
 -   **Editor Integration**: Native support for Zed IDE via Agent Client Protocol (ACP)
 -   **Lifecycle Hooks**: Execute custom shell commands in response to agent events for context enrichment, policy enforcement, and automation ([docs](./docs/guides/lifecycle-hooks.md))
--   **Semantic Search**: AST-based search capabilities with ast-grep integration
 -   **Context Management**: Advanced token budget tracking and context curation
 -   **TUI Interface**: Rich terminal user interface with real-time streaming
 
@@ -136,8 +135,6 @@ See [Security Model](./docs/SECURITY_MODEL.md) for details.
     -   [Token budget management](./docs/context_engineering_implementation.md#token-budget-tracking--attention-management)
     -   [Dynamic context curation](./docs/context_engineering_implementation.md#phase-2-dynamic-context-curation)
 -   [**Code Intelligence**](./docs/user-guide/tree-sitter-integration.md)
-    -   [AST-Grep tools](./docs/AST_GREP_TOOLS_ASSESSMENT_UPDATED.md)
-    -   [Semantic search](./docs/development/command-failure-handling.md)
 -   [**Agent Client Protocol (ACP)**](./docs/guides/zed-acp.md)
 -   [**Zed Integration**](./docs/guides/zed-acp.md) - Agent Client Protocol Integration. VT Code is fully [capable ACP agent](https://agentclientprotocol.com/overview/agents), works with [ACP Clients](https://agentclientprotocol.com/overview/clients), for example [Zed](https://zed.dev/).
 -   [**Lifecycle Hooks**](./docs/guides/lifecycle-hooks.md) - Execute shell commands in response to agent events, enabling context enrichment, policy enforcement, and automation

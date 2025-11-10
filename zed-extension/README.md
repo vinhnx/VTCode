@@ -7,7 +7,7 @@ An AI coding assistant for the Zed editor - A Rust-based terminal coding agent w
 - **AI Coding Assistant**: Access the VTCode agent directly from Zed
 - **Code Analysis**: Analyze your workspace with semantic code intelligence
 - **Configuration Support**: Syntax highlighting and autocomplete for `vtcode.toml`
-- **Context Awareness**: Leverages Tree-sitter and ast-grep for deep code understanding
+- **Context Awareness**: Leverages Tree-sitter for deep code understanding
 - **Multi-Provider AI**: Supports OpenAI, Anthropic, Google, xAI, DeepSeek, and more
 - **Security First**: Built-in safeguards with human-in-the-loop controls
 

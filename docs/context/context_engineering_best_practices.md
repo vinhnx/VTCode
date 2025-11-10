@@ -76,7 +76,7 @@ Work within `WORKSPACE_DIR`. Use targeted exploration (search, inspect) before m
 Keep context minimal—load only what's needed for the current step.
 
 ## Context Strategy
-- Use search tools (rg, ast-grep) to find relevant code before reading files
+- Use search tools (rg, ripgrep) to find relevant code before reading files
 - Load file metadata (paths, sizes) as references; read content only when necessary
 - Summarize tool outputs; avoid echoing large results
 - Preserve recent decisions and errors in your working memory
@@ -204,14 +204,14 @@ drill down as needed. Maintain a mental model of your recent actions for coheren
 ## Tool Selection Strategy
 
 **For exploration:**
-- Start with `grep_file` or `ast_grep_search` to find relevant locations
+- Start with `grep_file` or `grep_file` to find relevant locations
 - Use `list_files` to understand structure before diving into content
 - Only call `read_file` after identifying specific files of interest
 
 **For modifications:**
 - Prefer `edit_file` for targeted changes (preserves context)
 - Use `write_file` only for new files or complete rewrites
-- For structural refactoring, use `ast_grep_search` with transform mode
+- For structural refactoring, use `grep_file` with transform mode
 
 **For execution:**
 - Use `run_terminal_cmd` for build/test/validation
@@ -367,7 +367,7 @@ pub fn get_tool_description(tool_name: &str, context: &ContextState) -> String {
     match context.phase {
         Phase::Exploration => {
             // Emphasize search tools
-            if matches!(tool_name, "grep_file" | "ast_grep_search") {
+            if matches!(tool_name, "grep_file" | "grep_file") {
                 format!("{}\n\n**Current Phase**: Use this to find relevant code before reading files.", base_desc)
             } else {
                 base_desc.to_string()

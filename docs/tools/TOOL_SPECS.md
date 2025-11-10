@@ -49,15 +49,6 @@ This document summarizes the updated tool schemas and guidance following Anthrop
     -   Key args: `command` (string|string[]), `working_dir` (string), `timeout_secs` (int), `mode` (string: pty|terminal|streaming), `response_format`.
     -   Default mode is `pty` so output retains ANSI styling.
 
--   ast_grep_search
-    -   Purpose: AST-grep based structural search/transform.
-    -   Key args: `pattern` (string), `path` (string), optional `rewrite`, `context_lines`, `max_results`, `response_format` (concise|detailed).
-    -   Concise outputs by operation:
-        -   search/custom: `[ { path, line_number, text } ]`
-        -   lint: `[ { path, line_number, message, severity, rule } ]`
-        -   transform/refactor: `[ { path, line_number, note } ]` (summarized before→after)
-    -   Detailed outputs: raw AST-grep JSON.
-
 ## Policy Constraints (scoped)
 
 The workspace `.vtcode/tool-policy.json` may include constraints like:

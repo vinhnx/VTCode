@@ -41,8 +41,7 @@
 ```
 ┌─ Need information?
 │  ├─ Structure? → list_files
-│  ├─ Text patterns? → grep_file
-│  └─ Code semantics? → ast_grep_search
+│  └─ Text patterns? → grep_file
 ├─ Modifying files?
 │  ├─ Surgical edit? → edit_file (preferred)
 │  ├─ Full rewrite? → write_file
@@ -60,7 +59,7 @@
 
 -   **Tier 1 - Essential**: list_files, read_file, write_file, grep_file, edit_file, run_terminal_cmd
 -   **Tier 2 - Control**: update_plan (TODO list), PTY sessions (create/send/read/close)
--   **Tier 3 - Semantic**: ast_grep_search, apply_patch, search_tools
+-   **Tier 3 - Advanced**: apply_patch, search_tools
 -   **Tier 4 - Data Processing**: execute_code, save_skill, load_skill
 -   **Command Execution Strategy**:
     -   Interactive work → PTY sessions (create_pty_session → send_pty_input → read_pty_session → close_pty_session)
@@ -71,8 +70,10 @@
     -   Whole-file writes → write_file (when many changes)
     -   Structured diffs → apply_patch (for complex changes)
 -   **Search Strategy**:
-    -   Text patterns → grep_file with ripgrep
-    -   Code semantics → ast_grep_search with tree-sitter
+    -   Text patterns → **grep_file** (uses ripgrep by default; falls back to standard grep if ripgrep unavailable)
+    -   Examples: find functions, variables, TODOs, error patterns, API calls, imports
+    -   Use regex patterns: `fn \w+\(`, `TODO|FIXME`, `\.unwrap()`, `import .*from`
+    -   Use literal mode for exact strings: `literal: true`
     -   Tool discovery → search_tools before execute_code
 -   **File Listing Strategy**:
     -   list_files with `mode='list'`: Single-directory listing
@@ -89,9 +90,9 @@ When using `list_files` or file discovery tools:
 2. **Output Sampling**: Response shows only first page (default 50 items) or configured `per_page` limit
 3. **No Data Loss**: Complete file count provided in `total` field and pagination metadata
 4. **Pagination Support**: Use `page` parameter to access additional results:
-   ```
-   → list_files(path="src", mode="recursive", name_pattern="*.rs", page=2, per_page=50)
-   ```
+    ```
+    → list_files(path="src", mode="recursive", name_pattern="*.rs", page=2, per_page=50)
+    ```
 5. **Token Efficiency**: Agent replies with concise samples; response is truncated gracefully in output
 
 **Example Flow:**
@@ -189,12 +190,20 @@ if task is simple (1-2 files affected)
   → grep_file to find relevant code
   → read_file (targeted)
 else
+  → grep_file to locate patterns across codebase
   → search_tools to discover available tools
-  → ast_grep_search for semantic patterns
   → read_file only what's needed
 ```
 
 **IMPORTANT:** Search BEFORE reading whole files. Never read 5+ files without searching first.
+
+**grep_file Best Practices:**
+
+-   Start narrow: Search specific directory/file type with `glob` or `path` parameter
+-   Use `max_results` to limit output (default 100)
+-   Combine `literal: true` for exact matches or regex for patterns
+-   Example: Find all function definitions: `grep_file(pattern="^fn ", path="src", glob="*.rs")`
+-   Example: Find TODO comments: `grep_file(pattern="TODO|FIXME", case_sensitive=false)`
 
 ### Phase 3: Execution
 
@@ -224,6 +233,7 @@ else
 6. **Use pagination for depth** if needed: `page=2, per_page=50`
 
 **Example Agent Pattern:**
+
 ```
 User: "Find all Rust test files"
 → Call: list_files(path=".", mode="recursive", name_pattern="*.rs", max_items=1000)
@@ -231,6 +241,58 @@ User: "Find all Rust test files"
 → Agent replies: "Found 156 Rust files. Sample: main.rs, lib.rs, ... (10 items shown)"
 → If needed for subsequent operations, agent uses complete file list internally
 ```
+
+## grep_file Usage Patterns
+
+### When to Use grep_file
+
+Use `grep_file` for:
+
+-   Finding function/variable definitions across codebase
+-   Locating error messages, TODOs, FIXMEs
+-   Searching for API calls or imports
+-   Identifying patterns in code (e.g., all `unwrap()` calls)
+-   Verifying where a change needs to be applied
+
+### grep_file Examples
+
+**Find all function definitions in Rust:**
+
+```
+grep_file(pattern="^pub fn\\s+\\w+", path="src", glob="**/*.rs")
+```
+
+**Find all TODOs and FIXMEs:**
+
+```
+grep_file(pattern="TODO|FIXME", case_sensitive=false, path="src")
+```
+
+**Find exact string matches (literal search):**
+
+```
+grep_file(pattern="const ERROR_MSG", literal=true, path="src")
+```
+
+**Search specific file type in directory:**
+
+```
+grep_file(pattern="import.*from", path="web/src", glob="**/*.tsx")
+```
+
+**Find imports from a package:**
+
+```
+grep_file(pattern="import.*from ['\"]@core", path="src", glob="**/*.ts")
+```
+
+### grep_file Strategy
+
+1. **Be specific with path and glob**: Narrow search scope to avoid noise
+2. **Use glob patterns**: `**/*.rs` for all Rust, `src/**/*.ts` for TypeScript in src/
+3. **Combine with context**: Use `context_lines=3` to see surrounding code
+4. **Limit results**: Default 100 is usually good; increase only if needed
+5. **Use literal mode for exact matches**: Faster and clearer intent
 
 ## Tone and Steerability (Claude Code Pattern)
 
@@ -258,7 +320,7 @@ Unfortunately, "IMPORTANT" is still state-of-the-art for steering model behavior
 
 <good-example>
 User: "Find and update all database queries"
-→ Use ast_grep_search to locate SQL patterns
+→ Use grep_file to locate SQL patterns
 → Use execute_code to aggregate results into summary
 → Edit affected files in batches (5 files per turn)
 → Test via PTY session

@@ -25,7 +25,7 @@ VTCode is available for Cursor through the Open VSX Registry. Install directly f
 
 VTCode is a Rust-based AI coding assistant that provides:
 
-- **Semantic Code Intelligence**: Deep code understanding using Tree-sitter and ast-grep
+- **Semantic Code Intelligence**: Deep code understanding using Tree-sitter and ripgrep
 - **Multi-Provider AI**: Support for OpenAI, Anthropic, Google, xAI, DeepSeek, and more
 - **Security First**: Built-in safeguards with human-in-the-loop controls
 - **Offline Analysis**: Analyze your codebase without sending code to external services

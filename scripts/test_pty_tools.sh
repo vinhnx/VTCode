@@ -43,19 +43,11 @@ run_test "CK Search Available" "which ck" "ck"
 # Test 2: Ripgrep
 run_test "Ripgrep Available" "which rg" "rg"
 
-# Test 3: AST-grep
-run_test "AST Grep Available" "which ast-grep" "ast-grep"
-
-
 echo -e "\nTesting Tool Functionality"
 echo "=========================="
 
-#! Following tests renumbered after removal of PTY checks
-# Test 4: Ripgrep functionality
+# Test 3: Ripgrep functionality
 run_test "Ripgrep Functionality" "echo 'test content' > /tmp/vtcode_test.txt && rg 'test' /tmp/vtcode_test.txt && rm /tmp/vtcode_test.txt" "test content"
-
-# Test 5: AST-grep functionality
-run_test "AST Grep Functionality" "echo 'fn test() {}' > /tmp/vtcode_test.rs && ast-grep --lang rust --pattern 'fn \$A() {}' /tmp/vtcode_test.rs && rm /tmp/vtcode_test.rs" "fn test()"
 
 echo -e "\nTesting Code Structure"
 echo "========================="

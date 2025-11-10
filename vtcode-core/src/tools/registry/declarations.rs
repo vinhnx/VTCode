@@ -189,31 +189,31 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
         // ============================================================
         FunctionDeclaration {
             name: tools::GREP_FILE.to_string(),
-            description: "Search code using ripgrep. Find patterns, functions, TODOs across files. Respects .gitignore by default. Use concise format for efficiency.".to_string(),
+            description: "Fast regex-based code search using ripgrep (replaces ast-grep). Find patterns, functions, definitions, TODOs, errors, imports, and API calls across files. Respects .gitignore/.ignore by default. Supports glob patterns, file-type filtering, context lines, and regex/literal matching. Essential for code navigation and analysis.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
-                    "pattern": {"type": "string", "description": "Search pattern (e.g. 'fn \\w+', 'TODO')"},
-                    "path": {"type": "string", "description": "Directory path (relative)", "default": "."},
-                    "max_results": {"type": "integer", "description": "Maximum number of results to return", "default": 100},
-                    "case_sensitive": {"type": "boolean", "description": "Case-sensitive matching (smart-case is used by default if not specified)", "default": false},
-                    "literal": {"type": "boolean", "description": "Treat pattern as literal string (disable regex)", "default": false},
-                    "glob_pattern": {"type": "string", "description": "Glob pattern to filter files (e.g., '*.rs', 'src/**/*.js')"},
-                    "context_lines": {"type": "integer", "description": "Number of context lines around matches", "default": 0},
-                    "respect_ignore_files": {"type": "boolean", "description": "Respect .gitignore, .ignore files", "default": true},
-                    "include_hidden": {"type": "boolean", "description": "Include hidden files in search", "default": false},
-                    "max_file_size": {"type": "integer", "description": "Maximum file size to search (in bytes)"},
-                    "search_hidden": {"type": "boolean", "description": "Search in hidden directories", "default": false},
-                    "search_binary": {"type": "boolean", "description": "Search binary files", "default": false},
-                    "files_with_matches": {"type": "boolean", "description": "Only return filenames that contain matches", "default": false},
-                    "type_pattern": {"type": "string", "description": "Search only files of specified type (e.g., 'rust', 'python', 'js')"},
-                    "invert_match": {"type": "boolean", "description": "Invert the match (show non-matching lines)", "default": false},
-                    "word_boundaries": {"type": "boolean", "description": "Match only on word boundaries", "default": false},
-                    "line_number": {"type": "boolean", "description": "Show line numbers in output", "default": true},
-                    "column": {"type": "boolean", "description": "Show column numbers in output", "default": false},
-                    "only_matching": {"type": "boolean", "description": "Show only matching parts of lines", "default": false},
-                    "trim": {"type": "boolean", "description": "Trim whitespace from output", "default": false},
-                    "response_format": {"type": "string", "description": "concise|detailed", "default": "concise"}
+                    "pattern": {"type": "string", "description": "Regex pattern or literal string to search for. Examples: 'fn \\\\w+\\\\(', 'TODO|FIXME', '^import\\\\s', '\\\\.get\\\\(' for HTTP verbs"},
+                    "path": {"type": "string", "description": "Directory path (relative). Defaults to current directory", "default": "."},
+                    "max_results": {"type": "integer", "description": "Maximum number of results to return (1-1000)", "default": 100},
+                    "case_sensitive": {"type": "boolean", "description": "Case-sensitive matching. Default uses smart-case: lowercase pattern = case-insensitive, with uppercase = case-sensitive", "default": false},
+                    "literal": {"type": "boolean", "description": "Treat pattern as literal string, not regex. Use for exact string matching", "default": false},
+                    "glob_pattern": {"type": "string", "description": "Filter files by glob pattern. Examples: '**/*.rs' (all Rust), 'src/**/*.ts' (TypeScript in src), '*.test.js'"},
+                    "context_lines": {"type": "integer", "description": "Lines of context before/after matches (0-20). Use 3-5 to see surrounding code for understanding. Default 0 for concise output", "default": 0},
+                    "respect_ignore_files": {"type": "boolean", "description": "Respect .gitignore and .ignore files. Set false to search all files including ignored ones", "default": true},
+                    "include_hidden": {"type": "boolean", "description": "Include hidden files (those starting with dot) in search results", "default": false},
+                    "max_file_size": {"type": "integer", "description": "Maximum file size to search in bytes. Skips files larger than this. Example: 5242880 for 5MB"},
+                    "search_hidden": {"type": "boolean", "description": "Search inside hidden directories (those starting with dot)", "default": false},
+                    "search_binary": {"type": "boolean", "description": "Search binary files. Usually false to avoid noise from compiled code/media", "default": false},
+                    "files_with_matches": {"type": "boolean", "description": "Return only filenames containing matches, not the match lines themselves", "default": false},
+                    "type_pattern": {"type": "string", "description": "Filter by file type: 'rust', 'python', 'typescript', 'javascript', 'java', 'go', etc. Faster than glob for language filtering"},
+                    "invert_match": {"type": "boolean", "description": "Invert matching: return lines that do NOT match the pattern", "default": false},
+                    "word_boundaries": {"type": "boolean", "description": "Match only at word boundaries (\\\\b in regex). Prevents partial word matches", "default": false},
+                    "line_number": {"type": "boolean", "description": "Include line numbers in output. Recommended true for file navigation", "default": true},
+                    "column": {"type": "boolean", "description": "Include column numbers in output for precise positioning", "default": false},
+                    "only_matching": {"type": "boolean", "description": "Show only the matched part of each line, not the full line", "default": false},
+                    "trim": {"type": "boolean", "description": "Trim leading/trailing whitespace from output lines", "default": false},
+                    "response_format": {"type": "string", "description": "Output format: 'concise' (compact JSON) or 'detailed' (with metadata)", "default": "concise"}
                 },
                 "required": ["pattern"]
             }),
@@ -239,8 +239,7 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
                         "items": {"type": "string"},
                         "description": "Filter by extensions"
                     },
-                    "case_sensitive": {"type": "boolean", "description": "Case-sensitive matching", "default": true},
-                    "ast_grep_pattern": {"type": "string", "description": "AST filter pattern"}
+                    "case_sensitive": {"type": "boolean", "description": "Case-sensitive matching", "default": true}
                 },
                 "required": ["path"]
             }),

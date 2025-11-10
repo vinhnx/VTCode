@@ -55,7 +55,7 @@
 - [x] update_plan - Task planning
 
 **Tier 3 - Specialized** (4 tools)
-- [x] ast_grep_search - Semantic code search
+
 - [x] apply_patch - Patch application
 - [x] delete_file - File deletion
 - [x] curl / web_fetch - Web content fetching

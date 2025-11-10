@@ -165,7 +165,7 @@ Inside your code, you can call any registered MCP tool as a function. Common too
 
 ### Search
 - `grep_file(pattern, path, case_sensitive)` - Search with regex
-- `ast_grep_search(pattern, path)` - AST-based search
+- `grep_file(pattern, path)` - AST-based search
 
 ### Tools Discovery
 - `search_tools(keyword, detail_level)` - Find available MCP tools
