@@ -108,24 +108,6 @@ impl TranscriptReflowCache {
         self.total_rows
     }
 
-    /// Gets the starting row index for a particular message
-    pub fn message_start_row(&self, message_index: usize) -> Option<usize> {
-        if message_index < self.row_offsets.len() {
-            Some(self.row_offsets[message_index])
-        } else {
-            None
-        }
-    }
-
-    /// Gets the number of rows for a particular message
-    pub fn message_row_count(&self, message_index: usize) -> Option<usize> {
-        if message_index < self.messages.len() {
-            Some(self.messages[message_index].lines.len())
-        } else {
-            None
-        }
-    }
-
     /// Gets a range of visible lines for a given window
     pub fn get_visible_range(&self, start_row: usize, max_rows: usize) -> Vec<Line<'static>> {
         if max_rows == 0 || start_row >= self.total_rows {

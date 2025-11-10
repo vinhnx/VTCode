@@ -4,7 +4,6 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use anyhow::{Result, anyhow};
 
-use crate::audit::PermissionAuditLog;
 use crate::config::PtyConfig;
 
 use super::PtyManager;
@@ -65,9 +64,5 @@ impl PtySessionManager {
 
     pub fn active_sessions(&self) -> usize {
         self.active_sessions.load(Ordering::SeqCst)
-    }
-
-    pub fn set_audit_log(&mut self, audit_log: Arc<tokio::sync::Mutex<PermissionAuditLog>>) {
-        self.manager = self.manager.clone().with_audit_log(audit_log);
     }
 }

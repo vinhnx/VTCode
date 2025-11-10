@@ -19,10 +19,9 @@ pub struct InputManager {
     history_draft: Option<String>,
     /// Time of last Escape key press for double-tap detection
     last_escape_time: Option<Instant>,
-    /// Whether input is enabled
-    enabled: bool,
 }
 
+#[allow(dead_code)]
 impl InputManager {
     /// Creates a new input manager
     pub fn new() -> Self {
@@ -33,18 +32,12 @@ impl InputManager {
             history_index: None,
             history_draft: None,
             last_escape_time: None,
-            enabled: true,
         }
     }
 
     /// Returns the current input content
     pub fn content(&self) -> &str {
         &self.content
-    }
-
-    /// Returns mutable reference to content (for direct manipulation if needed)
-    pub fn content_mut(&mut self) -> &mut String {
-        &mut self.content
     }
 
     /// Sets the input content and resets cursor to end
@@ -191,25 +184,7 @@ impl InputManager {
         self.history_draft = None;
     }
 
-    /// Gets the history draft (unsaved input from before history navigation)
-    pub fn history_draft(&self) -> Option<&str> {
-        self.history_draft.as_deref()
-    }
 
-    /// Checks if currently viewing history
-    pub fn is_in_history(&self) -> bool {
-        self.history_index.is_some()
-    }
-
-    /// Sets whether input is enabled
-    pub fn set_enabled(&mut self, enabled: bool) {
-        self.enabled = enabled;
-    }
-
-    /// Returns whether input is enabled
-    pub fn is_enabled(&self) -> bool {
-        self.enabled
-    }
 
     /// Updates last escape time and returns true if double-tap (within 300ms)
     pub fn check_escape_double_tap(&mut self) -> bool {
@@ -222,11 +197,6 @@ impl InputManager {
 
         self.last_escape_time = Some(now);
         is_double_tap
-    }
-
-    /// Clears escape time (useful when exiting input mode)
-    pub fn reset_escape_time(&mut self) {
-        self.last_escape_time = None;
     }
 
     /// Returns the history entries (for debugging/testing)
@@ -255,7 +225,6 @@ mod tests {
         let manager = InputManager::new();
         assert_eq!(manager.content(), "");
         assert_eq!(manager.cursor(), 0);
-        assert!(manager.is_enabled());
     }
 
     #[test]

@@ -2469,25 +2469,6 @@ impl Session {
         }
     }
 
-    fn apply_history_entry(&mut self, index: usize) {
-        if let Some(entry) = self.input_manager.history().get(index) {
-            if self.input_manager.content() != entry {
-                self.input_manager.set_content(entry.clone());
-                self.input_manager.move_cursor_to_end();
-                self.scroll_manager.set_offset(0);
-            // Don't update slash suggestions during history navigation to prevent popup from showing
-            // Slash suggestions will be updated when user starts typing normally
-            } else {
-                self.input_manager.move_cursor_to_end();
-            }
-            self.mark_dirty();
-        }
-    }
-
-    fn reset_history_navigation(&mut self) {
-        self.input_manager.reset_history_navigation();
-    }
-
     fn move_left(&mut self) {
         self.input_manager.move_cursor_left();
         self.update_slash_suggestions();

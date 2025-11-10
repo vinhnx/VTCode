@@ -19,6 +19,7 @@ pub struct ScrollManager {
     metrics_dirty: bool,
 }
 
+#[allow(dead_code)]
 impl ScrollManager {
     /// Creates a new scroll manager with given viewport height
     pub fn new(viewport_rows: u16) -> Self {
