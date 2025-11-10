@@ -1,6 +1,6 @@
 [package]
 name = "vtcode-acp-client"
-version = "0.43.3"
+version = "0.43.4"
 edition = "2024"
 authors = ["vinhnx <vinhnx@users.noreply.github.com>"]
 description = "ACP client implementation for inter-agent communication and orchestration"

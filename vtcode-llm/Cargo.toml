@@ -1,6 +1,6 @@
 [package]
 name = "vtcode-llm"
-version = "0.43.3"
+version = "0.43.4"
 edition = "2024"
 authors = ["vinhnx <vinhnx@users.noreply.github.com>"]
 description = "Prototype extraction of VTCode's unified LLM client layer"
@@ -39,8 +39,8 @@ mock = ["dep:async-trait"]
 [dependencies]
 anyhow = "1.0"
 async-trait = { version = "0.1", optional = true }
-vtcode-commons = { path = "../vtcode-commons", version = "0.43.3" }
-vtcode-core = { path = "../vtcode-core", version = "0.43.3" }
+vtcode-commons = { path = "../vtcode-commons", version = "0.43.4" }
+vtcode-core = { path = "../vtcode-core", version = "0.43.4" }
 
 [dev-dependencies]
 futures = "0.3"
