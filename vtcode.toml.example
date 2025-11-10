@@ -202,7 +202,6 @@ max_repeated_tool_calls = 2
 # Specific tool policies - Override default policy for individual tools
 [tools.policies]
 apply_patch = "prompt"            # Apply code patches (requires confirmation)
-ast_grep_search = "allow"         # AST-based code search (no confirmation needed)
 close_pty_session = "allow"        # Close PTY sessions (no confirmation needed)
 create_pty_session = "allow"       # Create PTY sessions (no confirmation needed)
 edit_file = "allow"               # Edit files directly (no confirmation needed)

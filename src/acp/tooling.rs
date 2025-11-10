@@ -27,7 +27,6 @@ pub const TOOL_LIST_FILES_NAME_PATTERN_ARG: &str = "name_pattern";
 pub const TOOL_LIST_FILES_CONTENT_PATTERN_ARG: &str = "content_pattern";
 pub const TOOL_LIST_FILES_FILE_EXTENSIONS_ARG: &str = "file_extensions";
 pub const TOOL_LIST_FILES_CASE_SENSITIVE_ARG: &str = "case_sensitive";
-pub const TOOL_LIST_FILES_AST_GREP_PATTERN_ARG: &str = "ast_grep_pattern";
 pub const TOOL_LIST_FILES_ITEMS_KEY: &str = "items";
 pub const TOOL_LIST_FILES_MESSAGE_KEY: &str = "message";
 pub const TOOL_LIST_FILES_RESULT_KEY: &str = "result";
@@ -250,10 +249,6 @@ impl AcpToolRegistry {
                     TOOL_LIST_FILES_CASE_SENSITIVE_ARG: {
                         "type": "boolean",
                         "description": "Enable case sensitive matching for patterns",
-                    },
-                    TOOL_LIST_FILES_AST_GREP_PATTERN_ARG: {
-                        "type": "string",
-                        "description": "tree-sitter based search pattern when mode is find_content",
                     },
                 },
                 "additionalProperties": false,

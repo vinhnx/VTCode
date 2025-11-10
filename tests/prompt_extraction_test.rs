@@ -9,7 +9,6 @@ fn test_system_prompt_documentation_exists() {
     assert!(system_md.contains("## Main System Prompt"));
     assert!(system_md.contains("## Configuration Integration"));
     assert!(system_md.contains("AVAILABLE TOOLS"));
-    assert!(system_md.contains("AST-Grep Power Tools"));
 }
 
 #[test]
@@ -31,7 +30,6 @@ fn test_system_prompt_content_accuracy() {
     let system_md = fs::read_to_string("prompts/system.md").expect("system.md should exist");
 
     // Verify extracted prompt contains key VTCode features
-    assert!(system_md.contains("ast_grep_search"));
     assert!(system_md.contains("batch_file_operations"));
     assert!(system_md.contains("run_pty_cmd"));
     assert!(system_md.contains("vtcode.toml"));
