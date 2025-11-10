@@ -944,21 +944,61 @@ export class VtcodeBackend implements vscode.Disposable {
     }
 
     /**
-     * Send tool result back to CLI (placeholder - needs implementation).
+     * Send tool result back to CLI via stdin.
+     * 
+     * NOTE: In the current exec mode architecture, the CLI runs autonomously
+     * and does not read stdin for tool results. This method is kept as a
+     * placeholder for potential future interactive modes where the CLI may
+     * need to consume tool responses via stdin.
      */
     private sendToolResult(callId: string, result: unknown): void {
         this.output.appendLine(
             `[vtcode] Tool result for ${callId}: ${JSON.stringify(result)}`
         );
-        // TODO: Implement sending result back to CLI stdin
+
+        // Attempt to send via stdin if available (defensive programming)
+        if (this.currentProcess && this.currentProcess.stdin) {
+            try {
+                const message = JSON.stringify({
+                    type: "tool_result",
+                    id: callId,
+                    result,
+                });
+                this.currentProcess.stdin.write(`${message}\n`);
+            } catch (error) {
+                this.output.appendLine(
+                    `[vtcode] Failed to send tool result: ${error instanceof Error ? error.message : String(error)}`
+                );
+            }
+        }
     }
 
     /**
-     * Send tool error back to CLI (placeholder - needs implementation).
+     * Send tool error back to CLI via stdin.
+     * 
+     * NOTE: In the current exec mode architecture, the CLI runs autonomously
+     * and does not read stdin for tool errors. This method is kept as a
+     * placeholder for potential future interactive modes where the CLI may
+     * need to consume error responses via stdin.
      */
     private sendToolError(callId: string, error: string): void {
         this.output.appendLine(`[vtcode] Tool error for ${callId}: ${error}`);
-        // TODO: Implement sending error back to CLI stdin
+
+        // Attempt to send via stdin if available (defensive programming)
+        if (this.currentProcess && this.currentProcess.stdin) {
+            try {
+                const message = JSON.stringify({
+                    type: "tool_error",
+                    id: callId,
+                    error,
+                });
+                this.currentProcess.stdin.write(`${message}\n`);
+            } catch (error) {
+                this.output.appendLine(
+                    `[vtcode] Failed to send tool error: ${error instanceof Error ? error.message : String(error)}`
+                );
+            }
+        }
     }
 
     /**

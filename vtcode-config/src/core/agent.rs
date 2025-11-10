@@ -127,9 +127,7 @@ pub struct AgentConfig {
     #[serde(default)]
     pub checkpointing: AgentCheckpointingConfig,
 
-    /// EXPERIMENTAL: Smart summarization configuration for long conversations
-    #[serde(default)]
-    pub smart_summarization: AgentSmartSummarizationConfig,
+
 }
 
 impl Default for AgentConfig {
@@ -160,7 +158,6 @@ impl Default for AgentConfig {
             custom_prompts: AgentCustomPromptsConfig::default(),
             custom_api_keys: BTreeMap::new(),
             checkpointing: AgentCheckpointingConfig::default(),
-            smart_summarization: AgentSmartSummarizationConfig::default(),
         }
     }
 }
@@ -459,123 +456,7 @@ fn default_recommended_actions() -> Vec<String> {
     ]
 }
 
-/// EXPERIMENTAL: Smart conversation summarization configuration
-/// This feature automatically compresses conversation history when context grows too large
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct AgentSmartSummarizationConfig {
-    /// Enable smart conversation summarization (disabled by default - experimental)
-    #[serde(default = "default_summarization_enabled")]
-    pub enabled: bool,
 
-    /// Minimum interval between summarizations in seconds
-    #[serde(default = "default_min_summary_interval_secs")]
-    pub min_summary_interval_secs: u64,
-
-    /// Maximum concurrent summarization tasks
-    #[serde(default = "default_max_concurrent_tasks")]
-    pub max_concurrent_tasks: usize,
-
-    /// Minimum number of turns before triggering summarization
-    #[serde(default = "default_min_turns_threshold")]
-    pub min_turns_threshold: usize,
-
-    /// Token usage percentage that triggers summarization (0.0 - 1.0)
-    #[serde(default = "default_token_threshold_percent")]
-    pub token_threshold_percent: f64,
-
-    /// Maximum content length per turn after compression (in characters)
-    #[serde(default = "default_max_turn_content_length")]
-    pub max_turn_content_length: usize,
-
-    /// Total size threshold for applying additional compression (in bytes)
-    #[serde(default = "default_aggressive_compression_threshold")]
-    pub aggressive_compression_threshold: usize,
-
-    /// Enable context optimization feature and show notification message
-    /// When false (default), context compression is completely disabled
-    /// When true, compresses context at 20+ turns or 85% token usage
-    #[serde(default = "default_show_context_optimization_message")]
-    pub show_context_optimization_message: bool,
-}
-
-impl Default for AgentSmartSummarizationConfig {
-    fn default() -> Self {
-        Self {
-            enabled: default_summarization_enabled(),
-            min_summary_interval_secs: default_min_summary_interval_secs(),
-            max_concurrent_tasks: default_max_concurrent_tasks(),
-            min_turns_threshold: default_min_turns_threshold(),
-            token_threshold_percent: default_token_threshold_percent(),
-            max_turn_content_length: default_max_turn_content_length(),
-            aggressive_compression_threshold: default_aggressive_compression_threshold(),
-            show_context_optimization_message: default_show_context_optimization_message(),
-        }
-    }
-}
-
-impl AgentSmartSummarizationConfig {
-    /// Validate the configuration values
-    pub fn validate(&self) -> Result<(), String> {
-        if self.min_summary_interval_secs == 0 {
-            return Err("min_summary_interval_secs must be greater than 0".to_string());
-        }
-
-        if self.max_concurrent_tasks == 0 {
-            return Err("max_concurrent_tasks must be greater than 0".to_string());
-        }
-
-        if self.max_concurrent_tasks > 100 {
-            return Err("max_concurrent_tasks cannot exceed 100 for safety".to_string());
-        }
-
-        if self.token_threshold_percent <= 0.0 || self.token_threshold_percent > 1.0 {
-            return Err("token_threshold_percent must be between 0.0 and 1.0".to_string());
-        }
-
-        if self.max_turn_content_length < 100 {
-            return Err("max_turn_content_length must be at least 100 characters".to_string());
-        }
-
-        if self.aggressive_compression_threshold < 1000 {
-            return Err("aggressive_compression_threshold must be at least 1000 bytes".to_string());
-        }
-
-        Ok(())
-    }
-}
-
-fn default_summarization_enabled() -> bool {
-    false // Disabled by default - experimental feature
-}
-
-fn default_min_summary_interval_secs() -> u64 {
-    30
-}
-
-fn default_max_concurrent_tasks() -> usize {
-    4
-}
-
-fn default_min_turns_threshold() -> usize {
-    20
-}
-
-fn default_token_threshold_percent() -> f64 {
-    0.6
-}
-
-fn default_max_turn_content_length() -> usize {
-    2000
-}
-
-fn default_aggressive_compression_threshold() -> usize {
-    15_000
-}
-
-fn default_show_context_optimization_message() -> bool {
-    false // Disabled by default - feature is opt-in to avoid surprising users
-}
 
 /// Small/lightweight model configuration for efficient operations
 ///
@@ -583,7 +464,6 @@ fn default_show_context_optimization_message() -> bool {
 /// - Large file reads and parsing (>50KB)
 /// - Web page summarization and analysis
 /// - Git history and commit message processing
-/// - Conversation context compression and summarization
 /// - One-word processing labels and simple classifications
 ///
 /// Typically 70-80% cheaper than the main model while maintaining quality for these tasks.
@@ -619,9 +499,7 @@ pub struct AgentSmallModelConfig {
     #[serde(default = "default_small_model_for_git_history")]
     pub use_for_git_history: bool,
 
-    /// Enable small model for context compression
-    #[serde(default = "default_small_model_for_compression")]
-    pub use_for_compression: bool,
+
 }
 
 impl Default for AgentSmallModelConfig {
@@ -634,7 +512,6 @@ impl Default for AgentSmallModelConfig {
             use_for_large_reads: default_small_model_for_large_reads(),
             use_for_web_summary: default_small_model_for_web_summary(),
             use_for_git_history: default_small_model_for_git_history(),
-            use_for_compression: default_small_model_for_compression(),
         }
     }
 }
@@ -663,6 +540,4 @@ fn default_small_model_for_git_history() -> bool {
     true
 }
 
-fn default_small_model_for_compression() -> bool {
-    true
-}
+

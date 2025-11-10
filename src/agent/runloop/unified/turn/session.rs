@@ -1015,28 +1015,10 @@ pub(crate) async fn run_single_agent_loop_unified(
                     ledger.update_available_tools(tool_names);
                 }
 
-                // Automatic summarization: prevent context overflow and blocking
-                // Check if the feature is enabled in config (disabled by default)
-                let optimization_enabled = vt_cfg
-                    .as_ref()
-                    .map(|cfg| {
-                        cfg.agent
-                            .smart_summarization
-                            .show_context_optimization_message
-                    })
-                    .unwrap_or(false);
-
                 let conversation_len = working_history.len();
-                let should_compress = optimization_enabled
-                    && (if token_budget_enabled {
-                        let budget = context_manager.token_budget();
-                        let usage_percent = budget.usage_percentage().await;
-                        conversation_len >= 20 || usage_percent >= 85.0
-                    } else {
-                        conversation_len >= 20
-                    });
 
-                if should_compress && working_history.len() > 15 {
+                // Removed automatic context compression logic
+
                     renderer.line(
                         MessageStyle::Info,
                         &format!(
@@ -1046,16 +1028,6 @@ pub(crate) async fn run_single_agent_loop_unified(
                     )?;
 
                     // Keep system message + recent 15 messages
-                    let mut compressed = Vec::new();
-                    if let Some(first) = working_history.first()
-                        && matches!(first.role, uni::MessageRole::System)
-                    {
-                        compressed.push(first.clone());
-                    }
-                    compressed.extend(working_history.iter().rev().take(15).rev().cloned());
-                    working_history = compressed;
-                }
-
                 let mut request_history = working_history.clone();
                 let _ = context_manager.enforce_context_window(&mut request_history);
                 context_manager.reset_token_budget().await;

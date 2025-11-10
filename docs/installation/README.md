@@ -65,6 +65,7 @@ vtcode
 - **DeepSeek** (DEEPSEEK_API_KEY)
 - **OpenRouter** (OPENROUTER_API_KEY)
 - **Ollama** (local, no API key)
+- **LM Studio** (local, no API key by default)
 
 Set the corresponding environment variable for your chosen provider.
 

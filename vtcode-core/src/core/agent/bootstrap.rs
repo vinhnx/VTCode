@@ -14,7 +14,7 @@ use anyhow::{Context, Result};
 use crate::config::models::ModelId;
 use crate::config::types::{AgentConfig, SessionInfo};
 use crate::core::agent::compaction::CompactionEngine;
-use crate::core::conversation_summarizer::ConversationSummarizer;
+
 use crate::core::decision_tracker::DecisionTracker;
 use crate::core::error_recovery::ErrorRecoveryManager;
 use crate::llm::{AnyClient, make_client};
@@ -31,7 +31,7 @@ pub struct AgentComponentSet {
     pub tool_registry: Arc<ToolRegistry>,
     pub decision_tracker: DecisionTracker,
     pub error_recovery: ErrorRecoveryManager,
-    pub summarizer: ConversationSummarizer,
+
     pub tree_sitter_analyzer: TreeSitterAnalyzer,
     pub compaction_engine: Arc<CompactionEngine>,
     pub session_info: SessionInfo,
@@ -47,7 +47,7 @@ pub struct AgentComponentBuilder<'config> {
     tool_registry: Option<Arc<ToolRegistry>>,
     decision_tracker: Option<DecisionTracker>,
     error_recovery: Option<ErrorRecoveryManager>,
-    summarizer: Option<ConversationSummarizer>,
+
     tree_sitter_analyzer: Option<TreeSitterAnalyzer>,
     compaction_engine: Option<Arc<CompactionEngine>>,
     session_info: Option<SessionInfo>,
@@ -62,7 +62,6 @@ impl<'config> AgentComponentBuilder<'config> {
             tool_registry: None,
             decision_tracker: None,
             error_recovery: None,
-            summarizer: None,
             tree_sitter_analyzer: None,
             compaction_engine: None,
             session_info: None,
@@ -93,11 +92,7 @@ impl<'config> AgentComponentBuilder<'config> {
         self
     }
 
-    /// Override the conversation summarizer instance.
-    pub fn with_summarizer(mut self, summarizer: ConversationSummarizer) -> Self {
-        self.summarizer = Some(summarizer);
-        self
-    }
+
 
     /// Override the tree-sitter analyzer instance.
     pub fn with_tree_sitter_analyzer(mut self, analyzer: TreeSitterAnalyzer) -> Self {
@@ -141,8 +136,6 @@ impl<'config> AgentComponentBuilder<'config> {
             .error_recovery
             .unwrap_or_else(ErrorRecoveryManager::new);
 
-        let summarizer = self.summarizer.unwrap_or_else(ConversationSummarizer::new);
-
         let compaction_engine = self
             .compaction_engine
             .unwrap_or_else(|| Arc::new(CompactionEngine::new()));
@@ -158,7 +151,6 @@ impl<'config> AgentComponentBuilder<'config> {
             tool_registry,
             decision_tracker,
             error_recovery,
-            summarizer,
             tree_sitter_analyzer,
             compaction_engine,
             session_info,

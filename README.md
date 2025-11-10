@@ -75,7 +75,7 @@ vtcode
 
 ### Supported Providers
 
-VT Code works with OpenAI, Anthropic, Google Gemini, xAI, DeepSeek, OpenRouter, Z.AI, Moonshot AI, MiniMax, and Ollama (local & cloud).
+VT Code works with OpenAI, Anthropic, Google Gemini, xAI, DeepSeek, OpenRouter, Z.AI, Moonshot AI, MiniMax, Ollama (local & cloud), and LM Studio (local).
 
 Set the corresponding environment variable for your provider (see [Installation Guide](./docs/installation/#supported-ai-providers) for all options).
 
@@ -131,6 +131,11 @@ See [Security Model](./docs/SECURITY_MODEL.md) for details.
      -   [Command line interface](./docs/user-guide/commands.md)
      -   [Custom prompts](./docs/user-guide/custom-prompts.md)
      -   [Configuration](./docs/config/CONFIGURATION_PRECEDENCE.md)
+-   [**AI Provider Setup**](./docs/PROVIDER_GUIDES.md) - Complete guides for configuring different LLM providers:
+    -   [OpenAI, Anthropic, Google Gemini](./docs/user-guide/getting-started.md#configure-your-llm-provider)
+    -   [OpenRouter](./docs/providers/openrouter.md)
+    -   [Ollama](./docs/providers/ollama.md)
+    -   [LM Studio](./docs/providers/lmstudio.md)
 -   [**Context Engineering**](./docs/context_engineering.md)
     -   [Token budget management](./docs/context_engineering_implementation.md#token-budget-tracking--attention-management)
     -   [Dynamic context curation](./docs/context_engineering_implementation.md#phase-2-dynamic-context-curation)

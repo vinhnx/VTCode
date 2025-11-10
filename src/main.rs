@@ -124,9 +124,7 @@ async fn main() -> Result<()> {
         Some(Commands::CreateProject { name, features }) => {
             cli::handle_create_project_command(core_cfg, name, features).await?;
         }
-        Some(Commands::CompressContext) => {
-            cli::handle_compress_context_command(core_cfg).await?;
-        }
+
         Some(Commands::Revert { turn, partial }) => {
             cli::handle_revert_command(core_cfg, *turn, partial.clone()).await?;
         }

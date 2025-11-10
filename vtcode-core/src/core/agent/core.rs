@@ -8,7 +8,7 @@ use crate::core::agent::compaction::CompactionEngine;
 use crate::core::agent::snapshots::{
     DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
 };
-use crate::core::conversation_summarizer::ConversationSummarizer;
+
 use crate::core::decision_tracker::DecisionTracker;
 use crate::core::error_recovery::{ErrorRecoveryManager, ErrorType};
 use crate::llm::AnyClient;
@@ -26,7 +26,7 @@ pub struct Agent {
     tool_registry: Arc<ToolRegistry>,
     decision_tracker: DecisionTracker,
     error_recovery: ErrorRecoveryManager,
-    summarizer: ConversationSummarizer,
+
     tree_sitter_analyzer: TreeSitterAnalyzer,
     compaction_engine: Arc<CompactionEngine>,
     session_info: SessionInfo,
@@ -52,7 +52,6 @@ impl Agent {
             tool_registry: components.tool_registry,
             decision_tracker: components.decision_tracker,
             error_recovery: components.error_recovery,
-            summarizer: components.summarizer,
             tree_sitter_analyzer: components.tree_sitter_analyzer,
             compaction_engine: components.compaction_engine,
             session_info: components.session_info,
@@ -141,11 +140,6 @@ impl Agent {
     /// Get mutable error recovery manager reference
     pub fn error_recovery_mut(&mut self) -> &mut ErrorRecoveryManager {
         &mut self.error_recovery
-    }
-
-    /// Get conversation summarizer reference
-    pub fn summarizer(&self) -> &ConversationSummarizer {
-        &self.summarizer
     }
 
     /// Get tool registry reference
@@ -388,24 +382,7 @@ impl Agent {
                 style(error_stats.avg_recovery_attempts).yellow()
             );
 
-            // Conversation summarization statistics
-            let summaries = self.summarizer.get_summaries();
-            if !summaries.is_empty() {
-                println!(
-                    "\n{} {}",
-                    style("[CONVERSATION SUMMARY]").green().bold(),
-                    "Statistics:"
-                );
-                println!("  {} summaries generated", style(summaries.len()).cyan());
-                if let Some(latest) = self.summarizer.get_latest_summary() {
-                    println!(
-                        "  {} Latest summary: {} turns, {:.1}% compression",
-                        style("(SUMMARY)").dim(),
-                        latest.total_turns,
-                        latest.compression_ratio * 100.0
-                    );
-                }
-            }
+
         } else {
             // Brief summary for non-verbose mode
             println!("{}", style(format!("  ↳ Session complete: {} decisions, {} successful ({}% success rate), {} errors",
