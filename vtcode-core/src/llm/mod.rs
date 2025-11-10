@@ -165,8 +165,10 @@
 
 pub mod capabilities;
 pub mod client;
+pub mod cost_estimator;
 pub mod error_display;
 pub mod factory;
+pub mod model_optimizer;
 pub mod provider;
 pub mod providers;
 pub mod rig_adapter;
@@ -179,7 +181,11 @@ mod error_display_test;
 // Re-export main types for backward compatibility
 pub use capabilities::ProviderCapabilities;
 pub use client::{AnyClient, make_client};
+pub use cost_estimator::{CostEstimator, EstimatedCost, ModelPricing};
 pub use factory::{create_provider_with_config, get_factory};
+pub use model_optimizer::{
+    BudgetConstraint, ModelMetrics, ModelOptimizer, ModelRecommendation, TaskComplexity,
+};
 pub use provider::{LLMStream, LLMStreamEvent};
 pub use token_metrics::{TokenMetrics, TokenCounter, TokenTypeMetrics};
 pub use providers::{

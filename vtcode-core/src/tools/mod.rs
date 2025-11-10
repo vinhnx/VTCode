@@ -136,6 +136,7 @@ pub mod pty;
 pub mod registry;
 pub mod result_cache;
 pub mod error_context;
+pub mod search_metrics;
 pub mod traits;
 pub mod tree_sitter;
 pub mod types;
@@ -149,6 +150,7 @@ pub use editing::{Patch, PatchError, PatchHunk, PatchLine, PatchOperation};
 pub use grep_file::GrepSearchManager;
 pub use result_cache::{ToolResultCache, CacheKey, CachedResult, CacheStats};
 pub use error_context::ToolErrorContext;
+pub use search_metrics::{SearchMetrics, SearchMetric, SearchMetricsStats};
 pub use plan::{
     PlanCompletionState, PlanManager, PlanStep, PlanSummary, PlanUpdateResult, StepStatus,
     TaskPlan, UpdatePlanArgs,

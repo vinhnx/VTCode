@@ -20,8 +20,8 @@ use vtcode_core::core::token_budget::{
     TokenBudgetConfig as RuntimeTokenBudgetConfig, TokenBudgetManager,
 };
 use vtcode_core::core::trajectory::TrajectoryLogger;
-use vtcode_core::llm::{factory::create_provider_with_config, provider as uni, TokenCounter};
-use vtcode_core::tools::ToolResultCache;
+use vtcode_core::llm::{factory::create_provider_with_config, provider as uni, TokenCounter, ModelOptimizer};
+use vtcode_core::tools::{ToolResultCache, SearchMetrics};
 use vtcode_core::acp::ToolPermissionCache;
 use vtcode_core::mcp::{McpClient, McpToolInfo};
 use vtcode_core::models::ModelId;
@@ -47,6 +47,8 @@ pub(crate) struct SessionState {
     pub token_counter: Arc<RwLock<TokenCounter>>,
     pub tool_result_cache: Arc<RwLock<ToolResultCache>>,
     pub tool_permission_cache: Arc<RwLock<ToolPermissionCache>>,
+    pub search_metrics: Arc<RwLock<SearchMetrics>>,
+    pub model_optimizer: Arc<RwLock<ModelOptimizer>>,
 
     pub custom_prompts: CustomPromptRegistry,
     pub sandbox: SandboxCoordinator,
@@ -301,6 +303,8 @@ pub(crate) async fn initialize_session(
     let token_counter = Arc::new(RwLock::new(TokenCounter::new()));
     let tool_result_cache = Arc::new(RwLock::new(ToolResultCache::new(128))); // 128-entry cache
     let tool_permission_cache = Arc::new(RwLock::new(ToolPermissionCache::new())); // Session-scoped
+    let search_metrics = Arc::new(RwLock::new(SearchMetrics::new())); // Track search performance
+    let model_optimizer = Arc::new(RwLock::new(ModelOptimizer::new())); // Track model performance
 
     Ok(SessionState {
         session_bootstrap,
@@ -320,6 +324,8 @@ pub(crate) async fn initialize_session(
         token_counter,
         tool_result_cache,
         tool_permission_cache,
+        search_metrics,
+        model_optimizer,
         custom_prompts,
         sandbox,
     })

@@ -35,6 +35,7 @@
 //!
 pub mod agent;
 
+pub mod context_pruner;
 pub mod decision_tracker;
 pub mod error_recovery;
 pub mod interfaces;
@@ -45,3 +46,6 @@ pub mod timeout_detector;
 pub mod token_budget;
 pub mod token_estimator;
 pub mod trajectory;
+
+// Re-export main types
+pub use context_pruner::{ContextEfficiency, ContextPruner, MessageMetrics, RetentionDecision, SemanticScore};

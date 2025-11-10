@@ -145,6 +145,8 @@ pub(crate) async fn run_single_agent_loop_unified(
             token_counter,
             tool_result_cache,
             tool_permission_cache,
+            search_metrics,
+            model_optimizer,
             custom_prompts,
             mut sandbox,
         } = initialize_session(&config, vt_cfg.as_ref(), full_auto, resume_ref).await?;
