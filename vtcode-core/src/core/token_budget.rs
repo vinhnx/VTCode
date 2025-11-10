@@ -1,9 +1,8 @@
-//! Token budget management for context engineering
+//! Token budget management for context tracking
 //!
 //! This module implements token counting and budget tracking to manage
-//! the attention budget of LLMs. Following Anthropic's context engineering
-//! principles, it helps prevent context rot by tracking token usage and
-//! triggering compaction when thresholds are exceeded.
+//! the attention budget of LLMs. It helps track token usage and monitor
+//! thresholds for awareness of context size.
 
 use anyhow::{Context, Result, anyhow};
 use serde::{Deserialize, Serialize};
@@ -23,8 +22,8 @@ pub struct TokenBudgetConfig {
     pub max_context_tokens: usize,
     /// Threshold percentage to trigger warnings (0.0-1.0)
     pub warning_threshold: f64,
-    /// Threshold percentage to trigger compaction (0.0-1.0)
-    pub compaction_threshold: f64,
+    /// Threshold percentage to trigger warnings (0.0-1.0)
+    pub alert_threshold: f64,
     /// Model name for tokenizer selection
     pub model: String,
     /// Optional override for tokenizer identifier or local path
@@ -38,7 +37,7 @@ impl Default for TokenBudgetConfig {
         Self {
             max_context_tokens: 128_000,
             warning_threshold: 0.75,
-            compaction_threshold: 0.85,
+            alert_threshold: 0.85,
             model: "gpt-5".to_string(),
             tokenizer_id: None,
             detailed_tracking: false,
@@ -99,8 +98,8 @@ impl TokenUsageStats {
         self.total_tokens as f64 / max_tokens as f64
     }
 
-    /// Check if compaction is needed
-    pub fn needs_compaction(&self, max_tokens: usize, threshold: f64) -> bool {
+    /// Check if alert threshold is exceeded
+    pub fn exceeds_alert_threshold(&self, max_tokens: usize, threshold: f64) -> bool {
         self.usage_ratio(max_tokens) >= threshold
     }
 }
@@ -325,14 +324,14 @@ impl TokenBudgetManager {
     pub async fn is_warning_threshold_exceeded(&self) -> bool {
         let stats = self.stats.read().await;
         let config = self.config.read().await;
-        stats.needs_compaction(config.max_context_tokens, config.warning_threshold)
+        stats.exceeds_alert_threshold(config.max_context_tokens, config.warning_threshold)
     }
 
-    /// Check if compaction threshold is exceeded
-    pub async fn is_compaction_threshold_exceeded(&self) -> bool {
+    /// Check if alert threshold is exceeded
+    pub async fn is_alert_threshold_exceeded(&self) -> bool {
         let stats = self.stats.read().await;
         let config = self.config.read().await;
-        stats.needs_compaction(config.max_context_tokens, config.compaction_threshold)
+        stats.exceeds_alert_threshold(config.max_context_tokens, config.alert_threshold)
     }
 
     /// Get current usage percentage
@@ -356,7 +355,7 @@ impl TokenBudgetManager {
         config.max_context_tokens.saturating_sub(stats.total_tokens)
     }
 
-    /// Reset token counts (e.g., after compaction)
+    /// Reset token counts (e.g., after cleanup)
     pub async fn reset(&self) {
         let mut stats = self.stats.write().await;
         *stats = TokenUsageStats::new();
@@ -365,7 +364,7 @@ impl TokenBudgetManager {
         debug!("Token budget reset");
     }
 
-    /// Deduct tokens (after compaction/removal)
+    /// Deduct tokens (after removal)
     pub async fn deduct_tokens(&self, component: ContextComponent, tokens: usize) {
         let mut stats = self.stats.write().await;
         stats.total_tokens = stats.total_tokens.saturating_sub(tokens);
@@ -434,8 +433,8 @@ impl TokenBudgetManager {
             }
         }
 
-        if usage_ratio >= config.compaction_threshold {
-            report.push_str("\nALERT: Compaction threshold exceeded");
+        if usage_ratio >= config.alert_threshold {
+            report.push_str("\nALERT: Alert threshold exceeded");
         } else if usage_ratio >= config.warning_threshold {
             report.push_str("\nWARNING: Approaching token limit");
         }
@@ -614,13 +613,13 @@ mod tests {
             .await
             .unwrap();
 
-        // Reconfigure thresholds so the current usage exceeds the compaction threshold
+        // Reconfigure thresholds so the current usage exceeds the alert threshold
         let mut updated_config = TokenBudgetConfig::default();
         updated_config.max_context_tokens = total_tokens.max(1);
-        updated_config.compaction_threshold = 0.5;
+        updated_config.alert_threshold = 0.5;
         manager.update_config(updated_config).await;
 
-        assert!(manager.is_compaction_threshold_exceeded().await);
+        assert!(manager.is_alert_threshold_exceeded().await);
     }
 
     #[tokio::test]
@@ -658,7 +657,7 @@ mod tests {
 
         let mut new_config = TokenBudgetConfig::for_model("gpt-4", 200);
         new_config.warning_threshold = 0.6;
-        new_config.compaction_threshold = 0.8;
+        new_config.alert_threshold = 0.8;
         manager.update_config(new_config).await;
 
         let updated_ratio = manager.usage_ratio().await;

@@ -14,9 +14,7 @@ use crate::agent::runloop::ResumeSession;
 use crate::agent::runloop::context::{ContextTrimConfig, load_context_trim_config};
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
-use vtcode_core::core::context_curator::{
-    ContextCurationConfig as RuntimeContextCurationConfig, ContextCurator,
-};
+
 use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::core::token_budget::{
     TokenBudgetConfig as RuntimeTokenBudgetConfig, TokenBudgetManager,
@@ -44,7 +42,7 @@ pub(crate) struct SessionState {
     pub mcp_panel_state: mcp_events::McpPanelState,
     pub token_budget: Arc<TokenBudgetManager>,
     pub token_budget_enabled: bool,
-    pub curator: ContextCurator,
+
     pub custom_prompts: CustomPromptRegistry,
     pub sandbox: SandboxCoordinator,
 }
@@ -188,29 +186,14 @@ pub(crate) async fn initialize_session(
     );
     if let Some(cfg) = context_features {
         token_budget_config.warning_threshold = cfg.token_budget.warning_threshold;
-        token_budget_config.compaction_threshold = cfg.token_budget.compaction_threshold;
+        token_budget_config.alert_threshold = cfg.token_budget.alert_threshold;
         token_budget_config.detailed_tracking = cfg.token_budget.detailed_tracking;
         token_budget_config.tokenizer_id = cfg.token_budget.tokenizer.clone();
     }
     let token_budget = Arc::new(TokenBudgetManager::new(token_budget_config));
 
     let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
-    let mut curator_config = RuntimeContextCurationConfig::default();
-    if let Some(cfg) = context_features {
-        curator_config.enabled = cfg.curation.enabled;
-        curator_config.max_tokens_per_turn = cfg.curation.max_tokens_per_turn;
-        curator_config.preserve_recent_messages = cfg.curation.preserve_recent_messages;
-        curator_config.max_tool_descriptions = cfg.curation.max_tool_descriptions;
-        curator_config.include_ledger = cfg.curation.include_ledger && cfg.ledger.enabled;
-        curator_config.ledger_max_entries = cfg.curation.ledger_max_entries;
-        curator_config.include_recent_errors = cfg.curation.include_recent_errors;
-        curator_config.max_recent_errors = cfg.curation.max_recent_errors;
-    }
-    let curator = ContextCurator::new(
-        curator_config,
-        Arc::clone(&token_budget),
-        Arc::clone(&decision_ledger),
-    );
+
     let conversation_history: Vec<uni::Message> = resume
         .map(|session| session.history.clone())
         .unwrap_or_default();
@@ -326,7 +309,6 @@ pub(crate) async fn initialize_session(
         mcp_panel_state,
         token_budget,
         token_budget_enabled,
-        curator,
         custom_prompts,
         sandbox,
     })
@@ -348,6 +330,6 @@ fn build_single_mcp_tool_definition(tool: &McpToolInfo) -> uni::ToolDefinition {
     uni::ToolDefinition::function(format!("mcp_{}", tool.name), description, parameters)
 }
 
-pub(crate) fn build_mcp_tool_definitions(tools: &[McpToolInfo]) -> Vec<uni::ToolDefinition> {
+pub fn build_mcp_tool_definitions(tools: &[McpToolInfo]) -> Vec<uni::ToolDefinition> {
     tools.iter().map(build_single_mcp_tool_definition).collect()
 }

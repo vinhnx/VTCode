@@ -353,8 +353,7 @@ model = "gpt-5-nano"
 # Percentage threshold to warn about token usage (0.75 = 75%)
 warning_threshold = 0.75
 
-# Percentage threshold to trigger context compaction (0.85 = 85%)
-compaction_threshold = 0.85
+
 
 # Enable detailed component-level token tracking (increases overhead)
 detailed_tracking = false

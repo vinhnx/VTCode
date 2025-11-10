@@ -15,7 +15,7 @@ use tracing::debug;
 use tracing::warn;
 use vtcode_core::config::constants::{defaults, ui};
 use vtcode_core::config::loader::VTCodeConfig;
-use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
+use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, UiSurfacePreference};
 use vtcode_core::core::agent::snapshots::{SnapshotConfig, SnapshotManager};
 use vtcode_core::core::decision_tracker::{Action as DTAction, DecisionOutcome};
 use vtcode_core::core::router::{Router, TaskClass};
@@ -30,7 +30,6 @@ use vtcode_core::utils::session_archive::{SessionArchive, SessionArchiveMetadata
 use vtcode_core::utils::style_helpers::{ColorPalette, render_styled};
 use vtcode_core::utils::transcript;
 
-use crate::agent::agents::is_context_overflow_error;
 use crate::agent::runloop::ResumeSession;
 use crate::agent::runloop::git::confirm_changes_with_git_diff;
 use crate::agent::runloop::model_picker::{ModelPickerProgress, ModelPickerState};
@@ -40,6 +39,7 @@ use crate::agent::runloop::text_tools::{detect_textual_tool_call, extract_code_f
 use crate::agent::runloop::tool_output::render_code_fence_blocks;
 use crate::agent::runloop::tool_output::render_tool_output;
 use crate::agent::runloop::ui::{build_inline_header_context, render_session_banner};
+use crate::agent::runloop::unified::mcp_tool_manager::McpToolManager;
 use crate::agent::runloop::unified::ui_interaction::{
     PlaceholderSpinner, stream_and_render_response,
 };
@@ -51,9 +51,7 @@ use super::workspace::{load_workspace_files, refresh_vt_config};
 use crate::agent::runloop::mcp_events;
 use crate::agent::runloop::unified::async_mcp_manager::McpInitStatus;
 use crate::agent::runloop::unified::context_manager::ContextManager;
-use crate::agent::runloop::unified::curator::{
-    build_curator_tools, format_provider_label, resolve_mode_label,
-};
+
 use crate::agent::runloop::unified::display::{display_user_message, ensure_turn_bottom_gap};
 use crate::agent::runloop::unified::inline_events::{
     InlineEventLoopResources, InlineInterruptCoordinator, InlineLoopAction, poll_inline_loop_action,
@@ -142,22 +140,17 @@ pub(crate) async fn run_single_agent_loop_unified(
             mut mcp_panel_state,
             token_budget,
             token_budget_enabled,
-            curator,
             custom_prompts,
             mut sandbox,
         } = initialize_session(&config, vt_cfg.as_ref(), full_auto, resume_ref).await?;
 
         let mut session_end_reason = SessionEndReason::Completed;
 
-        let initial_tool_snapshot = tools.read().await.clone();
-        let curator_tool_catalog = build_curator_tools(&initial_tool_snapshot);
         let mut context_manager = ContextManager::new(
             base_system_prompt,
             trim_config,
             token_budget,
             token_budget_enabled,
-            curator,
-            curator_tool_catalog,
         );
         let trim_config = context_manager.trim_config();
         let token_budget_enabled = context_manager.token_budget_enabled();
@@ -275,9 +268,9 @@ pub(crate) async fn run_single_agent_loop_unified(
             .unwrap_or_else(|| "workspace".to_string());
         let workspace_path = config.workspace.to_string_lossy().into_owned();
         let provider_label = if config.provider.trim().is_empty() {
-            format_provider_label(provider_client.name())
+            provider_client.name().to_string()
         } else {
-            format_provider_label(&config.provider)
+            config.provider.clone()
         };
         let header_provider_label = provider_label.clone();
         let archive_metadata = SessionArchiveMetadata::new(
@@ -369,7 +362,13 @@ pub(crate) async fn run_single_agent_loop_unified(
                 }
             }
         }
-        let mode_label = resolve_mode_label(config.ui_surface, full_auto);
+        let mode_label = match (config.ui_surface, full_auto) {
+            (UiSurfacePreference::Inline, true) => "auto".to_string(),
+            (UiSurfacePreference::Inline, false) => "inline".to_string(),
+            (UiSurfacePreference::Alternate, _) => "alt".to_string(),
+            (UiSurfacePreference::Auto, true) => "auto".to_string(),
+            (UiSurfacePreference::Auto, false) => "std".to_string(),
+        };
         let header_context = build_inline_header_context(
             &config,
             &session_bootstrap,
@@ -515,7 +514,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                             let new_definitions =
                                                 build_mcp_tool_definitions(&mcp_tools);
                                             registered_tools = new_definitions.len();
-                                            let updated_snapshot = {
+                                            let _updated_snapshot = {
                                                 let mut guard = tools.write().await;
                                                 guard.retain(|tool| {
                                                     !tool.function.name.starts_with("mcp_")
@@ -523,15 +522,15 @@ pub(crate) async fn run_single_agent_loop_unified(
                                                 guard.extend(new_definitions);
                                                 guard.clone()
                                             };
-                                            context_manager.update_tool_catalog(
-                                                build_curator_tools(&updated_snapshot),
-                                            );
 
-                                            // Store the initial tool names to track changes later
-                                            last_known_mcp_tools = mcp_tools
-                                                .iter()
-                                                .map(|t| format!("{}-{}", t.provider, t.name))
-                                                .collect();
+                                            // Enumerate MCP tools after initial setup (with detailed tool discovery messages)
+                                            McpToolManager::enumerate_mcp_tools_after_initial_setup(
+                                                &mut tool_registry,
+                                                &tools,
+                                                mcp_tools,
+                                                &mut last_known_mcp_tools,
+                                                &mut renderer,
+                                            ).await?;
                                         }
                                         Err(err) => {
                                             warn!(
@@ -592,7 +591,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         Ok(new_mcp_tools) => {
                                             let new_definitions =
                                                 build_mcp_tool_definitions(&new_mcp_tools);
-                                            let updated_snapshot = {
+                                            let _updated_snapshot = {
                                                 let mut guard = tools.write().await;
                                                 guard.retain(|tool| {
                                                     !tool.function.name.starts_with("mcp_")
@@ -600,34 +599,15 @@ pub(crate) async fn run_single_agent_loop_unified(
                                                 guard.extend(new_definitions);
                                                 guard.clone()
                                             };
-                                            context_manager.update_tool_catalog(
-                                                build_curator_tools(&updated_snapshot),
-                                            );
 
-                                            let added_count = new_mcp_tools
-                                                .len()
-                                                .saturating_sub(last_known_mcp_tools.len());
-                                            let message = if added_count > 0 {
-                                                format!(
-                                                    "Discovered {} new MCP tool{}",
-                                                    added_count,
-                                                    if added_count == 1 { "" } else { "s" }
-                                                )
-                                            } else {
-                                                "MCP tools updated".to_string()
-                                            };
-
-                                            renderer.line(
-                                                MessageStyle::Info,
-                                                &format!("{}", message),
-                                            )?;
-                                            renderer.line_if_not_empty(MessageStyle::Output)?;
-
-                                            // Update the last known tools
-                                            last_known_mcp_tools = new_mcp_tools
-                                                .iter()
-                                                .map(|t| format!("{}-{}", t.provider, t.name))
-                                                .collect();
+                                            // Enumerate MCP tools after refresh (with detailed tool discovery messages)
+                                            McpToolManager::enumerate_mcp_tools_after_refresh(
+                                                &mut tool_registry,
+                                                &tools,
+                                                &mut last_known_mcp_tools,
+                                                &mut renderer,
+                                            )
+                                            .await?;
                                         }
                                         Err(err) => {
                                             warn!(
@@ -892,18 +872,8 @@ pub(crate) async fn run_single_agent_loop_unified(
             };
 
             conversation_history.push(user_message);
-            let _pruned_tools = context_manager.prune_tool_responses(&mut conversation_history);
-            // Removed: Tool response pruning message
-            let trim_result = context_manager.enforce_context_window(&mut conversation_history);
-            if trim_result.is_trimmed() {
-                renderer.line(
-                    MessageStyle::Info,
-                    &format!(
-                        "Trimmed {} earlier messages to respect the context window (~{} tokens).",
-                        trim_result.removed_messages, trim_config.max_tokens,
-                    ),
-                )?;
-            }
+            // Removed: Tool response pruning
+            // Removed: Context window enforcement to respect token limits
 
             let mut working_history = conversation_history.clone();
             let max_tool_loops = vt_cfg
@@ -953,8 +923,6 @@ pub(crate) async fn run_single_agent_loop_unified(
                     working_history.push(uni::Message::assistant(notice));
                     break TurnLoopResult::Completed;
                 }
-
-                let _ = context_manager.enforce_context_window(&mut working_history);
 
                 let decision = if let Some(cfg) = vt_cfg.as_ref().filter(|cfg| cfg.router.enabled) {
                     Router::route_async(cfg, &config, &config.api_key, input).await
@@ -1015,21 +983,10 @@ pub(crate) async fn run_single_agent_loop_unified(
                     ledger.update_available_tools(tool_names);
                 }
 
-                let conversation_len = working_history.len();
+                let _conversation_len = working_history.len();
 
                 // Removed automatic context compression logic
-
-                    renderer.line(
-                        MessageStyle::Info,
-                        &format!(
-                            "Optimizing context ({} messages -> 15 recent)",
-                            conversation_len
-                        ),
-                    )?;
-
-                    // Keep system message + recent 15 messages
-                let mut request_history = working_history.clone();
-                let _ = context_manager.enforce_context_window(&mut request_history);
+                let request_history = working_history.clone();
                 context_manager.reset_token_budget().await;
                 let system_prompt = context_manager
                     .build_system_prompt(&request_history, step_count)
@@ -1158,20 +1115,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                         }
 
                         let error_text = error.to_string();
-                        if is_context_overflow_error(&error_text) {
-                            let removed_tool_messages =
-                                context_manager.prune_tool_responses(&mut working_history);
-                            let removed_turns =
-                                context_manager.aggressive_trim(&mut working_history);
-                            if removed_tool_messages + removed_turns > 0 {
-                                renderer.line(
-                                    MessageStyle::Info,
-                                    "Context overflow detected; trimmed earlier messages and will retry.",
-                                )?;
-                                allow_follow_up = true;
-                                continue 'outer;
-                            }
-                        }
+                        // Removed: Context overflow handling and automatic retry logic
 
                         let has_recent_tool = working_history
                             .iter()
@@ -2037,20 +1981,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                 TurnLoopResult::Completed => {
                     conversation_history = working_history;
 
-                    let _pruned_after_turn =
-                        context_manager.prune_tool_responses(&mut conversation_history);
-                    // Removed: Tool response pruning message after completion
-                    let post_trim =
-                        context_manager.enforce_context_window(&mut conversation_history);
-                    if post_trim.is_trimmed() {
-                        renderer.line(
-                        MessageStyle::Info,
-                        &format!(
-                            "Trimmed {} earlier messages to respect the context window (~{} tokens).",
-                            post_trim.removed_messages, trim_config.max_tokens,
-                        ),
-                    )?;
-                    }
+                    // Removed: Tool response pruning after completion
+                    // Removed: Context window enforcement after completion
 
                     if let Some(last) = conversation_history.last()
                         && last.role == uni::MessageRole::Assistant

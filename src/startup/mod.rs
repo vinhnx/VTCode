@@ -471,7 +471,6 @@ mod tests {
         let entries = vec![
             "agent.provider=openai".to_string(),
             "custom-config/vtcode.toml".to_string(),
-            "context.curation.enabled=false".to_string(),
         ];
 
         let (path, overrides) = parse_cli_config_entries(&entries);
@@ -479,25 +478,18 @@ mod tests {
         assert_eq!(path, Some(PathBuf::from("custom-config/vtcode.toml")));
         assert_eq!(
             overrides,
-            vec![
-                ("agent.provider".to_string(), "openai".to_string()),
-                ("context.curation.enabled".to_string(), "false".to_string())
-            ]
+            vec![("agent.provider".to_string(), "openai".to_string())]
         );
     }
 
     #[test]
     fn applies_inline_overrides_to_config() -> Result<()> {
         let mut config = VTCodeConfig::default();
-        let overrides = vec![
-            ("agent.provider".to_string(), "\"openai\"".to_string()),
-            ("context.curation.enabled".to_string(), "false".to_string()),
-        ];
+        let overrides = vec![("agent.provider".to_string(), "\"openai\"".to_string())];
 
         apply_inline_config_overrides(&mut config, &overrides)?;
 
         assert_eq!(config.agent.provider, "openai");
-        assert!(!config.context.curation.enabled);
         Ok(())
     }
 }

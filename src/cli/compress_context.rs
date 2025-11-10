@@ -1,12 +1,7 @@
 use anyhow::Result;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 
-pub async fn handle_compress_context_command(config: &CoreAgentConfig) -> Result<()> {
-    // Delegate to core demo implementation
-    vtcode_core::commands::compress_context::handle_compress_context_command(
-        config.clone(),
-        None,
-        None,
-    )
-    .await
+// Removed: Context compression command has been removed as part of complete context optimization feature removal
+pub async fn handle_compress_context_command(_config: &CoreAgentConfig) -> Result<()> {
+    anyhow::bail!("Context compression command has been removed as part of context optimization feature removal")
 }

@@ -1,13 +1,14 @@
 mod async_mcp_manager;
 
 mod context_manager;
-mod curator;
+
 mod diagnostics;
 mod display;
 mod driver;
 mod inline_events;
 
 mod mcp_support;
+mod mcp_tool_manager;
 mod model_selection;
 mod palettes;
 mod progress;

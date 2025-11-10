@@ -221,19 +221,12 @@ Still flexible, not prescriptive
     - `lightweight.md` - Improved lightweight prompt
     - `specialized.md` - Improved specialized prompt
 
-### Phase 2: Dynamic Context Curation (Short-term)
+### Phase 2: Removed Context Curation (Short-term)
 
-1. Implement `ContextCurator` in `vtcode-core/src/core/context_curator.rs`
-2. Add per-turn context selection logic
-3. Integrate with existing `TokenBudgetManager`
-4. Add configuration in `vtcode.toml`:
-
-    ```toml
-    [context.curation]
-    enabled = true
-    max_tokens_per_turn = 100000
-    preserve_recent_messages = 5
-    ```
+1. Removed `ContextCurator` context compression functionality
+2. Removed per-turn context selection logic
+3. Removed integration with `TokenBudgetManager` for compression
+4. Removed context curation configuration in `vtcode.toml`
 
 ### Phase 3: Adaptive Tool Descriptions (Medium-term)
 

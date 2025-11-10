@@ -16,7 +16,6 @@ This document summarizes all documentation updates made to reflect the new conte
     -   Token budget tracking with Hugging Face `tokenizers`
     -   Real-time attention management
     -   67-82% system prompt optimization
-    -   Intelligent context compaction
     -   Link to Anthropic's research
 
 **Replaced:**
@@ -50,14 +49,12 @@ This document summarizes all documentation updates made to reflect the new conte
 enabled = true
 model = "gpt-5-nano"
 warning_threshold = 0.75
-compaction_threshold = 0.85
 detailed_tracking = false
 
 [context.ledger]
 enabled = true
 max_entries = 12
 include_in_prompt = true
-preserve_in_compression = true
 ```
 
 #### Context Engineering Foundation Section
@@ -77,10 +74,7 @@ preserve_in_compression = true
     - Token reduction metrics
     - Search-first approach emphasis
 
-3. **Advanced Context Compression** (UPDATED)
 
-    - Updated threshold from 80% to 85%
-    - Enhanced with token budget awareness
 
 4. **Learn More Links** (NEW)
     - Link to `docs/context_engineering.md`
@@ -145,7 +139,6 @@ Comprehensive guide covering:
 -   Token budget management
 -   Decision ledger
 -   Tool result clearing
--   Intelligent context compaction
 -   Tool design for efficiency
 -   Configuration
 -   Best practices
@@ -192,7 +185,6 @@ Added new section:
 enabled = true
 model = "gpt-5-nano"
 warning_threshold = 0.75
-compaction_threshold = 0.85
 detailed_tracking = false
 ```
 
@@ -245,7 +237,7 @@ Reference to source files
 1. **Performance Improvement**: 67-82% reduction in system prompt tokens
 2. **Better Context Management**: Real-time tracking prevents context overflow
 3. **Easy Configuration**: Simple TOML configuration
-4. **Intelligent Behavior**: Automatic warnings and compaction
+4. **Intelligent Behavior**: Automatic warnings
 5. **Transparency**: See token usage via reports
 
 ### For Developers

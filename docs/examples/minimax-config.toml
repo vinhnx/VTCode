@@ -63,9 +63,6 @@ command_timeout_seconds = 300
 
 # Context management
 [context]
-max_context_tokens = 90000
-trim_to_percent = 60
-preserve_recent_turns = 6
 
 # Note: Prompt caching support for MiniMax is not documented
 # You may want to disable it or test if it works

@@ -106,19 +106,19 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 - **File**: `docs/research/prompt_caching.md`
   - **Content**: Prompt caching and optimization techniques
-  - **Topics**: Performance optimization, context engineering, cache strategies
+  - **Topics**: Performance optimization, cache strategies
   - **User Questions**: "How does VT Code optimize performance?", "What advanced features exist?", "How can I speed up VT Code?"
 
 - **File**: `docs/performance/OPTIMIZATION_GUIDE.md`
   - **Content**: Comprehensive performance optimization guide
-  - **Topics**: Speed optimization, memory usage, context management, model selection for performance
+  - **Topics**: Speed optimization, memory usage, model selection for performance
   - **User Questions**: "How can I optimize VT Code performance?", "What affects VT Code speed?", "How do I reduce response times?"
 
 ### Advanced Features & Research
 
 - **File**: `docs/improved_system_prompts.md`
   - **Content**: Advanced system prompt engineering
-  - **Topics**: Prompt optimization, context injection, workflow automation
+  - **Topics**: Prompt optimization, workflow automation
   - **User Questions**: "How do system prompts work?", "Can I customize behavior?", "How do I optimize prompts?"
 
 - **File**: `docs/advanced/AGENT_COORDINATION.md`
@@ -126,10 +126,7 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Agent types, coordination patterns, task delegation, workflow orchestration
   - **User Questions**: "How does VT Code coordinate multiple agents?", "What agent types exist?", "How do I use agent orchestration?"
 
-- **File**: `docs/advanced/CONTEXT_ENGINEERING.md`
-  - **Content**: Advanced context management and engineering
-  - **Topics**: Context optimization, memory management, conversation flow, context injection
-  - **User Questions**: "How does VT Code manage context?", "What is context engineering?", "How do I optimize conversation context?"
+
 
 ### Development & Testing
 
@@ -267,9 +264,7 @@ This document serves as an index of all VT Code documentation. When users ask qu
 - "How does VT Code coordinate multiple agents?"
 - "What agent types exist?"
 - "How do I use agent orchestration?"
-- "How does VT Code manage context?"
-- "What is context engineering?"
-- "How do I optimize conversation context?"
+
 
 ### Development & Integration
 - "How do I contribute to VT Code?"
@@ -299,7 +294,7 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 ### Advanced Features
 
-- **Context Engineering**: Intelligent conversation context management
+
 - **Tree-sitter Integration**: Code parsing for 6+ programming languages
 - **MCP Protocol**: Model Context Protocol integration for enhanced capabilities
 - **PTY Integration**: Full pseudo-terminal support for interactive programs
@@ -316,7 +311,6 @@ This document serves as an index of all VT Code documentation. When users ask qu
 ### Performance & Optimization
 
 - **Prompt Caching**: Intelligent caching system for faster responses
-- **Context Optimization**: Smart context management to reduce token usage
 - **Memory Efficiency**: Optimized for resource-constrained environments
 - **Streaming Support**: Real-time streaming for better user experience
 

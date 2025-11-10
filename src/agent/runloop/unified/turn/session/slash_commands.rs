@@ -403,7 +403,6 @@ pub(super) async fn handle_outcome(
         SlashCommandOutcome::ClearConversation => {
             ctx.conversation_history.clear();
             *ctx.session_stats = SessionStats::default();
-            ctx.context_manager.clear_curator_state();
             {
                 let mut ledger = ctx.decision_ledger.write().await;
                 *ledger = DecisionTracker::new();

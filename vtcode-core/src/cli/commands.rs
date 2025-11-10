@@ -78,8 +78,6 @@ pub struct StatsCommand {
     pub include_performance: bool,
 }
 
-
-
 /// Single prompt command configuration
 pub struct AskCommand {
     pub prompt: String,

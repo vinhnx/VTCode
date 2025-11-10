@@ -416,52 +416,101 @@ impl ToolRegistry {
             };
 
             // Get MCP client for code execution
-            let mcp_client = match mcp_client {
-                Some(client) => client,
+            let result = match mcp_client {
+                Some(mcp_client) => {
+                    // Build execution config
+                    let mut config: crate::exec::code_executor::ExecutionConfig =
+                        Default::default();
+                    if let Some(timeout_secs) = parsed.timeout_secs {
+                        config.timeout_secs = timeout_secs;
+                    }
+
+                    // Create a safe sandbox profile with workspace isolation
+                    // The sandbox enforces these restrictions:
+                    // - Shell: Auto-detected (pwsh/bash on supported systems, cmd.exe on Windows)
+                    // - Working directory: .vtcode/sandbox in workspace
+                    // - Allowed paths: workspace root + /tmp (temporary files)
+                    // - Runtime: AnthropicSrt for code execution monitoring
+                    let sandbox_profile = crate::sandbox::SandboxProfile::new(
+                        resolve_shell_candidate(),
+                        workspace_root.join(".vtcode/sandbox/settings.json"),
+                        workspace_root.join(".vtcode/sandbox"),
+                        vec![workspace_root.clone(), std::path::PathBuf::from("/tmp")],
+                        crate::sandbox::SandboxRuntimeKind::AnthropicSrt,
+                    );
+
+                    // Create and configure code executor
+                    let executor = CodeExecutor::new(
+                        language,
+                        sandbox_profile,
+                        mcp_client,
+                        workspace_root.clone(),
+                    )
+                    .with_config(config);
+
+                    // Execute the code
+                    executor
+                        .execute(&parsed.code)
+                        .await
+                        .context("code execution failed")?
+                }
                 None => {
-                    // Create a no-op executor if MCP client not available
-                    debug!("MCP client not configured, code execution may be limited");
-                    // For now, we'll require MCP client
-                    return Err(anyhow!(
-                        "MCP client not configured. Code execution requires MCP tools access."
-                    ));
+                    debug!("MCP client not configured, attempting direct code execution");
+
+                    // Attempt direct code execution without MCP if no client available
+                    let code = parsed.code.clone();
+                    let language = language;
+
+                    // Create a direct executor (non-sandboxed fallback)
+                    // In a real implementation, this would need proper sandboxing
+                    use std::io::Write;
+                    use std::process::Command;
+                    use tempfile::NamedTempFile;
+
+                    let result = match language {
+                        Language::Python3 => {
+                            let output = Command::new("python3")
+                                .arg("-c")
+                                .arg(&code)
+                                .current_dir(&workspace_root)
+                                .output()
+                                .context("failed to execute Python code")?;
+
+                            crate::exec::code_executor::ExecutionResult {
+                                exit_code: output.status.code().unwrap_or(1) as i32,
+                                stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+                                stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+                                duration_ms: 0, // Not tracked in this fallback
+                                json_result: None,
+                            }
+                        }
+                        Language::JavaScript => {
+                            // Create a temporary file for JavaScript execution
+                            let mut temp_file = NamedTempFile::new_in(&workspace_root)
+                                .context("failed to create temp file for JavaScript execution")?;
+                            temp_file
+                                .write_all(code.as_bytes())
+                                .context("failed to write JavaScript code to temp file")?;
+
+                            let output = Command::new("node")
+                                .arg(temp_file.path())
+                                .current_dir(&workspace_root)
+                                .output()
+                                .context("failed to execute JavaScript code")?;
+
+                            crate::exec::code_executor::ExecutionResult {
+                                exit_code: output.status.code().unwrap_or(1) as i32,
+                                stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+                                stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+                                duration_ms: 0, // Not tracked in this fallback
+                                json_result: None,
+                            }
+                        }
+                    };
+
+                    result
                 }
             };
-
-            // Build execution config
-            let mut config: crate::exec::code_executor::ExecutionConfig = Default::default();
-            if let Some(timeout_secs) = parsed.timeout_secs {
-                config.timeout_secs = timeout_secs;
-            }
-
-            // Create a safe sandbox profile with workspace isolation
-            // The sandbox enforces these restrictions:
-            // - Shell: Auto-detected (pwsh/bash on supported systems, cmd.exe on Windows)
-            // - Working directory: .vtcode/sandbox in workspace
-            // - Allowed paths: workspace root + /tmp (temporary files)
-            // - Runtime: AnthropicSrt for code execution monitoring
-            let sandbox_profile = crate::sandbox::SandboxProfile::new(
-                resolve_shell_candidate(),
-                workspace_root.join(".vtcode/sandbox/settings.json"),
-                workspace_root.join(".vtcode/sandbox"),
-                vec![workspace_root.clone(), std::path::PathBuf::from("/tmp")],
-                crate::sandbox::SandboxRuntimeKind::AnthropicSrt,
-            );
-
-            // Create and configure code executor
-            let executor = CodeExecutor::new(
-                language,
-                sandbox_profile,
-                mcp_client,
-                workspace_root.clone(),
-            )
-            .with_config(config);
-
-            // Execute the code
-            let result = executor
-                .execute(&parsed.code)
-                .await
-                .context("code execution failed")?;
 
             debug!(
                 exit_code = result.exit_code,

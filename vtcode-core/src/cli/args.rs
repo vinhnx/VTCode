@@ -422,8 +422,6 @@ pub enum Commands {
     /// Example: vtcode create-project myapp web,auth,db
     CreateProject { name: String, features: Vec<String> },
 
-
-
     /// **Revert agent to a previous snapshot
     ///
     /// Features:

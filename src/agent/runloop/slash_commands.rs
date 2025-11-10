@@ -173,7 +173,6 @@ pub async fn handle_slash_command(
             Ok(SlashCommandOutcome::Handled)
         }
 
-
         "init" => {
             let mut force = false;
             for flag in args.split_whitespace() {

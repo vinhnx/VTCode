@@ -31,12 +31,30 @@ impl ColorPalette {
 
 /// Render text with a single color and optional effects
 pub fn render_styled(text: &str, color: Color, effects: Option<String>) -> String {
-    let style = Style::new().fg_color(Some(color));
+    let mut style = Style::new().fg_color(Some(color));
 
     // Apply effects if provided (e.g., bold, dimmed)
-    // For now, we accept effects as a parameter but don't use it
-    // This allows future extension without changing the signature
-    let _ = effects;
+    if let Some(effects_str) = effects {
+        let mut ansi_effects = anstyle::Effects::new();
+
+        // Parse the effects string and apply appropriate effects
+        for effect in effects_str.split(',') {
+            let effect = effect.trim().to_lowercase();
+            match effect.as_str() {
+                "bold" => ansi_effects = ansi_effects | anstyle::Effects::BOLD,
+                "dim" | "dimmed" => ansi_effects = ansi_effects | anstyle::Effects::DIMMED,
+                "italic" => ansi_effects = ansi_effects | anstyle::Effects::ITALIC,
+                "underline" => ansi_effects = ansi_effects | anstyle::Effects::UNDERLINE,
+                "blink" => ansi_effects = ansi_effects | anstyle::Effects::BLINK,
+                "invert" | "reversed" => ansi_effects = ansi_effects | anstyle::Effects::INVERT,
+                "hidden" => ansi_effects = ansi_effects | anstyle::Effects::HIDDEN,
+                "strikethrough" => ansi_effects = ansi_effects | anstyle::Effects::STRIKETHROUGH,
+                _ => {} // Ignore unknown effects
+            }
+        }
+
+        style = style.effects(ansi_effects);
+    }
 
     format!("{}{}{}", style, text, style.render_reset())
 }

@@ -383,7 +383,7 @@ All notable changes to vtcode will be documented in this file.
 
 
 ### Features
-    - feat: update vtcode.toml configuration for new model provider and context optimization features
+    - feat: update vtcode.toml configuration for new model provider
 
 
 ### Bug Fixes
@@ -414,7 +414,7 @@ All notable changes to vtcode will be documented in this file.
 
 
 ### Features
-    - feat: update vtcode.toml configuration for new model provider and context optimization features
+    - feat: update vtcode.toml configuration for new model provider
     - feat: add Kimi K2 Thinking model support and update Moonshot provider logic
 
 
@@ -475,7 +475,7 @@ All notable changes to vtcode will be documented in this file.
 
 
 ### Features
-    - feat: update vtcode.toml configuration for new model provider and context optimization features
+    - feat: update vtcode.toml configuration for new model provider
     - feat: add Kimi K2 Thinking model support and update Moonshot provider logic
 
 
@@ -2588,7 +2588,7 @@ All notable changes to vtcode will be documented in this file.
   3. Decision ledger summary (compact)
   4. Recent errors and resolutions
   5. Relevant tools (phase-aware)
-- **Automatic Compression**: Compresses context when budget is exceeded while preserving priority items
+
 - **Configurable Curation**: Full control via `[context.curation]` configuration
 
 **Key Features:**
@@ -2623,9 +2623,9 @@ max_recent_errors = 3
 
 - **New Module**: `token_budget.rs` - Real-time token budget tracking using Hugging Face `tokenizers`
 - **Component-Level Tracking**: Monitor token usage by category (system prompt, messages, tool results, decision ledger)
-- **Configurable Thresholds**: Warning at 75% and compaction trigger at 85% (customizable via `vtcode.toml`)
+- **Configurable Thresholds**: Warning at 75% (customizable via `vtcode.toml`)
 - **Model-Specific Tokenizers**: Support for GPT, Claude, and other models for accurate counting
-- **Automatic Deduction**: Track token removal during context cleanup and compaction
+- **Automatic Deduction**: Track token removal during context cleanup
 - **Budget Reports**: Generate detailed token usage reports by component
 - **Performance Optimized**: ~10μs per message using Rust-native Hugging Face `tokenizers`
 - **New Method**: `remaining_tokens()` - Get remaining tokens in budget for context curation decisions
@@ -2636,7 +2636,6 @@ max_recent_errors = 3
 enabled = true
 model = "gpt-5-nano"
 warning_threshold = 0.75
-compaction_threshold = 0.85
 detailed_tracking = false
 ```
 
@@ -2805,7 +2804,7 @@ detailed_tracking = false
 
 1. **Complete Decision Transparency** - Every action tracked and explained
 2. **Intelligent Error Recovery** - Learn from mistakes and adapt strategies
-3. **Automatic Conversation Summarization** - Handle long sessions efficiently
+
 4. **Confidence Scoring** - Quality assessment for all agent actions
 5. **Pattern Detection** - Identify and address recurring issues
 
@@ -2824,7 +2823,7 @@ detailed_tracking = false
 - **Multi-file Operations**: Batch processing capabilities
 - **Project Templates**: Predefined scaffolds for common projects
 - **Integration APIs**: REST endpoints for external integration
-- **Research-preview Context Compression**: More sophisticated summarization algorithms
+
 
 ### Research Areas
 
