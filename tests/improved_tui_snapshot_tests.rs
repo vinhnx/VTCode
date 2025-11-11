@@ -49,7 +49,7 @@ fn test_ui_component_serialization() {
         style: InlineTextStyle {
             color: None,
             bg_color: None,
-            effects: Effects::empty(),
+            effects: Effects::new(),
         },
     };
     assert_snapshot!("normal_segment", format!("{:?}", normal_segment));

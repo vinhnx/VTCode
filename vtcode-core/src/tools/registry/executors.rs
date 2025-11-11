@@ -1368,10 +1368,7 @@ fn normalize_terminal_payload(args: &mut Value) -> Result<()> {
 fn ensure_default_timeout(args: &mut Value, context: &str, default: u64) -> Result<()> {
     let map = value_as_object_mut(args, context)?;
     if !map.contains_key("timeout_secs") {
-        let timeout = if let Some(cmd_parts) = collect_command_array(map)
-            .ok()
-            .flatten()
-        {
+        let timeout = if let Some(cmd_parts) = collect_command_array(map).ok().flatten() {
             if is_long_running_command(&cmd_parts) {
                 LONG_RUNNING_COMMAND_TIMEOUT_SECS
             } else {

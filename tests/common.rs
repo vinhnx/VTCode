@@ -1,7 +1,6 @@
 use assert_fs::TempDir;
 use assert_fs::prelude::*;
 use std::env;
-use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use tempfile::NamedTempFile;
