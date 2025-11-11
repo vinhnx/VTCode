@@ -93,7 +93,7 @@ mod integration_tests {
 
     #[test]
     fn test_full_permission_flow() -> anyhow::Result<()> {
-        use std::path::Path;
+
 
         // 1. Initialize audit log
         let audit_dir = TempDir::new()?;

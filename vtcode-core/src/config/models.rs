@@ -443,6 +443,8 @@ impl ModelId {
             ModelId::GPT5Mini => models::GPT_5_MINI,
             ModelId::GPT5Nano => models::GPT_5_NANO,
             ModelId::CodexMiniLatest => models::CODEX_MINI_LATEST,
+            ModelId::OpenAIGptOss20b => models::openai::GPT_OSS_20B,
+            ModelId::OpenAIGptOss120b => models::openai::GPT_OSS_120B,
             // Anthropic models
             ModelId::ClaudeOpus41 => models::CLAUDE_OPUS_4_1_20250805,
             ModelId::ClaudeSonnet45 => models::CLAUDE_SONNET_4_5,
@@ -494,8 +496,58 @@ impl ModelId {
             ModelId::LmStudioPhi31Mini4kInstruct => models::lmstudio::PHI_31_MINI_4K_INSTRUCT,
             // MiniMax models
             ModelId::MinimaxM2 => models::minimax::MINIMAX_M2,
-            // OpenRouter models
-            _ => unreachable!(),
+            // OpenRouter models - fallback for any OpenRouter model without metadata
+            ModelId::OpenRouterGrokCodeFast1
+            | ModelId::OpenRouterGrok4Fast
+            | ModelId::OpenRouterGrok4
+            | ModelId::OpenRouterZaiGlm46
+            | ModelId::OpenRouterMoonshotaiKimiK20905
+            | ModelId::OpenRouterMoonshotaiKimiK2Thinking
+            | ModelId::OpenRouterMoonshotaiKimiK2Free
+            | ModelId::OpenRouterQwen3Max
+            | ModelId::OpenRouterQwen3235bA22b
+            | ModelId::OpenRouterQwen3235bA22bFree
+            | ModelId::OpenRouterQwen3235bA22b2507
+            | ModelId::OpenRouterQwen3235bA22bThinking2507
+            | ModelId::OpenRouterQwen332b
+            | ModelId::OpenRouterQwen330bA3b
+            | ModelId::OpenRouterQwen330bA3bFree
+            | ModelId::OpenRouterQwen330bA3bInstruct2507
+            | ModelId::OpenRouterQwen330bA3bThinking2507
+            | ModelId::OpenRouterQwen314b
+            | ModelId::OpenRouterQwen314bFree
+            | ModelId::OpenRouterQwen38b
+            | ModelId::OpenRouterQwen38bFree
+            | ModelId::OpenRouterQwen34bFree
+            | ModelId::OpenRouterQwen3Next80bA3bInstruct
+            | ModelId::OpenRouterQwen3Next80bA3bThinking
+            | ModelId::OpenRouterQwen3Coder
+            | ModelId::OpenRouterQwen3CoderFree
+            | ModelId::OpenRouterQwen3CoderPlus
+            | ModelId::OpenRouterQwen3CoderFlash
+            | ModelId::OpenRouterQwen3Coder30bA3bInstruct
+            | ModelId::OpenRouterDeepSeekV32Exp
+            | ModelId::OpenRouterDeepSeekChatV31
+            | ModelId::OpenRouterDeepSeekR1
+            | ModelId::OpenRouterDeepSeekChatV31Free
+            | ModelId::OpenRouterNvidiaNemotronNano9bV2Free
+            | ModelId::OpenRouterOpenAIGptOss120b
+            | ModelId::OpenRouterOpenAIGptOss20b
+            | ModelId::OpenRouterOpenAIGptOss20bFree
+            | ModelId::OpenRouterOpenAIGpt5
+            | ModelId::OpenRouterOpenAIGpt5Codex
+            | ModelId::OpenRouterOpenAIGpt5Chat
+            | ModelId::OpenRouterOpenAIGpt4oSearchPreview
+            | ModelId::OpenRouterOpenAIGpt4oMiniSearchPreview
+            | ModelId::OpenRouterOpenAIChatgpt4oLatest
+            | ModelId::OpenRouterAnthropicClaudeSonnet45
+            | ModelId::OpenRouterAnthropicClaudeHaiku45
+            | ModelId::OpenRouterAnthropicClaudeOpus41
+            | ModelId::OpenRouterMinimaxM2Free => {
+                // Fallback to a default value for OpenRouter models without metadata
+                // In production, these should have metadata
+                "openrouter-model"
+            }
         }
     }
 
@@ -558,7 +610,54 @@ impl ModelId {
             | ModelId::LmStudioGemma29BIt
             | ModelId::LmStudioPhi31Mini4kInstruct => Provider::LmStudio,
             ModelId::MinimaxM2 => Provider::Minimax,
-            _ => unreachable!(),
+            // OpenRouter models - fallback for any OpenRouter model without metadata
+            ModelId::OpenRouterGrokCodeFast1
+            | ModelId::OpenRouterGrok4Fast
+            | ModelId::OpenRouterGrok4
+            | ModelId::OpenRouterZaiGlm46
+            | ModelId::OpenRouterMoonshotaiKimiK20905
+            | ModelId::OpenRouterMoonshotaiKimiK2Thinking
+            | ModelId::OpenRouterMoonshotaiKimiK2Free
+            | ModelId::OpenRouterQwen3Max
+            | ModelId::OpenRouterQwen3235bA22b
+            | ModelId::OpenRouterQwen3235bA22bFree
+            | ModelId::OpenRouterQwen3235bA22b2507
+            | ModelId::OpenRouterQwen3235bA22bThinking2507
+            | ModelId::OpenRouterQwen332b
+            | ModelId::OpenRouterQwen330bA3b
+            | ModelId::OpenRouterQwen330bA3bFree
+            | ModelId::OpenRouterQwen330bA3bInstruct2507
+            | ModelId::OpenRouterQwen330bA3bThinking2507
+            | ModelId::OpenRouterQwen314b
+            | ModelId::OpenRouterQwen314bFree
+            | ModelId::OpenRouterQwen38b
+            | ModelId::OpenRouterQwen38bFree
+            | ModelId::OpenRouterQwen34bFree
+            | ModelId::OpenRouterQwen3Next80bA3bInstruct
+            | ModelId::OpenRouterQwen3Next80bA3bThinking
+            | ModelId::OpenRouterQwen3Coder
+            | ModelId::OpenRouterQwen3CoderFree
+            | ModelId::OpenRouterQwen3CoderPlus
+            | ModelId::OpenRouterQwen3CoderFlash
+            | ModelId::OpenRouterQwen3Coder30bA3bInstruct
+            | ModelId::OpenRouterDeepSeekV32Exp
+            | ModelId::OpenRouterDeepSeekChatV31
+            | ModelId::OpenRouterDeepSeekR1
+            | ModelId::OpenRouterDeepSeekChatV31Free
+            | ModelId::OpenRouterNvidiaNemotronNano9bV2Free
+            | ModelId::OpenRouterOpenAIGptOss120b
+            | ModelId::OpenRouterOpenAIGptOss20b
+            | ModelId::OpenRouterOpenAIGptOss20bFree
+            | ModelId::OpenRouterOpenAIGpt5
+            | ModelId::OpenRouterOpenAIGpt5Codex
+            | ModelId::OpenRouterOpenAIGpt5Chat
+            | ModelId::OpenRouterOpenAIGpt4oSearchPreview
+            | ModelId::OpenRouterOpenAIGpt4oMiniSearchPreview
+            | ModelId::OpenRouterOpenAIChatgpt4oLatest
+            | ModelId::OpenRouterAnthropicClaudeSonnet45
+            | ModelId::OpenRouterAnthropicClaudeHaiku45
+            | ModelId::OpenRouterAnthropicClaudeOpus41
+            | ModelId::OpenRouterMinimaxM2Free => Provider::OpenRouter,
         }
     }
 
@@ -805,6 +904,9 @@ impl ModelId {
             ModelId::OllamaGptOss120bCloud => {
                 "Cloud-hosted GPT-OSS 120B accessed through Ollama Cloud for larger reasoning tasks"
             }
+            ModelId::OllamaGptOss20bCloud => {
+                "Cloud-hosted GPT-OSS 20B accessed through Ollama Cloud for enhanced reasoning tasks"
+            }
             ModelId::OllamaQwen317b => {
                 "Qwen3 1.7B served locally through Ollama without external API requirements"
             }
@@ -814,6 +916,9 @@ impl ModelId {
 
             ModelId::OllamaKimiK21tCloud => {
                 "Cloud-hosted Kimi K2 1T model accessed through Ollama Cloud for high-capacity reasoning tasks"
+            }
+            ModelId::OllamaMinimaxM2Cloud => {
+                "Cloud-hosted MiniMax-M2 accessed through Ollama Cloud with reasoning and tool use"
             }
             ModelId::OllamaQwen3Coder480bCloud => {
                 "Qwen3 Coder 480B expert model provided by Ollama Cloud for complex code generation"
@@ -843,8 +948,58 @@ impl ModelId {
             ModelId::MinimaxM2 => {
                 "MiniMax-M2 via Anthropic-compatible API with reasoning and tool use"
             }
-            // OpenRouter models
-            _ => unreachable!(),
+            // OpenRouter models - fallback for any OpenRouter model without metadata
+            ModelId::OpenRouterGrokCodeFast1
+            | ModelId::OpenRouterGrok4Fast
+            | ModelId::OpenRouterGrok4
+            | ModelId::OpenRouterZaiGlm46
+            | ModelId::OpenRouterMoonshotaiKimiK20905
+            | ModelId::OpenRouterMoonshotaiKimiK2Thinking
+            | ModelId::OpenRouterMoonshotaiKimiK2Free
+            | ModelId::OpenRouterQwen3Max
+            | ModelId::OpenRouterQwen3235bA22b
+            | ModelId::OpenRouterQwen3235bA22bFree
+            | ModelId::OpenRouterQwen3235bA22b2507
+            | ModelId::OpenRouterQwen3235bA22bThinking2507
+            | ModelId::OpenRouterQwen332b
+            | ModelId::OpenRouterQwen330bA3b
+            | ModelId::OpenRouterQwen330bA3bFree
+            | ModelId::OpenRouterQwen330bA3bInstruct2507
+            | ModelId::OpenRouterQwen330bA3bThinking2507
+            | ModelId::OpenRouterQwen314b
+            | ModelId::OpenRouterQwen314bFree
+            | ModelId::OpenRouterQwen38b
+            | ModelId::OpenRouterQwen38bFree
+            | ModelId::OpenRouterQwen34bFree
+            | ModelId::OpenRouterQwen3Next80bA3bInstruct
+            | ModelId::OpenRouterQwen3Next80bA3bThinking
+            | ModelId::OpenRouterQwen3Coder
+            | ModelId::OpenRouterQwen3CoderFree
+            | ModelId::OpenRouterQwen3CoderPlus
+            | ModelId::OpenRouterQwen3CoderFlash
+            | ModelId::OpenRouterQwen3Coder30bA3bInstruct
+            | ModelId::OpenRouterDeepSeekV32Exp
+            | ModelId::OpenRouterDeepSeekChatV31
+            | ModelId::OpenRouterDeepSeekR1
+            | ModelId::OpenRouterDeepSeekChatV31Free
+            | ModelId::OpenRouterNvidiaNemotronNano9bV2Free
+            | ModelId::OpenRouterOpenAIGptOss120b
+            | ModelId::OpenRouterOpenAIGptOss20b
+            | ModelId::OpenRouterOpenAIGptOss20bFree
+            | ModelId::OpenRouterOpenAIGpt5
+            | ModelId::OpenRouterOpenAIGpt5Codex
+            | ModelId::OpenRouterOpenAIGpt5Chat
+            | ModelId::OpenRouterOpenAIGpt4oSearchPreview
+            | ModelId::OpenRouterOpenAIGpt4oMiniSearchPreview
+            | ModelId::OpenRouterOpenAIChatgpt4oLatest
+            | ModelId::OpenRouterAnthropicClaudeSonnet45
+            | ModelId::OpenRouterAnthropicClaudeHaiku45
+            | ModelId::OpenRouterAnthropicClaudeOpus41
+            | ModelId::OpenRouterMinimaxM2Free => {
+                // Fallback description for OpenRouter models
+                // In production, these should have metadata
+                "Model available via OpenRouter marketplace"
+            }
         }
     }
 
@@ -1128,7 +1283,9 @@ impl ModelId {
             | ModelId::GPT5Codex
             | ModelId::GPT5Mini
             | ModelId::GPT5Nano
-            | ModelId::CodexMiniLatest => "5",
+            | ModelId::CodexMiniLatest
+            | ModelId::OpenAIGptOss20b
+            | ModelId::OpenAIGptOss120b => "5",
             // Anthropic generations
             ModelId::ClaudeSonnet45 | ModelId::ClaudeHaiku45 => "4.5",
             ModelId::ClaudeSonnet4 => "4",
@@ -1151,6 +1308,7 @@ impl ModelId {
             ModelId::ZaiGlm432b0414128k => "4-32B",
             // Moonshot generations
             ModelId::MoonshotKimiK2TurboPreview
+            | ModelId::MoonshotKimiK2ThinkingHeavy
             | ModelId::MoonshotKimiK20905Preview
             | ModelId::MoonshotKimiK20711Preview => "k2",
             ModelId::MoonshotKimiK2Thinking => "k2-thinking",
@@ -1176,7 +1334,54 @@ impl ModelId {
             ModelId::LmStudioPhi31Mini4kInstruct => "phi-3.1",
             // MiniMax models
             ModelId::MinimaxM2 => "m2",
-            _ => unreachable!(),
+            // OpenRouter models - fallback for any OpenRouter model without metadata
+            ModelId::OpenRouterGrokCodeFast1
+            | ModelId::OpenRouterGrok4Fast
+            | ModelId::OpenRouterGrok4
+            | ModelId::OpenRouterZaiGlm46
+            | ModelId::OpenRouterMoonshotaiKimiK20905
+            | ModelId::OpenRouterMoonshotaiKimiK2Thinking
+            | ModelId::OpenRouterMoonshotaiKimiK2Free
+            | ModelId::OpenRouterQwen3Max
+            | ModelId::OpenRouterQwen3235bA22b
+            | ModelId::OpenRouterQwen3235bA22bFree
+            | ModelId::OpenRouterQwen3235bA22b2507
+            | ModelId::OpenRouterQwen3235bA22bThinking2507
+            | ModelId::OpenRouterQwen332b
+            | ModelId::OpenRouterQwen330bA3b
+            | ModelId::OpenRouterQwen330bA3bFree
+            | ModelId::OpenRouterQwen330bA3bInstruct2507
+            | ModelId::OpenRouterQwen330bA3bThinking2507
+            | ModelId::OpenRouterQwen314b
+            | ModelId::OpenRouterQwen314bFree
+            | ModelId::OpenRouterQwen38b
+            | ModelId::OpenRouterQwen38bFree
+            | ModelId::OpenRouterQwen34bFree
+            | ModelId::OpenRouterQwen3Next80bA3bInstruct
+            | ModelId::OpenRouterQwen3Next80bA3bThinking
+            | ModelId::OpenRouterQwen3Coder
+            | ModelId::OpenRouterQwen3CoderFree
+            | ModelId::OpenRouterQwen3CoderPlus
+            | ModelId::OpenRouterQwen3CoderFlash
+            | ModelId::OpenRouterQwen3Coder30bA3bInstruct
+            | ModelId::OpenRouterDeepSeekV32Exp
+            | ModelId::OpenRouterDeepSeekChatV31
+            | ModelId::OpenRouterDeepSeekR1
+            | ModelId::OpenRouterDeepSeekChatV31Free
+            | ModelId::OpenRouterNvidiaNemotronNano9bV2Free
+            | ModelId::OpenRouterOpenAIGptOss120b
+            | ModelId::OpenRouterOpenAIGptOss20b
+            | ModelId::OpenRouterOpenAIGptOss20bFree
+            | ModelId::OpenRouterOpenAIGpt5
+            | ModelId::OpenRouterOpenAIGpt5Codex
+            | ModelId::OpenRouterOpenAIGpt5Chat
+            | ModelId::OpenRouterOpenAIGpt4oSearchPreview
+            | ModelId::OpenRouterOpenAIGpt4oMiniSearchPreview
+            | ModelId::OpenRouterOpenAIChatgpt4oLatest
+            | ModelId::OpenRouterAnthropicClaudeSonnet45
+            | ModelId::OpenRouterAnthropicClaudeHaiku45
+            | ModelId::OpenRouterAnthropicClaudeOpus41
+            | ModelId::OpenRouterMinimaxM2Free => "unknown",  // fallback generation for OpenRouter models
         }
     }
 }
