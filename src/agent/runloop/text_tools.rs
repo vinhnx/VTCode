@@ -483,9 +483,18 @@ fn convert_harmony_args_to_tool_format(tool_name: &str, parsed: Value) -> Value 
                         "_validation_error": "command executable cannot be empty"
                     });
                 }
-                serde_json::json!({
-                    "command": [cmd_str]
-                })
+
+                // Parse the command string into separate arguments using shell parsing
+                // This handles cases like "cargo fmt" -> ["cargo", "fmt"]
+                // and "git commit -m 'message'" -> ["git", "commit", "-m", "message"]
+                match shell_split(cmd_str) {
+                    Ok(args) if !args.is_empty() => serde_json::json!({
+                        "command": args
+                    }),
+                    Ok(_) | Err(_) => serde_json::json!({
+                        "command": [cmd_str]
+                    }),
+                }
             } else {
                 parsed
             }

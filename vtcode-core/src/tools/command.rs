@@ -8,6 +8,7 @@ use crate::exec::async_command::{AsyncProcessRunner, ProcessOptions, StreamCaptu
 use crate::exec::cancellation;
 use crate::execpolicy::{sanitize_working_dir, validate_command};
 use crate::tools::command_policy::CommandPolicyEvaluator;
+use crate::tools::path_env;
 use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
 use serde_json::{Value, json};
@@ -20,6 +21,7 @@ use std::{path::PathBuf, time::Duration};
 pub struct CommandTool {
     workspace_root: PathBuf,
     policy: CommandPolicyEvaluator,
+    extra_path_entries: Vec<PathBuf>,
 }
 
 impl CommandTool {
@@ -31,14 +33,23 @@ impl CommandTool {
         // Note: We use the workspace_root directly here. Full validation happens
         // in prepare_invocation which is async.
         let policy = CommandPolicyEvaluator::from_config(&commands_config);
+        let extra_path_entries = path_env::compute_extra_search_paths(
+            &commands_config.extra_path_entries,
+            &workspace_root,
+        );
         Self {
             workspace_root,
             policy,
+            extra_path_entries,
         }
     }
 
-    pub fn update_commands_config(&mut self, commands_config: CommandsConfig) {
-        self.policy = CommandPolicyEvaluator::from_config(&commands_config);
+    pub fn update_commands_config(&mut self, commands_config: &CommandsConfig) {
+        self.policy = CommandPolicyEvaluator::from_config(commands_config);
+        self.extra_path_entries = path_env::compute_extra_search_paths(
+            &commands_config.extra_path_entries,
+            &self.workspace_root,
+        );
     }
 
     async fn execute_terminal_command(
@@ -53,6 +64,13 @@ impl CommandTool {
         // then override specific variables for consistent terminal behavior.
         // This matches the PTY environment setup in pty.rs:set_command_environment()
         let mut env: HashMap<OsString, OsString> = std::env::vars_os().collect();
+        if !self.extra_path_entries.is_empty() {
+            let path_key = OsString::from("PATH");
+            let current_path = env.get(&path_key).map(|value| value.as_os_str());
+            if let Some(merged) = path_env::merge_path_env(current_path, &self.extra_path_entries) {
+                env.insert(path_key, merged);
+            }
+        }
         env.insert(OsString::from("PAGER"), OsString::from("cat"));
         env.insert(OsString::from("GIT_PAGER"), OsString::from("cat"));
         env.insert(OsString::from("LESS"), OsString::from("R"));
@@ -127,14 +145,32 @@ impl CommandTool {
             validate_command(command, &self.workspace_root, &working_dir).await?;
         }
 
-        Ok(CommandInvocation {
-            program: program.clone(),
-            args: command[1..].to_vec(),
-            display: input
-                .raw_command
-                .clone()
-                .unwrap_or_else(|| format_command(command)),
-        })
+        // Check if the program (first command element) exists in PATH; if not, wrap in shell to leverage user's shell configuration
+        // This is similar to the PTY implementation that wraps commands in shell when not found in PATH
+        let resolved_invocation = if let Some(resolved_path) =
+            path_env::resolve_program_path(program, &self.extra_path_entries)
+        {
+            // Program found, execute resolved path directly to avoid PATH lookups
+            CommandInvocation {
+                program: resolved_path,
+                args: command[1..].to_vec(),
+                display: input
+                    .raw_command
+                    .clone()
+                    .unwrap_or_else(|| format_command(command)),
+            }
+        } else {
+            // Program not found in PATH, wrap in shell to leverage user's PATH (like .zshrc, .bashrc)
+            let shell = "/bin/sh";
+            let full_command = format_command(command);
+            CommandInvocation {
+                program: shell.to_string(),
+                args: vec!["-c".to_string(), full_command.clone()],
+                display: full_command,
+            }
+        };
+
+        Ok(resolved_invocation)
     }
 }
 
@@ -225,6 +261,8 @@ fn quote_argument_posix(arg: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tools::path_env;
+    use tempfile::tempdir;
 
     fn make_tool() -> CommandTool {
         let cwd = std::env::current_dir().expect("current dir");
@@ -299,8 +337,38 @@ mod tests {
             .prepare_invocation(&input)
             .await
             .expect("custom allow list should enable command");
-        assert_eq!(invocation.program, "my-build");
-        assert!(invocation.args.is_empty());
+        assert_eq!(invocation.program, "/bin/sh");
+        assert_eq!(
+            invocation.args,
+            vec!["-c".to_string(), "my-build".to_string()]
+        );
+    }
+
+    #[test]
+    fn resolve_program_path_respects_os_path_separator() {
+        let noise_dir = tempdir().expect("noise tempdir");
+        let target_dir = tempdir().expect("target tempdir");
+        let fake_tool_path = target_dir.path().join("fake-tool");
+        std::fs::write(&fake_tool_path, b"#!/bin/sh\n").expect("write fake tool");
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = std::fs::metadata(&fake_tool_path)
+                .expect("metadata")
+                .permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&fake_tool_path, perms).expect("set perms");
+        }
+
+        let custom_paths = vec![
+            noise_dir.path().to_path_buf(),
+            target_dir.path().to_path_buf(),
+        ];
+        let resolved =
+            path_env::resolve_program_path_from_paths("fake-tool", custom_paths.into_iter());
+        let expected = fake_tool_path.to_string_lossy().to_string();
+        assert_eq!(resolved, Some(expected));
     }
 
     #[tokio::test]
@@ -315,6 +383,45 @@ mod tests {
             .await
             .expect_err("deny list should block cargo");
         assert!(error.to_string().contains("is not permitted"));
+    }
+
+    #[tokio::test]
+    async fn prepare_invocation_uses_extra_path_entries() {
+        let cwd = std::env::current_dir().expect("current dir");
+        let temp_dir = tempdir().expect("tempdir");
+        let binary_path = temp_dir.path().join("fake-extra");
+        std::fs::write(&binary_path, b"#!/bin/sh\n").expect("write fake binary");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = std::fs::metadata(&binary_path)
+                .expect("metadata")
+                .permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&binary_path, perms).expect("set perms");
+        }
+
+        let mut config = CommandsConfig::default();
+        config.allow_list.push("fake-extra".to_string());
+        config.extra_path_entries = vec![
+            binary_path
+                .parent()
+                .expect("parent")
+                .to_string_lossy()
+                .to_string(),
+        ];
+
+        let tool = CommandTool::with_commands_config(cwd, config);
+        let input = make_input(vec!["fake-extra"]);
+        let invocation = tool
+            .prepare_invocation(&input)
+            .await
+            .expect("extra path should allow command");
+        assert_eq!(
+            invocation.program,
+            binary_path.to_string_lossy().to_string()
+        );
+        assert!(invocation.args.is_empty());
     }
 
     #[tokio::test]
@@ -414,7 +521,9 @@ mod tests {
         // See: vtcode-core/src/tools/command.rs:execute_terminal_command()
 
         // Set a test environment variable in the parent process
-        std::env::set_var("_TEST_VAR_FOR_ENV_INHERITANCE", "test_value");
+        unsafe {
+            std::env::set_var("_TEST_VAR_FOR_ENV_INHERITANCE", "test_value");
+        }
 
         // The fix uses std::env::vars_os().collect() which inherits all parent variables
         let env: HashMap<OsString, OsString> = std::env::vars_os().collect();
@@ -432,6 +541,8 @@ mod tests {
         );
 
         // Cleanup
-        std::env::remove_var("_TEST_VAR_FOR_ENV_INHERITANCE");
+        unsafe {
+            std::env::remove_var("_TEST_VAR_FOR_ENV_INHERITANCE");
+        }
     }
 }

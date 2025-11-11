@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::constants::commands as command_constants;
+
 /// Command execution configuration
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -7,6 +9,10 @@ pub struct CommandsConfig {
     /// Commands that can be executed without prompting
     #[serde(default)]
     pub allow_list: Vec<String>,
+
+    /// Additional directories that should be searched/prepended to PATH for command execution
+    #[serde(default = "default_extra_path_entries")]
+    pub extra_path_entries: Vec<String>,
 
     /// Commands that are always denied
     #[serde(default)]
@@ -119,6 +125,7 @@ impl Default for CommandsConfig {
                 "docker".to_string(),
                 "docker-compose".to_string(),
             ],
+            extra_path_entries: default_extra_path_entries(),
             deny_list: vec![
                 "rm -rf /".to_string(),
                 "rm -rf ~".to_string(),
@@ -257,4 +264,11 @@ impl Default for CommandsConfig {
             ],
         }
     }
+}
+
+fn default_extra_path_entries() -> Vec<String> {
+    command_constants::DEFAULT_EXTRA_PATH_ENTRIES
+        .iter()
+        .map(|value| value.to_string())
+        .collect()
 }

@@ -1941,11 +1941,13 @@ impl AgentRunner {
                 if cmd_val.is_array() {
                     cmd_val
                         .as_array()
-                        .unwrap()
-                        .iter()
-                        .filter_map(|v| v.as_str())
-                        .collect::<Vec<_>>()
-                        .join(" ")
+                        .map(|arr| {
+                            arr.iter()
+                                .filter_map(|v| v.as_str())
+                                .collect::<Vec<_>>()
+                                .join(" ")
+                        })
+                        .unwrap_or_default()
                 } else {
                     cmd_val.as_str().unwrap_or("").to_string()
                 }
@@ -2165,11 +2167,17 @@ fn convert_python_args_to_json(args_str: &str) -> Option<String> {
             let key = arg[..eq_pos].trim().trim_matches('"').trim_matches('\'');
             let value = arg[eq_pos + 1..].trim();
 
-            // Convert value to JSON format
+            // Convert value to JSON format - properly escape string values
             let json_value = if value.starts_with('"') && value.ends_with('"') {
-                value.to_string()
+                // Already properly quoted, but ensure proper escaping
+                serde_json::to_string(&value[1..value.len() - 1]).unwrap_or_else(|_| {
+                    format!("\"{}\"", value[1..value.len() - 1].replace('"', "\\\""))
+                })
             } else if value.starts_with('\'') && value.ends_with('\'') {
-                format!("\"{}\"", value.trim_matches('\''))
+                // Convert single-quoted to double-quoted with proper escaping
+                serde_json::to_string(&value[1..value.len() - 1]).unwrap_or_else(|_| {
+                    format!("\"{}\"", value[1..value.len() - 1].replace('"', "\\\""))
+                })
             } else if value == "True" || value == "true" {
                 "true".to_string()
             } else if value == "False" || value == "false" {
@@ -2179,8 +2187,9 @@ fn convert_python_args_to_json(args_str: &str) -> Option<String> {
             } else if let Ok(num) = value.parse::<f64>() {
                 num.to_string()
             } else {
-                // Assume it's a string that needs quotes
-                format!("\"{}\"", value)
+                // Assume it's a string that needs quotes - properly escape it
+                serde_json::to_string(value)
+                    .unwrap_or_else(|_| format!("\"{}\"", value.replace('"', "\\\"")))
             };
 
             json_parts.push(format!("\"{}\": {}", key, json_value));

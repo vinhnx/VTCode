@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use std::hash::{Hash, Hasher};
+use std::hash::Hash;
 
 use vtcode_core::config::constants::context as context_defaults;
 use vtcode_core::config::loader::VTCodeConfig;
@@ -8,18 +8,37 @@ use vtcode_core::tools::tree_sitter::{
     LanguageSupport, SymbolInfo, SymbolKind, TreeSitterAnalyzer,
 };
 
+/// Semantic scoring weights for different symbol kinds
+/// Higher weights indicate more valuable content that should be preserved during trimming
+const SYMBOL_WEIGHT_FUNCTION_METHOD: u32 = 6;
+const SYMBOL_WEIGHT_CLASS_STRUCT: u32 = 8;
+const SYMBOL_WEIGHT_MODULE_TYPE: u32 = 4;
+const SYMBOL_WEIGHT_VARIABLE_CONST: u32 = 2;
+const SYMBOL_WEIGHT_IMPORT: u32 = 1;
+
+/// Minimum score threshold for high-value content (functions, classes, etc.)
+const HIGH_VALUE_SCORE_THRESHOLD: u8 = SYMBOL_WEIGHT_FUNCTION_METHOD as u8;
+
+/// Configuration for context trimming operations
 #[derive(Clone, Copy)]
 pub(crate) struct ContextTrimConfig {
+    /// Maximum number of tokens to keep in the context
     pub(crate) max_tokens: usize,
+    /// Target percentage to trim to when aggressive trimming is needed
     #[allow(dead_code)]
     pub(crate) trim_to_percent: u8,
+    /// Number of recent conversation turns to always preserve
     #[allow(dead_code)]
     pub(crate) preserve_recent_turns: usize,
+    /// Whether to use semantic analysis for intelligent trimming
     pub(crate) semantic_compression: bool,
+    /// Whether to prioritize tool-related messages during trimming
     #[allow(dead_code)]
     pub(crate) tool_aware_retention: bool,
+    /// Maximum depth of nested structures to consider during semantic analysis
     #[allow(dead_code)]
     pub(crate) max_structural_depth: usize,
+    /// Number of recent tool messages to preserve
     #[allow(dead_code)]
     pub(crate) preserve_recent_tools: usize,
 }
@@ -35,9 +54,11 @@ impl ContextTrimConfig {
     }
 }
 
+/// Result of a context trimming operation
 #[derive(Default)]
 #[allow(dead_code)]
 pub(crate) struct ContextTrimOutcome {
+    /// Number of messages that were removed during trimming
     pub(crate) removed_messages: usize,
 }
 
@@ -48,6 +69,10 @@ impl ContextTrimOutcome {
     }
 }
 
+/// Removes tool-related messages from history while preserving recent and important ones
+///
+/// This function intelligently prunes tool responses and calls to manage context size,
+/// prioritizing recent messages and important tool interactions.
 #[allow(dead_code)]
 pub(crate) fn prune_unified_tool_responses(
     history: &mut Vec<uni::Message>,
@@ -58,63 +83,87 @@ pub(crate) fn prune_unified_tool_responses(
     }
 
     let keep_from = history.len().saturating_sub(config.preserve_recent_turns);
-
-    let tool_retention_indices = if config.tool_aware_retention && config.preserve_recent_tools > 0
-    {
-        let mut retained: HashSet<usize> = HashSet::with_capacity(config.preserve_recent_tools);
-
-        for index in (0..history.len()).rev() {
-            if history[index].is_tool_response() {
-                retained.insert(index);
-                if retained.len() >= config.preserve_recent_tools {
-                    break;
-                }
-            }
-        }
-
-        if retained.len() < config.preserve_recent_tools {
-            for index in (0..history.len()).rev() {
-                if history[index].has_tool_calls() {
-                    retained.insert(index);
-                    if retained.len() >= config.preserve_recent_tools {
-                        break;
-                    }
-                }
-            }
-        }
-
-        if retained.is_empty() {
-            None
-        } else {
-            Some(retained)
-        }
-    } else {
-        None
-    };
-
     if keep_from == 0 {
         return 0;
     }
 
-    let mut removed = 0usize;
-    let mut index = 0usize;
+    // Identify tool messages that should be preserved regardless of age
+    let tool_retention_indices = if config.tool_aware_retention && config.preserve_recent_tools > 0
+    {
+        collect_tool_retention_indices(history, config.preserve_recent_tools)
+    } else {
+        None
+    };
+
+    remove_messages_with_retention(history, keep_from, tool_retention_indices)
+}
+
+/// Collects indices of tool messages that should be preserved
+fn collect_tool_retention_indices(
+    history: &[uni::Message],
+    preserve_count: usize,
+) -> Option<HashSet<usize>> {
+    let mut retained = HashSet::with_capacity(preserve_count);
+
+    // First pass: prioritize recent tool responses
+    for (index, message) in history.iter().enumerate().rev() {
+        if message.is_tool_response() {
+            retained.insert(index);
+            if retained.len() >= preserve_count {
+                break;
+            }
+        }
+    }
+
+    // Second pass: add tool calls if we still need more
+    if retained.len() < preserve_count {
+        for (index, message) in history.iter().enumerate().rev() {
+            if message.has_tool_calls() {
+                retained.insert(index);
+                if retained.len() >= preserve_count {
+                    break;
+                }
+            }
+        }
+    }
+
+    if retained.is_empty() {
+        None
+    } else {
+        Some(retained)
+    }
+}
+
+/// Removes messages from history while respecting retention indices
+fn remove_messages_with_retention(
+    history: &mut Vec<uni::Message>,
+    keep_from: usize,
+    tool_retention_indices: Option<HashSet<usize>>,
+) -> usize {
+    let mut removed = 0;
+    let mut index = 0;
+
     history.retain(|message| {
-        let contains_tool_payload = message.is_tool_response() || message.has_tool_calls();
-        let keep_due_to_recent_turn = index >= keep_from;
-        let keep_due_to_tool_retention = tool_retention_indices
-            .as_ref()
-            .map(|indices| indices.contains(&index))
-            .unwrap_or(false);
-        let keep = keep_due_to_recent_turn || !contains_tool_payload || keep_due_to_tool_retention;
+        let keep = index >= keep_from
+            || (!message.is_tool_response() && !message.has_tool_calls())
+            || tool_retention_indices
+                .as_ref()
+                .map_or(false, |indices| indices.contains(&index));
+
         if !keep {
             removed += 1;
         }
         index += 1;
         keep
     });
+
     removed
 }
 
+/// Aggressively trims history by removing older messages while preserving recent ones
+///
+/// This is a fast-path trimming method that simply removes the oldest messages
+/// to meet the target size, without semantic analysis.
 #[allow(dead_code)]
 pub(crate) fn apply_aggressive_trim_unified(
     history: &mut Vec<uni::Message>,
@@ -141,6 +190,10 @@ pub(crate) fn apply_aggressive_trim_unified(
     remove
 }
 
+/// Enforces context window limits using intelligent semantic trimming
+///
+/// This function analyzes the semantic importance of messages and removes the least
+/// valuable ones first, while preserving recent messages and high-value content.
 #[allow(dead_code)]
 pub(crate) fn enforce_unified_context_window(
     history: &mut Vec<uni::Message>,
@@ -148,7 +201,7 @@ pub(crate) fn enforce_unified_context_window(
     analyzer: Option<&mut TreeSitterAnalyzer>,
     cache: Option<&mut HashMap<u64, u8>>,
 ) -> ContextTrimOutcome {
-    if history.is_empty() {
+    if history.is_empty() || history.len() == 1 {
         return ContextTrimOutcome::default();
     }
 
@@ -156,66 +209,76 @@ pub(crate) fn enforce_unified_context_window(
         .iter()
         .map(approximate_unified_message_tokens)
         .collect();
-    let mut total_tokens: usize = tokens_per_message.iter().sum();
 
+    let mut total_tokens: usize = tokens_per_message.iter().sum();
     if total_tokens <= config.max_tokens {
         return ContextTrimOutcome::default();
     }
 
-    let target_tokens = config.target_tokens();
     let semantic_scores = compute_semantic_scores(history, analyzer, cache, &config);
-    let last_index = history.len().saturating_sub(1);
-    let mut removal_set: HashSet<usize> = HashSet::new();
-
-    if history.len() == 1 {
-        return ContextTrimOutcome::default();
-    }
-
     let preserve_boundary = history.len().saturating_sub(config.preserve_recent_turns);
-    let mut early_candidates: Vec<usize> = (0..preserve_boundary).collect();
-    early_candidates.sort_by(|a, b| {
-        semantic_scores[*a]
-            .cmp(&semantic_scores[*b])
-            .then_with(|| a.cmp(b))
-    });
 
-    for index in early_candidates {
-        if total_tokens <= config.max_tokens {
-            break;
-        }
-        removal_set.insert(index);
-        total_tokens = total_tokens.saturating_sub(tokens_per_message[index]);
-        if total_tokens <= target_tokens {
-            break;
-        }
-    }
+    let mut removal_set = HashSet::new();
 
-    if total_tokens > config.max_tokens && last_index > 0 {
-        let mut extended_candidates: Vec<usize> = (preserve_boundary..last_index).collect();
-        extended_candidates.sort_by(|a, b| {
-            semantic_scores[*a]
-                .cmp(&semantic_scores[*b])
-                .then_with(|| a.cmp(b))
-        });
+    // Remove low-value messages from early history first
+    remove_low_value_messages(
+        &mut removal_set,
+        &mut total_tokens,
+        0..preserve_boundary,
+        &semantic_scores,
+        &tokens_per_message,
+        config.max_tokens,
+    );
 
-        for index in extended_candidates {
-            if total_tokens <= config.max_tokens {
-                break;
-            }
-            removal_set.insert(index);
-            total_tokens = total_tokens.saturating_sub(tokens_per_message[index]);
-            if total_tokens <= target_tokens {
-                break;
-            }
-        }
+    // If still over limit, consider messages in the extended range
+    if total_tokens > config.max_tokens && preserve_boundary < history.len() - 1 {
+        remove_low_value_messages(
+            &mut removal_set,
+            &mut total_tokens,
+            preserve_boundary..history.len() - 1,
+            &semantic_scores,
+            &tokens_per_message,
+            config.max_tokens,
+        );
     }
 
     if removal_set.is_empty() {
         return ContextTrimOutcome::default();
     }
 
-    let mut removed_messages = 0usize;
-    let mut current_index = 0usize;
+    let removed_messages = apply_removal_set(history, &removal_set);
+    ContextTrimOutcome { removed_messages }
+}
+
+/// Removes low-value messages from the specified range
+fn remove_low_value_messages(
+    removal_set: &mut HashSet<usize>,
+    total_tokens: &mut usize,
+    range: std::ops::Range<usize>,
+    semantic_scores: &[u8],
+    tokens_per_message: &[usize],
+    max_tokens: usize,
+) {
+    let mut candidates: Vec<usize> = range.collect();
+    candidates.sort_by_key(|&i| (semantic_scores[i], i));
+
+    for &index in &candidates {
+        if *total_tokens <= max_tokens {
+            break;
+        }
+        // Skip high-value content (functions, classes) - preserve if possible
+        if semantic_scores[index] < HIGH_VALUE_SCORE_THRESHOLD {
+            removal_set.insert(index);
+            *total_tokens = total_tokens.saturating_sub(tokens_per_message[index]);
+        }
+    }
+}
+
+/// Applies the removal set to history and returns count of removed messages
+fn apply_removal_set(history: &mut Vec<uni::Message>, removal_set: &HashSet<usize>) -> usize {
+    let mut removed_messages = 0;
+    let mut current_index = 0;
+
     history.retain(|_| {
         let keep = !removal_set.contains(&current_index);
         if !keep {
@@ -225,7 +288,7 @@ pub(crate) fn enforce_unified_context_window(
         keep
     });
 
-    ContextTrimOutcome { removed_messages }
+    removed_messages
 }
 
 pub(crate) fn load_context_trim_config(vt_cfg: Option<&VTCodeConfig>) -> ContextTrimConfig {
@@ -273,18 +336,21 @@ pub(crate) fn load_context_trim_config(vt_cfg: Option<&VTCodeConfig>) -> Context
     }
 }
 
+/// Approximates the token count for a message using character-based estimation
+///
+/// This provides a fast approximation without requiring actual tokenization.
 #[allow(dead_code)]
 fn approximate_unified_message_tokens(message: &uni::Message) -> usize {
     let mut total_chars = message.content.as_text().len();
     total_chars += message.role.as_generic_str().len();
 
     if let Some(tool_calls) = &message.tool_calls {
-        for call in tool_calls {
-            total_chars += call.id.len();
-            total_chars += call.call_type.len();
-            total_chars += call.function.name.len();
-            total_chars += call.function.arguments.len();
-        }
+        total_chars += tool_calls.iter().fold(0, |acc, call| {
+            acc + call.id.len()
+                + call.call_type.len()
+                + call.function.name.len()
+                + call.function.arguments.len()
+        });
     }
 
     if let Some(tool_call_id) = &message.tool_call_id {
@@ -294,13 +360,20 @@ fn approximate_unified_message_tokens(message: &uni::Message) -> usize {
     total_chars.div_ceil(context_defaults::CHAR_PER_TOKEN_APPROX)
 }
 
+/// Represents a code block extracted from message content
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 struct CodeBlock {
+    /// Optional language hint (e.g., "rust", "python")
     language_hint: Option<String>,
+    /// The actual code content
     content: String,
 }
 
+/// Computes semantic importance scores for all messages in history
+///
+/// Messages with higher scores contain more valuable content (functions, classes, etc.)
+/// and should be preserved during trimming operations.
 #[allow(dead_code)]
 fn compute_semantic_scores(
     history: &[uni::Message],
@@ -317,19 +390,7 @@ fn compute_semantic_scores(
     };
 
     if let Some(cache_map) = cache {
-        let mut scores = Vec::with_capacity(history.len());
-        for message in history {
-            let cache_key = message_semantic_hash(message);
-            let score = if let Some(value) = cache_map.get(&cache_key).copied() {
-                value
-            } else {
-                let computed = compute_semantic_score(message, analyzer, config);
-                cache_map.insert(cache_key, computed);
-                computed
-            };
-            scores.push(score);
-        }
-        scores
+        compute_scores_with_cache(history, analyzer, config, cache_map)
     } else {
         history
             .iter()
@@ -338,6 +399,34 @@ fn compute_semantic_scores(
     }
 }
 
+/// Computes scores using a cache to avoid redundant analysis
+fn compute_scores_with_cache(
+    history: &[uni::Message],
+    analyzer: &mut TreeSitterAnalyzer,
+    config: &ContextTrimConfig,
+    cache_map: &mut HashMap<u64, u8>,
+) -> Vec<u8> {
+    let mut scores = Vec::with_capacity(history.len());
+    for message in history {
+        let cache_key = message_semantic_hash(message);
+        let score = if let Some(&cached) = cache_map.get(&cache_key) {
+            cached
+        } else {
+            let computed = compute_semantic_score(message, analyzer, config);
+            cache_map.insert(cache_key, computed);
+            computed
+        };
+        scores.push(score);
+    }
+    scores
+}
+
+/// Computes semantic importance score for a single message
+///
+/// The score is based on:
+/// - Code structure (functions, classes, modules)
+/// - Tool-related content (responses, calls)
+/// - Origin tool tracking
 #[allow(dead_code)]
 fn compute_semantic_score(
     message: &uni::Message,
@@ -347,114 +436,118 @@ fn compute_semantic_score(
     let message_text = message.content.as_text();
     let mut code_blocks = extract_code_blocks(&message_text);
 
-    if code_blocks.is_empty() {
-        if analyzer
+    // If no explicit code blocks but content looks like code, treat entire message as code
+    if code_blocks.is_empty()
+        && analyzer
             .detect_language_from_content(&message_text)
             .is_some()
-        {
-            code_blocks.push(CodeBlock {
-                language_hint: None,
-                content: message_text.clone(),
-            });
-        } else {
-            return 0;
-        }
+    {
+        code_blocks.push(CodeBlock {
+            language_hint: None,
+            content: message_text.clone(),
+        });
     }
 
-    let mut total_score: u32 = 0;
-
-    for block in code_blocks {
-        let snippet = block.content.trim();
-        if snippet.is_empty() {
-            continue;
-        }
-
-        let mut language = block
-            .language_hint
-            .as_deref()
-            .and_then(language_hint_to_support);
-
-        if language.is_none() {
-            language = analyzer.detect_language_from_content(snippet);
-        }
-
-        let Some(language) = language else {
-            continue;
-        };
-
-        let tree = match analyzer.parse(snippet, language) {
-            Ok(tree) => tree,
-            Err(_) => continue,
-        };
-
-        let symbols = match analyzer.extract_symbols(&tree, snippet, language) {
-            Ok(symbols) => symbols,
-            Err(_) => Vec::new(),
-        };
-
-        let block_score = score_symbols(&symbols, config);
-        if block_score > 0 {
-            total_score = total_score.saturating_add(block_score);
-        } else {
-            total_score = total_score.saturating_add(1);
-        }
+    if code_blocks.is_empty() {
+        return 0;
     }
+
+    let total_score: u32 = code_blocks
+        .iter()
+        .filter_map(|block| analyze_code_block(block, analyzer, config))
+        .fold(0, |acc, score| acc.saturating_add(score));
 
     if total_score == 0 {
-        0
-    } else {
-        // Base bonus for tool responses/calls
-        let mut base_bonus: u32 = if message.is_tool_response() || message.has_tool_calls() {
-            2
-        } else {
-            0
-        };
-
-        // Additional bonus if this message originated from an actively-used tool
-        if message.origin_tool.is_some() && config.tool_aware_retention {
-            base_bonus = base_bonus.saturating_add(1);
-        }
-
-        let score = total_score.saturating_add(base_bonus).min(u8::MAX as u32);
-        score as u8
+        return 0;
     }
+
+    let tool_bonus = calculate_tool_bonus(message, config);
+    total_score.saturating_add(tool_bonus).min(u8::MAX as u32) as u8
 }
 
+/// Analyzes a single code block and returns its semantic score
+fn analyze_code_block(
+    block: &CodeBlock,
+    analyzer: &mut TreeSitterAnalyzer,
+    config: &ContextTrimConfig,
+) -> Option<u32> {
+    let snippet = block.content.trim();
+    if snippet.is_empty() {
+        return None;
+    }
+
+    let language = block
+        .language_hint
+        .as_deref()
+        .and_then(language_hint_to_support)
+        .or_else(|| analyzer.detect_language_from_content(snippet))?;
+
+    let tree = analyzer.parse(snippet, language).ok()?;
+    let symbols = analyzer.extract_symbols(&tree, snippet, language).ok()?;
+
+    let block_score = score_symbols(&symbols, config);
+    Some(if block_score > 0 { block_score } else { 1 })
+}
+
+/// Calculates bonus points for tool-related content
+fn calculate_tool_bonus(message: &uni::Message, config: &ContextTrimConfig) -> u32 {
+    let base_bonus: u32 = if message.is_tool_response() || message.has_tool_calls() {
+        2
+    } else {
+        0
+    };
+
+    let origin_bonus: u32 = if message.origin_tool.is_some() && config.tool_aware_retention {
+        1
+    } else {
+        0
+    };
+
+    base_bonus.saturating_add(origin_bonus)
+}
+
+/// Scores symbols based on their type and importance
+///
+/// Different symbol types have different weights for context preservation.
 #[allow(dead_code)]
 fn score_symbols(symbols: &[SymbolInfo], config: &ContextTrimConfig) -> u32 {
-    let mut total = 0u32;
-
-    for symbol in symbols {
-        let scope_depth = estimate_scope_depth(symbol.scope.as_deref());
-        if scope_depth > config.max_structural_depth {
-            continue;
-        }
-
-        let weight = match symbol.kind {
-            SymbolKind::Function | SymbolKind::Method => 6,
-            SymbolKind::Class | SymbolKind::Struct | SymbolKind::Interface | SymbolKind::Trait => 8,
-            SymbolKind::Module | SymbolKind::Type => 4,
-            SymbolKind::Variable | SymbolKind::Constant => 2,
-            SymbolKind::Import => 1,
-        };
-
-        total = total.saturating_add(weight);
-    }
-
-    total
+    symbols
+        .iter()
+        .filter(|symbol| {
+            estimate_scope_depth(symbol.scope.as_deref()) <= config.max_structural_depth
+        })
+        .map(|symbol| symbol_weight(&symbol.kind))
+        .fold(0, |acc, weight| acc.saturating_add(weight))
 }
 
+/// Returns the weight for a given symbol kind
+fn symbol_weight(kind: &SymbolKind) -> u32 {
+    match kind {
+        SymbolKind::Function | SymbolKind::Method => SYMBOL_WEIGHT_FUNCTION_METHOD,
+        SymbolKind::Class | SymbolKind::Struct | SymbolKind::Interface | SymbolKind::Trait => {
+            SYMBOL_WEIGHT_CLASS_STRUCT
+        }
+        SymbolKind::Module | SymbolKind::Type => SYMBOL_WEIGHT_MODULE_TYPE,
+        SymbolKind::Variable | SymbolKind::Constant => SYMBOL_WEIGHT_VARIABLE_CONST,
+        SymbolKind::Import => SYMBOL_WEIGHT_IMPORT,
+    }
+}
+
+/// Estimates the nesting depth of a scope string
+///
+/// Deeper scopes are considered less important for context preservation.
 #[allow(dead_code)]
 fn estimate_scope_depth(scope: Option<&str>) -> usize {
-    scope
-        .map(|raw| {
-            raw.split(|ch: char| matches!(ch, ':' | '.' | '#'))
-                .filter(|segment| !segment.is_empty())
-                .count()
-        })
-        .unwrap_or(0)
+    scope.map_or(0, |raw| {
+        raw.split(|ch: char| matches!(ch, ':' | '.' | '#'))
+            .filter(|segment| !segment.is_empty())
+            .count()
+    })
 }
 
+/// Extracts code blocks from markdown-formatted text
+///
+/// Handles both fenced code blocks with language hints and plain code blocks.
 #[allow(dead_code)]
 fn extract_code_blocks(source: &str) -> Vec<CodeBlock> {
     let mut blocks = Vec::new();
@@ -464,25 +557,21 @@ fn extract_code_blocks(source: &str) -> Vec<CodeBlock> {
 
     for line in source.lines() {
         let trimmed = line.trim_start();
-        if trimmed.starts_with("```") {
+        if let Some(hint) = trimmed.strip_prefix("```") {
             if in_block {
-                let language_hint = current_language.take();
+                // End of code block
                 if !current_content.is_empty() {
                     blocks.push(CodeBlock {
-                        language_hint,
+                        language_hint: current_language.take(),
                         content: current_content.trim_end().to_string(),
                     });
                 }
                 current_content.clear();
                 in_block = false;
             } else {
+                // Start of code block
                 in_block = true;
-                let hint = trimmed.trim_start_matches("```").trim();
-                current_language = if hint.is_empty() {
-                    None
-                } else {
-                    Some(hint.to_string())
-                };
+                current_language = Some(hint.trim().to_string()).filter(|s| !s.is_empty());
                 current_content.clear();
             }
             continue;
@@ -494,6 +583,7 @@ fn extract_code_blocks(source: &str) -> Vec<CodeBlock> {
         }
     }
 
+    // Handle unclosed code block at end of text
     if in_block && !current_content.is_empty() {
         blocks.push(CodeBlock {
             language_hint: current_language.take(),
@@ -504,10 +594,17 @@ fn extract_code_blocks(source: &str) -> Vec<CodeBlock> {
     blocks
 }
 
+/// Converts language hint string to LanguageSupport enum
+///
+/// Supports common language names and file extensions.
 #[allow(dead_code)]
 fn language_hint_to_support(hint: &str) -> Option<LanguageSupport> {
-    let normalized = hint.trim().trim_start_matches('.').to_ascii_lowercase();
-    match normalized.as_str() {
+    match hint
+        .trim()
+        .trim_start_matches('.')
+        .to_ascii_lowercase()
+        .as_str()
+    {
         "rust" | "rs" => Some(LanguageSupport::Rust),
         "python" | "py" => Some(LanguageSupport::Python),
         "javascript" | "js" => Some(LanguageSupport::JavaScript),
@@ -520,9 +617,14 @@ fn language_hint_to_support(hint: &str) -> Option<LanguageSupport> {
     }
 }
 
+/// Computes a hash for message semantic content caching
+///
+/// Messages with identical semantic content will have the same hash,
+/// allowing us to cache expensive semantic analysis results.
 #[allow(dead_code)]
 fn message_semantic_hash(message: &uni::Message) -> u64 {
     use std::collections::hash_map::DefaultHasher;
+    use std::hash::Hasher;
 
     let mut hasher = DefaultHasher::new();
     message.role.as_generic_str().hash(&mut hasher);

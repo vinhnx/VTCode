@@ -1381,7 +1381,7 @@ impl ModelId {
             | ModelId::OpenRouterAnthropicClaudeSonnet45
             | ModelId::OpenRouterAnthropicClaudeHaiku45
             | ModelId::OpenRouterAnthropicClaudeOpus41
-            | ModelId::OpenRouterMinimaxM2Free => "unknown",  // fallback generation for OpenRouter models
+            | ModelId::OpenRouterMinimaxM2Free => "unknown", // fallback generation for OpenRouter models
         }
     }
 }
