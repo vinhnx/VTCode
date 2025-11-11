@@ -172,6 +172,7 @@ pub mod model_optimizer;
 pub mod provider;
 pub mod providers;
 pub mod rig_adapter;
+pub mod task_analyzer;
 pub mod token_metrics;
 pub mod types;
 
@@ -187,6 +188,7 @@ pub use model_optimizer::{
     BudgetConstraint, ModelMetrics, ModelOptimizer, ModelRecommendation, TaskComplexity,
 };
 pub use provider::{LLMStream, LLMStreamEvent};
+pub use task_analyzer::{TaskAnalysis, TaskAnalyzer, TaskAspects};
 pub use token_metrics::{TokenMetrics, TokenCounter, TokenTypeMetrics};
 pub use providers::{
     AnthropicProvider, GeminiProvider, OllamaProvider, OpenAIProvider, XAIProvider, ZAIProvider,
