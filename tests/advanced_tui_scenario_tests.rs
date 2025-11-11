@@ -200,7 +200,7 @@ fn test_ui_styling_variations() {
                 style: InlineTextStyle {
                     color: None,
                     bg_color: None,
-                    effects: Effects::empty(),
+                    effects: Effects::new(),
                 },
             },
         ),
