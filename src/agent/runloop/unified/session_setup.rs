@@ -20,7 +20,7 @@ use vtcode_core::core::token_budget::{
     TokenBudgetConfig as RuntimeTokenBudgetConfig, TokenBudgetManager,
 };
 use vtcode_core::core::trajectory::TrajectoryLogger;
-use vtcode_core::llm::{factory::create_provider_with_config, provider as uni, TokenCounter, ModelOptimizer};
+use vtcode_core::llm::{factory::create_provider_with_config, provider as uni, TokenCounter, ModelOptimizer, TaskComplexity, TaskAnalyzer};
 use vtcode_core::tools::{ToolResultCache, SearchMetrics};
 use vtcode_core::acp::ToolPermissionCache;
 use vtcode_core::mcp::{McpClient, McpToolInfo};
@@ -306,6 +306,9 @@ pub(crate) async fn initialize_session(
     let search_metrics = Arc::new(RwLock::new(SearchMetrics::new())); // Track search performance
     let model_optimizer = Arc::new(RwLock::new(ModelOptimizer::new())); // Track model performance
 
+    // Log model recommendation on startup based on potential task complexity
+    log_initial_model_recommendation_sync(&model_optimizer, &config.model);
+
     Ok(SessionState {
         session_bootstrap,
         provider_client,
@@ -349,4 +352,59 @@ fn build_single_mcp_tool_definition(tool: &McpToolInfo) -> uni::ToolDefinition {
 
 pub fn build_mcp_tool_definitions(tools: &[McpToolInfo]) -> Vec<uni::ToolDefinition> {
     tools.iter().map(build_single_mcp_tool_definition).collect()
+}
+
+/// Log initial model recommendation on session startup (sync version for initialization)
+fn log_initial_model_recommendation_sync(optimizer: &Arc<RwLock<ModelOptimizer>>, current_model: &str) {
+    // Default to standard complexity for initial session
+    let complexity = TaskComplexity::Standard;
+    
+    // We can't use async here during initialization, so just log a note that
+    // model recommendations will be available during the session
+    debug!(
+        "Session starting with model: '{}' | Task complexity estimation will be performed on first request",
+        current_model
+    );
+}
+
+/// Analyze user query and log task complexity estimation
+fn estimate_and_log_task_complexity(query: &str) -> TaskComplexity {
+    if query.is_empty() {
+        return TaskComplexity::Standard;
+    }
+
+    let analysis = TaskAnalyzer::analyze_query(query);
+    
+    debug!(
+        "Task complexity: {:?} (confidence: {}%) | {}",
+        analysis.complexity,
+        analysis.confidence,
+        analysis.reasoning
+    );
+
+    if analysis.aspects.has_refactoring {
+        debug!("Detected: Refactoring work");
+    }
+    if analysis.aspects.has_design_decisions {
+        debug!("Detected: Design decisions needed");
+    }
+    if analysis.aspects.has_debugging {
+        debug!("Detected: Debugging/troubleshooting");
+    }
+    if analysis.aspects.is_multi_file {
+        debug!("Detected: Multi-file changes");
+    }
+    if analysis.aspects.has_exploration {
+        debug!("Detected: Code exploration/research");
+    }
+    if analysis.aspects.needs_explanation {
+        debug!("Detected: Explanation/documentation needed");
+    }
+    
+    debug!(
+        "Estimated tool calls needed: {}",
+        analysis.aspects.estimated_tool_calls
+    );
+
+    analysis.complexity
 }

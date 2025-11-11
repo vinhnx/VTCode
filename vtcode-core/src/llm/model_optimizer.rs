@@ -62,6 +62,43 @@ pub enum TaskComplexity {
     Expert,
 }
 
+impl TaskComplexity {
+    /// Classify task complexity based on task description
+    pub fn classify_from_description(description: &str) -> Self {
+        let desc_lower = description.to_lowercase();
+        
+        // Expert level indicators
+        if desc_lower.contains("architecture") || 
+           desc_lower.contains("design") ||
+           desc_lower.contains("security") ||
+           desc_lower.contains("performance optimization") ||
+           desc_lower.contains("system design") {
+            return TaskComplexity::Expert;
+        }
+        
+        // Complex level indicators
+        if desc_lower.contains("refactor") ||
+           desc_lower.contains("multi-file") ||
+           desc_lower.contains("restructure") ||
+           desc_lower.contains("complex") ||
+           desc_lower.contains("rewrite") {
+            return TaskComplexity::Complex;
+        }
+        
+        // Standard level indicators
+        if desc_lower.contains("test") ||
+           desc_lower.contains("analyze") ||
+           desc_lower.contains("review") ||
+           desc_lower.contains("implement") ||
+           desc_lower.contains("debug") {
+            return TaskComplexity::Standard;
+        }
+        
+        // Default to Simple
+        TaskComplexity::Simple
+    }
+}
+
 /// Budget constraint for model selection
 #[derive(Debug, Clone, Copy)]
 pub struct BudgetConstraint {
