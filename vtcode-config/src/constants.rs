@@ -1315,14 +1315,9 @@ pub mod chunking {
     /// Number of lines to read from end of file when chunking
     pub const CHUNK_END_LINES: usize = 800;
 
-    /// Maximum lines for terminal command output before truncation
-    pub const MAX_TERMINAL_OUTPUT_LINES: usize = 3_000;
-
-    /// Number of lines to show from start of terminal output when truncating
-    pub const TERMINAL_OUTPUT_START_LINES: usize = 1_000;
-
-    /// Number of lines to show from end of terminal output when truncating
-    pub const TERMINAL_OUTPUT_END_LINES: usize = 1_000;
+    // DEPRECATED: Terminal output truncation now uses token-based limits instead of line limits
+    // See: src/agent/runloop/tool_output/streams.rs (MAX_TOOL_RESPONSE_TOKENS: 25_000)
+    // These constants are no longer used and can be safely removed when cleaning up
 
     /// Maximum content size for write_file before chunking (in bytes)
     pub const MAX_WRITE_CONTENT_SIZE: usize = 500_000; // 500KB
