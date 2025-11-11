@@ -12,6 +12,19 @@ pub mod prompts {
     pub const CORE_BUILTIN_PROMPTS_DIR: &str = "vtcode-core/prompts/custom";
 }
 
+/// Command execution defaults shared across the agent runtime
+pub mod commands {
+    pub const DEFAULT_EXTRA_PATH_ENTRIES: &[&str] = &[
+        "$HOME/.cargo/bin",
+        "$HOME/.local/bin",
+        "/opt/homebrew/bin",
+        "/usr/local/bin",
+        "$HOME/.asdf/bin",
+        "$HOME/.asdf/shims",
+        "$HOME/go/bin",
+    ];
+}
+
 /// Model ID constants to sync with docs/models.json
 pub mod models {
     // Google/Gemini models

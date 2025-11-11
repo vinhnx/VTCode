@@ -93,8 +93,6 @@ mod integration_tests {
 
     #[test]
     fn test_full_permission_flow() -> anyhow::Result<()> {
-
-
         // 1. Initialize audit log
         let audit_dir = TempDir::new()?;
         let mut audit_log = PermissionAuditLog::new(audit_dir.path().to_path_buf())?;

@@ -109,6 +109,9 @@ pub(crate) async fn run_single_agent_loop_unified(
         // The cleanup will happen in the Drop implementations
         original_hook(panic_info);
     }));
+
+    // Note: The original hook will not be restored during this session
+    // but Rust runtime should handle this appropriately
     let mut config = config.clone();
     let mut resume_state = resume;
 
@@ -184,9 +187,7 @@ pub(crate) async fn run_single_agent_loop_unified(
 
         // Set environment variable to indicate TUI mode is active
         // This prevents CLI dialoguer prompts from corrupting the TUI display
-        // SAFETY: We're setting this at the start of the TUI session and it's only read
-        // by the tool policy manager to detect TUI mode. No other threads are modifying
-        // this variable concurrently.
+        // SAFETY: Setting a process-local environment variable is safe; the OS copies the value.
         unsafe {
             std::env::set_var("VTCODE_TUI_MODE", "1");
         }

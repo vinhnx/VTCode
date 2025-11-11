@@ -201,6 +201,13 @@ allow_list = [
     "echo",         # Print text
 ]
 
+# Additional directories to prepend to PATH when running commands
+extra_path_entries = [
+  "$HOME/.cargo/bin",
+  "$HOME/.local/bin",
+  "/opt/homebrew/bin",
+]
+
 # Commands that are never allowed
 deny_list = [
     "rm -rf /",        # Delete root directory (dangerous)

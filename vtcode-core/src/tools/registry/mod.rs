@@ -517,7 +517,10 @@ impl ToolRegistry {
     pub fn apply_commands_config(&mut self, commands_config: &CommandsConfig) {
         self.inventory
             .command_tool_mut()
-            .update_commands_config(commands_config.clone());
+            .update_commands_config(commands_config);
+        self.pty_sessions
+            .manager()
+            .apply_commands_config(commands_config);
     }
 
     pub fn apply_timeout_policy(&mut self, timeouts: &TimeoutsConfig) {

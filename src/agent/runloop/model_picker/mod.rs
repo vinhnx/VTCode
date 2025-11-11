@@ -613,6 +613,7 @@ impl ModelPickerState {
                 }
                 Ok(Some(ExistingKey::WorkspaceDotenv(value))) => {
                     selection.requires_api_key = false;
+                    // SAFETY: Keys are sanitized and values come from configuration sources.
                     unsafe {
                         std::env::set_var(&selection.env_key, &value);
                     }
@@ -694,6 +695,7 @@ impl ModelPickerState {
                 }
                 Ok(Some(ExistingKey::WorkspaceDotenv(value))) => {
                     renderer.close_modal();
+                    // SAFETY: Keys are sanitized and values come from configuration sources.
                     unsafe {
                         std::env::set_var(&selection.env_key, &value);
                     }

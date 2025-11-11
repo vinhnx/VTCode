@@ -132,6 +132,7 @@ pub mod error_context;
 pub mod file_ops;
 pub mod grep_file;
 pub mod names;
+pub(crate) mod path_env;
 pub mod plan;
 pub mod pty;
 pub mod registry;
