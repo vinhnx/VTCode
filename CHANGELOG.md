@@ -3,6 +3,33 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Version 0.43.0] - 2025-11-09
+# [Version 0.43.5] - 2025-11-11
+
+
+### Features
+    - feat: Implement permission system with command resolution, audit logging, and caching
+
+
+### Refactors
+    - refactor: Remove unused audit log and history navigation methods
+    - refactor: Remove references to ast_grep_search from documentation and tool policies
+    - refactor: Phase 2 Step 4 - migrate remaining input methods and word navigation
+    - refactor: Phase 2 Step 3 - migrate clear_input() and reset_history_navigation()
+    - refactor: Phase 2 Step 2 - add manager sync helper methods
+    - refactor: Phase 2 Step 1 - add manager fields to Session struct
+    - refactor: extract input history navigation logic fix in InputManager
+
+
+### Documentation
+    - docs: update changelog for v0.43.4 [skip ci]
+    - docs: update Phase 2 progress - Step 4 complete with all input methods migrated
+    - docs: add VT Code execution policy documentation and update command validation
+
+
+### Chores
+    - chore: update npm package.json to v0.43.4 [skip ci]
+    - chore: release v0.43.4
+    - chore: update npm package.json to v0.43.3 [skip ci]
 # [Version 0.43.4] - 2025-11-10
 
 
