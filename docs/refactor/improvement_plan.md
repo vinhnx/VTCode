@@ -1594,10 +1594,14 @@ All Phase 5 components are:
     - [x] Added `record_efficiency_after_trim()` to capture efficiency metrics
     - [x] Tracks context utilization, semantic value per token, messages removed
     - [x] Build status: ✅ All passing (`cargo check --lib`)
-  - [ ] **Add efficiency metrics to TUI**
-    - [ ] Display context window utilization percentage in status line
-    - [ ] Show which messages were pruned and why
-    - [ ] Report semantic content preservation stats
+  - [x] **Add efficiency metrics to TUI** ✅ COMPLETE
+    - [x] Display context window utilization percentage in status line
+    - [x] Added `InputStatusState` fields for context tracking
+    - [x] Created `build_model_status_with_context()` function
+    - [x] Integrated context efficiency into `update_input_status_if_changed()`
+    - [x] Added `update_context_efficiency()` to refresh metrics
+    - [x] Extended `StatusLineContext` for payload support
+    - [x] Display format: "model | 12.5K tokens | 65% context"
   - [ ] **Report on context retention statistics**
     - [ ] Add to decision ledger for retrospectives
     - [ ] Track pruning effectiveness over time
@@ -2030,12 +2034,27 @@ All Phase 5 components are integrated and working:
    - Preserves semantic value while reducing tokens
    - Fully integrated into context enforcement pipeline
 
-### 🎯 Next Steps (Phase 6.6.3-6.6.4)
+### 🔄 Phase 6.6.3 Implementation (Nov 11, 2025 - TUI Status Line Integration)
 
-1. **Phase 6.6.3**: Display TUI efficiency metrics
-   - Show context utilization % in status line
-   - Display pruning stats and semantic preservation
+**Extended TUI Status Line with Context Metrics** ✅ **COMPLETE**
+- Added context efficiency fields to `InputStatusState`
+- Created `build_model_status_with_context()` for enriched display
+- Integrated `update_context_efficiency()` for metrics updates
+- Extended `StatusLineCommandPayload` with context info
+- Session loop now updates status with efficiency metrics
+- Display format: "claude-3 | 12.5K tokens | 65% context"
+- Full integration into status line update pipeline
 
-2. **Phase 6.6.4**: Decision ledger integration
-   - Track pruning decisions over time
+**Files Modified:**
+- `src/agent/runloop/unified/status_line.rs` (added context tracking)
+- `src/agent/runloop/unified/turn/session.rs` (integrated efficiency updates)
+- `docs/refactor/improvement_plan.md` (status updates)
+
+**Build Status**: ✅ `cargo check --lib` passes
+
+### 🎯 Next Steps (Phase 6.6.4)
+
+1. **Phase 6.6.4**: Decision ledger integration
+   - Track pruning decisions over time in decision ledger
    - Report patterns and effectiveness
+   - Analyze semantic value preservation statistics

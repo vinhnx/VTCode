@@ -69,7 +69,7 @@ use crate::agent::runloop::unified::shell::{
 };
 use crate::agent::runloop::unified::state::{CtrlCSignal, CtrlCState, SessionStats};
 use crate::agent::runloop::unified::status_line::{
-    InputStatusState, update_input_status_if_changed,
+    InputStatusState, update_input_status_if_changed, update_context_efficiency,
 };
 use crate::agent::runloop::unified::tool_pipeline::{
     ToolExecutionStatus, execute_tool_with_timeout,
@@ -505,6 +505,17 @@ pub(crate) async fn run_single_agent_loop_unified(
                     "Failed to refresh status line"
                 );
             }
+
+            // Update context efficiency metrics in status line
+            if let Some(efficiency) = context_manager.last_efficiency() {
+                update_context_efficiency(
+                    &mut input_status_state,
+                    efficiency.context_utilization_percent,
+                    efficiency.total_tokens,
+                    efficiency.semantic_value_per_token,
+                );
+            }
+
             if ctrl_c_state.is_exit_requested() {
                 session_end_reason = SessionEndReason::Exit;
                 break;
