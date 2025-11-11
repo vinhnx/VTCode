@@ -29,9 +29,9 @@ fn test_inline_segment_snapshot() {
     let segment = InlineSegment {
         text: "Hello, world!".to_string(),
         style: InlineTextStyle {
-            bold: true,
-            italic: false,
             color: None,
+            bg_color: None,
+            effects: Effects::new().bold(),
         },
     };
     assert_snapshot!("styled_segment", format!("{:?}", segment));
@@ -61,9 +61,9 @@ fn test_inline_command_debug() {
     let segment = InlineSegment {
         text: "Hello! I'm your AI assistant.".to_string(),
         style: InlineTextStyle {
-            bold: true,
-            italic: false,
             color: None,
+            bg_color: None,
+            effects: Effects::new().bold(),
         },
     };
 
@@ -81,9 +81,9 @@ fn test_ui_component_combinations() {
     let message_segment = InlineSegment {
         text: "This is a test message with styling".to_string(),
         style: InlineTextStyle {
-            bold: true,
-            italic: true,
             color: None,
+            bg_color: None,
+            effects: Effects::new().bold().italic(),
         },
     };
 
