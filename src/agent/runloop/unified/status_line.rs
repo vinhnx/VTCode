@@ -25,9 +25,25 @@ pub(crate) struct InputStatusState {
     pub(crate) last_git_refresh: Option<Instant>,
     pub(crate) command_value: Option<String>,
     pub(crate) last_command_refresh: Option<Instant>,
+    // Context efficiency metrics
+    pub(crate) context_utilization: Option<f64>,
+    pub(crate) context_tokens: Option<usize>,
+    pub(crate) semantic_value_per_token: Option<f64>,
 }
 
 const GIT_STATUS_REFRESH_INTERVAL: Duration = Duration::from_secs(2);
+
+/// Update context efficiency metrics in the status state
+pub(crate) fn update_context_efficiency(
+    state: &mut InputStatusState,
+    utilization: f64,
+    tokens: usize,
+    semantic_per_token: f64,
+) {
+    state.context_utilization = Some(utilization);
+    state.context_tokens = Some(tokens);
+    state.semantic_value_per_token = Some(semantic_per_token);
+}
 
 pub(crate) async fn update_input_status_if_changed(
     handle: &InlineHandle,
@@ -100,7 +116,12 @@ pub(crate) async fn update_input_status_if_changed(
             (None, None)
         }
         StatusLineMode::Auto => {
-            let right = build_model_status_right(trimmed_model, trimmed_reasoning);
+            let right = build_model_status_with_context(
+                trimmed_model,
+                trimmed_reasoning,
+                state.context_utilization,
+                state.context_tokens,
+            );
             (state.git_left.clone(), right)
         }
         StatusLineMode::Command => {
@@ -148,12 +169,22 @@ pub(crate) async fn update_input_status_if_changed(
                     (state.command_value.clone(), None)
                 } else {
                     state.command_value = None;
-                    let right = build_model_status_right(trimmed_model, trimmed_reasoning);
+                    let right = build_model_status_with_context(
+                        trimmed_model,
+                        trimmed_reasoning,
+                        state.context_utilization,
+                        state.context_tokens,
+                    );
                     (state.git_left.clone(), right)
                 }
             } else {
                 state.command_value = None;
-                let right = build_model_status_right(trimmed_model, trimmed_reasoning);
+                let right = build_model_status_with_context(
+                    trimmed_model,
+                    trimmed_reasoning,
+                    state.context_utilization,
+                    state.context_tokens,
+                );
                 (state.git_left.clone(), right)
             }
         }
@@ -180,6 +211,45 @@ fn build_model_status_right(model: &str, reasoning: &str) -> Option<String> {
     } else {
         Some(format!("{} ({})", model, reasoning))
     }
+}
+
+/// Build status display with context efficiency metrics
+/// 
+/// Format: "model | 12.5K tokens | 65% context"
+pub(crate) fn build_model_status_with_context(
+    model: &str,
+    reasoning: &str,
+    context_utilization: Option<f64>,
+    total_tokens: Option<usize>,
+) -> Option<String> {
+    if model.is_empty() {
+        return None;
+    }
+
+    let mut parts = vec![model.to_string()];
+
+    if let Some(tokens) = total_tokens {
+        let formatted = if tokens >= 1_000_000 {
+            format!("{:.1}M", tokens as f64 / 1_000_000.0)
+        } else if tokens >= 1_000 {
+            format!("{:.1}K", tokens as f64 / 1_000.0)
+        } else {
+            tokens.to_string()
+        };
+        parts.push(format!("{} tokens", formatted));
+    }
+
+    if let Some(util) = context_utilization {
+        if util > 0.0 {
+            parts.push(format!("{:.0}% context", util.min(100.0)));
+        }
+    }
+
+    if !reasoning.is_empty() {
+        parts.push(format!("({})", reasoning));
+    }
+
+    Some(parts.join(" | "))
 }
 
 async fn run_status_line_command(
@@ -280,8 +350,16 @@ struct StatusLineCommandPayload {
     workspace: StatusLineWorkspace,
     model: StatusLineModel,
     runtime: StatusLineRuntime,
+    context: Option<StatusLineContext>,
     git: Option<StatusLineGit>,
     version: &'static str,
+}
+
+#[derive(Serialize)]
+struct StatusLineContext {
+    utilization_percent: f64,
+    total_tokens: usize,
+    semantic_value_per_token: f64,
 }
 
 impl StatusLineCommandPayload {
@@ -291,6 +369,17 @@ impl StatusLineCommandPayload {
         model_display: &str,
         reasoning: &str,
         git: Option<&GitStatusSummary>,
+    ) -> Self {
+        Self::with_context(workspace, model_id, model_display, reasoning, git, None)
+    }
+
+    fn with_context(
+        workspace: &Path,
+        model_id: &str,
+        model_display: &str,
+        reasoning: &str,
+        git: Option<&GitStatusSummary>,
+        context: Option<StatusLineContext>,
     ) -> Self {
         let workspace_path = workspace.to_string_lossy().to_string();
         Self {
@@ -307,6 +396,7 @@ impl StatusLineCommandPayload {
             runtime: StatusLineRuntime {
                 reasoning_effort: reasoning.to_string(),
             },
+            context,
             git: git.map(StatusLineGit::from_summary),
             version: env!("CARGO_PKG_VERSION"),
         }
@@ -341,6 +431,21 @@ impl StatusLineGit {
         Self {
             branch: summary.branch.clone(),
             dirty: summary.dirty,
+        }
+    }
+}
+
+impl StatusLineContext {
+    /// Create context info from efficiency metrics
+    pub(crate) fn from_efficiency(
+        utilization_percent: f64,
+        total_tokens: usize,
+        semantic_value_per_token: f64,
+    ) -> Self {
+        Self {
+            utilization_percent,
+            total_tokens,
+            semantic_value_per_token,
         }
     }
 }
