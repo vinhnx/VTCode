@@ -26,15 +26,18 @@ if [[ ! -f "Cargo.toml" ]]; then
     exit 1
 fi
 
-# Build and run
-echo "Building vtcode in release mode (this may take a few minutes)..."
-echo "Tip: Use './run.sh debug' for faster builds during development"
-echo ""
-
 # Check if user wants debug build
 if [[ "$1" == "debug" ]]; then
+    echo "Building vtcode in debug mode for faster compilation..."
+    echo "Tip: Use './run.sh' for release builds in production"
+    echo ""
     echo "Using debug build for faster compilation..."
     cargo build
+else
+    echo "Building vtcode in release mode (this may take a few minutes)..."
+    echo "Tip: Use './run.sh debug' for faster builds during development"
+    echo ""
+fi
     echo ""
     echo "Debug build complete!"
     echo ""

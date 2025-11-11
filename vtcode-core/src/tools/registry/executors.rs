@@ -24,9 +24,10 @@ use std::{
 use tokio::time::sleep;
 use tracing::{debug, trace, warn};
 
-const DEFAULT_TERMINAL_TIMEOUT_SECS: u64 = 30;
+const DEFAULT_TERMINAL_TIMEOUT_SECS: u64 = 180;
 const DEFAULT_PTY_TIMEOUT_SECS: u64 = 300;
 const RUN_PTY_POLL_TIMEOUT_SECS: u64 = 5;
+const LONG_RUNNING_COMMAND_TIMEOUT_SECS: u64 = 600;
 // For known long-running commands, wait longer before returning partial output
 const RUN_PTY_POLL_TIMEOUT_LONG_RUNNING: u64 = 30;
 const LONG_RUNNING_COMMANDS: &[&str] = &[
@@ -1367,9 +1368,37 @@ fn normalize_terminal_payload(args: &mut Value) -> Result<()> {
 fn ensure_default_timeout(args: &mut Value, context: &str, default: u64) -> Result<()> {
     let map = value_as_object_mut(args, context)?;
     if !map.contains_key("timeout_secs") {
-        map.insert("timeout_secs".to_string(), Value::Number(default.into()));
+        let timeout = if let Some(cmd_parts) = collect_command_array(map)
+            .ok()
+            .flatten()
+        {
+            if is_long_running_command(&cmd_parts) {
+                LONG_RUNNING_COMMAND_TIMEOUT_SECS
+            } else {
+                default
+            }
+        } else {
+            default
+        };
+        map.insert("timeout_secs".to_string(), Value::Number(timeout.into()));
     }
     Ok(())
+}
+
+fn collect_command_array(map: &Map<String, Value>) -> Result<Option<Vec<String>>> {
+    if let Some(cmd) = map.get("command") {
+        if let Some(cmd_str) = cmd.as_str() {
+            return Ok(Some(vec![cmd_str.to_string()]));
+        } else if let Some(cmd_array) = cmd.as_array() {
+            return Ok(Some(
+                cmd_array
+                    .iter()
+                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                    .collect(),
+            ));
+        }
+    }
+    Ok(None)
 }
 
 fn parse_timeout_secs(value: Option<&Value>, fallback: u64) -> Result<u64> {
