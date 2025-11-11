@@ -928,20 +928,16 @@ impl ToolRegistry {
             .get("raw_command")
             .and_then(|value| value.as_str())
             .map(|value| value.to_string());
-        let shell = resolve_shell_preference(
+        let shell_program = resolve_shell_preference(
             payload.get("shell").and_then(|value| value.as_str()),
             self.pty_config(),
-        )
-        .or_else(|| {
-            // Fallback: if preference resolution fails, use aggressive shell detection
-            Some(resolve_shell_candidate().display().to_string())
-        });
+        );
         let login_shell = payload
             .get("login")
             .and_then(|value| value.as_bool())
             .unwrap_or(false);
 
-        if let Some(shell_program) = shell {
+        {
             let normalized_shell = normalized_shell_name(&shell_program);
             let existing_shell = command
                 .first()
@@ -1094,19 +1090,14 @@ impl ToolRegistry {
             .and_then(|value| value.as_bool())
             .unwrap_or(false);
 
-        if let Some(shell_program) = resolve_shell_preference(
+        let shell_program = resolve_shell_preference(
             payload.get("shell").and_then(|value| value.as_str()),
             self.pty_config(),
-        )
-        .or_else(|| {
-            // Fallback: if preference resolution fails, use aggressive shell detection
-            Some(resolve_shell_candidate().display().to_string())
-        }) {
-            let should_replace = payload.get("shell").is_some()
-                || (command_parts.len() == 1 && is_default_shell_placeholder(&command_parts[0]));
-            if should_replace {
-                command_parts = vec![shell_program];
-            }
+        );
+        let should_replace = payload.get("shell").is_some()
+            || (command_parts.len() == 1 && is_default_shell_placeholder(&command_parts[0]));
+        if should_replace {
+            command_parts = vec![shell_program];
         }
 
         if login_shell
@@ -2079,7 +2070,7 @@ mod tests {
         let mut config = PtyConfig::default();
         config.preferred_shell = Some("/bin/bash".to_string());
         let resolved = super::resolve_shell_preference(Some("/custom/zsh"), &config);
-        assert_eq!(resolved.as_deref(), Some("/custom/zsh"));
+        assert_eq!(resolved, "/custom/zsh");
     }
 
     #[test]
@@ -2087,7 +2078,15 @@ mod tests {
         let mut config = PtyConfig::default();
         config.preferred_shell = Some("/bin/zsh".to_string());
         let resolved = super::resolve_shell_preference(None, &config);
-        assert_eq!(resolved.as_deref(), Some("/bin/zsh"));
+        assert_eq!(resolved, "/bin/zsh");
+    }
+
+    #[test]
+    fn resolve_shell_preference_always_returns_value() {
+        let config = PtyConfig::default();
+        let resolved = super::resolve_shell_preference(None, &config);
+        // Should never return empty string - guaranteed to have a fallback
+        assert!(!resolved.is_empty());
     }
 
     #[test]
@@ -2568,7 +2567,7 @@ fn tokenize_windows_command(command: &str) -> Result<Vec<String>> {
     Ok(tokens)
 }
 
-fn resolve_shell_preference(explicit: Option<&str>, config: &PtyConfig) -> Option<String> {
+fn resolve_shell_preference(explicit: Option<&str>, config: &PtyConfig) -> String {
     explicit
         .and_then(sanitize_shell_candidate)
         .or_else(|| {
@@ -2583,6 +2582,7 @@ fn resolve_shell_preference(explicit: Option<&str>, config: &PtyConfig) -> Optio
                 .and_then(|value| sanitize_shell_candidate(&value))
         })
         .or_else(detect_posix_shell_candidate)
+        .unwrap_or_else(|| resolve_shell_candidate().display().to_string())
 }
 
 fn resolve_shell_candidate() -> PathBuf {

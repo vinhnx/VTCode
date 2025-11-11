@@ -53,23 +53,26 @@ preferred_shell = "/bin/zsh"
 
 The shell resolution is implemented in `vtcode-core/src/tools/registry/executors.rs`:
 
-- `resolve_shell_preference()` - Implements the priority chain
-- `resolve_shell_candidate()` - Provides aggressive fallback detection
-- `detect_posix_shell_candidate()` - Scans for available POSIX shells
+- `resolve_shell_preference()` - Infallible function that implements the full priority chain and always returns a valid shell path
+- `resolve_shell_candidate()` - Aggressive shell detection with platform-specific fallbacks
+- `detect_posix_shell_candidate()` - Scans for available POSIX shells in standard locations
 
-### Automatic Fallback
+### Design: Infallible Shell Resolution
 
-When executing PTY commands (`prepare_ephemeral_pty_command`, `send_pty_input`), if `resolve_shell_preference()` returns `None`, the code automatically falls back to `resolve_shell_candidate()`:
+`resolve_shell_preference()` is designed as an **infallible** function that always returns `String` (not `Option<String>`):
 
 ```rust
-let shell = resolve_shell_preference(...)
-    .or_else(|| {
-        // Fallback: if preference resolution fails, use aggressive shell detection
-        Some(resolve_shell_candidate().display().to_string())
-    });
+fn resolve_shell_preference(explicit: Option<&str>, config: &PtyConfig) -> String {
+    explicit
+        .and_then(sanitize_shell_candidate)
+        .or_else(|| config.preferred_shell.as_deref().and_then(sanitize_shell_candidate))
+        .or_else(|| env::var("SHELL").ok().and_then(|value| sanitize_shell_candidate(&value)))
+        .or_else(detect_posix_shell_candidate)
+        .unwrap_or_else(|| resolve_shell_candidate().display().to_string())
+}
 ```
 
-This ensures that shell wrapping always occurs, preventing commands from executing without proper shell environment setup.
+The `.unwrap_or_else()` at the end guarantees a shell is **always** found, even if all other options fail. This eliminates the need for `.or_else()` calls at usage sites and ensures shell wrapping always occurs.
 
 ## Benefits
 
