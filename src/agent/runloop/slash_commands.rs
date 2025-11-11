@@ -57,6 +57,7 @@ pub enum SlashCommandOutcome {
     ManageSandbox {
         action: SandboxAction,
     },
+    ShowPruningReport,
     SubmitPrompt {
         prompt: String,
     },
@@ -220,6 +221,7 @@ pub async fn handle_slash_command(
         }
         "status" => Ok(SlashCommandOutcome::ShowStatus),
         "cost" => Ok(SlashCommandOutcome::ShowCost),
+        "pruning-report" | "pruning_report" => Ok(SlashCommandOutcome::ShowPruningReport),
         "doctor" => {
             if !args.is_empty() {
                 renderer.line(MessageStyle::Error, "Usage: /doctor")?;

@@ -7,12 +7,14 @@ use tokio::sync::{Notify, RwLock};
 use tokio::task;
 
 use serde_json::Value;
+use vtcode_core::acp::{PermissionGrant, ToolPermissionCache};
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::core::interfaces::ui::UiSession;
 use vtcode_core::tool_policy::ToolPolicy;
 use vtcode_core::tools::registry::{ToolPermissionDecision, ToolRegistry};
-use vtcode_core::tools::{JustificationExtractor, ToolRiskScorer, ToolRiskContext, ToolSource, WorkspaceTrust};
-use vtcode_core::acp::{ToolPermissionCache, PermissionGrant};
+use vtcode_core::tools::{
+    JustificationExtractor, ToolRiskContext, ToolRiskScorer, ToolSource, WorkspaceTrust,
+};
 use vtcode_core::ui::tui::{InlineEvent, InlineHandle};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
@@ -285,25 +287,27 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
     hooks: Option<&LifecycleHookEngine>,
     justification: Option<&vtcode_core::tools::ToolJustification>,
     approval_recorder: Option<&vtcode_core::tools::ApprovalRecorder>,
-    decision_ledger: Option<&Arc<tokio::sync::RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>>,
+    decision_ledger: Option<
+        &Arc<tokio::sync::RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>,
+    >,
     tool_permission_cache: Option<&Arc<RwLock<ToolPermissionCache>>>,
 ) -> Result<ToolPermissionFlow> {
     // Check tool permission cache for previously granted permissions
     if let Some(cache) = tool_permission_cache {
         let permission_cache = cache.read().await;
-        
+
         // Check if tool access is denied
         if permission_cache.is_denied(tool_name) {
             return Ok(ToolPermissionFlow::Denied);
         }
-        
+
         // Check if we have cached permission that can be reused
         if permission_cache.can_use_cached(tool_name) {
             tracing::debug!("Using cached ACP permission for tool: {}", tool_name);
             return Ok(ToolPermissionFlow::Approved);
         }
     }
-    
+
     let mut hook_requires_prompt = false;
 
     if let Some(hooks) = hooks {
@@ -419,41 +423,41 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         HitlDecision::Approved => {
             // One-time approval - mark as preapproved for this execution but don't persist
             tool_registry.mark_tool_preapproved(tool_name);
-            
+
             // Cache permission grant for this session
             if let Some(cache) = tool_permission_cache {
                 let mut perm_cache = cache.write().await;
                 perm_cache.cache_grant(tool_name, PermissionGrant::Once);
             }
-            
+
             // Record approval decision for pattern learning
             if let Some(recorder) = approval_recorder {
                 let _ = recorder.record_approval(tool_name, true, None).await;
             }
-            
+
             Ok(ToolPermissionFlow::Approved)
         }
         HitlDecision::ApprovedSession => {
             // Session-only approval - mark as preapproved but don't persist
             tool_registry.mark_tool_preapproved(tool_name);
-            
+
             // Cache permission grant for this session
             if let Some(cache) = tool_permission_cache {
                 let mut perm_cache = cache.write().await;
                 perm_cache.cache_grant(tool_name, PermissionGrant::Session);
             }
-            
+
             // Record approval decision for pattern learning
             if let Some(recorder) = approval_recorder {
                 let _ = recorder.record_approval(tool_name, true, None).await;
             }
-            
+
             Ok(ToolPermissionFlow::Approved)
         }
         HitlDecision::ApprovedPermanent => {
             // Permanent approval - mark and persist to policy
             tool_registry.mark_tool_preapproved(tool_name);
-            
+
             // Cache permission grant permanently
             if let Some(cache) = tool_permission_cache {
                 let mut perm_cache = cache.write().await;
@@ -495,7 +499,7 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
             if let Some(recorder) = approval_recorder {
                 let _ = recorder.record_approval(tool_name, false, None).await;
             }
-            
+
             Ok(ToolPermissionFlow::Denied)
         }
         HitlDecision::Exit => Ok(ToolPermissionFlow::Exit),

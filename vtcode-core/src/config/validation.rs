@@ -2,13 +2,12 @@
 ///
 /// Provides comprehensive validation of VTCodeConfig at startup to catch
 /// common configuration errors early and provide helpful error messages.
-
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use std::collections::HashMap;
 use std::path::Path;
 
-use crate::config::loader::VTCodeConfig;
 use crate::config::FullAutoConfig;
+use crate::config::loader::VTCodeConfig;
 use serde_json::Value as JsonValue;
 
 /// Result of a configuration validation check
@@ -67,7 +66,7 @@ fn load_models_json() -> Result<JsonValue> {
         std::path::PathBuf::from("../docs/models.json"),
         std::path::PathBuf::from("../../docs/models.json"),
     ];
-    
+
     for path in &paths {
         if path.exists() {
             let content = std::fs::read_to_string(path)
@@ -76,7 +75,7 @@ fn load_models_json() -> Result<JsonValue> {
                 .context("Failed to parse docs/models.json. Check JSON syntax.");
         }
     }
-    
+
     anyhow::bail!("Could not find docs/models.json. Checked: {:?}", paths)
 }
 
@@ -90,8 +89,7 @@ fn get_available_models() -> Result<HashMap<String, Vec<String>>> {
         for (provider_name, provider_data) in providers {
             if let Some(provider_obj) = provider_data.as_object() {
                 if let Some(models_obj) = provider_obj.get("models").and_then(|m| m.as_object()) {
-                    let model_ids: Vec<String> =
-                        models_obj.keys().cloned().collect();
+                    let model_ids: Vec<String> = models_obj.keys().cloned().collect();
                     result.insert(provider_name.clone(), model_ids);
                 }
             }
@@ -103,8 +101,8 @@ fn get_available_models() -> Result<HashMap<String, Vec<String>>> {
 
 /// Validate that the configured model exists in models.json
 pub fn validate_model_exists(provider: &str, model: &str) -> Result<()> {
-    let available_models = get_available_models()
-        .context("Failed to load available models from docs/models.json")?;
+    let available_models =
+        get_available_models().context("Failed to load available models from docs/models.json")?;
 
     match available_models.get(provider) {
         Some(models) => {
@@ -154,7 +152,11 @@ pub fn validate_config(config: &VTCodeConfig, workspace: &Path) -> Result<Valida
     let mut result = ValidationResult::new();
 
     // Validate agent model exists
-    validate_agent_model(&config.agent.provider, &config.agent.default_model, &mut result);
+    validate_agent_model(
+        &config.agent.provider,
+        &config.agent.default_model,
+        &mut result,
+    );
 
     // Validate context window if specified
     validate_context_window(config, &mut result);
@@ -186,18 +188,11 @@ fn validate_agent_model(provider: &str, model: &str, result: &mut ValidationResu
                 } else {
                     format!("{}", context_size)
                 };
-                tracing::debug!(
-                    "Agent model '{}' context window: {}",
-                    model,
-                    display_size
-                );
+                tracing::debug!("Agent model '{}' context window: {}", model, display_size);
             }
         }
         Err(e) => {
-            result.add_error(format!(
-                "Agent model configuration invalid: {}",
-                e
-            ));
+            result.add_error(format!("Agent model configuration invalid: {}", e));
         }
     }
 }
@@ -205,10 +200,9 @@ fn validate_agent_model(provider: &str, model: &str, result: &mut ValidationResu
 fn validate_context_window(config: &VTCodeConfig, result: &mut ValidationResult) {
     let context_window = config.context.max_context_tokens;
     if context_window > 0 {
-        if let Ok(Some(model_context)) = get_model_context_window(
-            &config.agent.provider,
-            &config.agent.default_model,
-        ) {
+        if let Ok(Some(model_context)) =
+            get_model_context_window(&config.agent.provider, &config.agent.default_model)
+        {
             if context_window > model_context {
                 result.add_warning(format!(
                     "Configured context window {} exceeds model capacity {}. \
@@ -220,11 +214,7 @@ fn validate_context_window(config: &VTCodeConfig, result: &mut ValidationResult)
     }
 }
 
-fn validate_checkpointing_dir(
-    storage_dir: &str,
-    workspace: &Path,
-    result: &mut ValidationResult,
-) {
+fn validate_checkpointing_dir(storage_dir: &str, workspace: &Path, result: &mut ValidationResult) {
     let path = if std::path::Path::new(storage_dir).is_absolute() {
         std::path::PathBuf::from(storage_dir)
     } else {
@@ -287,10 +277,7 @@ mod tests {
         assert!(result.is_ok(), "Should get available models");
 
         let models = result.unwrap();
-        assert!(
-            !models.is_empty(),
-            "Should have at least one provider"
-        );
+        assert!(!models.is_empty(), "Should have at least one provider");
 
         // Check for common providers
         assert!(

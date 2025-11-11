@@ -423,7 +423,9 @@ impl PtyManager {
         let sandbox_profile = self.current_sandbox_profile();
         let result = tokio::task::spawn_blocking(move || -> Result<PtyCommandResult> {
             let timeout_duration = Duration::from_millis(timeout);
-            let (exec_program, exec_args, display_program, env_profile) =
+
+            // Try to resolve the program path. If not found, wrap in shell.
+            let (exec_program, exec_args, display_program, env_profile, _use_shell_wrapper) =
                 if let Some(profile) = sandbox_profile.clone() {
                     let command_string =
                         join(std::iter::once(program.clone()).chain(args.iter().cloned()));
@@ -436,9 +438,23 @@ impl PtyManager {
                         ],
                         program.clone(),
                         Some(profile),
+                        false,
                     )
+                } else if let Some(_resolved_path) = resolve_program_path(&program) {
+                    // Program found in PATH, use it directly
+                    (program.clone(), args.clone(), program.clone(), None, false)
                 } else {
-                    (program.clone(), args.clone(), program.clone(), None)
+                    // Program not found in PATH, wrap in shell to leverage user's PATH
+                    let shell = "/bin/sh";
+                    let full_command =
+                        join(std::iter::once(program.clone()).chain(args.iter().cloned()));
+                    (
+                        shell.to_string(),
+                        vec!["-c".to_string(), full_command.clone()],
+                        program.clone(),
+                        None,
+                        true,
+                    )
                 };
 
             let mut builder = CommandBuilder::new(exec_program.clone());
@@ -637,8 +653,19 @@ impl PtyManager {
                 program.clone(),
                 Some(profile),
             )
-        } else {
+        } else if let Some(_resolved_path) = resolve_program_path(&program) {
+            // Program found in PATH, use it directly
             (program.clone(), args.clone(), program.clone(), None)
+        } else {
+            // Program not found in PATH, wrap in shell to leverage user's PATH
+            let shell = "/bin/sh";
+            let full_command = join(std::iter::once(program.clone()).chain(args.iter().cloned()));
+            (
+                shell.to_string(),
+                vec!["-c".to_string(), full_command.clone()],
+                program.clone(),
+                None,
+            )
         };
 
         let pty_system = native_pty_system();
@@ -986,6 +1013,28 @@ fn is_shell_program(program: &str) -> bool {
         name.as_str(),
         "bash" | "sh" | "zsh" | "fish" | "dash" | "ash" | "busybox"
     )
+}
+
+/// Resolve program path - if program doesn't exist in PATH, return None to signal shell fallback.
+/// This allows the shell to find programs installed in user-specific directories.
+fn resolve_program_path(program: &str) -> Option<String> {
+    // Check if program is an absolute or relative path
+    if program.contains(std::path::MAIN_SEPARATOR) || program.contains('/') {
+        return Some(program.to_string());
+    }
+
+    // Try to find the program in PATH
+    if let Ok(path_env) = std::env::var("PATH") {
+        for path_dir in path_env.split(std::path::MAIN_SEPARATOR) {
+            let full_path = Path::new(path_dir).join(program);
+            if full_path.exists() && full_path.is_file() {
+                return Some(full_path.to_string_lossy().to_string());
+            }
+        }
+    }
+
+    // If not found in PATH, return None to signal shell wrapping
+    None
 }
 
 pub fn is_development_toolchain_command(program: &str) -> bool {

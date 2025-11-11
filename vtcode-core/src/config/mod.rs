@@ -49,7 +49,7 @@ pub use models::{ModelId, OpenRouterMetadata};
 pub use router::{ComplexityModelMap, HeuristicSettings, ResourceBudget, RouterConfig};
 pub use telemetry::TelemetryConfig;
 pub use types::{ReasoningEffortLevel, UiSurfacePreference};
-pub use validation::{validate_config, validate_model_exists, ValidationResult};
+pub use validation::{ValidationResult, validate_config, validate_model_exists};
 pub use validator::{ConfigValidator, ModelsDatabase, ValidationResult as ConfigValidationResult};
 pub use vtcode_config::TimeoutsConfig;
 pub use vtcode_config::root::{

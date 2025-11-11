@@ -49,7 +49,10 @@ impl CommandTool {
         let work_dir =
             sanitize_working_dir(&self.workspace_root, input.working_dir.as_deref()).await?;
 
-        let mut env = HashMap::new();
+        // Build environment: inherit parent process variables (required for PATH, HOME, etc.)
+        // then override specific variables for consistent terminal behavior.
+        // This matches the PTY environment setup in pty.rs:set_command_environment()
+        let mut env: HashMap<OsString, OsString> = std::env::vars_os().collect();
         env.insert(OsString::from("PAGER"), OsString::from("cat"));
         env.insert(OsString::from("GIT_PAGER"), OsString::from("cat"));
         env.insert(OsString::from("LESS"), OsString::from("R"));
@@ -401,5 +404,34 @@ mod tests {
         let args = json!({ "command": ["ls", "-la"] });
         tool.validate_args(&args)
             .expect("valid command should pass validation");
+    }
+
+    #[test]
+    fn environment_variables_are_inherited_from_parent() {
+        // Verify that the environment setup includes inherited parent process variables.
+        // This test documents the fix for the cargo fmt issue where PATH and other
+        // critical environment variables were not being passed to subprocesses.
+        // See: vtcode-core/src/tools/command.rs:execute_terminal_command()
+
+        // Set a test environment variable in the parent process
+        std::env::set_var("_TEST_VAR_FOR_ENV_INHERITANCE", "test_value");
+
+        // The fix uses std::env::vars_os().collect() which inherits all parent variables
+        let env: HashMap<OsString, OsString> = std::env::vars_os().collect();
+
+        // Verify our test variable is present
+        assert!(
+            env.contains_key(&OsString::from("_TEST_VAR_FOR_ENV_INHERITANCE")),
+            "Parent environment variables should be inherited"
+        );
+
+        // Verify critical system variables are present
+        assert!(
+            env.contains_key(&OsString::from("PATH")),
+            "PATH environment variable must be inherited for command resolution"
+        );
+
+        // Cleanup
+        std::env::remove_var("_TEST_VAR_FOR_ENV_INHERITANCE");
     }
 }

@@ -17,7 +17,6 @@ use crate::llm::factory::create_provider_for_model;
 use crate::llm::provider as uni_provider;
 use crate::llm::provider::{FunctionDefinition, LLMRequest, Message, ToolCall, ToolDefinition};
 use crate::llm::{AnyClient, make_client};
-use crate::llm::model_optimizer::ModelOptimizer;
 use crate::mcp::McpClient;
 use crate::prompts::system::compose_system_instruction_text;
 use crate::tools::{ToolRegistry, build_function_declarations};
@@ -26,7 +25,7 @@ use anyhow::{Result, anyhow};
 use futures::StreamExt;
 use serde_json::Value;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex};
 use tokio::time::{Duration, timeout};
 use tracing::{info, warn};
 
@@ -301,8 +300,6 @@ pub struct AgentRunner {
     event_sink: Option<EventSink>,
     /// Maximum number of autonomous turns before halting
     max_turns: usize,
-    /// Optional model optimizer for tracking usage metrics
-    model_optimizer: Option<Arc<RwLock<ModelOptimizer>>>,
 }
 
 impl AgentRunner {
@@ -592,7 +589,6 @@ impl AgentRunner {
             quiet: false,
             event_sink: None,
             max_turns: defaults::DEFAULT_FULL_AUTO_MAX_TURNS,
-            model_optimizer: None,
         })
     }
 
@@ -612,81 +608,6 @@ impl AgentRunner {
     /// Remove any previously registered structured event callback.
     pub fn clear_event_handler(&mut self) {
         self.event_sink = None;
-    }
-
-    /// Attach a model optimizer for tracking model usage metrics.
-    pub fn set_model_optimizer(&mut self, optimizer: Arc<RwLock<ModelOptimizer>>) {
-        self.model_optimizer = Some(optimizer);
-    }
-
-    /// Record model usage metrics if optimizer is attached (provider format).
-    fn record_model_usage(&self, response: &crate::llm::provider::LLMResponse) {
-        if let Some(optimizer) = &self.model_optimizer {
-            if let Some(usage) = &response.usage {
-                // Calculate estimated cost in cents
-                // This is a rough estimate; actual cost depends on pricing
-                let input_tokens = usage.prompt_tokens as u64;
-                let output_tokens = usage.completion_tokens as u64;
-                
-                // Rough pricing: $0.01 per 1K tokens (adjust as needed)
-                let cost_cents = ((input_tokens + output_tokens) as f64 / 1000.0) * 1.0;
-                
-                // Get effective context window from provider
-                let context_window = self.provider_client.effective_context_size(&self.model);
-                
-                // Extract provider name from model
-                let provider = self.model
-                    .split('/').next()
-                    .unwrap_or("unknown")
-                    .to_string();
-                
-                if let Ok(mut opt) = optimizer.write() {
-                    opt.record_model_usage(
-                        &self.model,
-                        &provider,
-                        input_tokens,
-                        output_tokens,
-                        cost_cents,
-                        context_window,
-                    );
-                }
-            }
-        }
-    }
-
-    /// Record model usage metrics if optimizer is attached (types format for Gemini).
-    fn record_model_usage_from_types(&self, response: &crate::llm::types::LLMResponse) {
-        if let Some(optimizer) = &self.model_optimizer {
-            if let Some(usage) = &response.usage {
-                // Calculate estimated cost in cents
-                // This is a rough estimate; actual cost depends on pricing
-                let input_tokens = usage.prompt_tokens as u64;
-                let output_tokens = usage.completion_tokens as u64;
-                
-                // Rough pricing: $0.01 per 1K tokens (adjust as needed)
-                let cost_cents = ((input_tokens + output_tokens) as f64 / 1000.0) * 1.0;
-                
-                // Get effective context window from provider
-                let context_window = self.provider_client.effective_context_size(&self.model);
-                
-                // Extract provider name from model
-                let provider = self.model
-                    .split('/').next()
-                    .unwrap_or("unknown")
-                    .to_string();
-                
-                if let Ok(mut opt) = optimizer.write() {
-                    opt.record_model_usage(
-                        &self.model,
-                        &provider,
-                        input_tokens,
-                        output_tokens,
-                        cost_cents,
-                        context_window,
-                    );
-                }
-            }
-        }
     }
 
     /// Enable full-auto execution with the provided allow-list.
@@ -904,9 +825,6 @@ impl AgentRunner {
                     )
                     .await?;
                 let resp = response;
-
-                // Record model usage metrics if optimizer is attached
-                self.record_model_usage(&resp);
 
                 runner_println!(
                     self,
@@ -1280,9 +1198,6 @@ impl AgentRunner {
 
             // For Gemini path: use original response handling
             let response = response_opt.expect("response should be set for Gemini path");
-
-            // Record model usage metrics if optimizer is attached
-            self.record_model_usage_from_types(&response);
 
             // Update progress for successful response
             runner_println!(

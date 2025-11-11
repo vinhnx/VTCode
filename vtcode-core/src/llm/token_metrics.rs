@@ -1,10 +1,9 @@
+use std::collections::HashMap;
 /// Token computation metrics and profiling
 ///
 /// Provides accurate token counting with profiling to understand
 /// where tokens are being used and optimize context window usage.
-
 use std::time::{Duration, Instant};
-use std::collections::HashMap;
 
 /// Token counting statistics
 #[derive(Debug, Clone)]
@@ -55,8 +54,7 @@ impl TokenMetrics {
 
         // Update running average
         if self.total_chars > 0 {
-            self.avg_chars_per_token =
-                (self.total_chars as f64) / (self.total_tokens as f64);
+            self.avg_chars_per_token = (self.total_chars as f64) / (self.total_tokens as f64);
         }
 
         let entry = self
@@ -90,8 +88,14 @@ impl TokenMetrics {
         output.push_str(&format!("📊 Token Metrics Summary\n"));
         output.push_str(&format!("  Total tokens: {}\n", self.total_tokens));
         output.push_str(&format!("  Total chars: {}\n", self.total_chars));
-        output.push_str(&format!("  Avg chars/token: {:.2}\n", self.avg_chars_per_token));
-        output.push_str(&format!("  Total time: {:.2}ms\n", self.total_time.as_secs_f64() * 1000.0));
+        output.push_str(&format!(
+            "  Avg chars/token: {:.2}\n",
+            self.avg_chars_per_token
+        ));
+        output.push_str(&format!(
+            "  Total time: {:.2}ms\n",
+            self.total_time.as_secs_f64() * 1000.0
+        ));
 
         if !self.by_type.is_empty() {
             output.push_str("\n  By Type:\n");
@@ -129,7 +133,7 @@ impl TokenCounter {
     pub fn count_with_profiling(&mut self, content_type: &str, text: &str) -> usize {
         let start = Instant::now();
         let chars = text.len();
-        
+
         // Use improved token counting:
         // - Code typically 3-4 chars/token (more punctuation/symbols)
         // - Documentation 4.5-5 chars/token (more words)
@@ -143,7 +147,8 @@ impl TokenCounter {
         };
 
         let elapsed = start.elapsed();
-        self.metrics.record(content_type, estimated_tokens.max(1), chars, elapsed);
+        self.metrics
+            .record(content_type, estimated_tokens.max(1), chars, elapsed);
 
         estimated_tokens.max(1)
     }
@@ -205,9 +210,9 @@ mod tests {
     fn test_counts_code_tokens() {
         let mut counter = TokenCounter::new();
         let code = "fn main() { println!(\"hello\"); }";
-        
+
         let tokens = counter.count_with_profiling("code", code);
-        
+
         // Code is ~35 chars, at 3.5 chars/token = ~10 tokens
         assert!(tokens >= 8 && tokens <= 12);
     }
@@ -216,9 +221,9 @@ mod tests {
     fn test_counts_documentation_tokens() {
         let mut counter = TokenCounter::new();
         let docs = "This is a long piece of documentation about the system.";
-        
+
         let tokens = counter.count_with_profiling("docs", docs);
-        
+
         // Docs are ~55 chars, at 4.5 chars/token = ~12 tokens
         assert!(tokens >= 10 && tokens <= 15);
     }

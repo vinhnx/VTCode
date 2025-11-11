@@ -48,7 +48,7 @@ impl CacheKey {
         let mut hasher = DefaultHasher::new();
         content.hash(&mut hasher);
         language.hash(&mut hasher);
-        
+
         Self {
             content_hash: hasher.finish(),
             language,
@@ -85,7 +85,8 @@ struct CachedAst {
 impl AstCache {
     /// Create a new cache with specified max size
     pub fn new(max_size: usize) -> Self {
-        let max_size = NonZeroUsize::new(max_size).unwrap_or_else(|| NonZeroUsize::new(128).unwrap());
+        let max_size =
+            NonZeroUsize::new(max_size).unwrap_or_else(|| NonZeroUsize::new(128).unwrap());
         Self {
             cache: HashMap::with_capacity(max_size.get()),
             access_order: Vec::with_capacity(max_size.get()),
@@ -101,7 +102,7 @@ impl AstCache {
     /// built into their TreeSitterAnalyzer instead.
     pub fn contains(&mut self, content: &str, language: LanguageSupport) -> bool {
         let key = CacheKey::new(content, language);
-        
+
         if self.cache.contains_key(&key) {
             self.update_access_order(&key);
             self.stats.hits += 1;
@@ -117,7 +118,7 @@ impl AstCache {
     /// This records the source code so we can validate cache entries.
     pub fn record_parse(&mut self, content: &str, language: LanguageSupport) {
         let key = CacheKey::new(content, language);
-        
+
         let entry = CachedAst {
             source: content.to_string(),
             is_valid: true,
@@ -127,7 +128,7 @@ impl AstCache {
             // New entry
             self.access_order.push(key);
             self.stats.size = self.cache.len();
-            
+
             // Evict if needed
             if self.access_order.len() > self.max_size.get() {
                 let lru_key = self.access_order.remove(0);

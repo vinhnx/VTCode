@@ -1,11 +1,11 @@
 //! Tool result caching for read-only operations
-//! 
+//!
 //! Caches results from read-only tools (grep, list_files, ast analysis) within a session
 //! to avoid re-running identical queries.
 
+use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, VecDeque};
 use std::hash::{Hash, Hasher};
-use std::collections::hash_map::DefaultHasher;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Identifies a cached tool result
@@ -25,7 +25,7 @@ impl CacheKey {
         let mut hasher = DefaultHasher::new();
         params.hash(&mut hasher);
         let params_hash = hasher.finish();
-        
+
         CacheKey {
             tool: tool.to_string(),
             params_hash,
@@ -52,21 +52,21 @@ impl CachedResult {
             .duration_since(UNIX_EPOCH)
             .map(|d| d.as_secs())
             .unwrap_or(0);
-        
+
         CachedResult {
             output,
             cached_at: now,
             access_count: 0,
         }
     }
-    
+
     /// Check if result is fresh (not older than max_age_secs)
     pub fn is_fresh(&self, max_age_secs: u64) -> bool {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map(|d| d.as_secs())
             .unwrap_or(0);
-        
+
         now.saturating_sub(self.cached_at) <= max_age_secs
     }
 }
@@ -93,14 +93,14 @@ impl ToolResultCache {
             ttl_secs: 300, // 5 minutes default
         }
     }
-    
+
     /// Create with custom TTL
     pub fn with_ttl(capacity: usize, ttl_secs: u64) -> Self {
         let mut cache = Self::new(capacity);
         cache.ttl_secs = ttl_secs;
         cache
     }
-    
+
     /// Insert a result into the cache
     pub fn insert(&mut self, key: CacheKey, output: String) {
         // Remove old entry if exists
@@ -110,11 +110,11 @@ impl ToolResultCache {
                 self.lru_order.remove(pos);
             }
         }
-        
+
         // Add to cache
         self.results.insert(key.clone(), CachedResult::new(output));
         self.lru_order.push_front(key);
-        
+
         // Evict if over capacity
         while self.results.len() > self.capacity {
             if let Some(evicted) = self.lru_order.pop_back() {
@@ -122,7 +122,7 @@ impl ToolResultCache {
             }
         }
     }
-    
+
     /// Retrieve a result if cached and fresh
     pub fn get(&mut self, key: &CacheKey) -> Option<String> {
         if let Some(result) = self.results.get_mut(key) {
@@ -144,30 +144,28 @@ impl ToolResultCache {
         }
         None
     }
-    
+
     /// Clear cache entries for a specific file
     pub fn invalidate_for_path(&mut self, path: &str) {
-        self.results.retain(|key, _| !key.target_path.ends_with(path) && key.target_path != path);
-        self.lru_order.retain(|key| {
-            !key.target_path.ends_with(path) && key.target_path != path
-        });
+        self.results
+            .retain(|key, _| !key.target_path.ends_with(path) && key.target_path != path);
+        self.lru_order
+            .retain(|key| !key.target_path.ends_with(path) && key.target_path != path);
     }
-    
+
     /// Clear entire cache
     pub fn clear(&mut self) {
         self.results.clear();
         self.lru_order.clear();
     }
-    
+
     /// Get cache statistics
     pub fn stats(&self) -> CacheStats {
-        let total_accesses = self.results.values()
-            .map(|r| r.access_count)
-            .sum::<usize>();
-        
+        let total_accesses = self.results.values().map(|r| r.access_count).sum::<usize>();
+
         let total_results = self.results.len();
         let capacity = self.capacity;
-        
+
         CacheStats {
             size: total_results,
             capacity,
@@ -193,111 +191,111 @@ pub struct CacheStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn creates_cache_key() {
         let key = CacheKey::new("grep_file", "pattern=test", "/workspace");
         assert_eq!(key.tool, "grep_file");
         assert_eq!(key.target_path, "/workspace");
     }
-    
+
     #[test]
     fn caches_and_retrieves_result() {
         let mut cache = ToolResultCache::new(10);
         let key = CacheKey::new("grep_file", "pattern=test", "/workspace");
         let output = "line 1\nline 2".to_string();
-        
+
         cache.insert(key.clone(), output.clone());
         assert_eq!(cache.get(&key), Some(output));
     }
-    
+
     #[test]
     fn returns_none_for_missing_key() {
         let mut cache = ToolResultCache::new(10);
         let key = CacheKey::new("grep_file", "pattern=test", "/workspace");
         assert_eq!(cache.get(&key), None);
     }
-    
+
     #[test]
     fn evicts_least_recently_used() {
         let mut cache = ToolResultCache::new(3);
-        
+
         let key1 = CacheKey::new("tool", "p1", "/a");
         let key2 = CacheKey::new("tool", "p2", "/b");
         let key3 = CacheKey::new("tool", "p3", "/c");
         let key4 = CacheKey::new("tool", "p4", "/d");
-        
+
         cache.insert(key1.clone(), "out1".to_string());
         cache.insert(key2.clone(), "out2".to_string());
         cache.insert(key3.clone(), "out3".to_string());
-        
+
         // Cache is full, adding key4 should evict key1
         cache.insert(key4.clone(), "out4".to_string());
-        
+
         assert_eq!(cache.get(&key1), None);
         assert_eq!(cache.get(&key2), Some("out2".to_string()));
     }
-    
+
     #[test]
     fn invalidates_by_path() {
         let mut cache = ToolResultCache::new(10);
-        
+
         let key1 = CacheKey::new("tool", "p1", "/workspace/file1.rs");
         let key2 = CacheKey::new("tool", "p2", "/workspace/file2.rs");
         let key3 = CacheKey::new("tool", "p3", "/other/file3.rs");
-        
+
         cache.insert(key1.clone(), "out1".to_string());
         cache.insert(key2.clone(), "out2".to_string());
         cache.insert(key3.clone(), "out3".to_string());
-        
+
         cache.invalidate_for_path("/workspace/file1.rs");
-        
+
         assert_eq!(cache.get(&key1), None);
         assert_eq!(cache.get(&key2), Some("out2".to_string()));
         assert_eq!(cache.get(&key3), Some("out3".to_string()));
     }
-    
+
     #[test]
     fn tracks_access_count() {
         let mut cache = ToolResultCache::new(10);
         let key = CacheKey::new("tool", "p1", "/a");
-        
+
         cache.insert(key.clone(), "output".to_string());
         assert_eq!(cache.results[&key].access_count, 0);
-        
+
         cache.get(&key);
         assert_eq!(cache.results[&key].access_count, 1);
-        
+
         cache.get(&key);
         assert_eq!(cache.results[&key].access_count, 2);
     }
-    
+
     #[test]
     fn clears_cache() {
         let mut cache = ToolResultCache::new(10);
         let key = CacheKey::new("tool", "p1", "/a");
-        
+
         cache.insert(key.clone(), "output".to_string());
         assert_eq!(cache.results.len(), 1);
-        
+
         cache.clear();
         assert_eq!(cache.results.len(), 0);
         assert_eq!(cache.get(&key), None);
     }
-    
+
     #[test]
     fn computes_stats() {
         let mut cache = ToolResultCache::new(10);
-        
+
         let key1 = CacheKey::new("tool", "p1", "/a");
         let key2 = CacheKey::new("tool", "p2", "/b");
-        
+
         cache.insert(key1.clone(), "out1".to_string());
         cache.insert(key2.clone(), "out2".to_string());
         cache.get(&key1);
         cache.get(&key2);
         cache.get(&key1);
-        
+
         let stats = cache.stats();
         assert_eq!(stats.size, 2);
         assert_eq!(stats.capacity, 10);

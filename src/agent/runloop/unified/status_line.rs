@@ -203,6 +203,7 @@ pub(crate) async fn update_input_status_if_changed(
     }
 }
 
+#[allow(dead_code)]
 fn build_model_status_right(model: &str, reasoning: &str) -> Option<String> {
     if model.is_empty() {
         None
@@ -214,7 +215,7 @@ fn build_model_status_right(model: &str, reasoning: &str) -> Option<String> {
 }
 
 /// Build status display with context efficiency metrics
-/// 
+///
 /// Format: "model | 12.5K tokens | 65% context"
 pub(crate) fn build_model_status_with_context(
     model: &str,
@@ -437,6 +438,7 @@ impl StatusLineGit {
 
 impl StatusLineContext {
     /// Create context info from efficiency metrics
+    #[allow(dead_code)]
     pub(crate) fn from_efficiency(
         utilization_percent: f64,
         total_tokens: usize,

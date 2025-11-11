@@ -11,15 +11,21 @@ use vtcode_core::tools::tree_sitter::{
 #[derive(Clone, Copy)]
 pub(crate) struct ContextTrimConfig {
     pub(crate) max_tokens: usize,
+    #[allow(dead_code)]
     pub(crate) trim_to_percent: u8,
+    #[allow(dead_code)]
     pub(crate) preserve_recent_turns: usize,
     pub(crate) semantic_compression: bool,
+    #[allow(dead_code)]
     pub(crate) tool_aware_retention: bool,
+    #[allow(dead_code)]
     pub(crate) max_structural_depth: usize,
+    #[allow(dead_code)]
     pub(crate) preserve_recent_tools: usize,
 }
 
 impl ContextTrimConfig {
+    #[allow(dead_code)]
     pub(crate) fn target_tokens(&self) -> usize {
         let percent = (self.trim_to_percent as u128).clamp(
             context_defaults::MIN_TRIM_RATIO_PERCENT as u128,
@@ -30,16 +36,19 @@ impl ContextTrimConfig {
 }
 
 #[derive(Default)]
+#[allow(dead_code)]
 pub(crate) struct ContextTrimOutcome {
     pub(crate) removed_messages: usize,
 }
 
 impl ContextTrimOutcome {
+    #[allow(dead_code)]
     pub(crate) fn is_trimmed(&self) -> bool {
         self.removed_messages > 0
     }
 }
 
+#[allow(dead_code)]
 pub(crate) fn prune_unified_tool_responses(
     history: &mut Vec<uni::Message>,
     config: &ContextTrimConfig,
@@ -106,6 +115,7 @@ pub(crate) fn prune_unified_tool_responses(
     removed
 }
 
+#[allow(dead_code)]
 pub(crate) fn apply_aggressive_trim_unified(
     history: &mut Vec<uni::Message>,
     config: ContextTrimConfig,
@@ -131,6 +141,7 @@ pub(crate) fn apply_aggressive_trim_unified(
     remove
 }
 
+#[allow(dead_code)]
 pub(crate) fn enforce_unified_context_window(
     history: &mut Vec<uni::Message>,
     config: ContextTrimConfig,
@@ -262,6 +273,7 @@ pub(crate) fn load_context_trim_config(vt_cfg: Option<&VTCodeConfig>) -> Context
     }
 }
 
+#[allow(dead_code)]
 fn approximate_unified_message_tokens(message: &uni::Message) -> usize {
     let mut total_chars = message.content.as_text().len();
     total_chars += message.role.as_generic_str().len();
@@ -283,11 +295,13 @@ fn approximate_unified_message_tokens(message: &uni::Message) -> usize {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct CodeBlock {
     language_hint: Option<String>,
     content: String,
 }
 
+#[allow(dead_code)]
 fn compute_semantic_scores(
     history: &[uni::Message],
     analyzer: Option<&mut TreeSitterAnalyzer>,
@@ -324,6 +338,7 @@ fn compute_semantic_scores(
     }
 }
 
+#[allow(dead_code)]
 fn compute_semantic_score(
     message: &uni::Message,
     analyzer: &mut TreeSitterAnalyzer,
@@ -400,13 +415,12 @@ fn compute_semantic_score(
             base_bonus = base_bonus.saturating_add(1);
         }
 
-        let score = total_score
-            .saturating_add(base_bonus)
-            .min(u8::MAX as u32);
+        let score = total_score.saturating_add(base_bonus).min(u8::MAX as u32);
         score as u8
     }
 }
 
+#[allow(dead_code)]
 fn score_symbols(symbols: &[SymbolInfo], config: &ContextTrimConfig) -> u32 {
     let mut total = 0u32;
 
@@ -430,6 +444,7 @@ fn score_symbols(symbols: &[SymbolInfo], config: &ContextTrimConfig) -> u32 {
     total
 }
 
+#[allow(dead_code)]
 fn estimate_scope_depth(scope: Option<&str>) -> usize {
     scope
         .map(|raw| {
@@ -440,6 +455,7 @@ fn estimate_scope_depth(scope: Option<&str>) -> usize {
         .unwrap_or(0)
 }
 
+#[allow(dead_code)]
 fn extract_code_blocks(source: &str) -> Vec<CodeBlock> {
     let mut blocks = Vec::new();
     let mut in_block = false;
@@ -488,6 +504,7 @@ fn extract_code_blocks(source: &str) -> Vec<CodeBlock> {
     blocks
 }
 
+#[allow(dead_code)]
 fn language_hint_to_support(hint: &str) -> Option<LanguageSupport> {
     let normalized = hint.trim().trim_start_matches('.').to_ascii_lowercase();
     match normalized.as_str() {
@@ -503,6 +520,7 @@ fn language_hint_to_support(hint: &str) -> Option<LanguageSupport> {
     }
 }
 
+#[allow(dead_code)]
 fn message_semantic_hash(message: &uni::Message) -> u64 {
     use std::collections::hash_map::DefaultHasher;
 
@@ -752,13 +770,17 @@ mod tests {
                 msg
             },
             {
-                let mut msg = uni::Message::tool_response("call_1".to_string(), "{\"matches\": [\"foo.rs\"]}".to_string());
+                let mut msg = uni::Message::tool_response(
+                    "call_1".to_string(),
+                    "{\"matches\": [\"foo.rs\"]}".to_string(),
+                );
                 msg.origin_tool = Some("grep_search".to_string());
                 msg
             },
             uni::Message::assistant("Found matches in grep".to_string()),
             {
-                let mut msg = uni::Message::assistant("using read_file on the grep result".to_string());
+                let mut msg =
+                    uni::Message::assistant("using read_file on the grep result".to_string());
                 msg.tool_calls = Some(vec![uni::ToolCall::function(
                     "call_2".to_string(),
                     "read_file".to_string(),
@@ -767,7 +789,10 @@ mod tests {
                 msg
             },
             {
-                let mut msg = uni::Message::tool_response("call_2".to_string(), "{\"content\": \"file content here\"}".to_string());
+                let mut msg = uni::Message::tool_response(
+                    "call_2".to_string(),
+                    "{\"content\": \"file content here\"}".to_string(),
+                );
                 msg.origin_tool = Some("read_file".to_string());
                 msg
             },
@@ -784,24 +809,28 @@ mod tests {
             preserve_recent_tools: 2,
         };
 
-        let mut analyzer =
-            TreeSitterAnalyzer::new().expect("Failed to create analyzer");
+        let mut analyzer = TreeSitterAnalyzer::new().expect("Failed to create analyzer");
 
         let original_len = history.len();
-        let outcome = enforce_unified_context_window(&mut history, config, Some(&mut analyzer), None);
+        let outcome =
+            enforce_unified_context_window(&mut history, config, Some(&mut analyzer), None);
 
         // Verify that we trimmed some messages
         assert!(outcome.is_trimmed());
         assert!(history.len() < original_len);
-        
+
         // Verify that recent tool responses are preserved
         let has_tool_response = history.iter().any(|msg| msg.is_tool_response());
-        assert!(has_tool_response, "Should preserve at least one tool response");
-        
+        assert!(
+            has_tool_response,
+            "Should preserve at least one tool response"
+        );
+
         // Verify that messages with origin_tool are preserved
-        let has_origin_tool = history
-            .iter()
-            .any(|msg| msg.origin_tool.is_some());
-        assert!(has_origin_tool, "Should preserve at least one message with origin_tool");
+        let has_origin_tool = history.iter().any(|msg| msg.origin_tool.is_some());
+        assert!(
+            has_origin_tool,
+            "Should preserve at least one message with origin_tool"
+        );
     }
 }

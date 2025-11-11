@@ -27,7 +27,7 @@ ui_surface = "auto"
 max_conversation_turns = 50
 
 # Reasoning effort level ("low", "medium", "high") - affects model usage and response speed
-reasoning_effort = "low"
+reasoning_effort = "medium"
 
 # Temperature for main LLM responses (0.0-1.0)
 # Lower values = more deterministic, higher values = more creative
@@ -284,6 +284,7 @@ cache_enabled = true
 
 # Cache time-to-live in seconds (default: 5 minutes = 300 seconds)
 cache_ttl_seconds = 300
+enabled = true
 
 # Security configuration - Safety settings for automated operations
 [security]
@@ -408,6 +409,9 @@ max_structural_depth = 3
 
 # Number of recent tool responses to keep when tool-aware retention is enabled
 preserve_recent_tools = 5
+max_context_tokens = 90000
+trim_to_percent = 80
+preserve_recent_turns = 12
 
 # Decision ledger configuration - Track important decisions
 [context.ledger]
@@ -419,6 +423,14 @@ max_entries = 12
 
 # Include ledger summary in model prompts
 include_in_prompt = true
+preserve_in_compression = true
+
+[context.token_budget]
+enabled = true
+model = "gpt-5-nano"
+warning_threshold = 0.75
+alert_threshold = 0.85
+detailed_tracking = false
 
 # AI model routing - Intelligent model selection
 [router]

@@ -126,9 +126,8 @@ impl DebugConfig {
             .as_ref()
             .and_then(|dir| {
                 if dir.starts_with("~") {
-                    dirs::home_dir().map(|home| {
-                        home.join(dir.trim_start_matches('~').trim_start_matches('/'))
-                    })
+                    dirs::home_dir()
+                        .map(|home| home.join(dir.trim_start_matches('~').trim_start_matches('/')))
                 } else {
                     Some(PathBuf::from(dir))
                 }

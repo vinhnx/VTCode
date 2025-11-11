@@ -31,9 +31,9 @@ impl RiskLevel {
 
     pub fn color_code(self) -> &'static str {
         match self {
-            Self::Low => "\x1b[32m", // green
-            Self::Medium => "\x1b[33m", // yellow
-            Self::High => "\x1b[31m", // red
+            Self::Low => "\x1b[32m",      // green
+            Self::Medium => "\x1b[33m",   // yellow
+            Self::High => "\x1b[31m",     // red
             Self::Critical => "\x1b[35m", // magenta
         }
     }

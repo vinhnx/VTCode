@@ -49,12 +49,12 @@ pub use acp::{
 };
 pub use api_keys::ApiKeySources;
 pub use context::{ContextFeaturesConfig, LedgerConfig};
-pub use debug::{DebugConfig, TraceLevel};
 pub use core::{
     AgentConfig, AgentCustomPromptsConfig, AgentOnboardingConfig, AutomationConfig, CommandsConfig,
     FullAutoConfig, PromptCachingConfig, ProviderPromptCachingConfig, SecurityConfig, ToolPolicy,
     ToolsConfig,
 };
+pub use debug::{DebugConfig, TraceLevel};
 pub use defaults::{
     ConfigDefaultsProvider, ContextStoreDefaults, PerformanceDefaults, ScenarioDefaults,
     SyntaxHighlightingDefaults, WorkspacePathsDefaults, current_config_defaults,

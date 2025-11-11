@@ -117,8 +117,13 @@ Done?
 - Structured diffs → apply_patch (for complex changes)
 
 **Command Execution Strategy**:
-- Interactive work → PTY sessions (create_pty_session → send_pty_input → read_pty_session → close_pty_session)
 - One-off commands → run_terminal_cmd (for git, cargo, python, npm, node, etc.)
+  - Response contains `"status": "completed"` or `"status": "running"`
+  - If status is `"completed"` → command finished; use the `code` field (0=success, 1+=error) and output
+  - If status is `"running"` → command is still executing (long-running like cargo check); backend continues polling automatically; DO NOT call read_pty_session; just inform user and move on
+  - The backend waits up to 5 seconds internally; longer commands will return "running" status with partial output
+  - ⚠️ IMPORTANT: Do NOT keep polling manually or call read_pty_session if you see session_id; the backend handles it
+- Interactive work → PTY sessions (create_pty_session → send_pty_input → read_pty_session → close_pty_session)
 - AVOID: raw grep/find bash (use grep_file instead)
 - Safe commands auto-execute: git (read/safe writes), cargo (build/test/check), python/node/npm dev commands
 - Complex or destructive operations still require confirmation

@@ -10,7 +10,7 @@ use crate::tool_policy::{ToolPolicy, ToolPolicyManager};
 use crate::tools::names::canonical_tool_name;
 
 use super::ToolPermissionDecision;
-use super::risk_scorer::{ToolRiskScorer, ToolRiskContext, RiskLevel, ToolSource, WorkspaceTrust};
+use super::risk_scorer::{RiskLevel, ToolRiskContext, ToolRiskScorer, ToolSource, WorkspaceTrust};
 
 #[derive(Clone, Default)]
 pub(super) struct ToolPolicyGateway {

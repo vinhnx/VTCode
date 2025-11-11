@@ -314,7 +314,14 @@ stdout_tail_lines = 20
 # Total lines to keep in PTY scrollback buffer
 scrollback_lines = 400
 
-# Preferred shell program for PTY sessions (defaults to $SHELL or auto-detect)
+# Preferred shell program for PTY sessions
+# Priority order for shell selection:
+# 1. Explicitly specified shell (per-command parameter)
+# 2. preferred_shell configuration (this setting)
+# 3. $SHELL environment variable
+# 4. Auto-detection (searches for /bin/zsh, /bin/bash, /bin/sh)
+# 5. Fallback to appropriate system default (/bin/sh on POSIX, cmd.exe/pwsh on Windows)
+# Leave blank to use auto-detection (recommended for development)
 # preferred_shell = "/bin/zsh"
 
 # Context management configuration - Controls conversation memory

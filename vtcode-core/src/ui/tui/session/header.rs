@@ -14,6 +14,35 @@ use crate::config::constants::ui;
 use super::super::types::{InlineHeaderContext, InlineHeaderHighlight};
 use super::{PROMPT_COMMAND_NAME, Session, ratatui_color_from_ansi};
 
+fn capitalize_first_letter(s: &str) -> String {
+    let mut chars = s.chars();
+    match chars.next() {
+        None => String::new(),
+        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+    }
+}
+
+fn compact_tools_format(tools_str: &str) -> String {
+    // Input format: "allow X · prompt Y · deny Z"
+    // Output format: "N" where N is the number of allowed (currently running) tools
+
+    let parts = tools_str.split(" · ");
+    let mut allow_count = 0;
+
+    for part in parts {
+        let trimmed = part.trim();
+        if trimmed.starts_with("allow ") {
+            let num_str = &trimmed[6..]; // Remove "allow " prefix
+            if let Ok(num) = num_str.parse::<i32>() {
+                allow_count = num;
+                break; // We found the allow count, no need to continue
+            }
+        }
+    }
+
+    format!("{}", allow_count)
+}
+
 impl Session {
     pub(super) fn render_header(&self, frame: &mut Frame<'_>, area: Rect, lines: &[Line<'static>]) {
         frame.render_widget(Clear, area);
@@ -111,7 +140,8 @@ impl Session {
         let reasoning = self.header_reasoning_short_value();
 
         if !provider.is_empty() {
-            let badge = format!("[{}]", provider.to_uppercase());
+            let capitalized_provider = capitalize_first_letter(&provider);
+            let badge = format!("[{}]", capitalized_provider);
             let mut style = self.header_primary_style();
             style = style.add_modifier(Modifier::BOLD);
             spans.push(Span::styled(badge, style));
@@ -121,8 +151,10 @@ impl Session {
             if !spans.is_empty() {
                 spans.push(Span::raw(" "));
             }
+            let agent_model_label = "Agent model: ";
             let mut style = self.header_primary_style();
             style = style.add_modifier(Modifier::ITALIC);
+            spans.push(Span::styled(agent_model_label, style));
             spans.push(Span::styled(model, style));
         }
 
@@ -181,6 +213,12 @@ impl Session {
         if value.eq_ignore_ascii_case(ui::HEADER_MODE_ALTERNATE) {
             return "Alternate".to_string();
         }
+
+        // Handle common abbreviations with more descriptive names
+        if value.to_lowercase() == "std" {
+            return "Session: Standard".to_string();
+        }
+
         let compact = value
             .strip_suffix(ui::HEADER_MODE_FULL_AUTO_SUFFIX)
             .unwrap_or(value)
@@ -249,12 +287,16 @@ impl Session {
                 }
 
                 if let Some(body) = trimmed.strip_prefix(ui::HEADER_TRUST_PREFIX) {
-                    selected = format!("Trust {}", body.trim());
+                    selected = format!("Trust: {}", body.trim());
                     return Some(selected);
                 }
 
                 if let Some(body) = trimmed.strip_prefix(ui::HEADER_TOOLS_PREFIX) {
-                    selected = format!("Tools: {}", body.trim());
+                    // Convert "allow X · prompt Y · deny Z" to a more compact format
+                    let formatted_body = body.trim();
+                    // Compact format: change "allow 14 · prompt 12 · deny 0" to "14" (only running tools count)
+                    let compact_tools = compact_tools_format(formatted_body);
+                    selected = format!("Tools: {}", compact_tools);
                     return Some(selected);
                 }
 

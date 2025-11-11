@@ -1,8 +1,7 @@
 /// Approval Decision Recording and Learning
-/// 
+///
 /// Records user approval decisions for high-risk tools and enables pattern learning
 /// to reduce approval friction over time.
-
 use super::justification::{ApprovalPattern, JustificationManager};
 use anyhow::Result;
 use std::path::PathBuf;
@@ -107,9 +106,24 @@ mod tests {
         let recorder = ApprovalRecorder::new(temp_dir.clone());
 
         // Record some approvals
-        assert!(recorder.record_approval("read_file", true, None).await.is_ok());
-        assert!(recorder.record_approval("read_file", true, None).await.is_ok());
-        assert!(recorder.record_approval("read_file", false, None).await.is_ok());
+        assert!(
+            recorder
+                .record_approval("read_file", true, None)
+                .await
+                .is_ok()
+        );
+        assert!(
+            recorder
+                .record_approval("read_file", true, None)
+                .await
+                .is_ok()
+        );
+        assert!(
+            recorder
+                .record_approval("read_file", false, None)
+                .await
+                .is_ok()
+        );
 
         // Check pattern
         let pattern = recorder.get_pattern("read_file").await;
@@ -126,7 +140,12 @@ mod tests {
         let recorder = ApprovalRecorder::new(temp_dir.clone());
 
         // Not enough approvals initially
-        assert!(recorder.get_auto_approval_suggestion("read_file").await.is_none());
+        assert!(
+            recorder
+                .get_auto_approval_suggestion("read_file")
+                .await
+                .is_none()
+        );
 
         // Add 5 approvals
         for _ in 0..5 {

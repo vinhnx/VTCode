@@ -41,6 +41,7 @@ pub mod error_recovery;
 pub mod interfaces;
 pub mod orchestrator_retry;
 pub mod prompt_caching;
+pub mod pruning_decisions;
 pub mod router;
 pub mod timeout_detector;
 pub mod token_budget;
@@ -48,4 +49,9 @@ pub mod token_estimator;
 pub mod trajectory;
 
 // Re-export main types
-pub use context_pruner::{ContextEfficiency, ContextPruner, MessageMetrics, RetentionDecision, SemanticScore};
+pub use context_pruner::{
+    ContextEfficiency, ContextPruner, MessageMetrics, RetentionDecision, SemanticScore,
+};
+pub use pruning_decisions::{
+    PruningDecision, PruningDecisionLedger, PruningReport, RetentionChoice,
+};

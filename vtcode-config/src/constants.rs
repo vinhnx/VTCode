@@ -198,7 +198,7 @@ pub mod models {
             DEFAULT_CLOUD_MODEL,
             GPT_OSS_20B_CLOUD,
             DEEPSEEK_V31_671B_CLOUD,
-            KIMI_K2_THINKING_CLOUD,
+            KIMI_K2_1T_CLOUD,
             QWEN3_CODER_480B_CLOUD,
             GLM_46_CLOUD,
             MINIMAX_M2_CLOUD,
@@ -210,33 +210,22 @@ pub mod models {
             GPT_OSS_20B_CLOUD,
             GPT_OSS_120B_CLOUD,
             QWEN3_1_7B,
-            QWEN3_CODER_480B_CLOUD,
             DEEPSEEK_V31_671B_CLOUD,
-            KIMI_K2_THINKING_CLOUD,
+            KIMI_K2_1T_CLOUD,
+            QWEN3_CODER_480B_CLOUD,
             GLM_46_CLOUD,
             MINIMAX_M2_CLOUD,
         ];
 
         /// Models that require an explicit reasoning effort level instead of boolean toggle
-        pub const REASONING_LEVEL_MODELS: &[&str] = &[
-            GPT_OSS_20B,
-            GPT_OSS_20B_CLOUD,
-            GPT_OSS_120B_CLOUD,
-            KIMI_K2_THINKING_CLOUD,
-        ];
+        pub const REASONING_LEVEL_MODELS: &[&str] =
+            &[GPT_OSS_20B, GPT_OSS_20B_CLOUD, GPT_OSS_120B_CLOUD];
 
         pub const GPT_OSS_20B: &str = DEFAULT_LOCAL_MODEL;
         pub const GPT_OSS_20B_CLOUD: &str = "gpt-oss:20b-cloud";
         pub const GPT_OSS_120B_CLOUD: &str = DEFAULT_CLOUD_MODEL;
         pub const QWEN3_1_7B: &str = "qwen3:1.7b";
         pub const DEEPSEEK_V31_671B_CLOUD: &str = "deepseek-v3.1:671b-cloud";
-
-        /// Kimi K2 Thinking model - Reasoning-tier K2 release for long-horizon agentic tasks
-        /// Optimized for extended thinking and multi-step reasoning workflows
-        pub const KIMI_K2_THINKING_CLOUD: &str = "kimi-k2-thinking:cloud";
-
-        /// Kimi K2 1T model - High-capacity reasoning model for complex tasks
-        /// Note: This is a different model variant from KIMI_K2_THINKING_CLOUD
         pub const KIMI_K2_1T_CLOUD: &str = "kimi-k2:1t-cloud";
         pub const QWEN3_CODER_480B_CLOUD: &str = "qwen3-coder:480b-cloud";
         pub const GLM_46_CLOUD: &str = "glm-4.6:cloud";
@@ -499,7 +488,7 @@ pub mod ui {
     pub const MODAL_INSTRUCTIONS_BULLET: &str = "•";
     pub const INLINE_HEADER_HEIGHT: u16 = 4;
     pub const INLINE_INPUT_HEIGHT: u16 = 4;
-    pub const INLINE_INPUT_MAX_LINES: usize = 3;
+    pub const INLINE_INPUT_MAX_LINES: usize = 10;
     pub const INLINE_NAVIGATION_PERCENT: u16 = 28;
     pub const INLINE_NAVIGATION_MIN_WIDTH: u16 = 24;
     pub const INLINE_CONTENT_MIN_WIDTH: u16 = 48;
@@ -563,10 +552,9 @@ pub mod ui {
     pub const HEADER_INPUT_LABEL: &str = "Input";
     pub const HEADER_INPUT_ENABLED: &str = "Enabled";
     pub const HEADER_INPUT_DISABLED: &str = "Disabled";
-    pub const INLINE_USER_PREFIX: &str = "> ";
-    pub const CHAT_INPUT_PLACEHOLDER_BOOTSTRAP: &str = "Describe your next task (@ for file picker, # for custom prompts, / for slash commands) or run /init to rerun workspace setup.";
-    pub const CHAT_INPUT_PLACEHOLDER_FOLLOW_UP: &str =
-        "Command (@ for file picker, # for custom prompts, / for slash commands)";
+    pub const INLINE_USER_PREFIX: &str = " ";
+    pub const CHAT_INPUT_PLACEHOLDER_BOOTSTRAP: &str = "Task (@files, #prompts, /commands)";
+    pub const CHAT_INPUT_PLACEHOLDER_FOLLOW_UP: &str = "Command (@files, #prompts, /commands)";
     pub const HEADER_SHORTCUT_HINT: &str = "Shortcuts: Enter=submit | Shift+Enter=newline | Ctrl/Cmd+Enter=queue | Esc=cancel | Ctrl+C=interrupt | @=file picker | #=custom prompts | /=slash commands";
     pub const HEADER_META_SEPARATOR: &str = "   ";
     pub const WELCOME_TEXT_WIDTH: usize = 80;
@@ -599,6 +587,42 @@ pub mod ui {
     pub const STATUS_LINE_MODE: &str = "auto";
     pub const STATUS_LINE_REFRESH_INTERVAL_MS: u64 = 1000;
     pub const STATUS_LINE_COMMAND_TIMEOUT_MS: u64 = 200;
+
+    // Theme and color constants
+    pub const THEME_MIN_CONTRAST_RATIO: f64 = 4.5;
+    pub const THEME_FOREGROUND_LIGHTEN_RATIO: f64 = 0.25;
+    pub const THEME_SECONDARY_LIGHTEN_RATIO: f64 = 0.2;
+    pub const THEME_MIX_RATIO: f64 = 0.35;
+    pub const THEME_TOOL_BODY_MIX_RATIO: f64 = 0.35;
+    pub const THEME_TOOL_BODY_LIGHTEN_RATIO: f64 = 0.2;
+    pub const THEME_RESPONSE_COLOR_LIGHTEN_RATIO: f64 = 0.15;
+    pub const THEME_REASONING_COLOR_LIGHTEN_RATIO: f64 = 0.3;
+    pub const THEME_USER_COLOR_LIGHTEN_RATIO: f64 = 0.2;
+    pub const THEME_SECONDARY_USER_COLOR_LIGHTEN_RATIO: f64 = 0.4;
+    pub const THEME_PRIMARY_STATUS_LIGHTEN_RATIO: f64 = 0.35;
+    pub const THEME_PRIMARY_STATUS_SECONDARY_LIGHTEN_RATIO: f64 = 0.5;
+    pub const THEME_LOGO_ACCENT_BANNER_LIGHTEN_RATIO: f64 = 0.35;
+    pub const THEME_LOGO_ACCENT_BANNER_SECONDARY_LIGHTEN_RATIO: f64 = 0.25;
+
+    // UI Color constants
+    pub const THEME_COLOR_WHITE_RED: u8 = 0xFF;
+    pub const THEME_COLOR_WHITE_GREEN: u8 = 0xFF;
+    pub const THEME_COLOR_WHITE_BLUE: u8 = 0xFF;
+    pub const THEME_MIX_RATIO_MIN: f64 = 0.0;
+    pub const THEME_MIX_RATIO_MAX: f64 = 1.0;
+    pub const THEME_BLEND_CLAMP_MIN: f64 = 0.0;
+    pub const THEME_BLEND_CLAMP_MAX: f64 = 255.0;
+
+    // WCAG contrast algorithm constants
+    pub const THEME_RELATIVE_LUMINANCE_CUTOFF: f64 = 0.03928;
+    pub const THEME_RELATIVE_LUMINANCE_LOW_FACTOR: f64 = 12.92;
+    pub const THEME_RELATIVE_LUMINANCE_OFFSET: f64 = 0.055;
+    pub const THEME_RELATIVE_LUMINANCE_EXPONENT: f64 = 2.4;
+    pub const THEME_CONTRAST_RATIO_OFFSET: f64 = 0.05;
+    pub const THEME_RED_LUMINANCE_COEFFICIENT: f64 = 0.2126;
+    pub const THEME_GREEN_LUMINANCE_COEFFICIENT: f64 = 0.7152;
+    pub const THEME_BLUE_LUMINANCE_COEFFICIENT: f64 = 0.0722;
+    pub const THEME_LUMINANCE_LIGHTEN_RATIO: f64 = 0.2;
 }
 
 /// Reasoning effort configuration constants
@@ -1232,6 +1256,39 @@ pub mod context {
 
     /// Maximum number of retry attempts when the provider signals context overflow
     pub const CONTEXT_ERROR_RETRY_LIMIT: usize = 2;
+
+    /// Default semantic score for cached values (0-255 scale, typically)
+    pub const DEFAULT_SEMANTIC_CACHE_SCORE: u8 = 128;
+
+    /// Default semantic score for non-system messages
+    pub const DEFAULT_SEMANTIC_SCORE: u32 = 500;
+
+    /// Default token count estimate for message parts with multiple components
+    pub const DEFAULT_TOKENS_FOR_PARTS: usize = 256;
+
+    /// Approximate number of characters per token used for token estimation
+    pub const CHAR_PER_TOKEN_APPROXIMATION: usize = 4;
+
+    /// Default semantic score for system messages
+    pub const SYSTEM_MESSAGE_SEMANTIC_SCORE: u32 = 950;
+
+    /// Default semantic score for user messages
+    pub const USER_MESSAGE_SEMANTIC_SCORE: u32 = 850;
+
+    /// Scaling factor for semantic scores (typically scales from 0-255 to 0-1000 range)
+    pub const SEMANTIC_SCORE_SCALING_FACTOR: u32 = 4;
+
+    /// Conversion factor for percentage calculations (100.0)
+    pub const PERCENTAGE_CONVERSION_FACTOR: f64 = 100.0;
+
+    /// Decimal precision for context utilization percentage display
+    pub const CONTEXT_UTILIZATION_PRECISION: usize = 1;
+
+    /// Decimal precision for semantic value per token display
+    pub const SEMANTIC_VALUE_PRECISION: usize = 2;
+
+    /// Minimum token count to prevent division by zero
+    pub const MIN_TOKEN_COUNT: usize = 1;
 }
 
 /// Chunking constants for large file handling

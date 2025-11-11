@@ -4,7 +4,6 @@
 /// by combining token cost analysis with semantic importance scoring.
 /// Messages are evaluated on both their token expense and semantic value,
 /// allowing preservation of high-semantic-value messages even if older.
-
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -101,10 +100,7 @@ impl ContextPruner {
     }
 
     /// Decide which messages to keep based on token budget and semantic value
-    pub fn prune_messages(
-        &self,
-        messages: &[MessageMetrics],
-    ) -> HashMap<usize, RetentionDecision> {
+    pub fn prune_messages(&self, messages: &[MessageMetrics]) -> HashMap<usize, RetentionDecision> {
         let mut decisions = HashMap::new();
         let mut total_tokens = 0;
 

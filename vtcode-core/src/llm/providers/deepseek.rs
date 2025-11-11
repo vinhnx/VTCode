@@ -153,7 +153,7 @@ impl DeepSeekProvider {
                         reasoning_details: None,
                         tool_calls,
                         tool_call_id: None,
-                            origin_tool: None,
+                        origin_tool: None,
                     });
                 }
                 "tool" => {

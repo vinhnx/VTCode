@@ -21,9 +21,9 @@ use vtcode_core::core::decision_tracker::{Action as DTAction, DecisionOutcome};
 use vtcode_core::core::router::{Router, TaskClass};
 use vtcode_core::llm::error_display;
 use vtcode_core::llm::provider::{self as uni};
+use vtcode_core::tools::error_context::ToolErrorContext;
 use vtcode_core::tools::registry::{ToolErrorType, ToolExecutionError, classify_error};
 use vtcode_core::tools::{ApprovalRecorder, result_cache::CacheKey};
-use vtcode_core::tools::error_context::ToolErrorContext;
 use vtcode_core::ui::theme;
 use vtcode_core::ui::tui::{InlineEvent, InlineEventCallback, spawn_session, theme_from_styles};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
@@ -69,7 +69,7 @@ use crate::agent::runloop::unified::shell::{
 };
 use crate::agent::runloop::unified::state::{CtrlCSignal, CtrlCState, SessionStats};
 use crate::agent::runloop::unified::status_line::{
-    InputStatusState, update_input_status_if_changed, update_context_efficiency,
+    InputStatusState, update_context_efficiency, update_input_status_if_changed,
 };
 use crate::agent::runloop::unified::tool_pipeline::{
     ToolExecutionStatus, execute_tool_with_timeout,
@@ -134,6 +134,7 @@ pub(crate) async fn run_single_agent_loop_unified(
             trim_config,
             mut conversation_history,
             decision_ledger,
+            pruning_ledger,
             trajectory: traj,
             base_system_prompt,
             full_auto_allowlist,
@@ -145,8 +146,7 @@ pub(crate) async fn run_single_agent_loop_unified(
             token_counter,
             tool_result_cache,
             tool_permission_cache,
-            search_metrics,
-            model_optimizer,
+            search_metrics: _,
             custom_prompts,
             mut sandbox,
         } = initialize_session(&config, vt_cfg.as_ref(), full_auto, resume_ref).await?;
@@ -744,6 +744,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                 tool_registry: &mut tool_registry,
                                 conversation_history: &mut conversation_history,
                                 decision_ledger: &decision_ledger,
+                                pruning_ledger: &pruning_ledger,
                                 context_manager: &mut context_manager,
                                 session_stats: &mut session_stats,
                                 tools: &tools,
@@ -1010,7 +1011,16 @@ pub(crate) async fn run_single_agent_loop_unified(
 
                 let _conversation_len = working_history.len();
 
-                // Removed automatic context compression logic
+                // Apply semantic pruning with decision tracking if configured
+                if trim_config.semantic_compression {
+                    let mut pruning_ledger_mut = pruning_ledger.write().await;
+                    context_manager.prune_with_semantic_priority(
+                        &mut working_history,
+                        Some(&mut *pruning_ledger_mut),
+                        step_count,
+                    );
+                }
+
                 let request_history = working_history.clone();
                 context_manager.reset_token_budget().await;
                 let system_prompt = context_manager
@@ -1367,13 +1377,14 @@ pub(crate) async fn run_single_agent_loop_unified(
 
                                 // Try to get from cache first for read-only tools
                                 let mut cache_hit = false;
-                                let params_str = serde_json::to_string(&args_val).unwrap_or_default();
+                                let params_str =
+                                    serde_json::to_string(&args_val).unwrap_or_default();
                                 let cache_key = CacheKey::new(
                                     name,
                                     &params_str,
                                     "", // No specific file path for generic tools
                                 );
-                                
+
                                 let pipeline_outcome = if is_read_only_tool {
                                     let mut tool_cache = tool_result_cache.write().await;
                                     if let Some(cached_output) = tool_cache.get(&cache_key) {
@@ -1408,10 +1419,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         .await;
 
                                         // Cache successful read-only results
-                                        if let ToolExecutionStatus::Success {
-                                            ref output,
-                                            ..
-                                        } = result
+                                        if let ToolExecutionStatus::Success { ref output, .. } =
+                                            result
                                         {
                                             let output_json = serde_json::to_string(output)
                                                 .unwrap_or_else(|_| "{}".to_string());
@@ -1530,7 +1539,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                             )?;
                                             turn_modified_files
                                                 .extend(modified_files.iter().map(PathBuf::from));
-                                            
+
                                             // Invalidate cache for modified files
                                             for file_path in &modified_files {
                                                 let mut cache = tool_result_cache.write().await;
@@ -1569,7 +1578,7 @@ pub(crate) async fn run_single_agent_loop_unified(
 
                                         let content = serde_json::to_string(&output)
                                             .unwrap_or_else(|_| "{}".to_string());
-                                        
+
                                         // Track token usage for this tool result
                                         {
                                             let mut counter = token_counter.write().await;
@@ -1580,12 +1589,14 @@ pub(crate) async fn run_single_agent_loop_unified(
                                             };
                                             counter.count_with_profiling(content_type, &content);
                                         }
-                                        
-                                        working_history.push(uni::Message::tool_response_with_origin(
-                                            call.id.clone(),
-                                            content,
-                                            name.to_string(),
-                                        ));
+
+                                        working_history.push(
+                                            uni::Message::tool_response_with_origin(
+                                                call.id.clone(),
+                                                content,
+                                                name.to_string(),
+                                            ),
+                                        );
 
                                         let mut hook_block_reason: Option<String> = None;
 
@@ -1762,24 +1773,27 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         .with_auto_recovery();
 
                                         // Display user-friendly error
-                                        renderer.line(MessageStyle::Error, &error_ctx.format_for_user())?;
+                                        renderer.line(
+                                            MessageStyle::Error,
+                                            &error_ctx.format_for_user(),
+                                        )?;
 
                                         // Display error type for better understanding
                                         let error_type_msg = match classified_clone {
-                                        ToolErrorType::InvalidParameters => {
-                                           "Invalid parameters provided"
-                                        }
-                                        ToolErrorType::ToolNotFound => "Tool not found",
-                                        ToolErrorType::ResourceNotFound => "Resource not found",
-                                        ToolErrorType::PermissionDenied => "Permission denied",
-                                           ToolErrorType::ExecutionError => "Execution error",
-                                           ToolErrorType::PolicyViolation => "Policy violation",
-                                        ToolErrorType::Timeout => "Operation timed out",
-                                        ToolErrorType::NetworkError => "Network error",
+                                            ToolErrorType::InvalidParameters => {
+                                                "Invalid parameters provided"
+                                            }
+                                            ToolErrorType::ToolNotFound => "Tool not found",
+                                            ToolErrorType::ResourceNotFound => "Resource not found",
+                                            ToolErrorType::PermissionDenied => "Permission denied",
+                                            ToolErrorType::ExecutionError => "Execution error",
+                                            ToolErrorType::PolicyViolation => "Policy violation",
+                                            ToolErrorType::Timeout => "Operation timed out",
+                                            ToolErrorType::NetworkError => "Network error",
                                         };
                                         renderer.line(
-                                           MessageStyle::Info,
-                                           &format!("Type: {}", error_type_msg),
+                                            MessageStyle::Info,
+                                            &format!("Type: {}", error_type_msg),
                                         )?;
                                         render_tool_output(
                                             &mut renderer,
@@ -1789,18 +1803,23 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         )?;
                                         let error_content = serde_json::to_string(&error_json)
                                             .unwrap_or_else(|_| "{}".to_string());
-                                        
+
                                         // Track error token usage
                                         {
                                             let mut counter = token_counter.write().await;
-                                            counter.count_with_profiling("tool_output", &error_content);
+                                            counter.count_with_profiling(
+                                                "tool_output",
+                                                &error_content,
+                                            );
                                         }
-                                        
-                                        working_history.push(uni::Message::tool_response_with_origin(
-                                            call.id.clone(),
-                                            error_content,
-                                            name.to_string(),
-                                        ));
+
+                                        working_history.push(
+                                            uni::Message::tool_response_with_origin(
+                                                call.id.clone(),
+                                                error_content,
+                                                name.to_string(),
+                                            ),
+                                        );
                                         let _ = last_tool_stdout.take();
                                         {
                                             let mut ledger = decision_ledger.write().await;
@@ -1837,18 +1856,23 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         let error_message = error.message.clone();
                                         let timeout_content = serde_json::to_string(&err_json)
                                             .unwrap_or_else(|_| "{}".to_string());
-                                        
+
                                         // Track timeout error token usage
                                         {
                                             let mut counter = token_counter.write().await;
-                                            counter.count_with_profiling("tool_output", &timeout_content);
+                                            counter.count_with_profiling(
+                                                "tool_output",
+                                                &timeout_content,
+                                            );
                                         }
-                                        
-                                        working_history.push(uni::Message::tool_response_with_origin(
-                                            call.id.clone(),
-                                            timeout_content,
-                                            name.to_string(),
-                                        ));
+
+                                        working_history.push(
+                                            uni::Message::tool_response_with_origin(
+                                                call.id.clone(),
+                                                timeout_content,
+                                                name.to_string(),
+                                            ),
+                                        );
                                         let _ = last_tool_stdout.take();
                                         {
                                             let mut ledger = decision_ledger.write().await;
@@ -1881,12 +1905,14 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         );
                                         let err_json = cancel_error.to_json_value();
 
-                                        working_history.push(uni::Message::tool_response_with_origin(
-                                            call.id.clone(),
-                                            serde_json::to_string(&err_json)
-                                                .unwrap_or_else(|_| "{}".to_string()),
-                                            name.to_string(),
-                                        ));
+                                        working_history.push(
+                                            uni::Message::tool_response_with_origin(
+                                                call.id.clone(),
+                                                serde_json::to_string(&err_json)
+                                                    .unwrap_or_else(|_| "{}".to_string()),
+                                                name.to_string(),
+                                            ),
+                                        );
                                         let _ = last_tool_stdout.take();
 
                                         {
@@ -1926,8 +1952,11 @@ pub(crate) async fn run_single_agent_loop_unified(
                                 )?;
                                 let content =
                                     serde_json::to_string(&denial).unwrap_or("{}".to_string());
-                                working_history
-                                    .push(uni::Message::tool_response_with_origin(call.id.clone(), content, name.to_string()));
+                                working_history.push(uni::Message::tool_response_with_origin(
+                                    call.id.clone(),
+                                    content,
+                                    name.to_string(),
+                                ));
                                 {
                                     let mut ledger = decision_ledger.write().await;
                                     ledger.record_outcome(
@@ -2181,6 +2210,7 @@ pub(crate) async fn run_single_agent_loop_unified(
             linked_directories,
             async_mcp_manager.as_deref(),
             &handle,
+            Some(&pruning_ledger),
         )
         .await?;
 

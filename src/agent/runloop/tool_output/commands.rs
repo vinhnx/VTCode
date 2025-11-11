@@ -36,11 +36,6 @@ pub(crate) fn render_terminal_command_panel(
         return Ok(());
     }
 
-    renderer.line(
-        MessageStyle::Info,
-        "─────────────────────────────────────────────────────────────────────────────",
-    )?;
-
     if !stdout.trim().is_empty() {
         render_stream_section(
             renderer,
@@ -71,11 +66,6 @@ pub(crate) fn render_terminal_command_panel(
             vt_config,
         )?;
     }
-
-    renderer.line(
-        MessageStyle::Info,
-        "─────────────────────────────────────────────────────────────────────────────",
-    )?;
 
     Ok(())
 }

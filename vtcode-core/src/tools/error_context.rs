@@ -2,7 +2,6 @@
 ///
 /// Provides structured error reporting with file/line context,
 /// partial output preservation, and helpful suggestions.
-
 use std::fmt;
 
 /// Error context for tool execution failures
@@ -131,30 +130,39 @@ impl ToolErrorContext {
         let lower_msg = self.message.to_lowercase();
 
         if lower_msg.contains("permission denied") {
-            self.suggestions.push("Check file permissions with `ls -l <path>`".to_string());
-            self.suggestions.push("Consider running with appropriate privileges".to_string());
+            self.suggestions
+                .push("Check file permissions with `ls -l <path>`".to_string());
+            self.suggestions
+                .push("Consider running with appropriate privileges".to_string());
         }
 
         if lower_msg.contains("not found") || lower_msg.contains("no such file") {
-            self.suggestions.push("Verify the file path exists".to_string());
-            self.suggestions.push("Check working directory with `pwd`".to_string());
+            self.suggestions
+                .push("Verify the file path exists".to_string());
+            self.suggestions
+                .push("Check working directory with `pwd`".to_string());
         }
 
         if lower_msg.contains("timeout") {
-            self.suggestions.push("Command took too long - increase timeout or optimize command".to_string());
-            self.suggestions.push("Check if file is very large or operation is I/O intensive".to_string());
+            self.suggestions
+                .push("Command took too long - increase timeout or optimize command".to_string());
+            self.suggestions
+                .push("Check if file is very large or operation is I/O intensive".to_string());
         }
 
         if lower_msg.contains("parse") || lower_msg.contains("syntax") {
-            self.suggestions.push("Check file format and syntax".to_string());
+            self.suggestions
+                .push("Check file format and syntax".to_string());
             if let Some(path) = &self.file_path.clone() {
                 self.suggestions.push(format!("Validate {}", path));
             }
         }
 
         if lower_msg.contains("memory") || lower_msg.contains("overflow") {
-            self.suggestions.push("Operation exceeded memory limits".to_string());
-            self.suggestions.push("Try with smaller input or split into multiple operations".to_string());
+            self.suggestions
+                .push("Operation exceeded memory limits".to_string());
+            self.suggestions
+                .push("Try with smaller input or split into multiple operations".to_string());
         }
 
         self
@@ -193,8 +201,7 @@ mod tests {
     #[test]
     fn test_truncates_long_output() {
         let long_output = "x".repeat(1000);
-        let ctx = ToolErrorContext::new("command", "Failed")
-            .with_partial_output(&long_output);
+        let ctx = ToolErrorContext::new("command", "Failed").with_partial_output(&long_output);
 
         let output = ctx.partial_output.unwrap();
         assert!(output.contains("truncated"));
@@ -221,10 +228,7 @@ mod tests {
         let ctx = ToolErrorContext::new("command", "permission denied").with_auto_recovery();
 
         assert!(!ctx.suggestions.is_empty());
-        assert!(ctx
-            .suggestions
-            .iter()
-            .any(|s| s.contains("permission")));
+        assert!(ctx.suggestions.iter().any(|s| s.contains("permission")));
     }
 
     #[test]
@@ -232,10 +236,11 @@ mod tests {
         let ctx = ToolErrorContext::new("command", "operation timeout").with_auto_recovery();
 
         assert!(!ctx.suggestions.is_empty());
-        assert!(ctx
-            .suggestions
-            .iter()
-            .any(|s| s.to_lowercase().contains("timeout")));
+        assert!(
+            ctx.suggestions
+                .iter()
+                .any(|s| s.to_lowercase().contains("timeout"))
+        );
     }
 
     #[test]

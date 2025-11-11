@@ -62,11 +62,29 @@ impl Session {
             }
         }
 
+        // Determine if we're in full auto trust mode and adjust styling accordingly
+        let is_full_auto_trust = self.is_full_auto_trust();
+        let border_style = if is_full_auto_trust {
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
+        } else {
+            self.accent_style()
+        };
+
+        // Determine the trust mode title for the border
+        let trust_title = if is_full_auto_trust {
+            "Full Auto Trust"
+        } else if self.is_tools_policy_trust() {
+            "Tools Policy Trust"
+        } else {
+            ""
+        };
+
         let block = Block::default()
             .borders(Borders::TOP | Borders::BOTTOM)
             .border_type(BorderType::Rounded)
             .style(self.default_style())
-            .border_style(self.accent_style());
+            .border_style(border_style)
+            .title(trust_title);
         let inner = block.inner(input_area);
         let input_render = self.build_input_render(inner.width, inner.height);
         let paragraph = Paragraph::new(input_render.text)
@@ -374,5 +392,13 @@ impl Session {
             .as_ref()
             .and_then(|modal| modal.secure_prompt.as_ref())
             .is_some()
+    }
+
+    fn is_full_auto_trust(&self) -> bool {
+        self.header_context.workspace_trust.contains("full auto")
+    }
+
+    fn is_tools_policy_trust(&self) -> bool {
+        self.header_context.workspace_trust.contains("tools policy")
     }
 }

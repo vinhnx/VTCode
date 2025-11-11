@@ -68,6 +68,8 @@ pub(super) struct SlashCommandContext<'a> {
     pub tool_registry: &'a mut ToolRegistry,
     pub conversation_history: &'a mut Vec<uni::Message>,
     pub decision_ledger: &'a Arc<RwLock<DecisionTracker>>,
+    pub pruning_ledger:
+        &'a Arc<RwLock<vtcode_core::core::pruning_decisions::PruningDecisionLedger>>,
     pub context_manager: &'a mut ContextManager,
     pub session_stats: &'a mut SessionStats,
     pub tools: &'a Arc<RwLock<Vec<uni::ToolDefinition>>>,
@@ -568,6 +570,54 @@ pub(super) async fn handle_outcome(
                         .line(MessageStyle::Info, &format!("Please visit: {}", DOCS_URL))?;
                 }
             }
+            ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
+            Ok(SlashCommandControl::Continue)
+        }
+        SlashCommandOutcome::ShowPruningReport => {
+            ctx.renderer.line(MessageStyle::Info, "Pruning Report:")?;
+            let ledger = ctx.pruning_ledger.read().await;
+            let report = ledger.generate_report();
+
+            // Display summary statistics
+            ctx.renderer.line(
+                MessageStyle::Output,
+                &format!(
+                    "  Total messages evaluated: {}",
+                    report.statistics.total_messages_evaluated
+                ),
+            )?;
+            ctx.renderer.line(
+                MessageStyle::Output,
+                &format!("  Messages kept: {}", report.statistics.messages_kept),
+            )?;
+            ctx.renderer.line(
+                MessageStyle::Output,
+                &format!("  Messages removed: {}", report.statistics.messages_removed),
+            )?;
+            ctx.renderer.line(
+                MessageStyle::Output,
+                &format!(
+                    "  Retention ratio: {:.1}%",
+                    report.message_retention_ratio * 100.0
+                ),
+            )?;
+            ctx.renderer.line(
+                MessageStyle::Output,
+                &format!("  Semantic efficiency: {:.2}", report.semantic_efficiency),
+            )?;
+
+            // Display brief ledger summary
+            let brief = ledger.render_ledger_brief(10);
+            if !brief.is_empty() {
+                ctx.renderer.line(MessageStyle::Output, "")?;
+                ctx.renderer
+                    .line(MessageStyle::Output, "Recent pruning decisions:")?;
+                for line in brief.lines().take(10) {
+                    ctx.renderer
+                        .line(MessageStyle::Output, &format!("  {}", line))?;
+                }
+            }
+
             ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
             Ok(SlashCommandControl::Continue)
         }

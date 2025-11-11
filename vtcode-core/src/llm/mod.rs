@@ -165,14 +165,12 @@
 
 pub mod capabilities;
 pub mod client;
-pub mod cost_estimator;
 pub mod error_display;
 pub mod factory;
-pub mod model_optimizer;
 pub mod provider;
 pub mod providers;
 pub mod rig_adapter;
-pub mod task_analyzer;
+
 pub mod token_metrics;
 pub mod types;
 
@@ -182,15 +180,11 @@ mod error_display_test;
 // Re-export main types for backward compatibility
 pub use capabilities::ProviderCapabilities;
 pub use client::{AnyClient, make_client};
-pub use cost_estimator::{CostEstimator, EstimatedCost, ModelPricing};
 pub use factory::{create_provider_with_config, get_factory};
-pub use model_optimizer::{
-    BudgetConstraint, ModelMetrics, ModelOptimizer, ModelRecommendation, TaskComplexity,
-};
 pub use provider::{LLMStream, LLMStreamEvent};
-pub use task_analyzer::{TaskAnalysis, TaskAnalyzer, TaskAspects};
-pub use token_metrics::{TokenMetrics, TokenCounter, TokenTypeMetrics};
 pub use providers::{
     AnthropicProvider, GeminiProvider, OllamaProvider, OpenAIProvider, XAIProvider, ZAIProvider,
 };
+
+pub use token_metrics::{TokenCounter, TokenMetrics, TokenTypeMetrics};
 pub use types::{BackendKind, LLMError, LLMResponse};

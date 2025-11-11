@@ -27,6 +27,11 @@ use tracing::{debug, trace, warn};
 const DEFAULT_TERMINAL_TIMEOUT_SECS: u64 = 30;
 const DEFAULT_PTY_TIMEOUT_SECS: u64 = 300;
 const RUN_PTY_POLL_TIMEOUT_SECS: u64 = 5;
+// For known long-running commands, wait longer before returning partial output
+const RUN_PTY_POLL_TIMEOUT_LONG_RUNNING: u64 = 30;
+const LONG_RUNNING_COMMANDS: &[&str] = &[
+    "cargo", "npm", "yarn", "pnpm", "pip", "python", "make", "docker",
+];
 const INTERACTIVE_COMMANDS: &[&str] = &[
     "python",
     "python3",
@@ -926,7 +931,11 @@ impl ToolRegistry {
         let shell = resolve_shell_preference(
             payload.get("shell").and_then(|value| value.as_str()),
             self.pty_config(),
-        );
+        )
+        .or_else(|| {
+            // Fallback: if preference resolution fails, use aggressive shell detection
+            Some(resolve_shell_candidate().display().to_string())
+        });
         let login_shell = payload
             .get("login")
             .and_then(|value| value.as_bool())
@@ -1007,12 +1016,16 @@ impl ToolRegistry {
             })?;
         lifecycle.commit();
 
-        let capture = collect_ephemeral_session_output(
-            self.pty_manager(),
-            &setup.session_id,
-            Duration::from_secs(RUN_PTY_POLL_TIMEOUT_SECS),
-        )
-        .await;
+        // Use adaptive timeout: longer for known long-running commands
+        let poll_timeout = if is_long_running_command(&setup.command) {
+            Duration::from_secs(RUN_PTY_POLL_TIMEOUT_LONG_RUNNING)
+        } else {
+            Duration::from_secs(RUN_PTY_POLL_TIMEOUT_SECS)
+        };
+
+        let capture =
+            collect_ephemeral_session_output(self.pty_manager(), &setup.session_id, poll_timeout)
+                .await;
 
         let snapshot = self
             .pty_manager()
@@ -1084,7 +1097,11 @@ impl ToolRegistry {
         if let Some(shell_program) = resolve_shell_preference(
             payload.get("shell").and_then(|value| value.as_str()),
             self.pty_config(),
-        ) {
+        )
+        .or_else(|| {
+            // Fallback: if preference resolution fails, use aggressive shell detection
+            Some(resolve_shell_candidate().display().to_string())
+        }) {
             let should_replace = payload.get("shell").is_some()
                 || (command_parts.len() == 1 && is_default_shell_placeholder(&command_parts[0]));
             if should_replace {
@@ -2362,12 +2379,30 @@ fn build_ephemeral_pty_response(
         Some(setup.session_id.clone())
     };
     let code = if completed { exit_code } else { None };
+    let status = if completed { "completed" } else { "running" };
+
+    // Build a clear message for the agent based on status
+    let message = if completed {
+        if let Some(exit_code) = code {
+            if exit_code == 0 {
+                "Command completed successfully".to_string()
+            } else {
+                format!("Command failed with exit code {}", exit_code)
+            }
+        } else {
+            "Command completed".to_string()
+        }
+    } else {
+        "Command is still running. Backend continues polling automatically. Do NOT call read_pty_session.".to_string()
+    };
 
     json!({
         "success": true,
         "command": setup.command.clone(),
         "output": strip_ansi(&output),
         "code": code,
+        "status": status,
+        "message": message,
         "mode": "pty",
         "session_id": session_reference,
         "pty": {
@@ -2653,5 +2688,24 @@ impl Drop for PtySessionLifecycle<'_> {
         if self.active {
             self.registry.end_pty_session();
         }
+    }
+}
+
+/// Detects if a command is known to be long-running (build tools, package managers, etc.)
+fn is_long_running_command(command_parts: &[String]) -> bool {
+    if let Some(first) = command_parts.first() {
+        let cmd = first.to_lowercase();
+        let basename = std::path::Path::new(&cmd)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+
+        // Check if it's a long-running command
+        LONG_RUNNING_COMMANDS
+            .iter()
+            .any(|&long_cmd| basename.starts_with(long_cmd) || basename == long_cmd)
+    } else {
+        false
     }
 }

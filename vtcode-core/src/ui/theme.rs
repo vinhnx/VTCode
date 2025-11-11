@@ -5,12 +5,12 @@ use once_cell::sync::Lazy;
 use parking_lot::RwLock;
 use std::collections::HashMap;
 
-use crate::config::constants::defaults;
+use crate::config::constants::{defaults, ui};
 
 /// Identifier for the default theme.
 pub const DEFAULT_THEME_ID: &str = defaults::DEFAULT_THEME;
 
-const MIN_CONTRAST: f64 = 4.5;
+const MIN_CONTRAST: f64 = ui::THEME_MIN_CONTRAST_RATIO;
 
 /// Palette describing UI colors for the terminal experience.
 #[derive(Clone, Debug)]
@@ -37,15 +37,19 @@ impl ThemePalette {
         let background = self.background;
         let secondary = self.secondary_accent;
 
-        let fallback_light = RgbColor(0xFF, 0xFF, 0xFF);
+        let fallback_light = RgbColor(
+            ui::THEME_COLOR_WHITE_RED,
+            ui::THEME_COLOR_WHITE_GREEN,
+            ui::THEME_COLOR_WHITE_BLUE,
+        );
 
         let text_color = ensure_contrast(
             self.foreground,
             background,
             MIN_CONTRAST,
             &[
-                lighten(self.foreground, 0.25),
-                lighten(secondary, 0.2),
+                lighten(self.foreground, ui::THEME_FOREGROUND_LIGHTEN_RATIO),
+                lighten(secondary, ui::THEME_SECONDARY_LIGHTEN_RATIO),
                 fallback_light,
             ],
         );
@@ -53,21 +57,34 @@ impl ThemePalette {
             secondary,
             background,
             MIN_CONTRAST,
-            &[lighten(secondary, 0.2), text_color, fallback_light],
+            &[
+                lighten(secondary, ui::THEME_SECONDARY_LIGHTEN_RATIO),
+                text_color,
+                fallback_light,
+            ],
         );
-        let tool_candidate = mix(self.alert, background, 0.35);
+        // Light gray for tool output derived from theme colors
+        let light_tool_color = lighten(text_color, ui::THEME_MIX_RATIO); // Lighter version of the text color
         let tool_color = ensure_contrast(
-            tool_candidate,
+            light_tool_color,
             background,
             MIN_CONTRAST,
-            &[self.alert, mix(self.alert, secondary, 0.25), fallback_light],
+            &[
+                lighten(light_tool_color, ui::THEME_TOOL_BODY_LIGHTEN_RATIO),
+                info_color,
+                text_color,
+            ],
         );
-        let tool_body_candidate = mix(tool_color, text_color, 0.35);
+        let tool_body_candidate = mix(light_tool_color, text_color, ui::THEME_TOOL_BODY_MIX_RATIO);
         let tool_body_color = ensure_contrast(
             tool_body_candidate,
             background,
             MIN_CONTRAST,
-            &[lighten(tool_color, 0.2), text_color, fallback_light],
+            &[
+                lighten(light_tool_color, ui::THEME_TOOL_BODY_LIGHTEN_RATIO),
+                text_color,
+                fallback_light,
+            ],
         );
         let tool_style = Style::new().fg_color(Some(Color::Rgb(tool_color)));
         let tool_detail_style = Style::new().fg_color(Some(Color::Rgb(tool_body_color)));
@@ -75,26 +92,42 @@ impl ThemePalette {
             text_color,
             background,
             MIN_CONTRAST,
-            &[lighten(text_color, 0.15), fallback_light],
+            &[
+                lighten(text_color, ui::THEME_RESPONSE_COLOR_LIGHTEN_RATIO),
+                fallback_light,
+            ],
         );
         let reasoning_color = ensure_contrast(
-            lighten(secondary, 0.3),
+            lighten(secondary, ui::THEME_REASONING_COLOR_LIGHTEN_RATIO),
             background,
             MIN_CONTRAST,
-            &[lighten(secondary, 0.15), text_color, fallback_light],
+            &[
+                lighten(secondary, ui::THEME_RESPONSE_COLOR_LIGHTEN_RATIO),
+                text_color,
+                fallback_light,
+            ],
         );
         let reasoning_style = Self::style_from(reasoning_color, false).effects(Effects::ITALIC);
+        // Make user messages more distinct using secondary accent color
         let user_color = ensure_contrast(
-            lighten(primary, 0.25),
+            lighten(secondary, ui::THEME_USER_COLOR_LIGHTEN_RATIO),
             background,
             MIN_CONTRAST,
-            &[lighten(secondary, 0.15), info_color, text_color],
+            &[
+                lighten(secondary, ui::THEME_SECONDARY_USER_COLOR_LIGHTEN_RATIO),
+                info_color,
+                text_color,
+            ],
         );
         let alert_color = ensure_contrast(
             self.alert,
             background,
             MIN_CONTRAST,
-            &[lighten(self.alert, 0.2), fallback_light, text_color],
+            &[
+                lighten(self.alert, ui::THEME_LUMINANCE_LIGHTEN_RATIO),
+                fallback_light,
+                text_color,
+            ],
         );
 
         ThemeStyles {
@@ -107,19 +140,27 @@ impl ThemePalette {
             tool_detail: tool_detail_style,
             status: Self::style_from(
                 ensure_contrast(
-                    lighten(primary, 0.35),
+                    lighten(primary, ui::THEME_PRIMARY_STATUS_LIGHTEN_RATIO),
                     background,
                     MIN_CONTRAST,
-                    &[lighten(primary, 0.5), info_color, text_color],
+                    &[
+                        lighten(primary, ui::THEME_PRIMARY_STATUS_SECONDARY_LIGHTEN_RATIO),
+                        info_color,
+                        text_color,
+                    ],
                 ),
                 true,
             ),
             mcp: Self::style_from(
                 ensure_contrast(
-                    lighten(self.logo_accent, 0.2),
+                    lighten(self.logo_accent, ui::THEME_SECONDARY_LIGHTEN_RATIO),
                     background,
                     MIN_CONTRAST,
-                    &[lighten(self.logo_accent, 0.35), info_color, fallback_light],
+                    &[
+                        lighten(self.logo_accent, ui::THEME_LOGO_ACCENT_BANNER_LIGHTEN_RATIO),
+                        info_color,
+                        fallback_light,
+                    ],
                 ),
                 true,
             ),
@@ -404,12 +445,19 @@ pub fn banner_color() -> RgbColor {
     let background = guard.palette.background;
     drop(guard);
 
-    let candidate = lighten(accent, 0.35);
+    let candidate = lighten(accent, ui::THEME_LOGO_ACCENT_BANNER_LIGHTEN_RATIO);
     ensure_contrast(
         candidate,
         background,
         MIN_CONTRAST,
-        &[lighten(accent, 0.5), lighten(secondary, 0.25), accent],
+        &[
+            lighten(accent, ui::THEME_PRIMARY_STATUS_SECONDARY_LIGHTEN_RATIO),
+            lighten(
+                secondary,
+                ui::THEME_LOGO_ACCENT_BANNER_SECONDARY_LIGHTEN_RATIO,
+            ),
+            accent,
+        ],
     )
 }
 
@@ -439,23 +487,27 @@ pub fn theme_label(theme_id: &str) -> Option<&'static str> {
 fn relative_luminance(color: RgbColor) -> f64 {
     fn channel(value: u8) -> f64 {
         let c = (value as f64) / 255.0;
-        if c <= 0.03928 {
-            c / 12.92
+        if c <= ui::THEME_RELATIVE_LUMINANCE_CUTOFF {
+            c / ui::THEME_RELATIVE_LUMINANCE_LOW_FACTOR
         } else {
-            ((c + 0.055) / 1.055).powf(2.4)
+            ((c + ui::THEME_RELATIVE_LUMINANCE_OFFSET)
+                / (1.0 + ui::THEME_RELATIVE_LUMINANCE_OFFSET))
+                .powf(ui::THEME_RELATIVE_LUMINANCE_EXPONENT)
         }
     }
     let r = channel(color.0);
     let g = channel(color.1);
     let b = channel(color.2);
-    0.2126 * r + 0.7152 * g + 0.0722 * b
+    ui::THEME_RED_LUMINANCE_COEFFICIENT * r
+        + ui::THEME_GREEN_LUMINANCE_COEFFICIENT * g
+        + ui::THEME_BLUE_LUMINANCE_COEFFICIENT * b
 }
 
 fn contrast_ratio(foreground: RgbColor, background: RgbColor) -> f64 {
     let fg = relative_luminance(foreground);
     let bg = relative_luminance(background);
     let (lighter, darker) = if fg > bg { (fg, bg) } else { (bg, fg) };
-    (lighter + 0.05) / (darker + 0.05)
+    (lighter + ui::THEME_CONTRAST_RATIO_OFFSET) / (darker + ui::THEME_CONTRAST_RATIO_OFFSET)
 }
 
 fn ensure_contrast(
@@ -476,11 +528,12 @@ fn ensure_contrast(
 }
 
 fn mix(color: RgbColor, target: RgbColor, ratio: f64) -> RgbColor {
-    let ratio = ratio.clamp(0.0, 1.0);
+    let ratio = ratio.clamp(ui::THEME_MIX_RATIO_MIN, ui::THEME_MIX_RATIO_MAX);
     let blend = |c: u8, t: u8| -> u8 {
         let c = c as f64;
         let t = t as f64;
-        ((c + (t - c) * ratio).round()).clamp(0.0, 255.0) as u8
+        ((c + (t - c) * ratio).round()).clamp(ui::THEME_BLEND_CLAMP_MIN, ui::THEME_BLEND_CLAMP_MAX)
+            as u8
     };
     RgbColor(
         blend(color.0, target.0),
@@ -490,7 +543,15 @@ fn mix(color: RgbColor, target: RgbColor, ratio: f64) -> RgbColor {
 }
 
 fn lighten(color: RgbColor, ratio: f64) -> RgbColor {
-    mix(color, RgbColor(0xFF, 0xFF, 0xFF), ratio)
+    mix(
+        color,
+        RgbColor(
+            ui::THEME_COLOR_WHITE_RED,
+            ui::THEME_COLOR_WHITE_GREEN,
+            ui::THEME_COLOR_WHITE_BLUE,
+        ),
+        ratio,
+    )
 }
 
 /// Resolve a theme identifier from configuration or CLI input.

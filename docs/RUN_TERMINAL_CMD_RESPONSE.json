@@ -1,0 +1,118 @@
+{
+  "description": "Example responses from run_terminal_cmd with the new status field",
+  
+  "scenario_1_quick_command_completed": {
+    "description": "Quick command that completes within 5 seconds",
+    "response": {
+      "success": true,
+      "command": ["git", "status"],
+      "output": "On branch main\nYour branch is up to date with 'origin/main'.\n\nnothing to commit, working tree clean",
+      "code": 0,
+      "status": "completed",
+      "mode": "pty",
+      "session_id": null,
+      "pty": {
+        "rows": 24,
+        "cols": 80
+      },
+      "working_directory": "/Users/user/project",
+      "timeout_secs": 30,
+      "duration_ms": 250
+    },
+    "agent_action": "Show output, exit code 0 indicates success"
+  },
+
+  "scenario_2_long_running_still_executing": {
+    "description": "Long-running command like 'cargo check' that exceeds 5-second timeout",
+    "response": {
+      "success": true,
+      "command": ["cargo", "check"],
+      "output": "Checking vtcode-core v0.43.4\nChecking hyper v1.0\n...(partial output)",
+      "code": null,
+      "status": "running",
+      "mode": "pty",
+      "session_id": "run-1762843061595",
+      "pty": {
+        "rows": 24,
+        "cols": 120
+      },
+      "working_directory": "/Users/user/project",
+      "timeout_secs": 300,
+      "duration_ms": 0
+    },
+    "agent_action": "Tell user 'Cargo check is running...', do NOT poll manually, move to next task"
+  },
+
+  "scenario_3_command_failed": {
+    "description": "Command completes with error",
+    "response": {
+      "success": true,
+      "command": ["npm", "test"],
+      "output": "error TS2322: Type 'string' is not assignable to type 'number'.",
+      "code": 1,
+      "status": "completed",
+      "mode": "pty",
+      "session_id": null,
+      "pty": {
+        "rows": 24,
+        "cols": 80
+      },
+      "working_directory": "/Users/user/project",
+      "timeout_secs": 60,
+      "duration_ms": 5234
+    },
+    "agent_action": "Show error, exit code 1 indicates failure"
+  },
+
+  "key_fields": {
+    "status": {
+      "type": "string",
+      "values": ["completed", "running"],
+      "when_completed": "'completed' → code field present, session_id is null",
+      "when_running": "'running' → code field is null, session_id is populated"
+    },
+    "code": {
+      "type": "number | null",
+      "meaning": "Exit code: 0=success, 1+=error, null=still running",
+      "present_only_when": "status is 'completed'"
+    },
+    "session_id": {
+      "type": "string | null",
+      "meaning": "Session identifier for UI progress tracking",
+      "present_only_when": "status is 'running'",
+      "agent_use": "DO NOT use for manual polling"
+    },
+    "output": {
+      "type": "string",
+      "meaning": "Partial or complete command output",
+      "when_completed": "Full output",
+      "when_running": "Partial output (updated as command runs)"
+    }
+  },
+
+  "agent_decision_tree": {
+    "if_status_is_completed": {
+      "do": [
+        "Check the 'code' field",
+        "If code is 0: show success message + output",
+        "If code is 1+: show error message + output"
+      ],
+      "dont": [
+        "Call read_pty_session",
+        "Keep polling"
+      ]
+    },
+    "if_status_is_running": {
+      "do": [
+        "Inform user: 'Command is running' or similar",
+        "Show partial output if relevant",
+        "Move to next task"
+      ],
+      "dont": [
+        "Call read_pty_session",
+        "Use session_id for polling",
+        "Wait for completion"
+      ]
+    }
+  }
+}

@@ -15,19 +15,21 @@ use crate::agent::runloop::context::{ContextTrimConfig, load_context_trim_config
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 
+use vtcode_core::acp::ToolPermissionCache;
 use vtcode_core::core::decision_tracker::DecisionTracker;
+use vtcode_core::core::pruning_decisions::PruningDecisionLedger;
 use vtcode_core::core::token_budget::{
     TokenBudgetConfig as RuntimeTokenBudgetConfig, TokenBudgetManager,
 };
 use vtcode_core::core::trajectory::TrajectoryLogger;
-use vtcode_core::llm::{factory::create_provider_with_config, provider as uni, TokenCounter, ModelOptimizer, TaskComplexity, TaskAnalyzer};
-use vtcode_core::tools::{ToolResultCache, SearchMetrics};
-use vtcode_core::acp::ToolPermissionCache;
+use vtcode_core::llm::{TokenCounter, factory::create_provider_with_config, provider as uni};
 use vtcode_core::mcp::{McpClient, McpToolInfo};
 use vtcode_core::models::ModelId;
 use vtcode_core::prompts::CustomPromptRegistry;
 use vtcode_core::tools::ToolRegistry;
 use vtcode_core::tools::build_function_declarations_with_mode;
+use vtcode_core::tools::{SearchMetrics, ToolResultCache};
+use vtcode_core::ui::user_confirmation::TaskComplexity;
 
 pub(crate) struct SessionState {
     pub session_bootstrap: SessionBootstrap,
@@ -37,6 +39,7 @@ pub(crate) struct SessionState {
     pub trim_config: ContextTrimConfig,
     pub conversation_history: Vec<uni::Message>,
     pub decision_ledger: Arc<RwLock<DecisionTracker>>,
+    pub pruning_ledger: Arc<RwLock<PruningDecisionLedger>>,
     pub trajectory: TrajectoryLogger,
     pub base_system_prompt: String,
     pub full_auto_allowlist: Option<Vec<String>>,
@@ -47,8 +50,8 @@ pub(crate) struct SessionState {
     pub token_counter: Arc<RwLock<TokenCounter>>,
     pub tool_result_cache: Arc<RwLock<ToolResultCache>>,
     pub tool_permission_cache: Arc<RwLock<ToolPermissionCache>>,
+    #[allow(dead_code)]
     pub search_metrics: Arc<RwLock<SearchMetrics>>,
-    pub model_optimizer: Arc<RwLock<ModelOptimizer>>,
 
     pub custom_prompts: CustomPromptRegistry,
     pub sandbox: SandboxCoordinator,
@@ -200,6 +203,7 @@ pub(crate) async fn initialize_session(
     let token_budget = Arc::new(TokenBudgetManager::new(token_budget_config));
 
     let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
+    let pruning_ledger = Arc::new(RwLock::new(PruningDecisionLedger::new()));
 
     let conversation_history: Vec<uni::Message> = resume
         .map(|session| session.history.clone())
@@ -304,10 +308,6 @@ pub(crate) async fn initialize_session(
     let tool_result_cache = Arc::new(RwLock::new(ToolResultCache::new(128))); // 128-entry cache
     let tool_permission_cache = Arc::new(RwLock::new(ToolPermissionCache::new())); // Session-scoped
     let search_metrics = Arc::new(RwLock::new(SearchMetrics::new())); // Track search performance
-    let model_optimizer = Arc::new(RwLock::new(ModelOptimizer::new())); // Track model performance
-
-    // Log model recommendation on startup based on potential task complexity
-    log_initial_model_recommendation_sync(&model_optimizer, &config.model);
 
     Ok(SessionState {
         session_bootstrap,
@@ -317,6 +317,7 @@ pub(crate) async fn initialize_session(
         trim_config,
         conversation_history,
         decision_ledger,
+        pruning_ledger,
         trajectory,
         base_system_prompt,
         full_auto_allowlist,
@@ -328,7 +329,6 @@ pub(crate) async fn initialize_session(
         tool_result_cache,
         tool_permission_cache,
         search_metrics,
-        model_optimizer,
         custom_prompts,
         sandbox,
     })
@@ -354,57 +354,48 @@ pub fn build_mcp_tool_definitions(tools: &[McpToolInfo]) -> Vec<uni::ToolDefinit
     tools.iter().map(build_single_mcp_tool_definition).collect()
 }
 
-/// Log initial model recommendation on session startup (sync version for initialization)
-fn log_initial_model_recommendation_sync(optimizer: &Arc<RwLock<ModelOptimizer>>, current_model: &str) {
-    // Default to standard complexity for initial session
-    let complexity = TaskComplexity::Standard;
-    
-    // We can't use async here during initialization, so just log a note that
-    // model recommendations will be available during the session
-    debug!(
-        "Session starting with model: '{}' | Task complexity estimation will be performed on first request",
-        current_model
-    );
-}
-
 /// Analyze user query and log task complexity estimation
+#[allow(dead_code)]
 fn estimate_and_log_task_complexity(query: &str) -> TaskComplexity {
     if query.is_empty() {
-        return TaskComplexity::Standard;
+        return TaskComplexity::Moderate;
     }
 
-    let analysis = TaskAnalyzer::analyze_query(query);
-    
-    debug!(
-        "Task complexity: {:?} (confidence: {}%) | {}",
-        analysis.complexity,
-        analysis.confidence,
-        analysis.reasoning
-    );
+    // Simple heuristic for task complexity based on query length and keywords
+    let lower = query.to_lowercase();
+    let complexity = if query.len() > 200
+        || lower.contains("refactor")
+        || lower.contains("debug")
+        || lower.contains("design")
+        || lower.contains("architecture")
+        || lower.contains("multiple")
+    {
+        TaskComplexity::Complex
+    } else if query.len() > 100
+        || lower.contains("fix")
+        || lower.contains("modify")
+        || lower.contains("implement")
+    {
+        TaskComplexity::Moderate
+    } else {
+        TaskComplexity::Simple
+    };
 
-    if analysis.aspects.has_refactoring {
+    debug!("Task complexity: {:?} (estimated)", complexity);
+
+    // Log some basic detections
+    if lower.contains("refactor") {
         debug!("Detected: Refactoring work");
     }
-    if analysis.aspects.has_design_decisions {
-        debug!("Detected: Design decisions needed");
-    }
-    if analysis.aspects.has_debugging {
+    if lower.contains("debug") || lower.contains("fix") {
         debug!("Detected: Debugging/troubleshooting");
     }
-    if analysis.aspects.is_multi_file {
+    if lower.contains("multiple") {
         debug!("Detected: Multi-file changes");
     }
-    if analysis.aspects.has_exploration {
-        debug!("Detected: Code exploration/research");
-    }
-    if analysis.aspects.needs_explanation {
+    if lower.contains("explain") {
         debug!("Detected: Explanation/documentation needed");
     }
-    
-    debug!(
-        "Estimated tool calls needed: {}",
-        analysis.aspects.estimated_tool_calls
-    );
 
-    analysis.complexity
+    complexity
 }

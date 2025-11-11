@@ -969,7 +969,7 @@ impl LLMClient for GeminiProvider {
                     reasoning_details: None,
                     tool_calls: None,
                     tool_call_id: None,
-                            origin_tool: None,
+                    origin_tool: None,
                 }],
                 system_prompt: None,
                 tools: None,

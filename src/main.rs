@@ -237,7 +237,9 @@ async fn initialize_tracing(_args: &Cli) -> Result<()> {
     Ok(())
 }
 
-fn initialize_tracing_from_config(config: &vtcode_core::config::loader::VTCodeConfig) -> Result<()> {
+fn initialize_tracing_from_config(
+    config: &vtcode_core::config::loader::VTCodeConfig,
+) -> Result<()> {
     use tracing_subscriber::fmt::format::FmtSpan;
 
     let debug_cfg = &config.debug;
@@ -250,8 +252,10 @@ fn initialize_tracing_from_config(config: &vtcode_core::config::loader::VTCodeCo
     let filter_str = format!("{}={}", targets, debug_cfg.trace_level.as_str());
 
     tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::try_from_default_env()
-            .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(&filter_str)))
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(&filter_str)),
+        )
         .with_span_events(FmtSpan::FULL)
         .init();
 

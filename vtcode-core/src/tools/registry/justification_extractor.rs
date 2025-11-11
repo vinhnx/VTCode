@@ -1,18 +1,17 @@
-/// Justification Extraction from Agent Context
-/// 
-/// Extracts agent reasoning from decision ledger to create tool justifications
-/// for high-risk tool approvals.
-
-use crate::core::decision_tracker::{Decision, DecisionTracker};
 use super::justification::ToolJustification;
 use super::risk_scorer::RiskLevel;
+/// Justification Extraction from Agent Context
+///
+/// Extracts agent reasoning from decision ledger to create tool justifications
+/// for high-risk tool approvals.
+use crate::core::decision_tracker::{Decision, DecisionTracker};
 
 /// Extractor for tool justifications from agent decision context
 pub struct JustificationExtractor;
 
 impl JustificationExtractor {
     /// Extract a justification from the latest decision context
-    /// 
+    ///
     /// Returns a ToolJustification with the agent's reasoning if available,
     /// or None if no relevant reasoning is found.
     pub fn extract_from_decision(
@@ -29,11 +28,7 @@ impl JustificationExtractor {
                     return None;
                 }
 
-                let just = ToolJustification::new(
-                    tool_name,
-                    &decision.reasoning,
-                    risk_level,
-                );
+                let just = ToolJustification::new(tool_name, &decision.reasoning, risk_level);
 
                 // Add expected outcome if available from the decision action
                 Some(just)
@@ -77,7 +72,11 @@ impl JustificationExtractor {
             return None;
         }
 
-        Some(ToolJustification::new(tool_name, combined_reasoning, risk_level))
+        Some(ToolJustification::new(
+            tool_name,
+            combined_reasoning,
+            risk_level,
+        ))
     }
 
     /// Suggest justification based on tool name and context
@@ -159,11 +158,8 @@ mod tests {
     #[test]
     fn test_extract_from_decision_low_risk() {
         let decision = create_test_decision("Read the source file");
-        let just = JustificationExtractor::extract_from_decision(
-            &decision,
-            "read_file",
-            &RiskLevel::Low,
-        );
+        let just =
+            JustificationExtractor::extract_from_decision(&decision, "read_file", &RiskLevel::Low);
 
         assert!(just.is_none()); // Low risk shouldn't generate justification
     }
@@ -198,10 +194,8 @@ mod tests {
 
     #[test]
     fn test_suggest_default_justification() {
-        let just = JustificationExtractor::suggest_default_justification(
-            "run_command",
-            &RiskLevel::High,
-        );
+        let just =
+            JustificationExtractor::suggest_default_justification("run_command", &RiskLevel::High);
 
         assert!(just.is_some());
         let just = just.unwrap();
@@ -211,10 +205,8 @@ mod tests {
 
     #[test]
     fn test_suggest_default_for_write_file() {
-        let just = JustificationExtractor::suggest_default_justification(
-            "write_file",
-            &RiskLevel::Medium,
-        );
+        let just =
+            JustificationExtractor::suggest_default_justification("write_file", &RiskLevel::Medium);
 
         assert!(just.is_some());
         let just = just.unwrap();
@@ -223,10 +215,8 @@ mod tests {
 
     #[test]
     fn test_suggest_default_for_unknown_tool() {
-        let just = JustificationExtractor::suggest_default_justification(
-            "unknown_tool",
-            &RiskLevel::High,
-        );
+        let just =
+            JustificationExtractor::suggest_default_justification("unknown_tool", &RiskLevel::High);
 
         assert!(just.is_none()); // Unknown tools should return None
     }

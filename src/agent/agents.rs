@@ -37,6 +37,7 @@ pub async fn run_single_agent_loop(
     driver.drive_turn(params).await
 }
 
+#[allow(dead_code)]
 pub fn is_context_overflow_error(message: &str) -> bool {
     let lower = message.to_lowercase();
     lower.contains("context length")

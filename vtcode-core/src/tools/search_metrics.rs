@@ -2,7 +2,6 @@
 ///
 /// Tracks token cost of search results to enable intelligent caching,
 /// sampling, and summarization of expensive searches in large codebases.
-
 use std::collections::HashMap;
 
 /// Metrics for a single search operation
@@ -86,11 +85,7 @@ impl SearchMetrics {
 
     /// Find most expensive searches
     pub fn expensive_searches(&self, limit: usize) -> Vec<&SearchMetric> {
-        let mut searches: Vec<_> = self
-            .searches
-            .values()
-            .filter(|s| s.is_expensive)
-            .collect();
+        let mut searches: Vec<_> = self.searches.values().filter(|s| s.is_expensive).collect();
         searches.sort_by(|a, b| b.result_tokens.cmp(&a.result_tokens));
         searches.into_iter().take(limit).collect()
     }

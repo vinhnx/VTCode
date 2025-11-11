@@ -2,7 +2,6 @@
 ///
 /// Caches file-level permission grants so the agent doesn't repeatedly
 /// ask the user for access to the same file during a single session.
-
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -98,7 +97,6 @@ impl AcpPermissionCache {
     /// Check if we can use cached permission without prompting
     pub fn can_use_cached(&self, path: &PathBuf) -> bool {
         matches!(
-
             self.grants.get(path),
             Some(PermissionGrant::Session | PermissionGrant::Permanent | PermissionGrant::Denied)
         )
@@ -245,10 +243,7 @@ mod tests {
         let path = test_path("file.rs");
 
         cache.cache_grant(path.clone(), PermissionGrant::Session);
-        assert_eq!(
-            cache.get_permission(&path),
-            Some(PermissionGrant::Session)
-        );
+        assert_eq!(cache.get_permission(&path), Some(PermissionGrant::Session));
     }
 
     #[test]
@@ -355,7 +350,10 @@ mod tests {
         let mut cache = AcpPermissionCache::new();
 
         for i in 0..5 {
-            cache.cache_grant(test_path(&format!("file{}.rs", i)), PermissionGrant::Session);
+            cache.cache_grant(
+                test_path(&format!("file{}.rs", i)),
+                PermissionGrant::Session,
+            );
         }
 
         assert_eq!(cache.stats().cached_entries, 5);

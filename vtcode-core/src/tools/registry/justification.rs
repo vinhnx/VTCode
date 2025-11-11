@@ -1,14 +1,13 @@
 /// Tool Justification System
-/// 
+///
 /// Captures agent reasoning before high-risk tool execution to improve approval UX
 /// and enable learning of approval patterns.
-
 use crate::tools::registry::risk_scorer::RiskLevel;
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
-use anyhow::Result;
 
 /// Justification provided by the agent for executing a high-risk tool
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -50,10 +49,10 @@ impl ToolJustification {
     /// Format justification for display in approval dialog
     pub fn format_for_dialog(&self) -> Vec<String> {
         let mut lines = vec![];
-        
+
         lines.push(String::new());
         lines.push("Agent Reasoning:".to_string());
-        
+
         // Wrap reason text if needed
         let reason_lines: Vec<&str> = self.reason.lines().collect();
         for line in reason_lines {
@@ -62,7 +61,7 @@ impl ToolJustification {
                 lines.push(wrapped_line.to_string());
             }
         }
-        
+
         if let Some(outcome) = &self.expected_outcome {
             lines.push(String::new());
             lines.push("Expected Outcome:".to_string());
@@ -71,10 +70,10 @@ impl ToolJustification {
                 lines.push(wrapped_line.to_string());
             }
         }
-        
+
         lines.push(String::new());
         lines.push(format!("Risk Level: {}", self.risk_level));
-        
+
         lines
     }
 }
@@ -129,10 +128,10 @@ impl JustificationManager {
             cache_dir,
             patterns: HashMap::new(),
         };
-        
+
         // Try to load existing patterns
         let _ = manager.load_patterns();
-        
+
         manager
     }
 
@@ -170,7 +169,7 @@ impl JustificationManager {
         } else {
             pattern.deny_count += 1;
         }
-        
+
         pattern.last_decision = Some(approved);
         pattern.recent_reason = reason;
 
@@ -190,7 +189,7 @@ impl JustificationManager {
     /// Get learning summary for a tool
     pub fn get_learning_summary(&self, tool_name: &str) -> Option<String> {
         let pattern = self.get_pattern(tool_name)?;
-        
+
         if pattern.approval_count() == 0 {
             return None;
         }
@@ -210,9 +209,13 @@ mod tests {
 
     #[test]
     fn test_tool_justification_creation() {
-        let just = ToolJustification::new("read_file", "Need to understand code structure", &RiskLevel::Low)
-            .with_outcome("Will analyze the AST to provide better context");
-        
+        let just = ToolJustification::new(
+            "read_file",
+            "Need to understand code structure",
+            &RiskLevel::Low,
+        )
+        .with_outcome("Will analyze the AST to provide better context");
+
         assert_eq!(just.tool_name, "read_file");
         assert!(just.reason.contains("understand"));
         assert!(just.expected_outcome.is_some());
@@ -223,9 +226,10 @@ mod tests {
         let just = ToolJustification::new(
             "run_command",
             "Execute build to check for compilation errors",
-            &RiskLevel::High
-        ).with_outcome("Will produce build output for analysis");
-        
+            &RiskLevel::High,
+        )
+        .with_outcome("Will produce build output for analysis");
+
         let formatted = just.format_for_dialog();
         assert!(formatted.iter().any(|l| l.contains("Agent Reasoning")));
         assert!(formatted.iter().any(|l| l.contains("Expected Outcome")));

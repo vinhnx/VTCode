@@ -109,7 +109,7 @@ impl StartupContext {
         if full_auto_requested {
             validate_full_auto_configuration(&config, &workspace)?;
         }
-        
+
         // Validate configuration against models database
         validate_startup_configuration(&config, &workspace)?;
 
@@ -429,16 +429,16 @@ fn resolve_workspace_path(workspace_arg: Option<PathBuf>) -> Result<PathBuf> {
 fn validate_startup_configuration(config: &VTCodeConfig, workspace: &Path) -> Result<()> {
     // Find models.json in workspace or standard locations
     let mut models_json_paths = vec![workspace.join("docs/models.json")];
-    
+
     if let Ok(cwd) = std::env::current_dir() {
         models_json_paths.push(cwd.join("docs/models.json"));
     }
-    
+
     let models_json_path = models_json_paths
         .iter()
         .find(|p| p.exists())
         .map(|p| p.to_path_buf());
-    
+
     if let Some(models_path) = models_json_path {
         match ConfigValidator::new(&models_path) {
             Ok(validator) => {
@@ -457,11 +457,14 @@ fn validate_startup_configuration(config: &VTCodeConfig, workspace: &Path) -> Re
             }
             Err(e) => {
                 // Non-critical validator creation error
-                eprintln!("Warning: Could not load models database for validation: {}", e);
+                eprintln!(
+                    "Warning: Could not load models database for validation: {}",
+                    e
+                );
             }
         }
     }
-    
+
     Ok(())
 }
 

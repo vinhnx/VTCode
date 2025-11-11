@@ -263,8 +263,6 @@ pub enum ModelId {
     /// DeepSeek V3.1 671B Cloud - Cloud-hosted DeepSeek model served via Ollama Cloud
     OllamaDeepseekV31671bCloud,
 
-    /// Kimi K2 Thinking Cloud - Cloud-hosted Kimi K2 Thinking model served via Ollama Cloud
-    OllamaKimiK2ThinkingCloud,
     /// Kimi K2 1T Cloud - Cloud-hosted Kimi K2 1T model served via Ollama Cloud
     OllamaKimiK21tCloud,
     /// Qwen3 Coder 480B Cloud - Cloud-hosted Qwen3 Coder model served via Ollama Cloud
@@ -530,7 +528,6 @@ impl ModelId {
             ModelId::OllamaQwen317b => models::ollama::QWEN3_1_7B,
             ModelId::OllamaDeepseekV31671bCloud => models::ollama::DEEPSEEK_V31_671B_CLOUD,
 
-            ModelId::OllamaKimiK2ThinkingCloud => models::ollama::KIMI_K2_THINKING_CLOUD,
             ModelId::OllamaKimiK21tCloud => models::ollama::KIMI_K2_1T_CLOUD,
             ModelId::OllamaQwen3Coder480bCloud => models::ollama::QWEN3_CODER_480B_CLOUD,
             ModelId::OllamaGlm46Cloud => models::ollama::GLM_46_CLOUD,
@@ -594,7 +591,6 @@ impl ModelId {
             | ModelId::OllamaGptOss120bCloud
             | ModelId::OllamaQwen317b
             | ModelId::OllamaDeepseekV31671bCloud
-            | ModelId::OllamaKimiK2ThinkingCloud
             | ModelId::OllamaKimiK21tCloud
             | ModelId::OllamaQwen3Coder480bCloud
             | ModelId::OllamaGlm46Cloud
@@ -669,7 +665,6 @@ impl ModelId {
             ModelId::OllamaQwen317b => "Qwen3 1.7B (local)",
             ModelId::OllamaDeepseekV31671bCloud => "DeepSeek V3.1 671B (cloud)",
 
-            ModelId::OllamaKimiK2ThinkingCloud => "Kimi K2 Thinking (cloud)",
             ModelId::OllamaKimiK21tCloud => "Kimi K2 1T (cloud)",
             ModelId::OllamaQwen3Coder480bCloud => "Qwen3 Coder 480B (cloud)",
             ModelId::OllamaGlm46Cloud => "GLM-4.6 (cloud)",
@@ -793,9 +788,6 @@ impl ModelId {
                 "Cloud-hosted DeepSeek V3.1 671B model accessed through Ollama Cloud for advanced reasoning"
             }
 
-            ModelId::OllamaKimiK2ThinkingCloud => {
-                "Cloud-hosted Kimi K2 Thinking model accessed through Ollama Cloud for advanced reasoning tasks"
-            }
             ModelId::OllamaKimiK21tCloud => {
                 "Cloud-hosted Kimi K2 1T model accessed through Ollama Cloud for high-capacity reasoning tasks"
             }
@@ -886,7 +878,7 @@ impl ModelId {
             ModelId::OllamaGptOss120bCloud,
             ModelId::OllamaQwen317b,
             ModelId::OllamaDeepseekV31671bCloud,
-            ModelId::OllamaKimiK2ThinkingCloud,
+            ModelId::OllamaKimiK21tCloud,
             ModelId::OllamaQwen3Coder480bCloud,
             ModelId::OllamaGlm46Cloud,
             ModelId::OllamaMinimaxM2Cloud,
@@ -1131,7 +1123,7 @@ impl ModelId {
             ModelId::OllamaGptOss120bCloud => "oss-cloud",
             ModelId::OllamaQwen317b => "oss",
             ModelId::OllamaDeepseekV31671bCloud => "deepseek-cloud",
-
+            ModelId::OllamaKimiK21tCloud => "kimi-k2-cloud",
             ModelId::OllamaQwen3Coder480bCloud => "qwen3-coder-cloud",
             ModelId::OllamaGlm46Cloud => "glm-cloud",
             ModelId::OllamaMinimaxM2Cloud => "minimax-cloud",
@@ -1216,9 +1208,6 @@ impl FromStr for ModelId {
                 Ok(ModelId::OllamaDeepseekV31671bCloud)
             }
 
-            s if s == models::ollama::KIMI_K2_THINKING_CLOUD => {
-                Ok(ModelId::OllamaKimiK2ThinkingCloud)
-            }
             s if s == models::ollama::KIMI_K2_1T_CLOUD => Ok(ModelId::OllamaKimiK21tCloud),
             s if s == models::ollama::QWEN3_CODER_480B_CLOUD => {
                 Ok(ModelId::OllamaQwen3Coder480bCloud)
@@ -1563,10 +1552,6 @@ mod tests {
         assert_eq!(ModelId::OllamaGptOss120bCloud.provider(), Provider::Ollama);
         assert_eq!(ModelId::OllamaQwen317b.provider(), Provider::Ollama);
         assert_eq!(
-            ModelId::OllamaKimiK2ThinkingCloud.provider(),
-            Provider::Ollama
-        );
-        assert_eq!(
             ModelId::LmStudioMetaLlama38BInstruct.provider(),
             Provider::LmStudio
         );
@@ -1610,7 +1595,7 @@ mod tests {
         );
         assert_eq!(
             ModelId::default_orchestrator_for_provider(Provider::Anthropic),
-            ModelId::ClaudeSonnet4
+            ModelId::ClaudeOpus41
         );
         assert_eq!(
             ModelId::default_orchestrator_for_provider(Provider::DeepSeek),
