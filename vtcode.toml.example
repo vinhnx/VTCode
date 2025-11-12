@@ -771,3 +771,21 @@ post_tool_use = [
     ]
   }
 ]
+
+# Model-specific behavior configuration
+[model]
+# Enable loop hang detection to identify when model is stuck in repetitive behavior
+# When disabled, the model can continue making repetitive tool calls
+# Default: false (detection is enabled by default)
+skip_loop_detection = false
+
+# Maximum number of identical tool calls (same tool + same arguments) before triggering loop detection
+# Default: 3
+# When a tool with identical arguments is called more than this threshold, detection triggers
+loop_detection_threshold = 3
+
+# Enable interactive prompt for loop detection instead of silently halting
+# When true, shows a user prompt asking whether to keep detection enabled or disable for session
+# When false, automatically halts on detected loop without prompting
+# Default: true
+loop_detection_interactive = true

@@ -4,8 +4,8 @@ pub mod bootstrap;
 use crate::acp::AgentClientProtocolConfig;
 use crate::context::ContextFeaturesConfig;
 use crate::core::{
-    AgentConfig, AutomationConfig, CommandsConfig, PermissionsConfig, PromptCachingConfig,
-    SecurityConfig, ToolsConfig,
+    AgentConfig, AutomationConfig, CommandsConfig, ModelConfig, PermissionsConfig,
+    PromptCachingConfig, SecurityConfig, ToolsConfig,
 };
 use crate::debug::DebugConfig;
 use crate::defaults::{self, ConfigDefaultsProvider, SyntaxHighlightingDefaults};
@@ -171,6 +171,10 @@ pub struct VTCodeConfig {
     /// Lifecycle hooks configuration
     #[serde(default)]
     pub hooks: HooksConfig,
+
+    /// Model-specific behavior configuration
+    #[serde(default)]
+    pub model: ModelConfig,
 }
 
 impl VTCodeConfig {

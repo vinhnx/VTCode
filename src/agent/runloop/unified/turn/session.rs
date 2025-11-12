@@ -58,6 +58,9 @@ use crate::agent::runloop::unified::display::{display_user_message, ensure_turn_
 use crate::agent::runloop::unified::inline_events::{
     InlineEventLoopResources, InlineInterruptCoordinator, InlineLoopAction, poll_inline_loop_action,
 };
+use crate::agent::runloop::unified::loop_detection::{
+    LoopDetectionResponse, LoopDetector, prompt_for_loop_detection,
+};
 use crate::agent::runloop::unified::model_selection::finalize_model_selection;
 use crate::agent::runloop::unified::palettes::{ActivePalette, apply_prompt_style};
 use crate::agent::runloop::unified::progress::ProgressReporter;
@@ -922,6 +925,26 @@ pub(crate) async fn run_single_agent_loop_unified(
                 .unwrap_or(defaults::DEFAULT_MAX_REPEATED_TOOL_CALLS);
             let mut repeated_tool_attempts: HashMap<String, usize> = HashMap::new();
 
+            // Initialize loop detection
+            let loop_detection_enabled = vt_cfg
+                .as_ref()
+                .map(|cfg| !cfg.model.skip_loop_detection)
+                .unwrap_or(true);
+            let loop_detection_threshold = vt_cfg
+                .as_ref()
+                .map(|cfg| cfg.model.loop_detection_threshold)
+                .unwrap_or(3);
+            let loop_detection_interactive = vt_cfg
+                .as_ref()
+                .map(|cfg| cfg.model.loop_detection_interactive)
+                .unwrap_or(true);
+            let mut loop_detector = LoopDetector::new(
+                loop_detection_threshold,
+                loop_detection_enabled,
+                loop_detection_interactive,
+            );
+            let mut loop_detection_disabled_for_session = false;
+
             let turn_result = 'outer: loop {
                 if ctrl_c_state.is_cancel_requested() {
                     renderer.line_if_not_empty(MessageStyle::Output)?;
@@ -1252,6 +1275,47 @@ pub(crate) async fn run_single_agent_loop_unified(
                             name,
                             serde_json::to_string(&args_val).unwrap_or_else(|_| "{}".to_string())
                         );
+
+                        // Check for loop hang detection
+                        let (is_loop_detected, repeat_count) =
+                            if !loop_detection_disabled_for_session {
+                                loop_detector.record_tool_call(&signature_key)
+                            } else {
+                                (false, 0)
+                            };
+
+                        if is_loop_detected {
+                            // Get user's choice with context information
+                            match prompt_for_loop_detection(
+                                loop_detection_interactive,
+                                &signature_key,
+                                repeat_count,
+                            ) {
+                                Ok(LoopDetectionResponse::KeepEnabled) => {
+                                    renderer.line(
+                                        MessageStyle::Info,
+                                        "Loop detection remains enabled. Skipping this tool call.",
+                                    )?;
+                                    // Reset only this signature for fresh monitoring
+                                    loop_detector.reset_signature(&signature_key);
+                                    continue; // Skip processing this tool call
+                                }
+                                Ok(LoopDetectionResponse::DisableForSession) => {
+                                    renderer.line(MessageStyle::Info, "Loop detection disabled for this session. Proceeding with tool call.")?;
+                                    loop_detection_disabled_for_session = true;
+                                    // Clear all tracking for fresh start after user override
+                                    loop_detector.reset();
+                                    // Continue processing the tool call below
+                                }
+                                Err(e) => {
+                                    warn!("Loop detection prompt failed: {}", e);
+                                    // Graceful degradation: disable detection and continue
+                                    loop_detection_disabled_for_session = true;
+                                    loop_detector.reset();
+                                }
+                            }
+                        }
+
                         let attempts = repeated_tool_attempts
                             .entry(signature_key.clone())
                             .or_insert(0);
