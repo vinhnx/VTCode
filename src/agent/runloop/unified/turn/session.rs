@@ -159,7 +159,7 @@ pub(crate) async fn run_single_agent_loop_unified(
         let mut context_manager = ContextManager::new(
             base_system_prompt,
             trim_config,
-            token_budget,
+            token_budget.clone(),
             token_budget_enabled,
         );
         let trim_config = context_manager.trim_config();
@@ -1510,7 +1510,9 @@ pub(crate) async fn run_single_agent_loop_unified(
                                             Some(name),
                                             &output,
                                             vt_cfg.as_ref(),
-                                        )?;
+                                            Some(&token_budget),
+                                        )
+                                        .await?;
                                         last_tool_stdout = if command_success {
                                             stdout.clone()
                                         } else {
@@ -1801,7 +1803,9 @@ pub(crate) async fn run_single_agent_loop_unified(
                                             Some(name),
                                             &error_json,
                                             vt_cfg.as_ref(),
-                                        )?;
+                                            Some(&token_budget),
+                                        )
+                                        .await?;
                                         let error_content = serde_json::to_string(&error_json)
                                             .unwrap_or_else(|_| "{}".to_string());
 
@@ -1950,7 +1954,9 @@ pub(crate) async fn run_single_agent_loop_unified(
                                     Some(name),
                                     &denial,
                                     vt_cfg.as_ref(),
-                                )?;
+                                    Some(&token_budget),
+                                )
+                                .await?;
                                 let content =
                                     serde_json::to_string(&denial).unwrap_or("{}".to_string());
                                 working_history.push(uni::Message::tool_response_with_origin(

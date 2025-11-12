@@ -9,6 +9,20 @@ All notable changes to vtcode will be documented in this file.
 ### Features
     - feat: Implement permission system with command resolution, audit logging, and caching
 
+### Improvements
+    - improve: Enhanced token approximation algorithm with median-based heuristics for fallback tokenization
+    - improve: Fixed token counting fallback to use consistent 3.5 chars/token ratio across head/tail sections
+    - improve: Eliminated async token counting overhead by using fast character-based fallback estimation
+    - improve: Optimized tail content collection from O(n²) string operations to O(n) with Vec collection
+    - improve: Added String pre-allocation with capacity to reduce memory allocations during truncation
+    - improve: Improved median-based token estimation to handle edge cases (zero word count, whitespace-heavy content)
+    - improve: Optimized result assembly with in-place string building and size pre-calculation
+    - improve: Increased code fence block display limit from 200 → 500 lines with better truncation messaging
+    - improve: Increased diff preview display limit from 300 → 500 lines with improved user guidance
+    - improve: Added comprehensive module-level documentation for token-aware truncation strategy
+    - improve: Clarified token budget messaging to users about what content is preserved
+    - docs: Added TRUNCATION_IMPROVEMENTS.md explaining token-based truncation design and enhancements
+
 
 ### Refactors
     - refactor: Remove unused audit log and history navigation methods

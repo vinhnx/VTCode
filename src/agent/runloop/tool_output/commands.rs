@@ -7,18 +7,20 @@ use shell_words::split as shell_split;
 use vtcode_core::config::ToolOutputMode;
 use vtcode_core::config::constants::tools;
 use vtcode_core::config::loader::VTCodeConfig;
+use vtcode_core::core::token_budget::TokenBudgetManager;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::streams::{render_stream_section, resolve_stdout_tail_limit, strip_ansi_codes};
 use super::styles::{GitStyles, LsStyles};
 
-pub(crate) fn render_terminal_command_panel(
+pub(crate) async fn render_terminal_command_panel(
     renderer: &mut AnsiRenderer,
     payload: &Value,
     git_styles: &GitStyles,
     ls_styles: &LsStyles,
     vt_config: Option<&VTCodeConfig>,
     allow_ansi: bool,
+    token_budget: Option<&TokenBudgetManager>,
 ) -> Result<()> {
     let stdout_raw = payload.get("stdout").and_then(Value::as_str).unwrap_or("");
     let stderr_raw = payload.get("stderr").and_then(Value::as_str).unwrap_or("");
@@ -49,7 +51,9 @@ pub(crate) fn render_terminal_command_panel(
             MessageStyle::Response,
             allow_ansi,
             vt_config,
-        )?;
+            token_budget,
+        )
+        .await?;
     }
     if !stderr.as_ref().trim().is_empty() {
         render_stream_section(
@@ -64,7 +68,9 @@ pub(crate) fn render_terminal_command_panel(
             MessageStyle::Error,
             allow_ansi,
             vt_config,
-        )?;
+            token_budget,
+        )
+        .await?;
     }
 
     Ok(())

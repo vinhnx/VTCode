@@ -1,3 +1,41 @@
+//! Tool output rendering with token-aware truncation
+//!
+//! This module handles formatting and displaying tool output to the user.
+//! It uses a **token-based truncation strategy** instead of naive line limits,
+//! which aligns with how LLMs consume context.
+//!
+//! ## Truncation Strategy
+//!
+//! Instead of hard line limits (e.g., "show first 128 + last 128 lines"), we use:
+//! - **Token budget**: 25,000 tokens max per tool response
+//! - **Head+Tail preservation**: Keep first ~50% and last ~50% of tokens
+//! - **Tokenizer-aware**: Uses HuggingFace tokenizers for accuracy, falls back to
+//!   character-based estimation (1 token ≈ 3.5 chars)
+//!
+//! ### Why Token-Based?
+//!
+//! 1. **Aligns with reality**: Tokens matter for context window, not lines
+//!    - 256 short lines (~1-2k tokens) < 100 long lines (~10k tokens)
+//!
+//! 2. **Better for incomplete outputs**: Long build logs or test results often have
+//!    critical info at the end (errors, summaries). Head+tail preserves both.
+//!
+//! 3. **Fewer tool calls needed**: Model can absorb more meaningful information
+//!    per call instead of making multiple sequential calls to work around limits.
+//!
+//! 4. **Consistent across tools**: All tool outputs use the same token budget,
+//!    not arbitrary per-tool line limits.
+//!
+//! ### UI Display Limits (Separate Layer)
+//!
+//! The token limit applies to what we *send to the model*. Display rendering has
+//! separate safeguards to prevent UI lag:
+//! - `MAX_LINE_LENGTH: 150`: Prevents extremely long lines from hanging the TUI
+//! - `INLINE_STREAM_MAX_LINES: 30`: Limits visible output in inline mode
+//! - `MAX_CODE_LINES: 500`: For code fence blocks (still truncated by tokens upstream)
+//!
+//! Full output is spooled to `.vtcode/tool-output/` for later review.
+
 use std::borrow::Cow;
 use std::io::Write as IoWrite;
 use std::path::PathBuf;
@@ -7,22 +45,52 @@ use smallvec::SmallVec;
 use vtcode_core::config::ToolOutputMode;
 use vtcode_core::config::constants::defaults;
 use vtcode_core::config::loader::VTCodeConfig;
+use vtcode_core::core::token_budget::{MAX_TOOL_RESPONSE_TOKENS, TokenBudgetManager};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
+use super::files::truncate_text_safe;
 use super::panels::{PanelContentLine, clamp_panel_text, render_panel};
 use super::styles::{GitStyles, LsStyles, select_line_style};
 use crate::agent::runloop::text_tools::CodeFenceBlock;
+use vtcode_core::core::token_constants::{
+    CODE_DETECTION_THRESHOLD, CODE_HEAD_RATIO_PERCENT, CODE_INDICATOR_CHARS, LOG_HEAD_RATIO_PERCENT,
+    TOKENS_PER_CHARACTER,
+};
 
+/// Maximum number of lines to display in inline mode before truncating
 const INLINE_STREAM_MAX_LINES: usize = 30;
+/// Maximum content width percentage for panel rendering
+const MAX_CONTENT_WIDTH_PERCENT: usize = 96;
+/// Maximum line length before truncation to prevent TUI hang
+const MAX_LINE_LENGTH: usize = 150;
+/// Size threshold (bytes) below which output is displayed inline vs. spooled
+const DEFAULT_SPOOL_THRESHOLD: usize = 200_000;
+/// Maximum number of lines to display in code fence blocks
+const MAX_CODE_LINES: usize = 500;
+/// Size threshold (bytes) at which to show minimal preview instead of full output
+const LARGE_OUTPUT_THRESHOLD_MB: usize = 1_000_000;
+/// Size threshold (bytes) at which to show fewer preview lines
+const VERY_LARGE_OUTPUT_THRESHOLD_MB: usize = 500_000;
+/// Size threshold (bytes) at which to skip preview entirely
+const EXTREME_OUTPUT_THRESHOLD_MB: usize = 2_000_000;
+
+/// Determine preview line count based on content size
+fn calculate_preview_lines(content_size: usize) -> usize {
+    match content_size {
+        size if size > LARGE_OUTPUT_THRESHOLD_MB => 3,
+        size if size > VERY_LARGE_OUTPUT_THRESHOLD_MB => 5,
+        _ => 10,
+    }
+}
 
 #[cfg_attr(
     feature = "profiling",
     tracing::instrument(
-        skip(renderer, content, git_styles, ls_styles, config),
+        skip(renderer, content, git_styles, ls_styles, config, token_budget),
         level = "debug"
     )
 )]
-pub(crate) fn render_stream_section(
+pub(crate) async fn render_stream_section(
     renderer: &mut AnsiRenderer,
     title: &str,
     content: &str,
@@ -34,6 +102,7 @@ pub(crate) fn render_stream_section(
     fallback_style: MessageStyle,
     allow_ansi: bool,
     config: Option<&VTCodeConfig>,
+    token_budget: Option<&TokenBudgetManager>,
 ) -> Result<()> {
     use std::fmt::Write as FmtWrite;
 
@@ -49,26 +118,34 @@ pub(crate) fn render_stream_section(
         strip_ansi_codes(content)
     };
 
+    // Apply token-based truncation if TokenBudgetManager is available
+    let (effective_normalized_content, was_truncated_by_tokens) = if let Some(budget) = token_budget
+    {
+        let (truncated_content, truncated_flag) = truncate_content_by_tokens(
+            normalized_content.as_ref(),
+            MAX_TOOL_RESPONSE_TOKENS,
+            budget,
+        )
+        .await;
+        (Cow::Owned(truncated_content), truncated_flag)
+    } else {
+        (normalized_content.clone(), false)
+    };
+
     if let Some(tool) = tool_name
         && let Ok(Some(log_path)) =
-            spool_output_if_needed(normalized_content.as_ref(), tool, config)
+            spool_output_if_needed(effective_normalized_content.as_ref(), tool, config)
     {
         // For very large output, show minimal preview to avoid TUI hang
-        let preview_lines = if content.len() > 1_000_000 {
-            3
-        } else if content.len() > 500_000 {
-            5
-        } else {
-            10
-        };
+        let preview_lines = calculate_preview_lines(effective_normalized_content.len());
 
         // Skip preview entirely for extremely large output
-        if content.len() > 2_000_000 {
+        if effective_normalized_content.len() > EXTREME_OUTPUT_THRESHOLD_MB {
             let mut msg_buffer = String::with_capacity(256);
             let _ = write!(
                 &mut msg_buffer,
                 "Command output too large ({} bytes), spooled to: {}",
-                content.len(),
+                effective_normalized_content.len(),
                 log_path.display()
             );
             renderer.line(MessageStyle::Info, &msg_buffer)?;
@@ -76,7 +153,8 @@ pub(crate) fn render_stream_section(
             return Ok(());
         }
 
-        let (tail, total) = tail_lines_streaming(normalized_content.as_ref(), preview_lines);
+        let (tail, total) =
+            tail_lines_streaming(effective_normalized_content.as_ref(), preview_lines);
 
         let mut msg_buffer = String::with_capacity(256);
         if !is_run_command {
@@ -89,7 +167,7 @@ pub(crate) fn render_stream_section(
                 &mut msg_buffer,
                 "[{}] Output too large ({} bytes, {} lines), spooled to: {}",
                 uppercase_title.as_ref(),
-                content.len(),
+                effective_normalized_content.len(),
                 total,
                 log_path.display()
             );
@@ -97,7 +175,7 @@ pub(crate) fn render_stream_section(
             let _ = write!(
                 &mut msg_buffer,
                 "Command output too large ({} bytes, {} lines), spooled to: {}",
-                content.len(),
+                effective_normalized_content.len(),
                 total,
                 log_path.display()
             );
@@ -126,22 +204,11 @@ pub(crate) fn render_stream_section(
             renderer.line(MessageStyle::Info, &msg_buffer)?;
         }
 
-        const MAX_LINE_LENGTH: usize = 150;
         for line in &tail {
             // Truncate very long lines to prevent TUI hang
             let display_line = if line.len() > MAX_LINE_LENGTH {
-                // Fast byte-based truncation for ASCII-heavy content
-                let truncate_at = line.len().min(MAX_LINE_LENGTH);
-                let safe_truncate = if line.is_char_boundary(truncate_at) {
-                    truncate_at
-                } else {
-                    // Find previous char boundary
-                    (0..truncate_at)
-                        .rev()
-                        .find(|&i| line.is_char_boundary(i))
-                        .unwrap_or(0)
-                };
-                Cow::Owned(format!("{}...", &line[..safe_truncate]))
+                let truncated = truncate_text_safe(line, MAX_LINE_LENGTH);
+                Cow::Owned(format!("{}...", truncated))
             } else {
                 Cow::Borrowed(*line)
             };
@@ -163,7 +230,14 @@ pub(crate) fn render_stream_section(
         return Ok(());
     }
 
-    let (lines_vec, total, truncated_flag) = if force_tail_mode {
+    // If content was already token-truncated, use that content; otherwise use the original normalized content
+    let (lines_vec, total, truncated_flag) = if was_truncated_by_tokens {
+        // Content was already truncated by tokens, so we need to process it differently
+        // Split the truncated content by lines and use that
+        let lines: SmallVec<[&str; 32]> = effective_normalized_content.lines().collect();
+        let total_lines = effective_normalized_content.lines().count();
+        (lines, total_lines, true) // Always mark as truncated if token-based truncation was applied
+    } else if force_tail_mode {
         let (tail, total) = tail_lines_streaming(normalized_content.as_ref(), tail_limit);
         let truncated = total > tail.len();
         (tail, total, truncated)
@@ -183,7 +257,7 @@ pub(crate) fn render_stream_section(
         (lines, total, truncated)
     };
 
-    let truncated = truncated_flag;
+    let truncated = truncated_flag || was_truncated_by_tokens;
 
     if lines_vec.is_empty() {
         return Ok(());
@@ -200,13 +274,17 @@ pub(crate) fn render_stream_section(
         let prefix = if is_mcp_tool { "" } else { "  " };
         format_buffer.clear();
         format_buffer.push_str(prefix);
-        format_buffer.push_str("[... ");
-        format_buffer.push_str(&hidden.to_string());
-        format_buffer.push_str(" line");
-        if hidden != 1 {
-            format_buffer.push('s');
+        if was_truncated_by_tokens {
+            format_buffer.push_str("[... content truncated by token budget ...]");
+        } else {
+            format_buffer.push_str("[... ");
+            format_buffer.push_str(&hidden.to_string());
+            format_buffer.push_str(" line");
+            if hidden != 1 {
+                format_buffer.push('s');
+            }
+            format_buffer.push_str(" truncated ...]");
         }
-        format_buffer.push_str(" truncated ...]");
         renderer.line(MessageStyle::Info, &format_buffer)?;
     }
 
@@ -246,8 +324,7 @@ pub(crate) fn render_code_fence_blocks(
     renderer: &mut AnsiRenderer,
     blocks: &[CodeFenceBlock],
 ) -> Result<()> {
-    const MAX_CONTENT_WIDTH: usize = 96;
-    let content_limit = MAX_CONTENT_WIDTH.saturating_sub(4);
+    let content_limit = MAX_CONTENT_WIDTH_PERCENT.saturating_sub(4);
     for (index, block) in blocks.iter().enumerate() {
         let header = describe_code_fence_header(block.language.as_deref());
 
@@ -260,13 +337,14 @@ pub(crate) fn render_code_fence_blocks(
             ));
         } else {
             lines.push(PanelContentLine::new(String::new(), MessageStyle::Response));
-            const MAX_CODE_LINES: usize = 200;
+            // Use reasonable limit to prevent UI hang, but note that semantic content is
+            // truncated at token level (25k tokens in render_stream_section)
             let total_lines = block.lines.len();
             for (idx, line) in block.lines.iter().enumerate() {
                 if idx >= MAX_CODE_LINES {
                     lines.push(PanelContentLine::new(
                         format!(
-                            "    ... ({} more lines truncated)",
+                            "    ... ({} more lines truncated, view full output in tool logs)",
                             total_lines - MAX_CODE_LINES
                         ),
                         MessageStyle::Info,
@@ -316,7 +394,7 @@ pub(crate) fn spool_output_if_needed(
 ) -> Result<Option<PathBuf>> {
     let threshold = config
         .map(|cfg| cfg.ui.tool_output_spool_bytes)
-        .unwrap_or(200_000);
+        .unwrap_or(DEFAULT_SPOOL_THRESHOLD);
 
     if content.len() < threshold {
         return Ok(None);
@@ -462,6 +540,153 @@ pub(crate) fn strip_ansi_codes(input: &str) -> Cow<'_, str> {
         output.push(ch);
     }
     Cow::Owned(output)
+}
+
+/// Truncate content by tokens, keeping head + tail to preserve context
+///
+/// This function implements token-aware truncation instead of naive line-based limits.
+/// It preserves the most important parts of the output:
+/// - Head: Shows initial state, setup, early context (40% for logs, 50% for code)
+/// - Tail: Shows final state, errors, completion status (60% for logs, 50% for code)
+///
+/// Smart allocation: For non-code output (logs, test results), we bias toward the tail
+/// (40/60 split) since errors and summaries typically appear at the end. For code blocks,
+/// we use balanced allocation (50/50) since logic can be distributed throughout.
+///
+/// Why token-based is better than line-based:
+/// 1. Tokens are what matter for LLM context window, not lines
+/// 2. Preserves both beginning context AND final results
+/// 3. Better for outputs where errors appear at the end (test failures, build logs)
+/// 4. More robust: 100 lines of code ≈ 2k tokens, 100 lines of prose ≈ 500 tokens
+///
+/// Fallback: If tokenization fails, uses character-based estimation (1 token ≈ 3.5 chars)
+async fn truncate_content_by_tokens(
+    content: &str,
+    max_tokens: usize,
+    token_budget: &TokenBudgetManager,
+) -> (String, bool) {
+    // Count total tokens in content
+    let total_tokens = match token_budget.count_tokens(content).await {
+        Ok(count) => count,
+        Err(_) => {
+            // If tokenization fails, fall back to character-based estimation
+            // More conservative than naive 1:4 ratio to account for punctuation
+            (content.len() as f64 / TOKENS_PER_CHARACTER).ceil() as usize
+        }
+    };
+
+    if total_tokens <= max_tokens {
+        return (content.to_owned(), false);
+    }
+
+    // Calculate how many tokens to take from head and tail
+    // Smart ratio: bias toward tail since most important info (errors, final state)
+    // appears at the end. Use LOG_HEAD_RATIO_PERCENT split for logs.
+    // Exception: if content is code, use CODE_HEAD_RATIO_PERCENT since logic can be anywhere.
+    // Detect code by checking for high density of brackets/operators
+    let char_count = content.len();
+    let bracket_count: usize = content
+        .chars()
+        .filter(|c| CODE_INDICATOR_CHARS.contains(*c))
+        .count();
+    let is_code = bracket_count > (char_count / CODE_DETECTION_THRESHOLD);
+    let head_ratio = if is_code {
+        CODE_HEAD_RATIO_PERCENT // Code: keep balanced context
+    } else {
+        LOG_HEAD_RATIO_PERCENT // Logs/output: bias toward errors at end
+    };
+
+    let head_tokens = (max_tokens * head_ratio) / 100;
+    let tail_tokens = max_tokens - head_tokens;
+
+    // Split content into lines to process token by token
+    let lines: Vec<&str> = content.lines().collect();
+
+    // For head: collect lines until we reach the token limit
+    // Use fast fallback estimation for most lines to avoid async overhead
+    let mut head_lines = Vec::new();
+    let mut current_tokens = 0;
+
+    for line in &lines {
+        if current_tokens >= head_tokens {
+            break;
+        }
+
+        // Fast path: estimate tokens using character count (avoids async call)
+        let line_tokens = (line.len() as f64 / TOKENS_PER_CHARACTER).ceil() as usize;
+        if current_tokens + line_tokens <= head_tokens || head_lines.is_empty() {
+            head_lines.push(line);
+            current_tokens += line_tokens;
+        } else {
+            break;
+        }
+    }
+
+    let head_line_idx = head_lines.len();
+    let head_content = if head_lines.is_empty() {
+        String::new()
+    } else {
+        // Pre-allocate based on estimated content size
+        let estimated_size = head_lines.iter().map(|l| l.len() + 1).sum::<usize>();
+        let mut buf = String::with_capacity(estimated_size);
+        for line in head_lines {
+            buf.push_str(line);
+            buf.push('\n');
+        }
+        buf
+    };
+
+    // For tail: collect lines from the end until we reach the token limit
+    // Use fast fallback estimation to avoid async overhead
+    let mut tail_lines = Vec::new();
+    let mut current_tokens = 0;
+    let mut tail_start_idx = lines.len();
+
+    for line in lines.iter().rev() {
+        if current_tokens >= tail_tokens {
+            break;
+        }
+
+        // Fast path: estimate tokens using character count (avoids async call)
+        let line_tokens = (line.len() as f64 / TOKENS_PER_CHARACTER).ceil() as usize;
+        if current_tokens + line_tokens <= tail_tokens || tail_lines.is_empty() {
+            tail_lines.push(*line);
+            current_tokens += line_tokens;
+            tail_start_idx -= 1;
+        } else {
+            break;
+        }
+    }
+
+    // Reverse tail_lines to restore original order
+    tail_lines.reverse();
+    let tail_content = if tail_lines.is_empty() {
+        String::new()
+    } else {
+        tail_lines.join("\n")
+    };
+
+    // Combine head and tail
+    if tail_start_idx > head_line_idx {
+        // No overlap, safe to combine
+        let truncated_lines = tail_start_idx - head_line_idx;
+        if tail_start_idx < lines.len() {
+            // Pre-calculate result size
+            let truncation_msg = format!("[... {} lines truncated ...]\n", truncated_lines);
+            let result_size = head_content.len() + 1 + truncation_msg.len() + tail_content.len();
+            let mut result = String::with_capacity(result_size);
+            result.push_str(head_content.trim_end());
+            result.push('\n');
+            result.push_str(&truncation_msg);
+            result.push_str(&tail_content);
+            (result.trim_end().to_string(), true)
+        } else {
+            (head_content.trim_end().to_string(), true)
+        }
+    } else {
+        // Overlap, just return head
+        (head_content.trim_end().to_string(), true)
+    }
 }
 
 fn describe_code_fence_header(language: Option<&str>) -> String {
