@@ -13,7 +13,6 @@
     "list_pty_sessions",
     "list_skills",
     "load_skill",
-    "mcp::time::get_current_time",
     "read_file",
     "read_pty_session",
     "resize_pty_session",
@@ -49,7 +48,8 @@
     "load_skill": "prompt",
     "save_skill": "prompt",
     "search_skills": "prompt",
-    "search_tools": "prompt"
+    "search_tools": "prompt",
+    "test_tool": "allow"
   },
   "constraints": {
     "curl": {

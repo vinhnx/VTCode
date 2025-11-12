@@ -1,5 +1,5 @@
 //! WebFetch tool for fetching and analyzing web content using AI
-//! 
+//!
 //! Supports both restricted (blocklist) and whitelist (allowlist) modes
 //! with dynamic configuration loading from vtcode.toml
 
@@ -10,8 +10,8 @@ use async_trait::async_trait;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::HashSet;
-use std::path::Path;
 use std::fs;
+use std::path::Path;
 
 pub mod domains;
 pub use domains::{BUILTIN_BLOCKED_DOMAINS, BUILTIN_BLOCKED_PATTERNS, MALICIOUS_PATTERNS};
@@ -150,7 +150,7 @@ impl WebFetchTool {
     fn validate_whitelist_mode(&self, url: &str) -> Result<()> {
         // In whitelist mode, only explicitly allowed domains are permitted
         let domain = extract_domain(url)?;
-        
+
         if self.allowed_domains.is_empty() {
             return Err(anyhow!(
                 "Whitelist mode enabled but no domains are whitelisted. Configure allowed_domains in web_fetch settings."
@@ -256,7 +256,7 @@ impl WebFetchTool {
 
         let content = fs::read_to_string(&expanded_path)
             .context(format!("Failed to read blocklist from {}", path))?;
-        
+
         #[derive(Deserialize)]
         struct BlocklistFile {
             blocked_domains: Option<Vec<String>>,
@@ -282,7 +282,7 @@ impl WebFetchTool {
 
         let content = fs::read_to_string(&expanded_path)
             .context(format!("Failed to read whitelist from {}", path))?;
-        
+
         #[derive(Deserialize)]
         struct WhitelistFile {
             allowed_domains: Option<Vec<String>>,

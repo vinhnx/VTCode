@@ -6,6 +6,7 @@ mod diagnostics;
 mod display;
 mod driver;
 mod inline_events;
+mod loop_detection;
 
 mod mcp_support;
 mod mcp_tool_manager;

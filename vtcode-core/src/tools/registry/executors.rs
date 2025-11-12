@@ -296,7 +296,7 @@ impl ToolRegistry {
         let blocked_patterns = Vec::new();
         let allowed_domains = Vec::new();
         let strict_https_only = true;
-        
+
         let tool = WebFetchTool::with_config(
             mode,
             blocked_domains,

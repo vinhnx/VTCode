@@ -51,8 +51,8 @@ pub use api_keys::ApiKeySources;
 pub use context::{ContextFeaturesConfig, LedgerConfig};
 pub use core::{
     AgentConfig, AgentCustomPromptsConfig, AgentOnboardingConfig, AutomationConfig, CommandsConfig,
-    FullAutoConfig, PromptCachingConfig, ProviderPromptCachingConfig, SecurityConfig, ToolPolicy,
-    ToolsConfig, WebFetchConfig,
+    FullAutoConfig, ModelConfig, PromptCachingConfig, ProviderPromptCachingConfig, SecurityConfig,
+    ToolPolicy, ToolsConfig, WebFetchConfig,
 };
 pub use debug::{DebugConfig, TraceLevel};
 pub use defaults::{
