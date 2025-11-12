@@ -17,4 +17,4 @@ pub use prompt_cache::{
     XAIPromptCacheSettings, ZaiPromptCacheSettings,
 };
 pub use security::SecurityConfig;
-pub use tools::{ToolPolicy, ToolsConfig};
+pub use tools::{ToolPolicy, ToolsConfig, WebFetchConfig};

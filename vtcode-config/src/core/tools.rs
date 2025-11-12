@@ -32,6 +32,59 @@ pub struct ToolsConfig {
     /// identical arguments within a single turn.
     #[serde(default = "default_max_repeated_tool_calls")]
     pub max_repeated_tool_calls: usize,
+
+    /// Web Fetch tool security configuration
+    #[serde(default)]
+    pub web_fetch: WebFetchConfig,
+}
+
+/// Web Fetch tool security configuration
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct WebFetchConfig {
+    /// Security mode: "restricted" (blocklist) or "whitelist" (allowlist)
+    #[serde(default = "default_web_fetch_mode")]
+    pub mode: String,
+
+    /// Enable dynamic blocklist loading from external file
+    #[serde(default)]
+    pub dynamic_blocklist_enabled: bool,
+
+    /// Path to dynamic blocklist file
+    #[serde(default)]
+    pub dynamic_blocklist_path: String,
+
+    /// Enable dynamic whitelist loading from external file
+    #[serde(default)]
+    pub dynamic_whitelist_enabled: bool,
+
+    /// Path to dynamic whitelist file
+    #[serde(default)]
+    pub dynamic_whitelist_path: String,
+
+    /// Inline blocklist - Additional domains to block
+    #[serde(default)]
+    pub blocked_domains: Vec<String>,
+
+    /// Inline whitelist - Domains to allow in restricted mode
+    #[serde(default)]
+    pub allowed_domains: Vec<String>,
+
+    /// Additional blocked patterns
+    #[serde(default)]
+    pub blocked_patterns: Vec<String>,
+
+    /// Enable audit logging of URL validation decisions
+    #[serde(default)]
+    pub enable_audit_logging: bool,
+
+    /// Path to audit log file
+    #[serde(default)]
+    pub audit_log_path: String,
+
+    /// Strict HTTPS-only mode
+    #[serde(default = "default_strict_https")]
+    pub strict_https_only: bool,
 }
 
 impl Default for ToolsConfig {
@@ -45,6 +98,25 @@ impl Default for ToolsConfig {
             policies,
             max_tool_loops: default_max_tool_loops(),
             max_repeated_tool_calls: default_max_repeated_tool_calls(),
+            web_fetch: WebFetchConfig::default(),
+        }
+    }
+}
+
+impl Default for WebFetchConfig {
+    fn default() -> Self {
+        Self {
+            mode: default_web_fetch_mode(),
+            dynamic_blocklist_enabled: false,
+            dynamic_blocklist_path: "~/.vtcode/web_fetch_blocklist.json".to_string(),
+            dynamic_whitelist_enabled: false,
+            dynamic_whitelist_path: "~/.vtcode/web_fetch_whitelist.json".to_string(),
+            blocked_domains: Vec::new(),
+            allowed_domains: Vec::new(),
+            blocked_patterns: Vec::new(),
+            enable_audit_logging: false,
+            audit_log_path: "~/.vtcode/web_fetch_audit.log".to_string(),
+            strict_https_only: true,
         }
     }
 }
@@ -72,6 +144,14 @@ fn default_max_tool_loops() -> usize {
 
 fn default_max_repeated_tool_calls() -> usize {
     defaults::DEFAULT_MAX_REPEATED_TOOL_CALLS
+}
+
+fn default_web_fetch_mode() -> String {
+    "restricted".to_string()
+}
+
+fn default_strict_https() -> bool {
+    true
 }
 
 const DEFAULT_TOOL_POLICIES: &[(&str, ToolPolicy)] = &[

@@ -290,7 +290,20 @@ impl ToolRegistry {
 
     pub(super) fn web_fetch_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
         use crate::tools::web_fetch::WebFetchTool;
-        let tool = WebFetchTool::new();
+        // Get config from policy gateway or use defaults
+        let mode = "restricted".to_string(); // Default mode
+        let blocked_domains = Vec::new();
+        let blocked_patterns = Vec::new();
+        let allowed_domains = Vec::new();
+        let strict_https_only = true;
+        
+        let tool = WebFetchTool::with_config(
+            mode,
+            blocked_domains,
+            blocked_patterns,
+            allowed_domains,
+            strict_https_only,
+        );
         Box::pin(async move { tool.execute(args).await })
     }
 
