@@ -53,8 +53,8 @@ use super::panels::{PanelContentLine, clamp_panel_text, render_panel};
 use super::styles::{GitStyles, LsStyles, select_line_style};
 use crate::agent::runloop::text_tools::CodeFenceBlock;
 use vtcode_core::core::token_constants::{
-    CODE_DETECTION_THRESHOLD, CODE_HEAD_RATIO_PERCENT, CODE_INDICATOR_CHARS, LOG_HEAD_RATIO_PERCENT,
-    TOKENS_PER_CHARACTER,
+    CODE_DETECTION_THRESHOLD, CODE_HEAD_RATIO_PERCENT, CODE_INDICATOR_CHARS,
+    LOG_HEAD_RATIO_PERCENT, TOKENS_PER_CHARACTER,
 };
 
 /// Maximum number of lines to display in inline mode before truncating

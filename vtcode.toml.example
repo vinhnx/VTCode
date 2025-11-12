@@ -189,6 +189,61 @@ update_plan = "allow"             # Update task plans (no confirmation needed)
 web_fetch = "prompt"              # Fetch web content (requires confirmation)
 write_file = "allow"              # Write files (no confirmation needed)
 
+# Web Fetch tool security configuration
+# See docs/tools/web_fetch_security.md for detailed documentation
+[tools.web_fetch]
+# Security mode: "restricted" (blocklist) or "whitelist" (allowlist only)
+# "restricted" - Blocks known sensitive/malicious domains (default, recommended)
+# "whitelist" - Only allows explicitly whitelisted domains (strictest, enterprise use)
+mode = "restricted"
+
+# Enable dynamic blocklist loading from external file
+# Useful for organization-specific domains
+dynamic_blocklist_enabled = false
+
+# Path to dynamic blocklist file (JSON format)
+# File should contain: { "blocked_domains": [...], "blocked_patterns": [...] }
+# Example: ~/.vtcode/web_fetch_blocklist.json
+# See .vtcode/web_fetch_blocklist.json.example for template
+dynamic_blocklist_path = "~/.vtcode/web_fetch_blocklist.json"
+
+# Enable dynamic whitelist loading from external file (whitelist mode only)
+# Recommended for enterprise use with whitelist mode
+dynamic_whitelist_enabled = false
+
+# Path to dynamic whitelist file (JSON format)
+# File should contain: { "allowed_domains": [...] }
+# Example: ~/.vtcode/web_fetch_whitelist.json
+# See .vtcode/web_fetch_whitelist.json.example for template
+dynamic_whitelist_path = "~/.vtcode/web_fetch_whitelist.json"
+
+# Inline blocklist - Additional domains to block (merged with default blocklist)
+# Example: ["internal-api.company.com", "legacy-system.local"]
+blocked_domains = []
+
+# Inline whitelist - Specific domains to allow in restricted mode
+# Useful for exempting legitimate services from blocklist
+# Example: ["paypal.com/status", "company-docs.com"]
+allowed_domains = []
+
+# Additional blocked patterns (merged with defaults)
+# These patterns prevent access to URLs containing sensitive information
+# Example: ["internal_token=", "company_secret="]
+blocked_patterns = []
+
+# Log all URL validation decisions for audit trail
+# Useful for security monitoring and compliance
+enable_audit_logging = false
+
+# Audit log file location
+# Only used if enable_audit_logging = true
+audit_log_path = "~/.vtcode/web_fetch_audit.log"
+
+# Strict mode: Block HTTP and require HTTPS
+# Recommended: keep true for production
+# Set to false only for development/testing with local services
+strict_https_only = true
+
 # Command security - Define safe and dangerous command patterns
 [commands]
 # Commands that are always allowed without confirmation

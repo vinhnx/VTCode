@@ -190,6 +190,49 @@ max_tool_loops = 100
 # Maximum number of repeated identical tool calls (prevents stuck loops)
 max_repeated_tool_calls = 2
 
+# Web Fetch tool security configuration
+[tools.web_fetch]
+# Security mode: "restricted" (blocklist) or "whitelist" (allowlist only)
+# "restricted" - Blocks known sensitive/malicious domains (default)
+# "whitelist" - Only allows explicitly whitelisted domains (strictest)
+mode = "restricted"
+
+# Enable dynamic blocklist loading from external file
+dynamic_blocklist_enabled = false
+
+# Path to dynamic blocklist file (JSON format)
+# File should contain: { "blocked_domains": [...], "blocked_patterns": [...] }
+# Reloaded on each web_fetch call if modified
+dynamic_blocklist_path = "~/.vtcode/web_fetch_blocklist.json"
+
+# Enable dynamic whitelist loading from external file (whitelist mode only)
+dynamic_whitelist_enabled = false
+
+# Path to dynamic whitelist file (JSON format)
+# File should contain: { "allowed_domains": [...], "allowed_patterns": [...] }
+# Reloaded on each web_fetch call if modified
+dynamic_whitelist_path = "~/.vtcode/web_fetch_whitelist.json"
+
+# Inline blocklist - Additional domains to block (merged with default blocklist)
+blocked_domains = []
+
+# Inline whitelist - Specific domains to allow in restricted mode
+# Useful for exempting legitimate services from blocklist
+allowed_domains = []
+
+# Additional blocked patterns (merged with defaults)
+blocked_patterns = []
+
+# Log all URL validation decisions for audit trail
+enable_audit_logging = false
+
+# Audit log file location
+audit_log_path = "~/.vtcode/web_fetch_audit.log"
+
+# Strict mode: Block HTTP and require HTTPS
+# Disable only for testing/development
+strict_https_only = true
+
 # Specific tool policies - Override default policy for individual tools
 [tools.policies]
 apply_patch = "prompt"

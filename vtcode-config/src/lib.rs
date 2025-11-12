@@ -52,7 +52,7 @@ pub use context::{ContextFeaturesConfig, LedgerConfig};
 pub use core::{
     AgentConfig, AgentCustomPromptsConfig, AgentOnboardingConfig, AutomationConfig, CommandsConfig,
     FullAutoConfig, PromptCachingConfig, ProviderPromptCachingConfig, SecurityConfig, ToolPolicy,
-    ToolsConfig,
+    ToolsConfig, WebFetchConfig,
 };
 pub use debug::{DebugConfig, TraceLevel};
 pub use defaults::{
