@@ -3,6 +3,28 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Version 0.43.0] - 2025-11-09
+# [Version 0.43.10] - 2025-11-13
+
+
+### Features
+    - feat(ripgrep): Add automatic installation and management for ripgrep dependency
+    - feat(loop_detection): Refactor loop hang detection for improved accuracy and user experience
+
+
+### Documentation
+    - docs: update changelog for v0.43.9 [skip ci]
+    - docs: update changelog for v0.43.8 [skip ci]
+    - docs: update changelog for v0.43.7 [skip ci]
+    - docs: update changelog for v0.43.7 [skip ci]
+    - docs: update changelog for v0.43.7 [skip ci]
+
+
+### Chores
+    - chore: release v0.43.9
+    - chore: update npm package.json to v0.43.8 [skip ci]
+    - chore: release v0.43.8
+    - chore: release v0.43.7
+    - chore: update npm package.json to v0.43.6 [skip ci]
 # [Version 0.43.9] - 2025-11-13
 
 
