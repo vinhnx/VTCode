@@ -101,6 +101,21 @@ use_for_web_summary = true
 # Use small model for git history processing
 use_for_git_history = true
 
+# Ripgrep dependency management - Auto-install ripgrep on startup for faster file search
+[agent.ripgrep]
+# Enable automatic ripgrep installation on startup (disable in CI/CD environments)
+auto_install = true
+
+# Preferred installation methods in order of preference
+# Available: "homebrew", "apt", "cargo", "chocolatey", "scoop"
+preferred_methods = []  # Empty = auto-detect based on platform and available tools
+
+# Skip installation cache and retry failed installations
+skip_cache = false
+
+# Installation timeout in seconds (prevents hung installations)
+timeout_seconds = 300
+
 # Onboarding configuration - Customize the startup experience
 [agent.onboarding]
 # Enable the onboarding welcome message on startup

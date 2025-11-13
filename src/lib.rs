@@ -164,6 +164,7 @@
 pub mod acp;
 pub mod ide_context;
 pub mod interactive_list;
+pub mod tools;
 mod workspace_trust;
 
 pub mod startup;

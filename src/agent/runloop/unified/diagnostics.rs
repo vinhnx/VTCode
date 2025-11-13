@@ -65,6 +65,18 @@ pub(crate) async fn run_doctor_diagnostics(
         .map(|version| format!("Found npm {}", version));
     render_doctor_check(renderer, "npm", npm_result)?;
 
+    let ripgrep_result = match detect_command_version("rg", &["--version"]) {
+        Ok(version) => Ok(format!("Found {}", version)),
+        Err(e) => {
+            if e.contains("not found") {
+                Err("Not installed (searches will fall back to built-in grep)".to_string())
+            } else {
+                Err(e)
+            }
+        }
+    };
+    render_doctor_check(renderer, "Ripgrep", ripgrep_result)?;
+
     let mcp_result = if let Some(cfg) = vt_cfg {
         if cfg.mcp.enabled {
             if let Some(manager) = async_mcp_manager {

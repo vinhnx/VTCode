@@ -7,6 +7,16 @@ use toml::value::Table as TomlTable;
 
 mod first_run;
 
+use crate::tools::RipgrepStatus;
+
+/// Truncate error messages to fit within display width
+fn truncate_error(msg: &str, max_len: usize) -> String {
+    if msg.len() > max_len {
+        format!("{}...", &msg[..max_len.saturating_sub(3)])
+    } else {
+        msg.to_string()
+    }
+}
 use first_run::maybe_run_first_run_setup;
 use vtcode_core::cli::args::Cli;
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
@@ -427,6 +437,9 @@ fn resolve_workspace_path(workspace_arg: Option<PathBuf>) -> Result<PathBuf> {
 }
 
 fn validate_startup_configuration(config: &VTCodeConfig, workspace: &Path) -> Result<()> {
+    // Check and optionally install ripgrep on startup
+    check_ripgrep_availability();
+
     // Find models.json in workspace or standard locations
     let mut models_json_paths = vec![workspace.join("docs/models.json")];
 
@@ -466,6 +479,87 @@ fn validate_startup_configuration(config: &VTCodeConfig, workspace: &Path) -> Re
     }
 
     Ok(())
+}
+
+/// Check ripgrep availability and attempt auto-installation if missing
+fn check_ripgrep_availability() {
+    match RipgrepStatus::check() {
+        RipgrepStatus::Available { version } => {
+            // Ripgrep is available, log silently at trace level only
+            tracing::debug!("Ripgrep available: {}", version);
+        }
+        RipgrepStatus::NotFound => {
+            // Show warning and attempt auto-installation
+            eprintln!(
+                "\n╭──────────────────────────────────────────────────────────────────────────────╮"
+            );
+            eprintln!(
+                "│ Ripgrep not available: Attempting auto-installation for faster file search...│"
+            );
+            eprintln!(
+                "╰──────────────────────────────────────────────────────────────────────────────╯\n"
+            );
+
+            // Attempt auto-installation
+            match RipgrepStatus::install() {
+                Ok(()) => {
+                    eprintln!(
+                        "\n╭──────────────────────────────────────────────────────────────────────────────╮"
+                    );
+                    eprintln!(
+                        "│ ✓ Ripgrep installed successfully! File search performance enabled.          │"
+                    );
+                    eprintln!(
+                        "╰──────────────────────────────────────────────────────────────────────────────╯\n"
+                    );
+                }
+                Err(e) => {
+                    eprintln!(
+                        "\n╭──────────────────────────────────────────────────────────────────────────────╮"
+                    );
+                    eprintln!(
+                        "│ Ripgrep auto-installation failed: {}                          │",
+                        truncate_error(&e.to_string(), 70)
+                    );
+                    eprintln!(
+                        "│ Falling back to built-in grep (slower). Install manually for better speed:   │"
+                    );
+                    eprintln!(
+                        "│   macOS:  brew install ripgrep                                               │"
+                    );
+                    eprintln!(
+                        "│   Linux:  sudo apt install ripgrep (or your distro's package manager)       │"
+                    );
+                    eprintln!(
+                        "│   Windows: choco install ripgrep (or: scoop install ripgrep)                │"
+                    );
+                    eprintln!(
+                        "│   Any OS: cargo install ripgrep                                              │"
+                    );
+                    eprintln!(
+                        "╰──────────────────────────────────────────────────────────────────────────────╯\n"
+                    );
+                    tracing::warn!("Ripgrep installation failed: {}", e);
+                }
+            }
+        }
+        RipgrepStatus::Error { reason } => {
+            eprintln!(
+                "\n╭──────────────────────────────────────────────────────────────────────────────╮"
+            );
+            eprintln!(
+                "│ Ripgrep check failed: {}                                             │",
+                truncate_error(&reason, 68)
+            );
+            eprintln!(
+                "│ Falling back to built-in grep (slower).                               │"
+            );
+            eprintln!(
+                "╰──────────────────────────────────────────────────────────────────────────────╯\n"
+            );
+            tracing::warn!("Ripgrep check error: {}", reason);
+        }
+    }
 }
 
 #[cfg(test)]
