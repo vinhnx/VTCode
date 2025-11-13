@@ -35,6 +35,7 @@ pub fn make_client(api_key: String, model: ModelId) -> AnyClient {
             Some(model.as_str().to_string()),
             None,
             None,
+            None,
         )),
         Provider::DeepSeek => Box::new(DeepSeekProvider::with_model(
             api_key,

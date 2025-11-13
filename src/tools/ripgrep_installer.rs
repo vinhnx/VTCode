@@ -80,16 +80,18 @@ impl InstallationCache {
     /// Check if another installation is in progress
     fn is_install_in_progress() -> bool {
         let lock_path = Self::lock_path();
-        lock_path.exists() && lock_path.metadata()
-            .map(|meta| {
-                // Consider lock stale after 30 minutes
-                let age = SystemTime::now()
-                    .duration_since(meta.modified().unwrap_or(SystemTime::UNIX_EPOCH))
-                    .unwrap_or_default()
-                    .as_secs();
-                age < 1800
-            })
-            .unwrap_or(false)
+        lock_path.exists()
+            && lock_path
+                .metadata()
+                .map(|meta| {
+                    // Consider lock stale after 30 minutes
+                    let age = SystemTime::now()
+                        .duration_since(meta.modified().unwrap_or(SystemTime::UNIX_EPOCH))
+                        .unwrap_or_default()
+                        .as_secs();
+                    age < 1800
+                })
+                .unwrap_or(false)
     }
 
     fn is_stale() -> bool {
@@ -107,8 +109,7 @@ impl InstallationCache {
 
     fn load() -> Result<Self> {
         let path = Self::cache_path();
-        let content = fs::read_to_string(&path)
-            .context("Failed to read installation cache")?;
+        let content = fs::read_to_string(&path).context("Failed to read installation cache")?;
         serde_json::from_str(&content).context("Failed to parse installation cache")
     }
 
@@ -207,7 +208,9 @@ impl RipgrepStatus {
         // Check if auto-install is disabled
         if std::env::var("VTCODE_RIPGREP_NO_INSTALL").is_ok() {
             debug_log("Auto-install disabled via VTCODE_RIPGREP_NO_INSTALL");
-            return Err(anyhow!("Ripgrep auto-installation disabled via VTCODE_RIPGREP_NO_INSTALL"));
+            return Err(anyhow!(
+                "Ripgrep auto-installation disabled via VTCODE_RIPGREP_NO_INSTALL"
+            ));
         }
 
         // Check if another installation is already in progress
@@ -224,9 +227,7 @@ impl RipgrepStatus {
         if !InstallationCache::is_stale() {
             if let Ok(cache) = InstallationCache::load() {
                 if cache.status == "failed" {
-                    let reason = cache.failure_reason
-                        .as_deref()
-                        .unwrap_or("unknown reason");
+                    let reason = cache.failure_reason.as_deref().unwrap_or("unknown reason");
                     debug_log(&format!("Cache shows previous failure: {}", reason));
                     return Err(anyhow!(
                         "Previous installation attempt failed ({}). Not retrying for 24 hours.",
@@ -237,10 +238,10 @@ impl RipgrepStatus {
         }
 
         let result = Self::install_with_smart_detection();
-        
+
         // Clean up lock file
         let _ = std::fs::remove_file(InstallationCache::lock_path());
-        
+
         match result {
             Ok(()) => {
                 // Verify installation was successful

@@ -1,3 +1,4 @@
+use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::PromptCachingConfig;
 use crate::config::models::Provider as ModelProvider;
@@ -29,11 +30,11 @@ pub struct MoonshotProvider {
 
 impl MoonshotProvider {
     pub fn new(api_key: String) -> Self {
-        Self::with_model_internal(api_key, models::moonshot::DEFAULT_MODEL.to_string(), None)
+        Self::with_model_internal(api_key, models::moonshot::DEFAULT_MODEL.to_string(), None, None)
     }
 
     pub fn with_model(api_key: String, model: String) -> Self {
-        Self::with_model_internal(api_key, model, None)
+        Self::with_model_internal(api_key, model, None, None)
     }
 
     pub fn from_config(
@@ -41,6 +42,7 @@ impl MoonshotProvider {
         model: Option<String>,
         base_url: Option<String>,
         prompt_cache: Option<PromptCachingConfig>,
+        timeouts: Option<TimeoutsConfig>,
     ) -> Self {
         let resolved_model = resolve_model(model, models::moonshot::DEFAULT_MODEL);
         let resolved_base_url = override_base_url(
@@ -71,8 +73,9 @@ impl MoonshotProvider {
         api_key: String,
         model: String,
         prompt_cache: Option<PromptCachingConfig>,
+        timeouts: Option<TimeoutsConfig>,
     ) -> Self {
-        Self::from_config(Some(api_key), Some(model), None, prompt_cache)
+        Self::from_config(Some(api_key), Some(model), None, prompt_cache, timeouts)
     }
 
     fn convert_to_moonshot_format(&self, request: &LLMRequest) -> Result<Value, LLMError> {

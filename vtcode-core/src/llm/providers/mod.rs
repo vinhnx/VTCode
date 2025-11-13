@@ -7,6 +7,7 @@ pub mod moonshot;
 pub mod ollama;
 pub mod openai;
 pub mod openrouter;
+pub mod streaming_progress;
 pub mod xai;
 pub mod zai;
 
@@ -27,5 +28,8 @@ pub use moonshot::MoonshotProvider;
 pub use ollama::OllamaProvider;
 pub use openai::OpenAIProvider;
 pub use openrouter::OpenRouterProvider;
+pub use streaming_progress::{
+    StreamingProgressBuilder, StreamingProgressCallback, StreamingProgressTracker,
+};
 pub use xai::XAIProvider;
 pub use zai::ZAIProvider;

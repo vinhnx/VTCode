@@ -1,3 +1,4 @@
+use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::PromptCachingConfig;
 use crate::llm::client::LLMClient;
@@ -30,6 +31,7 @@ impl XAIProvider {
         model: Option<String>,
         base_url: Option<String>,
         prompt_cache: Option<PromptCachingConfig>,
+        timeouts: Option<TimeoutsConfig>,
     ) -> Self {
         let resolved_model = resolve_model(model, models::xai::DEFAULT_MODEL);
         let resolved_base_url =

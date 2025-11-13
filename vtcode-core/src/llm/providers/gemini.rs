@@ -1,3 +1,4 @@
+use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::{GeminiPromptCacheMode, GeminiPromptCacheSettings, PromptCachingConfig};
 use crate::gemini::function_calling::{
@@ -5,7 +6,7 @@ use crate::gemini::function_calling::{
 };
 use crate::gemini::models::SystemInstruction;
 use crate::gemini::streaming::{
-    StreamingCandidate, StreamingError, StreamingProcessor, StreamingResponse,
+    StreamingCandidate, StreamingConfig, StreamingError, StreamingProcessor, StreamingResponse,
 };
 use crate::gemini::{
     Candidate, Content, FunctionDeclaration, GenerateContentRequest, GenerateContentResponse, Part,
@@ -34,6 +35,7 @@ pub struct GeminiProvider {
     model: String,
     prompt_cache_enabled: bool,
     prompt_cache_settings: GeminiPromptCacheSettings,
+    timeouts: TimeoutsConfig,
 }
 
 impl GeminiProvider {
@@ -43,11 +45,12 @@ impl GeminiProvider {
             models::google::GEMINI_2_5_FLASH.to_string(),
             None,
             None,
+            TimeoutsConfig::default(),
         )
     }
 
     pub fn with_model(api_key: String, model: String) -> Self {
-        Self::with_model_internal(api_key, model, None, None)
+        Self::with_model_internal(api_key, model, None, None, TimeoutsConfig::default())
     }
 
     pub fn from_config(
@@ -55,11 +58,19 @@ impl GeminiProvider {
         model: Option<String>,
         base_url: Option<String>,
         prompt_cache: Option<PromptCachingConfig>,
+
+        timeouts: Option<TimeoutsConfig>,
     ) -> Self {
         let api_key_value = api_key.unwrap_or_default();
         let model_value = resolve_model(model, models::google::GEMINI_2_5_FLASH);
 
-        Self::with_model_internal(api_key_value, model_value, prompt_cache, base_url)
+        Self::with_model_internal(
+            api_key_value,
+            model_value,
+            prompt_cache,
+            base_url,
+            timeouts.unwrap_or_default(),
+        )
     }
 
     fn with_model_internal(
@@ -67,6 +78,7 @@ impl GeminiProvider {
         model: String,
         prompt_cache: Option<PromptCachingConfig>,
         base_url: Option<String>,
+        timeouts: TimeoutsConfig,
     ) -> Self {
         let (prompt_cache_enabled, prompt_cache_settings) = extract_prompt_cache_settings(
             prompt_cache,
@@ -89,6 +101,7 @@ impl GeminiProvider {
             model,
             prompt_cache_enabled,
             prompt_cache_settings,
+            timeouts,
         }
     }
 }
@@ -251,8 +264,11 @@ impl LLMProvider for GeminiProvider {
         let (event_tx, event_rx) = mpsc::unbounded_channel::<Result<LLMStreamEvent, LLMError>>();
         let completion_sender = event_tx.clone();
 
+        let streaming_timeout = self.timeouts.streaming_ceiling_seconds;
+
         tokio::spawn(async move {
-            let mut processor = StreamingProcessor::new();
+            let config = StreamingConfig::with_total_timeout(streaming_timeout);
+            let mut processor = StreamingProcessor::with_config(config);
             let token_sender = completion_sender.clone();
             let mut aggregated_text = String::new();
             let mut on_chunk = |chunk: &str| -> Result<(), StreamingError> {

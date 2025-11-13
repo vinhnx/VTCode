@@ -1,5 +1,6 @@
 use super::common::resolve_model;
 use super::openai::OpenAIProvider;
+use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::PromptCachingConfig;
 use crate::llm::client::LLMClient;
@@ -90,6 +91,7 @@ impl LmStudioProvider {
         model: Option<String>,
         base_url: Option<String>,
         prompt_cache: Option<PromptCachingConfig>,
+        timeouts: Option<TimeoutsConfig>,
     ) -> OpenAIProvider {
         let resolved_model = resolve_model(model, models::lmstudio::DEFAULT_MODEL);
         let resolved_base = Self::resolve_base_url(base_url);
@@ -98,6 +100,7 @@ impl LmStudioProvider {
             Some(resolved_model),
             Some(resolved_base),
             prompt_cache,
+            timeouts,
         )
     }
 
@@ -114,6 +117,7 @@ impl LmStudioProvider {
         model: Option<String>,
         base_url: Option<String>,
         prompt_cache: Option<PromptCachingConfig>,
+        timeouts: Option<TimeoutsConfig>,
     ) -> Self {
         Self::with_model_internal(api_key, model, base_url, prompt_cache)
     }

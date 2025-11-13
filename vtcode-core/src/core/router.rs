@@ -92,6 +92,7 @@ impl Router {
                 None,
                 Some(router_cfg.llm_router_model.clone()),
                 Some(core.prompt_cache.clone()),
+                None,
             ) {
                 let sys = "You are a routing classifier. Output only one label: simple | standard | complex | codegen_heavy | retrieval_heavy. Choose the best class for the user's last message. No prose.".to_string();
                 let supports_effort =

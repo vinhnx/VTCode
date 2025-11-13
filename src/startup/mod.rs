@@ -551,9 +551,7 @@ fn check_ripgrep_availability() {
                 "│ Ripgrep check failed: {}                                             │",
                 truncate_error(&reason, 68)
             );
-            eprintln!(
-                "│ Falling back to built-in grep (slower).                               │"
-            );
+            eprintln!("│ Falling back to built-in grep (slower).                               │");
             eprintln!(
                 "╰──────────────────────────────────────────────────────────────────────────────╯\n"
             );

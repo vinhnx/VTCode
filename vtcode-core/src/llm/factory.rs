@@ -2,6 +2,7 @@ use super::providers::{
     AnthropicProvider, DeepSeekProvider, GeminiProvider, LmStudioProvider, MinimaxProvider,
     MoonshotProvider, OllamaProvider, OpenAIProvider, OpenRouterProvider, XAIProvider, ZAIProvider,
 };
+use crate::config::TimeoutsConfig;
 use crate::config::core::PromptCachingConfig;
 use crate::config::models::{ModelId, Provider};
 use crate::llm::provider::{LLMError, LLMProvider};
@@ -19,6 +20,7 @@ pub struct ProviderConfig {
     pub base_url: Option<String>,
     pub model: Option<String>,
     pub prompt_cache: Option<PromptCachingConfig>,
+    pub timeouts: Option<TimeoutsConfig>,
 }
 
 trait BuiltinProvider: LLMProvider {
@@ -194,6 +196,7 @@ pub fn create_provider_for_model(
         None,
         Some(model.to_string()),
         prompt_cache,
+        None,
     )
 }
 
@@ -204,6 +207,7 @@ pub fn create_provider_with_config(
     base_url: Option<String>,
     model: Option<String>,
     prompt_cache: Option<PromptCachingConfig>,
+    timeouts: Option<TimeoutsConfig>,
 ) -> Result<Box<dyn LLMProvider>, LLMError> {
     let factory = get_factory().lock().unwrap();
     let config = ProviderConfig {
@@ -211,6 +215,7 @@ pub fn create_provider_with_config(
         base_url,
         model,
         prompt_cache,
+        timeouts,
     };
 
     factory.create_provider(provider_name, config)
@@ -223,6 +228,7 @@ impl BuiltinProvider for GeminiProvider {
             base_url,
             model,
             prompt_cache,
+            timeouts,
         } = config;
 
         Box::new(GeminiProvider::from_config(
@@ -230,6 +236,7 @@ impl BuiltinProvider for GeminiProvider {
             model,
             base_url,
             prompt_cache,
+            timeouts,
         ))
     }
 }
@@ -241,6 +248,7 @@ impl BuiltinProvider for OpenAIProvider {
             base_url,
             model,
             prompt_cache,
+            timeouts,
         } = config;
 
         Box::new(OpenAIProvider::from_config(
@@ -248,6 +256,7 @@ impl BuiltinProvider for OpenAIProvider {
             model,
             base_url,
             prompt_cache,
+            timeouts,
         ))
     }
 }
@@ -259,6 +268,7 @@ impl BuiltinProvider for AnthropicProvider {
             base_url,
             model,
             prompt_cache,
+            timeouts,
         } = config;
 
         Box::new(AnthropicProvider::from_config(
@@ -266,6 +276,7 @@ impl BuiltinProvider for AnthropicProvider {
             model,
             base_url,
             prompt_cache,
+            timeouts,
         ))
     }
 }
@@ -277,6 +288,7 @@ impl BuiltinProvider for MinimaxProvider {
             base_url,
             model,
             prompt_cache,
+            timeouts,
         } = config;
 
         Box::new(MinimaxProvider::from_config(
@@ -284,6 +296,7 @@ impl BuiltinProvider for MinimaxProvider {
             model,
             base_url,
             prompt_cache,
+            timeouts,
         ))
     }
 }
@@ -295,6 +308,7 @@ impl BuiltinProvider for DeepSeekProvider {
             base_url,
             model,
             prompt_cache,
+            timeouts,
         } = config;
 
         Box::new(DeepSeekProvider::from_config(
@@ -302,6 +316,7 @@ impl BuiltinProvider for DeepSeekProvider {
             model,
             base_url,
             prompt_cache,
+            timeouts,
         ))
     }
 }
@@ -313,6 +328,7 @@ impl BuiltinProvider for OpenRouterProvider {
             base_url,
             model,
             prompt_cache,
+            timeouts,
         } = config;
 
         Box::new(OpenRouterProvider::from_config(
@@ -320,6 +336,7 @@ impl BuiltinProvider for OpenRouterProvider {
             model,
             base_url,
             prompt_cache,
+            timeouts,
         ))
     }
 }
@@ -331,6 +348,7 @@ impl BuiltinProvider for MoonshotProvider {
             base_url,
             model,
             prompt_cache,
+            timeouts,
         } = config;
 
         Box::new(MoonshotProvider::from_config(
@@ -338,6 +356,7 @@ impl BuiltinProvider for MoonshotProvider {
             model,
             base_url,
             prompt_cache,
+            timeouts,
         ))
     }
 }
@@ -349,6 +368,7 @@ impl BuiltinProvider for OllamaProvider {
             base_url,
             model,
             prompt_cache,
+            timeouts,
         } = config;
 
         Box::new(OllamaProvider::from_config(
@@ -356,6 +376,7 @@ impl BuiltinProvider for OllamaProvider {
             model,
             base_url,
             prompt_cache,
+            timeouts,
         ))
     }
 }
@@ -367,6 +388,7 @@ impl BuiltinProvider for LmStudioProvider {
             base_url,
             model,
             prompt_cache,
+            timeouts,
         } = config;
 
         Box::new(LmStudioProvider::from_config(
@@ -374,6 +396,7 @@ impl BuiltinProvider for LmStudioProvider {
             model,
             base_url,
             prompt_cache,
+            timeouts,
         ))
     }
 }
@@ -385,6 +408,7 @@ impl BuiltinProvider for XAIProvider {
             base_url,
             model,
             prompt_cache,
+            timeouts,
         } = config;
 
         Box::new(XAIProvider::from_config(
@@ -392,6 +416,7 @@ impl BuiltinProvider for XAIProvider {
             model,
             base_url,
             prompt_cache,
+            timeouts,
         ))
     }
 }
@@ -403,6 +428,7 @@ impl BuiltinProvider for ZAIProvider {
             base_url,
             model,
             prompt_cache,
+            timeouts,
         } = config;
 
         Box::new(ZAIProvider::from_config(
@@ -410,6 +436,7 @@ impl BuiltinProvider for ZAIProvider {
             model,
             base_url,
             prompt_cache,
+            timeouts,
         ))
     }
 }

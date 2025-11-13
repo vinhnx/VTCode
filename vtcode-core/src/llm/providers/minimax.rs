@@ -1,4 +1,5 @@
 use super::AnthropicProvider;
+use crate::config::TimeoutsConfig;
 use crate::config::constants::models;
 use crate::config::core::PromptCachingConfig;
 use crate::llm::client::LLMClient;
@@ -28,11 +29,12 @@ impl MinimaxProvider {
         model: Option<String>,
         base_url: Option<String>,
         prompt_cache: Option<PromptCachingConfig>,
+        timeouts: Option<TimeoutsConfig>,
     ) -> Self {
         let effective_model = model.unwrap_or_else(|| models::minimax::MINIMAX_M2.to_string());
 
         let inner =
-            AnthropicProvider::from_config(api_key, Some(effective_model), base_url, prompt_cache);
+            AnthropicProvider::from_config(api_key, Some(effective_model), base_url, prompt_cache, timeouts);
 
         Self { inner }
     }

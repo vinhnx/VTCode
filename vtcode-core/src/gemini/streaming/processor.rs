@@ -12,6 +12,7 @@ use reqwest::Response;
 use serde_json::Value;
 use std::time::Instant;
 use tokio::time::{Duration, timeout};
+use tracing;
 
 /// Configuration for the streaming processor
 #[derive(Debug, Clone)]
@@ -20,6 +21,8 @@ pub struct StreamingConfig {
     pub chunk_timeout: Duration,
     /// Maximum time to wait for the first chunk
     pub first_chunk_timeout: Duration,
+    /// Maximum total time for entire streaming request (0 means no limit)
+    pub total_timeout: Duration,
     /// Buffer size for chunk processing
     pub buffer_size: usize,
 }
@@ -29,16 +32,32 @@ impl Default for StreamingConfig {
         Self {
             chunk_timeout: Duration::from_secs(30),
             first_chunk_timeout: Duration::from_secs(60),
+            total_timeout: Duration::from_secs(600),
             buffer_size: 1024,
         }
     }
 }
+
+impl StreamingConfig {
+    /// Create config with custom total timeout (in seconds)
+    pub fn with_total_timeout(total_timeout_secs: u64) -> Self {
+        Self {
+            total_timeout: Duration::from_secs(total_timeout_secs),
+            ..Default::default()
+        }
+    }
+}
+
+/// Callback for streaming timeout progress updates
+pub type ProgressCallback = Box<dyn Fn(f32) + Send + Sync>;
 
 /// Streaming processor for handling real-time responses from the Gemini API
 pub struct StreamingProcessor {
     config: StreamingConfig,
     metrics: StreamingMetrics,
     current_event_data: String,
+    progress_callback: Option<ProgressCallback>,
+    warning_threshold: f32,
 }
 
 impl StreamingProcessor {
@@ -48,6 +67,8 @@ impl StreamingProcessor {
             config: StreamingConfig::default(),
             metrics: StreamingMetrics::default(),
             current_event_data: String::new(),
+            progress_callback: None,
+            warning_threshold: 0.8,
         }
     }
 
@@ -57,7 +78,21 @@ impl StreamingProcessor {
             config,
             metrics: StreamingMetrics::default(),
             current_event_data: String::new(),
+            progress_callback: None,
+            warning_threshold: 0.8,
         }
+    }
+
+    /// Set a progress callback that reports timeout progress as a ratio (0.0-1.0)
+    pub fn with_progress_callback(mut self, callback: ProgressCallback) -> Self {
+        self.progress_callback = Some(callback);
+        self
+    }
+
+    /// Set the warning threshold for timeout progress (0.0-1.0, default 0.8)
+    pub fn with_warning_threshold(mut self, threshold: f32) -> Self {
+        self.warning_threshold = threshold.clamp(0.0, 1.0);
+        self
     }
 
     /// Process a streaming response from the Gemini API
@@ -95,14 +130,17 @@ impl StreamingProcessor {
 
         let mut _has_valid_content = false;
         let mut buffer = String::new();
+        let request_start = Instant::now();
 
         // Wait for the first chunk with a longer timeout
+        let first_chunk_start = Instant::now();
         let first_chunk_result = timeout(self.config.first_chunk_timeout, stream.next()).await;
 
         match first_chunk_result {
             Ok(Some(Ok(bytes))) => {
                 self.metrics.first_chunk_time = Some(Instant::now());
                 self.metrics.total_bytes += bytes.len();
+                self.report_progress(first_chunk_start, request_start);
 
                 // Process the first chunk
                 buffer.push_str(&String::from_utf8_lossy(&bytes));
@@ -126,6 +164,7 @@ impl StreamingProcessor {
             }
             Err(_) => {
                 self.metrics.error_count += 1;
+                self.report_progress(first_chunk_start, request_start);
                 return Err(StreamingError::TimeoutError {
                     operation: "first_chunk".to_string(),
                     duration: self.config.first_chunk_timeout,
@@ -135,6 +174,22 @@ impl StreamingProcessor {
 
         // Process subsequent chunks
         while let Some(result) = stream.next().await {
+            let elapsed = request_start.elapsed();
+
+            // Check if total timeout has been exceeded
+            if self.config.total_timeout.as_secs() > 0 {
+                if elapsed > self.config.total_timeout {
+                    self.metrics.error_count += 1;
+                    self.report_progress_at_timeout(elapsed);
+                    return Err(StreamingError::TimeoutError {
+                        operation: "streaming".to_string(),
+                        duration: elapsed,
+                    });
+                }
+                // Report progress towards timeout
+                self.report_progress_with_timeout(elapsed);
+            }
+
             match result {
                 Ok(bytes) => {
                     self.metrics.total_bytes += bytes.len();
@@ -155,6 +210,7 @@ impl StreamingProcessor {
                 }
                 Err(e) => {
                     self.metrics.error_count += 1;
+                    self.report_progress_at_timeout(elapsed);
                     return Err(StreamingError::NetworkError {
                         message: format!("Failed to read chunk: {}", e),
                         is_retryable: true,
@@ -687,6 +743,44 @@ impl StreamingProcessor {
                 None
             }
             _ => None,
+        }
+    }
+
+    /// Report progress towards the timeout threshold
+    fn report_progress_with_timeout(&self, elapsed: Duration) {
+        if self.config.total_timeout.as_secs() == 0 {
+            return;
+        }
+
+        let progress = elapsed.as_secs_f32() / self.config.total_timeout.as_secs_f32();
+        let progress_clamped = progress.min(0.99); // Cap at 99% to avoid premature completion
+
+        if let Some(ref callback) = self.progress_callback {
+            callback(progress_clamped);
+        }
+
+        // Warn if approaching warning threshold
+        if progress >= self.warning_threshold {
+            tracing::warn!(
+                "Streaming operation at {:.0}% of timeout limit ({}/{:?} elapsed). Approaching timeout.",
+                progress_clamped * 100.0,
+                elapsed.as_secs(),
+                self.config.total_timeout
+            );
+        }
+    }
+
+    /// Report progress when timeout/error occurs
+    fn report_progress_at_timeout(&self, _elapsed: Duration) {
+        if let Some(ref callback) = self.progress_callback {
+            callback(1.0); // Report as complete/failed
+        }
+    }
+
+    /// Report immediate progress (e.g., after first chunk)
+    fn report_progress(&self, _event_time: Instant, _start_time: Instant) {
+        if let Some(ref callback) = self.progress_callback {
+            callback(0.1); // Report early progress
         }
     }
 
