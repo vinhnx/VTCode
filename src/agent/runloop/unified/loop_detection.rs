@@ -10,17 +10,14 @@ pub struct LoopDetector {
     threshold: usize,
     /// Whether detection is enabled
     enabled: bool,
-    /// Whether to show interactive prompt
-    interactive: bool,
 }
 
 impl LoopDetector {
-    pub fn new(threshold: usize, enabled: bool, interactive: bool) -> Self {
+    pub fn new(threshold: usize, enabled: bool, _interactive: bool) -> Self {
         Self {
             repeated_calls: HashMap::new(),
             threshold,
             enabled,
-            interactive,
         }
     }
 
@@ -40,20 +37,6 @@ impl LoopDetector {
         (*count > self.threshold, *count)
     }
 
-    /// Get the count for a signature without recording a new call
-    pub fn peek_count(&self, signature: &str) -> usize {
-        self.repeated_calls.get(signature).copied().unwrap_or(0)
-    }
-
-    /// Check if next call would trigger detection
-    pub fn would_trigger(&self, signature: &str) -> bool {
-        if !self.enabled {
-            return false;
-        }
-        let current_count = self.repeated_calls.get(signature).copied().unwrap_or(0);
-        current_count + 1 > self.threshold
-    }
-
     /// Clear the tracking state
     pub fn reset(&mut self) {
         self.repeated_calls.clear();
@@ -62,31 +45,6 @@ impl LoopDetector {
     /// Reset tracking for a specific signature only
     pub fn reset_signature(&mut self, signature: &str) {
         self.repeated_calls.remove(signature);
-    }
-
-    /// Get the count of repetitions for a signature
-    pub fn get_count(&self, signature: &str) -> usize {
-        self.repeated_calls.get(signature).copied().unwrap_or(0)
-    }
-
-    /// Check if interactive prompts should be shown
-    pub fn is_interactive(&self) -> bool {
-        self.interactive
-    }
-
-    /// Check if detection is enabled
-    pub fn is_enabled(&self) -> bool {
-        self.enabled
-    }
-
-    /// Disable detection
-    pub fn disable(&mut self) {
-        self.enabled = false;
-    }
-
-    /// Enable detection
-    pub fn enable(&mut self) {
-        self.enabled = true;
     }
 }
 
@@ -200,8 +158,8 @@ mod tests {
 
         detector.reset();
 
-        assert_eq!(detector.get_count(sig), 0);
-        assert!(!detector.record_tool_call(sig).0); // count = 1
+        let (detected, count) = detector.record_tool_call(sig);
+        assert!(!detected && count == 1);
     }
 
     #[test]
@@ -216,31 +174,9 @@ mod tests {
         assert!(!detector.record_tool_call(sig1).0); // sig1 count = 2
         assert!(detector.record_tool_call(sig1).0); // sig1 count = 3 > threshold
 
-        // sig2 should still be at 1
-        assert_eq!(detector.get_count(sig2), 1);
-    }
-
-    #[test]
-    fn test_loop_detector_interactive_flag() {
-        let interactive_detector = LoopDetector::new(3, true, true);
-        let non_interactive_detector = LoopDetector::new(3, true, false);
-
-        assert!(interactive_detector.is_interactive());
-        assert!(!non_interactive_detector.is_interactive());
-    }
-
-    #[test]
-    fn test_loop_detector_enable_disable() {
-        let mut detector = LoopDetector::new(2, true, true);
-
-        assert!(detector.is_enabled());
-
-        detector.disable();
-        assert!(!detector.is_enabled());
-        assert!(!detector.record_tool_call("test").0);
-
-        detector.enable();
-        assert!(detector.is_enabled());
+        // sig2 should still be at 1 - verify by recording again
+        let (_, sig2_count) = detector.record_tool_call(sig2);
+        assert_eq!(sig2_count, 2);
     }
 
     #[test]
@@ -260,38 +196,9 @@ mod tests {
     }
 
     #[test]
-    fn test_peek_count() {
-        let mut detector = LoopDetector::new(2, true, true);
-
-        assert_eq!(detector.peek_count("test"), 0);
-
-        detector.record_tool_call("test");
-        assert_eq!(detector.peek_count("test"), 1);
-
-        detector.record_tool_call("test");
-        assert_eq!(detector.peek_count("test"), 2);
-    }
-
-    #[test]
-    fn test_would_trigger() {
-        let mut detector = LoopDetector::new(2, true, true);
-
-        assert!(!detector.would_trigger("test")); // would be 1
-        detector.record_tool_call("test");
-
-        assert!(!detector.would_trigger("test")); // would be 2
-        detector.record_tool_call("test");
-
-        assert!(detector.would_trigger("test")); // would be 3 > threshold of 2
-    }
-
-    #[test]
     fn test_non_interactive_mode() {
-        let detector = LoopDetector::new(3, true, false);
-        assert!(!detector.is_interactive());
-
-        // Non-interactive mode should still detect loops
-        let mut detector = detector;
+        // Non-interactive mode should still detect loops properly
+        let mut detector = LoopDetector::new(3, true, false);
         assert!(!detector.record_tool_call("test").0); // 1
         assert!(!detector.record_tool_call("test").0); // 2
         assert!(!detector.record_tool_call("test").0); // 3
@@ -308,13 +215,13 @@ mod tests {
         detector.record_tool_call("sig2");
         detector.record_tool_call("sig2");
 
-        assert_eq!(detector.get_count("sig1"), 2);
-        assert_eq!(detector.get_count("sig2"), 2);
-
         // Selectively reset only sig1
         detector.reset_signature("sig1");
 
-        assert_eq!(detector.get_count("sig1"), 0); // Reset
-        assert_eq!(detector.get_count("sig2"), 2); // Untouched
+        // After reset, sig1 should be back at 1 (not detected)
+        assert!(!detector.record_tool_call("sig1").0);
+
+        // sig2 should continue from where it was - at 3 > threshold of 2
+        assert!(detector.record_tool_call("sig2").0);
     }
 }
