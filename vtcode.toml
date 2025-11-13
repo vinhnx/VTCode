@@ -409,6 +409,9 @@ default_ceiling_seconds = 180
 pty_ceiling_seconds = 300
 # Maximum duration for MCP tool calls in seconds. Set to 0 to disable.
 mcp_ceiling_seconds = 120
+# Maximum duration for streaming API responses in seconds. Set to 0 to disable.
+# Increase this if you encounter streaming timeouts with long inputs or slow networks
+streaming_ceiling_seconds = 600
 # Emit a warning once a tool runs longer than this percentage of its ceiling.
 warning_threshold_percent = 80
 

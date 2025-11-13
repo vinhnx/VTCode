@@ -1,5 +1,6 @@
 use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::PromptCachingConfig;
+use crate::config::TimeoutsConfig;
 use crate::llm::client::LLMClient;
 use crate::llm::provider::{
     FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
@@ -109,6 +110,7 @@ impl OllamaProvider {
         model: Option<String>,
         base_url: Option<String>,
         _prompt_cache: Option<PromptCachingConfig>,
+        _timeouts: Option<TimeoutsConfig>,
     ) -> Self {
         let resolved_model = resolve_model(model, models::ollama::DEFAULT_MODEL);
         Self::with_model_internal(resolved_model, base_url, api_key)

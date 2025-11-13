@@ -54,9 +54,14 @@ async fn handle_list_models(_cli: &Cli) -> Result<()> {
         };
         println!("{}", colored_provider);
 
-        if let Ok(provider) =
-            create_provider_with_config(provider_name, Some("dummy".to_string()), None, None, None)
-        {
+        if let Ok(provider) = create_provider_with_config(
+            provider_name,
+            Some("dummy".to_string()),
+            None,
+            None,
+            None,
+            None,
+        ) {
             let models = provider.supported_models();
             let current_model = &config.preferences.default_model;
 
@@ -281,7 +286,7 @@ async fn handle_test_provider(_cli: &Cli, provider: &str) -> Result<()> {
     let (api_key, base_url, model) = get_provider_credentials(&config, provider)?;
 
     let provider_instance =
-        create_provider_with_config(provider, api_key, base_url, model.clone(), None)?;
+        create_provider_with_config(provider, api_key, base_url, model.clone(), None, None)?;
 
     let test_request = crate::llm::provider::LLMRequest {
         messages: vec![crate::llm::provider::Message {
