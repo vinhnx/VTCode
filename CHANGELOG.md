@@ -3,6 +3,32 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Version 0.43.0] - 2025-11-09
+# [Version 0.43.7] - 2025-11-13
+
+
+### Features
+    - feat(ripgrep): Add automatic installation and management for ripgrep dependency
+    - feat(loop_detection): Refactor loop hang detection for improved accuracy and user experience
+    - feat(web_fetch): Introduce Web Fetch tool with security configurations
+    - feat: Implement token-based truncation for tool output rendering
+    - feat: Enhance command execution with additional PATH entries and environment variable handling
+
+
+### Refactors
+    - refactor: replace cargo_bin_cmd with assert_cmd in CLI tests and simplify InlineTextStyle initialization
+    - refactor: update InlineTextStyle to include bg_color and effects in snapshot tests
+    - refactor: update command execution in tests and remove unused imports
+
+
+### Documentation
+    - docs: update changelog for v0.43.6 [skip ci]
+    - docs: Add truncation audit and remove unused terminal output line-limit constants
+
+
+### Chores
+    - chore: update npm package.json to v0.43.6 [skip ci]
+    - chore: release v0.43.6
+    - chore: update npm package.json to v0.43.5 [skip ci]
 # [Version 0.43.6] - 2025-11-12
 
 
