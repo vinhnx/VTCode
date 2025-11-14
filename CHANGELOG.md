@@ -3,6 +3,23 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Version 0.43.0] - 2025-11-09
+# [Version 0.43.15] - 2025-11-14
+
+
+### Documentation
+    - docs: update changelog for v0.43.14 [skip ci]
+    - docs: update changelog for v0.43.13 [skip ci]
+    - docs: update changelog for v0.43.12 [skip ci]
+    - docs: update changelog for v0.43.11 [skip ci]
+
+
+### Chores
+    - chore: release v0.43.14
+    - chore: release v0.43.13
+    - chore: release v0.43.12
+    - chore: update npm package.json to v0.43.11 [skip ci]
+    - chore: release v0.43.11
+    - chore: update npm package.json to v0.43.10 [skip ci]
 # [Version 0.43.14] - 2025-11-14
 
 
