@@ -4,6 +4,7 @@ use anstyle::{AnsiColor, Style as AnsiStyle};
 use vtcode_core::config::constants::tools;
 use vtcode_core::utils::diff_styles::DiffColorPalette;
 use vtcode_core::utils::style_helpers::bold_color;
+use anstyle_git;
 
 pub(crate) struct GitStyles {
     pub(crate) add: Option<AnsiStyle>,
@@ -13,11 +14,19 @@ pub(crate) struct GitStyles {
 
 impl GitStyles {
     pub(crate) fn new() -> Self {
-        let palette = DiffColorPalette::default();
         Self {
-            add: Some(palette.added_style()),
-            remove: Some(palette.removed_style()),
-            header: Some(bold_color(AnsiColor::Yellow)),
+            add: Some(anstyle_git::parse("new").unwrap_or(
+                // Fallback to original behavior
+                DiffColorPalette::default().added_style()
+            )),
+            remove: Some(anstyle_git::parse("old").unwrap_or(
+                // Fallback to original behavior
+                DiffColorPalette::default().removed_style()
+            )),
+            header: Some(anstyle_git::parse("meta").unwrap_or(
+                // Fallback to original behavior
+                bold_color(AnsiColor::Yellow)
+            )),
         }
     }
 }

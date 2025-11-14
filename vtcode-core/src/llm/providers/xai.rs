@@ -46,6 +46,7 @@ impl XAIProvider {
             Some(resolved_model.clone()),
             Some(resolved_base_url),
             prompt_cache_forward,
+            timeouts,
         );
 
         Self {
@@ -60,7 +61,7 @@ impl XAIProvider {
         model: String,
         prompt_cache: Option<PromptCachingConfig>,
     ) -> Self {
-        Self::from_config(Some(api_key), Some(model), None, prompt_cache)
+        Self::from_config(Some(api_key), Some(model), None, prompt_cache, None)
     }
 }
 

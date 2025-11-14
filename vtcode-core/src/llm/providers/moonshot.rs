@@ -42,7 +42,7 @@ impl MoonshotProvider {
         model: Option<String>,
         base_url: Option<String>,
         prompt_cache: Option<PromptCachingConfig>,
-        timeouts: Option<TimeoutsConfig>,
+        _timeouts: Option<TimeoutsConfig>,
     ) -> Self {
         let resolved_model = resolve_model(model, models::moonshot::DEFAULT_MODEL);
         let resolved_base_url = override_base_url(

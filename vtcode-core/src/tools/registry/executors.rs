@@ -1,12 +1,16 @@
 use crate::config::PtyConfig;
 use crate::mcp::{DetailLevel, ToolDiscovery};
-use crate::tools::apply_patch::Patch;
+use crate::tools::apply_patch::{Patch, PatchOperation};
+use crate::tools::editing::PatchLine;
 use crate::tools::grep_file::GrepSearchInput;
 use crate::tools::traits::Tool;
 use crate::tools::types::{EnhancedTerminalInput, VTCodePtySession};
 use crate::tools::{
     PlanUpdateResult, PtyCommandRequest, PtyCommandResult, PtyManager, UpdatePlanArgs,
 };
+
+use crate::utils::diff::{compute_diff, DiffOptions};
+use tokio::fs;
 use anyhow::{Context, Result, anyhow};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
@@ -842,36 +846,126 @@ impl ToolRegistry {
             }
         }
 
-        // Generate diff preview
-        let mut diff_lines = Vec::new();
+        // Generate enhanced diff preview with proper git-style diffs
+        let mut diff_preview = String::new();
+        
         for op in patch.operations() {
             match op {
-                crate::tools::editing::PatchOperation::AddFile { path, content } => {
-                    diff_lines.push(format!("--- /dev/null"));
-                    diff_lines.push(format!("+++ {}", path));
-                    for line in content.lines() {
-                        diff_lines.push(format!("+{}", line));
+                PatchOperation::AddFile { path, content } => {
+                    // For new files, create a proper unified diff format
+                    let structured_diff = compute_diff("", content, DiffOptions {
+                        context_lines: 3,
+                        old_label: Some("/dev/null"),
+                        new_label: Some(path),
+                        missing_newline_hint: true,
+                    });
+                    
+                    diff_preview.push_str(&structured_diff.formatted);
+                    if !structured_diff.formatted.is_empty() {
+                        diff_preview.push('\n');
                     }
                 }
-                crate::tools::editing::PatchOperation::DeleteFile { path } => {
-                    diff_lines.push(format!("--- {}", path));
-                    diff_lines.push(format!("+++ /dev/null"));
+                PatchOperation::DeleteFile { path } => {
+                    // For deleted files, try to read the current content to show what will be deleted
+                    let full_path = self.workspace_root().join(path);
+                    let current_content = if full_path.exists() {
+                        std::fs::read_to_string(&full_path).unwrap_or_default()
+                    } else {
+                        String::new()
+                    };
+                    
+                    // Create a structured diff for the renderer
+                    let structured_diff = compute_diff(&current_content, "", DiffOptions {
+                        context_lines: 3,
+                        old_label: Some(path),
+                        new_label: Some(path),
+                        missing_newline_hint: true,
+                    });
+                    
+                    diff_preview.push_str(&structured_diff.formatted);
+                    if !structured_diff.formatted.is_empty() {
+                        diff_preview.push('\n');
+                    }
                 }
-                crate::tools::editing::PatchOperation::UpdateFile { path, chunks, .. } => {
-                    diff_lines.push(format!("--- {}", path));
-                    diff_lines.push(format!("+++ {}", path));
+                PatchOperation::UpdateFile { path, chunks, .. } => {
+                    // For updated files, read the current content and properly apply the patch
+                    let full_path = self.workspace_root().join(path);
+                    let old_content = if full_path.exists() {
+                        fs::read_to_string(&full_path).await.unwrap_or_default()
+                    } else {
+                        String::new() // If file doesn't exist, treat as empty for an add operation
+                    };
+
+                    // Reconstruct the new content by applying the patch changes
+                    let old_lines: Vec<&str> = old_content.lines().collect();
+                    let mut new_lines = Vec::new();
+                    let mut current_old_line_idx = 0;
+
                     for chunk in chunks {
+                        // Add context lines from the original file before this chunk
                         if let Some(ctx) = &chunk.change_context {
-                            diff_lines.push(format!("@@ {} @@", ctx));
+                            // Extract the line numbers from the context string (e.g., "@@ -1,5 +1,6 @@")
+                            if ctx.starts_with("@@") {
+                                // Parse context to find at which line to apply the changes
+                                // Format is typically: @@ -old_start,old_count +new_start,new_count @@
+                                let parts: Vec<&str> = ctx.split_whitespace().collect();
+                                if parts.len() >= 3 {
+                                    if let Some(old_part) = parts.get(1) {
+                                        if let Some(range_str) = old_part.strip_prefix('-') {
+                                            let range_parts: Vec<&str> = range_str.split(',').collect();
+                                            if let (Some(start_str), Some(_count_str)) = (range_parts.get(0), range_parts.get(1)) {
+                                                if let Ok(start_line) = start_str.parse::<usize>() {
+                                                    let start_idx = start_line.saturating_sub(1); // Convert to 0-indexed
+                                                    
+                                                    // Add lines from old content up to this chunk position
+                                                    while current_old_line_idx < start_idx && current_old_line_idx < old_lines.len() {
+                                                        new_lines.push(old_lines[current_old_line_idx].to_string());
+                                                        current_old_line_idx += 1;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
+
+                        // Process lines in the chunk
                         for line in &chunk.lines {
-                            let (prefix, text) = match line {
-                                crate::tools::editing::PatchLine::Addition(t) => ("+", t),
-                                crate::tools::editing::PatchLine::Removal(t) => ("-", t),
-                                crate::tools::editing::PatchLine::Context(t) => (" ", t),
-                            };
-                            diff_lines.push(format!("{}{}", prefix, text));
+                            match line {
+                                PatchLine::Addition(text) => {
+                                    new_lines.push(text.clone());
+                                }
+                                PatchLine::Context(text) => {
+                                    new_lines.push(text.clone());
+                                    current_old_line_idx += 1;
+                                }
+                                PatchLine::Removal(_) => {
+                                    current_old_line_idx += 1; // Skip this line from old content
+                                }
+                            }
                         }
+                    }
+
+                    // Add any remaining lines from the original file
+                    while current_old_line_idx < old_lines.len() {
+                        new_lines.push(old_lines[current_old_line_idx].to_string());
+                        current_old_line_idx += 1;
+                    }
+
+                    let new_content = new_lines.join("\n");
+                    
+                    // Create a structured diff using the same approach as generate_unified_diff
+                    let structured_diff = compute_diff(&old_content, &new_content, DiffOptions {
+                        context_lines: 3,
+                        old_label: Some(path),
+                        new_label: Some(path),
+                        missing_newline_hint: true,
+                    });
+                    
+                    diff_preview.push_str(&structured_diff.formatted);
+                    if !structured_diff.formatted.is_empty() {
+                        diff_preview.push('\n');
                     }
                 }
             }
@@ -890,7 +984,10 @@ impl ToolRegistry {
         Ok(json!({
             "success": true,
             "applied": results,
-            "diff_preview": diff_lines.join("\n"),
+            "diff_preview": {
+                "content": diff_preview,
+                "truncated": false
+            },
         }))
     }
 

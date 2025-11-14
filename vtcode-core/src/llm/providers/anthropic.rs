@@ -49,7 +49,7 @@ impl AnthropicProvider {
         model: Option<String>,
         base_url: Option<String>,
         prompt_cache: Option<PromptCachingConfig>,
-        timeouts: Option<TimeoutsConfig>,
+        _timeouts: Option<TimeoutsConfig>,
     ) -> Self {
         let api_key_value = api_key.unwrap_or_default();
         let model_value = resolve_model(model, models::anthropic::DEFAULT_MODEL);

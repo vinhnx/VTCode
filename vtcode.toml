@@ -5,13 +5,13 @@
 # Core agent behavior; see docs/config/CONFIGURATION_PRECEDENCE.md.
 [agent]
 # Primary LLM provider to use (e.g., "openai", "gemini", "anthropic", "openrouter")
-provider = "gemini"
+provider = "ollama"
 
 # Environment variable containing the API key for the provider
-api_key_env = "GEMINI_API_KEY"
+api_key_env = "OLLAMA_API_KEY"
 
 # Default model to use when no specific model is specified
-default_model = "gemini-2.5-flash-lite"
+default_model = "gpt-oss:20b-cloud"
 
 # Visual theme for the terminal interface
 theme = "ciapre-dark"
@@ -27,7 +27,7 @@ ui_surface = "auto"
 max_conversation_turns = 50
 
 # Reasoning effort level ("low", "medium", "high") - affects model usage and response speed
-reasoning_effort = "medium"
+reasoning_effort = "low"
 
 # Temperature for main LLM responses (0.0-1.0)
 # Lower values = more deterministic, higher values = more creative
@@ -514,15 +514,15 @@ llm_router_model = ""
 # Model mapping for different task types
 [router.models]
 # Model for simple queries
-simple = "gemini-2.5-flash-lite"
+simple = "gpt-oss:20b-cloud"
 # Model for standard tasks
-standard = "gemini-2.5-flash-lite"
+standard = "gpt-oss:20b-cloud"
 # Model for complex tasks
-complex = "gemini-2.5-flash-lite"
+complex = "gpt-oss:20b-cloud"
 # Model for code generation heavy tasks
-codegen_heavy = "gemini-2.5-flash-lite"
+codegen_heavy = "gpt-oss:20b-cloud"
 # Model for information retrieval heavy tasks
-retrieval_heavy = "gemini-2.5-flash-lite"
+retrieval_heavy = "gpt-oss:20b-cloud"
 
 # Router budget settings (if applicable)
 [router.budgets]
@@ -788,6 +788,11 @@ session_end = []
 user_prompt_submit = []
 pre_tool_use = []
 post_tool_use = []
+
+[model]
+skip_loop_detection = false
+loop_detection_threshold = 3
+loop_detection_interactive = true
 
 # [hooks.lifecycle]
 # # Session start hook that provides project context
