@@ -41,7 +41,7 @@
 </p>
 
 ---
-
+[![BuyMeACoffee](https://raw.githubusercontent.com/pachadotdev/buymeacoffee-badges/main/bmc-yellow.svg)](https://www.buymeacoffee.com/vinhnx)
 ## Installation
 
 **macOS & Linux:**
@@ -183,7 +183,7 @@ For installation instructions and download links for other IDEs, visit our [IDE 
 I build VT Code in my free time as a passion [project](https://github.com/vinhnx/vtcode?tab=readme-ov-file#technical-motivation) to research and explore how coding agents work in practice. If you find VT Code useful, please consider supporting my work with a coffee via
 [BuyMeACoffee](https://www.buymeacoffee.com/vinhnx):
 
-[![BuyMeACoffee](https://raw.githubusercontent.com/pachadotdev/buymeacoffee-badges/main/bmc-black.svg)](https://www.buymeacoffee.com/vinhnx)
+[![BuyMeACoffee](https://raw.githubusercontent.com/pachadotdev/buymeacoffee-badges/main/bmc-yellow.svg)](https://www.buymeacoffee.com/vinhnx)
 
 [![QR Code](resources/screenshots/qr_donate.png)](https://buymeacoffee.com/vinhnx)
 
