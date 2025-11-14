@@ -306,24 +306,32 @@ impl OpenAIProvider {
         let serialized_tools = tools
             .iter()
             .map(|tool| {
-                if tool.tool_type == "function" {
-                    let name = &tool.function.name;
-                    let description = &tool.function.description;
-                    let parameters = &tool.function.parameters;
+                match tool.tool_type.as_str() {
+                    "function" => {
+                        let name = &tool.function.as_ref().unwrap().name;
+                        let description = &tool.function.as_ref().unwrap().description;
+                        let parameters = &tool.function.as_ref().unwrap().parameters;
 
-                    json!({
-                        "type": &tool.tool_type,
-                        "name": name,
-                        "description": description,
-                        "parameters": parameters,
-                        "function": {
+                        json!({
+                            "type": &tool.tool_type,
                             "name": name,
                             "description": description,
                             "parameters": parameters,
-                        }
-                    })
-                } else {
-                    json!(tool)
+                            "function": {
+                                "name": name,
+                                "description": description,
+                                "parameters": parameters,
+                            }
+                        })
+                    }
+                    "apply_patch" | "shell" | "custom" | "grammar" => {
+                        // For GPT-5.1 native tool types and GPT-5 features, use direct serialization
+                        json!(tool)
+                    }
+                    _ => {
+                        // Fallback for unknown tool types
+                        json!(tool)
+                    }
                 }
             })
             .collect::<Vec<Value>>();
@@ -333,6 +341,12 @@ impl OpenAIProvider {
 
     fn is_gpt5_codex_model(model: &str) -> bool {
         model == models::openai::GPT_5_CODEX
+    }
+
+    fn is_gpt51_model(model: &str) -> bool {
+        model == models::openai::GPT_5_1
+            || model == models::openai::GPT_5_1_CODEX
+            || model == models::openai::GPT_5_1_MINI
     }
 
     fn is_responses_api_model(model: &str) -> bool {
@@ -395,9 +409,9 @@ impl OpenAIProvider {
                     }
 
                     Some(ToolDescription::new(
-                        tool.function.name.clone(),
-                        tool.function.description.clone(),
-                        Some(tool.function.parameters.clone()),
+                        tool.function.as_ref().unwrap().name.clone(),
+                        tool.function.as_ref().unwrap().description.clone(),
+                        Some(tool.function.as_ref().unwrap().parameters.clone()),
                     ))
                 })
                 .collect();
@@ -438,10 +452,12 @@ impl OpenAIProvider {
                 MessageRole::Assistant => {
                     if let Some(tool_calls) = &msg.tool_calls {
                         for call in tool_calls {
-                            tool_call_authors.insert(
-                                call.id.clone(),
-                                format!("functions.{}", call.function.name),
-                            );
+                            if let Some(ref func) = call.function {
+                                tool_call_authors.insert(
+                                    call.id.clone(),
+                                    format!("functions.{}", func.name),
+                                );
+                            }
                         }
                     }
 
@@ -862,15 +878,17 @@ impl OpenAIProvider {
                     if !tool_calls.is_empty() {
                         let tool_calls_json: Vec<Value> = tool_calls
                             .iter()
-                            .map(|tc| {
-                                active_tool_call_ids.insert(tc.id.clone());
-                                json!({
-                                    "id": tc.id,
-                                    "type": "function",
-                                    "function": {
-                                        "name": tc.function.name,
-                                        "arguments": tc.function.arguments
-                                    }
+                            .filter_map(|tc| {
+                                tc.function.as_ref().map(|func| {
+                                    active_tool_call_ids.insert(tc.id.clone());
+                                    json!({
+                                        "id": tc.id,
+                                        "type": "function",
+                                        "function": {
+                                            "name": func.name,
+                                            "arguments": func.arguments
+                                        }
+                                    })
                                 })
                             })
                             .collect();
@@ -921,6 +939,14 @@ impl OpenAIProvider {
             if let Some(tools) = &request.tools {
                 if let Some(serialized) = Self::serialize_tools(tools) {
                     openai_request["tools"] = serialized;
+
+                    // Check if any tools are custom types - if so, disable parallel tool calls
+                    // as per GPT-5 specification: "custom tool type does NOT support parallel tool calling"
+                    let has_custom_tool = tools.iter().any(|tool| tool.tool_type == "custom");
+                    if has_custom_tool {
+                        // Override parallel tool calls to false if custom tools are present
+                        openai_request["parallel_tool_calls"] = Value::Bool(false);
+                    }
                 }
             }
 
@@ -928,8 +954,11 @@ impl OpenAIProvider {
                 openai_request["tool_choice"] = tool_choice.to_provider_format("openai");
             }
 
-            if let Some(parallel) = request.parallel_tool_calls {
-                openai_request["parallel_tool_calls"] = Value::Bool(parallel);
+            // Only set parallel tool calls if not overridden due to custom tools
+            if request.parallel_tool_calls.is_some() && !openai_request.get("parallel_tool_calls").is_some() {
+                if let Some(parallel) = request.parallel_tool_calls {
+                    openai_request["parallel_tool_calls"] = Value::Bool(parallel);
+                }
             }
 
             if self.supports_parallel_tool_config(&request.model) {
@@ -993,6 +1022,14 @@ impl OpenAIProvider {
             if let Some(tools) = &request.tools {
                 if let Some(serialized) = Self::serialize_tools(tools) {
                     openai_request["tools"] = serialized;
+
+                    // Check if any tools are custom types - if so, disable parallel tool calls
+                    // as per GPT-5 specification: "custom tool type does NOT support parallel tool calling"
+                    let has_custom_tool = tools.iter().any(|tool| tool.tool_type == "custom");
+                    if has_custom_tool {
+                        // Override parallel tool calls to false if custom tools are present
+                        openai_request["parallel_tool_calls"] = Value::Bool(false);
+                    }
                 }
             }
 
@@ -1000,8 +1037,11 @@ impl OpenAIProvider {
                 openai_request["tool_choice"] = tool_choice.to_provider_format("openai");
             }
 
-            if let Some(parallel) = request.parallel_tool_calls {
-                openai_request["parallel_tool_calls"] = Value::Bool(parallel);
+            // Only set parallel tool calls if not overridden due to custom tools
+            if request.parallel_tool_calls.is_some() && !openai_request.get("parallel_tool_calls").is_some() {
+                if let Some(parallel) = request.parallel_tool_calls {
+                    openai_request["parallel_tool_calls"] = Value::Bool(parallel);
+                }
             }
 
             if self.supports_parallel_tool_config(&request.model) {
@@ -1028,6 +1068,46 @@ impl OpenAIProvider {
         {
             openai_request["reasoning"] =
                 json!({ "effort": ReasoningEffortLevel::default().as_str() });
+        }
+
+        // Add text formatting options for GPT-5 and compatible models, including verbosity and grammar
+        let mut text_format = json!({});
+        let mut has_format_options = false;
+
+        if let Some(verbosity) = request.verbosity {
+            text_format["verbosity"] = json!(verbosity.as_str());
+            has_format_options = true;
+        }
+
+        // Add grammar constraint if tools include grammar definitions
+        if let Some(ref tools) = request.tools {
+            let grammar_tools: Vec<&ToolDefinition> = tools.iter()
+                .filter(|tool| tool.tool_type == "grammar")
+                .collect();
+
+            if !grammar_tools.is_empty() {
+                // Use the first grammar definition found
+                if let Some(grammar_tool) = grammar_tools.first() {
+                    if let Some(ref grammar) = grammar_tool.grammar {
+                        text_format["format"] = json!({
+                            "type": "grammar",
+                            "syntax": grammar.syntax,
+                            "definition": grammar.definition
+                        });
+                        has_format_options = true;
+                    }
+                }
+            }
+        }
+
+        // Set default verbosity for GPT-5.1 models if no format options specified
+        if !has_format_options && request.model.starts_with("gpt-5.1") {
+            text_format["verbosity"] = json!("medium");
+            has_format_options = true;
+        }
+
+        if has_format_options {
+            openai_request["text"] = text_format;
         }
 
         Ok(openai_request)
@@ -1863,15 +1943,17 @@ fn build_standard_responses_payload(
 
                 if let Some(tool_calls) = &msg.tool_calls {
                     for call in tool_calls {
-                        active_tool_call_ids.insert(call.id.clone());
-                        content_parts.push(json!({
-                            "type": "tool_call",
-                            "id": call.id.clone(),
-                            "function": {
-                                "name": call.function.name.clone(),
-                                "arguments": call.function.arguments.clone()
-                            }
-                        }));
+                        if let Some(ref func) = call.function {
+                            active_tool_call_ids.insert(call.id.clone());
+                            content_parts.push(json!({
+                                "type": "tool_call",
+                                "id": call.id.clone(),
+                                "function": {
+                                    "name": func.name.clone(),
+                                    "arguments": func.arguments.clone()
+                                }
+                            }));
+                        }
                     }
                 }
 
@@ -1979,15 +2061,17 @@ fn build_codex_responses_payload(request: &LLMRequest) -> Result<OpenAIResponses
 
                 if let Some(tool_calls) = &msg.tool_calls {
                     for call in tool_calls {
-                        active_tool_call_ids.insert(call.id.clone());
-                        content_parts.push(json!({
-                            "type": "tool_call",
-                            "id": call.id.clone(),
-                            "function": {
-                                "name": call.function.name.clone(),
-                                "arguments": call.function.arguments.clone()
-                            }
-                        }));
+                        if let Some(ref func) = call.function {
+                            active_tool_call_ids.insert(call.id.clone());
+                            content_parts.push(json!({
+                                "type": "tool_call",
+                                "id": call.id.clone(),
+                                "function": {
+                                    "name": func.name.clone(),
+                                    "arguments": func.arguments.clone()
+                                }
+                            }));
+                        }
                     }
                 }
 

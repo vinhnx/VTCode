@@ -247,6 +247,8 @@ fn build_parameter_type_map(
             let mut param_map = HashMap::new();
             if let Some(properties) = tool
                 .function
+                .as_ref()
+                .unwrap()
                 .parameters
                 .get("properties")
                 .and_then(|props| props.as_object())
@@ -270,7 +272,7 @@ fn build_parameter_type_map(
                 }
             }
 
-            map.insert(tool.function.name.clone(), param_map);
+            map.insert(tool.function.as_ref().unwrap().name.clone(), param_map);
         }
     }
 

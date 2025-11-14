@@ -51,6 +51,8 @@ pub enum SlashCommandOutcome {
         action: McpCommandAction,
     },
     RunDoctor,
+    DebugAgent,
+    AnalyzeAgent,
     ManageWorkspaceDirectories {
         command: WorkspaceDirectoryCommand,
     },
@@ -503,6 +505,28 @@ pub async fn handle_slash_command(
                 return Ok(SlashCommandOutcome::Handled);
             }
             Ok(SlashCommandOutcome::OpenDocs)
+        }
+        "debug" => {
+            // Accept optional arguments for debugging specific targets
+            if args.split_whitespace().count() > 1 {
+                renderer.line(
+                    MessageStyle::Error,
+                    "Usage: /debug [file|directory|problem] - accepts at most one argument"
+                )?;
+                return Ok(SlashCommandOutcome::Handled);
+            }
+            Ok(SlashCommandOutcome::DebugAgent)
+        }
+        "analyze" => {
+            // Accept optional arguments for specifying analysis type
+            if args.split_whitespace().count() > 1 {
+                renderer.line(
+                    MessageStyle::Error,
+                    "Usage: /analyze [full|security|performance] - accepts at most one argument"
+                )?;
+                return Ok(SlashCommandOutcome::Handled);
+            }
+            Ok(SlashCommandOutcome::AnalyzeAgent)
         }
         "exit" => Ok(SlashCommandOutcome::Exit),
         _ => {

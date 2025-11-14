@@ -328,22 +328,24 @@ impl OllamaProvider {
                     if let Some(tool_calls) = message.get_tool_calls() {
                         let mut converted = Vec::new();
                         for (index, tool_call) in tool_calls.iter().enumerate() {
-                            if !tool_call.id.is_empty() {
-                                tool_names
-                                    .entry(tool_call.id.clone())
-                                    .or_insert_with(|| tool_call.function.name.clone());
-                            }
+                            if let Some(ref func) = tool_call.function {
+                                if !tool_call.id.is_empty() {
+                                    tool_names
+                                        .entry(tool_call.id.clone())
+                                        .or_insert_with(|| func.name.clone());
+                                }
 
-                            let arguments =
-                                Self::parse_tool_arguments(&tool_call.function.arguments)?;
-                            converted.push(OllamaToolCall {
-                                call_type: tool_call.call_type.clone(),
-                                function: OllamaToolFunctionCall {
-                                    name: tool_call.function.name.clone(),
-                                    arguments: Some(arguments),
-                                    index: Some(index as u32),
-                                },
-                            });
+                                let arguments =
+                                    Self::parse_tool_arguments(&func.arguments)?;
+                                converted.push(OllamaToolCall {
+                                    call_type: tool_call.call_type.clone(),
+                                    function: OllamaToolFunctionCall {
+                                        name: func.name.clone(),
+                                        arguments: Some(arguments),
+                                        index: Some(index as u32),
+                                    },
+                                });
+                            }
                         }
 
                         if !converted.is_empty() {

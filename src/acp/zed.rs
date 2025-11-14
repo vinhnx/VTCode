@@ -871,7 +871,7 @@ impl ZedAgent {
                     tool_call_id: call.id.clone(),
                     llm_response: json!({
                         TOOL_RESPONSE_KEY_STATUS: TOOL_ERROR_LABEL,
-                        TOOL_RESPONSE_KEY_TOOL: call.function.name,
+                        TOOL_RESPONSE_KEY_TOOL: call.function.as_ref().expect("Tool call must have function").name,
                         TOOL_RESPONSE_KEY_MESSAGE: "Client connection unavailable",
                     })
                     .to_string(),
@@ -882,21 +882,22 @@ impl ZedAgent {
         let mut results = Vec::new();
 
         for call in calls {
-            let tool_descriptor = self.acp_tool_registry.lookup(&call.function.name);
+            let func_ref = call.function.as_ref().expect("Tool call must have function");
+            let tool_descriptor = self.acp_tool_registry.lookup(&func_ref.name);
             let args_value_result: Result<Value, _> =
-                serde_json::from_str(&call.function.arguments);
+                serde_json::from_str(&func_ref.arguments);
             let args_value_for_input = args_value_result.as_ref().ok().cloned();
             let title = match (tool_descriptor, args_value_for_input.as_ref()) {
                 (Some(descriptor), Some(args)) => {
                     self.acp_tool_registry
-                        .render_title(descriptor, &call.function.name, args)
+                        .render_title(descriptor, &func_ref.name, args)
                 }
                 (Some(descriptor), None) => {
                     let null_args = Value::Null;
                     self.acp_tool_registry
-                        .render_title(descriptor, &call.function.name, &null_args)
+                        .render_title(descriptor, &func_ref.name, &null_args)
                 }
-                (None, _) => format!("{} (unsupported)", call.function.name),
+                (None, _) => format!("{} (unsupported)", func_ref.name),
             };
 
             let call_id = acp::ToolCallId(Arc::from(call.id.clone()));
@@ -959,13 +960,13 @@ impl ZedAgent {
             let mut report = if let Some(report) = permission_override {
                 report
             } else if session.cancel_flag.get() {
-                ToolExecutionReport::cancelled(&call.function.name)
+                ToolExecutionReport::cancelled(&func_ref.name)
             } else {
                 match (tool_descriptor, args_value_result) {
                     (Some(descriptor), Ok(args_value)) => {
                         self.execute_descriptor(
                             descriptor,
-                            &call.function.name,
+                            &func_ref.name,
                             &client,
                             session_id,
                             &args_value,
@@ -973,10 +974,10 @@ impl ZedAgent {
                         .await
                     }
                     (None, Ok(_)) => {
-                        ToolExecutionReport::failure(&call.function.name, "Unsupported tool")
+                        ToolExecutionReport::failure(&func_ref.name, "Unsupported tool")
                     }
                     (_, Err(error)) => ToolExecutionReport::failure(
-                        &call.function.name,
+                        &func_ref.name,
                         &format!("Invalid JSON arguments: {error}"),
                     ),
                 }
@@ -984,7 +985,7 @@ impl ZedAgent {
 
             if session.cancel_flag.get() && matches!(report.status, acp::ToolCallStatus::Completed)
             {
-                report = ToolExecutionReport::cancelled(&call.function.name);
+                report = ToolExecutionReport::cancelled(&func_ref.name);
             }
 
             let mut update_fields = acp::ToolCallUpdateFields::default();

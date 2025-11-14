@@ -1186,12 +1186,14 @@ impl OpenRouterProvider {
 
                     if let Some(tool_calls) = &msg.tool_calls {
                         for call in tool_calls {
-                            content_parts.push(json!({
-                                "type": "tool_call",
-                                "id": call.id.clone(),
-                                "name": call.function.name.clone(),
-                                "arguments": call.function.arguments.clone()
-                            }));
+                            if let Some(ref func) = call.function {
+                                content_parts.push(json!({
+                                    "type": "tool_call",
+                                    "id": call.id.clone(),
+                                    "name": func.name.clone(),
+                                    "arguments": func.arguments.clone()
+                                }));
+                            }
                         }
                     }
 
@@ -1283,12 +1285,14 @@ impl OpenRouterProvider {
 
                     if let Some(tool_calls) = &msg.tool_calls {
                         for call in tool_calls {
-                            content_parts.push(json!({
-                                "type": "tool_call",
-                                "id": call.id.clone(),
-                                "name": call.function.name.clone(),
-                                "arguments": call.function.arguments.clone()
-                            }));
+                            if let Some(ref func) = call.function {
+                                content_parts.push(json!({
+                                    "type": "tool_call",
+                                    "id": call.id.clone(),
+                                    "name": func.name.clone(),
+                                    "arguments": func.arguments.clone()
+                                }));
+                            }
                         }
                     }
 
@@ -1392,9 +1396,9 @@ impl OpenRouterProvider {
                         json!({
                             "type": "function",
                             "function": {
-                                "name": tool.function.name,
-                                "description": tool.function.description,
-                                "parameters": tool.function.parameters
+                                "name": tool.function.as_ref().unwrap().name,
+                                "description": tool.function.as_ref().unwrap().description,
+                                "parameters": tool.function.as_ref().unwrap().parameters
                             }
                         })
                     })
@@ -1451,14 +1455,16 @@ impl OpenRouterProvider {
                     if !tool_calls.is_empty() {
                         let tool_calls_json: Vec<Value> = tool_calls
                             .iter()
-                            .map(|tc| {
-                                json!({
-                                    "id": tc.id,
-                                    "type": "function",
-                                    "function": {
-                                        "name": tc.function.name,
-                                        "arguments": tc.function.arguments
-                                    }
+                            .filter_map(|tc| {
+                                tc.function.as_ref().map(|func| {
+                                    json!({
+                                        "id": tc.id,
+                                        "type": "function",
+                                        "function": {
+                                            "name": func.name,
+                                            "arguments": func.arguments
+                                        }
+                                    })
                                 })
                             })
                             .collect();
@@ -1510,9 +1516,9 @@ impl OpenRouterProvider {
                         json!({
                             "type": "function",
                             "function": {
-                                "name": tool.function.name,
-                                "description": tool.function.description,
-                                "parameters": tool.function.parameters
+                                "name": tool.function.as_ref().unwrap().name,
+                                "description": tool.function.as_ref().unwrap().description,
+                                "parameters": tool.function.as_ref().unwrap().parameters
                             }
                         })
                     })

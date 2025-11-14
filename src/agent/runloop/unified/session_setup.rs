@@ -3,6 +3,7 @@ use crate::agent::runloop::sandbox::SandboxCoordinator;
 use crate::agent::runloop::telemetry::build_trajectory_logger;
 use crate::agent::runloop::welcome::{SessionBootstrap, prepare_session_bootstrap};
 use anyhow::{Context, Result};
+use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio::time::{Duration, sleep};
@@ -143,6 +144,19 @@ pub(crate) async fn initialize_session(
             )
         })
         .collect();
+
+    // Add GPT-5.1 specific tools if the model supports them
+    if let Ok(model_id) = ModelId::from_str(&config.model) {
+        if model_id.is_gpt51_variant() {
+            // Add apply_patch tool for GPT-5.1's structured diff editing
+            tool_definitions.push(uni::ToolDefinition::apply_patch(
+                "Apply structured diffs to modify files. Use this tool to create, update, or delete file content using unified diff format. The tool enables iterative, multi-step code editing workflows by applying patches and reporting results back.".to_string()
+            ));
+
+            // Add shell tool for GPT-5.1's controlled command-line interface
+            tool_definitions.push(uni::ToolDefinition::shell(None));
+        }
+    }
 
     // Add MCP tools if available (from async manager). Poll briefly for readiness
     // so a fast-starting MCP server will be exposed during session startup.

@@ -544,7 +544,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                             let _updated_snapshot = {
                                                 let mut guard = tools.write().await;
                                                 guard.retain(|tool| {
-                                                    !tool.function.name.starts_with("mcp_")
+                                                    !tool.function.as_ref().unwrap().name.starts_with("mcp_")
                                                 });
                                                 guard.extend(new_definitions);
                                                 guard.clone()
@@ -621,7 +621,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                             let _updated_snapshot = {
                                                 let mut guard = tools.write().await;
                                                 guard.retain(|tool| {
-                                                    !tool.function.name.starts_with("mcp_")
+                                                    !tool.function.as_ref().unwrap().name.starts_with("mcp_")
                                                 });
                                                 guard.extend(new_definitions);
                                                 guard.clone()
@@ -1027,7 +1027,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                         let snapshot = tools.read().await;
                         snapshot
                             .iter()
-                            .map(|tool| tool.function.name.clone())
+                            .map(|tool| tool.function.as_ref().unwrap().name.clone())
                             .collect()
                     };
                     ledger.update_available_tools(tool_names);
@@ -1267,7 +1267,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                     // This prevents the loop from breaking after tool execution
                     let _ = final_text.take();
                     for call in &tool_calls {
-                        let name = call.function.name.as_str();
+                        let name = call.function.as_ref().expect("Tool call must have function").name.as_str();
                         let args_val = call
                             .parsed_arguments()
                             .unwrap_or_else(|_| serde_json::json!({}));

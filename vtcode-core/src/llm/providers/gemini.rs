@@ -460,7 +460,9 @@ impl GeminiProvider {
                 && let Some(tool_calls) = &message.tool_calls
             {
                 for tool_call in tool_calls {
-                    call_map.insert(tool_call.id.clone(), tool_call.function.name.clone());
+                    if let Some(ref func) = tool_call.function {
+                        call_map.insert(tool_call.id.clone(), func.name.clone());
+                    }
                 }
             }
         }
@@ -483,15 +485,17 @@ impl GeminiProvider {
                 && let Some(tool_calls) = &message.tool_calls
             {
                 for tool_call in tool_calls {
-                    let parsed_args = serde_json::from_str(&tool_call.function.arguments)
-                        .unwrap_or_else(|_| json!({}));
-                    parts.push(Part::FunctionCall {
-                        function_call: GeminiFunctionCall {
-                            name: tool_call.function.name.clone(),
-                            args: parsed_args,
-                            id: Some(tool_call.id.clone()),
-                        },
-                    });
+                    if let Some(ref func) = tool_call.function {
+                        let parsed_args = serde_json::from_str(&func.arguments)
+                            .unwrap_or_else(|_| json!({}));
+                        parts.push(Part::FunctionCall {
+                            function_call: GeminiFunctionCall {
+                                name: func.name.clone(),
+                                args: parsed_args,
+                                id: Some(tool_call.id.clone()),
+                            },
+                        });
+                    }
                 }
             }
 
@@ -541,9 +545,9 @@ impl GeminiProvider {
                 .iter()
                 .map(|tool| Tool {
                     function_declarations: vec![FunctionDeclaration {
-                        name: tool.function.name.clone(),
-                        description: tool.function.description.clone(),
-                        parameters: sanitize_function_parameters(tool.function.parameters.clone()),
+                        name: tool.function.as_ref().unwrap().name.clone(),
+                        description: tool.function.as_ref().unwrap().description.clone(),
+                        parameters: sanitize_function_parameters(tool.function.as_ref().unwrap().parameters.clone()),
                     }],
                 })
                 .collect()
@@ -644,11 +648,12 @@ impl GeminiProvider {
                     tool_calls.push(ToolCall {
                         id: call_id,
                         call_type: "function".to_string(),
-                        function: FunctionCall {
+                        function: Some(FunctionCall {
                             name: function_call.name,
                             arguments: serde_json::to_string(&function_call.args)
                                 .unwrap_or_else(|_| "{}".to_string()),
-                        },
+                        }),
+                        text: None,
                     });
                 }
                 Part::FunctionResponse { .. } => {
@@ -878,11 +883,13 @@ impl LLMClient for GeminiProvider {
                             .flat_map(|tool| &tool.function_declarations)
                             .map(|decl| crate::llm::provider::ToolDefinition {
                                 tool_type: "function".to_string(),
-                                function: crate::llm::provider::FunctionDefinition {
+                                function: Some(crate::llm::provider::FunctionDefinition {
                                     name: decl.name.clone(),
                                     description: decl.description.clone(),
                                     parameters: decl.parameters.clone(),
-                                },
+                                }),
+                                shell: None,
+                                grammar: None,
                             })
                             .collect::<Vec<_>>()
                     });
@@ -920,12 +927,14 @@ impl LLMClient for GeminiProvider {
                         if !tool_calls.is_empty() {
                             // Create a JSON structure that the agent can parse
                             let tool_call_json = json!({
-                                "tool_calls": tool_calls.iter().map(|tc| {
-                                    json!({
-                                        "function": {
-                                            "name": tc.function.name,
-                                            "arguments": tc.function.arguments
-                                        }
+                                "tool_calls": tool_calls.iter().filter_map(|tc| {
+                                    tc.function.as_ref().map(|func| {
+                                        json!({
+                                            "function": {
+                                                "name": func.name,
+                                                "arguments": func.arguments
+                                            }
+                                        })
                                     })
                                 }).collect::<Vec<_>>()
                             });

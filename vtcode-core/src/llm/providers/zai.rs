@@ -38,9 +38,9 @@ impl ZAIProvider {
                 json!({
                     "type": tool.tool_type,
                     "function": {
-                        "name": tool.function.name,
-                        "description": tool.function.description,
-                        "parameters": tool.function.parameters,
+                        "name": tool.function.as_ref().unwrap().name,
+                        "description": tool.function.as_ref().unwrap().description,
+                        "parameters": tool.function.as_ref().unwrap().parameters,
                     }
                 })
             })
@@ -258,16 +258,20 @@ impl ZAIProvider {
                     if !tool_calls.is_empty() {
                         let tool_calls_json: Vec<Value> = tool_calls
                             .iter()
-                            .map(|tc| {
-                                active_tool_call_ids.insert(tc.id.clone());
-                                json!({
-                                    "id": tc.id,
-                                    "type": "function",
-                                    "function": {
-                                        "name": tc.function.name,
-                                        "arguments": tc.function.arguments,
-                                    }
-                                })
+                            .filter_map(|tc| {
+                                if let Some(ref func) = tc.function {
+                                    active_tool_call_ids.insert(tc.id.clone());
+                                    Some(json!({
+                                        "id": tc.id,
+                                        "type": "function",
+                                        "function": {
+                                            "name": func.name,
+                                            "arguments": func.arguments,
+                                        }
+                                    }))
+                                } else {
+                                    None
+                                }
                             })
                             .collect();
                         message["tool_calls"] = Value::Array(tool_calls_json);

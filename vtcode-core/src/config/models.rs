@@ -1415,6 +1415,24 @@ impl ModelId {
             | ModelId::OpenRouterMinimaxM2Free => "unknown", // fallback generation for OpenRouter models
         }
     }
+
+    /// Determine if this model is a GPT-5.1 variant with enhanced tool support
+    pub fn is_gpt51_variant(&self) -> bool {
+        matches!(
+            self,
+            ModelId::GPT51 | ModelId::GPT51Codex | ModelId::GPT51Mini
+        )
+    }
+
+    /// Determine if this model supports GPT-5.1's new apply_patch tool type
+    pub fn supports_apply_patch_tool(&self) -> bool {
+        self.is_gpt51_variant()
+    }
+
+    /// Determine if this model supports GPT-5.1's new shell tool type
+    pub fn supports_shell_tool(&self) -> bool {
+        self.is_gpt51_variant()
+    }
 }
 
 impl fmt::Display for ModelId {

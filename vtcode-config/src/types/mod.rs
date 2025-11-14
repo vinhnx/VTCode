@@ -14,6 +14,7 @@ use std::path::PathBuf;
 #[serde(rename_all = "lowercase")]
 pub enum ReasoningEffortLevel {
     None,
+    Minimal,
     Low,
     Medium,
     High,
@@ -24,6 +25,7 @@ impl ReasoningEffortLevel {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::None => "none",
+            Self::Minimal => "minimal",
             Self::Low => reasoning::LOW,
             Self::Medium => reasoning::MEDIUM,
             Self::High => reasoning::HIGH,
@@ -35,6 +37,8 @@ impl ReasoningEffortLevel {
         let normalized = value.trim();
         if normalized.eq_ignore_ascii_case("none") {
             Some(Self::None)
+        } else if normalized.eq_ignore_ascii_case("minimal") {
+            Some(Self::Minimal)
         } else if normalized.eq_ignore_ascii_case(reasoning::LOW) {
             Some(Self::Low)
         } else if normalized.eq_ignore_ascii_case(reasoning::MEDIUM) {

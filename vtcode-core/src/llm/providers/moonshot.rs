@@ -182,14 +182,16 @@ impl MoonshotProvider {
             if let Some(tool_calls) = &message.tool_calls {
                 let serialized_calls = tool_calls
                     .iter()
-                    .map(|call| {
-                        json!({
-                            "id": call.id.clone(),
-                            "type": "function",
-                            "function": {
-                                "name": call.function.name.clone(),
-                                "arguments": call.function.arguments.clone()
-                            }
+                    .filter_map(|call| {
+                        call.function.as_ref().map(|func| {
+                            json!({
+                                "id": call.id.clone(),
+                                "type": "function",
+                                "function": {
+                                    "name": func.name.clone(),
+                                    "arguments": func.arguments.clone()
+                                }
+                            })
                         })
                     })
                     .collect::<Vec<_>>();
@@ -283,12 +285,13 @@ impl MoonshotProvider {
                                                     .and_then(|args_val| args_val.as_str())
                                                     .map(|args| crate::llm::provider::ToolCall {
                                                         id: id.to_string(),
-                                                        function:
+                                                        function: Some(
                                                             crate::llm::provider::FunctionCall {
                                                                 name: name.to_string(),
                                                                 arguments: args.to_string(),
-                                                            },
+                                                            }),
                                                         call_type: "function".to_string(),
+                                                        text: None,
                                                     })
                                             })
                                     })

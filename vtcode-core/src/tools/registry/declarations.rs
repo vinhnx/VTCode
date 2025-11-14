@@ -525,13 +525,13 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
 
         FunctionDeclaration {
             name: tools::APPLY_PATCH.to_string(),
-            description: "Apply Codex-style patch blocks to multiple files atomically.".to_string(),
+            description: "Apply structured diffs to modify files. Use this tool to create, update, or delete file content using unified diff format. The tool enables iterative, multi-step code editing workflows by applying patches and reporting results back. GPT-5.1 specific tool optimized for precise file modifications.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
-                    "input": {"type": "string", "description": "Patch content with *** Begin/End Patch markers"},
-                    "patch": {"type": "string", "description": "Alias for input"},
-                    "diff": {"type": "string", "description": "Alias for input"}
+                    "input": {"type": "string", "description": "Patch content in unified diff format with *** Begin/End Patch markers"},
+                    "patch": {"type": "string", "description": "Alias for input - unified diff format patch"},
+                    "diff": {"type": "string", "description": "Alias for input - unified diff format patch"}
                 },
                 "anyOf": [
                     {"required": ["input"]},
@@ -541,42 +541,6 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
             }),
         },
 
-        // ============================================================
-        // COMMAND EXECUTION
-        // ============================================================
-        FunctionDeclaration {
-            name: tools::RUN_COMMAND.to_string(),
-            description: "[DEPRECATED] Use PTY session tools instead (create_pty_session, send_pty_input, read_pty_session). Legacy unified command execution with auto-detection.".to_string(),
-            parameters: json!({
-                "type": "object",
-                "properties": {
-                    "command": {
-                        "description": "Command to execute (array or string)",
-                        "oneOf": [
-                            {"type": "array", "items": {"type": "string"}},
-                            {"type": "string"}
-                        ]
-                    },
-                    "args": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "Command arguments (when command is string)"
-                    },
-                    "working_dir": {"type": "string", "description": "Working directory"},
-                    "cwd": {"type": "string", "description": "Alias for working_dir"},
-                    "timeout_secs": {"type": "integer", "description": "Timeout seconds (auto: 30s terminal, 300s PTY)"},
-                    "mode": {"type": "string", "description": "terminal|pty|auto", "default": "auto"},
-                    "tty": {"type": "boolean", "description": "Alias for mode=pty"},
-                    "interactive": {"type": "boolean", "description": "Force PTY mode for interactive programs"},
-                    "response_format": {"type": "string", "description": "concise|detailed", "default": "concise"},
-                    "shell": {"type": "string", "description": "Shell executable"},
-                    "login": {"type": "boolean", "description": "Use login shell semantics"},
-                    "rows": {"type": "integer", "description": "Terminal rows (PTY mode)", "default": 24},
-                    "cols": {"type": "integer", "description": "Terminal columns (PTY mode)", "default": 80}
-                },
-                "required": ["command"]
-            }),
-        },
 
         // ============================================================
         // PTY SESSION MANAGEMENT
@@ -584,7 +548,7 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
 
         FunctionDeclaration {
             name: tools::CREATE_PTY_SESSION.to_string(),
-            description: "Create persistent PTY session for reuse across calls.".to_string(),
+            description: "Create persistent PTY session for reuse across calls. For GPT-5.1 models, use shell tool for direct command-line interface interactions.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -703,14 +667,14 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
         // ============================================================
         FunctionDeclaration {
             name: tools::UPDATE_PLAN.to_string(),
-            description: "Track multi-step plan with status (pending|in_progress|completed).".to_string(),
+            description: "Track multi-step plan with status (pending|in_progress|completed). Follow GPT-5.1 format: 2-5 milestone items with one in_progress at a time for complex tasks.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
                     "explanation": {"type": "string", "description": "Plan summary"},
                     "plan": {
                         "type": "array",
-                        "description": "Plan steps with status",
+                        "description": "Plan steps with status, following GPT-5.1 recommended format: 2-5 milestone items with one in_progress at a time",
                         "items": {
                             "type": "object",
                             "properties": {

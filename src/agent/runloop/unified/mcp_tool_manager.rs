@@ -19,7 +19,7 @@ impl McpToolManager {
                     super::session_setup::build_mcp_tool_definitions(&new_mcp_tools);
                 let _updated_snapshot = {
                     let mut guard = tools.write().await;
-                    guard.retain(|tool| !tool.function.name.starts_with("mcp_"));
+                    guard.retain(|tool| !tool.function.as_ref().unwrap().name.starts_with("mcp_"));
                     guard.extend(new_definitions);
                     guard.clone()
                 };
@@ -97,7 +97,7 @@ impl McpToolManager {
         let new_definitions = super::session_setup::build_mcp_tool_definitions(&mcp_tools);
         let _updated_snapshot = {
             let mut guard = tools.write().await;
-            guard.retain(|tool| !tool.function.name.starts_with("mcp_"));
+            guard.retain(|tool| !tool.function.as_ref().unwrap().name.starts_with("mcp_"));
             guard.extend(new_definitions);
             guard.clone()
         };

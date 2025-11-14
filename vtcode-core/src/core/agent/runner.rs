@@ -713,13 +713,15 @@ impl AgentRunner {
             .flat_map(|tool| tool.function_declarations)
             .map(|decl| ToolDefinition {
                 tool_type: "function".to_string(),
-                function: FunctionDefinition {
+                function: Some(FunctionDefinition {
                     name: decl.name,
                     description: decl.description,
                     parameters: crate::llm::providers::gemini::sanitize_function_parameters(
                         decl.parameters,
                     ),
-                },
+                }),
+                shell: None,
+                grammar: None,
             })
             .collect();
 
@@ -935,7 +937,7 @@ impl AgentRunner {
                         );
 
                         for call in tool_calls_vec {
-                            let name = call.function.name.clone();
+                            let name = call.function.as_ref().expect("Tool call must have function").name.clone();
 
                             runner_println!(
                                 self,

@@ -295,14 +295,16 @@ impl DeepSeekProvider {
             if let Some(tool_calls) = &message.tool_calls {
                 let serialized_calls = tool_calls
                     .iter()
-                    .map(|call| {
-                        json!({
-                            "id": call.id.clone(),
-                            "type": "function",
-                            "function": {
-                                "name": call.function.name.clone(),
-                                "arguments": call.function.arguments.clone()
-                            }
+                    .filter_map(|call| {
+                        call.function.as_ref().map(|func| {
+                            json!({
+                                "id": call.id.clone(),
+                                "type": "function",
+                                "function": {
+                                    "name": func.name.clone(),
+                                    "arguments": func.arguments.clone()
+                                }
+                            })
                         })
                     })
                     .collect::<Vec<_>>();

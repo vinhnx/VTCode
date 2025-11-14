@@ -522,9 +522,9 @@ impl AnthropicProvider {
                     .iter()
                     .map(|tool| {
                         json!({
-                            "name": tool.function.name,
-                            "description": tool.function.description,
-                            "input_schema": tool.function.parameters
+                            "name": tool.function.as_ref().unwrap().name,
+                            "description": tool.function.as_ref().unwrap().description,
+                            "input_schema": tool.function.as_ref().unwrap().parameters
                         })
                     })
                     .collect();
@@ -578,14 +578,16 @@ impl AnthropicProvider {
                     }
                     if let Some(tool_calls) = &msg.tool_calls {
                         for call in tool_calls {
-                            let args: Value = serde_json::from_str(&call.function.arguments)
-                                .unwrap_or_else(|_| json!({}));
-                            content_blocks.push(json!({
-                                "type": "tool_use",
-                                "id": call.id,
-                                "name": call.function.name,
-                                "input": args
-                            }));
+                            if let Some(ref func) = call.function {
+                                let args: Value = serde_json::from_str(&func.arguments)
+                                    .unwrap_or_else(|_| json!({}));
+                                content_blocks.push(json!({
+                                    "type": "tool_use",
+                                    "id": call.id,
+                                    "name": func.name,
+                                    "input": args
+                                }));
+                            }
                         }
                     }
                     if content_blocks.is_empty() {

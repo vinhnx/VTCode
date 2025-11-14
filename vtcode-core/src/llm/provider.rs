@@ -777,12 +777,82 @@ impl MessageRole {
 /// Based on official API documentation from Context7
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolDefinition {
-    /// The type of tool (always "function" for function calling)
+    /// The type of tool: "function", "apply_patch" (GPT-5.1), "shell" (GPT-5.1), or "custom" (GPT-5 freeform)
     #[serde(rename = "type")]
     pub tool_type: String,
 
     /// Function definition containing name, description, and parameters
-    pub function: FunctionDefinition,
+    /// Used for "function", "apply_patch", and "custom" types
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub function: Option<FunctionDefinition>,
+
+    /// Shell tool configuration (GPT-5.1 specific)
+    /// Describes shell command capabilities and constraints
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub shell: Option<ShellToolDefinition>,
+
+    /// Grammar definition for context-free grammar constraints (GPT-5 specific)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub grammar: Option<GrammarDefinition>,
+}
+
+/// Shell tool definition for GPT-5.1 shell tool type
+/// Allows controlled command-line interface interactions
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ShellToolDefinition {
+    /// Description of shell tool capabilities
+    pub description: String,
+
+    /// List of allowed commands (whitelist for safety)
+    pub allowed_commands: Vec<String>,
+
+    /// List of forbidden commands (blacklist for safety)
+    pub forbidden_patterns: Vec<String>,
+
+    /// Maximum command timeout in seconds
+    pub timeout_seconds: u32,
+}
+
+/// Grammar definition for GPT-5 context-free grammar (CFG) constraints
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GrammarDefinition {
+    /// The syntax of the grammar: "lark" or "regex"
+    pub syntax: String,
+
+    /// The grammar definition in the specified syntax
+    pub definition: String,
+}
+
+impl Default for GrammarDefinition {
+    fn default() -> Self {
+        Self {
+            syntax: "lark".to_string(),
+            definition: "".to_string(),
+        }
+    }
+}
+
+impl Default for ShellToolDefinition {
+    fn default() -> Self {
+        Self {
+            description: "Execute shell commands in the workspace".to_string(),
+            allowed_commands: vec![
+                "ls".to_string(),
+                "find".to_string(),
+                "grep".to_string(),
+                "cargo".to_string(),
+                "git".to_string(),
+                "python".to_string(),
+                "node".to_string(),
+            ],
+            forbidden_patterns: vec![
+                "rm -rf".to_string(),
+                "sudo".to_string(),
+                "passwd".to_string(),
+            ],
+            timeout_seconds: 30,
+        }
+    }
 }
 
 /// Function definition within a tool
@@ -813,58 +883,203 @@ impl ToolDefinition {
         let sanitized_description = sanitize_tool_description(&description);
         Self {
             tool_type: "function".to_string(),
-            function: FunctionDefinition {
+            function: Some(FunctionDefinition {
                 name,
                 description: sanitized_description,
                 parameters,
-            },
+            }),
+            shell: None,
+            grammar: None,
+        }
+    }
+
+    /// Create a new apply_patch tool definition (GPT-5.1 specific)
+    /// The apply_patch tool lets models create, update, and delete files using structured diffs
+    pub fn apply_patch(description: String) -> Self {
+        let sanitized_description = sanitize_tool_description(&description);
+        Self {
+            tool_type: "apply_patch".to_string(),
+            function: Some(FunctionDefinition {
+                name: "apply_patch".to_string(),
+                description: sanitized_description,
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "file_path": {
+                            "type": "string",
+                            "description": "The absolute path to the file to modify"
+                        },
+                        "patch": {
+                            "type": "string",
+                            "description": "Unified diff format patch to apply"
+                        }
+                    },
+                    "required": ["file_path", "patch"]
+                }),
+            }),
+            shell: None,
+            grammar: None,
+        }
+    }
+
+    /// Create a new shell tool definition (GPT-5.1 specific)
+    /// The shell tool allows controlled command-line interface interactions
+    pub fn shell(config: Option<ShellToolDefinition>) -> Self {
+        let shell_config = config.unwrap_or_default();
+        Self {
+            tool_type: "shell".to_string(),
+            function: None,
+            shell: Some(shell_config),
+            grammar: None,
+        }
+    }
+
+    /// Create a new custom tool definition for freeform function calling (GPT-5 specific)
+    /// Allows raw text payloads without JSON wrapping
+    pub fn custom(name: String, description: String) -> Self {
+        let sanitized_description = sanitize_tool_description(&description);
+        Self {
+            tool_type: "custom".to_string(),
+            function: Some(FunctionDefinition {
+                name,
+                description: sanitized_description,
+                parameters: json!({}), // Custom tools may not need parameters
+            }),
+            shell: None,
+            grammar: None,
+        }
+    }
+
+    /// Create a new grammar tool definition for context-free grammar constraints (GPT-5 specific)
+    /// Ensures model output matches predefined syntax
+    pub fn grammar(syntax: String, definition: String) -> Self {
+        Self {
+            tool_type: "grammar".to_string(),
+            function: None,
+            shell: None,
+            grammar: Some(GrammarDefinition {
+                syntax,
+                definition,
+            }),
         }
     }
 
     /// Get the function name for easy access
     pub fn function_name(&self) -> &str {
-        &self.function.name
+        if let Some(func) = &self.function {
+            &func.name
+        } else {
+            &self.tool_type
+        }
     }
 
     /// Validate that this tool definition is properly formed
     pub fn validate(&self) -> Result<(), String> {
-        if self.tool_type != "function" {
-            return Err(format!(
-                "Only 'function' type is supported, got: {}",
-                self.tool_type
-            ));
+        match self.tool_type.as_str() {
+            "function" => self.validate_function(),
+            "apply_patch" => self.validate_apply_patch(),
+            "shell" => self.validate_shell(),
+            "custom" => self.validate_custom(),
+            "grammar" => self.validate_grammar(),
+            other => Err(format!(
+                "Unsupported tool type: {}. Supported types: function, apply_patch, shell, custom, grammar",
+                other
+            )),
         }
+    }
 
-        if self.function.name.is_empty() {
-            return Err("Function name cannot be empty".to_string());
+    fn validate_function(&self) -> Result<(), String> {
+        if let Some(func) = &self.function {
+            if func.name.is_empty() {
+                return Err("Function name cannot be empty".to_string());
+            }
+            if func.description.is_empty() {
+                return Err("Function description cannot be empty".to_string());
+            }
+            if !func.parameters.is_object() {
+                return Err("Function parameters must be a JSON object".to_string());
+            }
+            Ok(())
+        } else {
+            Err("Function tool missing function definition".to_string())
         }
+    }
 
-        if self.function.description.is_empty() {
-            return Err("Function description cannot be empty".to_string());
+    fn validate_apply_patch(&self) -> Result<(), String> {
+        if let Some(func) = &self.function {
+            if func.name != "apply_patch" {
+                return Err(format!("apply_patch tool must have name 'apply_patch', got: {}", func.name));
+            }
+            if func.description.is_empty() {
+                return Err("apply_patch description cannot be empty".to_string());
+            }
+            Ok(())
+        } else {
+            Err("apply_patch tool missing function definition".to_string())
         }
+    }
 
-        // Validate that parameters is a proper JSON Schema object
-        if !self.function.parameters.is_object() {
-            return Err("Function parameters must be a JSON object".to_string());
+    fn validate_shell(&self) -> Result<(), String> {
+        if let Some(shell) = &self.shell {
+            if shell.description.is_empty() {
+                return Err("Shell tool description cannot be empty".to_string());
+            }
+            if shell.timeout_seconds == 0 {
+                return Err("Shell tool timeout must be greater than 0".to_string());
+            }
+            Ok(())
+        } else {
+            Err("Shell tool missing shell definition".to_string())
         }
+    }
 
-        Ok(())
+    fn validate_custom(&self) -> Result<(), String> {
+        if let Some(func) = &self.function {
+            if func.name.is_empty() {
+                return Err("Custom tool name cannot be empty".to_string());
+            }
+            if func.description.is_empty() {
+                return Err("Custom tool description cannot be empty".to_string());
+            }
+            Ok(())
+        } else {
+            Err("Custom tool missing function definition".to_string())
+        }
+    }
+
+    fn validate_grammar(&self) -> Result<(), String> {
+        if let Some(grammar) = &self.grammar {
+            if !["lark", "regex"].contains(&grammar.syntax.as_str()) {
+                return Err("Grammar syntax must be 'lark' or 'regex'".to_string());
+            }
+            if grammar.definition.is_empty() {
+                return Err("Grammar definition cannot be empty".to_string());
+            }
+            Ok(())
+        } else {
+            Err("Grammar tool missing grammar definition".to_string())
+        }
     }
 }
 
-/// Universal tool call that matches the exact structure from OpenAI API
-/// Based on OpenAI Cookbook examples and official documentation
+/// Universal tool call that matches OpenAI/Anthropic/Gemini specifications
+/// Based on official API documentation from Context7
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ToolCall {
     /// Unique identifier for this tool call (e.g., "call_123")
     pub id: String,
 
-    /// The type of tool call (always "function" for function calling)
+    /// The type of tool call: "function", "custom" (GPT-5 freeform), or other
     #[serde(rename = "type")]
     pub call_type: String,
 
-    /// Function call details
-    pub function: FunctionCall,
+    /// Function call details (for function-type tools)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub function: Option<FunctionCall>,
+
+    /// Raw text payload (for custom freeform tools in GPT-5)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
 }
 
 /// Function call within a tool call
@@ -883,35 +1098,65 @@ impl ToolCall {
         Self {
             id,
             call_type: "function".to_string(),
-            function: FunctionCall { name, arguments },
+            function: Some(FunctionCall { name, arguments }),
+            text: None,
         }
     }
 
-    /// Parse the arguments as JSON Value
+    /// Create a new custom tool call with raw text payload (GPT-5 freeform)
+    pub fn custom(id: String, name: String, text: String) -> Self {
+        Self {
+            id,
+            call_type: "custom".to_string(),
+            function: Some(FunctionCall {
+                name,
+                arguments: text.clone(), // For custom tools, we treat the text as arguments
+            }),
+            text: Some(text),
+        }
+    }
+
+    /// Parse the arguments as JSON Value (for function-type tools)
     pub fn parsed_arguments(&self) -> Result<Value, serde_json::Error> {
-        serde_json::from_str(&self.function.arguments)
+        if let Some(ref func) = self.function {
+            serde_json::from_str(&func.arguments)
+        } else {
+            // Return an error by trying to parse invalid JSON
+            serde_json::from_str("")
+        }
     }
 
     /// Validate that this tool call is properly formed
     pub fn validate(&self) -> Result<(), String> {
-        if self.call_type != "function" {
-            return Err(format!(
-                "Only 'function' type is supported, got: {}",
-                self.call_type
-            ));
-        }
-
         if self.id.is_empty() {
             return Err("Tool call ID cannot be empty".to_string());
         }
 
-        if self.function.name.is_empty() {
-            return Err("Function name cannot be empty".to_string());
-        }
-
-        // Validate that arguments is valid JSON
-        if let Err(e) = self.parsed_arguments() {
-            return Err(format!("Invalid JSON in function arguments: {}", e));
+        match self.call_type.as_str() {
+            "function" => {
+                if let Some(func) = &self.function {
+                    if func.name.is_empty() {
+                        return Err("Function name cannot be empty".to_string());
+                    }
+                    // Validate that arguments is valid JSON for function tools
+                    if let Err(e) = self.parsed_arguments() {
+                        return Err(format!("Invalid JSON in function arguments: {}", e));
+                    }
+                } else {
+                    return Err("Function tool call missing function details".to_string());
+                }
+            }
+            "custom" => {
+                // For custom tools, we allow raw text payload without JSON validation
+                if let Some(func) = &self.function {
+                    if func.name.is_empty() {
+                        return Err("Custom tool name cannot be empty".to_string());
+                    }
+                } else {
+                    return Err("Custom tool call missing function details".to_string());
+                }
+            }
+            _ => return Err(format!("Unsupported tool call type: {}", self.call_type)),
         }
 
         Ok(())

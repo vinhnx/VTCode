@@ -348,8 +348,8 @@ fn approximate_unified_message_tokens(message: &uni::Message) -> usize {
         total_chars += tool_calls.iter().fold(0, |acc, call| {
             acc + call.id.len()
                 + call.call_type.len()
-                + call.function.name.len()
-                + call.function.arguments.len()
+                + call.function.as_ref().expect("Tool call must have function").name.len()
+                + call.function.as_ref().expect("Tool call must have function").arguments.len()
         });
     }
 
@@ -637,8 +637,8 @@ fn message_semantic_hash(message: &uni::Message) -> u64 {
     if let Some(tool_calls) = &message.tool_calls {
         for call in tool_calls {
             call.id.hash(&mut hasher);
-            call.function.name.hash(&mut hasher);
-            call.function.arguments.hash(&mut hasher);
+            call.function.as_ref().expect("Tool call must have function").name.hash(&mut hasher);
+            call.function.as_ref().expect("Tool call must have function").arguments.hash(&mut hasher);
         }
     }
 
