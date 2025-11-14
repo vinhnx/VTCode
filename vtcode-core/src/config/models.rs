@@ -190,6 +190,12 @@ pub enum ModelId {
     GPT5Mini,
     /// GPT-5 Nano - Latest most cost-effective OpenAI model (2025-08-07)
     GPT5Nano,
+    /// GPT-5.1 - Enhanced latest most capable OpenAI model with improved reasoning (2025-11-14)
+    GPT51,
+    /// GPT-5.1 Codex - Code-focused GPT-5.1 variant using the Responses API
+    GPT51Codex,
+    /// GPT-5.1 Mini - Enhanced efficient OpenAI model with improved capabilities (2025-11-14)
+    GPT51Mini,
     /// Codex Mini Latest - Latest Codex model for code generation (2025-05-16)
     CodexMiniLatest,
     /// GPT-OSS 20B - OpenAI's open-source 20B parameter model using harmony
@@ -442,6 +448,9 @@ impl ModelId {
             ModelId::GPT5Codex => models::GPT_5_CODEX,
             ModelId::GPT5Mini => models::GPT_5_MINI,
             ModelId::GPT5Nano => models::GPT_5_NANO,
+            ModelId::GPT51 => models::GPT_5_1,
+            ModelId::GPT51Codex => models::GPT_5_1_CODEX,
+            ModelId::GPT51Mini => models::GPT_5_1_MINI,
             ModelId::CodexMiniLatest => models::CODEX_MINI_LATEST,
             ModelId::OpenAIGptOss20b => models::openai::GPT_OSS_20B,
             ModelId::OpenAIGptOss120b => models::openai::GPT_OSS_120B,
@@ -565,6 +574,9 @@ impl ModelId {
             | ModelId::GPT5Codex
             | ModelId::GPT5Mini
             | ModelId::GPT5Nano
+            | ModelId::GPT51
+            | ModelId::GPT51Codex
+            | ModelId::GPT51Mini
             | ModelId::CodexMiniLatest
             | ModelId::OpenAIGptOss20b
             | ModelId::OpenAIGptOss120b => Provider::OpenAI,
@@ -714,6 +726,8 @@ impl ModelId {
             ModelId::Gemini25Pro => Some(ModelId::Gemini25Flash),
             ModelId::GPT5 => Some(ModelId::GPT5Mini),
             ModelId::GPT5Codex => Some(ModelId::CodexMiniLatest),
+            ModelId::GPT51 => Some(ModelId::GPT51Mini),
+            ModelId::GPT51Codex => Some(ModelId::CodexMiniLatest),
             ModelId::DeepSeekReasoner => Some(ModelId::DeepSeekChat),
             ModelId::XaiGrok4 => Some(ModelId::XaiGrok4Mini),
             ModelId::XaiGrok4Code => Some(ModelId::XaiGrok4CodeLatest),
@@ -746,6 +760,9 @@ impl ModelId {
             ModelId::GPT5Codex => "GPT-5 Codex",
             ModelId::GPT5Mini => "GPT-5 Mini",
             ModelId::GPT5Nano => "GPT-5 Nano",
+            ModelId::GPT51 => "GPT-5.1",
+            ModelId::GPT51Codex => "GPT-5.1 Codex",
+            ModelId::GPT51Mini => "GPT-5.1 Mini",
             ModelId::CodexMiniLatest => "Codex Mini Latest",
             // Anthropic models
             ModelId::ClaudeOpus41 => "Claude Opus 4.1",
@@ -825,6 +842,13 @@ impl ModelId {
             ModelId::GPT5Codex => {
                 "Code-focused GPT-5 variant optimized for tool calling and structured outputs"
             }
+            ModelId::GPT51 => {
+                "Enhanced most capable OpenAI model with improved reasoning and capabilities"
+            }
+            ModelId::GPT51Codex => {
+                "Code-focused GPT-5.1 variant optimized for tool calling and structured outputs"
+            }
+            ModelId::GPT51Mini => "Enhanced efficient OpenAI model with improved capabilities",
             ModelId::GPT5Mini => "Latest efficient OpenAI model, great for most tasks",
             ModelId::GPT5Nano => "Latest most cost-effective OpenAI model",
             ModelId::CodexMiniLatest => "Latest Codex model optimized for code generation",
@@ -1021,6 +1045,9 @@ impl ModelId {
             ModelId::GPT5Codex,
             ModelId::GPT5Mini,
             ModelId::GPT5Nano,
+            ModelId::GPT51,
+            ModelId::GPT51Codex,
+            ModelId::GPT51Mini,
             ModelId::CodexMiniLatest,
             // Anthropic models
             ModelId::ClaudeOpus41,
@@ -1092,6 +1119,7 @@ impl ModelId {
             ModelId::Gemini25FlashPreview,
             ModelId::Gemini25Pro,
             ModelId::GPT5,
+            ModelId::GPT51,
             ModelId::OpenAIGptOss20b,
             ModelId::ClaudeOpus41,
             ModelId::ClaudeSonnet45,
@@ -1283,6 +1311,9 @@ impl ModelId {
             | ModelId::GPT5Codex
             | ModelId::GPT5Mini
             | ModelId::GPT5Nano
+            | ModelId::GPT51
+            | ModelId::GPT51Codex
+            | ModelId::GPT51Mini
             | ModelId::CodexMiniLatest
             | ModelId::OpenAIGptOss20b
             | ModelId::OpenAIGptOss120b => "5",

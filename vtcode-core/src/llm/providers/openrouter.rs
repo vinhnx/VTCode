@@ -718,6 +718,7 @@ impl OpenRouterProvider {
             parallel_tool_calls: None,
             parallel_tool_config: None,
             reasoning_effort: None,
+            verbosity: None,
         }
     }
 
@@ -1086,6 +1087,7 @@ impl OpenRouterProvider {
             parallel_tool_calls,
             parallel_tool_config: None,
             reasoning_effort,
+            verbosity: None,
         })
     }
 
@@ -2111,6 +2113,7 @@ mod tests {
             parallel_tool_calls: Some(true),
             parallel_tool_config: None,
             reasoning_effort: None,
+            verbosity: None,
         }
     }
 

@@ -451,6 +451,7 @@ impl PromptOptimizer {
             parallel_tool_calls: None,
             parallel_tool_config: None,
             reasoning_effort: None,
+            verbosity: None,
         };
 
         let response = self

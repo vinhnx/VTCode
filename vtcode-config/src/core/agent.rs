@@ -1,5 +1,5 @@
 use crate::constants::{defaults, instructions, llm_generation, project_doc, prompts};
-use crate::types::{ReasoningEffortLevel, UiSurfacePreference};
+use crate::types::{ReasoningEffortLevel, UiSurfacePreference, VerbosityLevel};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -39,10 +39,15 @@ pub struct AgentConfig {
     #[serde(default = "default_max_conversation_turns")]
     pub max_conversation_turns: usize,
 
-    /// Reasoning effort level for models that support it (low, medium, high)
-    /// Applies to: Claude, GPT-5, Gemini, Qwen3, DeepSeek with reasoning capability
+    /// Reasoning effort level for models that support it (none, low, medium, high)
+    /// Applies to: Claude, GPT-5, GPT-5.1, Gemini, Qwen3, DeepSeek with reasoning capability
     #[serde(default = "default_reasoning_effort")]
     pub reasoning_effort: ReasoningEffortLevel,
+
+    /// Verbosity level for output text (low, medium, high)
+    /// Applies to: GPT-5.1 and other models that support verbosity control
+    #[serde(default = "default_verbosity")]
+    pub verbosity: VerbosityLevel,
 
     /// Temperature for main LLM responses (0.0-1.0)
     /// Lower values = more deterministic, higher values = more creative
@@ -139,6 +144,7 @@ impl Default for AgentConfig {
             ui_surface: UiSurfacePreference::default(),
             max_conversation_turns: default_max_conversation_turns(),
             reasoning_effort: default_reasoning_effort(),
+            verbosity: default_verbosity(),
             temperature: default_temperature(),
             max_tokens: default_max_tokens(),
             refine_temperature: default_refine_temperature(),
@@ -211,6 +217,10 @@ fn default_max_conversation_turns() -> usize {
 }
 fn default_reasoning_effort() -> ReasoningEffortLevel {
     ReasoningEffortLevel::default()
+}
+
+fn default_verbosity() -> VerbosityLevel {
+    VerbosityLevel::default()
 }
 
 fn default_temperature() -> f32 {

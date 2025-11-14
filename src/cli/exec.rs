@@ -116,6 +116,7 @@ pub async fn handle_exec_command(
         config.workspace.clone(),
         session_id,
         Some(config.reasoning_effort),
+        None,
     )
     .await?;
 

@@ -1,6 +1,6 @@
+use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::PromptCachingConfig;
-use crate::config::TimeoutsConfig;
 use crate::llm::client::LLMClient;
 use crate::llm::provider::{
     FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
@@ -187,6 +187,7 @@ impl OllamaProvider {
             parallel_tool_calls: None,
             parallel_tool_config: None,
             reasoning_effort: None,
+            verbosity: None,
         }
     }
 
@@ -275,6 +276,7 @@ impl OllamaProvider {
             parallel_tool_calls: None,
             parallel_tool_config: None,
             reasoning_effort: None,
+            verbosity: None,
         })
     }
 

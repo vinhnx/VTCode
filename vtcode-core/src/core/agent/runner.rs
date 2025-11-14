@@ -4,7 +4,7 @@ use crate::config::VTCodeConfig;
 use crate::config::constants::{defaults, tools};
 use crate::config::loader::ConfigManager;
 use crate::config::models::{ModelId, Provider as ModelProvider};
-use crate::config::types::ReasoningEffortLevel;
+use crate::config::types::{ReasoningEffortLevel, VerbosityLevel};
 use crate::core::agent::conversation::{
     build_conversation, build_messages_from_conversation, compose_system_instruction,
 };
@@ -294,6 +294,8 @@ pub struct AgentRunner {
     _api_key: String,
     /// Reasoning effort level for models that support it
     reasoning_effort: Option<ReasoningEffortLevel>,
+    /// Verbosity level for output text
+    verbosity: Option<VerbosityLevel>,
     /// Suppress stdout output when emitting structured events
     quiet: bool,
     /// Optional sink for streaming structured events
@@ -556,6 +558,7 @@ impl AgentRunner {
         workspace: PathBuf,
         session_id: String,
         reasoning_effort: Option<ReasoningEffortLevel>,
+        verbosity: Option<VerbosityLevel>,
     ) -> Result<Self> {
         // Create client based on model
         let client: AnyClient = make_client(api_key.clone(), model.clone());
@@ -586,6 +589,7 @@ impl AgentRunner {
             model: model.as_str().to_string(),
             _api_key: api_key,
             reasoning_effort,
+            verbosity,
             quiet: false,
             event_sink: None,
             max_turns: defaults::DEFAULT_FULL_AUTO_MAX_TURNS,
@@ -797,6 +801,7 @@ impl AgentRunner {
                 } else {
                     None
                 },
+                verbosity: self.verbosity,
             };
 
             // Use provider-specific client for OpenAI/Anthropic (and generic support for others)

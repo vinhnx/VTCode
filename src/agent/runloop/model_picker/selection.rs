@@ -156,6 +156,7 @@ pub(super) fn selection_from_dynamic(provider: Provider, model_id: &str) -> Sele
 
 pub(super) fn reasoning_level_label(level: ReasoningEffortLevel) -> &'static str {
     match level {
+        ReasoningEffortLevel::None => "None (Fast)",
         ReasoningEffortLevel::Low => reasoning::LABEL_LOW,
         ReasoningEffortLevel::Medium => reasoning::LABEL_MEDIUM,
         ReasoningEffortLevel::High => reasoning::LABEL_HIGH,
@@ -164,6 +165,7 @@ pub(super) fn reasoning_level_label(level: ReasoningEffortLevel) -> &'static str
 
 pub(super) fn reasoning_level_description(level: ReasoningEffortLevel) -> &'static str {
     match level {
+        ReasoningEffortLevel::None => "No reasoning overhead - fastest responses (GPT-5.1)",
         ReasoningEffortLevel::Low => reasoning::DESCRIPTION_LOW,
         ReasoningEffortLevel::Medium => reasoning::DESCRIPTION_MEDIUM,
         ReasoningEffortLevel::High => reasoning::DESCRIPTION_HIGH,

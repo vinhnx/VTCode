@@ -1790,6 +1790,7 @@ impl acp::Agent for ZedAgent {
                 parallel_tool_calls: None,
                 parallel_tool_config: None,
                 reasoning_effort,
+                verbosity: None,
             };
 
             let mut stream = provider
@@ -1881,6 +1882,7 @@ impl acp::Agent for ZedAgent {
                     parallel_tool_calls: None,
                     parallel_tool_config: None,
                     reasoning_effort,
+                    verbosity: None,
                 };
 
                 let response = provider

@@ -9,8 +9,7 @@ use crate::tools::{
     PlanUpdateResult, PtyCommandRequest, PtyCommandResult, PtyManager, UpdatePlanArgs,
 };
 
-use crate::utils::diff::{compute_diff, DiffOptions};
-use tokio::fs;
+use crate::utils::diff::{DiffOptions, compute_diff};
 use anyhow::{Context, Result, anyhow};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
@@ -25,6 +24,7 @@ use std::{
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
+use tokio::fs;
 use tokio::time::sleep;
 use tracing::{debug, trace, warn};
 
@@ -848,18 +848,22 @@ impl ToolRegistry {
 
         // Generate enhanced diff preview with proper git-style diffs
         let mut diff_preview = String::new();
-        
+
         for op in patch.operations() {
             match op {
                 PatchOperation::AddFile { path, content } => {
                     // For new files, create a proper unified diff format
-                    let structured_diff = compute_diff("", content, DiffOptions {
-                        context_lines: 3,
-                        old_label: Some("/dev/null"),
-                        new_label: Some(path),
-                        missing_newline_hint: true,
-                    });
-                    
+                    let structured_diff = compute_diff(
+                        "",
+                        content,
+                        DiffOptions {
+                            context_lines: 3,
+                            old_label: Some("/dev/null"),
+                            new_label: Some(path),
+                            missing_newline_hint: true,
+                        },
+                    );
+
                     diff_preview.push_str(&structured_diff.formatted);
                     if !structured_diff.formatted.is_empty() {
                         diff_preview.push('\n');
@@ -873,15 +877,19 @@ impl ToolRegistry {
                     } else {
                         String::new()
                     };
-                    
+
                     // Create a structured diff for the renderer
-                    let structured_diff = compute_diff(&current_content, "", DiffOptions {
-                        context_lines: 3,
-                        old_label: Some(path),
-                        new_label: Some(path),
-                        missing_newline_hint: true,
-                    });
-                    
+                    let structured_diff = compute_diff(
+                        &current_content,
+                        "",
+                        DiffOptions {
+                            context_lines: 3,
+                            old_label: Some(path),
+                            new_label: Some(path),
+                            missing_newline_hint: true,
+                        },
+                    );
+
                     diff_preview.push_str(&structured_diff.formatted);
                     if !structured_diff.formatted.is_empty() {
                         diff_preview.push('\n');
@@ -912,14 +920,22 @@ impl ToolRegistry {
                                 if parts.len() >= 3 {
                                     if let Some(old_part) = parts.get(1) {
                                         if let Some(range_str) = old_part.strip_prefix('-') {
-                                            let range_parts: Vec<&str> = range_str.split(',').collect();
-                                            if let (Some(start_str), Some(_count_str)) = (range_parts.get(0), range_parts.get(1)) {
+                                            let range_parts: Vec<&str> =
+                                                range_str.split(',').collect();
+                                            if let (Some(start_str), Some(_count_str)) =
+                                                (range_parts.get(0), range_parts.get(1))
+                                            {
                                                 if let Ok(start_line) = start_str.parse::<usize>() {
                                                     let start_idx = start_line.saturating_sub(1); // Convert to 0-indexed
-                                                    
+
                                                     // Add lines from old content up to this chunk position
-                                                    while current_old_line_idx < start_idx && current_old_line_idx < old_lines.len() {
-                                                        new_lines.push(old_lines[current_old_line_idx].to_string());
+                                                    while current_old_line_idx < start_idx
+                                                        && current_old_line_idx < old_lines.len()
+                                                    {
+                                                        new_lines.push(
+                                                            old_lines[current_old_line_idx]
+                                                                .to_string(),
+                                                        );
                                                         current_old_line_idx += 1;
                                                     }
                                                 }
@@ -954,15 +970,19 @@ impl ToolRegistry {
                     }
 
                     let new_content = new_lines.join("\n");
-                    
+
                     // Create a structured diff using the same approach as generate_unified_diff
-                    let structured_diff = compute_diff(&old_content, &new_content, DiffOptions {
-                        context_lines: 3,
-                        old_label: Some(path),
-                        new_label: Some(path),
-                        missing_newline_hint: true,
-                    });
-                    
+                    let structured_diff = compute_diff(
+                        &old_content,
+                        &new_content,
+                        DiffOptions {
+                            context_lines: 3,
+                            old_label: Some(path),
+                            new_label: Some(path),
+                            missing_newline_hint: true,
+                        },
+                    );
+
                     diff_preview.push_str(&structured_diff.formatted);
                     if !structured_diff.formatted.is_empty() {
                         diff_preview.push('\n');

@@ -33,6 +33,25 @@ use openai_harmony::{HarmonyEncodingName, load_harmony_encoding};
 
 const MAX_COMPLETION_TOKENS_FIELD: &str = "max_completion_tokens";
 
+/// Detect if an OpenAI API error indicates the model was not found or is inaccessible
+fn is_model_not_found(status: StatusCode, error_text: &str) -> bool {
+    status == StatusCode::NOT_FOUND
+        || error_text.contains("model_not_found")
+        || (error_text.to_ascii_lowercase().contains("does not exist")
+            && error_text.to_ascii_lowercase().contains("model"))
+}
+
+/// Provide a fallback model when the requested GPT-5.1 model is unavailable
+fn fallback_model_if_not_found(model: &str) -> Option<String> {
+    match model {
+        m if m == models::openai::GPT_5_1_MINI => Some(models::openai::GPT_5_1.to_string()),
+        m if m == models::openai::GPT_5_MINI => Some(models::openai::GPT_5.to_string()),
+        m if m == models::openai::GPT_5_NANO => Some(models::openai::GPT_5_MINI.to_string()),
+        m if m == models::openai::GPT_5_1_CODEX => Some(models::openai::GPT_5_CODEX.to_string()),
+        _ => Some(models::openai::DEFAULT_MODEL.to_string()),
+    }
+}
+
 use super::{
     ReasoningBuffer,
     common::{extract_prompt_cache_settings, override_base_url, resolve_model},
@@ -579,6 +598,7 @@ impl OpenAIProvider {
             parallel_tool_calls: None,
             parallel_tool_config: None,
             reasoning_effort: None,
+            verbosity: None,
         }
     }
 
@@ -768,6 +788,7 @@ impl OpenAIProvider {
             parallel_tool_calls,
             parallel_tool_config: None,
             reasoning_effort,
+            verbosity: None,
         })
     }
 
@@ -1557,6 +1578,7 @@ mod tests {
             parallel_tool_calls: None,
             parallel_tool_config: None,
             reasoning_effort: None,
+            verbosity: None,
         }
     }
 
@@ -2175,6 +2197,33 @@ impl LLMProvider for OpenAIProvider {
                 return Err(LLMError::RateLimit);
             }
 
+            if is_model_not_found(status, &error_text) {
+                if let Some(fallback_model) = fallback_model_if_not_found(&request.model) {
+                    if fallback_model != request.model {
+                        #[cfg(debug_assertions)]
+                        debug!(
+                            target = "vtcode::llm::openai",
+                            requested = %request.model,
+                            fallback = %fallback_model,
+                            "Model not found while streaming; retrying with fallback"
+                        );
+                        let mut retry_request = request.clone();
+                        retry_request.model = fallback_model;
+                        retry_request.stream = false;
+                        let response = self.generate(retry_request).await?;
+                        let stream = try_stream! {
+                            yield LLMStreamEvent::Completed { response };
+                        };
+                        return Ok(Box::pin(stream));
+                    }
+                }
+                let formatted_error = error_display::format_llm_error(
+                    "OpenAI",
+                    &format!("HTTP {}: {} (model not available)", status, error_text),
+                );
+                return Err(LLMError::Provider(formatted_error));
+            }
+
             let formatted_error = error_display::format_llm_error(
                 "OpenAI",
                 &format!("HTTP {}: {}", status, error_text),
@@ -2434,6 +2483,53 @@ impl LLMProvider for OpenAIProvider {
                     || error_text.contains("rate limit")
                 {
                     return Err(LLMError::RateLimit);
+                } else if is_model_not_found(status, &error_text) {
+                    if let Some(fallback_model) = fallback_model_if_not_found(&request.model) {
+                        if fallback_model != request.model {
+                            #[cfg(debug_assertions)]
+                            debug!(
+                                target = "vtcode::llm::openai",
+                                requested = %request.model,
+                                fallback = %fallback_model,
+                                "Model not found; retrying with fallback"
+                            );
+                            let mut retry_request = request.clone();
+                            retry_request.model = fallback_model;
+                            let retry_openai =
+                                self.convert_to_openai_responses_format(&retry_request)?;
+                            let retry_response = self
+                                .authorize(self.http_client.post(&url))
+                                .header("OpenAI-Beta", "responses=v1")
+                                .json(&retry_openai)
+                                .send()
+                                .await
+                                .map_err(|e| {
+                                    let formatted_error = error_display::format_llm_error(
+                                        "OpenAI",
+                                        &format!("Network error: {}", e),
+                                    );
+                                    LLMError::Network(formatted_error)
+                                })?;
+                            if retry_response.status().is_success() {
+                                let openai_response: Value =
+                                    retry_response.json().await.map_err(|e| {
+                                        let formatted_error = error_display::format_llm_error(
+                                            "OpenAI",
+                                            &format!("Failed to parse response: {}", e),
+                                        );
+                                        LLMError::Provider(formatted_error)
+                                    })?;
+                                let response =
+                                    self.parse_openai_responses_response(openai_response)?;
+                                return Ok(response);
+                            }
+                        }
+                    }
+                    let formatted_error = error_display::format_llm_error(
+                        "OpenAI",
+                        &format!("HTTP {}: {} (model not available)", status, error_text),
+                    );
+                    return Err(LLMError::Provider(formatted_error));
                 } else {
                     let formatted_error = error_display::format_llm_error(
                         "OpenAI",

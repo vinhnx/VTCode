@@ -191,6 +191,7 @@ impl AnthropicProvider {
             parallel_tool_calls: None,
             parallel_tool_config: None,
             reasoning_effort: None,
+            verbosity: None,
         }
     }
 
@@ -418,6 +419,7 @@ impl AnthropicProvider {
             parallel_tool_calls,
             parallel_tool_config,
             reasoning_effort,
+            verbosity: None,
         })
     }
 

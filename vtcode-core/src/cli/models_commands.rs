@@ -289,27 +289,18 @@ async fn handle_test_provider(_cli: &Cli, provider: &str) -> Result<()> {
         create_provider_with_config(provider, api_key, base_url, model.clone(), None, None)?;
 
     let test_request = crate::llm::provider::LLMRequest {
-        messages: vec![crate::llm::provider::Message {
-            role: crate::llm::provider::MessageRole::User,
-            content: crate::llm::provider::MessageContent::Text(
-                "Respond with 'OK' if you receive this message.".to_string(),
-            ),
-            reasoning: None,
-            reasoning_details: None,
-            tool_calls: None,
-            tool_call_id: None,
-            origin_tool: None,
-        }],
+        messages: vec![crate::llm::provider::Message::user("test".to_string())],
         system_prompt: None,
         tools: None,
-        model: model.unwrap_or_else(|| "test".to_string()),
+        model: model.clone().unwrap_or_else(|| "test".to_string()),
         max_tokens: Some(10),
-        temperature: Some(0.1),
+        temperature: Some(0.0),
         stream: false,
         tool_choice: None,
         parallel_tool_calls: None,
         parallel_tool_config: None,
         reasoning_effort: None,
+        verbosity: None,
     };
 
     match provider_instance.generate(test_request).await {

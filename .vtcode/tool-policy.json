@@ -40,7 +40,7 @@
     "resize_pty_session": "allow",
     "send_pty_input": "allow",
     "grep_file": "allow",
-    "create_file": "allow",
+    "create_file": "prompt",
     "delete_file": "prompt",
     "run_terminal_cmd": "allow",
     "web_fetch": "prompt",

@@ -1,8 +1,8 @@
 use crate::llm_modular::client::LLMClient;
-use crate::llm_modular::types::{BackendKind, LLMResponse, LLMError, Usage};
+use crate::llm_modular::types::{BackendKind, LLMError, LLMResponse, Usage};
 use async_trait::async_trait;
 use reqwest;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 /// OpenAI LLM provider
 pub struct OpenAIProvider {
@@ -24,17 +24,24 @@ impl OpenAIProvider {
 #[async_trait]
 impl LLMClient for OpenAIProvider {
     async fn generate(&mut self, prompt: &str) -> Result<LLMResponse, LLMError> {
+        // GPT-5.1 and the GPT-5 family use the Responses API and do not
+        // support temperature/top_p/logprobs. We use reasoning + verbosity
+        // controls instead and send a simple text input.
+
         let request_body = json!({
             "model": self.model,
-            "messages": [{
-                "role": "user",
-                "content": prompt
-            }],
-            "temperature": 0.7
+            "input": prompt,
+            "reasoning": {
+                "effort": "none"
+            },
+            "text": {
+                "verbosity": "medium"
+            }
         });
 
-        let response = self.client
-            .post("https://api.openai.com/v1/chat/completions")
+        let response = self
+            .client
+            .post("https://api.openai.com/v1/responses")
             .header("Authorization", format!("Bearer {}", self.api_key))
             .header("Content-Type", "application/json")
             .json(&request_body)
@@ -52,8 +59,19 @@ impl LLMClient for OpenAIProvider {
             .await
             .map_err(|e| LLMError::ApiError(format!("Failed to parse response: {}", e)))?;
 
-        let content = response_json["choices"][0]["message"]["content"]
-            .as_str()
+        // Responses API: primary text output is exposed via `output_text`.
+        // Fall back to items[0].output_text if needed.
+        let content = response_json
+            .get("output_text")
+            .and_then(|v| v.as_str())
+            .or_else(|| {
+                response_json
+                    .get("output")
+                    .and_then(|o| o.get("items"))
+                    .and_then(|items| items.get(0))
+                    .and_then(|item| item.get("output_text"))
+                    .and_then(|v| v.as_str())
+            })
             .unwrap_or("")
             .to_string();
 
@@ -78,8 +96,14 @@ impl LLMClient for OpenAIProvider {
                     .and_then(|t| t.as_u64())
                     .unwrap_or(0) as usize,
                 cached_prompt_tokens,
-                cache_creation_tokens: None,
-                cache_read_tokens: None,
+                cache_creation_tokens: usage_obj
+                    .get("cache_creation_input_tokens")
+                    .and_then(|v| v.as_u64())
+                    .map(|v| v as usize),
+                cache_read_tokens: usage_obj
+                    .get("cache_read_input_tokens")
+                    .and_then(|v| v.as_u64())
+                    .map(|v| v as usize),
             }
         });
 

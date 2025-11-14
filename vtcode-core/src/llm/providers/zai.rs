@@ -100,6 +100,7 @@ impl ZAIProvider {
             parallel_tool_calls: None,
             parallel_tool_config: None,
             reasoning_effort: None,
+            verbosity: None,
         }
     }
 
@@ -209,6 +210,7 @@ impl ZAIProvider {
             parallel_tool_calls: None,
             parallel_tool_config: None,
             reasoning_effort: None,
+            verbosity: None,
         })
     }
 

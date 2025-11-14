@@ -88,7 +88,10 @@ impl WebFetchTool {
 
         let response = client
             .get(url)
-            .header("Accept", "text/markdown, text/html, application/json, text/plain, */*")
+            .header(
+                "Accept",
+                "text/markdown, text/html, application/json, text/plain, */*",
+            )
             .send()
             .await?;
 

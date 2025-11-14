@@ -79,6 +79,7 @@ pub fn reasoning_parameters_for(provider: Provider, effort: ReasoningEffortLevel
         Provider::OpenAI => {
             let mut reasoning = openai::responses_api::Reasoning::new();
             let mapped = match effort {
+                ReasoningEffortLevel::None => return Some(json!({ "effort": "none" })),
                 ReasoningEffortLevel::Low => openai::responses_api::ReasoningEffort::Low,
                 ReasoningEffortLevel::Medium => openai::responses_api::ReasoningEffort::Medium,
                 ReasoningEffortLevel::High => openai::responses_api::ReasoningEffort::High,
@@ -89,6 +90,7 @@ pub fn reasoning_parameters_for(provider: Provider, effort: ReasoningEffortLevel
         Provider::Gemini => {
             let include_thoughts = matches!(effort, ReasoningEffortLevel::High);
             let budget = match effort {
+                ReasoningEffortLevel::None => return None,
                 ReasoningEffortLevel::Low => 64,
                 ReasoningEffortLevel::Medium => 128,
                 ReasoningEffortLevel::High => 256,
@@ -104,6 +106,7 @@ pub fn reasoning_parameters_for(provider: Provider, effort: ReasoningEffortLevel
         Provider::Moonshot => {
             // Moonshot Kimi-K2-Thinking supports enhanced reasoning configuration
             let reasoning_config = match effort {
+                ReasoningEffortLevel::None => return None,
                 ReasoningEffortLevel::Low => json!({
                     "reasoning_effort": "low",
                     "reasoning_steps_limit": 60,

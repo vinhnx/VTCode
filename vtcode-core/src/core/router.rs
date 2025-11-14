@@ -114,6 +114,7 @@ impl Router {
                     parallel_tool_calls: None,
                     parallel_tool_config: None,
                     reasoning_effort,
+                    verbosity: None,
                 };
                 if let Ok(resp) = provider.generate(req).await {
                     if let Some(text) = resp.content {

@@ -95,6 +95,7 @@ impl DeepSeekProvider {
             parallel_tool_calls: None,
             parallel_tool_config: None,
             reasoning_effort: None,
+            verbosity: None,
         }
     }
 
@@ -194,6 +195,7 @@ impl DeepSeekProvider {
             parallel_tool_calls: None,
             parallel_tool_config: None,
             reasoning_effort: None,
+            verbosity: None,
         })
     }
 

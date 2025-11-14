@@ -52,7 +52,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::pin::Pin;
 
-use crate::config::types::ReasoningEffortLevel;
+use crate::config::types::{ReasoningEffortLevel, VerbosityLevel};
 
 /// Universal LLM request structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -75,9 +75,13 @@ pub struct LLMRequest {
     /// Parallel tool use configuration following Anthropic best practices
     pub parallel_tool_config: Option<ParallelToolConfig>,
 
-    /// Reasoning effort level for models that support it (low, medium, high)
-    /// Applies to: Claude, GPT-5, Gemini, Qwen3, DeepSeek with reasoning capability
+    /// Reasoning effort level for models that support it (none, low, medium, high)
+    /// Applies to: Claude, GPT-5, GPT-5.1, Gemini, Qwen3, DeepSeek with reasoning capability
     pub reasoning_effort: Option<ReasoningEffortLevel>,
+
+    /// Verbosity level for output text (low, medium, high)
+    /// Applies to: GPT-5.1 and other models that support verbosity control
+    pub verbosity: Option<VerbosityLevel>,
 }
 
 /// Tool choice configuration that works across different providers

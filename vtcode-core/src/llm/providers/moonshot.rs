@@ -30,7 +30,12 @@ pub struct MoonshotProvider {
 
 impl MoonshotProvider {
     pub fn new(api_key: String) -> Self {
-        Self::with_model_internal(api_key, models::moonshot::DEFAULT_MODEL.to_string(), None, None)
+        Self::with_model_internal(
+            api_key,
+            models::moonshot::DEFAULT_MODEL.to_string(),
+            None,
+            None,
+        )
     }
 
     pub fn with_model(api_key: String, model: String) -> Self {
@@ -498,6 +503,7 @@ impl LLMClient for MoonshotProvider {
             parallel_tool_calls: None,
             parallel_tool_config: None,
             reasoning_effort: None,
+            verbosity: None,
         };
 
         let response = <MoonshotProvider as LLMProvider>::generate(self, request).await?;

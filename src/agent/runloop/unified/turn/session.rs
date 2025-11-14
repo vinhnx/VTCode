@@ -1078,6 +1078,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                         None
                     },
                     reasoning_effort,
+                    verbosity: None,
                 };
 
                 let thinking_spinner = PlaceholderSpinner::new(
@@ -2143,6 +2144,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         None
                                     }
                                 }),
+                                verbosity: None,
                             };
                             let rr = provider_client.generate(review_req).await.ok();
                             if let Some(r) = rr.and_then(|result| result.content)

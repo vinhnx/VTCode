@@ -107,6 +107,7 @@ pub async fn handle_ask_command(
         parallel_tool_calls: None,
         parallel_tool_config: None,
         reasoning_effort,
+        verbosity: None,
     };
 
     match request_mode {

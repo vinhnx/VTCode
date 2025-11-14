@@ -909,6 +909,7 @@ impl LLMClient for GeminiProvider {
                         parallel_tool_calls: None,
                         parallel_tool_config: None,
                         reasoning_effort: None,
+                        verbosity: None,
                     };
 
                     // Use the standard LLMProvider generate method
@@ -972,6 +973,7 @@ impl LLMClient for GeminiProvider {
                         parallel_tool_calls: None,
                         parallel_tool_config: None,
                         reasoning_effort: None,
+                        verbosity: None,
                     }
                 }
             }
@@ -997,6 +999,7 @@ impl LLMClient for GeminiProvider {
                 parallel_tool_calls: None,
                 parallel_tool_config: None,
                 reasoning_effort: None,
+                verbosity: None,
             }
         };
 
@@ -1077,6 +1080,7 @@ mod tests {
             parallel_tool_calls: None,
             parallel_tool_config: None,
             reasoning_effort: None,
+            verbosity: None,
         };
 
         let gemini_request = provider

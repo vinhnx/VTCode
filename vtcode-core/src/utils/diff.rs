@@ -259,25 +259,48 @@ fn format_colored_diff(hunks: &[DiffHunk], options: &DiffOptions<'_>) -> String 
     }
 
     // Use git-standard colors from anstyle-git to match Git's default color scheme
-    let header_style = anstyle_git::parse("section").unwrap_or_else(|_| Style::new().fg_color(Some(Color::Ansi(AnsiColor::Cyan))));
-    let hunk_header_style = anstyle_git::parse("meta").unwrap_or_else(|_| Style::new().fg_color(Some(Color::Ansi(AnsiColor::Cyan))));
-    let addition_style = anstyle_git::parse("new").unwrap_or_else(|_| Style::new().fg_color(Some(Color::Ansi(AnsiColor::Green))));
-    let deletion_style = anstyle_git::parse("old").unwrap_or_else(|_| Style::new().fg_color(Some(Color::Ansi(AnsiColor::Red))));
-    let context_style = anstyle_git::parse("context").unwrap_or_else(|_| Style::new().fg_color(Some(Color::Ansi(AnsiColor::White))));
+    let header_style = anstyle_git::parse("section")
+        .unwrap_or_else(|_| Style::new().fg_color(Some(Color::Ansi(AnsiColor::Cyan))));
+    let hunk_header_style = anstyle_git::parse("meta")
+        .unwrap_or_else(|_| Style::new().fg_color(Some(Color::Ansi(AnsiColor::Cyan))));
+    let addition_style = anstyle_git::parse("new")
+        .unwrap_or_else(|_| Style::new().fg_color(Some(Color::Ansi(AnsiColor::Green))));
+    let deletion_style = anstyle_git::parse("old")
+        .unwrap_or_else(|_| Style::new().fg_color(Some(Color::Ansi(AnsiColor::Red))));
+    let context_style = anstyle_git::parse("context")
+        .unwrap_or_else(|_| Style::new().fg_color(Some(Color::Ansi(AnsiColor::White))));
 
     let mut output = String::new();
 
     if let (Some(old_label), Some(new_label)) = (options.old_label, options.new_label) {
         let formatted = format!("--- {old_label}\n");
-        output.push_str(&format!("{}{}{}", header_style.render(), formatted, Reset.render()));
-        
+        output.push_str(&format!(
+            "{}{}{}",
+            header_style.render(),
+            formatted,
+            Reset.render()
+        ));
+
         let formatted = format!("+++ {new_label}\n");
-        output.push_str(&format!("{}{}{}", header_style.render(), formatted, Reset.render()));
+        output.push_str(&format!(
+            "{}{}{}",
+            header_style.render(),
+            formatted,
+            Reset.render()
+        ));
     }
 
     for hunk in hunks {
-        let header = format!("@@ -{},{} +{},{} @@\n", hunk.old_start, hunk.old_lines, hunk.new_start, hunk.new_lines);
-        output.push_str(&format!("{}{}{}", hunk_header_style.render(), header, Reset.render()));
+        let header = format!(
+            "@@ -{},{} +{},{} @@\n",
+            hunk.old_start, hunk.old_lines, hunk.new_start, hunk.new_lines
+        );
+        output.push_str(&format!(
+            "{}{}{}",
+            hunk_header_style.render(),
+            header,
+            Reset.render()
+        ));
 
         for line in &hunk.lines {
             let (style, prefix) = match line.kind {
@@ -297,7 +320,12 @@ fn format_colored_diff(hunks: &[DiffHunk], options: &DiffOptions<'_>) -> String 
 
             if options.missing_newline_hint && !line.text.ends_with('\n') {
                 let eof_hint = "\\ No newline at end of file\n";
-                output.push_str(&format!("{}{}{}", context_style.render(), eof_hint, Reset.render()));
+                output.push_str(&format!(
+                    "{}{}{}",
+                    context_style.render(),
+                    eof_hint,
+                    Reset.render()
+                ));
             }
         }
     }

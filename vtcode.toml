@@ -74,6 +74,7 @@ instruction_max_bytes = 16384
 
 # List of additional instruction files to include in context
 instruction_files = []
+verbosity = "medium"
 
 # Small model configuration for efficient operations
 # Following Claude Code's pattern, use a smaller model for 50%+ of calls (large reads, parsing, summarization)

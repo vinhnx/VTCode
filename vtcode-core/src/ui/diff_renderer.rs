@@ -28,8 +28,8 @@ impl GitDiffPalette {
                         "old" => style_from_color_name("red"),
                         "context" => style_from_color_name("white"),
                         "meta" | "header" => style_from_color_name("cyan"),
-                        _ => Style::new()
-                    }
+                        _ => Style::new(),
+                    },
                 )
             } else {
                 Style::new()
@@ -37,16 +37,32 @@ impl GitDiffPalette {
         };
 
         Self {
-            bullet: if use_colors { style_from_color_name("yellow") } else { Style::new() }, // For summary bullets
-            label: if use_colors { style_from_color_name("white") } else { Style::new() },   // For summary labels
-            path: if use_colors { style_from_color_name("white") } else { Style::new() },    // For file paths
+            bullet: if use_colors {
+                style_from_color_name("yellow")
+            } else {
+                Style::new()
+            }, // For summary bullets
+            label: if use_colors {
+                style_from_color_name("white")
+            } else {
+                Style::new()
+            }, // For summary labels
+            path: if use_colors {
+                style_from_color_name("white")
+            } else {
+                Style::new()
+            }, // For file paths
             stat_added: git_parse("new"),
             stat_removed: git_parse("old"),
             line_added: git_parse("new"),
             line_removed: git_parse("old"),
             line_context: git_parse("context"),
             line_header: git_parse("meta"), // Git uses "meta" for headers
-            line_number: if use_colors { style_from_color_name("yellow") } else { Style::new() }, // For line numbers
+            line_number: if use_colors {
+                style_from_color_name("yellow")
+            } else {
+                Style::new()
+            }, // For line numbers
         }
     }
 
@@ -156,7 +172,10 @@ impl DiffRenderer {
         let deletions = format!("-{}", diff.stats.deletions);
         let added_span = self.paint(&self.palette.stat_added, &additions);
         let removed_span = self.paint(&self.palette.stat_removed, &deletions);
-        format!("{} {} {} ({} {})", bullet, label, path, added_span, removed_span)
+        format!(
+            "{} {} {} ({} {})",
+            bullet, label, path, added_span, removed_span
+        )
     }
 
     fn render_line(&self, line: &DiffLine) -> String {

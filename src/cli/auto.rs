@@ -76,6 +76,7 @@ pub async fn handle_auto_task_command(
         config.workspace.clone(),
         session_id,
         Some(config.reasoning_effort),
+        None,
     )
     .await?;
 

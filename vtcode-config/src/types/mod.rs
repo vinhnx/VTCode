@@ -13,6 +13,7 @@ use std::path::PathBuf;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ReasoningEffortLevel {
+    None,
     Low,
     Medium,
     High,
@@ -22,6 +23,7 @@ impl ReasoningEffortLevel {
     /// Return the textual representation expected by downstream APIs
     pub fn as_str(self) -> &'static str {
         match self {
+            Self::None => "none",
             Self::Low => reasoning::LOW,
             Self::Medium => reasoning::MEDIUM,
             Self::High => reasoning::HIGH,
@@ -31,7 +33,9 @@ impl ReasoningEffortLevel {
     /// Attempt to parse an effort level from user configuration input
     pub fn parse(value: &str) -> Option<Self> {
         let normalized = value.trim();
-        if normalized.eq_ignore_ascii_case(reasoning::LOW) {
+        if normalized.eq_ignore_ascii_case("none") {
+            Some(Self::None)
+        } else if normalized.eq_ignore_ascii_case(reasoning::LOW) {
             Some(Self::Low)
         } else if normalized.eq_ignore_ascii_case(reasoning::MEDIUM) {
             Some(Self::Medium)
@@ -51,6 +55,77 @@ impl ReasoningEffortLevel {
 impl Default for ReasoningEffortLevel {
     fn default() -> Self {
         Self::Medium
+    }
+}
+
+/// Verbosity level for model output (GPT-5.1 and compatible models)
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum VerbosityLevel {
+    Low,
+    Medium,
+    High,
+}
+
+impl VerbosityLevel {
+    /// Return the textual representation expected by downstream APIs
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Low => "low",
+            Self::Medium => "medium",
+            Self::High => "high",
+        }
+    }
+
+    /// Attempt to parse a verbosity level from user configuration input
+    pub fn parse(value: &str) -> Option<Self> {
+        let normalized = value.trim();
+        if normalized.eq_ignore_ascii_case("low") {
+            Some(Self::Low)
+        } else if normalized.eq_ignore_ascii_case("medium") {
+            Some(Self::Medium)
+        } else if normalized.eq_ignore_ascii_case("high") {
+            Some(Self::High)
+        } else {
+            None
+        }
+    }
+
+    /// Enumerate the allowed configuration values
+    pub fn allowed_values() -> &'static [&'static str] {
+        &["low", "medium", "high"]
+    }
+}
+
+impl Default for VerbosityLevel {
+    fn default() -> Self {
+        Self::Medium
+    }
+}
+
+impl fmt::Display for VerbosityLevel {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl<'de> Deserialize<'de> for VerbosityLevel {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let raw = String::deserialize(deserializer)?;
+        if let Some(parsed) = Self::parse(&raw) {
+            Ok(parsed)
+        } else {
+            tracing::warn!(
+                input = raw,
+                allowed = ?Self::allowed_values(),
+                "Invalid verbosity level provided; falling back to default"
+            );
+            Ok(Self::default())
+        }
     }
 }
 
