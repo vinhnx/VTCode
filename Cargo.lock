@@ -5529,6 +5529,7 @@ dependencies = [
  "agent-client-protocol",
  "anstyle",
  "anstyle-crossterm",
+ "anstyle-git",
  "anyhow",
  "assert_cmd",
  "assert_fs",

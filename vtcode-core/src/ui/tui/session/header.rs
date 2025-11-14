@@ -151,7 +151,7 @@ impl Session {
             if !spans.is_empty() {
                 spans.push(Span::raw(" "));
             }
-            let agent_model_label = "Agent model: ";
+            let agent_model_label = "Model: ";
             let mut style = self.header_primary_style();
             style = style.add_modifier(Modifier::ITALIC);
             spans.push(Span::styled(agent_model_label, style));

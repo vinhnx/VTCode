@@ -86,7 +86,11 @@ impl WebFetchTool {
             .user_agent("VTCode/1.0 (compatible; web-fetch tool)")
             .build()?;
 
-        let response = client.get(url).send().await?;
+        let response = client
+            .get(url)
+            .header("Accept", "text/markdown, text/html, application/json, text/plain, */*")
+            .send()
+            .await?;
 
         if !response.status().is_success() {
             return Err(anyhow!(

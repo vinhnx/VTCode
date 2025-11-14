@@ -91,7 +91,7 @@ impl LmStudioProvider {
         model: Option<String>,
         base_url: Option<String>,
         prompt_cache: Option<PromptCachingConfig>,
-        timeouts: Option<TimeoutsConfig>,
+        _timeouts: Option<TimeoutsConfig>,
     ) -> OpenAIProvider {
         let resolved_model = resolve_model(model, models::lmstudio::DEFAULT_MODEL);
         let resolved_base = Self::resolve_base_url(base_url);
@@ -100,7 +100,7 @@ impl LmStudioProvider {
             Some(resolved_model),
             Some(resolved_base),
             prompt_cache,
-            timeouts,
+            _timeouts,
         )
     }
 
@@ -117,7 +117,7 @@ impl LmStudioProvider {
         model: Option<String>,
         base_url: Option<String>,
         prompt_cache: Option<PromptCachingConfig>,
-        timeouts: Option<TimeoutsConfig>,
+        _timeouts: Option<TimeoutsConfig>,
     ) -> Self {
         Self::with_model_internal(api_key, model, base_url, prompt_cache)
     }
@@ -128,7 +128,7 @@ impl LmStudioProvider {
         base_url: Option<String>,
         prompt_cache: Option<PromptCachingConfig>,
     ) -> Self {
-        let inner = Self::build_inner(api_key, model, base_url, prompt_cache);
+        let inner = Self::build_inner(api_key, model, base_url, prompt_cache, None);
         Self { inner }
     }
 }

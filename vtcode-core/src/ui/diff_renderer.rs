@@ -1,6 +1,7 @@
 use crate::ui::git_config::GitColorConfig;
 use crate::utils::style_helpers::style_from_color_name;
 use anstyle::{Reset, Style};
+use anstyle_git;
 use std::path::Path;
 
 struct GitDiffPalette {
@@ -18,25 +19,34 @@ struct GitDiffPalette {
 
 impl GitDiffPalette {
     fn new(use_colors: bool) -> Self {
-        let parse = |spec: &str| -> Style {
+        let git_parse = |git_color: &str| -> Style {
             if use_colors {
-                style_from_color_name(spec)
+                anstyle_git::parse(git_color).unwrap_or(
+                    // Fallback to original behavior for backwards compatibility
+                    match git_color {
+                        "new" => style_from_color_name("green"),
+                        "old" => style_from_color_name("red"),
+                        "context" => style_from_color_name("white"),
+                        "meta" | "header" => style_from_color_name("cyan"),
+                        _ => Style::new()
+                    }
+                )
             } else {
                 Style::new()
             }
         };
 
         Self {
-            bullet: parse("yellow"),
-            label: parse("white"),
-            path: parse("white"),
-            stat_added: parse("green"),
-            stat_removed: parse("red"),
-            line_added: parse("green"),
-            line_removed: parse("red"),
-            line_context: parse("white"),
-            line_header: parse("cyan"),
-            line_number: parse("yellow"),
+            bullet: if use_colors { style_from_color_name("yellow") } else { Style::new() }, // For summary bullets
+            label: if use_colors { style_from_color_name("white") } else { Style::new() },   // For summary labels
+            path: if use_colors { style_from_color_name("white") } else { Style::new() },    // For file paths
+            stat_added: git_parse("new"),
+            stat_removed: git_parse("old"),
+            line_added: git_parse("new"),
+            line_removed: git_parse("old"),
+            line_context: git_parse("context"),
+            line_header: git_parse("meta"), // Git uses "meta" for headers
+            line_number: if use_colors { style_from_color_name("yellow") } else { Style::new() }, // For line numbers
         }
     }
 
@@ -55,7 +65,7 @@ impl GitDiffPalette {
             line_added: config.diff_new,
             line_removed: config.diff_old,
             line_context: config.diff_context,
-            line_header: config.diff_header,
+            line_header: config.diff_header, // Use the configuration from Git
             line_number: style_from_color_name("yellow"),
         }
     }
@@ -146,7 +156,7 @@ impl DiffRenderer {
         let deletions = format!("-{}", diff.stats.deletions);
         let added_span = self.paint(&self.palette.stat_added, &additions);
         let removed_span = self.paint(&self.palette.stat_removed, &deletions);
-        format!("{bullet} {label} {path} ({added_span} {removed_span})")
+        format!("{} {} {} ({} {})", bullet, label, path, added_span, removed_span)
     }
 
     fn render_line(&self, line: &DiffLine) -> String {
@@ -188,7 +198,7 @@ impl DiffRenderer {
 
     fn paint(&self, style: &Style, text: &str) -> String {
         if self.use_colors {
-            format!("{style}{text}{Reset}")
+            format!("{}{}{}", style.render(), text, Reset.render())
         } else {
             text.to_string()
         }
