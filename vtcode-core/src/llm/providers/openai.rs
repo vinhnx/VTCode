@@ -343,8 +343,6 @@ impl OpenAIProvider {
         model == models::openai::GPT_5_CODEX
     }
 
-
-
     fn is_responses_api_model(model: &str) -> bool {
         models::openai::RESPONSES_API_MODELS
             .iter()
@@ -968,15 +966,10 @@ impl OpenAIProvider {
             }
         }
 
-        if let Some(effort) = request.reasoning_effort {
-            if self.supports_reasoning_effort(&request.model) {
-                if let Some(payload) = reasoning_parameters_for(Provider::OpenAI, effort) {
-                    openai_request["reasoning"] = payload;
-                } else {
-                    openai_request["reasoning"] = json!({ "effort": effort.as_str() });
-                }
-            }
-        }
+        // NOTE: The 'reasoning' parameter is NOT supported in Chat Completions API.
+        // It's only valid in the Responses API. Since this function builds Chat Completions
+        // requests, we explicitly skip adding the reasoning parameter here.
+        // Reasoning parameters are only added in convert_to_openai_responses_format().
 
         Ok(openai_request)
     }
@@ -1066,8 +1059,18 @@ impl OpenAIProvider {
         if self.supports_reasoning_effort(&request.model)
             && openai_request.get("reasoning").is_none()
         {
-            openai_request["reasoning"] =
-                json!({ "effort": ReasoningEffortLevel::default().as_str() });
+            // For GPT-5.1 models, use "none" as the default reasoning effort
+            // For other models, use the default reasoning effort level (medium)
+            let default_effort = if request.model.starts_with("gpt-5.1") {
+                "none"
+            } else {
+                ReasoningEffortLevel::default().as_str()
+            };
+
+            // Only add the reasoning parameter if it's not "none"
+            if default_effort != "none" {
+                openai_request["reasoning"] = json!({ "effort": default_effort });
+            }
         }
 
         // Add text formatting options for GPT-5 and compatible models, including verbosity and grammar

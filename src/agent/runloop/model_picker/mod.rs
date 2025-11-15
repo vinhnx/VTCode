@@ -407,11 +407,12 @@ impl ModelPickerState {
         }
 
         let normalized = input.to_ascii_lowercase();
-        if matches!(normalized.as_str(), "off" | "disable" | "none") {
+        if matches!(normalized.as_str(), "off" | "disable") {
             return self.apply_reasoning_off_choice(renderer);
         }
 
         let level = match normalized.as_str() {
+            "none" => Some(ReasoningEffortLevel::None),
             "easy" | "low" => Some(ReasoningEffortLevel::Low),
             "medium" => Some(ReasoningEffortLevel::Medium),
             "hard" | "high" => Some(ReasoningEffortLevel::High),
@@ -509,6 +510,28 @@ impl ModelPickerState {
         let Some(current_selection) = self.selection.clone() else {
             return Err(anyhow!("Reasoning requested before selecting a model"));
         };
+
+        // For GPT-5.1 models, disable reasoning by setting effort to "none" on the same model
+        // rather than switching to a different model
+        if current_selection.model_id.starts_with("gpt-5.1") {
+            self.selected_reasoning = Some(ReasoningEffortLevel::None);
+            renderer.line(
+                MessageStyle::Info,
+                &format!(
+                    "Reasoning disabled for {} by setting effort to 'none'.",
+                    current_selection.model_display
+                ),
+            )?;
+
+            if current_selection.requires_api_key {
+                self.step = PickerStep::AwaitApiKey;
+                self.prompt_api_key_step(renderer)?;
+                return Ok(ModelPickerProgress::InProgress);
+            }
+
+            let result = self.build_result();
+            return Ok(ModelPickerProgress::Completed(result?));
+        }
 
         let Some(target_model) = current_selection.reasoning_off_model else {
             renderer.line(

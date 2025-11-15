@@ -268,37 +268,51 @@ pub mod models {
         pub const DEEPSEEK_REASONER: &str = "deepseek-reasoner";
     }
 
-    // Anthropic models (from docs/models.json) - Updated for Claude 4.5 family
+    // Anthropic models (from docs/models.json) - Updated for Claude 4.5 family, Claude 4, and Claude 4.5
     pub mod anthropic {
         // Standard model for straightforward tools - Sonnet 4.5 preferred for most use cases
-        pub const DEFAULT_MODEL: &str = "claude-sonnet-4-5-20250929";
+        pub const DEFAULT_MODEL: &str = "claude-sonnet-4-5";
         pub const SUPPORTED_MODELS: &[&str] = &[
-            "claude-haiku-4-5-20251001",   // Fast: Claude Haiku 4.5 (2025-10-01)
-            "claude-sonnet-4-5-20250929",  // Balanced: Claude Sonnet 4.5 (2025-09-29)
-            "claude-opus-4-1-20250805",    // High-performance: Claude Opus 4.1 (2025-08-05)
-            "claude-3-5-sonnet-20241022",  // Previous: Sonnet 3.5 (2024-10-22)
-            "claude-3-5-haiku-20241022",   // Previous: Haiku 3.5 (2024-10-22)
-            "claude-3-opus-20250219",      // Previous: Opus 3 (2025-02-19)
+            "claude-haiku-4-5",  // Fast: Claude Haiku 4.5
+            "claude-sonnet-4-5", // Balanced: Claude Sonnet 4.5
+            "claude-opus-4-5",   // High-performance: Claude Opus 4.5
+            "claude-opus-4-1",   // High-performance: Claude Opus 4.1
+            "claude-opus-4",     // Previous: Claude Opus 4
+            "claude-4-sonnet",   // New Claude 4 Sonnet
+            "claude-4-haiku",    // New Claude 4 Haiku
+            "claude-4-opus",     // New Claude 4 Opus
+            "claude-3-5-sonnet", // Legacy: Sonnet 3.5
+            "claude-3-5-haiku",  // Legacy: Haiku 3.5
+            "claude-3-opus",     // Legacy: Opus 3
         ];
 
-        // Convenience constants for commonly used models (using latest snapshot dates)
-        pub const CLAUDE_HAIKU_4_5: &str = "claude-haiku-4-5-20251001";
-        pub const CLAUDE_SONNET_4_5: &str = "claude-sonnet-4-5-20250929";
-        pub const CLAUDE_SONNET_4_20250514: &str = "claude-sonnet-4-20250514";
-        pub const CLAUDE_OPUS_4_1: &str = "claude-opus-4-1-20250805";
-        pub const CLAUDE_OPUS_4_1_20250805: &str = "claude-opus-4-1-20250805";
-        pub const CLAUDE_SONNET_3_5_20241022: &str = "claude-3-5-sonnet-20241022";
-        pub const CLAUDE_HAIKU_3_5_20241022: &str = "claude-3-5-haiku-20241022";
-        pub const CLAUDE_OPUS_3_20250219: &str = "claude-3-opus-20250219";
+        // Convenience constants for commonly used models (using latest names)
+        pub const CLAUDE_HAIKU_4_5: &str = "claude-haiku-4-5";
+        pub const CLAUDE_SONNET_4_5: &str = "claude-sonnet-4-5";
+        pub const CLAUDE_OPUS_4_5: &str = "claude-opus-4-5";
+        pub const CLAUDE_OPUS_4_1: &str = "claude-opus-4-1";
+        pub const CLAUDE_OPUS_4_1_20250805: &str = "claude-opus-4-1"; // legacy alias
+        pub const CLAUDE_OPUS_4: &str = "claude-opus-4";
+        pub const CLAUDE_OPUS_4_20250514: &str = "claude-opus-4"; // legacy alias
+        pub const CLAUDE_SONNET_4: &str = "claude-sonnet-4";
+        pub const CLAUDE_SONNET_4_20250514: &str = "claude-sonnet-4"; // legacy alias
+        pub const CLAUDE_4_SONNET: &str = "claude-4-sonnet";
+        pub const CLAUDE_4_HAIKU: &str = "claude-4-haiku";
+        pub const CLAUDE_4_OPUS: &str = "claude-4-opus";
+        pub const CLAUDE_SONNET_3_5_20241022: &str = "claude-3-5-sonnet"; // legacy alias
+        pub const CLAUDE_HAIKU_3_5_20241022: &str = "claude-3-5-haiku"; // legacy alias
+        pub const CLAUDE_OPUS_3_20250219: &str = "claude-3-opus"; // legacy alias
 
         /// Models that accept the reasoning effort parameter
         pub const REASONING_MODELS: &[&str] = &[
             CLAUDE_HAIKU_4_5,
             CLAUDE_SONNET_4_5,
+            CLAUDE_OPUS_4_5,
             CLAUDE_OPUS_4_1,
-            CLAUDE_OPUS_4_1_20250805,
-            CLAUDE_SONNET_3_5_20241022,
-            CLAUDE_OPUS_3_20250219,
+            CLAUDE_4_SONNET,
+            CLAUDE_4_OPUS,
+            CLAUDE_SONNET_3_5_20241022, // legacy alias
+            CLAUDE_OPUS_3_20250219,     // legacy alias
         ];
     }
 
@@ -341,9 +355,14 @@ pub mod models {
     pub const GPT_5_1_MINI: &str = openai::GPT_5_1_MINI;
     pub const CODEX_MINI: &str = openai::CODEX_MINI_LATEST;
     pub const CODEX_MINI_LATEST: &str = openai::CODEX_MINI_LATEST;
+    pub const CLAUDE_OPUS_4_5: &str = anthropic::CLAUDE_OPUS_4_5;
     pub const CLAUDE_OPUS_4_1_20250805: &str = anthropic::CLAUDE_OPUS_4_1_20250805;
     pub const CLAUDE_SONNET_4_5: &str = anthropic::CLAUDE_SONNET_4_5;
     pub const CLAUDE_HAIKU_4_5: &str = anthropic::CLAUDE_HAIKU_4_5;
+    pub const CLAUDE_4_SONNET: &str = anthropic::CLAUDE_4_SONNET;
+    pub const CLAUDE_4_HAIKU: &str = anthropic::CLAUDE_4_HAIKU;
+    pub const CLAUDE_4_OPUS: &str = anthropic::CLAUDE_4_OPUS;
+    pub const CLAUDE_SONNET_4: &str = anthropic::CLAUDE_SONNET_4;
     pub const CLAUDE_SONNET_4_20250514: &str = anthropic::CLAUDE_SONNET_4_20250514;
     pub const MINIMAX_M2: &str = minimax::MINIMAX_M2;
     pub const MOONSHOT_KIMI_K2_TURBO_PREVIEW: &str = moonshot::KIMI_K2_TURBO_PREVIEW;

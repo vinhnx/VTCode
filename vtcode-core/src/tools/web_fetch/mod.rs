@@ -7,10 +7,10 @@ use super::traits::Tool;
 use crate::config::constants::tools;
 use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
+use reqwest::header::{ACCEPT, HeaderMap, HeaderValue, USER_AGENT};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::HashSet;
-use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, USER_AGENT};
 use std::fs;
 use std::path::Path;
 
@@ -397,7 +397,10 @@ impl WebFetchTool {
     fn default_headers() -> HeaderMap {
         let mut headers = HeaderMap::new();
         headers.insert(ACCEPT, HeaderValue::from_static("text/markdown, */*"));
-        headers.insert(USER_AGENT, HeaderValue::from_static("VTCode/1.0 (compatible; web-fetch tool)"));
+        headers.insert(
+            USER_AGENT,
+            HeaderValue::from_static("VTCode/1.0 (compatible; web-fetch tool)"),
+        );
         headers
     }
 }

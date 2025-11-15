@@ -204,12 +204,20 @@ pub enum ModelId {
     OpenAIGptOss120b,
 
     // Anthropic models
+    /// Claude Opus 4.5 - Latest most capable Anthropic model (2025-11-15)
+    ClaudeOpus45,
     /// Claude Opus 4.1 - Latest most capable Anthropic model (2025-08-05)
     ClaudeOpus41,
-    /// Claude Sonnet 4.5 - Latest balanced Anthropic model (2025-10-15)
+    /// Claude Sonnet 4.5 - Latest balanced Anthropic model (2025-11-15)
     ClaudeSonnet45,
-    /// Claude Haiku 4.5 - Latest efficient Anthropic model (2025-10-15)
+    /// Claude Haiku 4.5 - Latest efficient Anthropic model (2025-11-15)
     ClaudeHaiku45,
+    /// Claude 4 Sonnet - Advanced Claude 4 model (2025-11-15)
+    Claude4Sonnet,
+    /// Claude 4 Haiku - Efficient Claude 4 model (2025-11-15)
+    Claude4Haiku,
+    /// Claude 4 Opus - Most capable Claude 4 model (2025-11-15)
+    Claude4Opus,
     /// Claude Sonnet 4 - Previous balanced Anthropic model (2025-05-14)
     ClaudeSonnet4,
 
@@ -455,9 +463,13 @@ impl ModelId {
             ModelId::OpenAIGptOss20b => models::openai::GPT_OSS_20B,
             ModelId::OpenAIGptOss120b => models::openai::GPT_OSS_120B,
             // Anthropic models
+            ModelId::ClaudeOpus45 => models::CLAUDE_OPUS_4_5,
             ModelId::ClaudeOpus41 => models::CLAUDE_OPUS_4_1_20250805,
             ModelId::ClaudeSonnet45 => models::CLAUDE_SONNET_4_5,
             ModelId::ClaudeHaiku45 => models::CLAUDE_HAIKU_4_5,
+            ModelId::Claude4Sonnet => models::CLAUDE_4_SONNET,
+            ModelId::Claude4Haiku => models::CLAUDE_4_HAIKU,
+            ModelId::Claude4Opus => models::CLAUDE_4_OPUS,
             ModelId::ClaudeSonnet4 => models::CLAUDE_SONNET_4_20250514,
             // DeepSeek models
             ModelId::DeepSeekChat => models::DEEPSEEK_CHAT,
@@ -580,9 +592,13 @@ impl ModelId {
             | ModelId::CodexMiniLatest
             | ModelId::OpenAIGptOss20b
             | ModelId::OpenAIGptOss120b => Provider::OpenAI,
-            ModelId::ClaudeOpus41
+            ModelId::ClaudeOpus45
+            | ModelId::ClaudeOpus41
             | ModelId::ClaudeSonnet45
             | ModelId::ClaudeHaiku45
+            | ModelId::Claude4Sonnet
+            | ModelId::Claude4Haiku
+            | ModelId::Claude4Opus
             | ModelId::ClaudeSonnet4 => Provider::Anthropic,
             ModelId::DeepSeekChat | ModelId::DeepSeekReasoner => Provider::DeepSeek,
             ModelId::XaiGrok4
@@ -859,11 +875,17 @@ impl ModelId {
                 "OpenAI's open-source 120B parameter GPT-OSS model using harmony tokenization"
             }
             // Anthropic models
+            ModelId::ClaudeOpus45 => {
+                "Latest most capable Anthropic model with advanced reasoning and structured outputs"
+            }
             ModelId::ClaudeOpus41 => "Latest most capable Anthropic model with advanced reasoning",
             ModelId::ClaudeSonnet45 => "Latest balanced Anthropic model for general tasks",
             ModelId::ClaudeHaiku45 => {
                 "Latest efficient Anthropic model optimized for low-latency agent workflows"
             }
+            ModelId::Claude4Sonnet => "Advanced Claude 4 Sonnet model with enhanced capabilities",
+            ModelId::Claude4Haiku => "Efficient Claude 4 Haiku model optimized for fast responses",
+            ModelId::Claude4Opus => "Most capable Claude 4 Opus model with advanced reasoning",
             ModelId::ClaudeSonnet4 => {
                 "Previous balanced Anthropic model maintained for compatibility"
             }
@@ -1318,7 +1340,12 @@ impl ModelId {
             | ModelId::OpenAIGptOss20b
             | ModelId::OpenAIGptOss120b => "5",
             // Anthropic generations
-            ModelId::ClaudeSonnet45 | ModelId::ClaudeHaiku45 => "4.5",
+            ModelId::ClaudeOpus45
+            | ModelId::ClaudeSonnet45
+            | ModelId::ClaudeHaiku45
+            | ModelId::Claude4Sonnet
+            | ModelId::Claude4Haiku
+            | ModelId::Claude4Opus => "4.5",
             ModelId::ClaudeSonnet4 => "4",
             ModelId::ClaudeOpus41 => "4.1",
             // DeepSeek generations

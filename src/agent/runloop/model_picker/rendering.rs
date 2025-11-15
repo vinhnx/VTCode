@@ -328,6 +328,20 @@ pub(super) fn render_reasoning_inline(
         selection: Some(InlineListSelection::Reasoning(current)),
         search_value: None,
     });
+
+    // For GPT-5.1 models, show "None" first as the default option (fastest)
+    let is_gpt51 = selection.model_id.starts_with("gpt-5.1");
+    if is_gpt51 {
+        items.push(InlineListItem {
+            title: reasoning_level_label(ReasoningEffortLevel::None).to_string(),
+            subtitle: Some(reasoning_level_description(ReasoningEffortLevel::None).to_string()),
+            badge: Some("GPT-5.1".to_string()),
+            indent: 0,
+            selection: Some(InlineListSelection::Reasoning(ReasoningEffortLevel::None)),
+            search_value: None,
+        });
+    }
+
     for level in [
         ReasoningEffortLevel::Low,
         ReasoningEffortLevel::Medium,
@@ -342,6 +356,19 @@ pub(super) fn render_reasoning_inline(
             search_value: None,
         });
     }
+
+    // Include "None" for non-GPT-5.1 models as well after the standard levels
+    if !is_gpt51 {
+        items.push(InlineListItem {
+            title: reasoning_level_label(ReasoningEffortLevel::None).to_string(),
+            subtitle: Some(reasoning_level_description(ReasoningEffortLevel::None).to_string()),
+            badge: None,
+            indent: 0,
+            selection: Some(InlineListSelection::Reasoning(ReasoningEffortLevel::None)),
+            search_value: None,
+        });
+    }
+
     if let Some(alternative) = selection.reasoning_off_model {
         items.push(InlineListItem {
             title: format!("Use {} (reasoning off)", alternative.display_name()),
@@ -382,35 +409,71 @@ pub(super) fn prompt_reasoning_plain(
     selection: &SelectionDetail,
     current: ReasoningEffortLevel,
 ) -> Result<()> {
+    let is_gpt51 = selection.model_id.starts_with("gpt-5.1");
     if selection.reasoning_optional {
-        renderer.line(
-            MessageStyle::Info,
-            &format!(
-                "Step 2 – reasoning effort (current: {}). Choose easy/medium/hard or type 'skip' if the model does not expose configurable reasoning.",
-                current
-            ),
-        )?;
+        if is_gpt51 {
+            renderer.line(
+                MessageStyle::Info,
+                &format!(
+                    "Step 2 – reasoning effort (current: {}). Choose none/easy/medium/hard or type 'skip' if the model does not expose configurable reasoning.",
+                    current
+                ),
+            )?;
+        } else {
+            renderer.line(
+                MessageStyle::Info,
+                &format!(
+                    "Step 2 – reasoning effort (current: {}). Choose easy/medium/hard or type 'skip' if the model does not expose configurable reasoning.",
+                    current
+                ),
+            )?;
+        }
     } else if let Some(alternative) = selection.reasoning_off_model {
-        renderer.line(
-            MessageStyle::Info,
-            &format!(
-                "Step 2 – select reasoning effort for {} (easy/medium/hard). Type 'skip' to keep {} or 'off' to use {} ({}).",
-                selection.model_display,
-                reasoning_level_label(current),
-                alternative.display_name(),
-                alternative.as_str()
-            ),
-        )?;
+        if is_gpt51 {
+            renderer.line(
+                MessageStyle::Info,
+                &format!(
+                    "Step 2 – select reasoning effort for {} (none/easy/medium/hard). Type 'skip' to keep {} or 'off' to use {} ({}). For GPT-5.1, 'none' provides lowest latency.",
+                    selection.model_display,
+                    reasoning_level_label(current),
+                    alternative.display_name(),
+                    alternative.as_str()
+                ),
+            )?;
+        } else {
+            renderer.line(
+                MessageStyle::Info,
+                &format!(
+                    "Step 2 – select reasoning effort for {} (easy/medium/hard). Type 'skip' to keep {} or 'off' to use {} ({}).",
+                    selection.model_display,
+                    reasoning_level_label(current),
+                    alternative.display_name(),
+                    alternative.as_str()
+                ),
+            )?;
+        }
     } else {
-        renderer.line(
-            MessageStyle::Info,
-            &format!(
-                "Step 2 – select reasoning effort for {} (easy/medium/hard). Type 'skip' to keep {}. Current: {}.",
-                selection.model_display,
-                reasoning_level_label(current),
-                current
-            ),
-        )?;
+        if is_gpt51 {
+            renderer.line(
+                MessageStyle::Info,
+                &format!(
+                    "Step 2 – select reasoning effort for {} (none/easy/medium/hard). Type 'skip' to keep {}. For GPT-5.1, 'none' provides lowest latency. Current: {}.",
+                    selection.model_display,
+                    reasoning_level_label(current),
+                    current
+                ),
+            )?;
+        } else {
+            renderer.line(
+                MessageStyle::Info,
+                &format!(
+                    "Step 2 – select reasoning effort for {} (easy/medium/hard). Type 'skip' to keep {}. Current: {}.",
+                    selection.model_display,
+                    reasoning_level_label(current),
+                    current
+                ),
+            )?;
+        }
     }
     Ok(())
 }

@@ -79,7 +79,7 @@ pub fn reasoning_parameters_for(provider: Provider, effort: ReasoningEffortLevel
         Provider::OpenAI => {
             let mut reasoning = openai::responses_api::Reasoning::new();
             let mapped = match effort {
-                ReasoningEffortLevel::None => return Some(json!({ "effort": "none" })),
+                ReasoningEffortLevel::None => return None, // Don't send any reasoning parameter for "none"
                 ReasoningEffortLevel::Minimal => return Some(json!({ "effort": "minimal" })), // GPT-5 minimal reasoning
                 ReasoningEffortLevel::Low => openai::responses_api::ReasoningEffort::Low,
                 ReasoningEffortLevel::Medium => openai::responses_api::ReasoningEffort::Medium,
