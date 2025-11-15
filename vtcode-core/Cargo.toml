@@ -1,6 +1,6 @@
 [package]
 name = "vtcode-core"
-version = "0.44.0"
+version = "0.44.1"
 edition = "2024"
 authors = ["vinhnx <vinhnx@users.noreply.github.com>"]
 description = "Core library for VTCode - a Rust-based terminal coding agent"
@@ -119,11 +119,11 @@ rig = { package = "rig-core", version = "0.23.1", default-features = false, feat
 vt100 = "0.15.2"
 portable-pty = "0.9.0"
 ansi-to-tui = "7.0.0"
-vtcode-commons = { path = "../vtcode-commons", version = "0.44.0" }
-vtcode-exec-events = { path = "../vtcode-exec-events", version = "0.44.0" }
-vtcode-config = { path = "../vtcode-config", version = "0.44.0" }
-vtcode-markdown-store = { path = "../vtcode-markdown-store", version = "0.44.0" }
-vtcode-indexer = { path = "../vtcode-indexer", version = "0.44.0" }
+vtcode-commons = { path = "../vtcode-commons", version = "0.44.1" }
+vtcode-exec-events = { path = "../vtcode-exec-events", version = "0.44.1" }
+vtcode-config = { path = "../vtcode-config", version = "0.44.1" }
+vtcode-markdown-store = { path = "../vtcode-markdown-store", version = "0.44.1" }
+vtcode-indexer = { path = "../vtcode-indexer", version = "0.44.1" }
 
 # Token counting for attention budget management
 tokenizers = { version = "0.22", features = ["http"] }
@@ -146,7 +146,7 @@ which = "8.0.0"
 textwrap = "0.16"
 
 [build-dependencies]
-vtcode-config = { path = "../vtcode-config", version = "0.44.0" }
+vtcode-config = { path = "../vtcode-config", version = "0.44.1" }
 
 [target.'cfg(unix)'.dependencies]
 
