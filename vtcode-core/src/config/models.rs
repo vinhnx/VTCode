@@ -859,20 +859,14 @@ impl ModelId {
                 "OpenAI's open-source 120B parameter GPT-OSS model using harmony tokenization"
             }
             // Anthropic models
-            ModelId::ClaudeOpus45 => {
+            ModelId::ClaudeOpus41 => {
                 "Latest most capable Anthropic model with advanced reasoning and structured outputs"
             }
-            ModelId::ClaudeOpus41 => "Latest most capable Anthropic model with advanced reasoning",
             ModelId::ClaudeSonnet45 => "Latest balanced Anthropic model for general tasks",
             ModelId::ClaudeHaiku45 => {
                 "Latest efficient Anthropic model optimized for low-latency agent workflows"
             }
-            ModelId::Claude4Sonnet => "Advanced Claude 4 Sonnet model with enhanced capabilities",
-            ModelId::Claude4Haiku => "Efficient Claude 4 Haiku model optimized for fast responses",
-            ModelId::Claude4Opus => "Most capable Claude 4 Opus model with advanced reasoning",
-            ModelId::ClaudeSonnet4 => {
-                "Previous balanced Anthropic model maintained for compatibility"
-            }
+            ModelId::ClaudeSonnet4 => "Advanced Claude 4 Sonnet model with enhanced capabilities",
             // DeepSeek models
             ModelId::DeepSeekChat => {
                 "DeepSeek V3.2-Exp non-thinking mode optimized for fast coding responses"
@@ -1324,14 +1318,10 @@ impl ModelId {
             | ModelId::OpenAIGptOss20b
             | ModelId::OpenAIGptOss120b => "5",
             // Anthropic generations
-            ModelId::ClaudeOpus45
+            ModelId::ClaudeOpus41
             | ModelId::ClaudeSonnet45
-            | ModelId::ClaudeHaiku45
-            | ModelId::Claude4Sonnet
-            | ModelId::Claude4Haiku
-            | ModelId::Claude4Opus => "4.5",
+            | ModelId::ClaudeHaiku45 => "4.5",
             ModelId::ClaudeSonnet4 => "4",
-            ModelId::ClaudeOpus41 => "4.1",
             // DeepSeek generations
             ModelId::DeepSeekChat | ModelId::DeepSeekReasoner => "V3.2-Exp",
             // xAI generations
