@@ -1,8 +1,10 @@
-mod slash_commands;
+use crate::agent::runloop::unified::turn::session::slash_commands;
 
 use anyhow::{Context, Result};
 use chrono::Local;
-use slash_commands::{SlashCommandContext, SlashCommandControl};
+use crate::agent::runloop::unified::turn::session::slash_commands::{
+    SlashCommandContext, SlashCommandControl,
+};
 use std::collections::{BTreeSet, HashMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::Arc;
