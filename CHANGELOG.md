@@ -3,6 +3,26 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Version 0.43.0] - 2025-11-09
+# [Version 0.44.1] - 2025-11-15
+
+
+### Bug Fixes
+    - fix: update Claude model identifiers and descriptions for accuracy
+
+
+### Documentation
+    - docs: update changelog for v0.44.0 [skip ci]
+    - docs: update changelog for v0.43.17 [skip ci]
+    - docs: update changelog for v0.43.16 [skip ci]
+
+
+### Chores
+    - chore: release v0.44.0
+    - chore: update configuration files for VTCode support
+    - chore: update npm package.json to v0.43.17 [skip ci]
+    - chore: release v0.43.17
+    - chore: release v0.43.16
+    - chore: update npm package.json to v0.43.15 [skip ci]
 # [Version 0.44.0] - 2025-11-15
 
 
