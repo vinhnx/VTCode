@@ -1,8 +1,8 @@
 mod config_modal;
 mod finalization;
 mod harmony;
-mod session;
 mod run_loop;
+mod session;
 mod utils;
 mod workspace;
 

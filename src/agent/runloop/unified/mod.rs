@@ -19,6 +19,7 @@ mod shell;
 mod state;
 mod status_line;
 mod tool_pipeline;
+ pub(crate) mod run_loop_context;
 mod tool_routing;
 mod tool_summary;
 mod turn;
