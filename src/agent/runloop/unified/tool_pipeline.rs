@@ -15,6 +15,12 @@ use vtcode_core::tools::registry::ToolErrorType;
 use vtcode_core::tools::registry::{ToolExecutionError, ToolRegistry, ToolTimeoutCategory};
 
 use super::state::CtrlCState;
+use super::run_loop_context::RunLoopContext;
+use crate::agent::runloop::unified::tool_routing::ensure_tool_permission;
+use crate::hooks::lifecycle::LifecycleHookEngine;
+use vtcode_core::config::loader::VTCodeConfig;
+use crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner;
+use vtcode_core::tools::ApprovalRecorder;
 
 /// Default timeout for tool execution if no policy is configured
 const DEFAULT_TOOL_TIMEOUT: Duration = Duration::from_secs(300);
@@ -60,6 +66,164 @@ pub(crate) enum ToolExecutionStatus {
     Cancelled,
     /// Tool execution progress update
     Progress(ToolProgress),
+}
+
+/// Outcome produced by a tool pipeline run - returns a success/failure wrapper along with stdout and modified files
+pub(crate) struct ToolPipelineOutcome {
+    pub status: ToolExecutionStatus,
+    pub stdout: Option<String>,
+    pub modified_files: Vec<String>,
+    pub command_success: bool,
+    pub has_more: bool,
+}
+
+impl ToolPipelineOutcome {
+    pub(crate) fn from_status(status: ToolExecutionStatus) -> Self {
+        match status {
+            ToolExecutionStatus::Success { output, stdout, modified_files, command_success, has_more } => {
+                let modified_files = modified_files;
+                ToolPipelineOutcome {
+                    status: ToolExecutionStatus::Success { output, stdout: stdout.clone(), modified_files: modified_files.clone(), command_success, has_more },
+                    stdout,
+                    modified_files,
+                    command_success,
+                    has_more,
+                }
+            }
+            other => ToolPipelineOutcome {
+                status: other,
+                stdout: None,
+                modified_files: vec![],
+                command_success: false,
+                has_more: false,
+            },
+        }
+    }
+}
+
+/// Execute tool call and handle permission, caching and common rendering.
+pub(crate) async fn run_tool_call(
+    ctx: &mut RunLoopContext<'_>,
+    call: &vtcode_core::llm::provider::ToolCall,
+    ctrl_c_state: &Arc<CtrlCState>,
+    ctrl_c_notify: &Arc<Notify>,
+    default_placeholder: Option<String>,
+    lifecycle_hooks: Option<&LifecycleHookEngine>,
+    skip_confirmations: bool,
+    token_budget: &Arc<vtcode_core::core::token_budget::TokenBudgetManager>,
+    vt_cfg: Option<&VTCodeConfig>,
+) -> Result<ToolPipelineOutcome, anyhow::Error> {
+    let name = call
+        .function
+        .as_ref()
+        .expect("Tool call must have function")
+        .name
+        .as_str()
+        .to_string();
+    let args_val = call.parsed_arguments().unwrap_or_else(|_| serde_json::json!({}));
+
+    // Pre-flight permission check
+    match ensure_tool_permission(
+        ctx.tool_registry,
+        &name,
+        Some(&args_val),
+        ctx.renderer,
+        ctx.handle,
+        ctx.session,
+        default_placeholder.clone(),
+        ctrl_c_state,
+        ctrl_c_notify,
+        lifecycle_hooks,
+        None, // justification
+        Some(ctx.approval_recorder),
+        Some(ctx.decision_ledger),
+        Some(ctx.tool_permission_cache),
+    )
+    .await
+    {
+        Ok(super::tool_routing::ToolPermissionFlow::Approved) => {}
+        Ok(super::tool_routing::ToolPermissionFlow::Denied) => {
+            return Ok(ToolPipelineOutcome::from_status(ToolExecutionStatus::Failure { error: anyhow::anyhow!("Tool permission denied") }));
+        }
+        Ok(super::tool_routing::ToolPermissionFlow::Interrupted) => {
+            return Ok(ToolPipelineOutcome::from_status(ToolExecutionStatus::Cancelled));
+        }
+        Ok(super::tool_routing::ToolPermissionFlow::Exit) => {
+            return Ok(ToolPipelineOutcome::from_status(ToolExecutionStatus::Cancelled));
+        }
+        Err(e) => {
+            return Ok(ToolPipelineOutcome::from_status(ToolExecutionStatus::Failure { error: e }));
+        }
+    }
+
+    // Determine read-only tools for caching
+    let is_read_only_tool = matches!(
+        name.as_str(),
+        "read_file" | "list_files" | "grep_search" | "find_files" | "tree_sitter_analyze"
+    );
+
+    // Attempt cache retrieval for read-only tools
+    if is_read_only_tool {
+        let mut cache = ctx.tool_result_cache.write().await;
+        let params_str = serde_json::to_string(&args_val).unwrap_or_default();
+        let cache_key = vtcode_core::tools::result_cache::CacheKey::new(&name, &params_str, "");
+        if let Some(cached_output) = cache.get(&cache_key) {
+            let cached_json: serde_json::Value = serde_json::from_str(&cached_output).unwrap_or(serde_json::json!({}));
+            let status = ToolExecutionStatus::Success {
+                output: cached_json,
+                stdout: None,
+                modified_files: vec![],
+                command_success: true,
+                has_more: false,
+            };
+            return Ok(ToolPipelineOutcome::from_status(status));
+        }
+    }
+
+    // Force TUI redraw to ensure stable UI
+    ctx.handle.force_redraw();
+    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+
+    // Execute with progress reporter
+    let progress_reporter = ProgressReporter::new();
+    progress_reporter.set_total(100).await;
+    progress_reporter.set_progress(0).await;
+    progress_reporter.set_message(format!("Starting {}...", name)).await;
+
+    let tool_spinner = PlaceholderSpinner::with_progress(
+        ctx.handle,
+        Some("".to_string()),
+        Some("".to_string()),
+        format!("Running tool: {}", name),
+        Some(&progress_reporter),
+    );
+
+    let outcome = execute_tool_with_timeout(
+        ctx.tool_registry,
+        &name,
+        args_val.clone(),
+        ctrl_c_state,
+        ctrl_c_notify,
+        Some(&progress_reporter),
+    )
+    .await;
+
+    match &outcome {
+        ToolExecutionStatus::Success { output, stdout, modified_files, command_success, has_more } => {
+            tool_spinner.finish();
+            // Cache successful read-only results
+            if is_read_only_tool && *command_success {
+                let mut cache = ctx.tool_result_cache.write().await;
+                let output_json = serde_json::to_string(&output).unwrap_or_else(|_| "{}".to_string());
+                let params_str = serde_json::to_string(&args_val).unwrap_or_default();
+                let cache_key = vtcode_core::tools::result_cache::CacheKey::new(&name, &params_str, "");
+                cache.insert(cache_key, output_json);
+            }
+        }
+        _ => {}
+    }
+
+    Ok(ToolPipelineOutcome::from_status(outcome))
 }
 
 /// Execute a tool with a timeout and progress reporting
