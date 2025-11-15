@@ -1,13 +1,8 @@
-use crate::agent::runloop::unified::turn::session::slash_commands;
-use crate::agent::runloop::context::ContextTrimConfig;
-use vtcode_core::prompts::CustomPromptRegistry;
-// use anyhow::anyhow; -- not required in helpers
+mod slash_commands;
 
-use crate::agent::runloop::unified::turn::session::slash_commands::{
-    SlashCommandContext, SlashCommandControl,
-};
 use anyhow::{Context, Result};
 use chrono::Local;
+use slash_commands::{SlashCommandContext, SlashCommandControl};
 use std::collections::{BTreeSet, HashMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -38,6 +33,70 @@ use vtcode_core::utils::style_helpers::{ColorPalette, render_styled};
 use vtcode_core::utils::transcript;
 
 use crate::agent::runloop::ResumeSession;
+use crate::agent::runloop::git::confirm_changes_with_git_diff;
+use crate::agent::runloop::model_picker::{ModelPickerProgress, ModelPickerState};
+use crate::agent::runloop::prompt::refine_user_prompt_if_enabled;
+use crate::agent::runloop::slash_commands::handle_slash_command;
+use crate::agent::runloop::text_tools::{detect_textual_tool_call, extract_code_fence_blocks};
+use crate::agent::runloop::tool_output::render_code_fence_blocks;
+use crate::agent::runloop::tool_output::render_tool_output;
+use crate::agent::runloop::ui::{build_inline_header_context, render_session_banner};
+use crate::agent::runloop::unified::mcp_tool_manager::McpToolManager;
+use crate::agent::runloop::unified::ui_interaction::{
+    PlaceholderSpinner, stream_and_render_response,
+};
+
+use super::finalization::finalize_session;
+use super::harmony::strip_harmony_syntax;
+use super::utils::{render_hook_messages, safe_force_redraw};
+use super::workspace::{load_workspace_files, refresh_vt_config};
+use crate::agent::runloop::mcp_events;
+use crate::agent::runloop::unified::async_mcp_manager::McpInitStatus;
+use crate::agent::runloop::unified::context_manager::ContextManager;
+
+use crate::agent::runloop::unified::display::{display_user_message, ensure_turn_bottom_gap};
+use crate::agent::runloop::unified::inline_events::{
+    InlineEventLoopResources, InlineInterruptCoordinator, InlineLoopAction, poll_inline_loop_action,
+};
+use crate::agent::runloop::unified::loop_detection::{
+    LoopDetectionResponse, LoopDetector, prompt_for_loop_detection,
+};
+use crate::agent::runloop::unified::model_selection::finalize_model_selection;
+use crate::agent::runloop::unified::palettes::{ActivePalette, apply_prompt_style};
+use crate::agent::runloop::unified::progress::ProgressReporter;
+use crate::agent::runloop::unified::session_setup::{
+    SessionState, build_mcp_tool_definitions, initialize_session,
+};
+use crate::agent::runloop::unified::shell::{
+    derive_recent_tool_output, should_short_circuit_shell,
+};
+use crate::agent::runloop::unified::state::{CtrlCSignal, CtrlCState, SessionStats};
+use crate::agent::runloop::unified::status_line::{
+    InputStatusState, update_context_efficiency, update_input_status_if_changed,
+};
+use crate::agent::runloop::unified::tool_pipeline::{
+    ToolExecutionStatus, execute_tool_with_timeout,
+};
+use crate::agent::runloop::unified::tool_routing::{ToolPermissionFlow, ensure_tool_permission};
+use crate::agent::runloop::unified::tool_summary::{
+    describe_tool_action, humanize_tool_name, render_tool_call_summary_with_status,
+};
+use crate::agent::runloop::unified::workspace_links::LinkedDirectory;
+use crate::hooks::lifecycle::{LifecycleHookEngine, SessionEndReason, SessionStartTrigger};
+use crate::ide_context::IdeContextBridge;
+
+enum TurnLoopResult {
+    Completed,
+    Aborted,
+    Cancelled,
+    Blocked {
+        #[allow(dead_code)]
+        reason: Option<String>,
+    },
+}
+
+const SELF_REVIEW_MIN_LENGTH: usize = 240;
+
 pub(crate) async fn run_single_agent_loop_unified(
     config: &CoreAgentConfig,
     mut vt_cfg: Option<VTCodeConfig>,
@@ -45,6 +104,89 @@ pub(crate) async fn run_single_agent_loop_unified(
     full_auto: bool,
     resume: Option<ResumeSession>,
 ) -> Result<()> {
+    // Set up panic handler to ensure MCP cleanup on panic
+    let original_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |panic_info| {
+        eprintln!("Application panic occurred: {:?}", panic_info);
+        // Note: We can't easily access the MCP client here due to move semantics
+        // The cleanup will happen in the Drop implementations
+        original_hook(panic_info);
+    }));
+
+    // Note: The original hook will not be restored during this session
+    // but Rust runtime should handle this appropriately
+    let mut config = config.clone();
+    let mut resume_state = resume;
+
+    loop {
+        let resume_ref = resume_state.as_ref();
+
+        let session_trigger = if resume_ref.is_some() {
+            SessionStartTrigger::Resume
+        } else {
+            SessionStartTrigger::Startup
+        };
+        let lifecycle_hooks = if let Some(vt) = vt_cfg.as_ref() {
+            LifecycleHookEngine::new(config.workspace.clone(), &vt.hooks, session_trigger)?
+        } else {
+            None
+        };
+
+        let SessionState {
+            session_bootstrap,
+            mut provider_client,
+            mut tool_registry,
+            tools,
+            trim_config,
+            mut conversation_history,
+            decision_ledger,
+            pruning_ledger,
+            trajectory: traj,
+            base_system_prompt,
+            full_auto_allowlist,
+            #[allow(unused_variables)]
+            async_mcp_manager,
+            mut mcp_panel_state,
+            token_budget,
+            token_budget_enabled,
+            token_counter,
+            tool_result_cache,
+            tool_permission_cache,
+            search_metrics: _,
+            custom_prompts,
+            mut sandbox,
+        } = initialize_session(&config, vt_cfg.as_ref(), full_auto, resume_ref).await?;
+
+        let mut session_end_reason = SessionEndReason::Completed;
+
+        let mut context_manager = ContextManager::new(
+            base_system_prompt,
+            trim_config,
+            token_budget.clone(),
+            token_budget_enabled,
+        );
+        let trim_config = context_manager.trim_config();
+        let token_budget_enabled = context_manager.token_budget_enabled();
+
+        let active_styles = theme::active_styles();
+        let theme_spec = theme_from_styles(&active_styles);
+        let mut default_placeholder = session_bootstrap
+            .placeholder
+            .clone()
+            .or_else(|| Some(ui::CHAT_INPUT_PLACEHOLDER_BOOTSTRAP.to_string()));
+        let mut follow_up_placeholder = if session_bootstrap.placeholder.is_none() {
+            Some(ui::CHAT_INPUT_PLACEHOLDER_FOLLOW_UP.to_string())
+        } else {
+            None
+        };
+        let inline_rows = vt_cfg
+            .as_ref()
+            .map(|cfg| cfg.ui.inline_viewport_rows)
+            .unwrap_or(ui::DEFAULT_INLINE_VIEWPORT_ROWS);
+        let show_timeline_pane = vt_cfg
+            .as_ref()
+            .map(|cfg| cfg.ui.show_timeline_pane)
+            .unwrap_or(ui::INLINE_SHOW_TIMELINE_PANE);
 
         // Set environment variable to indicate TUI mode is active
         // This prevents CLI dialoguer prompts from corrupting the TUI display
@@ -538,14 +680,15 @@ pub(crate) async fn run_single_agent_loop_unified(
                 full_auto,
             };
 
-            let mut input_owned = poll_inline_input(
-                &mut session,
-                &ctrl_c_notify,
-                resources,
-                full_auto,
-                async_mcp_manager.as_ref(),
-            )
-            .await?;
+            let mut input_owned =
+                match poll_inline_loop_action(&mut session, &ctrl_c_notify, resources).await? {
+                    InlineLoopAction::Continue => continue,
+                    InlineLoopAction::Submit(text) => text,
+                    InlineLoopAction::Exit(reason) => {
+                        session_end_reason = reason;
+                        break;
+                    }
+                };
 
             if input_owned.is_empty() {
                 continue;
@@ -596,40 +739,55 @@ pub(crate) async fn run_single_agent_loop_unified(
                 input if input.starts_with('/') => {
                     // Handle slash commands
                     if let Some(command_input) = input.strip_prefix('/') {
-                        input_owned = process_slash_command(
-                            command_input,
-                            &mut renderer,
-                            &handle,
-                            &mut session,
-                            &mut config,
-                            &mut vt_cfg,
-                            &mut provider_client,
-                            &session_bootstrap,
-                            &mut model_picker_state,
-                            &mut palette_state,
-                            &mut sandbox,
-                            &mut tool_registry,
-                            &mut conversation_history,
-                            &decision_ledger,
-                            &pruning_ledger,
-                            &mut context_manager,
-                            &mut session_stats,
-                            &tools,
-                            token_budget_enabled,
-                            &trim_config,
-                            &custom_prompts,
-                            async_mcp_manager.as_ref(),
-                            &mut mcp_panel_state,
-                            &mut linked_directories,
-                            &ctrl_c_state,
-                            &ctrl_c_notify,
-                            &default_placeholder,
-                            lifecycle_hooks.as_ref(),
-                            full_auto,
-                            Some(&*approval_recorder),
-                            &tool_permission_cache,
+                        let outcome =
+                            handle_slash_command(command_input, &mut renderer, &custom_prompts)
+                                .await?;
+                        let command_result = slash_commands::handle_outcome(
+                            outcome,
+                            SlashCommandContext {
+                                renderer: &mut renderer,
+                                handle: &handle,
+                                session: &mut session,
+                                config: &mut config,
+                                vt_cfg: &mut vt_cfg,
+                                provider_client: &mut provider_client,
+                                session_bootstrap: &session_bootstrap,
+                                model_picker_state: &mut model_picker_state,
+                                palette_state: &mut palette_state,
+                                sandbox: &mut sandbox,
+                                tool_registry: &mut tool_registry,
+                                conversation_history: &mut conversation_history,
+                                decision_ledger: &decision_ledger,
+                                pruning_ledger: &pruning_ledger,
+                                context_manager: &mut context_manager,
+                                session_stats: &mut session_stats,
+                                tools: &tools,
+                                token_budget_enabled,
+                                trim_config: &trim_config,
+                                async_mcp_manager: async_mcp_manager.as_ref(),
+                                mcp_panel_state: &mut mcp_panel_state,
+                                linked_directories: &mut linked_directories,
+                                ctrl_c_state: &ctrl_c_state,
+                                ctrl_c_notify: &ctrl_c_notify,
+                                default_placeholder: &default_placeholder,
+                                lifecycle_hooks: lifecycle_hooks.as_ref(),
+                                full_auto,
+                                approval_recorder: Some(&approval_recorder),
+                                tool_permission_cache: &tool_permission_cache,
+                            },
                         )
                         .await?;
+                        match command_result {
+                            SlashCommandControl::SubmitPrompt(prompt) => {
+                                input_owned = prompt;
+                            }
+                            SlashCommandControl::Continue => continue,
+                            SlashCommandControl::BreakWithReason(reason) => {
+                                session_end_reason = reason;
+                                break;
+                            }
+                            SlashCommandControl::BreakWithoutReason => break,
+                        }
                     }
                 }
                 _ => {}
@@ -658,28 +816,38 @@ pub(crate) async fn run_single_agent_loop_unified(
                 }
             }
 
-            if let Some(_picker) = model_picker_state.as_mut() {
-                let model_outcome = maybe_handle_model_picker(
-                    &mut model_picker_state,
-                    &mut renderer,
-                    input_owned.as_str(),
-                    &mut config,
-                    &mut vt_cfg,
-                    &mut provider_client,
-                    &session_bootstrap,
-                    &handle,
-                    full_auto,
-                )
-                .await?;
-                match model_outcome {
+            if let Some(picker) = model_picker_state.as_mut() {
+                let progress = picker.handle_input(&mut renderer, input_owned.as_str())?;
+                match progress {
                     ModelPickerProgress::InProgress => continue,
-                    ModelPickerProgress::NeedsRefresh => continue,
+                    ModelPickerProgress::NeedsRefresh => {
+                        picker.refresh_dynamic_models(&mut renderer).await?;
+                        continue;
+                    }
                     ModelPickerProgress::Cancelled => {
                         model_picker_state = None;
                         continue;
                     }
                     ModelPickerProgress::Completed(selection) => {
-                        // selection was applied inside maybe_handle_model_picker
+                        let picker_state = model_picker_state.take().unwrap();
+                        if let Err(err) = finalize_model_selection(
+                            &mut renderer,
+                            &picker_state,
+                            selection,
+                            &mut config,
+                            &mut vt_cfg,
+                            &mut provider_client,
+                            &session_bootstrap,
+                            &handle,
+                            full_auto,
+                        )
+                        .await
+                        {
+                            renderer.line(
+                                MessageStyle::Error,
+                                &format!("Failed to apply model selection: {}", err),
+                            )?;
+                        }
                         continue;
                     }
                 }
@@ -1109,21 +1277,6 @@ pub(crate) async fn run_single_agent_loop_unified(
                     // Clear final_text since it was used for assistant_text
                     // This prevents the loop from breaking after tool execution
                     let _ = final_text.take();
-                    // Build run-loop context to pass to tool pipeline handlers
-                    let mut run_ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext {
-                        renderer: &mut renderer,
-                        handle: &handle,
-                        tool_registry: &mut tool_registry,
-                        tools: &tools,
-                        tool_result_cache: &tool_result_cache,
-                        tool_permission_cache: &tool_permission_cache,
-                        decision_ledger: &decision_ledger,
-                        pruning_ledger: &pruning_ledger,
-                        session_stats: &mut session_stats,
-                        mcp_panel_state: &mut mcp_panel_state,
-                        approval_recorder: &approval_recorder,
-                        session: &mut session,
-                    };
                     for call in &tool_calls {
                         let name = call
                             .function
@@ -1243,26 +1396,25 @@ pub(crate) async fn run_single_agent_loop_unified(
                             )
                         };
 
-                        // Delegate the heavy lifting to our extracted tool pipeline
-                        let pipeline_outcome = crate::agent::runloop::unified::tool_pipeline::run_tool_call(
-                            &mut run_ctx,
-                            call,
+                        match ensure_tool_permission(
+                            &mut tool_registry,
+                            name,
+                            Some(&args_val),
+                            &mut renderer,
+                            &handle,
+                            &mut session,
+                            default_placeholder.clone(),
                             &ctrl_c_state,
                             &ctrl_c_notify,
-                            default_placeholder.clone(),
                             lifecycle_hooks.as_ref(),
-                            skip_confirmations,
-                            &token_budget,
-                            vt_cfg.as_ref(),
+                            None, // justification from agent - TODO: extract from context
+                            Some(&approval_recorder),
+                            Some(&decision_ledger),
+                            Some(&tool_permission_cache),
                         )
-                        .await?;
-
-                        match pipeline_outcome.status {
-                            ToolExecutionStatus::Progress(progress) => {
-                                // updates are handled by pipeline if needed
-                                continue;
-                            }
-                            ToolExecutionStatus::Success { ref output, ref stdout, ref modified_files, command_success, has_more } => {
+                        .await
+                        {
+                            Ok(ToolPermissionFlow::Approved) => {
                                 // Force redraw immediately after modal closes to clear artifacts
                                 safe_force_redraw(&handle, &mut last_forced_redraw);
                                 // Longer delay to ensure modal is fully cleared before spinner starts
@@ -1409,7 +1561,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                             true,
                                         );
 
-                                        // Handle MCP events and render output
+                                        // Handle MCP events
                                         if let Some(tool_name) = name.strip_prefix("mcp_") {
                                             let mut mcp_event = mcp_events::McpEvent::new(
                                                 "mcp".to_string(),
@@ -1420,8 +1572,10 @@ pub(crate) async fn run_single_agent_loop_unified(
                                             mcp_panel_state.add_event(mcp_event);
                                         } else {
                                             // Render tool summary with status
-                                            let exit_code = output.get("exit_code").and_then(|v| v.as_i64());
-                                            let status_icon = if command_success { "✓" } else { "✗" };
+                                            let exit_code =
+                                                output.get("exit_code").and_then(|v| v.as_i64());
+                                            let status_icon =
+                                                if command_success { "✓" } else { "✗" };
                                             render_tool_call_summary_with_status(
                                                 &mut renderer,
                                                 name,
@@ -1440,7 +1594,11 @@ pub(crate) async fn run_single_agent_loop_unified(
                                             Some(&token_budget),
                                         )
                                         .await?;
-                                        last_tool_stdout = if command_success { stdout.clone() } else { None };
+                                        last_tool_stdout = if command_success {
+                                            stdout.clone()
+                                        } else {
+                                            None
+                                        };
 
                                         if matches!(
                                             name,
@@ -2161,158 +2319,4 @@ pub(crate) async fn run_single_agent_loop_unified(
     }
 
     Ok(())
-}
-
-async fn poll_inline_input(
-    session: &mut vtcode_core::ui::tui::InlineSession,
-    ctrl_c_notify: &Arc<Notify>,
-    resources: InlineEventLoopResources<'_>,
-    full_auto: bool,
-    async_mcp_manager: Option<&Arc<crate::agent::runloop::unified::async_mcp_manager::AsyncMcpManager>>,
- ) -> Result<String> {
-    // Run pre-poll checks using the resources (refresh config and mcp status), then poll action
-    if let Err(err) = refresh_vt_config(&resources.config.workspace, &resources.config, resources.vt_cfg).await {
-        tracing::warn!(workspace = %resources.config.workspace.display(), error = ?err, "Failed to refresh workspace configuration");
-        resources.renderer.line(MessageStyle::Error, &format!("Failed to reload configuration: {}", err))?;
-    }
-
-    if let Some(mcp_manager) = async_mcp_manager {
-        let mcp_status = mcp_manager.get_status().await;
-        if mcp_status.is_error() && let Some(error_msg) = mcp_status.get_error_message() {
-            resources.renderer.line(MessageStyle::Error, &format!("MCP Error: {}", error_msg))?;
-            resources.renderer.line(MessageStyle::Info, "Use /mcp to check status or update your vtcode.toml configuration.")?;
-        }
-    }
-
-    // Poll inline loop and handle actions
-    let mut input_owned = match poll_inline_loop_action(session, ctrl_c_notify, resources).await? {
-        InlineLoopAction::Continue => return Ok(String::new()),
-        InlineLoopAction::Submit(text) => text,
-        InlineLoopAction::Exit(reason) => return Err(anyhow::anyhow!("Session exit: {:?}", reason)),
-    };
-
-    if input_owned.is_empty() {
-        return Ok(String::new());
-    }
-
-    // do nothing here - pre-poll checks already handled above
-
-    Ok(input_owned)
-}
-
-async fn process_slash_command(
-    command_input: &str,
-    renderer: &mut AnsiRenderer,
-    handle: &vtcode_core::ui::tui::InlineHandle,
-    session: &mut vtcode_core::ui::tui::InlineSession,
-    config: &mut CoreAgentConfig,
-    vt_cfg: &mut Option<VTCodeConfig>,
-    provider_client: &mut Box<dyn vtcode_core::llm::provider::LLMProvider>,
-    session_bootstrap: &crate::agent::runloop::welcome::SessionBootstrap,
-    model_picker_state: &mut Option<ModelPickerState>,
-    palette_state: &mut Option<ActivePalette>,
-    sandbox: &mut crate::agent::runloop::sandbox::SandboxCoordinator,
-    tool_registry: &mut vtcode_core::tools::ToolRegistry,
-    conversation_history: &mut Vec<vtcode_core::llm::provider::Message>,
-    decision_ledger: &Arc<tokio::sync::RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>,
-    pruning_ledger: &Arc<tokio::sync::RwLock<vtcode_core::core::pruning_decisions::PruningDecisionLedger>>,
-    context_manager: &mut ContextManager,
-    session_stats: &mut SessionStats,
-    tools: &Arc<tokio::sync::RwLock<Vec<vtcode_core::llm::provider::ToolDefinition>>>,
-    token_budget_enabled: bool,
-    trim_config: &ContextTrimConfig,
-    custom_prompts: &CustomPromptRegistry,
-    async_mcp_manager: Option<&Arc<crate::agent::runloop::unified::async_mcp_manager::AsyncMcpManager>>,
-    mcp_panel_state: &mut crate::agent::runloop::mcp_events::McpPanelState,
-    linked_directories: &mut Vec<LinkedDirectory>,
-    ctrl_c_state: &Arc<CtrlCState>,
-    ctrl_c_notify: &Arc<Notify>,
-    default_placeholder: &Option<String>,
-    lifecycle_hooks: Option<&LifecycleHookEngine>,
-    full_auto: bool,
-    approval_recorder: Option<&vtcode_core::tools::ApprovalRecorder>,
-    tool_permission_cache: &Arc<tokio::sync::RwLock<vtcode_core::acp::ToolPermissionCache>>,
- ) -> Result<String> {
-    let outcome = handle_slash_command(command_input, renderer, custom_prompts).await?;
-    let command_result = slash_commands::handle_outcome(
-        outcome,
-        SlashCommandContext {
-            renderer,
-            handle,
-            session,
-            config,
-            vt_cfg,
-            provider_client,
-            session_bootstrap,
-            model_picker_state,
-            palette_state,
-            sandbox,
-            tool_registry,
-            conversation_history,
-            decision_ledger,
-            pruning_ledger,
-            context_manager,
-            session_stats,
-            tools,
-            token_budget_enabled,
-            trim_config,
-            async_mcp_manager,
-            mcp_panel_state,
-            linked_directories,
-            ctrl_c_state,
-            ctrl_c_notify,
-            default_placeholder,
-            lifecycle_hooks,
-            full_auto,
-            approval_recorder,
-            tool_permission_cache,
-        },
-    )
-    .await?;
-
-    match command_result {
-        SlashCommandControl::SubmitPrompt(prompt) => Ok(prompt),
-        SlashCommandControl::Continue => Ok(String::new()),
-        SlashCommandControl::BreakWithReason(reason) => Err(anyhow::anyhow!("Break: {:?}", reason)),
-        SlashCommandControl::BreakWithoutReason => Err(anyhow::anyhow!("Break without reason")),
-    }
-}
-
-async fn maybe_handle_model_picker(
-    model_picker_opt: &mut Option<ModelPickerState>,
-    renderer: &mut AnsiRenderer,
-    input: &str,
-    config: &mut CoreAgentConfig,
-    vt_cfg: &mut Option<VTCodeConfig>,
-    provider_client: &mut Box<dyn vtcode_core::llm::provider::LLMProvider>,
-    session_bootstrap: &crate::agent::runloop::welcome::SessionBootstrap,
-    handle: &vtcode_core::ui::tui::InlineHandle,
-    full_auto: bool,
-) -> Result<ModelPickerProgress> {
-    let picker = model_picker_opt.as_mut().unwrap();
-    let progress = picker.handle_input(renderer, input)?;
-    match progress {
-        ModelPickerProgress::InProgress => Ok(ModelPickerProgress::InProgress),
-        ModelPickerProgress::NeedsRefresh => {
-            picker.refresh_dynamic_models(renderer).await?;
-            Ok(ModelPickerProgress::NeedsRefresh)
-        }
-        ModelPickerProgress::Cancelled => Ok(ModelPickerProgress::Cancelled),
-        ModelPickerProgress::Completed(selection) => {
-            let picker_state = model_picker_opt.take().unwrap();
-            finalize_model_selection(
-                renderer,
-                &picker_state,
-                selection.clone(),
-                config,
-                vt_cfg,
-                provider_client,
-                session_bootstrap,
-                handle,
-                full_auto,
-            )
-            .await?;
-            Ok(ModelPickerProgress::Completed(selection))
-        }
-    }
 }
