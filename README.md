@@ -41,7 +41,7 @@
 </p>
 
 ---
-[![BuyMeACoffee](https://raw.githubusercontent.com/pachadotdev/buymeacoffee-badges/main/bmc-yellow.svg)](https://www.buymeacoffee.com/vinhnx)
+
 ## Installation
 
 **macOS & Linux:**
