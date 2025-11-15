@@ -145,6 +145,14 @@ const packageJsonContributions = {
                     icon: "$(comment-discussion)",
                 },
             ],
+            // Secondary side bar contributions (VS Code >= 1.106)
+            secondary: [
+                {
+                    id: "vtcode-sidebar",
+                    title: "VTCode",
+                    icon: "$(comment-discussion)",
+                },
+            ],
         },
         views: {
             "vtcode-sidebar": [

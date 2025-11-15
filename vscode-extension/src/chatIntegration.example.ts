@@ -59,6 +59,16 @@ const packageJsonUpdates = {
                     icon: "media/vtcode-icon.svg",
                 },
             ],
+            // To support the Secondary Side Bar (VS Code >= 1.106)
+            // you may also contribute the same view container id here
+            // or provide separate container id if desired.
+            secondary: [
+                {
+                    id: "vtcode-sidebar",
+                    title: "VTCode",
+                    icon: "media/vtcode-icon.svg",
+                },
+            ],
         },
         views: {
             "vtcode-sidebar": [

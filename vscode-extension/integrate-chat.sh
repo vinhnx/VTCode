@@ -24,8 +24,16 @@ cat << 'EOF'
 
 {
   "contributes": {
-    "viewsContainers": {
+      "viewsContainers": {
       "activitybar": [
+        {
+          "id": "vtcode-sidebar",
+          "title": "VTCode",
+          "icon": "media/vtcode-icon.svg"
+        }
+      ]
+      ,
+      "secondary": [
         {
           "id": "vtcode-sidebar",
           "title": "VTCode",
