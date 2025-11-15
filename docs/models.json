@@ -128,6 +128,18 @@
                 },
                 "context": 400000
             },
+            "gpt-5.1-mini": {
+                "id": "gpt-5.1-mini",
+                "name": "GPT-5.1 Mini",
+                "description": "Lightweight GPT-5.1 variant optimized for fast responses and cost-efficiency.",
+                "reasoning": false,
+                "tool_call": true,
+                "modalities": {
+                    "input": ["text"],
+                    "output": ["text"]
+                },
+                "context": 200000
+            },
             "gpt-5": {
                 "id": "gpt-5",
                 "name": "GPT-5",
@@ -182,6 +194,28 @@
                     "output": ["text"]
                 },
                 "context": 200000
+            },
+            "gpt-oss-20b": {
+                "id": "gpt-oss-20b",
+                "name": "GPT-OSS 20B",
+                "reasoning": true,
+                "tool_call": true,
+                "modalities": {
+                    "input": ["text"],
+                    "output": ["text"]
+                },
+                "context": 131072
+            },
+            "gpt-oss-120b": {
+                "id": "gpt-oss-120b",
+                "name": "GPT-OSS 120B",
+                "reasoning": true,
+                "tool_call": true,
+                "modalities": {
+                    "input": ["text"],
+                    "output": ["text"]
+                },
+                "context": 131072
             }
         }
     },

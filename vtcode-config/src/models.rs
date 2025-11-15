@@ -491,10 +491,10 @@ impl ModelId {
             ModelId::GPT5Nano => models::GPT_5_NANO,
             ModelId::CodexMiniLatest => models::CODEX_MINI_LATEST,
             // Anthropic models
-            ModelId::ClaudeOpus41 => models::CLAUDE_OPUS_4_1_20250805,
+            ModelId::ClaudeOpus41 => models::CLAUDE_OPUS_4_1,
             ModelId::ClaudeSonnet45 => models::CLAUDE_SONNET_4_5,
             ModelId::ClaudeHaiku45 => models::CLAUDE_HAIKU_4_5,
-            ModelId::ClaudeSonnet4 => models::CLAUDE_SONNET_4_20250514,
+            ModelId::ClaudeSonnet4 => models::CLAUDE_SONNET_4_5_20250929,
             // DeepSeek models
             ModelId::DeepSeekChat => models::DEEPSEEK_CHAT,
             ModelId::DeepSeekReasoner => models::DEEPSEEK_REASONER,
@@ -1164,10 +1164,10 @@ impl FromStr for ModelId {
             s if s == models::openai::GPT_OSS_20B => Ok(ModelId::OpenAIGptOss20b),
             s if s == models::openai::GPT_OSS_120B => Ok(ModelId::OpenAIGptOss120b),
             // Anthropic models
-            s if s == models::CLAUDE_OPUS_4_1_20250805 => Ok(ModelId::ClaudeOpus41),
+            s if s == models::CLAUDE_OPUS_4_1 => Ok(ModelId::ClaudeOpus41),
             s if s == models::CLAUDE_SONNET_4_5 => Ok(ModelId::ClaudeSonnet45),
             s if s == models::CLAUDE_HAIKU_4_5 => Ok(ModelId::ClaudeHaiku45),
-            s if s == models::CLAUDE_SONNET_4_20250514 => Ok(ModelId::ClaudeSonnet4),
+            s if s == models::CLAUDE_SONNET_4_5_20250929 => Ok(ModelId::ClaudeSonnet4),
             // DeepSeek models
             s if s == models::DEEPSEEK_CHAT => Ok(ModelId::DeepSeekChat),
             s if s == models::DEEPSEEK_REASONER => Ok(ModelId::DeepSeekReasoner),
@@ -1306,12 +1306,9 @@ mod tests {
         assert_eq!(ModelId::ClaudeHaiku45.as_str(), models::CLAUDE_HAIKU_4_5);
         assert_eq!(
             ModelId::ClaudeSonnet4.as_str(),
-            models::CLAUDE_SONNET_4_20250514
+            models::CLAUDE_SONNET_4_5_20250929
         );
-        assert_eq!(
-            ModelId::ClaudeOpus41.as_str(),
-            models::CLAUDE_OPUS_4_1_20250805
-        );
+        assert_eq!(ModelId::ClaudeOpus41.as_str(), models::CLAUDE_OPUS_4_1);
         // DeepSeek models
         assert_eq!(ModelId::DeepSeekChat.as_str(), models::DEEPSEEK_CHAT);
         assert_eq!(
@@ -1398,11 +1395,13 @@ mod tests {
             ModelId::ClaudeHaiku45
         );
         assert_eq!(
-            models::CLAUDE_SONNET_4_20250514.parse::<ModelId>().unwrap(),
+            models::CLAUDE_SONNET_4_5_20250929
+                .parse::<ModelId>()
+                .unwrap(),
             ModelId::ClaudeSonnet4
         );
         assert_eq!(
-            models::CLAUDE_OPUS_4_1_20250805.parse::<ModelId>().unwrap(),
+            models::CLAUDE_OPUS_4_1.parse::<ModelId>().unwrap(),
             ModelId::ClaudeOpus41
         );
         // DeepSeek models

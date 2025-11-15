@@ -950,14 +950,13 @@ impl LLMProvider for AnthropicProvider {
             model
         };
 
-        // Structured outputs are available for Claude 4 and Claude 4.5 models
+        // Structured outputs are available for Claude 4.5 models and their aliases
         requested == models::anthropic::CLAUDE_SONNET_4_5
+            || requested == models::anthropic::CLAUDE_SONNET_4_5_20250929
+            || requested == models::anthropic::CLAUDE_OPUS_4_1
             || requested == models::anthropic::CLAUDE_OPUS_4_1_20250805
-            || requested == models::anthropic::CLAUDE_OPUS_4_5
             || requested == models::anthropic::CLAUDE_HAIKU_4_5
-            || requested == models::anthropic::CLAUDE_4_SONNET
-            || requested == models::anthropic::CLAUDE_4_HAIKU
-            || requested == models::anthropic::CLAUDE_4_OPUS
+            || requested == models::anthropic::CLAUDE_HAIKU_4_5_20251001
     }
 
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
@@ -1257,20 +1256,17 @@ mod tests {
         // Claude Opus 4.1 should support structured output
         assert!(provider.supports_structured_output(models::CLAUDE_OPUS_4_1_20250805));
 
-        // Claude Opus 4.5 should support structured output
-        assert!(provider.supports_structured_output(models::CLAUDE_OPUS_4_5));
+        // Claude Sonnet 4.5 should support structured output
+        assert!(provider.supports_structured_output(models::CLAUDE_SONNET_4_5));
+
+        // Claude Sonnet 4.5 (versioned) should support structured output
+        assert!(provider.supports_structured_output(models::CLAUDE_SONNET_4_5_20250929));
+
+        // Claude Opus 4.1 should support structured output
+        assert!(provider.supports_structured_output(models::CLAUDE_OPUS_4_1));
 
         // Claude Haiku 4.5 should support structured output
         assert!(provider.supports_structured_output(models::CLAUDE_HAIKU_4_5));
-
-        // Claude 4 Sonnet should support structured output
-        assert!(provider.supports_structured_output(models::CLAUDE_4_SONNET));
-
-        // Claude 4 Haiku should support structured output
-        assert!(provider.supports_structured_output(models::CLAUDE_4_HAIKU));
-
-        // Claude 4 Opus should support structured output
-        assert!(provider.supports_structured_output(models::CLAUDE_4_OPUS));
 
         // Test with empty model string (should use provider's default)
         let provider_default = AnthropicProvider::from_config(
