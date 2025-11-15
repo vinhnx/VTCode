@@ -94,7 +94,7 @@
     "grammars": [
       {
         "language": "vtcode-config",
-        "scopeName": "source.vtcode.toml",
+        "scopeName": "source.toml",
         "path": "./syntaxes/vtcode.tmLanguage.json"
       }
     ],
