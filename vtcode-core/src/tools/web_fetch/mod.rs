@@ -10,6 +10,7 @@ use async_trait::async_trait;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::HashSet;
+use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, USER_AGENT};
 use std::fs;
 use std::path::Path;
 
@@ -81,19 +82,14 @@ impl WebFetchTool {
         // Validate URL
         self.validate_url(url)?;
 
+        let default_headers = Self::default_headers();
+
         let client = reqwest::Client::builder()
+            .default_headers(default_headers)
             .timeout(std::time::Duration::from_secs(timeout_secs))
-            .user_agent("VTCode/1.0 (compatible; web-fetch tool)")
             .build()?;
 
-        let response = client
-            .get(url)
-            .header(
-                "Accept",
-                "text/markdown, text/html, application/json, text/plain, */*",
-            )
-            .send()
-            .await?;
+        let response = client.get(url).send().await?;
 
         if !response.status().is_success() {
             return Err(anyhow!(
@@ -391,6 +387,18 @@ impl WebFetchTool {
             "truncated": truncated,
             "next_action_hint": "Analyze `content` using `prompt` and answer the user in natural language based on the fetched page."
         }))
+    }
+}
+
+impl WebFetchTool {
+    /// Returns default headers used by the WebFetch client. This keeps Accept set to
+    /// prefer 'text/markdown' so documentation sites can provide token-efficient markdown
+    /// content as a preference.
+    fn default_headers() -> HeaderMap {
+        let mut headers = HeaderMap::new();
+        headers.insert(ACCEPT, HeaderValue::from_static("text/markdown, */*"));
+        headers.insert(USER_AGENT, HeaderValue::from_static("VTCode/1.0 (compatible; web-fetch tool)"));
+        headers
     }
 }
 
@@ -739,5 +747,13 @@ mod tests {
         assert!(result.is_err());
         let error = result.unwrap_err().to_string();
         assert!(error.contains("sensitive pattern"));
+    }
+
+    #[test]
+    fn default_headers_contain_text_markdown_accept() {
+        let headers = WebFetchTool::default_headers();
+        assert!(headers.contains_key(ACCEPT));
+        let val = headers.get(ACCEPT).unwrap().to_str().unwrap();
+        assert!(val.contains("text/markdown"));
     }
 }

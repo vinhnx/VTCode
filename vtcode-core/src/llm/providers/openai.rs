@@ -343,11 +343,7 @@ impl OpenAIProvider {
         model == models::openai::GPT_5_CODEX
     }
 
-    fn is_gpt51_model(model: &str) -> bool {
-        model == models::openai::GPT_5_1
-            || model == models::openai::GPT_5_1_CODEX
-            || model == models::openai::GPT_5_1_MINI
-    }
+
 
     fn is_responses_api_model(model: &str) -> bool {
         models::openai::RESPONSES_API_MODELS
