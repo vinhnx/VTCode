@@ -43,6 +43,7 @@ use crate::agent::runloop::unified::workspace_links::{
 };
 use crate::agent::runloop::welcome::SessionBootstrap;
 use crate::hooks::lifecycle::{LifecycleHookEngine, SessionEndReason};
+use vtcode_core::config::constants::tools as tools_consts;
 use webbrowser;
 
 use super::super::config_modal::{MODAL_CLOSE_HINT, load_config_modal_content};
@@ -97,6 +98,31 @@ pub(super) async fn handle_outcome(
         }
         SlashCommandOutcome::Handled => Ok(SlashCommandControl::Continue),
         SlashCommandOutcome::DebugAgent => {
+            // Prefer tool-driven diagnostics when available
+            if ctx.tool_registry.has_tool(tools_consts::DEBUG_AGENT).await {
+                ctx.tool_registry
+                    .mark_tool_preapproved(tools_consts::DEBUG_AGENT);
+                match ctx
+                    .tool_registry
+                    .execute_tool(tools_consts::DEBUG_AGENT, serde_json::json!({}))
+                    .await
+                {
+                    Ok(value) => {
+                        ctx.renderer
+                            .line(MessageStyle::Info, "Debug information (tool):")?;
+                        ctx.renderer
+                            .line(MessageStyle::Output, &format!("{}", value))?;
+                        return Ok(SlashCommandControl::Continue);
+                    }
+                    Err(err) => {
+                        ctx.renderer.line(
+                            MessageStyle::Error,
+                            &format!("Failed to invoke debug_agent tool: {}", err),
+                        )?;
+                    }
+                }
+            }
+
             ctx.renderer
                 .line(MessageStyle::Info, "Debug information:")?;
             ctx.renderer.line(
@@ -138,9 +164,64 @@ pub(super) async fn handle_outcome(
                 }
             }
             ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
+            // If the GET_ERRORS tool is registered, call it to get a summary of recent errors
+            if ctx.tool_registry.has_tool(tools_consts::GET_ERRORS).await {
+                ctx.tool_registry
+                    .mark_tool_preapproved(tools_consts::GET_ERRORS);
+                match ctx
+                    .tool_registry
+                    .execute_tool(
+                        tools_consts::GET_ERRORS,
+                        serde_json::json!({ "scope": "archive", "limit": 3 }),
+                    )
+                    .await
+                {
+                    Ok(value) => {
+                        ctx.renderer
+                            .line(MessageStyle::Info, "Recent errors (via get_errors):")?;
+                        ctx.renderer
+                            .line(MessageStyle::Output, &format!("{}", value))?;
+                    }
+                    Err(err) => {
+                        ctx.renderer.line(
+                            MessageStyle::Error,
+                            &format!("Failed to run get_errors tool: {}", err),
+                        )?;
+                    }
+                }
+            }
             Ok(SlashCommandControl::Continue)
         }
         SlashCommandOutcome::AnalyzeAgent => {
+            // Prefer tool-driven analysis when available
+            if ctx
+                .tool_registry
+                .has_tool(tools_consts::ANALYZE_AGENT)
+                .await
+            {
+                ctx.tool_registry
+                    .mark_tool_preapproved(tools_consts::ANALYZE_AGENT);
+                match ctx
+                    .tool_registry
+                    .execute_tool(tools_consts::ANALYZE_AGENT, serde_json::json!({}))
+                    .await
+                {
+                    Ok(value) => {
+                        ctx.renderer
+                            .line(MessageStyle::Info, "Agent analysis (tool):")?;
+                        ctx.renderer
+                            .line(MessageStyle::Output, &format!("{}", value))?;
+                        return Ok(SlashCommandControl::Continue);
+                    }
+                    Err(err) => {
+                        ctx.renderer.line(
+                            MessageStyle::Error,
+                            &format!("Failed to invoke analyze_agent tool: {}", err),
+                        )?;
+                    }
+                }
+            }
+
             ctx.renderer.line(MessageStyle::Info, "Agent analysis:")?;
             ctx.renderer.line(
                 MessageStyle::Output,
@@ -197,6 +278,32 @@ pub(super) async fn handle_outcome(
             }
 
             ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
+            // Use GET_ERRORS to augment analysis when available
+            if ctx.tool_registry.has_tool(tools_consts::GET_ERRORS).await {
+                ctx.tool_registry
+                    .mark_tool_preapproved(tools_consts::GET_ERRORS);
+                match ctx
+                    .tool_registry
+                    .execute_tool(
+                        tools_consts::GET_ERRORS,
+                        serde_json::json!({ "scope": "archive", "limit": 5 }),
+                    )
+                    .await
+                {
+                    Ok(value) => {
+                        ctx.renderer
+                            .line(MessageStyle::Info, "get_errors analysis:")?;
+                        ctx.renderer
+                            .line(MessageStyle::Output, &format!("{}", value))?;
+                    }
+                    Err(err) => {
+                        ctx.renderer.line(
+                            MessageStyle::Error,
+                            &format!("Failed to run get_errors tool: {}", err),
+                        )?;
+                    }
+                }
+            }
             Ok(SlashCommandControl::Continue)
         }
         SlashCommandOutcome::ThemeChanged(theme_id) => {

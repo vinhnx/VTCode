@@ -53,11 +53,79 @@ use tracing::{debug, warn};
 
 use super::plan::PlanManager;
 use crate::mcp::{McpClient, McpToolExecutor, McpToolInfo};
+use std::collections::VecDeque;
+use std::sync::RwLock;
+use std::time::SystemTime;
 
 #[cfg(test)]
 use super::traits::Tool;
 #[cfg(test)]
 use crate::config::types::CapabilityLevel;
+
+/// Record of a tool execution for diagnostics
+#[derive(Debug, Clone)]
+pub struct ToolExecutionRecord {
+    pub tool_name: String,
+    pub args: Value,
+    pub result: Result<Value, String>, // Ok(result) or Err(error_message)
+    pub timestamp: SystemTime,
+    pub success: bool,
+}
+
+/// Thread-safe execution history for recording tool executions
+#[derive(Clone)]
+pub struct ToolExecutionHistory {
+    records: Arc<RwLock<VecDeque<ToolExecutionRecord>>>,
+    max_records: usize,
+}
+
+impl ToolExecutionHistory {
+    pub fn new(max_records: usize) -> Self {
+        Self {
+            records: Arc::new(RwLock::new(VecDeque::new())),
+            max_records,
+        }
+    }
+
+    pub fn add_record(&self, record: ToolExecutionRecord) {
+        let mut records = self.records.write().unwrap();
+        records.push_back(record);
+        while records.len() > self.max_records {
+            records.pop_front();
+        }
+    }
+
+    pub fn get_recent_records(&self, count: usize) -> Vec<ToolExecutionRecord> {
+        let records = self.records.read().unwrap();
+        let records_len = records.len();
+        let start = if count > records_len {
+            0
+        } else {
+            records_len - count
+        };
+        records.iter().skip(start).cloned().collect()
+    }
+
+    pub fn get_recent_failures(&self, count: usize) -> Vec<ToolExecutionRecord> {
+        let records = self.records.read().unwrap();
+        let failures: Vec<ToolExecutionRecord> = records
+            .iter()
+            .rev() // Go from newest to oldest
+            .filter(|r| !r.success)
+            .take(count)
+            .cloned()
+            .collect();
+        // Now reverse again to get chronological order (oldest to newest)
+        let mut result = failures;
+        result.reverse();
+        result
+    }
+
+    pub fn clear(&self) {
+        let mut records = self.records.write().unwrap();
+        records.clear();
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToolTimeoutCategory {
@@ -199,6 +267,7 @@ pub struct ToolRegistry {
     mcp_tool_index: HashMap<String, Vec<String>>,
     mcp_tool_presence: HashMap<String, bool>,
     timeout_policy: ToolTimeoutPolicy,
+    execution_history: ToolExecutionHistory,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -289,6 +358,7 @@ impl ToolRegistry {
             mcp_tool_index: HashMap::new(),
             mcp_tool_presence: HashMap::new(),
             timeout_policy: ToolTimeoutPolicy::default(),
+            execution_history: ToolExecutionHistory::new(100), // Keep last 100 executions
         };
 
         registry.sync_policy_catalog().await;
@@ -575,6 +645,9 @@ impl ToolRegistry {
             format!("{} (alias for {})", name, tool_name)
         };
 
+        // Clone args early to use in error recording
+        let args_for_recording = args.clone();
+
         if self.policy_gateway.has_full_auto_allowlist()
             && !self.policy_gateway.is_allowed_in_full_auto(tool_name)
         {
@@ -586,6 +659,17 @@ impl ToolRegistry {
                     display_name
                 ),
             );
+
+            // Record the failed execution
+            let record = ToolExecutionRecord {
+                tool_name: tool_name.to_string(),
+                args: args_for_recording,
+                result: Err("Tool execution denied by policy".to_string()),
+                timestamp: SystemTime::now(),
+                success: false,
+            };
+            self.execution_history.add_record(record);
+
             return Ok(error.to_json_value());
         }
 
@@ -597,6 +681,17 @@ impl ToolRegistry {
                 ToolErrorType::PolicyViolation,
                 format!("Tool '{}' execution denied by policy", display_name),
             );
+
+            // Record the failed execution
+            let record = ToolExecutionRecord {
+                tool_name: tool_name.to_string(),
+                args: args_for_recording,
+                result: Err("Tool execution denied by policy".to_string()),
+                timestamp: SystemTime::now(),
+                success: false,
+            };
+            self.execution_history.add_record(record);
+
             return Ok(error.to_json_value());
         }
 
@@ -604,7 +699,7 @@ impl ToolRegistry {
             .policy_gateway
             .apply_policy_constraints(tool_name, args)
         {
-            Ok(args) => args,
+            Ok(processed_args) => processed_args,
             Err(err) => {
                 let error = ToolExecutionError::with_original_error(
                     tool_name.to_string(),
@@ -612,6 +707,17 @@ impl ToolRegistry {
                     "Failed to apply policy constraints".to_string(),
                     err.to_string(),
                 );
+
+                // Record the failed execution
+                let record = ToolExecutionRecord {
+                    tool_name: tool_name.to_string(),
+                    args: args_for_recording,
+                    result: Err(format!("Failed to apply policy constraints: {}", err)),
+                    timestamp: SystemTime::now(),
+                    success: false,
+                };
+                self.execution_history.add_record(record);
+
                 return Ok(error.to_json_value());
             }
         };
@@ -662,6 +768,20 @@ impl ToolRegistry {
                     format!("Failed to resolve MCP tool '{}': {}", display_name, err),
                     err.to_string(),
                 );
+
+                // Record the failed execution
+                let record = ToolExecutionRecord {
+                    tool_name: tool_name.to_string(),
+                    args: args.clone(),
+                    result: Err(format!(
+                        "Failed to resolve MCP tool '{}': {}",
+                        display_name, err
+                    )),
+                    timestamp: SystemTime::now(),
+                    success: false,
+                };
+                self.execution_history.add_record(record);
+
                 return Ok(error.to_json_value());
             }
 
@@ -670,6 +790,17 @@ impl ToolRegistry {
                 ToolErrorType::ToolNotFound,
                 format!("Unknown tool: {}", display_name),
             );
+
+            // Record the failed execution
+            let record = ToolExecutionRecord {
+                tool_name: tool_name.to_string(),
+                args: args.clone(),
+                result: Err(format!("Unknown tool: {}", display_name)),
+                timestamp: SystemTime::now(),
+                success: false,
+            };
+            self.execution_history.add_record(record);
+
             return Ok(error.to_json_value());
         }
 
@@ -682,6 +813,17 @@ impl ToolRegistry {
                     "Failed to start PTY session".to_string(),
                     err.to_string(),
                 );
+
+                // Record the failed execution
+                let record = ToolExecutionRecord {
+                    tool_name: tool_name.to_string(),
+                    args: args_for_recording,
+                    result: Err("Failed to start PTY session".to_string()),
+                    timestamp: SystemTime::now(),
+                    success: false,
+                };
+                self.execution_history.add_record(record);
+
                 return Ok(error.to_json_value());
             }
         }
@@ -711,12 +853,23 @@ impl ToolRegistry {
             }
         } else {
             // This should theoretically never happen since we checked tool_exists above
-            return Ok(ToolExecutionError::new(
+            let error = ToolExecutionError::new(
                 tool_name.to_string(),
                 ToolErrorType::ToolNotFound,
                 "Tool not found in registry".to_string(),
-            )
-            .to_json_value());
+            );
+
+            // Record the failed execution
+            let record = ToolExecutionRecord {
+                tool_name: tool_name.to_string(),
+                args: args_for_recording,
+                result: Err("Tool not found in registry".to_string()),
+                timestamp: SystemTime::now(),
+                success: false,
+            };
+            self.execution_history.add_record(record);
+
+            return Ok(error.to_json_value());
         };
 
         // Clean up PTY session if we started one
@@ -724,9 +877,23 @@ impl ToolRegistry {
             self.end_pty_session();
         }
 
-        // Handle the execution result
-        match result {
-            Ok(value) => Ok(normalize_tool_output(value)),
+        // Handle the execution result and record it
+        let execution_result = match result {
+            Ok(value) => {
+                let normalized_value = normalize_tool_output(value);
+
+                // Record the successful execution
+                let record = ToolExecutionRecord {
+                    tool_name: tool_name.to_string(),
+                    args: args_for_recording,
+                    result: Ok(normalized_value.clone()),
+                    timestamp: SystemTime::now(),
+                    success: true,
+                };
+                self.execution_history.add_record(record);
+
+                Ok(normalized_value)
+            }
             Err(err) => {
                 let error_type = classify_error(&err);
                 let error = ToolExecutionError::with_original_error(
@@ -735,9 +902,22 @@ impl ToolRegistry {
                     format!("Tool execution failed: {}", err),
                     err.to_string(),
                 );
+
+                // Record the failed execution
+                let record = ToolExecutionRecord {
+                    tool_name: tool_name.to_string(),
+                    args: args_for_recording,
+                    result: Err(format!("Tool execution failed: {}", err)),
+                    timestamp: SystemTime::now(),
+                    success: false,
+                };
+                self.execution_history.add_record(record);
+
                 Ok(error.to_json_value())
             }
-        }
+        };
+
+        execution_result
     }
 
     /// Set the MCP client for this registry
@@ -970,6 +1150,21 @@ impl ToolRegistry {
         self.policy_gateway
             .persist_mcp_tool_policy(&provider, tool_name, policy)
             .await
+    }
+
+    /// Get recent tool execution records
+    pub fn get_recent_tool_executions(&self, count: usize) -> Vec<ToolExecutionRecord> {
+        self.execution_history.get_recent_records(count)
+    }
+
+    /// Get recent tool execution failures
+    pub fn get_recent_tool_failures(&self, count: usize) -> Vec<ToolExecutionRecord> {
+        self.execution_history.get_recent_failures(count)
+    }
+
+    /// Clear the execution history
+    pub fn clear_execution_history(&self) {
+        self.execution_history.clear();
     }
 }
 

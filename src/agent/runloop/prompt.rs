@@ -82,7 +82,47 @@ pub(crate) async fn refine_user_prompt_if_enabled(
         .await
         .map(|response| response.content.unwrap_or_default())
     {
-        Ok(text) if should_accept_refinement(raw, &text) => text,
+        Ok(text) if should_accept_refinement(raw, &text) => {
+            // If the user's prompt looks like a debug/analyze request, append a concise tools hint
+            let lower = text.to_lowercase();
+            let debug_triggers = [
+                "debug",
+                "analyze",
+                "error",
+                "fix",
+                "issue",
+                "troubleshoot",
+                "diagnose",
+            ];
+            let error_triggers = [
+                "error",
+                "failed",
+                "problem",
+                "issue",
+                "bug",
+                "crash",
+                "exception",
+                "not working",
+            ];
+
+            if debug_triggers.iter().any(|token| lower.contains(token)) {
+                let base_message = format!(
+                    "{}\n\nNote: For diagnostics, prefer using tools: get_errors (with detailed=true for comprehensive analysis), debug_agent, analyze_agent, search_tools.",
+                    text
+                );
+
+                if error_triggers.iter().any(|token| lower.contains(token)) {
+                    format!(
+                        "{}\n\nFor error-focused diagnostics, run: get_errors with scope='all' and detailed=true to identify root causes and get self-fix suggestions.",
+                        base_message
+                    )
+                } else {
+                    base_message
+                }
+            } else {
+                text
+            }
+        }
         _ => raw.to_string(),
     }
 }

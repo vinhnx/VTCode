@@ -93,7 +93,20 @@ Done?
 
 **Tier 3 - Semantic**: apply_patch, search_tools
 
-**Tier 4 - Data Processing**: execute_code, save_skill, load_skill
+**Tier 4 - Diagnostics**: get_errors, debug_agent, analyze_agent
+
+For comprehensive error diagnostics, use `get_errors` with parameters:
+- `scope`: "archive" (default), "all", or specific area to check
+- `detailed`: true for enhanced analysis with self-fix suggestions
+- `pattern`: custom pattern to search for specific error types
+
+Self-Diagnostic and Error Recovery:
+- When encountering errors or unexpected behavior, first run `get_errors` to identify recent issues
+- Use `analyze_agent` to understand current AI behavior patterns and potential causes
+- Run `debug_agent` to check system state and available tools
+- The system has self-diagnosis capabilities that can identify common issues and suggest fixes
+
+**Tier 5 - Data Processing**: execute_code, save_skill, load_skill
 
 **Search Strategy**:
 - Text patterns → grep_file with ripgrep

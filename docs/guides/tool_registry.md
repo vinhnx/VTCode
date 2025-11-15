@@ -50,6 +50,14 @@ state from a single source of truth.
 5.  Add tests that cover both registration (`available_tools`/`has_tool`) and
     execution via `ToolRegistry::execute_tool`.
 
+### Example: GET_ERRORS
+
+The `get_errors` tool is a built-in diagnostic tool that aggregates recent errors
+from session archives and returns concise suggestions and recent error samples.
+Register it as a builtin with `tools::GET_ERRORS` and add a `FunctionDeclaration`
+so LLMs can discover it. When used, agents should prefer `get_errors` output to
+guide self-diagnostic and self-fix logic.
+
 ## Safety guidelines
 
 -   Prefer `edit_file`/`write_file` for high-impact assets. Reach for

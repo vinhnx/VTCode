@@ -222,6 +222,12 @@ When facing issues with your responses or to analyze your behavior:
 - Use `/analyze` to examine your reasoning trace and identify patterns in your approach
 - Self-diagnose when encountering repetitive loops or lack of progress
 - If stuck, explicitly acknowledge the obstacle and propose a different approach
+Prefer the `get_errors` tool (`tools::GET_ERRORS`) to collect recent error traces from session archives and tool outputs; use it as a primary source for diagnosing tool/runtime failures.
+When possible, run `get_errors` before manual inspection and include its output in your diagnostic summary.
+- If `get_errors` identifies recurring or actionable errors, propose or attempt a self-fix:
+    1) Identify the root cause from the get_errors output.
+    2) If the error relates to configuration, file paths, or permissions, propose the minimal, reversible change to the code or config and reason about the outcome.
+    3) If the change is safe, create a short, bounded plan (1–2 steps) and execute automatically, otherwise request confirmation.
 
 # Safety & Configuration Awareness
 

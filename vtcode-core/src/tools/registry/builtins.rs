@@ -155,6 +155,24 @@ pub(super) fn builtin_tool_registrations() -> Vec<ToolRegistration> {
             ToolRegistry::list_skills_executor,
         ),
         ToolRegistration::new(
+            tools::DEBUG_AGENT,
+            CapabilityLevel::Basic,
+            false,
+            ToolRegistry::debug_agent_executor,
+        ),
+        ToolRegistration::new(
+            tools::ANALYZE_AGENT,
+            CapabilityLevel::Basic,
+            false,
+            ToolRegistry::analyze_agent_executor,
+        ),
+        ToolRegistration::new(
+            tools::GET_ERRORS,
+            CapabilityLevel::Basic,
+            false,
+            ToolRegistry::get_errors_executor,
+        ),
+        ToolRegistration::new(
             "search_skills",
             CapabilityLevel::Basic,
             false,

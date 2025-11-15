@@ -13,6 +13,7 @@ use crate::utils::diff::{DiffOptions, compute_diff};
 use anyhow::{Context, Result, anyhow};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
+use chrono::prelude::Utc;
 use futures::future::BoxFuture;
 use portable_pty::PtySize;
 use serde::Deserialize;
@@ -79,6 +80,449 @@ const INTERACTIVE_COMMANDS: &[&str] = &[
 ];
 
 use super::ToolRegistry;
+
+impl ToolRegistry {
+    pub(super) fn get_errors_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
+        Box::pin(async move {
+            #[derive(serde::Deserialize)]
+            struct Args {
+                #[serde(default = "default_scope")]
+                scope: String,
+                #[serde(default = "default_limit")]
+                limit: usize,
+                #[serde(default = "default_detailed")]
+                detailed: bool,
+                #[serde(default)]
+                pattern: Option<String>,
+            }
+
+            fn default_scope() -> String {
+                "archive".to_string()
+            }
+
+            fn default_limit() -> usize {
+                5
+            }
+
+            fn default_detailed() -> bool {
+                false
+            }
+
+            let parsed: Args = serde_json::from_value(args).unwrap_or(Args {
+                scope: default_scope(),
+                limit: default_limit(),
+                detailed: default_detailed(),
+                pattern: None,
+            });
+
+            // Initialize comprehensive error report
+            let mut error_report = serde_json::json!({
+                "timestamp": Utc::now().to_rfc3339(),
+                "workspace": self.workspace_root().to_string_lossy(),
+                "scope": parsed.scope,
+                "detailed": parsed.detailed,
+                "total_errors": 0,
+                "recent_errors": Vec::<Value>::new(),
+                "suggestions": Vec::<String>::new(),
+                "diagnostics": {
+                    "tool_execution_failures": Vec::<Value>::new(),
+                    "recent_tool_calls": Vec::<Value>::new(),
+                    "system_state": {}
+                }
+            });
+
+            if parsed.scope == "archive" || parsed.scope == "all" {
+                // Search in session archives
+                let sessions =
+                    match crate::utils::session_archive::list_recent_sessions(parsed.limit).await {
+                        Ok(list) => list,
+                        Err(err) => {
+                            tracing::warn!("Failed to list session archives: {}", err);
+                            Vec::new()
+                        }
+                    };
+
+                let mut issues = Vec::new();
+                let mut total_errors = 0usize;
+
+                for listing in sessions {
+                    for message in listing.snapshot.messages {
+                        // Check assistant messages for error-like content
+                        if message.role == crate::llm::provider::MessageRole::Assistant {
+                            let text = message.content.as_text();
+                            let lower = text.to_lowercase();
+
+                            // Enhanced error detection patterns
+                            let error_patterns = [
+                                "error",
+                                "failed",
+                                "exception",
+                                "permission denied",
+                                "not found",
+                                "no such file",
+                                "cannot",
+                                "could not",
+                                "exception",
+                                "panic",
+                                "crash",
+                                "unhandled",
+                                "fatal",
+                                "timeout",
+                                "connection refused",
+                                "access denied",
+                                "stack trace",
+                                "traceback",
+                                "abort",
+                                "terminate",
+                            ];
+
+                            let matches_pattern = if let Some(ref pattern) = parsed.pattern {
+                                lower.contains(&pattern.to_lowercase())
+                            } else {
+                                error_patterns.iter().any(|&pat| lower.contains(pat))
+                            };
+
+                            if matches_pattern {
+                                total_errors += 1;
+                                issues.push(serde_json::json!({
+                                    "type": "session_error",
+                                    "workspace": listing.snapshot.metadata.workspace_label,
+                                    "path": listing.snapshot.metadata.workspace_path,
+                                    "message": text.trim(),
+                                    "timestamp": listing.snapshot.ended_at.to_rfc3339(),
+                                }));
+                            }
+                        }
+                    }
+                }
+
+                error_report["recent_errors"] = serde_json::to_value(issues)
+                    .unwrap_or_else(|_| serde_json::Value::Array(vec![]));
+                error_report["total_errors"] = serde_json::to_value(total_errors)
+                    .unwrap_or_else(|_| serde_json::Value::Number(serde_json::Number::from(0)));
+            }
+
+            // Enhanced suggestions with self-fix capabilities
+            let mut suggestions = Vec::new();
+            let total_errors = error_report["total_errors"].as_u64().unwrap_or(0) as usize;
+
+            if total_errors > 0 {
+                suggestions.push(
+                    "Review recent assistant tool calls and session archives for more details"
+                        .to_string(),
+                );
+
+                if parsed.detailed {
+                    suggestions.push(
+                        "Consider running 'debug_agent' for more system diagnostics".to_string(),
+                    );
+                    suggestions.push(
+                        "Try 'analyze_agent' to understand current behavior patterns".to_string(),
+                    );
+                    suggestions.push(
+                        "Use 'search_tools' to find specific tools for error handling".to_string(),
+                    );
+                }
+
+                // Self-fix suggestions based on common error patterns
+                // Extract error messages to check for patterns
+                let error_messages: Vec<String> = error_report["recent_errors"]
+                    .as_array()
+                    .unwrap_or(&Vec::new())
+                    .iter()
+                    .filter_map(|err| err.get("message").and_then(|m| m.as_str()))
+                    .map(|s| s.to_lowercase())
+                    .collect();
+
+                // File not found errors
+                if error_messages.iter().any(|msg| {
+                    msg.contains("not found")
+                        || msg.contains("no such file")
+                        || msg.contains("file does not exist")
+                }) {
+                    suggestions.push(
+                        "File not found errors: Verify file paths exist and are accessible"
+                            .to_string(),
+                    );
+                    suggestions.push(
+                        "Try using 'list_files' to check directory contents before accessing files"
+                            .to_string(),
+                    );
+                    suggestions.push(
+                        "Consider creating missing files with 'create_file' or 'write_file' tools"
+                            .to_string(),
+                    );
+                }
+
+                // Permission errors
+                if error_messages.iter().any(|msg| {
+                    msg.contains("permission")
+                        || msg.contains("access denied")
+                        || msg.contains("forbidden")
+                }) {
+                    suggestions.push(
+                        "Permission errors: Check file permissions and workspace access"
+                            .to_string(),
+                    );
+                    suggestions.push(
+                        "Consider running with appropriate permissions or changing file ownership"
+                            .to_string(),
+                    );
+                }
+
+                // Command execution errors
+                if error_messages.iter().any(|msg| {
+                    msg.contains("command not found")
+                        || msg.contains("command failed")
+                        || msg.contains("exit code")
+                }) {
+                    suggestions.push("Command execution errors: Verify command availability with 'list_files' or check PATH environment".to_string());
+                    suggestions.push(
+                        "Use 'run_terminal_cmd' to test commands manually before automation"
+                            .to_string(),
+                    );
+                }
+
+                // Git-related errors
+                if error_messages.iter().any(|msg| {
+                    msg.contains("git") && (msg.contains("error") || msg.contains("fatal"))
+                }) {
+                    suggestions.push(
+                        "Git errors: Check repository status and Git configuration".to_string(),
+                    );
+                    suggestions.push(
+                        "Run 'run_terminal_cmd' with 'git status' to diagnose repository issues"
+                            .to_string(),
+                    );
+                }
+
+                // Network/HTTP errors
+                if error_messages.iter().any(|msg| {
+                    msg.contains("connection")
+                        || msg.contains("timeout")
+                        || msg.contains("network")
+                        || msg.contains("http")
+                        || msg.contains("ssl")
+                        || msg.contains("tls")
+                }) {
+                    suggestions.push(
+                        "Network/HTTP errors: Check internet connectivity and proxy settings"
+                            .to_string(),
+                    );
+                    suggestions.push(
+                        "Verify API endpoints and credentials if using external services"
+                            .to_string(),
+                    );
+                    suggestions.push(
+                        "Consider using 'web_fetch' with proper error handling for web requests"
+                            .to_string(),
+                    );
+                }
+
+                // Memory/resource errors
+                if error_messages.iter().any(|msg| {
+                    msg.contains("memory")
+                        || msg.contains("oom")
+                        || msg.contains("out of")
+                        || msg.contains("resource")
+                        || msg.contains("too large")
+                }) {
+                    suggestions.push(
+                        "Memory/resource errors: Consider processing data in smaller chunks"
+                            .to_string(),
+                    );
+                    suggestions.push("Use 'execute_code' with memory-efficient algorithms when handling large files".to_string());
+                }
+
+                // Add a general recommendation to use the enhanced get_errors
+                suggestions.push(
+                    "For more detailed diagnostics, run 'get_errors' with detailed=true parameter"
+                        .to_string(),
+                );
+            } else {
+                suggestions.push("No obvious errors discovered in recent sessions".to_string());
+                if parsed.detailed {
+                    suggestions.push(
+                        "Run 'debug_agent' or 'analyze_agent' for proactive system checks"
+                            .to_string(),
+                    );
+                    suggestions.push("Consider performing routine maintenance tasks if working with large projects".to_string());
+                }
+            }
+
+            error_report["suggestions"] = serde_json::to_value(suggestions)
+                .unwrap_or_else(|_| serde_json::Value::Array(vec![]));
+
+            // Add system diagnostics if detailed mode
+            if parsed.detailed {
+                let available_tools = self.available_tools().await;
+
+                // Get actual recent tool execution history
+                let recent_executions = self.get_recent_tool_executions(20); // Last 20 executions
+                let recent_failures = self.get_recent_tool_failures(10); // Last 10 failures
+
+                // Convert to JSON format for the report
+                let recent_tool_calls: Vec<Value> = recent_executions
+                    .iter()
+                    .map(|record| {
+                        json!({
+                            "tool_name": record.tool_name,
+                            "timestamp": record.timestamp.duration_since(std::time::UNIX_EPOCH)
+                                .map(|d| d.as_secs())
+                                .unwrap_or(0),
+                            "success": record.success,
+                        })
+                    })
+                    .collect();
+
+                let tool_execution_failures: Vec<Value> = recent_failures
+                    .iter()
+                    .map(|record| {
+                        json!({
+                            "tool_name": record.tool_name,
+                            "timestamp": record.timestamp.duration_since(std::time::UNIX_EPOCH)
+                                .map(|d| d.as_secs())
+                                .unwrap_or(0),
+                            "error": match &record.result {
+                                Ok(_) => "Unexpected success in failure list".to_string(),
+                                Err(e) => e.clone(),
+                            },
+                            "args": record.args,
+                        })
+                    })
+                    .collect();
+
+                let system_state = json!({
+                    "available_tools_count": available_tools.len(),
+                    "workspace_root": self.workspace_root().to_string_lossy(),
+                    "recent_tool_calls": recent_tool_calls,
+                });
+
+                // Self-diagnosis logic
+                let mut self_diagnosis_issues = Vec::new();
+
+                // Check for common system issues
+                if available_tools.is_empty() {
+                    self_diagnosis_issues.push("No tools are currently available - this may indicate a system initialization issue".to_string());
+                }
+
+                // Check workspace status
+                let workspace_path = self.workspace_root();
+                if !workspace_path.exists() {
+                    self_diagnosis_issues.push(format!(
+                        "Workspace directory does not exist: {}",
+                        workspace_path.display()
+                    ));
+                } else if !workspace_path.is_dir() {
+                    self_diagnosis_issues.push(format!(
+                        "Workspace path is not a directory: {}",
+                        workspace_path.display()
+                    ));
+                }
+
+                // Check for execution failures in history
+                if !recent_failures.is_empty() {
+                    let failure_count = recent_failures.len();
+                    self_diagnosis_issues.push(format!(
+                        "Found {} recent tool execution failures that need attention",
+                        failure_count
+                    ));
+                }
+
+                // Provide self-fix suggestions
+                let mut self_fix_suggestions = Vec::new();
+                if !self_diagnosis_issues.is_empty() {
+                    self_fix_suggestions
+                        .push("Run system initialization to ensure proper setup".to_string());
+                    self_fix_suggestions
+                        .push("Verify workspace directory and permissions".to_string());
+                    self_fix_suggestions
+                        .push("Check that all required tools are properly configured".to_string());
+
+                    if !recent_failures.is_empty() {
+                        self_fix_suggestions.push(
+                            "Review recent tool failures and their error messages".to_string(),
+                        );
+                        self_fix_suggestions.push(
+                            "Consider retrying failed operations with corrected parameters"
+                                .to_string(),
+                        );
+                    }
+                } else if total_errors == 0 && recent_failures.is_empty() {
+                    self_fix_suggestions
+                        .push("System appears healthy. No immediate issues detected.".to_string());
+                    if parsed.scope != "all" {
+                        self_fix_suggestions.push(
+                            "Consider running with scope='all' for comprehensive check".to_string(),
+                        );
+                    }
+                } else {
+                    self_fix_suggestions.push(
+                        "Based on the errors found, review the suggestions provided above"
+                            .to_string(),
+                    );
+                    self_fix_suggestions.push(
+                        "Consider running 'debug_agent' for additional system insights".to_string(),
+                    );
+
+                    if !recent_failures.is_empty() {
+                        self_fix_suggestions.push(
+                            "Examine recent tool execution failures in the diagnostics section"
+                                .to_string(),
+                        );
+                    }
+                }
+
+                let self_diagnosis_summary = if !self_diagnosis_issues.is_empty() {
+                    format!(
+                        "Self-diagnosis found {} potential system issues. {}",
+                        self_diagnosis_issues.len(),
+                        self_diagnosis_issues.join("; ")
+                    )
+                } else {
+                    "Self-diagnosis: System appears healthy with no critical issues detected"
+                        .to_string()
+                };
+
+                error_report["diagnostics"] = json!({
+                    "tool_execution_failures": tool_execution_failures,
+                    "recent_tool_calls_count": recent_executions.len(),
+                    "recent_tool_failures_count": recent_failures.len(),
+                    "recent_tool_calls": recent_tool_calls,
+                    "system_state": system_state,
+                    "self_diagnosis": self_diagnosis_summary,
+                    "self_diagnosis_issues": self_diagnosis_issues,
+                    "self_fix_suggestions": self_fix_suggestions
+                });
+            }
+
+            Ok(error_report)
+        })
+    }
+
+    pub(super) fn debug_agent_executor(&mut self, _args: Value) -> BoxFuture<'_, Result<Value>> {
+        Box::pin(async move {
+            // Lightweight snapshot of registry state for diagnostics; this will not include full session context.
+            let tools = self.available_tools().await;
+            let stats = json!({
+                "tools_registered": tools,
+                "workspace_root": self.workspace_root().to_string_lossy(),
+            });
+            Ok(stats)
+        })
+    }
+
+    pub(super) fn analyze_agent_executor(&mut self, _args: Value) -> BoxFuture<'_, Result<Value>> {
+        Box::pin(async move {
+            // Aggregate some simple analysis metrics for the agent's behavior
+            let available_tools = self.available_tools().await;
+            Ok(json!({
+                "available_tools_count": available_tools.len(),
+                "available_tools": available_tools,
+            }))
+        })
+    }
+}
 
 impl ToolRegistry {
     pub(super) fn grep_file_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {

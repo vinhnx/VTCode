@@ -738,6 +738,10 @@ pub mod tools {
     pub const WEB_FETCH: &str = "web_fetch";
     pub const SEARCH_TOOLS: &str = "search_tools";
     pub const EXECUTE_CODE: &str = "execute_code";
+    /// Returns recent errors and suggested fixes gathered from session snapshots and tool history
+    pub const GET_ERRORS: &str = "get_errors";
+    pub const DEBUG_AGENT: &str = "debug_agent";
+    pub const ANALYZE_AGENT: &str = "analyze_agent";
 
     // Special wildcard for full access
     pub const WILDCARD_ALL: &str = "*";

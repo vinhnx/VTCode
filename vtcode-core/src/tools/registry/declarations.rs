@@ -285,6 +285,27 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
                 "required": ["code", "language"]
             }),
         },
+        FunctionDeclaration {
+            name: tools::GET_ERRORS.to_string(),
+            description: "Aggregate recent error traces from session archives and tool outputs. Useful for diagnosing runtime failures, patterns, and suggested recovery actions. Use 'scope' to specify 'archive' or 'session' and 'limit' to control the number of sessions to analyze.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "scope": {"type": "string", "description": "Scope to analyze: 'archive' or 'session'", "default": "archive"},
+                    "limit": {"type": "integer", "description": "How many recent sessions to analyze for errors", "default": 5}
+                }
+            }),
+        },
+        FunctionDeclaration {
+            name: tools::DEBUG_AGENT.to_string(),
+            description: "Return a lightweight diagnostic snapshot of the agent environment and available tools; useful for quick introspection.".to_string(),
+            parameters: json!({"type": "object", "properties": {}}),
+        },
+        FunctionDeclaration {
+            name: tools::ANALYZE_AGENT.to_string(),
+            description: "Return a brief analysis summary for agent behavior such as tool usage counts and available tools for diagnosing behavior patterns.".to_string(),
+            parameters: json!({"type": "object", "properties": {}}),
+        },
 
         FunctionDeclaration {
             name: "save_skill".to_string(),

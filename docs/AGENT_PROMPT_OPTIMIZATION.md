@@ -1,7 +1,7 @@
 # Agent Prompt Optimization - November 2025
 
-**Status**: ✅ Complete  
-**Date**: November 2025  
+**Status**: ✅ Complete
+**Date**: November 2025
 **Impact**: 35-62% reduction in static prompt content while preserving clarity
 
 ---
@@ -16,17 +16,18 @@ Optimized all agent-facing system prompts to be concise, direct, and LLM-focused
 
 ### 1. DEFAULT_SYSTEM_PROMPT (system.rs)
 
-**Before**: 71 lines, ~950 tokens  
-**After**: 49 lines, ~650 tokens  
+**Before**: 71 lines, ~950 tokens
+**After**: 49 lines, ~650 tokens
 **Reduction**: 31% (300 tokens saved)
 
 **Key Changes**:
-- Removed "Operating Principles" preamble; merged into **Core**
-- Collapsed "Execution Loop" from 6 steps to 5 focused actions
-- Removed "Attention Management" section (covered in **Do**)
-- Simplified tool descriptions to clear arrow chains
-- Condensed code execution patterns to bullet points
-- Removed "Guidelines" and "Self-Documentation" boilerplate
+
+-   Removed "Operating Principles" preamble; merged into **Core**
+-   Collapsed "Execution Loop" from 6 steps to 5 focused actions
+-   Removed "Attention Management" section (covered in **Do**)
+-   Simplified tool descriptions to clear arrow chains
+-   Condensed code execution patterns to bullet points
+-   Removed "Guidelines" and "Self-Documentation" boilerplate
 
 **Result**: Same instruction clarity, lower token cost per prompt
 
@@ -34,15 +35,16 @@ Optimized all agent-facing system prompts to be concise, direct, and LLM-focused
 
 ### 2. DEFAULT_LIGHTWEIGHT_PROMPT (system.rs)
 
-**Before**: 34 lines, ~450 tokens  
-**After**: 13 lines, ~170 tokens  
+**Before**: 34 lines, ~450 tokens
+**After**: 13 lines, ~170 tokens
 **Reduction**: 62% (280 tokens saved)
 
 **Key Changes**:
-- Collapsed responsibilities and approach into single **Do** line
-- Simplified tools list to brief category descriptions
-- Removed redundant code execution tips
-- Removed guidelines section
+
+-   Collapsed responsibilities and approach into single **Do** line
+-   Simplified tools list to brief category descriptions
+-   Removed redundant code execution tips
+-   Removed guidelines section
 
 **Result**: Ultra-concise prompt for fast/simple tasks
 
@@ -50,33 +52,39 @@ Optimized all agent-facing system prompts to be concise, direct, and LLM-focused
 
 ### 3. DEFAULT_SPECIALIZED_PROMPT (system.rs)
 
-**Before**: 70 lines, ~900 tokens  
-**After**: 32 lines, ~420 tokens  
+**Before**: 70 lines, ~900 tokens
+**After**: 32 lines, ~420 tokens
 **Reduction**: 54% (480 tokens saved)
 
 **Key Changes**:
-- Simplified "Core Responsibilities" to **Flow** line
-- Collapsed context management into brief statement
-- Removed advanced guidelines section
-- Condensed tool selection strategy to simple lists
-- Removed multi-turn coherence section (covered in **Multi-turn**)
+
+-   Simplified "Core Responsibilities" to **Flow** line
+-   Collapsed context management into brief statement
+-   Removed advanced guidelines section
+-   Condensed tool selection strategy to simple lists
+-   Removed multi-turn coherence section (covered in **Multi-turn**)
 
 **Result**: Focused refactoring prompt with essential guidance
+
+### Diagnostics tools
+
+Added guidance for diagnostic workflows: agents should use `tools::GET_ERRORS` to collect recent error traces, and fall back to `tools::DEBUG_AGENT` and `tools::ANALYZE_AGENT` for introspection and analysis. These tools are available as builtins and preferred for self-diagnosis workflows.
 
 ---
 
 ### 4. AGENTS.md
 
-**Before**: 110 lines of detailed guidance  
-**After**: 58 lines of actionable guidance  
+**Before**: 110 lines of detailed guidance
+**After**: 58 lines of actionable guidance
 **Reduction**: 47% (52 lines)
 
 **Changes**:
-- Converted verbose lists to inline format
-- Removed repeated explanations of code execution
-- Simplified tool tiers to single lines
-- Condensed workflow sections using arrows
-- Removed redundant safety sections
+
+-   Converted verbose lists to inline format
+-   Removed repeated explanations of code execution
+-   Simplified tool tiers to single lines
+-   Condensed workflow sections using arrows
+-   Removed redundant safety sections
 
 **Result**: Quick reference for agents, 50% smaller
 
@@ -85,9 +93,10 @@ Optimized all agent-facing system prompts to be concise, direct, and LLM-focused
 ### 5. prompts/system.md
 
 **Changes**:
-- Removed overview/documentation preamble
-- Simplified header from "Core System Prompt" to "Default Prompt (Default)"
-- Removed architecture description
+
+-   Removed overview/documentation preamble
+-   Simplified header from "Core System Prompt" to "Default Prompt (Default)"
+-   Removed architecture description
 
 **Result**: Pure system prompt content, no metadata overhead
 
@@ -95,13 +104,13 @@ Optimized all agent-facing system prompts to be concise, direct, and LLM-focused
 
 ## Token Efficiency Gains
 
-| Prompt | Tokens Before | Tokens After | Savings |
-|--------|---------------|--------------|---------|
-| DEFAULT | 950 | 650 | 300 (31%) |
-| LIGHTWEIGHT | 450 | 170 | 280 (62%) |
-| SPECIALIZED | 900 | 420 | 480 (54%) |
-| AGENTS.md | 1,400+ | 750+ | 650+ (46%) |
-| **Total** | **3,700+** | **1,990+** | **~1,710 (46%)** |
+| Prompt      | Tokens Before | Tokens After | Savings          |
+| ----------- | ------------- | ------------ | ---------------- |
+| DEFAULT     | 950           | 650          | 300 (31%)        |
+| LIGHTWEIGHT | 450           | 170          | 280 (62%)        |
+| SPECIALIZED | 900           | 420          | 480 (54%)        |
+| AGENTS.md   | 1,400+        | 750+         | 650+ (46%)       |
+| **Total**   | **3,700+**    | **1,990+**   | **~1,710 (46%)** |
 
 **Per-Session Impact**: 1,710 tokens saved on system prompt initialization = ~4-6 additional tool calls available per session.
 
@@ -109,12 +118,12 @@ Optimized all agent-facing system prompts to be concise, direct, and LLM-focused
 
 ## Instruction Quality Validation
 
-✅ **Clarity**: All core instructions preserved  
-✅ **Completeness**: No missing guidance for agents  
-✅ **Actionability**: Direct, tool-focused language  
-✅ **Safety**: All safety boundaries included  
-✅ **Code Execution**: Full guidance on execute_code/skills  
-✅ **Tool References**: All tool names and workflows present  
+✅ **Clarity**: All core instructions preserved
+✅ **Completeness**: No missing guidance for agents
+✅ **Actionability**: Direct, tool-focused language
+✅ **Safety**: All safety boundaries included
+✅ **Code Execution**: Full guidance on execute_code/skills
+✅ **Tool References**: All tool names and workflows present
 
 ---
 
@@ -132,28 +141,28 @@ Optimized all agent-facing system prompts to be concise, direct, and LLM-focused
 
 ## Testing
 
-✅ All 64 exec integration tests passing  
-✅ System prompt parsing works correctly  
-✅ Markdown to prompt extraction verified  
-✅ No regression in agent guidance  
+✅ All 64 exec integration tests passing
+✅ System prompt parsing works correctly
+✅ Markdown to prompt extraction verified
+✅ No regression in agent guidance
 
 ---
 
 ## Files Modified
 
-- `vtcode-core/src/prompts/system.rs` - 3 const prompts optimized
-- `AGENTS.md` - Condensed guidance
-- `prompts/system.md` - Simplified header
-- No breaking changes to public APIs
+-   `vtcode-core/src/prompts/system.rs` - 3 const prompts optimized
+-   `AGENTS.md` - Condensed guidance
+-   `prompts/system.md` - Simplified header
+-   No breaking changes to public APIs
 
 ---
 
 ## Deployment
 
-- ✅ No configuration changes needed
-- ✅ Backward compatible (prompts still work identically)
-- ✅ Immediate benefit on new conversations
-- ✅ No migration required
+-   ✅ No configuration changes needed
+-   ✅ Backward compatible (prompts still work identically)
+-   ✅ Immediate benefit on new conversations
+-   ✅ No migration required
 
 ---
 
@@ -168,10 +177,10 @@ Optimized all agent-facing system prompts to be concise, direct, and LLM-focused
 
 ## References
 
-- **CODE_EXECUTION_QUICK_START.md**: Quick patterns
-- **AGENTS.md**: Updated agent guide  
-- **MCP_COMPLETE_IMPLEMENTATION_STATUS.md**: Full architecture
-- **TOOL_CONFIGURATION_AUDIT.md**: Tool policy details
+-   **CODE_EXECUTION_QUICK_START.md**: Quick patterns
+-   **AGENTS.md**: Updated agent guide
+-   **MCP_COMPLETE_IMPLEMENTATION_STATUS.md**: Full architecture
+-   **TOOL_CONFIGURATION_AUDIT.md**: Tool policy details
 
 ---
 
