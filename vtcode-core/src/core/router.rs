@@ -110,6 +110,7 @@ impl Router {
                     max_tokens: Some(8),
                     temperature: Some(0.0),
                     stream: false,
+                    output_format: None,
                     tool_choice: Some(uni::ToolChoice::none()),
                     parallel_tool_calls: None,
                     parallel_tool_config: None,

@@ -722,6 +722,7 @@ impl AgentRunner {
                 }),
                 shell: None,
                 grammar: None,
+                strict: None,
             })
             .collect();
 
@@ -795,6 +796,7 @@ impl AgentRunner {
                 max_tokens: Some(2000),
                 temperature: Some(0.7),
                 stream: supports_streaming,
+                output_format: None,
                 tool_choice: None,
                 parallel_tool_calls: None,
                 parallel_tool_config,

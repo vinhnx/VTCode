@@ -96,6 +96,7 @@ impl ZAIProvider {
             max_tokens: None,
             temperature: None,
             stream: false,
+            output_format: None,
             tool_choice: None,
             parallel_tool_calls: None,
             parallel_tool_config: None,
@@ -198,6 +199,7 @@ impl ZAIProvider {
                 .and_then(|s| s.as_bool())
                 .unwrap_or(false),
             tools: None,
+            output_format: None,
             tool_choice: value.get("tool_choice").and_then(|choice| match choice {
                 Value::String(s) => match s.as_str() {
                     "auto" => Some(ToolChoice::auto()),

@@ -56,6 +56,7 @@ fn test_openai_tool_call_format() {
         parallel_tool_calls: None,
         parallel_tool_config: None,
         reasoning_effort: None,
+        output_format: None,
     };
 
     // Only validate shape via provider API; internal conversion details are private
@@ -108,6 +109,7 @@ fn test_anthropic_tool_call_format() {
         parallel_tool_calls: None,
         parallel_tool_config: None,
         reasoning_effort: None,
+        output_format: None,
     };
 
     // Only validate shape via provider API; internal conversion details are private
@@ -160,6 +162,7 @@ fn test_gemini_tool_call_format() {
         parallel_tool_calls: None,
         parallel_tool_config: None,
         reasoning_effort: None,
+        output_format: None,
     };
 
     assert!(provider.validate_request(&request).is_ok());
@@ -193,6 +196,7 @@ fn test_all_providers_tool_validation() {
         parallel_tool_calls: None,
         parallel_tool_config: None,
         reasoning_effort: None,
+        output_format: None,
     };
 
     let openai_request = LLMRequest {
@@ -207,6 +211,7 @@ fn test_all_providers_tool_validation() {
         parallel_tool_calls: None,
         parallel_tool_config: None,
         reasoning_effort: None,
+        output_format: None,
     };
 
     let anthropic_request = LLMRequest {
@@ -221,6 +226,7 @@ fn test_all_providers_tool_validation() {
         parallel_tool_calls: None,
         parallel_tool_config: None,
         reasoning_effort: None,
+        output_format: None,
     };
 
     let openrouter_request = LLMRequest {
@@ -235,6 +241,7 @@ fn test_all_providers_tool_validation() {
         parallel_tool_calls: None,
         parallel_tool_config: None,
         reasoning_effort: None,
+        output_format: None,
     };
 
     assert!(gemini.validate_request(&gemini_request).is_ok());
@@ -254,6 +261,7 @@ fn test_all_providers_tool_validation() {
         parallel_tool_calls: None,
         parallel_tool_config: None,
         reasoning_effort: None,
+        output_format: None,
     };
 
     assert!(lmstudio.validate_request(&lmstudio_request).is_ok());
@@ -270,6 +278,7 @@ fn test_all_providers_tool_validation() {
         parallel_tool_calls: None,
         parallel_tool_config: None,
         reasoning_effort: None,
+        output_format: None,
     };
 
     assert!(
@@ -321,6 +330,7 @@ fn test_openrouter_tool_call_format() {
         parallel_tool_calls: None,
         parallel_tool_config: None,
         reasoning_effort: None,
+        output_format: None,
     };
 
     assert!(provider.validate_request(&request).is_ok());

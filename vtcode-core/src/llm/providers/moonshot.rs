@@ -503,6 +503,7 @@ impl LLMClient for MoonshotProvider {
             max_tokens: None,
             temperature: Some(0.7),
             stream: false,
+            output_format: None,
             tool_choice: None,
             parallel_tool_calls: None,
             parallel_tool_config: None,

@@ -892,6 +892,7 @@ impl LLMClient for GeminiProvider {
                                 }),
                                 shell: None,
                                 grammar: None,
+                                strict: None,
                             })
                             .collect::<Vec<_>>()
                     });
@@ -914,6 +915,7 @@ impl LLMClient for GeminiProvider {
                             .and_then(|v| v.as_f64())
                             .map(|v| v as f32),
                         stream: false,
+                        output_format: None,
                         tool_choice: None,
                         parallel_tool_calls: None,
                         parallel_tool_config: None,
@@ -980,6 +982,7 @@ impl LLMClient for GeminiProvider {
                         max_tokens: None,
                         temperature: None,
                         stream: false,
+                        output_format: None,
                         tool_choice: None,
                         parallel_tool_calls: None,
                         parallel_tool_config: None,
@@ -1006,6 +1009,7 @@ impl LLMClient for GeminiProvider {
                 max_tokens: None,
                 temperature: None,
                 stream: false,
+                output_format: None,
                 tool_choice: None,
                 parallel_tool_calls: None,
                 parallel_tool_config: None,

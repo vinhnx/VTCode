@@ -65,6 +65,10 @@ pub struct LLMRequest {
     pub temperature: Option<f32>,
     pub stream: bool,
 
+    /// Optional structured output JSON schema to request from providers that support it
+    /// For Anthropic this will be sent as `output_format: { type: "json_schema", schema: ... }`
+    pub output_format: Option<Value>,
+
     /// Tool choice configuration based on official API docs
     /// Supports: "auto" (default), "none", "any", or specific tool selection
     pub tool_choice: Option<ToolChoice>,
@@ -794,6 +798,9 @@ pub struct ToolDefinition {
     /// Grammar definition for context-free grammar constraints (GPT-5 specific)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub grammar: Option<GrammarDefinition>,
+    /// When true and using Anthropic, mark the tool as strict for structured tool use validation
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub strict: Option<bool>,
 }
 
 /// Shell tool definition for GPT-5.1 shell tool type
@@ -890,7 +897,14 @@ impl ToolDefinition {
             }),
             shell: None,
             grammar: None,
+            strict: None,
         }
+    }
+
+    /// Set whether the tool should be considered strict (Anthropic structured tool use)
+    pub fn with_strict(mut self, strict: bool) -> Self {
+        self.strict = Some(strict);
+        self
     }
 
     /// Create a new apply_patch tool definition (GPT-5.1 specific)
@@ -919,6 +933,7 @@ impl ToolDefinition {
             }),
             shell: None,
             grammar: None,
+            strict: None,
         }
     }
 
@@ -931,6 +946,7 @@ impl ToolDefinition {
             function: None,
             shell: Some(shell_config),
             grammar: None,
+            strict: None,
         }
     }
 
@@ -947,6 +963,7 @@ impl ToolDefinition {
             }),
             shell: None,
             grammar: None,
+            strict: None,
         }
     }
 
@@ -958,6 +975,7 @@ impl ToolDefinition {
             function: None,
             shell: None,
             grammar: Some(GrammarDefinition { syntax, definition }),
+            strict: None,
         }
     }
 

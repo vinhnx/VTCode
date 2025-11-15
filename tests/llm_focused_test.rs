@@ -166,6 +166,7 @@ fn test_anthropic_tool_message_handling() {
         parallel_tool_calls: None,
         parallel_tool_config: None,
         reasoning_effort: None,
+        output_format: None,
     };
 
     // Validate request shape instead of internal conversion

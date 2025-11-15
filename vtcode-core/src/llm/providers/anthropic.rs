@@ -178,6 +178,30 @@ impl AnthropicProvider {
         Some(betas.join(", "))
     }
 
+    /// Returns true if the model is a Claude model supported by the Anthropic provider.
+    fn is_claude_model(&self, model: &str) -> bool {
+        let requested = if model.trim().is_empty() { self.model.as_str() } else { model };
+        models::anthropic::SUPPORTED_MODELS.contains(&requested)
+    }
+
+    /// Combines prompt cache betas with structured outputs beta when requested.
+    fn combined_beta_header_value(&self, include_structured: bool) -> Option<String> {
+        let mut pieces: Vec<String> = Vec::new();
+        if let Some(pc) = self.prompt_cache_beta_header_value() {
+            for p in pc.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()) {
+                pieces.push(p);
+            }
+        }
+        if include_structured {
+            pieces.push("structured-outputs-2025-11-13".to_string());
+        }
+        if pieces.is_empty() {
+            None
+        } else {
+            Some(pieces.join(", "))
+        }
+    }
+
     fn default_request(&self, prompt: &str) -> LLMRequest {
         LLMRequest {
             messages: vec![Message::user(prompt.to_string())],
@@ -192,6 +216,7 @@ impl AnthropicProvider {
             parallel_tool_config: None,
             reasoning_effort: None,
             verbosity: None,
+            output_format: None,
         }
     }
 
@@ -356,11 +381,11 @@ impl AnthropicProvider {
                         .get("input_schema")
                         .cloned()
                         .unwrap_or_else(|| json!({}));
-                    Some(ToolDefinition::function(
-                        name.to_string(),
-                        description,
-                        parameters,
-                    ))
+                    let mut tool_def = ToolDefinition::function(name.to_string(), description, parameters);
+                    if let Some(strict_val) = tool.get("strict").and_then(|v| v.as_bool()) {
+                        tool_def = tool_def.with_strict(strict_val);
+                    }
+                    Some(tool_def)
                 })
                 .collect();
 
@@ -401,6 +426,8 @@ impl AnthropicProvider {
                     .and_then(ReasoningEffortLevel::parse)
             });
 
+        let output_format = value.get("output_format").cloned();
+
         let model = value
             .get("model")
             .and_then(|m| m.as_str())
@@ -419,6 +446,7 @@ impl AnthropicProvider {
             parallel_tool_calls,
             parallel_tool_config,
             reasoning_effort,
+            output_format,
             verbosity: None,
         })
     }
@@ -521,11 +549,17 @@ impl AnthropicProvider {
                 let mut built_tools: Vec<Value> = tools
                     .iter()
                     .map(|tool| {
-                        json!({
+                        let mut obj = json!({
                             "name": tool.function.as_ref().unwrap().name,
                             "description": tool.function.as_ref().unwrap().description,
                             "input_schema": tool.function.as_ref().unwrap().parameters
-                        })
+                        });
+                        if let Some(strict) = tool.strict {
+                            if strict {
+                                obj["strict"] = json!(true);
+                            }
+                        }
+                        obj
                     })
                     .collect();
 
@@ -687,8 +721,21 @@ impl AnthropicProvider {
             }
         }
 
+        // Include structured output format when requested and supported by the model
+        // According to Anthropic documentation, structured outputs are available for Claude Sonnet 4.5 and Claude Opus 4.1
+        if let Some(schema) = &request.output_format {
+            if self.supports_structured_output(&request.model) {
+                anthropic_request["output_format"] = json!({
+                    "type": "json_schema",
+                    "schema": schema
+                });
+            }
+        }
+
         Ok(anthropic_request)
     }
+
+
 
     fn parse_anthropic_response(&self, response_json: Value) -> Result<LLMResponse, LLMError> {
         let content = response_json
@@ -850,6 +897,27 @@ impl LLMProvider for AnthropicProvider {
         true
     }
 
+    /// Check if the Anthropic provider supports structured outputs for the given model.
+    ///
+    /// According to Anthropic documentation, structured outputs are currently available
+    /// as a public beta feature for Claude Sonnet 4.5 and Claude Opus 4.1 models only.
+    ///
+    /// This feature allows Claude to guarantee responses that follow a specific JSON schema,
+    /// ensuring valid, parseable output for downstream processing.
+    fn supports_structured_output(&self, model: &str) -> bool {
+        let requested = if model.trim().is_empty() {
+            self.model.as_str()
+        } else {
+            model
+        };
+
+        // According to Anthropic documentation: "Structured outputs are available for Claude Sonnet 4.5 and Claude Opus 4.1"
+        requested == models::anthropic::CLAUDE_SONNET_4_5
+            || requested == models::anthropic::CLAUDE_OPUS_4_1_20250805
+    }
+
+
+
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
         let anthropic_request = self.convert_to_anthropic_format(&request)?;
         let url = format!("{}/messages", self.base_url);
@@ -860,7 +928,8 @@ impl LLMProvider for AnthropicProvider {
             .header("x-api-key", &self.api_key)
             .header("anthropic-version", urls::ANTHROPIC_API_VERSION);
 
-        if let Some(beta_header) = self.prompt_cache_beta_header_value() {
+        let include_structured = anthropic_request.get("output_format").is_some();
+        if let Some(beta_header) = self.combined_beta_header_value(include_structured) {
             request_builder = request_builder.header("anthropic-beta", beta_header);
         }
 
@@ -945,6 +1014,28 @@ impl LLMProvider for AnthropicProvider {
             return Err(LLMError::InvalidRequest(formatted_error));
         }
 
+        // Check if structured output is requested on an unsupported model
+        if request.output_format.is_some() && !self.supports_structured_output(&request.model) {
+            let formatted_error = error_display::format_llm_error(
+                "Anthropic",
+                &format!(
+                    "Structured output is not supported for model '{}'. Structured outputs are only available for Claude Sonnet 4.5 and Claude Opus 4.1 models.",
+                    request.model
+                ),
+            );
+            return Err(LLMError::InvalidRequest(formatted_error));
+        }
+
+        // Validate the schema if structured output is requested
+        // This checks for Anthropic-specific JSON Schema limitations such as:
+        // - No numeric constraints (minimum, maximum, multipleOf)
+        // - No string length constraints (minLength, maxLength)
+        // - Array minItems only supports values 0 or 1
+        // - additionalProperties must be false for objects
+        if let Some(ref schema) = request.output_format {
+            self.validate_anthropic_schema(schema)?;
+        }
+
         for message in &request.messages {
             if let Err(err) = message.validate_for_provider("anthropic") {
                 let formatted = error_display::format_llm_error("Anthropic", &err);
@@ -999,6 +1090,8 @@ mod tests {
             parallel_tool_calls: None,
             parallel_tool_config: None,
             reasoning_effort: None,
+            output_format: None,
+            verbosity: None,
         }
     }
 
@@ -1010,6 +1103,7 @@ mod tests {
             Some(models::CLAUDE_SONNET_4_5.to_string()),
             None,
             Some(config),
+            None,
         );
 
         let request = sample_request();
@@ -1050,6 +1144,7 @@ mod tests {
             Some(models::CLAUDE_SONNET_4_5.to_string()),
             None,
             Some(config),
+            None,
         );
 
         let beta_header = provider
@@ -1070,6 +1165,7 @@ mod tests {
             Some(models::CLAUDE_SONNET_4_5.to_string()),
             None,
             Some(config),
+            None,
         );
 
         let request = sample_request();
@@ -1099,6 +1195,109 @@ mod tests {
             .find(|msg| msg["role"] == "user")
             .expect("user message exists");
         assert!(user_message["content"][0].get("cache_control").is_none());
+    }
+
+    #[test]
+    fn test_structured_output_support() {
+        let provider = AnthropicProvider::from_config(
+            Some("key".to_string()),
+            Some(models::CLAUDE_SONNET_4_5.to_string()),
+            None,
+            None,
+            None,
+        );
+
+        // Claude Sonnet 4.5 should support structured output
+        assert!(provider.supports_structured_output(models::CLAUDE_SONNET_4_5));
+
+        // Claude Opus 4.1 should support structured output
+        assert!(provider.supports_structured_output(models::CLAUDE_OPUS_4_1_20250805));
+
+        // Other models should not support structured output based on our implementation
+        assert!(!provider.supports_structured_output(models::CLAUDE_HAIKU_4_5));
+
+        // Test with empty model string (should use provider's default)
+        let provider_default = AnthropicProvider::from_config(
+            "key".to_string(),
+            models::anthropic::DEFAULT_MODEL.to_string(),
+            None,
+            None,
+            None,
+        );
+        assert!(provider_default.supports_structured_output(""));
+    }
+
+    #[test]
+    fn test_structured_output_schema_validation() {
+        let provider = AnthropicProvider::new("key".to_string());
+
+        // Valid schema should pass
+        let valid_schema = json!({
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "age": {"type": "integer"}
+            },
+            "required": ["name", "age"],
+            "additionalProperties": false
+        });
+        assert!(provider.validate_anthropic_schema(&valid_schema).is_ok());
+
+        // Schema with unsupported numeric constraints should fail
+        let invalid_schema = json!({
+            "type": "object",
+            "properties": {
+                "age": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100
+                }
+            },
+            "required": ["age"],
+            "additionalProperties": false
+        });
+        assert!(provider.validate_anthropic_schema(&invalid_schema).is_err());
+
+        // Schema with unsupported string constraints should fail
+        let invalid_string_schema = json!({
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 50
+                }
+            },
+            "required": ["name"],
+            "additionalProperties": false
+        });
+        assert!(provider.validate_anthropic_schema(&invalid_string_schema).is_err());
+
+        // Schema with minItems > 1 should fail
+        let invalid_array_schema = json!({
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "minItems": 5
+                }
+            },
+            "required": ["items"],
+            "additionalProperties": false
+        });
+        assert!(provider.validate_anthropic_schema(&invalid_array_schema).is_err());
+
+        // Schema with additionalProperties: true should fail
+        let invalid_additional_props_schema = json!({
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"}
+            },
+            "required": ["name"],
+            "additionalProperties": true
+        });
+        assert!(provider.validate_anthropic_schema(&invalid_additional_props_schema).is_err());
     }
 }
 
@@ -1130,5 +1329,161 @@ impl LLMClient for AnthropicProvider {
 
     fn model_id(&self) -> &str {
         &self.model
+    }
+}
+
+// Helper impl block for schema validation methods (not part of LLMProvider trait)
+impl AnthropicProvider {
+    /// Validates a JSON schema against Anthropic's structured output limitations
+    /// Based on Anthropic documentation: https://docs.anthropic.com/claude/reference/structured-outputs
+    fn validate_anthropic_schema(&self, schema: &Value) -> Result<(), LLMError> {
+        if let Value::Object(obj) = schema {
+            self.validate_schema_object(obj, "root")?;
+        } else {
+            let formatted_error = error_display::format_llm_error(
+                "Anthropic",
+                "Structured output schema must be an object with 'type' and 'schema' properties",
+            );
+            return Err(LLMError::InvalidRequest(formatted_error));
+        }
+        Ok(())
+    }
+
+    /// Recursively validate an object in the JSON schema according to Anthropic limitations
+    fn validate_schema_object(&self, obj: &serde_json::Map<String, Value>, path: &str) -> Result<(), LLMError> {
+        for (key, value) in obj {
+            match key.as_str() {
+                // Validate type-specific limitations
+                "type" => {
+                    if let Some(type_str) = value.as_str() {
+                        match type_str {
+                            "object" | "array" | "string" | "number" | "integer" | "boolean" | "null" => {},
+                            _ => {
+                                let formatted_error = error_display::format_llm_error(
+                                    "Anthropic",
+                                    &format!("Unsupported schema type '{}', path: {}", type_str, path),
+                                );
+                                return Err(LLMError::InvalidRequest(formatted_error));
+                            }
+                        }
+                    }
+                },
+                // Check for unsupported numeric constraints
+                "minimum" | "maximum" | "multipleOf" => {
+                    let formatted_error = error_display::format_llm_error(
+                        "Anthropic",
+                        &format!("Numeric constraints like '{}' are not supported by Anthropic structured output. Path: {}", key, path),
+                    );
+                    return Err(LLMError::InvalidRequest(formatted_error));
+                },
+                // Check for unsupported string constraints
+                "minLength" | "maxLength" => {
+                    let formatted_error = error_display::format_llm_error(
+                        "Anthropic",
+                        &format!("String constraints like '{}' are not supported by Anthropic structured output. Path: {}", key, path),
+                    );
+                    return Err(LLMError::InvalidRequest(formatted_error));
+                },
+                // Check for unsupported array constraints beyond minItems with values 0 or 1
+                "minItems" | "maxItems" | "uniqueItems" => {
+                    if key == "minItems" {
+                        if let Some(min_items) = value.as_u64() {
+                            if min_items > 1 {
+                                let formatted_error = error_display::format_llm_error(
+                                    "Anthropic",
+                                    &format!("Array minItems only supports values 0 or 1, got {}, path: {}", min_items, path),
+                                );
+                                return Err(LLMError::InvalidRequest(formatted_error));
+                            }
+                        }
+                    } else {
+                        let formatted_error = error_display::format_llm_error(
+                            "Anthropic",
+                            &format!("Array constraints like '{}' are not supported by Anthropic structured output. Path: {}", key, path),
+                        );
+                        return Err(LLMError::InvalidRequest(formatted_error));
+                    }
+                },
+                // Check for additionalProperties - must be false for objects
+                "additionalProperties" => {
+                    if let Some(additional_props) = value.as_bool() {
+                        if additional_props != false {
+                            let formatted_error = error_display::format_llm_error(
+                                "Anthropic",
+                                &format!("additionalProperties must be set to false, got {}, path: {}", additional_props, path),
+                            );
+                            return Err(LLMError::InvalidRequest(formatted_error));
+                        }
+                    }
+                },
+                // Recursively validate nested objects and arrays in properties
+                "properties" => {
+                    if let Value::Object(props) = value {
+                        for (prop_name, prop_value) in props {
+                            let prop_path = format!("{}.properties.{}", path, prop_name);
+                            self.validate_schema_property(prop_value, &prop_path)?;
+                        }
+                    }
+                },
+                "items" => {
+                    let items_path = format!("{}.items", path);
+                    self.validate_schema_property(value, &items_path)?;
+                },
+                "enum" => {
+                    // Enums are supported but with limitations (no complex types)
+                    if let Value::Array(items) = value {
+                        for (i, item) in items.iter().enumerate() {
+                            if !self.is_valid_enum_value(item) {
+                                let formatted_error = error_display::format_llm_error(
+                                    "Anthropic",
+                                    &format!("Invalid enum value at index {}, path: {}. Enums in Anthropic structured output only support strings, numbers, booleans, and null.", i, path),
+                                );
+                                return Err(LLMError::InvalidRequest(formatted_error));
+                            }
+                        }
+                    }
+                },
+                // For other keys, check if it's a nested schema component
+                _ => {
+                    // If the value is an object that could be a schema, validate it recursively
+                    if let Value::Object(nested_obj) = value {
+                        let nested_path = format!("{}.{}", path, key);
+                        self.validate_schema_object(nested_obj, &nested_path)?;
+                    }
+                    // If it's an array of objects that could be schemas
+                    else if let Value::Array(arr) = value {
+                        for (i, item) in arr.iter().enumerate() {
+                            if let Value::Object(nested_obj) = item {
+                                let nested_path = format!("{}.{}[{}]", path, key, i);
+                                self.validate_schema_object(nested_obj, &nested_path)?;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Validate an individual schema property
+    fn validate_schema_property(&self, value: &Value, path: &str) -> Result<(), LLMError> {
+        match value {
+            Value::Object(obj) => self.validate_schema_object(obj, path),
+            Value::Array(arr) => {
+                for (i, item) in arr.iter().enumerate() {
+                    if let Value::Object(obj) = item {
+                        let item_path = format!("{}[{}]", path, i);
+                        self.validate_schema_object(obj, &item_path)?;
+                    }
+                }
+                Ok(())
+            },
+            _ => Ok(()),
+        }
+    }
+
+    /// Check if an enum value is valid (string, number, boolean, or null)
+    fn is_valid_enum_value(&self, value: &Value) -> bool {
+        matches!(value, Value::String(_) | Value::Number(_) | Value::Bool(_) | Value::Null)
     }
 }

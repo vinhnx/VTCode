@@ -268,29 +268,37 @@ pub mod models {
         pub const DEEPSEEK_REASONER: &str = "deepseek-reasoner";
     }
 
-    // Anthropic models (from docs/models.json) - Updated for tool use best practices
+    // Anthropic models (from docs/models.json) - Updated for Claude 4.5 family
     pub mod anthropic {
-        // Standard model for straightforward tools - Sonnet 4 preferred for most use cases
-        pub const DEFAULT_MODEL: &str = "claude-sonnet-4-5";
+        // Standard model for straightforward tools - Sonnet 4.5 preferred for most use cases
+        pub const DEFAULT_MODEL: &str = "claude-sonnet-4-5-20250929";
         pub const SUPPORTED_MODELS: &[&str] = &[
-            "claude-opus-4-1-20250805", // Latest: Opus 4.1 (2025-08-05)
-            "claude-sonnet-4-5",        // Latest: Sonnet 4.5 (2025-10-15)
-            "claude-haiku-4-5",         // Latest: Haiku 4.5 (2025-10-15)
-            "claude-sonnet-4-20250514", // Previous: Sonnet 4 (2025-05-14)
+            "claude-haiku-4-5-20251001",   // Fast: Claude Haiku 4.5 (2025-10-01)
+            "claude-sonnet-4-5-20250929",  // Balanced: Claude Sonnet 4.5 (2025-09-29)
+            "claude-opus-4-1-20250805",    // High-performance: Claude Opus 4.1 (2025-08-05)
+            "claude-3-5-sonnet-20241022",  // Previous: Sonnet 3.5 (2024-10-22)
+            "claude-3-5-haiku-20241022",   // Previous: Haiku 3.5 (2024-10-22)
+            "claude-3-opus-20250219",      // Previous: Opus 3 (2025-02-19)
         ];
 
-        // Convenience constants for commonly used models
-        pub const CLAUDE_OPUS_4_1_20250805: &str = "claude-opus-4-1-20250805";
-        pub const CLAUDE_SONNET_4_5: &str = "claude-sonnet-4-5";
-        pub const CLAUDE_HAIKU_4_5: &str = "claude-haiku-4-5";
+        // Convenience constants for commonly used models (using latest snapshot dates)
+        pub const CLAUDE_HAIKU_4_5: &str = "claude-haiku-4-5-20251001";
+        pub const CLAUDE_SONNET_4_5: &str = "claude-sonnet-4-5-20250929";
         pub const CLAUDE_SONNET_4_20250514: &str = "claude-sonnet-4-20250514";
+        pub const CLAUDE_OPUS_4_1: &str = "claude-opus-4-1-20250805";
+        pub const CLAUDE_OPUS_4_1_20250805: &str = "claude-opus-4-1-20250805";
+        pub const CLAUDE_SONNET_3_5_20241022: &str = "claude-3-5-sonnet-20241022";
+        pub const CLAUDE_HAIKU_3_5_20241022: &str = "claude-3-5-haiku-20241022";
+        pub const CLAUDE_OPUS_3_20250219: &str = "claude-3-opus-20250219";
 
         /// Models that accept the reasoning effort parameter
         pub const REASONING_MODELS: &[&str] = &[
-            CLAUDE_OPUS_4_1_20250805,
-            CLAUDE_SONNET_4_5,
             CLAUDE_HAIKU_4_5,
-            CLAUDE_SONNET_4_20250514,
+            CLAUDE_SONNET_4_5,
+            CLAUDE_OPUS_4_1,
+            CLAUDE_OPUS_4_1_20250805,
+            CLAUDE_SONNET_3_5_20241022,
+            CLAUDE_OPUS_3_20250219,
         ];
     }
 
