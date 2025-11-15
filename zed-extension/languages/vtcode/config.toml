@@ -1,4 +1,4 @@
 # VTCode configuration file language support for Zed
 name = "VTCode Config"
-scope = "source.vtcode.toml"
+scope = "source.toml"
 first_line_pattern = '^\s*(# VTCode|id\s*=|name\s*=)'
