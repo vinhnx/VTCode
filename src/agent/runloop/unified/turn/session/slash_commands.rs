@@ -48,14 +48,14 @@ use webbrowser;
 
 use super::super::config_modal::{MODAL_CLOSE_HINT, load_config_modal_content};
 
-pub(super) enum SlashCommandControl {
+pub(crate) enum SlashCommandControl {
     Continue,
     SubmitPrompt(String),
     BreakWithReason(SessionEndReason),
     BreakWithoutReason,
 }
 
-pub(super) struct SlashCommandContext<'a> {
+pub(crate) struct SlashCommandContext<'a> {
     pub renderer: &'a mut AnsiRenderer,
     pub handle: &'a InlineHandle,
     pub session: &'a mut InlineSession,
@@ -88,7 +88,7 @@ pub(super) struct SlashCommandContext<'a> {
     pub tool_permission_cache: &'a Arc<RwLock<vtcode_core::acp::ToolPermissionCache>>,
 }
 
-pub(super) async fn handle_outcome(
+pub(crate) async fn handle_outcome(
     outcome: SlashCommandOutcome,
     ctx: SlashCommandContext<'_>,
 ) -> Result<SlashCommandControl> {
