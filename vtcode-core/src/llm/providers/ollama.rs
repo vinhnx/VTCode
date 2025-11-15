@@ -183,6 +183,7 @@ impl OllamaProvider {
             max_tokens: None,
             temperature: None,
             stream: false,
+            output_format: None,
             tool_choice: None,
             parallel_tool_calls: None,
             parallel_tool_config: None,
@@ -272,6 +273,7 @@ impl OllamaProvider {
                 .get("stream")
                 .and_then(|entry| entry.as_bool())
                 .unwrap_or(false),
+            output_format: None,
             tool_choice: None,
             parallel_tool_calls: None,
             parallel_tool_config: None,

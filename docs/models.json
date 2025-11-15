@@ -190,52 +190,92 @@
         "env": ["ANTHROPIC_API_KEY"],
         "api": "https://api.anthropic.com/v1",
         "name": "Anthropic",
-        "doc": "https://docs.anthropic.com/en/docs/about-claude/models",
+        "doc": "https://docs.anthropic.com/claude/docs/models-overview",
+        "default_model": "claude-sonnet-4-5-20250929",
         "models": {
-            "claude-sonnet-4-5": {
-                "id": "claude-sonnet-4-5",
+            "claude-sonnet-4-5-20250929": {
+                "id": "claude-sonnet-4-5-20250929",
                 "name": "Claude Sonnet 4.5",
+                "description": "Latest flagship model for complex agents and coding. Optimal balance of intelligence, speed, and cost.",
                 "reasoning": true,
                 "tool_call": true,
                 "modalities": {
                     "input": ["text", "image"],
                     "output": ["text"]
                 },
-                "context": 200000
+                "context": 200000,
+                "output_tokens": 64000,
+                "status": "current"
+            },
+            "claude-haiku-4-5-20251001": {
+                "id": "claude-haiku-4-5-20251001",
+                "name": "Claude Haiku 4.5",
+                "description": "Fastest model with near-frontier intelligence. Most cost-effective option.",
+                "reasoning": true,
+                "tool_call": true,
+                "modalities": {
+                    "input": ["text", "image"],
+                    "output": ["text"]
+                },
+                "context": 200000,
+                "output_tokens": 64000,
+                "status": "current"
             },
             "claude-opus-4-1-20250805": {
                 "id": "claude-opus-4-1-20250805",
                 "name": "Claude Opus 4.1",
+                "description": "Exceptional model for specialized reasoning tasks. Highest reasoning capability.",
                 "reasoning": true,
                 "tool_call": true,
                 "modalities": {
                     "input": ["text", "image"],
-                    "output": ["text"]
-                },
-                "context": 200000
-            },
-            "claude-sonnet-4-20250514": {
-                "id": "claude-sonnet-4-20250514",
-                "name": "Claude Sonnet 4 (2025-05-14)",
-                "reasoning": true,
-                "tool_call": true,
-                "modalities": {
-                    "input": ["text", "image"],
-                    "output": ["text"]
-                },
-                "context": 200000
-            },
-            "MiniMax-M2": {
-                "id": "MiniMax-M2",
-                "name": "MiniMax-M2",
-                "reasoning": true,
-                "tool_call": true,
-                "modalities": {
-                    "input": ["text"],
                     "output": ["text"]
                 },
                 "context": 200000,
-                "note": "MiniMax-M2 via Anthropic-compatible API at https://api.minimax.io/anthropic"
+                "output_tokens": 32000,
+                "status": "current"
+            },
+            "claude-sonnet-4-5": {
+                "id": "claude-sonnet-4-5",
+                "name": "Claude Sonnet 4.5 (alias)",
+                "description": "Alias for latest Claude Sonnet 4.5. Auto-updates with new releases.",
+                "alias": "claude-sonnet-4-5-20250929",
+                "reasoning": true,
+                "tool_call": true,
+                "modalities": {
+                    "input": ["text", "image"],
+                    "output": ["text"]
+                },
+                "context": 200000,
+                "status": "stable"
+            },
+            "claude-haiku-4-5": {
+                "id": "claude-haiku-4-5",
+                "name": "Claude Haiku 4.5 (alias)",
+                "description": "Alias for latest Claude Haiku 4.5. Auto-updates with new releases.",
+                "alias": "claude-haiku-4-5-20251001",
+                "reasoning": true,
+                "tool_call": true,
+                "modalities": {
+                    "input": ["text", "image"],
+                    "output": ["text"]
+                },
+                "context": 200000,
+                "status": "stable"
+            },
+            "claude-opus-4-1": {
+                "id": "claude-opus-4-1",
+                "name": "Claude Opus 4.1 (alias)",
+                "description": "Alias for latest Claude Opus 4.1. Auto-updates with new releases.",
+                "alias": "claude-opus-4-1-20250805",
+                "reasoning": true,
+                "tool_call": true,
+                "modalities": {
+                    "input": ["text", "image"],
+                    "output": ["text"]
+                },
+                "context": 200000,
+                "status": "stable"
             }
         }
     },

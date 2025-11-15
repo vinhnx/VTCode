@@ -296,6 +296,7 @@ async fn handle_test_provider(_cli: &Cli, provider: &str) -> Result<()> {
         max_tokens: Some(10),
         temperature: Some(0.0),
         stream: false,
+        output_format: None,
         tool_choice: None,
         parallel_tool_calls: None,
         parallel_tool_config: None,

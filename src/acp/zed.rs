@@ -1793,6 +1793,7 @@ impl acp::Agent for ZedAgent {
                 parallel_tool_calls: None,
                 parallel_tool_config: None,
                 reasoning_effort,
+                output_format: None,
                 verbosity: None,
             };
 
@@ -1885,6 +1886,7 @@ impl acp::Agent for ZedAgent {
                     parallel_tool_calls: None,
                     parallel_tool_config: None,
                     reasoning_effort,
+                    output_format: None,
                     verbosity: None,
                 };
 

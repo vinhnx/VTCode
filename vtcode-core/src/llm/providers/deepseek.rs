@@ -91,6 +91,7 @@ impl DeepSeekProvider {
             max_tokens: None,
             temperature: None,
             stream: false,
+            output_format: None,
             tool_choice: None,
             parallel_tool_calls: None,
             parallel_tool_config: None,
@@ -191,6 +192,7 @@ impl DeepSeekProvider {
                 .and_then(|s| s.as_bool())
                 .unwrap_or(false),
             tools: None,
+            output_format: None,
             tool_choice: None,
             parallel_tool_calls: None,
             parallel_tool_config: None,

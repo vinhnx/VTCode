@@ -352,6 +352,7 @@ fn test_request_validation() {
         parallel_tool_calls: None,
         parallel_tool_config: None,
         reasoning_effort: None,
+        output_format: None,
     };
     assert!(gemini.validate_request(&valid_gemini_request).is_ok());
 
@@ -367,6 +368,7 @@ fn test_request_validation() {
         parallel_tool_calls: None,
         parallel_tool_config: None,
         reasoning_effort: None,
+        output_format: None,
     };
     assert!(openai.validate_request(&valid_openai_request).is_ok());
 
@@ -382,6 +384,7 @@ fn test_request_validation() {
         parallel_tool_calls: None,
         parallel_tool_config: None,
         reasoning_effort: None,
+        output_format: None,
     };
     assert!(anthropic.validate_request(&valid_anthropic_request).is_ok());
 
@@ -397,6 +400,7 @@ fn test_request_validation() {
         parallel_tool_calls: None,
         parallel_tool_config: None,
         reasoning_effort: None,
+        output_format: None,
     };
     assert!(
         anthropic
@@ -416,6 +420,7 @@ fn test_request_validation() {
         parallel_tool_calls: None,
         parallel_tool_config: None,
         reasoning_effort: None,
+        output_format: None,
     };
     assert!(
         openrouter
@@ -435,6 +440,7 @@ fn test_request_validation() {
         parallel_tool_calls: None,
         parallel_tool_config: None,
         reasoning_effort: None,
+        output_format: None,
     };
     assert!(xai.validate_request(&valid_xai_request).is_ok());
 
@@ -451,6 +457,7 @@ fn test_request_validation() {
         parallel_tool_calls: None,
         parallel_tool_config: None,
         reasoning_effort: None,
+        output_format: None,
     };
     assert!(gemini.validate_request(&invalid_request).is_err());
     assert!(openai.validate_request(&invalid_request).is_err());
@@ -478,6 +485,7 @@ fn test_anthropic_tool_message_handling() {
         parallel_tool_calls: None,
         parallel_tool_config: None,
         reasoning_effort: None,
+        output_format: None,
     };
 
     // Use the public validator as a proxy for ensuring request shape is acceptable

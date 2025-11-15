@@ -1088,6 +1088,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                         None
                     },
                     reasoning_effort,
+                    output_format: None,
                     verbosity: None,
                 };
 
@@ -2159,6 +2160,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         None
                                     }
                                 }),
+                                output_format: None,
                                 verbosity: None,
                             };
                             let rr = provider_client.generate(review_req).await.ok();

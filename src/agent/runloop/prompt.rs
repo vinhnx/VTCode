@@ -74,6 +74,7 @@ pub(crate) async fn refine_user_prompt_if_enabled(
         parallel_tool_calls: None,
         parallel_tool_config: None,
         reasoning_effort,
+        output_format: None,
         verbosity: None,
     };
 
