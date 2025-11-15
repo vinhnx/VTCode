@@ -5,6 +5,7 @@ The `web_fetch` tool provides flexible security modes for controlling which URLs
 ## Security Modes
 
 ### Restricted Mode (Default)
+
 ```toml
 [tools.web_fetch]
 mode = "restricted"
@@ -12,22 +13,27 @@ mode = "restricted"
 
 In **restricted mode**, a blocklist is used to prevent access to sensitive domains while allowing most other sites. This is the default mode and suitable for general use.
 
+Note: WebFetch will prefer Markdown content from documentation sites by sending an `Accept` header with `text/markdown` to encourage token-efficient responses from servers that serve docs in multiple formats.
+
 **Built-in blocked domains include:**
-- Banking/Financial: PayPal, Stripe, Square, etc.
-- Authentication: Google Accounts, Microsoft Login, Okta, etc.
-- Email providers: Gmail, Outlook, iCloud Mail
-- Medical records: HealthVault, Epic, Cerner
-- Legal: DocuSign, Adobe Sign
-- VPN/Proxy services
+
+-   Banking/Financial: PayPal, Stripe, Square, etc.
+-   Authentication: Google Accounts, Microsoft Login, Okta, etc.
+-   Email providers: Gmail, Outlook, iCloud Mail
+-   Medical records: HealthVault, Epic, Cerner
+-   Legal: DocuSign, Adobe Sign
+-   VPN/Proxy services
 
 **Built-in blocked patterns include:**
-- Credentials in URLs: `password=`, `token=`, `api_key=`, `secret=`
-- Auth headers: `oauth`, `bearer`, `x-auth`, `authorization:`
-- Sensitive paths: `/admin`, `/private`, `/internal`, `/secret`
+
+-   Credentials in URLs: `password=`, `token=`, `api_key=`, `secret=`
+-   Auth headers: `oauth`, `bearer`, `x-auth`, `authorization:`
+-   Sensitive paths: `/admin`, `/private`, `/internal`, `/secret`
 
 **Exemptions:** Use `allowed_domains` to exempt specific domains from the blocklist.
 
 ### Whitelist Mode (Strict)
+
 ```toml
 [tools.web_fetch]
 mode = "whitelist"
@@ -62,21 +68,16 @@ Create `~/.vtcode/web_fetch_blocklist.json`:
 
 ```json
 {
-  "blocked_domains": [
-    "internal-api.company.com",
-    "legacy-system.local"
-  ],
-  "blocked_patterns": [
-    "internal_token=",
-    "company_secret="
-  ]
+    "blocked_domains": ["internal-api.company.com", "legacy-system.local"],
+    "blocked_patterns": ["internal_token=", "company_secret="]
 }
 ```
 
 **Benefits:**
-- Reload configuration without restarting VTCode
-- Maintain organization-specific blocklists
-- Separate from main configuration file
+
+-   Reload configuration without restarting VTCode
+-   Maintain organization-specific blocklists
+-   Separate from main configuration file
 
 ### Enable Dynamic Whitelist (Whitelist Mode)
 
@@ -91,17 +92,17 @@ Create `~/.vtcode/web_fetch_whitelist.json`:
 
 ```json
 {
-  "allowed_domains": [
-    "github.com",
-    "github.io",
-    "docs.rs",
-    "rust-lang.org",
-    "crates.io",
-    "npmjs.com",
-    "pypi.org",
-    "wikipedia.org",
-    "stackoverflow.com"
-  ]
+    "allowed_domains": [
+        "github.com",
+        "github.io",
+        "docs.rs",
+        "rust-lang.org",
+        "crates.io",
+        "npmjs.com",
+        "pypi.org",
+        "wikipedia.org",
+        "stackoverflow.com"
+    ]
 }
 ```
 
@@ -173,6 +174,7 @@ audit_log_path = "~/.vtcode/web_fetch_audit.log"
 ## Configuration Examples
 
 ### Development Environment (Permissive)
+
 ```toml
 [tools.web_fetch]
 mode = "restricted"
@@ -181,6 +183,7 @@ blocked_domains = []       # Minimal restrictions
 ```
 
 ### Production (Conservative)
+
 ```toml
 [tools.web_fetch]
 mode = "restricted"
@@ -192,6 +195,7 @@ audit_log_path = "~/.vtcode/web_fetch_audit.log"
 ```
 
 ### Enterprise (Whitelist Only)
+
 ```toml
 [tools.web_fetch]
 mode = "whitelist"
@@ -204,13 +208,16 @@ audit_log_path = "~/.vtcode/web_fetch_audit.log"
 ## Troubleshooting
 
 ### URL blocked unexpectedly
+
 1. Check if domain is in built-in blocklist
 2. Check if URL contains blocked pattern (credentials, /admin, etc.)
 3. Check dynamic blocklist file if enabled
 4. In whitelist mode, verify domain is in whitelist
 
 ### "Whitelist mode enabled but no domains whitelisted"
+
 Configure `allowed_domains` or load from dynamic file:
+
 ```toml
 [tools.web_fetch]
 mode = "whitelist"
@@ -218,6 +225,7 @@ allowed_domains = ["github.com", "docs.rs"]
 ```
 
 ### Dynamic file not loading
+
 1. Verify file path is correct (use `~/` for home directory)
 2. Ensure file is valid JSON
 3. Check file permissions (must be readable)
@@ -225,17 +233,19 @@ allowed_domains = ["github.com", "docs.rs"]
 
 ## Related Configuration
 
-- **Tool policies**: Control when web_fetch requires approval
-  ```toml
-  [tools.policies]
-  web_fetch = "prompt"  # Ask before fetching
-  ```
+-   **Tool policies**: Control when web_fetch requires approval
 
-- **Content types**: Only text-based content is supported
-  - `text/html`, `text/plain`, `text/markdown`
-  - `application/json`, `application/xml`
-  - Binaries (executables, archives, etc.) are rejected
+    ```toml
+    [tools.policies]
+    web_fetch = "prompt"  # Ask before fetching
+    ```
 
-- **Size limits**: Maximum 500KB content per fetch
-  - Override with `max_bytes` parameter per request
-  - Prevents downloading large files
+-   **Content types**: Only text-based content is supported
+
+    -   `text/html`, `text/plain`, `text/markdown`
+    -   `application/json`, `application/xml`
+    -   Binaries (executables, archives, etc.) are rejected
+
+-   **Size limits**: Maximum 500KB content per fetch
+    -   Override with `max_bytes` parameter per request
+    -   Prevents downloading large files
