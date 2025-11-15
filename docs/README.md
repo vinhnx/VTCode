@@ -69,6 +69,7 @@ New to VT Code? Start with installation and basic usage:
 -   [Decision Ledger](./context/DECISION_LEDGER.md) - How decisions are tracked and injected
 -   **[Configuration Guide](./CONFIGURATION.md)** - Comprehensive configuration options
 -   **[Status Line Configuration](./guides/status-line.md)** - Customize the inline prompt footer
+-   **[Responses API & Reasoning Models](./guides/responses-api-reasoning.md)** - Align reasoning-centric prompts with the OpenAI Responses API
 
 ### For Developers
 
