@@ -214,6 +214,27 @@ impl StartupContext {
 
         let skip_confirmations = args.skip_confirmations || full_auto_requested;
 
+        // CLI validation: warn if prompt_cache_retention is set but model does not use Responses API
+        if agent_config.provider.eq_ignore_ascii_case("openai") {
+            if let Some(ref retention) = agent_config
+                .prompt_cache
+                .providers
+                .openai
+                .prompt_cache_retention
+            {
+                if !retention.trim().is_empty() {
+                    // Use constants list to identify which models use Responses API
+                    if let Some(msg) = check_prompt_cache_retention_compat(
+                        &config,
+                        &agent_config.model,
+                        &agent_config.provider,
+                    ) {
+                        tracing::warn!("{}", msg);
+                    }
+                }
+            }
+        }
+
         Ok(StartupContext {
             workspace,
             config,
@@ -224,6 +245,33 @@ impl StartupContext {
             session_resume,
         })
     }
+}
+
+/// Validate whether prompt_cache_retention is applicable for the given model and provider.
+/// Returns an optional warning message if compatibility is lacking.
+pub fn check_prompt_cache_retention_compat(
+    config: &VTCodeConfig,
+    model: &str,
+    provider: &str,
+) -> Option<String> {
+    // Only relevant for OpenAI provider
+    if !provider.eq_ignore_ascii_case("openai") {
+        return None;
+    }
+
+    if let Some(ref retention) = config.prompt_cache.providers.openai.prompt_cache_retention {
+        if retention.trim().is_empty() {
+            return None;
+        }
+        if !vtcode_core::config::constants::models::openai::RESPONSES_API_MODELS.contains(&model) {
+            return Some(format!(
+                "`prompt_cache_retention` is set but the selected model '{}' does not use the OpenAI Responses API. The setting will be ignored for this model. Run `vtcode models list --provider openai` to see supported Responses API models.",
+                model
+            ));
+        }
+    }
+
+    None
 }
 
 fn parse_cli_config_entries(entries: &[String]) -> (Option<PathBuf>, Vec<(String, String)>) {
@@ -629,5 +677,30 @@ mod tests {
 
         assert_eq!(config.agent.provider, "openai");
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod validation_tests {
+    use super::*;
+
+    #[test]
+    fn retention_warning_for_non_responses_model() {
+        let mut cfg = VTCodeConfig::default();
+        cfg.prompt_cache.providers.openai.prompt_cache_retention = Some("24h".to_string());
+        let model = "codex-mini-latest"; // not in responses API list
+        let provider = "openai";
+        let msg = check_prompt_cache_retention_compat(&cfg, model, provider);
+        assert!(msg.is_some());
+    }
+
+    #[test]
+    fn retention_ok_for_responses_model() {
+        let mut cfg = VTCodeConfig::default();
+        cfg.prompt_cache.providers.openai.prompt_cache_retention = Some("24h".to_string());
+        let model = vtcode_core::config::constants::models::openai::GPT_5; // responses model
+        let provider = "openai";
+        let msg = check_prompt_cache_retention_compat(&cfg, model, provider);
+        assert!(msg.is_none());
     }
 }

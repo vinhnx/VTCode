@@ -33,6 +33,20 @@ VT Code already routes GPT-5.1 (Codex) and other reasoning-focused models throug
 
 5. **Cache-friendly prompts**: The Responses API differentiates cached and uncached tokens. Longer prompts (>= 1,024 tokens) benefit from returning everything—including reasoning items—so the cache can match on both the request and internal context. Higher cache hit ratios reduce costs and latency for `o4-mini`, `o3`, and GPT-5-series models.
 
+    Tip: You can instruct the Responses API to retain cached prefixes for longer by setting `prompt_cache_retention` on the request. VT Code exposes this setting in `vtcode.toml` under `[prompt_cache.providers.openai]` as `# prompt_cache_retention = "24h"` (commented out by default). Using a longer retention can reduce costs and latency for frequently repeated prompts in GPT-5.1 if set. The value must be in the format `<number>[s|m|h|d]` (e.g., `24h`) and is restricted to a minimum of `1s` and a maximum of `30d`.
+
+    Example: Enable 24h retention using CLI config overrides for a Responses model:
+
+    ```bash
+    vtcode --model gpt-5 --config prompt_cache.providers.openai.prompt_cache_retention=24h ask "Explain this function"
+    ```
+
+    To list the models known to support the OpenAI Responses API, run:
+
+    ```bash
+    vtcode models list --provider openai
+    ```
+
 6. **Function calling etiquette**: Ensure any VT Code tool definitions expose their JSON schema via the `function` payload. The Responses API requires each tool message to include a `tool_call_id`, and VT Code already handles this when serializing `ToolDefinition`s. Reinjecting reasoning summaries into `context` keeps every tool loop consistent with the `responses` guidance.
 
 7. **Reasoning visibility**: When troubleshooting, inspect `.vtcode/logs/trajectory.jsonl` for `reasoning` or `reasoning_summary` entries. The agent’s telemetry also logs `reasoning_effort` (see the inline status line guide) so you can correlate agent decisions with expectation-aligned reasoning levels.

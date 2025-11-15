@@ -289,7 +289,8 @@ impl MoonshotProvider {
                                                             crate::llm::provider::FunctionCall {
                                                                 name: name.to_string(),
                                                                 arguments: args.to_string(),
-                                                            }),
+                                                            },
+                                                        ),
                                                         call_type: "function".to_string(),
                                                         text: None,
                                                     })

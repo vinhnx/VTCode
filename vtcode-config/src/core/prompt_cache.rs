@@ -1,6 +1,9 @@
 use crate::constants::prompt_cache;
+use anyhow::Context;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 /// Global prompt caching configuration loaded from vtcode.toml
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -104,6 +107,12 @@ pub struct OpenAIPromptCacheSettings {
 
     #[serde(default = "default_true")]
     pub surface_metrics: bool,
+
+    /// Optional prompt cache retention string to pass directly into OpenAI Responses API
+    /// Example: "24h" or "1d". If set, VT Code will include `prompt_cache_retention`
+    /// in the request body to extend the model-side prompt caching window.
+    #[serde(default)]
+    pub prompt_cache_retention: Option<String>,
 }
 
 impl Default for OpenAIPromptCacheSettings {
@@ -113,7 +122,19 @@ impl Default for OpenAIPromptCacheSettings {
             min_prefix_tokens: default_openai_min_prefix_tokens(),
             idle_expiration_seconds: default_openai_idle_expiration(),
             surface_metrics: default_true(),
+            prompt_cache_retention: None,
         }
+    }
+}
+
+impl OpenAIPromptCacheSettings {
+    /// Validate OpenAI provider prompt cache settings. Returns Err if the retention value is invalid.
+    pub fn validate(&self) -> anyhow::Result<()> {
+        if let Some(ref retention) = self.prompt_cache_retention {
+            parse_retention_duration(retention)
+                .with_context(|| format!("Invalid prompt_cache_retention: {}", retention))?;
+        }
+        Ok(())
     }
 }
 
@@ -404,6 +425,60 @@ fn resolve_default_cache_dir() -> PathBuf {
     PathBuf::from(prompt_cache::DEFAULT_CACHE_DIR)
 }
 
+/// Parse a duration string into a std::time::Duration
+/// Acceptable formats: <number>[s|m|h|d], e.g., "30s", "5m", "24h", "1d".
+fn parse_retention_duration(input: &str) -> anyhow::Result<Duration> {
+    let input = input.trim();
+    if input.is_empty() {
+        anyhow::bail!("Empty retention string");
+    }
+
+    // Strict format: number + unit (s|m|h|d)
+    let re = Regex::new(r"^(\d+)([smhdSMHD])$").unwrap();
+    let caps = re
+        .captures(input)
+        .ok_or_else(|| anyhow::anyhow!("Invalid retention format; use <number>[s|m|h|d]"))?;
+
+    let value_str = caps.get(1).unwrap().as_str();
+    let unit = caps
+        .get(2)
+        .unwrap()
+        .as_str()
+        .chars()
+        .next()
+        .unwrap()
+        .to_ascii_lowercase();
+    let value: u64 = value_str
+        .parse()
+        .with_context(|| format!("Invalid numeric value in retention: {}", value_str))?;
+
+    let seconds = match unit {
+        's' => value,
+        'm' => value * 60,
+        'h' => value * 60 * 60,
+        'd' => value * 24 * 60 * 60,
+        _ => anyhow::bail!("Invalid retention unit; expected s,m,h,d"),
+    };
+
+    // Enforce a reasonable retention window: at least 1s and max 30 days
+    const MIN_SECONDS: u64 = 1;
+    const MAX_SECONDS: u64 = 30 * 24 * 60 * 60; // 30 days
+    if seconds < MIN_SECONDS || seconds > MAX_SECONDS {
+        anyhow::bail!("prompt_cache_retention must be between 1s and 30d");
+    }
+
+    Ok(Duration::from_secs(seconds))
+}
+
+impl PromptCachingConfig {
+    /// Validate prompt cache config and provider overrides
+    pub fn validate(&self) -> anyhow::Result<()> {
+        // Validate OpenAI provider settings
+        self.providers.openai.validate()?;
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -430,6 +505,7 @@ mod tests {
         );
         assert_eq!(cfg.providers.gemini.mode, GeminiPromptCacheMode::Implicit);
         assert!(cfg.providers.moonshot.enabled);
+        assert_eq!(cfg.providers.openai.prompt_cache_retention, None);
     }
 
     #[test]
@@ -456,5 +532,33 @@ mod tests {
         };
         let resolved = cfg.resolve_cache_dir(Some(workspace));
         assert_eq!(resolved, workspace.join("relative/cache"));
+    }
+
+    #[test]
+    fn parse_retention_duration_valid_and_invalid() {
+        assert_eq!(
+            parse_retention_duration("24h").unwrap(),
+            std::time::Duration::from_secs(86400)
+        );
+        assert_eq!(
+            parse_retention_duration("5m").unwrap(),
+            std::time::Duration::from_secs(300)
+        );
+        assert_eq!(
+            parse_retention_duration("1s").unwrap(),
+            std::time::Duration::from_secs(1)
+        );
+        assert!(parse_retention_duration("0s").is_err());
+        assert!(parse_retention_duration("31d").is_err());
+        assert!(parse_retention_duration("abc").is_err());
+        assert!(parse_retention_duration("").is_err());
+        assert!(parse_retention_duration("10x").is_err());
+    }
+
+    #[test]
+    fn validate_prompt_cache_rejects_invalid_retention() {
+        let mut cfg = PromptCachingConfig::default();
+        cfg.providers.openai.prompt_cache_retention = Some("invalid".to_string());
+        assert!(cfg.validate().is_err());
     }
 }

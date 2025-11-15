@@ -486,8 +486,8 @@ impl GeminiProvider {
             {
                 for tool_call in tool_calls {
                     if let Some(ref func) = tool_call.function {
-                        let parsed_args = serde_json::from_str(&func.arguments)
-                            .unwrap_or_else(|_| json!({}));
+                        let parsed_args =
+                            serde_json::from_str(&func.arguments).unwrap_or_else(|_| json!({}));
                         parts.push(Part::FunctionCall {
                             function_call: GeminiFunctionCall {
                                 name: func.name.clone(),
@@ -547,7 +547,9 @@ impl GeminiProvider {
                     function_declarations: vec![FunctionDeclaration {
                         name: tool.function.as_ref().unwrap().name.clone(),
                         description: tool.function.as_ref().unwrap().description.clone(),
-                        parameters: sanitize_function_parameters(tool.function.as_ref().unwrap().parameters.clone()),
+                        parameters: sanitize_function_parameters(
+                            tool.function.as_ref().unwrap().parameters.clone(),
+                        ),
                     }],
                 })
                 .collect()

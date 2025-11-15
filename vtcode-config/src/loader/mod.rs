@@ -199,6 +199,10 @@ impl VTCodeConfig {
             .validate()
             .context("Invalid timeouts configuration")?;
 
+        self.prompt_cache
+            .validate()
+            .context("Invalid prompt_cache configuration")?;
+
         Ok(())
     }
 
@@ -741,11 +745,14 @@ enable_auto_cleanup = true
 min_quality_threshold = 0.7
 
 # Prompt cache configuration for OpenAI
-[prompt_cache.providers.openai]
-enabled = true
-min_prefix_tokens = 1024
-idle_expiration_seconds = 3600
-surface_metrics = true
+    [prompt_cache.providers.openai]
+    enabled = true
+    min_prefix_tokens = 1024
+    idle_expiration_seconds = 3600
+    surface_metrics = true
+    # Optional: server-side prompt cache retention for OpenAI Responses API
+    # Example: "24h" (leave commented out for default behavior)
+    # prompt_cache_retention = "24h"
 
 # Prompt cache configuration for Anthropic
 [prompt_cache.providers.anthropic]
@@ -1145,6 +1152,30 @@ mod tests {
             error.contains("validate"),
             "expected validation context in error, got: {}",
             error
+        );
+    }
+
+    #[test]
+    fn loader_loads_prompt_cache_retention_from_toml() {
+        use std::fs::File;
+        use std::io::Write;
+
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("vtcode.toml");
+        let mut file = File::create(&path).unwrap();
+        let contents = r#"
+[prompt_cache]
+enabled = true
+[prompt_cache.providers.openai]
+prompt_cache_retention = "24h"
+"#;
+        file.write_all(contents.as_bytes()).unwrap();
+
+        let manager = ConfigManager::load_from_file(&path).unwrap();
+        let config = manager.config();
+        assert_eq!(
+            config.prompt_cache.providers.openai.prompt_cache_retention,
+            Some("24h".to_string())
         );
     }
 

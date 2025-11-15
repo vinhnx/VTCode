@@ -453,10 +453,8 @@ impl OpenAIProvider {
                     if let Some(tool_calls) = &msg.tool_calls {
                         for call in tool_calls {
                             if let Some(ref func) = call.function {
-                                tool_call_authors.insert(
-                                    call.id.clone(),
-                                    format!("functions.{}", func.name),
-                                );
+                                tool_call_authors
+                                    .insert(call.id.clone(), format!("functions.{}", func.name));
                             }
                         }
                     }
@@ -955,7 +953,9 @@ impl OpenAIProvider {
             }
 
             // Only set parallel tool calls if not overridden due to custom tools
-            if request.parallel_tool_calls.is_some() && !openai_request.get("parallel_tool_calls").is_some() {
+            if request.parallel_tool_calls.is_some()
+                && !openai_request.get("parallel_tool_calls").is_some()
+            {
                 if let Some(parallel) = request.parallel_tool_calls {
                     openai_request["parallel_tool_calls"] = Value::Bool(parallel);
                 }
@@ -1038,7 +1038,9 @@ impl OpenAIProvider {
             }
 
             // Only set parallel tool calls if not overridden due to custom tools
-            if request.parallel_tool_calls.is_some() && !openai_request.get("parallel_tool_calls").is_some() {
+            if request.parallel_tool_calls.is_some()
+                && !openai_request.get("parallel_tool_calls").is_some()
+            {
                 if let Some(parallel) = request.parallel_tool_calls {
                     openai_request["parallel_tool_calls"] = Value::Bool(parallel);
                 }
@@ -1081,7 +1083,8 @@ impl OpenAIProvider {
 
         // Add grammar constraint if tools include grammar definitions
         if let Some(ref tools) = request.tools {
-            let grammar_tools: Vec<&ToolDefinition> = tools.iter()
+            let grammar_tools: Vec<&ToolDefinition> = tools
+                .iter()
                 .filter(|tool| tool.tool_type == "grammar")
                 .collect();
 
@@ -1108,6 +1111,19 @@ impl OpenAIProvider {
 
         if has_format_options {
             openai_request["text"] = text_format;
+        }
+
+        // If configured, include the `prompt_cache_retention` value in the Responses API
+        // request. This allows the user to extend the server-side prompt cache window
+        // (e.g., "24h") to increase cache reuse and reduce cost/latency on GPT-5.1.
+        // Only include prompt_cache_retention when both configured and when the selected
+        // model uses the OpenAI Responses API.
+        if OpenAIProvider::is_responses_api_model(&request.model) {
+            if let Some(ref retention) = self.prompt_cache_settings.prompt_cache_retention {
+                if !retention.trim().is_empty() {
+                    openai_request["prompt_cache_retention"] = json!(retention);
+                }
+            }
         }
 
         Ok(openai_request)
@@ -1793,6 +1809,120 @@ mod tests {
 
         assert!(!OpenAIProvider::uses_harmony("gpt-5"));
         assert!(!OpenAIProvider::uses_harmony("gpt-oss:20b"));
+    }
+
+    #[test]
+    fn responses_payload_includes_prompt_cache_retention() {
+        let mut pc = PromptCachingConfig::default();
+        pc.providers.openai.prompt_cache_retention = Some("24h".to_string());
+
+        let provider = OpenAIProvider::from_config(
+            Some("key".to_string()),
+            Some(models::openai::GPT_5_1.to_string()),
+            None,
+            Some(pc),
+            None,
+        );
+
+        let request = sample_request(models::openai::GPT_5_1);
+        let payload = provider
+            .convert_to_openai_responses_format(&request)
+            .expect("conversion should succeed");
+
+        assert_eq!(
+            payload
+                .get("prompt_cache_retention")
+                .and_then(Value::as_str),
+            Some("24h")
+        );
+    }
+
+    #[test]
+    fn responses_payload_excludes_prompt_cache_retention_when_not_set() {
+        let pc = PromptCachingConfig::default(); // default is Some("24h"); ram: to simulate none, set to None
+        let mut pc = pc;
+        pc.providers.openai.prompt_cache_retention = None;
+        let provider = OpenAIProvider::from_config(
+            Some("key".to_string()),
+            Some(models::openai::GPT_5_1.to_string()),
+            None,
+            Some(pc),
+            None,
+        );
+
+        let mut request = sample_request(models::openai::GPT_5_1);
+        request.stream = true;
+        let payload = provider
+            .convert_to_openai_responses_format(&request)
+            .expect("conversion should succeed");
+
+        assert!(payload.get("prompt_cache_retention").is_none());
+    }
+
+    #[test]
+    fn responses_payload_includes_prompt_cache_retention_streaming() {
+        let mut pc = PromptCachingConfig::default();
+        pc.providers.openai.prompt_cache_retention = Some("12h".to_string());
+
+        let provider = OpenAIProvider::from_config(
+            Some("key".to_string()),
+            Some(models::openai::GPT_5_1.to_string()),
+            None,
+            Some(pc),
+            None,
+        );
+
+        let mut request = sample_request(models::openai::GPT_5_1);
+        request.stream = true;
+        let payload = provider
+            .convert_to_openai_responses_format(&request)
+            .expect("conversion should succeed");
+
+        assert_eq!(
+            payload
+                .get("prompt_cache_retention")
+                .and_then(Value::as_str),
+            Some("12h")
+        );
+    }
+
+    #[test]
+    fn responses_payload_excludes_retention_for_non_responses_model() {
+        let mut pc = PromptCachingConfig::default();
+        pc.providers.openai.prompt_cache_retention = Some("9999s".to_string());
+
+        let provider = OpenAIProvider::from_config(
+            Some("key".to_string()),
+            Some(models::openai::CODEX_MINI_LATEST.to_string()),
+            None,
+            Some(pc),
+            None,
+        );
+
+        let request = sample_request(models::openai::CODEX_MINI_LATEST);
+        let payload = provider
+            .convert_to_openai_responses_format(&request)
+            .expect("conversion should succeed");
+
+        assert!(payload.get("prompt_cache_retention").is_none());
+    }
+
+    #[test]
+    fn provider_from_config_respects_prompt_cache_retention() {
+        let mut pc = PromptCachingConfig::default();
+        pc.providers.openai.prompt_cache_retention = Some("72h".to_string());
+        let provider = OpenAIProvider::from_config(
+            Some("key".to_string()),
+            Some(models::openai::GPT_5_1.to_string()),
+            None,
+            Some(pc.clone()),
+            None,
+        );
+
+        assert_eq!(
+            provider.prompt_cache_settings.prompt_cache_retention,
+            Some("72h".to_string())
+        );
     }
 
     #[test]

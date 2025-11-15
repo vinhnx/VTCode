@@ -51,6 +51,16 @@ pub struct Cli {
     ///   • z-ai/glm-4.6 - OpenRouter Z.AI GLM 4.6
     ///   • moonshotai/kimi-k2-0905 - OpenRouter MoonshotAI Kimi K2
     ///   • gpt-oss:20b - Ollama local model
+    /// Note: If using OpenAI, the `prompt_cache_retention` configuration applies only to models
+    /// that support the OpenAI Responses API (e.g., gpt-5, gpt-5.1). Setting it for non-Responses
+    /// models will be ignored.
+    /// To see all available models for a given provider, use the `models` command. For example:
+    ///
+    ///   vtcode models list --provider openai
+    ///
+    /// Note: If using OpenAI, the `prompt_cache_retention` configuration applies only to models
+    /// that support the OpenAI Responses API (e.g., gpt-5, gpt-5.1). Setting it for non-Responses
+    /// models will be ignored.
     #[arg(long, global = true)]
     pub model: Option<String>,
 
@@ -173,6 +183,10 @@ pub struct Cli {
     /// Mirrors Codex CLI's `--config key=value` behaviour while still accepting
     /// an explicit config path.
     /// Use repeated flags to apply multiple overrides (highest precedence).
+    ///
+    /// Example: set prompt cache retention for an OpenAI Responses model
+    ///
+    ///   vtcode --model gpt-5 --config prompt_cache.providers.openai.prompt_cache_retention=24h ask "Explain this function"
     #[arg(
         short = 'c',
         long = "config",
@@ -181,6 +195,10 @@ pub struct Cli {
         global = true
     )]
     pub config: Vec<String>,
+
+    /// NOTE: If you set `prompt_cache.providers.openai.prompt_cache_retention` via `--config`,
+    /// it is only applied to OpenAI models that support the Responses API (e.g., `gpt-5`). For
+    /// other models this setting is ignored (and a warning will be emitted at startup).
 
     /// Log level (error, warn, info, debug, trace)
     ///

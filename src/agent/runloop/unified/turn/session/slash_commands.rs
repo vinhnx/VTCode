@@ -97,39 +97,43 @@ pub(super) async fn handle_outcome(
         }
         SlashCommandOutcome::Handled => Ok(SlashCommandControl::Continue),
         SlashCommandOutcome::DebugAgent => {
+            ctx.renderer
+                .line(MessageStyle::Info, "Debug information:")?;
             ctx.renderer.line(
-                MessageStyle::Info,
-                "Debug information:"
+                MessageStyle::Output,
+                &format!("  Current model: {}", ctx.config.model),
             )?;
             ctx.renderer.line(
                 MessageStyle::Output,
-                &format!("  Current model: {}", ctx.config.model)
+                &format!("  Workspace: {}", ctx.config.workspace.display()),
             )?;
             ctx.renderer.line(
                 MessageStyle::Output,
-                &format!("  Workspace: {}", ctx.config.workspace.display())
+                &format!(
+                    "  Conversation history: {} messages",
+                    ctx.conversation_history.len()
+                ),
             )?;
             ctx.renderer.line(
                 MessageStyle::Output,
-                &format!("  Conversation history: {} messages", ctx.conversation_history.len())
-            )?;
-            ctx.renderer.line(
-                MessageStyle::Output,
-                &format!("  Available tools: {} registered", ctx.tools.read().await.len())
+                &format!(
+                    "  Available tools: {} registered",
+                    ctx.tools.read().await.len()
+                ),
             )?;
             // Show recent decisions
             let ledger = ctx.decision_ledger.read().await;
             if !ledger.get_decisions().is_empty() {
                 ctx.renderer.line(
                     MessageStyle::Output,
-                    &format!("  Recent decisions: {}", ledger.get_decisions().len())
+                    &format!("  Recent decisions: {}", ledger.get_decisions().len()),
                 )?;
                 // Show last few decisions
                 let recent = ledger.get_decisions().iter().rev().take(3);
                 for (idx, decision) in recent.enumerate() {
                     ctx.renderer.line(
                         MessageStyle::Output,
-                        &format!("    {}: {:?}", idx + 1, decision.action)
+                        &format!("    {}: {:?}", idx + 1, decision.action),
                     )?;
                 }
             }
@@ -137,44 +141,45 @@ pub(super) async fn handle_outcome(
             Ok(SlashCommandControl::Continue)
         }
         SlashCommandOutcome::AnalyzeAgent => {
-            ctx.renderer.line(
-                MessageStyle::Info,
-                "Agent analysis:"
-            )?;
+            ctx.renderer.line(MessageStyle::Info, "Agent analysis:")?;
             ctx.renderer.line(
                 MessageStyle::Output,
-                "  Analyzing current AI behavior patterns..."
+                "  Analyzing current AI behavior patterns...",
             )?;
 
             // Calculate some statistics
             let total_messages = ctx.conversation_history.len();
-            let tool_calls: usize = ctx.conversation_history.iter()
+            let tool_calls: usize = ctx
+                .conversation_history
+                .iter()
                 .filter(|msg| msg.role == uni::MessageRole::Assistant)
                 .map(|msg| msg.tool_calls.as_ref().map_or(0, |calls| calls.len()))
                 .sum();
 
-            let user_messages = ctx.conversation_history.iter()
+            let user_messages = ctx
+                .conversation_history
+                .iter()
                 .filter(|msg| msg.role == uni::MessageRole::User)
                 .count();
 
             ctx.renderer.line(
                 MessageStyle::Output,
-                &format!("  Total messages in conversation: {}", total_messages)
+                &format!("  Total messages in conversation: {}", total_messages),
             )?;
             ctx.renderer.line(
                 MessageStyle::Output,
-                &format!("  User messages: {}", user_messages)
+                &format!("  User messages: {}", user_messages),
             )?;
             ctx.renderer.line(
                 MessageStyle::Output,
-                &format!("  Assistant tool calls: {}", tool_calls)
+                &format!("  Assistant tool calls: {}", tool_calls),
             )?;
 
             if total_messages > 0 {
                 let tool_call_ratio = (tool_calls as f64) / (total_messages as f64) * 100.0;
                 ctx.renderer.line(
                     MessageStyle::Output,
-                    &format!("  Tool usage ratio: {:.1}%", tool_call_ratio)
+                    &format!("  Tool usage ratio: {:.1}%", tool_call_ratio),
                 )?;
             }
 
@@ -183,10 +188,11 @@ pub(super) async fn handle_outcome(
                 let token_budget = ctx.context_manager.token_budget();
                 ctx.renderer.line(
                     MessageStyle::Output,
-                    &format!("  Current token budget: {}/{}",
+                    &format!(
+                        "  Current token budget: {}/{}",
                         token_budget.get_stats().await.total_tokens,
                         ctx.trim_config.max_tokens
-                    )
+                    ),
                 )?;
             }
 

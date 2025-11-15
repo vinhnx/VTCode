@@ -937,7 +937,12 @@ impl AgentRunner {
                         );
 
                         for call in tool_calls_vec {
-                            let name = call.function.as_ref().expect("Tool call must have function").name.clone();
+                            let name = call
+                                .function
+                                .as_ref()
+                                .expect("Tool call must have function")
+                                .name
+                                .clone();
 
                             runner_println!(
                                 self,

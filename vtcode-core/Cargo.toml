@@ -181,3 +181,4 @@ rustdoc-args = ["--cfg", "docsrs"]
 [dev-dependencies]
 assert_fs = "1.1"
 nix = { version = "0.30", features = ["user"] }
+mockito = "0.31"

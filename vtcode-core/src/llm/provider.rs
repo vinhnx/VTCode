@@ -957,10 +957,7 @@ impl ToolDefinition {
             tool_type: "grammar".to_string(),
             function: None,
             shell: None,
-            grammar: Some(GrammarDefinition {
-                syntax,
-                definition,
-            }),
+            grammar: Some(GrammarDefinition { syntax, definition }),
         }
     }
 
@@ -1008,7 +1005,10 @@ impl ToolDefinition {
     fn validate_apply_patch(&self) -> Result<(), String> {
         if let Some(func) = &self.function {
             if func.name != "apply_patch" {
-                return Err(format!("apply_patch tool must have name 'apply_patch', got: {}", func.name));
+                return Err(format!(
+                    "apply_patch tool must have name 'apply_patch', got: {}",
+                    func.name
+                ));
             }
             if func.description.is_empty() {
                 return Err("apply_patch description cannot be empty".to_string());

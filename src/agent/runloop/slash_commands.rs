@@ -511,7 +511,7 @@ pub async fn handle_slash_command(
             if args.split_whitespace().count() > 1 {
                 renderer.line(
                     MessageStyle::Error,
-                    "Usage: /debug [file|directory|problem] - accepts at most one argument"
+                    "Usage: /debug [file|directory|problem] - accepts at most one argument",
                 )?;
                 return Ok(SlashCommandOutcome::Handled);
             }
@@ -522,7 +522,7 @@ pub async fn handle_slash_command(
             if args.split_whitespace().count() > 1 {
                 renderer.line(
                     MessageStyle::Error,
-                    "Usage: /analyze [full|security|performance] - accepts at most one argument"
+                    "Usage: /analyze [full|security|performance] - accepts at most one argument",
                 )?;
                 return Ok(SlashCommandOutcome::Handled);
             }

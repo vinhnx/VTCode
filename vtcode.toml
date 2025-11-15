@@ -661,6 +661,10 @@ enabled = true
 min_prefix_tokens = 1024
 idle_expiration_seconds = 3600
 surface_metrics = true
+# Optional: set server-side prompt cache retention for OpenAI Responses API.
+# Example: "24h" will increase model-side prompt caching to 24 hours, which can
+# reduce cost and latency for repeated reasoning prompts.
+prompt_cache_retention = "24h"
 
 # Prompt cache configuration for Anthropic
 [prompt_cache.providers.anthropic]

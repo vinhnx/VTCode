@@ -335,8 +335,7 @@ impl OllamaProvider {
                                         .or_insert_with(|| func.name.clone());
                                 }
 
-                                let arguments =
-                                    Self::parse_tool_arguments(&func.arguments)?;
+                                let arguments = Self::parse_tool_arguments(&func.arguments)?;
                                 converted.push(OllamaToolCall {
                                     call_type: tool_call.call_type.clone(),
                                     function: OllamaToolFunctionCall {

@@ -32,6 +32,24 @@ surface_metrics = true
 -   `min_prefix_tokens` — minimum number of prompt tokens before the API is asked to cache the prefix.
 -   `idle_expiration_seconds` — how long (in seconds) a cached prefix can remain idle before expiry.
 -   `surface_metrics` — when enabled, OpenAI usage responses expose cache-hit statistics surfaced through VT Code’s usage telemetry.
+-   `prompt_cache_retention` — optional time duration to set the Responses API server-side cache retention for prefixes (e.g., "24h"). Increasing this value can improve cache hit rates and reduce costs/latency for repeated prompt patterns on GPT-5-series.
+-   `prompt_cache_retention` — optional time duration to set the Responses API server-side cache retention for prefixes (e.g., "24h"). Increasing this value can improve cache hit rates and reduce costs/latency for repeated prompt patterns on GPT-5-series.
+-   Default: `None` (opt-in) - VT Code does not set prompt_cache_retention by default; add it to `vtcode.toml` to enable it.
+-   Valid formats: `<number>[s|m|h|d]` (e.g., `30s`, `5m`, `24h`, `7d`).
+-   Valid range: minimum `1s`; maximum `30d`.
+-   Example CLI override to enable 24h retention for Responses model:
+
+    ```bash
+    vtcode --model gpt-5 --config prompt_cache.providers.openai.prompt_cache_retention=24h ask "Explain this function"
+    ```
+
+-   To list all Response-API-enabled OpenAI models:
+
+    ```bash
+    vtcode models list --provider openai
+    ```
+
+-   Applies only to OpenAI models that use the Responses API; for other models this value is ignored.
 
 ### Anthropic (Claude)
 
@@ -122,8 +140,8 @@ When upgrading to the new prompt caching system:
 
 ## Troubleshooting
 
-- If caching isn't working as expected, verify that both global and provider-specific `enabled` flags are set to `true`
-- Check that your prompts meet the minimum token requirements for each provider
-- Enable verbose logging to see cache interaction details
+-   If caching isn't working as expected, verify that both global and provider-specific `enabled` flags are set to `true`
+-   Check that your prompts meet the minimum token requirements for each provider
+-   Enable verbose logging to see cache interaction details
 
 By tuning these values you can balance latency, cost, and cache freshness per provider while keeping the behaviour consistent across the VT Code agent ecosystem.

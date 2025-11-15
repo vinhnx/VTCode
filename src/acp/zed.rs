@@ -882,10 +882,12 @@ impl ZedAgent {
         let mut results = Vec::new();
 
         for call in calls {
-            let func_ref = call.function.as_ref().expect("Tool call must have function");
+            let func_ref = call
+                .function
+                .as_ref()
+                .expect("Tool call must have function");
             let tool_descriptor = self.acp_tool_registry.lookup(&func_ref.name);
-            let args_value_result: Result<Value, _> =
-                serde_json::from_str(&func_ref.arguments);
+            let args_value_result: Result<Value, _> = serde_json::from_str(&func_ref.arguments);
             let args_value_for_input = args_value_result.as_ref().ok().cloned();
             let title = match (tool_descriptor, args_value_for_input.as_ref()) {
                 (Some(descriptor), Some(args)) => {

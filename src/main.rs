@@ -3,7 +3,7 @@
 //! Thin binary entry point that delegates to modular CLI handlers.
 
 use anyhow::{Context, Result};
-use clap::Parser;
+use clap::{CommandFactory, Parser};
 use colorchoice::ColorChoice as GlobalColorChoice;
 use std::io::IsTerminal;
 use std::io::{self, Read};
@@ -25,6 +25,20 @@ async fn main() -> Result<()> {
 
     process_hardening::apply_process_hardening()
         .context("failed to apply process hardening safeguards")?;
+
+    // If user asked for help, augment the help output with dynamic model list
+    // and print the help with the additional CLI details.
+    let raw_args: Vec<String> = std::env::args().collect();
+    if raw_args.iter().any(|a| a == "-h" || a == "--help") {
+        let mut cmd = Cli::command();
+        let help_extra = vtcode_core::cli::help::openai_responses_models_help();
+        let help_box: Box<str> = help_extra.into_boxed_str();
+        let help_static: &'static str = Box::leak(help_box);
+        cmd = cmd.after_help(help_static);
+        cmd.print_help().ok();
+        println!();
+        return Ok(());
+    }
 
     let args = Cli::parse();
 
