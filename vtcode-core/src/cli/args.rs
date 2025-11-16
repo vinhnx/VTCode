@@ -616,6 +616,35 @@ pub enum Commands {
         #[arg(short, long)]
         output: Option<std::path::PathBuf>,
     },
+
+    /// **Display token budget information and usage statistics**
+    ///
+    /// Features:
+    ///   • Show current token usage and remaining budget
+    ///   • Display recent max_tokens usage from tool calls
+    ///   • Provide token usage statistics and breakdown
+    ///
+    /// Examples:
+    ///   vtcode tokens status
+    ///   vtcode tokens history
+    ///   vtcode tokens summary
+    Tokens {
+        #[command(subcommand)]
+        command: TokenCommands,
+    },
+}
+
+/// Token-related subcommands
+#[derive(Subcommand, Debug)]
+pub enum TokenCommands {
+    /// Show current token budget status and usage
+    Status,
+
+    /// Show recent token usage history
+    History,
+
+    /// Show summary of token usage patterns
+    Summary,
 }
 
 /// Supported Agent Client Protocol clients

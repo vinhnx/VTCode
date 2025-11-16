@@ -119,7 +119,8 @@ pub(crate) async fn render_stream_section(
     };
 
     // Apply token-based truncation if TokenBudgetManager is available
-    let (effective_normalized_content, was_truncated_by_tokens) = if let Some(budget) = token_budget {
+    let (effective_normalized_content, was_truncated_by_tokens) = if let Some(budget) = token_budget
+    {
         // Resolve configurable token budget and byte fuse from config
         let (max_tokens, byte_fuse) = if let Some(cfg) = config {
             let ctx_cfg = &cfg.context;
@@ -135,12 +136,8 @@ pub(crate) async fn render_stream_section(
             )
         };
 
-        let (mut truncated_content, mut truncated_flag) = truncate_content_by_tokens(
-            normalized_content.as_ref(),
-            max_tokens,
-            budget,
-        )
-        .await;
+        let (mut truncated_content, mut truncated_flag) =
+            truncate_content_by_tokens(normalized_content.as_ref(), max_tokens, budget).await;
 
         // Apply byte fuse as a secondary safeguard
         if truncated_content.len() > byte_fuse {

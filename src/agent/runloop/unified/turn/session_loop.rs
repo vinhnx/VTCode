@@ -64,9 +64,7 @@ enum TurnLoopResult {
     Completed,
     Aborted,
     Cancelled,
-    Blocked {
-        reason: Option<String>,
-    },
+    Blocked { reason: Option<String> },
 }
 
 #[allow(dead_code)]

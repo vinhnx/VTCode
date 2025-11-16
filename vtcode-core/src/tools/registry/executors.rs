@@ -2889,6 +2889,7 @@ struct PtySessionViewArgs {
     session_id: String,
     drain_output: bool,
     view: PtySnapshotViewOptions,
+    max_tokens: Option<usize>,
 }
 
 impl PtySessionViewArgs {
@@ -2897,11 +2898,16 @@ impl PtySessionViewArgs {
         let drain_output = bool_from_map(map, "drain", false);
         let include_screen = bool_from_map(map, "include_screen", true);
         let include_scrollback = bool_from_map(map, "include_scrollback", true);
+        let max_tokens = map
+            .get("max_tokens")
+            .and_then(|v| v.as_u64())
+            .map(|v| v as usize);
 
         Ok(Self {
             session_id,
             drain_output,
             view: PtySnapshotViewOptions::new(include_screen, include_scrollback),
+            max_tokens,
         })
     }
 }

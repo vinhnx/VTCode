@@ -69,6 +69,8 @@ pub struct Input {
     pub chunk_lines: Option<usize>,
     #[serde(default)]
     pub max_lines: Option<usize>,
+    #[serde(default)]
+    pub max_tokens: Option<usize>,
     #[serde(default, alias = "offset", alias = "byte_offset")]
     pub offset_bytes: Option<u64>,
     #[serde(default, alias = "line_offset")]
@@ -179,6 +181,9 @@ pub struct EnhancedTerminalInput {
     /// Explicit confirmation to run potentially destructive operations
     #[serde(default)]
     pub confirm: Option<bool>,
+    /// Maximum number of tokens to return in the output
+    #[serde(default)]
+    pub max_tokens: Option<usize>,
 }
 
 /// PTY Session structure for managing interactive terminal sessions

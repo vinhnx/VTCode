@@ -10,6 +10,7 @@ pub const MAX_TOOL_RESPONSE_TOKENS: usize = 25_000;
 use anyhow::{Context, Result, anyhow};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -167,12 +168,22 @@ enum TokenizerSpec {
     },
 }
 
+/// Track applied max_tokens for tool calls
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MaxTokensUsage {
+    pub tool_name: String,
+    pub applied_max_tokens: Option<usize>,
+    pub timestamp: u64,
+    pub context: String, // Optional context about the tool call
+}
+
 /// Token budget manager
 pub struct TokenBudgetManager {
     config: Arc<RwLock<TokenBudgetConfig>>,
     stats: Arc<RwLock<TokenUsageStats>>,
     component_tokens: Arc<RwLock<HashMap<String, usize>>>,
     tokenizer_cache: Arc<RwLock<Option<TokenCounter>>>,
+    max_tokens_history: Arc<RwLock<VecDeque<MaxTokensUsage>>>,
 }
 
 impl TokenBudgetManager {
@@ -185,6 +196,7 @@ impl TokenBudgetManager {
             stats: Arc::new(RwLock::new(TokenUsageStats::new())),
             component_tokens: Arc::new(RwLock::new(HashMap::new())),
             tokenizer_cache: Arc::new(RwLock::new(None)),
+            max_tokens_history: Arc::new(RwLock::new(VecDeque::new())),
         }
     }
 
@@ -442,6 +454,21 @@ impl TokenBudgetManager {
             }
         }
 
+        // Add max_tokens usage history
+        let max_tokens_history = self.max_tokens_history.read().await;
+        if !max_tokens_history.is_empty() {
+            report.push_str("\nRecent max_tokens Usage:\n");
+            for usage in max_tokens_history.iter().rev().take(10) {
+                let applied = usage.applied_max_tokens
+                    .map(|n| n.to_string())
+                    .unwrap_or_else(|| "None".to_string());
+                report.push_str(&format!(
+                    "  - Tool: {} | Applied max_tokens: {} | Context: {}\n",
+                    usage.tool_name, applied, usage.context
+                ));
+            }
+        }
+
         if usage_ratio >= config.alert_threshold {
             report.push_str("\nALERT: Alert threshold exceeded");
         } else if usage_ratio >= config.warning_threshold {
@@ -449,6 +476,65 @@ impl TokenBudgetManager {
         }
 
         report
+    }
+
+    /// Record max_tokens usage for a tool call
+    pub async fn record_max_tokens_usage(&self, tool_name: &str, applied_max_tokens: Option<usize>, context: &str) {
+        let mut history = self.max_tokens_history.write().await;
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+
+        history.push_front(MaxTokensUsage {
+            tool_name: tool_name.to_string(),
+            applied_max_tokens,
+            timestamp,
+            context: context.to_string(),
+        });
+
+        // Keep only the last 50 entries to prevent unlimited growth
+        while history.len() > 50 {
+            history.pop_back();
+        }
+    }
+
+    /// Get recent max_tokens usage
+    pub async fn get_recent_max_tokens_usage(&self) -> Vec<MaxTokensUsage> {
+        let history = self.max_tokens_history.read().await;
+        history.iter().cloned().collect()
+    }
+
+    /// Get summary of recent max_tokens usage
+    pub async fn get_max_tokens_usage_summary(&self) -> String {
+        let history = self.max_tokens_history.read().await;
+        if history.is_empty() {
+            return "No max_tokens usage recorded.".to_string();
+        }
+
+        let mut summary = String::from("Recent max_tokens Usage Summary:\n");
+        summary.push_str(&format!("Total recorded: {} tool calls\n", history.len()));
+
+        let mut with_max_tokens = 0;
+        let mut total_max_tokens = 0;
+        for usage in history.iter() {
+            if let Some(max_tokens) = usage.applied_max_tokens {
+                with_max_tokens += 1;
+                total_max_tokens += max_tokens;
+            }
+        }
+
+        if with_max_tokens > 0 {
+            summary.push_str(&format!(
+                "Tool calls with max_tokens: {} (avg: {:.1})\n",
+                with_max_tokens,
+                total_max_tokens as f64 / with_max_tokens as f64
+            ));
+        } else {
+            summary.push_str("No tool calls with max_tokens applied.\n");
+        }
+
+        summary
     }
 }
 
