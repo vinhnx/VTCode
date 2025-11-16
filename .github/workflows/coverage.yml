@@ -11,11 +11,12 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
 
 jobs:
   coverage:
     name: Code coverage
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-arm64
 
     steps:
       - uses: actions/checkout@v5
@@ -36,7 +37,7 @@ jobs:
         uses: taiki-e/install-action@cargo-llvm-cov
 
       - name: Generate code coverage
-        run: cargo llvm-cov --workspace --lcov --output-path lcov.info
+        run: cargo llvm-cov --locked --workspace --lcov --output-path lcov.info
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5

@@ -10,7 +10,7 @@ on:
 
 jobs:
     release:
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-latest-arm64
         steps:
             - uses: actions/checkout@v5
               with:

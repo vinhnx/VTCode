@@ -5,15 +5,21 @@ name: Release on Tag Push
 on:
   push:
     tags:
-      - 'v*'  # Triggers on tags like v1.0.0, v0.1.2, etc.
+      - "v*" # Triggers on tags like v1.0.0, v0.1.2, etc.
 
 permissions:
   contents: write
 
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_PROFILE_TEST_DEBUG: 0
+  CARGO_PROFILE_RELEASE_LTO: true
+  CARGO_PROFILE_RELEASE_CODEGEN_UNITS: 1
+
 jobs:
   create-release:
     name: Create GitHub Release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-arm64
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
@@ -23,13 +29,13 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: 'lts/*'
-          
+          node-version: "lts/*"
+
       - name: Generate changelog and create release
         run: npx changelogithub --github ${{ github.repository }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        
+
   build-binaries:
     needs: create-release
     name: Build and Upload Release Binaries
@@ -91,7 +97,7 @@ jobs:
           echo "PKG_CONFIG_PATH=$OPENSSL_DIR/lib/pkgconfig:${PKG_CONFIG_PATH:-}" >> "$GITHUB_ENV"
 
       - name: Build release binary
-        run: cargo build --release --target ${{ matrix.target }}
+        run: cargo build --locked --release --target ${{ matrix.target }}
 
       - name: Package binary (Unix)
         if: matrix.os != 'windows-latest'
