@@ -22,6 +22,7 @@ use vtcode_core::tools::ToolRegistry;
 use vtcode_core::tools::result_cache::ToolResultCache;
 use vtcode_core::ui::tui::InlineHandle;
 use vtcode_core::utils::ansi::AnsiRenderer;
+use vtcode_core::utils::ansi::MessageStyle;
 
 /// Context for turn processing operations
 pub(crate) struct TurnProcessingContext<'a> {
@@ -187,31 +188,7 @@ pub(crate) async fn execute_llm_request(
     Ok((response, response_streamed))
 }
 
-/// Derive recent tool output from conversation history
-fn derive_recent_tool_output(working_history: &[uni::Message]) -> Option<String> {
-    for message in working_history.iter().rev() {
-        if let uni::MessageRole::Tool = message.role {
-            let content = message.content.as_text();
-            if !content.trim().is_empty() {
-                return Some(content);
-            }
-        }
-    }
-    None
-}
-
-/// Strip harmony syntax from text
-fn strip_harmony_syntax(text: &str) -> String {
-    // Remove harmony tool call syntax from the displayed text
-    text.lines()
-        .filter(|line| {
-            !line.contains("<|start|>")
-                && !line.contains("<|channel|>")
-                && !line.contains("<|call|>")
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
-}
+// Use `strip_harmony_syntax` and `derive_recent_tool_output` helpers from other modules
 
 /// Result of processing a single turn
 pub(crate) enum TurnProcessingResult {
@@ -234,4 +211,99 @@ pub(crate) enum TurnProcessingResult {
     Cancelled,
     /// Turn was aborted due to error
     Aborted,
+}
+
+/// Process an LLM response and return a `TurnProcessingResult` describing whether
+/// there are tool calls to run, a textual assistant response, or nothing.
+pub(crate) fn process_llm_response(
+    response: &vtcode_core::llm::provider::LLMResponse,
+    renderer: &mut AnsiRenderer,
+    conversation_len: usize,
+) -> Result<TurnProcessingResult> {
+    use crate::agent::runloop::unified::turn::harmony::strip_harmony_syntax;
+    use vtcode_core::llm::provider as uni;
+
+    let mut final_text = response.content.clone();
+    let mut tool_calls = response.tool_calls.clone().unwrap_or_default();
+    let mut interpreted_textual_call = false;
+
+    // Strip harmony syntax from displayed content if present
+    if let Some(ref text) = final_text
+        && (text.contains("<|start|>") || text.contains("<|channel|>") || text.contains("<|call|>"))
+    {
+        let cleaned = strip_harmony_syntax(text);
+        if !cleaned.trim().is_empty() {
+            final_text = Some(cleaned);
+        } else {
+            final_text = None;
+        }
+    }
+
+    if tool_calls.is_empty() {
+        if let Some(text) = final_text.clone() {
+            if !text.trim().is_empty() {
+                if let Some((name, args)) =
+                    crate::agent::runloop::text_tools::detect_textual_tool_call(&text)
+                {
+                    let args_json =
+                        serde_json::to_string(&args).unwrap_or_else(|_| "{}".to_string());
+                    let code_blocks =
+                        crate::agent::runloop::text_tools::extract_code_fence_blocks(&text);
+                    if !code_blocks.is_empty() {
+                        crate::agent::runloop::tool_output::render_code_fence_blocks(
+                            renderer,
+                            &code_blocks,
+                        )?;
+                        renderer.line(MessageStyle::Output, "")?;
+                    }
+                    let (headline, _) =
+                        crate::agent::runloop::unified::tool_summary::describe_tool_action(
+                            &name, &args,
+                        );
+                    let notice = if headline.is_empty() {
+                        format!(
+                            "Detected {} request",
+                            crate::agent::runloop::unified::tool_summary::humanize_tool_name(&name)
+                        )
+                    } else {
+                        format!("Detected {headline}")
+                    };
+                    renderer.line(MessageStyle::Info, &notice)?;
+                    let call_id = format!("call_textual_{}", conversation_len);
+                    tool_calls.push(uni::ToolCall::function(
+                        call_id.clone(),
+                        name.clone(),
+                        args_json.clone(),
+                    ));
+                    interpreted_textual_call = true;
+                    final_text = None;
+                }
+            }
+        }
+    }
+
+    // Build result
+    if !tool_calls.is_empty() {
+        let assistant_text = if interpreted_textual_call {
+            String::new()
+        } else {
+            final_text.clone().unwrap_or_default()
+        };
+        return Ok(TurnProcessingResult::ToolCalls {
+            tool_calls,
+            assistant_text,
+            reasoning: response.reasoning.clone(),
+        });
+    }
+
+    if let Some(text) = final_text {
+        if !text.trim().is_empty() {
+            return Ok(TurnProcessingResult::TextResponse {
+                text,
+                reasoning: response.reasoning.clone(),
+            });
+        }
+    }
+
+    Ok(TurnProcessingResult::Empty)
 }

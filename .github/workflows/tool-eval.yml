@@ -4,15 +4,33 @@ permissions:
 
 on:
   push:
+    paths:
+      - '**.rs'
+      - '**/Cargo.toml'
+      - '**/Cargo.lock'
+      - 'scripts/**'
+      - '.github/workflows/**'
   pull_request:
+    paths:
+      - '**.rs'
+      - '**/Cargo.toml'
+      - '**/Cargo.lock'
+      - 'scripts/**'
+      - '.github/workflows/**'
 
 env:
   CARGO_INCREMENTAL: 0
   CARGO_PROFILE_TEST_DEBUG: 0
+  RUSTFLAGS: "-D warnings"
+
+# Time out jobs after 15 minutes to prevent resource waste
+defaults:
+  run:
+    timeout-minutes: 15
 
 jobs:
   eval:
-    runs-on: ubuntu-latest-arm64
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v5

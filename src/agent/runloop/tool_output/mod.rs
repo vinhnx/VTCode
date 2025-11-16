@@ -43,7 +43,14 @@ pub(crate) async fn render_tool_output(
             let ls_styles = LsStyles::from_env();
             return render_write_file_preview(renderer, val, &git_styles, &ls_styles);
         }
-        Some(tools::RUN_COMMAND) => {
+        Some(tools::RUN_COMMAND)
+        | Some(tools::RUN_PTY_CMD)
+        | Some(tools::READ_PTY_SESSION)
+        | Some(tools::CREATE_PTY_SESSION)
+        | Some(tools::SEND_PTY_INPUT)
+        | Some(tools::CLOSE_PTY_SESSION)
+        | Some(tools::RESIZE_PTY_SESSION)
+        | Some(tools::LIST_PTY_SESSIONS) => {
             let git_styles = GitStyles::new();
             let ls_styles = LsStyles::from_env();
             return render_terminal_command_panel(

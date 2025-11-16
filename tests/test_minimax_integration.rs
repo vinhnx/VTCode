@@ -62,6 +62,7 @@ mod minimax_integration_tests {
             Some(models::minimax::MINIMAX_M2.to_string()),
             None,
             None,
+            None,
         );
 
         let supported = provider.supported_models();

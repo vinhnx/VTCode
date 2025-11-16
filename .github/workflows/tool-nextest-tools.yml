@@ -4,15 +4,31 @@ permissions:
 
 on:
   push:
+    paths:
+      - '**.rs'
+      - '**/Cargo.toml'
+      - '**/Cargo.lock'
+      - '.github/workflows/**'
   pull_request:
+    paths:
+      - '**.rs'
+      - '**/Cargo.toml'
+      - '**/Cargo.lock'
+      - '.github/workflows/**'
 
 env:
   CARGO_INCREMENTAL: 0
   CARGO_PROFILE_TEST_DEBUG: 0
+  RUSTFLAGS: "-D warnings"
+
+# Time out jobs after 15 minutes to prevent resource waste
+defaults:
+  run:
+    timeout-minutes: 15
 
 jobs:
   tool-tests:
-    runs-on: ubuntu-latest-arm64
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -25,6 +41,9 @@ jobs:
 
       - name: Install nextest
         run: cargo install cargo-nextest --locked
+
+      - name: Compile tests
+        run: cargo test --locked --no-run
 
       - name: Build tests
         run: cargo nextest list -p vtcode-core --lib || true

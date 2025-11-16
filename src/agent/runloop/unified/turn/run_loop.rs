@@ -22,6 +22,7 @@ use vtcode_core::core::router::{Router, TaskClass};
 use vtcode_core::llm::error_display;
 use vtcode_core::llm::provider::{self as uni};
 use vtcode_core::tools::ApprovalRecorder;
+use vtcode_core::tools::registry::{ToolErrorType, ToolExecutionError};
 use vtcode_core::ui::theme;
 use vtcode_core::ui::tui::{InlineEvent, InlineEventCallback, spawn_session, theme_from_styles};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
@@ -38,7 +39,6 @@ use crate::agent::runloop::prompt::refine_user_prompt_if_enabled;
 use crate::agent::runloop::slash_commands::handle_slash_command;
 use crate::agent::runloop::text_tools::{detect_textual_tool_call, extract_code_fence_blocks};
 use crate::agent::runloop::tool_output::render_code_fence_blocks;
-use crate::agent::runloop::tool_output::render_tool_output;
 use crate::agent::runloop::ui::{build_inline_header_context, render_session_banner};
 use crate::agent::runloop::unified::mcp_tool_manager::McpToolManager;
 use crate::agent::runloop::unified::ui_interaction::{
@@ -84,7 +84,7 @@ use crate::agent::runloop::unified::workspace_links::LinkedDirectory;
 use crate::hooks::lifecycle::{LifecycleHookEngine, SessionEndReason, SessionStartTrigger};
 use crate::ide_context::IdeContextBridge;
 
-enum TurnLoopResult {
+pub enum TurnLoopResult {
     Completed,
     Aborted,
     Cancelled,
@@ -94,7 +94,7 @@ enum TurnLoopResult {
     },
 }
 
-pub(crate) enum PrepareToolCallResult {
+pub enum PrepareToolCallResult {
     Approved,
     Denied,
     Exit,
@@ -103,7 +103,9 @@ pub(crate) enum PrepareToolCallResult {
 
 const SELF_REVIEW_MIN_LENGTH: usize = 240;
 
-pub(crate) async fn run_turn_prepare_tool_call<S: vtcode_core::core::interfaces::ui::UiSession + ?Sized>(
+pub(crate) async fn run_turn_prepare_tool_call<
+    S: vtcode_core::core::interfaces::ui::UiSession + ?Sized,
+>(
     tool_registry: &mut vtcode_core::tools::registry::ToolRegistry,
     name: &str,
     args_val: Option<&serde_json::Value>,
@@ -116,7 +118,11 @@ pub(crate) async fn run_turn_prepare_tool_call<S: vtcode_core::core::interfaces:
     hooks: Option<&LifecycleHookEngine>,
     justification: Option<&vtcode_core::tools::ToolJustification>,
     approval_recorder: Option<&ApprovalRecorder>,
-    decision_ledger: Option<&Arc<tokio::sync::RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>>,
+    decision_ledger: Option<
+        &Arc<tokio::sync::RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>,
+    >,
+    mcp_panel_state: Option<&mut crate::agent::runloop::mcp_events::McpPanelState>,
+    tool_result_cache: Option<&Arc<tokio::sync::RwLock<vtcode_core::tools::ToolResultCache>>>,
     tool_permission_cache: Option<&Arc<tokio::sync::RwLock<vtcode_core::acp::ToolPermissionCache>>>,
     session_stats: &mut crate::agent::runloop::unified::state::SessionStats,
     traj: &vtcode_core::core::trajectory::TrajectoryLogger,
@@ -158,21 +164,50 @@ pub(crate) async fn run_turn_prepare_tool_call<S: vtcode_core::core::interfaces:
                 format!("Tool '{}' execution denied by policy", name),
             )
             .to_json_value();
-            traj.log_tool_call(working_history.len(), name, args_val.unwrap_or(&serde_json::json!({})), false);
-            render_tool_output(
+            traj.log_tool_call(
+                working_history.len(),
+                name,
+                args_val.unwrap_or(&serde_json::json!({})),
+                false,
+            );
+            // Build a ToolPipelineOutcome wrapper for the denial, and render via adapter
+            use crate::agent::runloop::unified::tool_pipeline::{ToolExecutionStatus, ToolPipelineOutcome};
+            use crate::agent::runloop::unified::tool_output_handler::handle_pipeline_output_renderer;
+            let outcome = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
+                output: denial.clone(),
+                stdout: None,
+                modified_files: vec![],
+                command_success: false,
+                has_more: false,
+            });
+            // Prepare an optional disabled panel if none is passed
+            let mut disabled_mcp = crate::agent::runloop::mcp_events::McpPanelState::disabled();
+            let mcp_ref: &mut crate::agent::runloop::mcp_events::McpPanelState =
+                match mcp_panel_state {
+                    Some(m) => m,
+                    None => &mut disabled_mcp,
+                };
+            handle_pipeline_output_renderer(
                 renderer,
-                Some(name),
-                &denial,
+                session_stats,
+                mcp_ref,
+                tool_result_cache,
+                decision_ledger,
+                name,
+                args_val.unwrap_or(&serde_json::json!({})),
+                &outcome,
                 vt_cfg,
-                Some(token_budget),
+                token_budget,
             )
             .await?;
             let content = serde_json::to_string(&denial).unwrap_or("{}".to_string());
-            working_history.push(vtcode_core::llm::provider::Message::tool_response_with_origin(
-                call_id.to_string(),
-                content,
-                name.to_string(),
-            ));
+            working_history.push(
+                vtcode_core::llm::provider::Message::tool_response_with_origin(
+                    call_id.to_string(),
+                    content,
+                    name.to_string(),
+                ),
+            );
             if let Some(ledger) = decision_ledger {
                 let mut ledger = ledger.write().await;
                 ledger.record_outcome(
@@ -193,7 +228,12 @@ pub(crate) async fn run_turn_prepare_tool_call<S: vtcode_core::core::interfaces:
             safe_force_redraw(handle, last_forced_redraw);
             tokio::time::sleep(Duration::from_millis(50)).await;
 
-            traj.log_tool_call(working_history.len(), name, args_val.unwrap_or(&serde_json::json!({})), false);
+            traj.log_tool_call(
+                working_history.len(),
+                name,
+                args_val.unwrap_or(&serde_json::json!({})),
+                false,
+            );
             renderer.line(
                 MessageStyle::Error,
                 &format!("Failed to evaluate policy for tool '{}': {}", name, err),
@@ -201,11 +241,13 @@ pub(crate) async fn run_turn_prepare_tool_call<S: vtcode_core::core::interfaces:
             let err_json = serde_json::json!({
                 "error": format!("Policy evaluation error for '{}' : {}", name, err)
             });
-            working_history.push(vtcode_core::llm::provider::Message::tool_response_with_origin(
-                call_id.to_string(),
-                err_json.to_string(),
-                name.to_string(),
-            ));
+            working_history.push(
+                vtcode_core::llm::provider::Message::tool_response_with_origin(
+                    call_id.to_string(),
+                    err_json.to_string(),
+                    name.to_string(),
+                ),
+            );
             if let Some(ledger) = decision_ledger {
                 let mut ledger = ledger.write().await;
                 ledger.record_outcome(
@@ -271,7 +313,7 @@ pub(crate) async fn run_turn_execute_tool(
         )
         .await;
 
-                // Cache successful read-only results
+        // Cache successful read-only results
         if let ToolExecutionStatus::Success { ref output, .. } = result {
             let output_json = serde_json::to_string(output).unwrap_or_else(|_| "{}".to_string());
             let mut cache = tool_result_cache.write().await;
@@ -315,7 +357,9 @@ pub(crate) async fn run_turn_handle_tool_success(
     working_history: &mut Vec<uni::Message>,
     call_id: &str,
     dec_id: &str,
-    decision_ledger: &Arc<tokio::sync::RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>,
+    decision_ledger: &Arc<
+        tokio::sync::RwLock<vtcode_core::core::decision_tracker::DecisionTracker>,
+    >,
     last_tool_stdout: &mut Option<String>,
     any_write_effect: &mut bool,
     turn_modified_files: &mut std::collections::BTreeSet<std::path::PathBuf>,
@@ -332,7 +376,12 @@ pub(crate) async fn run_turn_handle_tool_success(
     session_stats.record_tool(name);
     // repeated_tool_attempts is mutated by caller; remove signature elsewhere as original code did before calling helper
     // Note: caller must manage repeated_tool_attempts removal.
-    traj.log_tool_call(working_history.len(), name, &serde_json::to_value(&output).unwrap_or(serde_json::json!({})), true);
+    traj.log_tool_call(
+        working_history.len(),
+        name,
+        &serde_json::to_value(&output).unwrap_or(serde_json::json!({})),
+        true,
+    );
 
     // Handle MCP events
     if let Some(tool_name) = name.strip_prefix("mcp_") {
@@ -347,15 +396,47 @@ pub(crate) async fn run_turn_handle_tool_success(
         // Render tool summary with status
         let exit_code = output.get("exit_code").and_then(|v| v.as_i64());
         let status_icon = if command_success { "✓" } else { "✗" };
-        render_tool_call_summary_with_status(renderer, name, &serde_json::to_value(&output).unwrap_or(serde_json::json!({})), status_icon, exit_code)?;
+        render_tool_call_summary_with_status(
+            renderer,
+            name,
+            &serde_json::to_value(&output).unwrap_or(serde_json::json!({})),
+            status_icon,
+            exit_code,
+        )?;
     }
 
-    // Render unified tool output
-    render_tool_output(renderer, Some(name), &output, vt_cfg, Some(token_budget)).await?;
+    // Render unified tool output via generic minimal adapter, to ensure consistent handling
+    let _ = crate::agent::runloop::unified::tool_output_handler::handle_pipeline_output_renderer(
+        renderer,
+        session_stats,
+        mcp_panel_state,
+        Some(tool_result_cache),
+        Some(decision_ledger),
+        name,
+        &serde_json::json!({}),
+        &crate::agent::runloop::unified::tool_pipeline::ToolPipelineOutcome::from_status(
+            crate::agent::runloop::unified::tool_pipeline::ToolExecutionStatus::Success {
+                output: output.clone(),
+                stdout: stdout.clone(),
+                modified_files: modified_files.clone(),
+                command_success,
+                has_more,
+            }
+        ),
+        vt_cfg,
+        token_budget,
+    ).await?;
 
-    *last_tool_stdout = if command_success { stdout.clone() } else { None };
+    *last_tool_stdout = if command_success {
+        stdout.clone()
+    } else {
+        None
+    };
 
-    if matches!(name, "write_file" | "edit_file" | "create_file" | "delete_file") {
+    if matches!(
+        name,
+        "write_file" | "edit_file" | "create_file" | "delete_file"
+    ) {
         *any_write_effect = true;
     }
 
@@ -386,7 +467,9 @@ pub(crate) async fn run_turn_handle_tool_success(
             notice_lines.push(format!("stdout preview: {}", preview));
         }
     }
-    if let Some(notice) = output.get("notice").and_then(|value| value.as_str()) && !notice.trim().is_empty() {
+    if let Some(notice) = output.get("notice").and_then(|value| value.as_str())
+        && !notice.trim().is_empty()
+    {
         notice_lines.push(notice.trim().to_string());
     }
     if !notice_lines.is_empty() {
@@ -404,12 +487,23 @@ pub(crate) async fn run_turn_handle_tool_success(
         counter.count_with_profiling("tool_output", &content);
     }
 
-    working_history.push(uni::Message::tool_response_with_origin(call_id.to_string(), content, name.to_string()));
+    working_history.push(uni::Message::tool_response_with_origin(
+        call_id.to_string(),
+        content,
+        name.to_string(),
+    ));
 
     let mut hook_block_reason: Option<String> = None;
 
     if let Some(hooks) = lifecycle_hooks {
-        match hooks.run_post_tool_use(name, Some(&serde_json::to_value(&output).unwrap_or(serde_json::json!({}))), &output).await {
+        match hooks
+            .run_post_tool_use(
+                name,
+                Some(&serde_json::to_value(&output).unwrap_or(serde_json::json!({}))),
+                &output,
+            )
+            .await
+        {
             Ok(outcome) => {
                 render_hook_messages(renderer, &outcome.messages)?;
                 for context in outcome.additional_context {
@@ -426,7 +520,10 @@ pub(crate) async fn run_turn_handle_tool_success(
                 }
             }
             Err(err) => {
-                renderer.line(MessageStyle::Error, &format!("Failed to run post-tool hooks: {}", err))?;
+                renderer.line(
+                    MessageStyle::Error,
+                    &format!("Failed to run post-tool hooks: {}", err),
+                )?;
             }
         }
     }
@@ -436,21 +533,43 @@ pub(crate) async fn run_turn_handle_tool_success(
         working_history.push(uni::Message::system(blocked_message));
         {
             let mut ledger = decision_ledger.write().await;
-            ledger.record_outcome(dec_id, DecisionOutcome::Failure { error: reason.clone(), recovery_attempts: 0, context_preserved: true });
+            ledger.record_outcome(
+                dec_id,
+                DecisionOutcome::Failure {
+                    error: reason.clone(),
+                    recovery_attempts: 0,
+                    context_preserved: true,
+                },
+            );
         }
         // Signal session end and break outer loop
-        return Ok(Some(TurnLoopResult::Blocked { reason: Some(reason) }));
+        return Ok(Some(TurnLoopResult::Blocked {
+            reason: Some(reason),
+        }));
     }
 
     {
         let mut ledger = decision_ledger.write().await;
-        ledger.record_outcome(dec_id, DecisionOutcome::Success { result: "tool_ok".to_string(), metrics: Default::default() });
+        ledger.record_outcome(
+            dec_id,
+            DecisionOutcome::Success {
+                result: "tool_ok".to_string(),
+                metrics: Default::default(),
+            },
+        );
     }
 
-    let allow_short_circuit = !has_more && command_success && should_short_circuit_shell(input, name, &serde_json::to_value(&output).unwrap_or(serde_json::json!({})));
+    let allow_short_circuit = !has_more
+        && command_success
+        && should_short_circuit_shell(
+            input,
+            name,
+            &serde_json::to_value(&output).unwrap_or(serde_json::json!({})),
+        );
 
     if allow_short_circuit {
-        let reply = derive_recent_tool_output(&working_history).unwrap_or_else(|| "Command completed successfully.".to_string());
+        let reply = derive_recent_tool_output(&working_history)
+            .unwrap_or_else(|| "Command completed successfully.".to_string());
         renderer.line(MessageStyle::Response, &reply)?;
         ensure_turn_bottom_gap(renderer, bottom_gap_applied)?;
         working_history.push(uni::Message::assistant(reply));
@@ -473,7 +592,12 @@ pub(crate) async fn run_turn_handle_tool_failure(
     dec_id: &str,
     mcp_panel_state: &mut mcp_events::McpPanelState,
     token_counter: &Arc<tokio::sync::RwLock<vtcode_core::llm::TokenCounter>>,
-    decision_ledger: &Arc<tokio::sync::RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>,
+    decision_ledger: &Arc<
+        tokio::sync::RwLock<vtcode_core::core::decision_tracker::DecisionTracker>,
+    >,
+    tool_result_cache: Option<&Arc<tokio::sync::RwLock<vtcode_core::tools::ToolResultCache>>>,
+    vt_cfg: Option<&VTCodeConfig>,
+    token_budget: &vtcode_core::core::token_budget::TokenBudgetManager,
 ) -> Result<()> {
     // Finish spinner / ensure redraw is caller's responsibility
     safe_force_redraw(handle, &mut Instant::now());
@@ -492,7 +616,10 @@ pub(crate) async fn run_turn_handle_tool_failure(
 
     if let Some(tool_name) = name.strip_prefix("mcp_") {
         renderer.line_if_not_empty(MessageStyle::Output)?;
-        renderer.line(MessageStyle::Error, &format!("MCP tool {} failed: {}", tool_name, error_message))?;
+        renderer.line(
+            MessageStyle::Error,
+            &format!("MCP tool {} failed: {}", tool_name, error_message),
+        )?;
         handle.force_redraw();
         tokio::time::sleep(Duration::from_millis(10)).await;
 
@@ -506,7 +633,29 @@ pub(crate) async fn run_turn_handle_tool_failure(
     }
 
     renderer.line(MessageStyle::Error, &error_message)?;
-    render_tool_output(renderer, Some(name), &error_json, None, None).await?;
+    // Render via the renderer adapter so all cache invalidation and MCP events are handled
+    use crate::agent::runloop::unified::tool_pipeline::{ToolExecutionStatus, ToolPipelineOutcome};
+    use crate::agent::runloop::unified::tool_output_handler::handle_pipeline_output_renderer;
+    let outcome = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
+        output: error_json.clone(),
+        stdout: None,
+        modified_files: vec![],
+        command_success: false,
+        has_more: false,
+    });
+    handle_pipeline_output_renderer(
+        renderer,
+        session_stats,
+        mcp_panel_state,
+        tool_result_cache,
+        Some(decision_ledger),
+        name,
+        &serde_json::json!({}),
+        &outcome,
+        vt_cfg,
+        token_budget,
+    )
+    .await?;
 
     // Track error token usage
     {
@@ -547,7 +696,9 @@ pub(crate) async fn run_turn_handle_tool_timeout(
     call_id: &str,
     dec_id: &str,
     token_counter: &Arc<tokio::sync::RwLock<vtcode_core::llm::TokenCounter>>,
-    decision_ledger: &Arc<tokio::sync::RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>,
+    decision_ledger: &Arc<
+        tokio::sync::RwLock<vtcode_core::core::decision_tracker::DecisionTracker>,
+    >,
 ) -> Result<()> {
     // Timeout handling mirrors original behavior
     handle.force_redraw();
@@ -555,7 +706,10 @@ pub(crate) async fn run_turn_handle_tool_timeout(
 
     session_stats.record_tool(name);
     renderer.line_if_not_empty(MessageStyle::Output)?;
-    renderer.line(MessageStyle::Error, &format!("Tool {} timed out after 5 minutes.", name))?;
+    renderer.line(
+        MessageStyle::Error,
+        &format!("Tool {} timed out after 5 minutes.", name),
+    )?;
     traj.log_tool_call(working_history.len(), name, &serde_json::json!({}), false);
 
     let error_message = error.to_string();
@@ -568,11 +722,22 @@ pub(crate) async fn run_turn_handle_tool_timeout(
         counter.count_with_profiling("tool_output", &timeout_content);
     }
 
-    working_history.push(uni::Message::tool_response_with_origin(call_id.to_string(), timeout_content, name.to_string()));
+    working_history.push(uni::Message::tool_response_with_origin(
+        call_id.to_string(),
+        timeout_content,
+        name.to_string(),
+    ));
 
     {
         let mut ledger = decision_ledger.write().await;
-        ledger.record_outcome(dec_id, DecisionOutcome::Failure { error: error_message, recovery_attempts: 0, context_preserved: true });
+        ledger.record_outcome(
+            dec_id,
+            DecisionOutcome::Failure {
+                error: error_message,
+                recovery_attempts: 0,
+                context_preserved: true,
+            },
+        );
     }
 
     Ok(())
@@ -586,7 +751,9 @@ pub(crate) async fn run_turn_handle_tool_cancelled(
     working_history: &mut Vec<uni::Message>,
     call_id: &str,
     dec_id: &str,
-    decision_ledger: &Arc<tokio::sync::RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>,
+    decision_ledger: &Arc<
+        tokio::sync::RwLock<vtcode_core::core::decision_tracker::DecisionTracker>,
+    >,
 ) -> Result<TurnLoopResult> {
     safe_force_redraw(handle, &mut Instant::now());
     tokio::time::sleep(Duration::from_millis(50)).await;
@@ -594,7 +761,10 @@ pub(crate) async fn run_turn_handle_tool_cancelled(
     session_stats.record_tool(name);
 
     renderer.line_if_not_empty(MessageStyle::Output)?;
-    renderer.line(MessageStyle::Info, "Operation cancelled by user. Stopping current turn.")?;
+    renderer.line(
+        MessageStyle::Info,
+        "Operation cancelled by user. Stopping current turn.",
+    )?;
 
     let err_json = serde_json::json!({ "error": "Tool execution cancelled by user" });
 
@@ -1581,7 +1751,9 @@ pub(crate) async fn run_single_agent_loop_unified(
                 };
 
                 async fn run_turn_ledger(
-                    decision_ledger: &Arc<tokio::sync::RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>,
+                    decision_ledger: &Arc<
+                        tokio::sync::RwLock<vtcode_core::core::decision_tracker::DecisionTracker>,
+                    >,
                     working_history: &Vec<uni::Message>,
                     tools: &Arc<tokio::sync::RwLock<Vec<uni::ToolDefinition>>>,
                 ) {
@@ -1608,7 +1780,11 @@ pub(crate) async fn run_single_agent_loop_unified(
 
                 async fn run_turn_pruning(
                     trim_config_semantic: bool,
-                    pruning_ledger: &Arc<tokio::sync::RwLock<vtcode_core::core::pruning_decisions::PruningDecisionLedger>>,
+                    pruning_ledger: &Arc<
+                        tokio::sync::RwLock<
+                            vtcode_core::core::pruning_decisions::PruningDecisionLedger,
+                        >,
+                    >,
                     context_manager: &mut ContextManager,
                     working_history: &mut Vec<uni::Message>,
                     step_count: usize,
@@ -1623,7 +1799,14 @@ pub(crate) async fn run_single_agent_loop_unified(
                     }
                 }
 
-                run_turn_pruning(trim_config.semantic_compression, &pruning_ledger, &mut context_manager, &mut working_history, step_count).await;
+                run_turn_pruning(
+                    trim_config.semantic_compression,
+                    &pruning_ledger,
+                    &mut context_manager,
+                    &mut working_history,
+                    step_count,
+                )
+                .await;
 
                 async fn run_turn_build_system_prompt(
                     context_manager: &mut ContextManager,
@@ -1826,8 +2009,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                         if let Some(text) = final_text.clone() {
                             if !text.trim().is_empty() {
                                 if let Some((name, args)) = detect_textual_tool_call(&text) {
-                                    let args_json =
-                                        serde_json::to_string(&args).unwrap_or_else(|_| "{}".to_string());
+                                    let args_json = serde_json::to_string(&args)
+                                        .unwrap_or_else(|_| "{}".to_string());
                                     let code_blocks = extract_code_fence_blocks(&text);
                                     if !code_blocks.is_empty() {
                                         render_code_fence_blocks(renderer, &code_blocks)?;
@@ -2005,6 +2188,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                             None, // justification from agent - TODO: extract from context
                             Some(&approval_recorder),
                             Some(&decision_ledger),
+                            Some(&mut mcp_panel_state),
+                            Some(&tool_result_cache),
                             Some(&tool_permission_cache),
                             &mut session_stats,
                             &traj,
@@ -2087,7 +2272,13 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         }
                                         continue;
                                     }
-                                    ToolExecutionStatus::Success { output, stdout, modified_files, command_success, has_more } => {
+                                    ToolExecutionStatus::Success {
+                                        output,
+                                        stdout,
+                                        modified_files,
+                                        command_success,
+                                        has_more,
+                                    } => {
                                         tool_spinner.finish();
                                         if let Some(res) = run_turn_handle_tool_success(
                                             name,
@@ -2118,7 +2309,9 @@ pub(crate) async fn run_single_agent_loop_unified(
                                             &mut bottom_gap_applied,
                                             &mut last_forced_redraw,
                                             input,
-                                        ).await? {
+                                        )
+                                        .await?
+                                        {
                                             break 'outer res;
                                         }
                                     }
@@ -2141,6 +2334,9 @@ pub(crate) async fn run_single_agent_loop_unified(
                                             &mut mcp_panel_state,
                                             &token_counter,
                                             &decision_ledger,
+                                            Some(&tool_result_cache),
+                                            vt_cfg.as_ref(),
+                                            &*token_budget,
                                         )
                                         .await?;
                                         // continue the outer loop

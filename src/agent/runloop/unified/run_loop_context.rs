@@ -30,3 +30,12 @@ pub(crate) struct RunLoopContext<'a> {
     pub session: &'a mut InlineSession,
     pub traj: &'a TrajectoryLogger,
 }
+
+// Lightweight adapter that provides a smaller context for per-turn operations.
+pub(crate) struct TurnExecutionContext<'a> {
+    pub renderer: &'a mut AnsiRenderer,
+    pub handle: &'a InlineHandle,
+    pub session_stats: &'a mut SessionStats,
+    pub mcp_panel_state: &'a mut McpPanelState,
+    pub approval_recorder: &'a ApprovalRecorder,
+}

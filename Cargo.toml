@@ -25,6 +25,20 @@ exclude = [
 ]
 default-run = "vtcode"
 
+# Override sections to consolidate duplicate dependencies
+[workspace.dependencies]
+base64 = "0.22.1"
+console = "0.16.1"
+crossterm = "0.29.0"
+schemars = "0.8.22"
+thiserror = "2.0.17"
+unicode-width = "0.2.0"
+vte = "0.15.0"
+hashbrown = "0.16.0"
+bit-set = "0.8.0"
+serde_json = "1.0"
+
+
 [workspace]
 members = [
     "vtcode-acp-client",
@@ -93,7 +107,7 @@ vtcode-acp-client = { path = "vtcode-acp-client", version = "0.44.1" }
 vtcode-core = { path = "vtcode-core", version = "0.44.1" }
 anyhow = "1.0"
 clap = { version = "4.5", features = ["derive"] }
-serde_json = "1.0"
+serde_json = { workspace = true }
 tokio = { version = "1.48", features = [
     "full",
     "fs",
@@ -134,7 +148,7 @@ percent-encoding = "2.3"
 url = "2.5"
 shell-words = "1.1"
 dialoguer = "0.12.0"
-crossterm = "0.29.0"
+crossterm = { workspace = true }
 ratatui = { version = "0.29", default-features = false, features = [
     "crossterm",
 ] }
@@ -152,18 +166,30 @@ profiling = []                            # Enable tracing instrumentation for p
 [profile.dev]
 split-debuginfo = "unpacked"
 debug = false
-lto = true
-codegen-units = 1
+lto = true  # Enable LTO even in dev for better optimization on M4
+codegen-units = 1  # Use single codegen unit for better optimization on M4
 panic = "abort"
 
 [profile.release]
 codegen-units = 1 # Allows compiler to perform better optimization.
-lto = "fat"       # Enables full Link-time Optimization for better size reduction.
-opt-level = "s"   # Prioritizes small binary size. Use `3` if you prefer speed.
+lto = true        # Enables Link-time Optimization for better performance and size reduction.
+opt-level = 3     # Optimize for performance on M4 (was "s" for size)
 strip = true      # Ensures debug symbols are removed.
 panic = "abort"   # Reduce size of panic paths.
-# Additional size optimizations:
-incremental = false # Disable incremental compilation for smaller size
+# Additional performance optimizations:
+incremental = false # Disable incremental compilation for better optimization
+
+# CI-specific profile for faster builds with minimal debug info
+[profile.ci]
+inherits = "dev"
+# Copy settings from dev profile but with minimal debug info
+debug = 0
+incremental = false
+overflow-checks = false
+
+# Apple Silicon M4 specific optimizations for release builds
+[target.'cfg(target_arch = "aarch64")'.profile.release]
+opt-level = 3  # Use max optimization for Apple Silicon M4
 
 [[bin]]
 name = "vtcode"

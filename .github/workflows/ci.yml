@@ -10,13 +10,49 @@ on:
   push:
     branches:
       - main
+    paths:
+      - '**.rs'
+      - '**.toml'
+      - '**.lock'
+      - '**.yml'
+      - '**.yaml'
+      - '**.json'
+      - '**.js'
+      - '**.ts'
+      - '**.md'  # Still run on markdown changes since we have markdown linting
+      - 'scripts/**'
+      - '!.github/dependabot.yml'  # Exclude dependabot changes
+      - '!.gitignore'
+      - '!.vtcodegitignore'
+      - '!.env*'
   pull_request:
     branches:
       - main
+    paths:
+      - '**.rs'
+      - '**.toml'
+      - '**.lock'
+      - '**.yml'
+      - '**.yaml'
+      - '**.json'
+      - '**.js'
+      - '**.ts'
+      - '**.md'  # Still run on markdown changes since we have markdown linting
+      - 'scripts/**'
+      - '!.github/dependabot.yml'  # Exclude dependabot changes
+      - '!.gitignore'
+      - '!.vtcodegitignore'
+      - '!.env*'
 
 env:
   CARGO_INCREMENTAL: 0 # Disable incremental compilation for faster from-scratch builds
   CARGO_PROFILE_TEST_DEBUG: 0 # Disable debug info in test builds for faster compilation
+  RUSTFLAGS: "-D warnings" # Deny warnings in CI builds
+
+# Time out jobs after 20 minutes to prevent resource waste
+defaults:
+  run:
+    timeout-minutes: 20
 
 # ensure that the workflow is only triggered once per PR,  subsequent pushes to the PR will cancel
 # and restart the workflow. See https://docs.github.com/en/actions/using-jobs/using-concurrency
@@ -28,7 +64,7 @@ concurrency:
 jobs:
   large-files:
     name: Enforce Large File Budget
-    runs-on: ubuntu-latest-arm64
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
       - name: Check tracked file sizes
@@ -37,7 +73,7 @@ jobs:
   # Lint the formatting of the codebase.
   formatting:
     name: Check Formatting
-    runs-on: ubuntu-latest-arm64
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@master
@@ -67,7 +103,7 @@ jobs:
   # Run cargo clippy.
   lint-clippy:
     name: Check Clippy
-    runs-on: ubuntu-latest-arm64
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
@@ -78,7 +114,7 @@ jobs:
   # Run markdownlint on all markdown files in the repository.
   lint-markdown:
     name: Check Markdown
-    runs-on: ubuntu-latest-arm64
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
       - id: filter
@@ -98,18 +134,13 @@ jobs:
 
     # Run cargo check. This is a fast way to catch any obvious errors in the code.
   check:
-    name: Check ${{ matrix.os }} ${{ matrix.toolchain }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest]
-        toolchain: ["stable"]
-    runs-on: ${{ matrix.os }}
+    name: Check code
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: ${{ matrix.toolchain }}
+          toolchain: stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo check --locked
 
@@ -146,6 +177,9 @@ jobs:
 
       - name: Install nextest
         run: cargo install cargo-nextest --locked
+
+      - name: Compile tests
+        run: cargo test --locked --no-run
 
       - name: Run tests with nextest
         run: cargo nextest run --locked

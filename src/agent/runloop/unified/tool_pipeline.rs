@@ -696,17 +696,14 @@ mod tests {
         let mut session = spawn_session(
             theme_spec.clone(),
             None,
-            vtcode_core::config::types::UiSurfacePreference::Default,
+            vtcode_core::config::types::UiSurfacePreference::default(),
             10,
             false,
             None,
         )
         .unwrap();
         let handle = session.clone_inline_handle();
-        let mut renderer = AnsiRenderer::with_inline_ui(
-            handle.clone(),
-            vtcode_core::config::types::HighlightConfig::default(),
-        );
+        let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
 
         let result_cache = Arc::new(tokio::sync::RwLock::new(ToolResultCache::new(10)));
         let decision_ledger = Arc::new(tokio::sync::RwLock::new(DecisionTracker::new()));
@@ -751,7 +748,7 @@ mod tests {
             None,
             true,
             &Arc::new(vtcode_core::core::token_budget::TokenBudgetManager::new(
-                4096,
+                vtcode_core::core::token_budget::TokenBudgetConfig::for_model("gpt-5", 4096),
             )),
             None,
             0,
@@ -786,17 +783,14 @@ mod tests {
         let mut session = spawn_session(
             theme_from_styles(&theme::active_styles()),
             None,
-            vtcode_core::config::types::UiSurfacePreference::Default,
+            vtcode_core::config::types::UiSurfacePreference::default(),
             10,
             false,
             None,
         )
         .unwrap();
         let handle = session.clone_inline_handle();
-        let mut renderer = AnsiRenderer::with_inline_ui(
-            handle.clone(),
-            vtcode_core::config::types::HighlightConfig::default(),
-        );
+        let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
 
         let result_cache = Arc::new(tokio::sync::RwLock::new(ToolResultCache::new(10)));
         let decision_ledger = Arc::new(tokio::sync::RwLock::new(DecisionTracker::new()));
@@ -843,7 +837,7 @@ mod tests {
             None,
             true,
             &Arc::new(vtcode_core::core::token_budget::TokenBudgetManager::new(
-                4096,
+                vtcode_core::core::token_budget::TokenBudgetConfig::for_model("gpt-5", 4096),
             )),
             None,
             1,
