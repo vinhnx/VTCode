@@ -3,6 +3,7 @@
 use serde_json::json;
 use vtcode_core::config::constants::models;
 use vtcode_core::config::models::Provider;
+use vtcode_core::config::types::VerbosityLevel;
 use vtcode_core::llm::{
     factory::{LLMFactory, create_provider_for_model, infer_provider},
     provider::{LLMProvider, LLMRequest, Message, MessageRole, ToolDefinition},
@@ -275,7 +276,7 @@ fn test_provider_supported_models() {
     let anthropic_models = anthropic.supported_models();
     assert!(anthropic_models.contains(&models::CLAUDE_SONNET_4_5.to_string()));
     assert!(anthropic_models.contains(&models::CLAUDE_HAIKU_4_5.to_string()));
-    assert!(anthropic_models.contains(&models::CLAUDE_SONNET_4_20250514.to_string()));
+    assert!(anthropic_models.contains(&models::CLAUDE_SONNET_4_5_20250929.to_string()));
     assert!(anthropic_models.contains(&"claude-opus-4-1-20250805".to_string()));
     assert!(anthropic_models.len() >= 3);
 
@@ -353,6 +354,7 @@ fn test_request_validation() {
         parallel_tool_config: None,
         reasoning_effort: None,
         output_format: None,
+        verbosity: Some(VerbosityLevel::default()),
     };
     assert!(gemini.validate_request(&valid_gemini_request).is_ok());
 
@@ -369,6 +371,7 @@ fn test_request_validation() {
         parallel_tool_config: None,
         reasoning_effort: None,
         output_format: None,
+        verbosity: Some(VerbosityLevel::default()),
     };
     assert!(openai.validate_request(&valid_openai_request).is_ok());
 
@@ -385,6 +388,7 @@ fn test_request_validation() {
         parallel_tool_config: None,
         reasoning_effort: None,
         output_format: None,
+        verbosity: Some(VerbosityLevel::default()),
     };
     assert!(anthropic.validate_request(&valid_anthropic_request).is_ok());
 
@@ -401,6 +405,7 @@ fn test_request_validation() {
         parallel_tool_config: None,
         reasoning_effort: None,
         output_format: None,
+        verbosity: Some(VerbosityLevel::default()),
     };
     assert!(
         anthropic
@@ -421,6 +426,7 @@ fn test_request_validation() {
         parallel_tool_config: None,
         reasoning_effort: None,
         output_format: None,
+        verbosity: Some(VerbosityLevel::default()),
     };
     assert!(
         openrouter
@@ -441,6 +447,7 @@ fn test_request_validation() {
         parallel_tool_config: None,
         reasoning_effort: None,
         output_format: None,
+        verbosity: Some(VerbosityLevel::default()),
     };
     assert!(xai.validate_request(&valid_xai_request).is_ok());
 
@@ -458,6 +465,7 @@ fn test_request_validation() {
         parallel_tool_config: None,
         reasoning_effort: None,
         output_format: None,
+        verbosity: Some(VerbosityLevel::default()),
     };
     assert!(gemini.validate_request(&invalid_request).is_err());
     assert!(openai.validate_request(&invalid_request).is_err());
@@ -486,6 +494,7 @@ fn test_anthropic_tool_message_handling() {
         parallel_tool_config: None,
         reasoning_effort: None,
         output_format: None,
+        verbosity: Some(VerbosityLevel::default()),
     };
 
     // Use the public validator as a proxy for ensuring request shape is acceptable
@@ -523,6 +532,9 @@ fn test_tool_definition_creation() {
     );
 
     assert_eq!(tool.function_name(), "get_weather");
-    assert_eq!(tool.function.description, "Get weather for a location");
-    assert!(tool.function.parameters.is_object());
+    assert_eq!(
+        tool.function.as_ref().unwrap().description,
+        "Get weather for a location"
+    );
+    assert!(tool.function.as_ref().unwrap().parameters.is_object());
 }

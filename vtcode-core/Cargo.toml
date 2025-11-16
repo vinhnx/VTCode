@@ -43,10 +43,10 @@ async-process = "2.2"
 futures = "0.3"
 futures-lite = "2.3"
 async-stream = "0.3"
-base64 = "0.22"
+base64 = { workspace = true }
 walkdir = "2.5"
 glob = "0.3"
-thiserror = "2.0"
+thiserror = { workspace = true }
 dialoguer = "0.12.0"
 regex = "1.12"
 shell-words = "1.1"
@@ -81,7 +81,7 @@ dirs = "6.0"
 # YAML support
 serde_yaml = "0.9"
 tracing = "0.1"
-vte = "0.15"
+vte = { workspace = true }
 anstyle-parse = "0.2"
 # ANSI styling
 anstyle = "1.0"
@@ -96,8 +96,8 @@ quick_cache = "0.6"
 roff = "0.2"
 syntect = "5.2"
 unicode-segmentation = "1.11"
-unicode-width = "0.2.0"
-crossterm = "0.29.0"
+unicode-width = { workspace = true }
+crossterm = { workspace = true }
 ratatui = { version = "0.29", default-features = false, features = [
     "crossterm",
     "unstable-rendered-line-info",
@@ -129,7 +129,7 @@ vtcode-indexer = { path = "../vtcode-indexer", version = "0.44.1" }
 tokenizers = { version = "0.22", features = ["http"] }
 
 # Schema generation
-schemars = { version = "0.8", optional = true }
+schemars = { workspace = true, optional = true }
 
 # MCP (Model Context Protocol) support
 rmcp = { version = "0.8.3", features = [

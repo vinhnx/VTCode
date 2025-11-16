@@ -2,6 +2,7 @@
 
 use serde_json::json;
 use vtcode_core::config::constants::models;
+use vtcode_core::config::types::VerbosityLevel;
 use vtcode_core::llm::{
     provider::{LLMProvider, LLMRequest, Message, ToolCall, ToolChoice, ToolDefinition},
     providers::{
@@ -57,6 +58,7 @@ fn test_openai_tool_call_format() {
         parallel_tool_config: None,
         reasoning_effort: None,
         output_format: None,
+        verbosity: Some(VerbosityLevel::default()),
     };
 
     // Only validate shape via provider API; internal conversion details are private
@@ -110,6 +112,7 @@ fn test_anthropic_tool_call_format() {
         parallel_tool_config: None,
         reasoning_effort: None,
         output_format: None,
+        verbosity: Some(VerbosityLevel::default()),
     };
 
     // Only validate shape via provider API; internal conversion details are private
@@ -163,6 +166,7 @@ fn test_gemini_tool_call_format() {
         parallel_tool_config: None,
         reasoning_effort: None,
         output_format: None,
+        verbosity: Some(VerbosityLevel::default()),
     };
 
     assert!(provider.validate_request(&request).is_ok());
@@ -174,8 +178,8 @@ fn test_all_providers_tool_validation() {
     let openai = OpenAIProvider::new("test_key".to_string());
     let anthropic = AnthropicProvider::new("test_key".to_string());
     let openrouter = OpenRouterProvider::new("test_key".to_string());
-    let ollama = OllamaProvider::from_config(None, None, None, None);
-    let lmstudio = LmStudioProvider::from_config(None, None, None, None);
+    let ollama = OllamaProvider::from_config(None, None, None, None, None);
+    let lmstudio = LmStudioProvider::from_config(None, None, None, None, None);
 
     // Test valid requests with tools
     let tool = ToolDefinition::function(
@@ -197,6 +201,7 @@ fn test_all_providers_tool_validation() {
         parallel_tool_config: None,
         reasoning_effort: None,
         output_format: None,
+        verbosity: Some(VerbosityLevel::default()),
     };
 
     let openai_request = LLMRequest {
@@ -212,13 +217,14 @@ fn test_all_providers_tool_validation() {
         parallel_tool_config: None,
         reasoning_effort: None,
         output_format: None,
+        verbosity: Some(VerbosityLevel::default()),
     };
 
     let anthropic_request = LLMRequest {
         messages: vec![Message::user("test".to_string())],
         system_prompt: None,
         tools: Some(vec![tool.clone()]),
-        model: models::CLAUDE_SONNET_4_20250514.to_string(),
+        model: models::CLAUDE_SONNET_4_5_20250929.to_string(),
         max_tokens: None,
         temperature: None,
         stream: false,
@@ -227,6 +233,7 @@ fn test_all_providers_tool_validation() {
         parallel_tool_config: None,
         reasoning_effort: None,
         output_format: None,
+        verbosity: Some(VerbosityLevel::default()),
     };
 
     let openrouter_request = LLMRequest {
@@ -242,6 +249,7 @@ fn test_all_providers_tool_validation() {
         parallel_tool_config: None,
         reasoning_effort: None,
         output_format: None,
+        verbosity: Some(VerbosityLevel::default()),
     };
 
     assert!(gemini.validate_request(&gemini_request).is_ok());
@@ -262,6 +270,7 @@ fn test_all_providers_tool_validation() {
         parallel_tool_config: None,
         reasoning_effort: None,
         output_format: None,
+        verbosity: Some(VerbosityLevel::default()),
     };
 
     assert!(lmstudio.validate_request(&lmstudio_request).is_ok());
@@ -279,6 +288,7 @@ fn test_all_providers_tool_validation() {
         parallel_tool_config: None,
         reasoning_effort: None,
         output_format: None,
+        verbosity: VerbosityLevel::default(),
     };
 
     assert!(
@@ -331,6 +341,7 @@ fn test_openrouter_tool_call_format() {
         parallel_tool_config: None,
         reasoning_effort: None,
         output_format: None,
+        verbosity: VerbosityLevel::default(),
     };
 
     assert!(provider.validate_request(&request).is_ok());
@@ -342,7 +353,7 @@ fn test_provider_tool_support_matrix() {
     let openai = OpenAIProvider::new("test_key".to_string());
     let anthropic = AnthropicProvider::new("test_key".to_string());
     let openrouter = OpenRouterProvider::new("test_key".to_string());
-    let ollama = OllamaProvider::from_config(None, None, None, None);
+    let ollama = OllamaProvider::from_config(None, None, None, None, None);
 
     for &model in models::google::SUPPORTED_MODELS {
         assert!(

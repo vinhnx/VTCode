@@ -9,6 +9,7 @@ use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::core::token_budget::TokenBudgetManager;
 use vtcode_core::llm::TokenCounter;
 use vtcode_core::llm::provider as uni;
+// session_loop is its own module at turn/session_loop.rs
 
 /// Centralized handling for tool failures discovered in the run loop.
 /// This function renders an informative error, adds an MCP event if applicable,
@@ -27,7 +28,7 @@ pub(crate) async fn handle_tool_failure(
     dec_id: &str,
     call_id: &str,
 ) -> Result<()> {
-    use crate::agent::runloop::tool_output::render_tool_output;
+    use crate::agent::runloop::unified::tool_output_handler::handle_pipeline_output;
     use vtcode_core::tools::error_context::ToolErrorContext;
     use vtcode_core::tools::registry::{ToolErrorType, ToolExecutionError, classify_error};
 
@@ -100,15 +101,16 @@ pub(crate) async fn handle_tool_failure(
         &format!("Type: {}", error_type_msg),
     )?;
 
-    // Render tool output with standardized view
-    render_tool_output(
-        &mut ctx.renderer,
-        Some(name),
-        &error_json,
-        vt_cfg,
-        Some(&token_budget),
-    )
-    .await?;
+    // Render tool output with standardized view via the generic handler
+    use crate::agent::runloop::unified::tool_pipeline::{ToolExecutionStatus, ToolPipelineOutcome};
+    let outcome = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
+        output: error_json.clone(),
+        stdout: None,
+        modified_files: vec![],
+        command_success: false,
+        has_more: false,
+    });
+    handle_pipeline_output(&mut *ctx, name, args_val, &outcome, vt_cfg, &*token_budget).await?;
 
     let error_content = serde_json::to_string(&error_json).unwrap_or_else(|_| "{}".to_string());
     {

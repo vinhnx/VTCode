@@ -20,13 +20,13 @@ indexmap = { version = "2.12", features = ["serde"] }
 once_cell = "1.19"
 regex = "1.12"
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+serde_json = { workspace = true }
 toml = "0.9.8"
 toml_edit = "0.23.7"
 tracing = "0.1"
 vtcode-commons = { path = "../vtcode-commons", version = "0.44.1" }
 dotenvy = "0.15"
-schemars = { version = "1.0.4", optional = true, features = ["indexmap2"] }
+schemars = { workspace = true, optional = true, features = ["indexmap2"] }
 
 [features]
 default = ["bootstrap"]
@@ -42,7 +42,7 @@ serial_test = "3.1"
 anyhow = "1.0"
 indexmap = { version = "2.12", features = ["serde"] }
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+serde_json = { workspace = true }
 
 [package.metadata.docs.rs]
 all-features = true

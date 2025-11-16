@@ -1,17 +1,17 @@
-#  **Testing Guide**
+# **Testing Guide**
 
 This guide covers vtcode's comprehensive test suite, including unit tests, integration tests, benchmarks, and testing best practices.
 
-##  **Test Overview**
+## **Test Overview**
 
 vtcode includes a multi-layered test suite designed to ensure reliability and performance:
 
-- **Unit Tests**: Test individual components and functions
-- **Integration Tests**: Test end-to-end functionality
-- **Performance Benchmarks**: Measure and track performance
-- **Mock Testing**: Test with realistic mock data
+-   **Unit Tests**: Test individual components and functions
+-   **Integration Tests**: Test end-to-end functionality
+-   **Performance Benchmarks**: Measure and track performance
+-   **Mock Testing**: Test with realistic mock data
 
-##  **Running Tests**
+## **Running Tests**
 
 ### Basic Test Commands
 
@@ -55,7 +55,7 @@ cargo bench -- search_benchmark
 cargo bench --features criterion/html_reports
 ```
 
-##  **Test Structure**
+## **Test Structure**
 
 ```
 tests/
@@ -75,7 +75,7 @@ src/
      analyzer.rs        # Unit tests for tree-sitter analyzer
 ```
 
-##  **Test Categories**
+## **Test Categories**
 
 ### Unit Tests
 
@@ -125,7 +125,7 @@ criterion_group!(benches, benchmark_function);
 criterion_main!(benches);
 ```
 
-##  **Testing Tools and Components**
+## **Testing Tools and Components**
 
 ### Tool Registry Testing
 
@@ -184,7 +184,7 @@ async fn test_grep_file_tool() {
 }
 ```
 
-##  **Mock Data and Testing Utilities**
+## **Mock Data and Testing Utilities**
 
 ### Common Test Setup
 
@@ -229,7 +229,7 @@ fn test_file_operations() {
 }
 ```
 
-##  **Performance Benchmarks**
+## **Performance Benchmarks**
 
 ### Search Performance
 
@@ -239,11 +239,11 @@ cargo bench -- search_benchmark
 
 Measures:
 
-- Simple pattern search performance
-- Word boundary search performance
-- Case-insensitive search performance
-- Search with context lines performance
-- Glob pattern filtering performance
+-   Simple pattern search performance
+-   Word boundary search performance
+-   Case-insensitive search performance
+-   Search with context lines performance
+-   Glob pattern filtering performance
 
 ### Tree-sitter Performance
 
@@ -253,12 +253,12 @@ cargo bench -- tree_sitter_benchmark
 
 Measures:
 
-- Parsing performance for different languages
-- Symbol extraction performance
-- Code analysis performance
-- File analysis performance
+-   Parsing performance for different languages
+-   Symbol extraction performance
+-   Code analysis performance
+-   File analysis performance
 
-##  **Testing Best Practices**
+## **Testing Best Practices**
 
 ### Test Organization
 
@@ -303,7 +303,7 @@ fn test_independent_functionality() {
 }
 ```
 
-##  **Continuous Integration**
+## **Continuous Integration**
 
 ### GitHub Actions Setup
 
@@ -312,13 +312,13 @@ name: Tests
 on: [push, pull_request]
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: dtolnay/rust-toolchain@stable
-      - run: cargo test
-      - run: cargo bench
+    test:
+        runs-on: ubuntu-latest-arm64
+        steps:
+            - uses: actions/checkout@v3
+            - uses: dtolnay/rust-toolchain@stable
+            - run: cargo test
+            - run: cargo bench
 ```
 
 ### Test Coverage
@@ -334,7 +334,7 @@ cargo tarpaulin --out Html
 open tarpaulin-report.html
 ```
 
-##  **Debugging Tests**
+## **Debugging Tests**
 
 ### Running Failed Tests
 
@@ -357,7 +357,7 @@ fn test_with_debug_output() {
 }
 ```
 
-##  **Performance Monitoring**
+## **Performance Monitoring**
 
 ### Benchmark Baselines
 
@@ -376,60 +376,60 @@ fn bench_baseline_search(b: &mut Bencher) {
 cargo bench --baseline baseline
 ```
 
-##  **Testing Checklist**
+## **Testing Checklist**
 
-- [ ] Unit tests for all public functions
-- [ ] Integration tests for component interactions
-- [ ] Error handling tests
-- [ ] Edge case testing
-- [ ] Performance benchmarks
-- [ ] Documentation examples tested
-- [ ] Cross-platform compatibility
-- [ ] Memory leak testing (if applicable)
+-   [ ] Unit tests for all public functions
+-   [ ] Integration tests for component interactions
+-   [ ] Error handling tests
+-   [ ] Edge case testing
+-   [ ] Performance benchmarks
+-   [ ] Documentation examples tested
+-   [ ] Cross-platform compatibility
+-   [ ] Memory leak testing (if applicable)
 
-##  **Additional Resources**
+## **Additional Resources**
 
 ### Testing Frameworks
 
-- **[Rust Testing Book](https://doc.rust-lang.org/book/ch11-00-testing.html)**
-- **[Criterion.rs Documentation](https://bheisler.github.io/criterion.rs/book/)**
-- **[Mockito Documentation](https://docs.rs/mockito/latest/mockito/)**
+-   **[Rust Testing Book](https://doc.rust-lang.org/book/ch11-00-testing.html)**
+-   **[Criterion.rs Documentation](https://bheisler.github.io/criterion.rs/book/)**
+-   **[Mockito Documentation](https://docs.rs/mockito/latest/mockito/)**
 
 ### Best Practices
 
-- **[Rust Testing Guidelines](https://rust-lang.github.io/rfcs/2909-destructuring-assignment.html)**
-- **[Effective Rust Testing](https://www.lurklurk.org/effective-rust/testing.html)**
+-   **[Rust Testing Guidelines](https://rust-lang.github.io/rfcs/2909-destructuring-assignment.html)**
+-   **[Effective Rust Testing](https://www.lurklurk.org/effective-rust/testing.html)**
 
-##  **Getting Help**
+## **Getting Help**
 
 ### Common Issues
 
 **Test fails intermittently**
 
-- Check for race conditions in async tests
-- Ensure proper test isolation
-- Use unique test data for each test
+-   Check for race conditions in async tests
+-   Ensure proper test isolation
+-   Use unique test data for each test
 
 **Benchmark results vary**
 
-- Run benchmarks multiple times
-- Use statistical significance testing
-- Consider environmental factors
+-   Run benchmarks multiple times
+-   Use statistical significance testing
+-   Consider environmental factors
 
 **Mock setup is complex**
 
-- Simplify test scenarios
-- Use builder patterns for complex objects
-- Consider integration tests instead of complex mocks
+-   Simplify test scenarios
+-   Use builder patterns for complex objects
+-   Consider integration tests instead of complex mocks
 
 ---
 
-##  **Navigation**
+## **Navigation**
 
-- **[Back to Documentation Index](./../README.md)**
-- **[User Guide](../user-guide/)**
-- **[API Reference](../api/)**
-- **[Contributing Guide](./contributing.md)**
+-   **[Back to Documentation Index](./../README.md)**
+-   **[User Guide](../user-guide/)**
+-   **[API Reference](../api/)**
+-   **[Contributing Guide](./contributing.md)**
 
 ---
 

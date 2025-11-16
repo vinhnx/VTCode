@@ -6,17 +6,32 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
+    paths:
+      - '**.rs'
+      - '**/Cargo.toml'
+      - '**/Cargo.lock'
+      - '.github/workflows/coverage.yml'
   pull_request:
     branches: [main]
+    paths:
+      - '**.rs'
+      - '**/Cargo.toml'
+      - '**/Cargo.lock'
+      - '.github/workflows/coverage.yml'
 
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
 
+# Time out jobs after 30 minutes to prevent resource waste (coverage can be more intensive)
+defaults:
+  run:
+    timeout-minutes: 30
+
 jobs:
   coverage:
     name: Code coverage
-    runs-on: ubuntu-latest-arm64
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v5
@@ -35,6 +50,9 @@ jobs:
 
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Compile tests for coverage
+        run: cargo llvm-cov --locked --workspace --no-run
 
       - name: Generate code coverage
         run: cargo llvm-cov --locked --workspace --lcov --output-path lcov.info

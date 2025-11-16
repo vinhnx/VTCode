@@ -1,6 +1,7 @@
 //! Focused test for LLM provider functionality
 
 use vtcode_core::config::constants::models;
+use vtcode_core::config::types::VerbosityLevel;
 use vtcode_core::llm::{
     factory::{LLMFactory, create_provider_for_model},
     provider::{LLMProvider, LLMRequest, Message, MessageRole},
@@ -167,6 +168,7 @@ fn test_anthropic_tool_message_handling() {
         parallel_tool_config: None,
         reasoning_effort: None,
         output_format: None,
+        verbosity: Some(VerbosityLevel::default()),
     };
 
     // Validate request shape instead of internal conversion

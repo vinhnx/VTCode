@@ -1,88 +1,63 @@
+use crate::agent::runloop::unified::turn::session::slash_commands::{
+    SlashCommandContext, SlashCommandControl,
+};
 use anyhow::{Context, Result};
 use chrono::Local;
-use crate::agent::runloop::unified::turn::session::slash_commands::{SlashCommandContext, SlashCommandControl};
 use std::collections::{BTreeSet, HashMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use tokio::sync::Notify;
-use tokio::task;
 
-#[cfg(debug_assertions)]
-use tracing::debug;
+use crate::agent::runloop::unified::turn::session::slash_commands;
+use vtcode_core::llm::provider::{self as uni};
+
 use tracing::warn;
 use vtcode_core::config::constants::{defaults, ui};
 use vtcode_core::config::loader::VTCodeConfig;
-use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, UiSurfacePreference};
+use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::agent::snapshots::{SnapshotConfig, SnapshotManager};
-use vtcode_core::core::decision_tracker::{Action as DTAction, DecisionOutcome};
-use vtcode_core::core::router::{Router, TaskClass};
-use vtcode_core::llm::error_display;
-use vtcode_core::llm::provider::{self as uni};
-use vtcode_core::tools::{ApprovalRecorder, result_cache::CacheKey};
-use vtcode_core::tools::registry::{ToolExecutionError, ToolErrorType};
+use vtcode_core::tools::ApprovalRecorder;
+
+use crate::agent::runloop::unified::state::CtrlCState;
+use vtcode_core::config::types::UiSurfacePreference;
 use vtcode_core::ui::theme;
 use vtcode_core::ui::tui::{InlineEvent, InlineEventCallback, spawn_session, theme_from_styles};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::at_pattern::parse_at_patterns;
-use vtcode_core::utils::session_archive::{SessionArchive, SessionArchiveMetadata, SessionMessage};
-use crate::agent::runloop::unified::turn::session::slash_commands;
+use vtcode_core::utils::session_archive::{SessionArchive, SessionArchiveMetadata};
 use vtcode_core::utils::transcript;
 
 use crate::agent::runloop::ResumeSession;
-use crate::agent::runloop::git::confirm_changes_with_git_diff;
 use crate::agent::runloop::model_picker::{ModelPickerProgress, ModelPickerState};
 use crate::agent::runloop::prompt::refine_user_prompt_if_enabled;
 use crate::agent::runloop::slash_commands::handle_slash_command;
-use crate::agent::runloop::text_tools::{detect_textual_tool_call, extract_code_fence_blocks};
-use crate::agent::runloop::tool_output::render_code_fence_blocks;
-use crate::agent::runloop::tool_output::render_tool_output;
 use crate::agent::runloop::ui::{build_inline_header_context, render_session_banner};
 use crate::agent::runloop::unified::mcp_tool_manager::McpToolManager;
-use crate::agent::runloop::unified::ui_interaction::{
-    PlaceholderSpinner, stream_and_render_response,
-};
 
 use super::finalization::finalize_session;
-use super::harmony::strip_harmony_syntax;
-use super::utils::{render_hook_messages, safe_force_redraw};
+use super::utils::render_hook_messages;
 use super::workspace::{load_workspace_files, refresh_vt_config};
-use crate::agent::runloop::mcp_events;
 use crate::agent::runloop::unified::async_mcp_manager::McpInitStatus;
 use crate::agent::runloop::unified::context_manager::ContextManager;
 
-use crate::agent::runloop::unified::display::{display_user_message, ensure_turn_bottom_gap};
+use crate::agent::runloop::unified::display::display_user_message;
 use crate::agent::runloop::unified::inline_events::{
     InlineEventLoopResources, InlineInterruptCoordinator, InlineLoopAction, poll_inline_loop_action,
 };
-use crate::agent::runloop::unified::loop_detection::{
-    LoopDetectionResponse, LoopDetector, prompt_for_loop_detection,
-};
+use crate::agent::runloop::unified::loop_detection::LoopDetector;
 use crate::agent::runloop::unified::model_selection::finalize_model_selection;
 use crate::agent::runloop::unified::palettes::{ActivePalette, apply_prompt_style};
-use crate::agent::runloop::unified::progress::ProgressReporter;
 use crate::agent::runloop::unified::session_setup::{
     SessionState, build_mcp_tool_definitions, initialize_session,
 };
-use crate::agent::runloop::unified::shell::{
-    derive_recent_tool_output, should_short_circuit_shell,
-};
-use crate::agent::runloop::unified::state::{CtrlCSignal, CtrlCState, SessionStats};
+use crate::agent::runloop::unified::state::{CtrlCSignal, SessionStats};
 use crate::agent::runloop::unified::status_line::{
     InputStatusState, update_context_efficiency, update_input_status_if_changed,
-};
-use crate::agent::runloop::unified::tool_pipeline::{
-    ToolExecutionStatus, execute_tool_with_timeout,
-};
-use crate::agent::runloop::unified::tool_routing::{ToolPermissionFlow, ensure_tool_permission};
-use crate::agent::runloop::unified::tool_summary::{
-    describe_tool_action, humanize_tool_name, render_tool_call_summary_with_status,
 };
 use crate::agent::runloop::unified::workspace_links::LinkedDirectory;
 use crate::hooks::lifecycle::{LifecycleHookEngine, SessionEndReason, SessionStartTrigger};
 use crate::ide_context::IdeContextBridge;
-
-use super::turn_processor::{process_single_turn, TurnContext, TurnResult};
 
 enum TurnLoopResult {
     Completed,
@@ -914,25 +889,25 @@ pub(crate) async fn run_single_agent_loop_unified(
             // Removed: Tool response pruning
             // Removed: Context window enforcement to respect token limits
 
-            let mut working_history = conversation_history.clone();
-            let max_tool_loops = vt_cfg
+            let working_history = conversation_history.clone();
+            let _max_tool_loops = vt_cfg
                 .as_ref()
                 .map(|cfg| cfg.tools.max_tool_loops)
                 .filter(|&value| value > 0)
                 .unwrap_or(defaults::DEFAULT_MAX_TOOL_LOOPS);
 
-            let mut step_count = 0usize;
-            let mut allow_follow_up = true;
-            let mut any_write_effect = false;
-            let mut last_tool_stdout: Option<String> = None;
-            let mut bottom_gap_applied = false;
-            let mut turn_modified_files: BTreeSet<PathBuf> = BTreeSet::new();
-            let tool_repeat_limit = vt_cfg
+            let mut _step_count = 0usize;
+            let mut _allow_follow_up = true;
+            let mut _any_write_effect = false;
+            let mut _last_tool_stdout: Option<String> = None;
+            let mut _bottom_gap_applied = false;
+            let mut _turn_modified_files: BTreeSet<PathBuf> = BTreeSet::new();
+            let _tool_repeat_limit = vt_cfg
                 .as_ref()
                 .map(|cfg| cfg.tools.max_repeated_tool_calls)
                 .filter(|&value| value > 0)
                 .unwrap_or(defaults::DEFAULT_MAX_REPEATED_TOOL_CALLS);
-            let mut repeated_tool_attempts: HashMap<String, usize> = HashMap::new();
+            let mut _repeated_tool_attempts: HashMap<String, usize> = HashMap::new();
 
             // Initialize loop detection
             let loop_detection_enabled = vt_cfg
@@ -947,1267 +922,71 @@ pub(crate) async fn run_single_agent_loop_unified(
                 .as_ref()
                 .map(|cfg| cfg.model.loop_detection_interactive)
                 .unwrap_or(true);
-            let mut loop_detector = LoopDetector::new(
+            let mut _loop_detector = LoopDetector::new(
                 loop_detection_threshold,
                 loop_detection_enabled,
                 loop_detection_interactive,
             );
-            let mut loop_detection_disabled_for_session = false;
+            let mut _loop_detection_disabled_for_session = false;
 
-            // Create turn context
-            let mut turn_ctx = TurnContext {
-                config: &mut config,
-                vt_cfg: &mut vt_cfg,
-                provider_client: &mut provider_client,
-                tool_registry: &mut tool_registry,
-                tools: &tools,
-                context_manager: &mut context_manager,
-                conversation_history: &mut working_history,
-                decision_ledger: &decision_ledger,
-                pruning_ledger: &pruning_ledger,
-                trajectory: &traj,
-                token_budget: &token_budget,
-                token_counter: &token_counter,
-                tool_result_cache: &tool_result_cache,
-                tool_permission_cache: &tool_permission_cache,
-                session_stats: &mut session_stats,
-                approval_recorder: &approval_recorder,
+            // New unified turn loop: use TurnLoopContext and run_turn_loop
+            let turn_loop_ctx = crate::agent::runloop::unified::turn::TurnLoopContext {
                 renderer: &mut renderer,
                 handle: &handle,
                 session: &mut session,
+                session_stats: &mut session_stats,
+                mcp_panel_state: &mut mcp_panel_state,
+                tool_result_cache: &tool_result_cache,
+                approval_recorder: &approval_recorder,
+                decision_ledger: &decision_ledger,
+                pruning_ledger: &pruning_ledger,
+                token_budget: &token_budget,
+                token_counter: &token_counter,
+                tool_registry: &mut tool_registry,
+                tools: &tools,
                 ctrl_c_state: &ctrl_c_state,
                 ctrl_c_notify: &ctrl_c_notify,
-                input_status_state: &mut input_status_state,
+                context_manager: &mut context_manager,
                 last_forced_redraw: &mut last_forced_redraw,
-                loop_detector: &mut loop_detector,
-                loop_detection_disabled_for_session,
-                repeated_tool_attempts: &mut repeated_tool_attempts,
-                last_tool_stdout: &mut last_tool_stdout,
-                mcp_panel_state: &mut mcp_panel_state,
-                step_count,
-                full_auto,
+                input_status_state: &mut input_status_state,
+                lifecycle_hooks: lifecycle_hooks.as_ref(),
+                default_placeholder: &default_placeholder,
+                tool_permission_cache: &tool_permission_cache,
+            };
+            let outcome = crate::agent::runloop::unified::turn::run_turn_loop(
+                input,
+                working_history.clone(),
+                turn_loop_ctx,
+                &config,
+                vt_cfg.as_ref(),
+                &mut provider_client,
+                &traj,
                 skip_confirmations,
-            };
-
-            let turn_result = process_single_turn(&mut turn_ctx, input).await?;
-            let turn_result = match turn_result {
-                TurnResult::Completed => TurnLoopResult::Completed,
-                TurnResult::Aborted => TurnLoopResult::Aborted,
-                TurnResult::Cancelled => TurnLoopResult::Cancelled,
-                TurnResult::Blocked { .. } => TurnLoopResult::Blocked { reason: None },
-            };
-
-                let decision = if let Some(cfg) = vt_cfg.as_ref().filter(|cfg| cfg.router.enabled) {
-                    Router::route_async(cfg, &config, &config.api_key, input).await
-                } else {
-                    Router::route(&VTCodeConfig::default(), &config, input)
-                };
-                traj.log_route(
-                    working_history.len(),
-                    &decision.selected_model,
-                    match decision.class {
-                        TaskClass::Simple => "simple",
-                        TaskClass::Standard => "standard",
-                        TaskClass::Complex => "complex",
-                        TaskClass::CodegenHeavy => "codegen_heavy",
-                        TaskClass::RetrievalHeavy => "retrieval_heavy",
-                    },
-                    &input.chars().take(120).collect::<String>(),
-                );
-
-                let active_model = decision.selected_model;
-                let (max_tokens_opt, parallel_cfg_opt) = if let Some(vt) = vt_cfg.as_ref() {
-                    let key = match decision.class {
-                        TaskClass::Simple => "simple",
-                        TaskClass::Standard => "standard",
-                        TaskClass::Complex => "complex",
-                        TaskClass::CodegenHeavy => "codegen_heavy",
-                        TaskClass::RetrievalHeavy => "retrieval_heavy",
-                    };
-                    let budget = vt.router.budgets.get(key);
-                    let max_tokens = budget.and_then(|b| b.max_tokens).map(|value| value as u32);
-                    let parallel = budget.and_then(|b| b.max_parallel_tools).map(|value| {
-                        vtcode_core::llm::provider::ParallelToolConfig {
-                            disable_parallel_tool_use: value <= 1,
-                            max_parallel_tools: Some(value),
-                            encourage_parallel: value > 1,
-                        }
-                    });
-                    (max_tokens, parallel)
-                } else {
-                    (None, None)
-                };
-
-                {
-                    let mut ledger = decision_ledger.write().await;
-                    ledger.start_turn(
-                        working_history.len(),
-                        working_history
-                            .last()
-                            .map(|message| message.content.as_text()),
-                    );
-                    let tool_names: Vec<String> = {
-                        let snapshot = tools.read().await;
-                        snapshot
-                            .iter()
-                            .map(|tool| tool.function.as_ref().unwrap().name.clone())
-                            .collect()
-                    };
-                    ledger.update_available_tools(tool_names);
-                }
-
-                let _conversation_len = working_history.len();
-
-                // Apply semantic pruning with decision tracking if configured
-                if trim_config.semantic_compression {
-                    let mut pruning_ledger_mut = pruning_ledger.write().await;
-                    context_manager.prune_with_semantic_priority(
-                        &mut working_history,
-                        Some(&mut *pruning_ledger_mut),
-                        step_count,
-                    );
-                }
-
-                let request_history = working_history.clone();
-                context_manager.reset_token_budget().await;
-                let system_prompt = context_manager
-                    .build_system_prompt(&request_history, step_count)
-                    .await?;
-
-                let use_streaming = provider_client.supports_streaming();
-                let reasoning_effort = vt_cfg.as_ref().and_then(|cfg| {
-                    if provider_client.supports_reasoning_effort(&active_model) {
-                        Some(cfg.agent.reasoning_effort)
-                    } else {
-                        None
-                    }
-                });
-                let current_tools = tools.read().await.clone();
-                let request = uni::LLMRequest {
-                    messages: request_history.clone(),
-                    system_prompt: Some(system_prompt),
-                    tools: Some(current_tools),
-                    model: active_model.clone(),
-                    max_tokens: max_tokens_opt.or(Some(2000)),
-                    temperature: Some(0.7),
-                    stream: use_streaming,
-                    tool_choice: Some(uni::ToolChoice::auto()),
-                    parallel_tool_calls: None,
-                    parallel_tool_config: if provider_client
-                        .supports_parallel_tool_config(&active_model)
-                    {
-                        parallel_cfg_opt.clone()
-                    } else {
-                        None
-                    },
-                    reasoning_effort,
-                    output_format: None,
-                    verbosity: None,
-                };
-
-                let thinking_spinner = PlaceholderSpinner::new(
-                    &handle,
-                    input_status_state.left.clone(),
-                    input_status_state.right.clone(),
-                    "Thinking...",
-                );
-                task::yield_now().await;
-                #[cfg(debug_assertions)]
-                let request_timer = Instant::now();
-                #[cfg(debug_assertions)]
-                {
-                    let tool_count = request.tools.as_ref().map_or(0, |tools| tools.len());
-                    debug!(
-                        target = "vtcode::agent::llm",
-                        model = %request.model,
-                        streaming = use_streaming,
-                        step = step_count,
-                        messages = request.messages.len(),
-                        tools = tool_count,
-                        "Dispatching provider request"
-                    );
-                }
-                let llm_result = if use_streaming {
-                    stream_and_render_response(
-                        provider_client.as_ref(),
-                        request,
-                        &thinking_spinner,
-                        &mut renderer,
-                        &ctrl_c_state,
-                        &ctrl_c_notify,
-                    )
-                    .await
-                } else {
-                    let provider_name = provider_client.name().to_string();
-
-                    if ctrl_c_state.is_cancel_requested() || ctrl_c_state.is_exit_requested() {
-                        thinking_spinner.finish();
-                        Err(uni::LLMError::Provider(error_display::format_llm_error(
-                            &provider_name,
-                            "Interrupted by user",
-                        )))
-                    } else {
-                        let generate_future = provider_client.generate(request);
-                        tokio::pin!(generate_future);
-                        let cancel_notifier = ctrl_c_notify.notified();
-                        tokio::pin!(cancel_notifier);
-                        let outcome = tokio::select! {
-                            res = &mut generate_future => {
-                                thinking_spinner.finish();
-                                res.map(|resp| (resp, false))
-                            }
-                            _ = &mut cancel_notifier => {
-                                thinking_spinner.finish();
-                                Err(uni::LLMError::Provider(error_display::format_llm_error(
-                                    &provider_name,
-                                    "Interrupted by user",
-                                )))
-                            }
-                        };
-                        outcome
-                    }
-                };
-
-                #[cfg(debug_assertions)]
-                {
-                    debug!(
-                        target = "vtcode::agent::llm",
-                        model = %active_model,
-                        streaming = use_streaming,
-                        step = step_count,
-                        elapsed_ms = request_timer.elapsed().as_millis(),
-                        succeeded = llm_result.is_ok(),
-                        "Provider request finished"
-                    );
-                }
-
-                let (response, response_streamed) = match llm_result {
-                    Ok(payload) => {
-                        if ctrl_c_state.is_cancel_requested() {
-                            renderer.line_if_not_empty(MessageStyle::Output)?;
-                            renderer.line(MessageStyle::Info, "Operation cancelled by user.")?;
-                            break 'outer TurnLoopResult::Cancelled;
-                        }
-                        working_history = request_history;
-                        payload
-                    }
-                    Err(error) => {
-                        if ctrl_c_state.is_cancel_requested() {
-                            renderer.line_if_not_empty(MessageStyle::Output)?;
-                            renderer.line(MessageStyle::Info, "Operation cancelled by user.")?;
-                            break 'outer TurnLoopResult::Cancelled;
-                        }
-
-                        let error_text = error.to_string();
-                        // Removed: Context overflow handling and automatic retry logic
-
-                        let has_recent_tool = working_history
-                            .iter()
-                            .rev()
-                            .take_while(|msg| msg.role != uni::MessageRole::Assistant)
-                            .any(|msg| msg.role == uni::MessageRole::Tool);
-
-                        if has_recent_tool {
-                            let reply = derive_recent_tool_output(&working_history)
-                                .unwrap_or_else(|| "Command completed successfully.".to_string());
-                            renderer.line(MessageStyle::Response, &reply)?;
-                            ensure_turn_bottom_gap(&mut renderer, &mut bottom_gap_applied)?;
-                            working_history.push(uni::Message::assistant(reply));
-                            let _ = last_tool_stdout.take();
-                            break 'outer TurnLoopResult::Completed;
-                        }
-
-                        renderer.line(
-                            MessageStyle::Error,
-                            &format!("Provider error: {error_text}"),
-                        )?;
-                        ensure_turn_bottom_gap(&mut renderer, &mut bottom_gap_applied)?;
-                        break 'outer TurnLoopResult::Aborted;
-                    }
-                };
-
-                let mut final_text = response.content.clone();
-                let mut tool_calls = response.tool_calls.unwrap_or_default();
-                let mut interpreted_textual_call = false;
-                let assistant_reasoning = response.reasoning.clone();
-
-                // Strip harmony syntax from displayed content if present
-                if let Some(ref text) = final_text
-                    && (text.contains("<|start|>")
-                        || text.contains("<|channel|>")
-                        || text.contains("<|call|>"))
-                {
-                    // Remove harmony tool call syntax from the displayed text
-                    let cleaned = strip_harmony_syntax(text);
-                    if !cleaned.trim().is_empty() {
-                        final_text = Some(cleaned);
-                    } else {
-                        final_text = None;
-                    }
-                }
-
-                if tool_calls.is_empty() {
-                    if let Some(text) = final_text.clone() {
-                        if !text.trim().is_empty()
-                            && let Some((name, args)) = detect_textual_tool_call(&text)
-                        {
-                            let args_json =
-                                serde_json::to_string(&args).unwrap_or_else(|_| "{}".to_string());
-                            let code_blocks = extract_code_fence_blocks(&text);
-                            if !code_blocks.is_empty() {
-                                render_code_fence_blocks(&mut renderer, &code_blocks)?;
-                                renderer.line(MessageStyle::Output, "")?;
-                            }
-                            let (headline, _) = describe_tool_action(&name, &args);
-                            let notice = if headline.is_empty() {
-                                format!("Detected {} request", humanize_tool_name(&name))
-                            } else {
-                                format!("Detected {headline}")
-                            };
-                            renderer.line(MessageStyle::Info, &notice)?;
-                            let call_id = format!("call_textual_{}", working_history.len());
-                            tool_calls.push(uni::ToolCall::function(
-                                call_id.clone(),
-                                name.clone(),
-                                args_json.clone(),
-                            ));
-                            interpreted_textual_call = true;
-                            final_text = None;
-                        }
-                    }
-                }
-
-                if !tool_calls.is_empty() {
-                    let assistant_text = if interpreted_textual_call {
-                        String::new()
-                    } else {
-                        final_text.clone().unwrap_or_default()
-                    };
-                    let message =
-                        uni::Message::assistant_with_tools(assistant_text, tool_calls.clone())
-                            .with_reasoning(assistant_reasoning.clone());
-                    working_history.push(message);
-                    // Clear final_text since it was used for assistant_text
-                    // This prevents the loop from breaking after tool execution
-                    let _ = final_text.take();
-                    for call in &tool_calls {
-                        let name = call
-                            .function
-                            .as_ref()
-                            .expect("Tool call must have function")
-                            .name
-                            .as_str();
-                        let args_val = call
-                            .parsed_arguments()
-                            .unwrap_or_else(|_| serde_json::json!({}));
-                        let signature_key = format!(
-                            "{}::{}",
-                            name,
-                            serde_json::to_string(&args_val).unwrap_or_else(|_| "{}".to_string())
-                        );
-
-                        // Check for loop hang detection
-                        let (is_loop_detected, repeat_count) =
-                            if !loop_detection_disabled_for_session {
-                                loop_detector.record_tool_call(&signature_key)
-                            } else {
-                                (false, 0)
-                            };
-
-                        if is_loop_detected {
-                            // Get user's choice with context information
-                            match prompt_for_loop_detection(
-                                loop_detection_interactive,
-                                &signature_key,
-                                repeat_count,
-                            ) {
-                                Ok(LoopDetectionResponse::KeepEnabled) => {
-                                    renderer.line(
-                                        MessageStyle::Info,
-                                        "Loop detection remains enabled. Skipping this tool call.",
-                                    )?;
-                                    // Reset only this signature for fresh monitoring
-                                    loop_detector.reset_signature(&signature_key);
-                                    continue; // Skip processing this tool call
-                                }
-                                Ok(LoopDetectionResponse::DisableForSession) => {
-                                    renderer.line(MessageStyle::Info, "Loop detection disabled for this session. Proceeding with tool call.")?;
-                                    loop_detection_disabled_for_session = true;
-                                    // Clear all tracking for fresh start after user override
-                                    loop_detector.reset();
-                                    // Continue processing the tool call below
-                                }
-                                Err(e) => {
-                                    warn!("Loop detection prompt failed: {}", e);
-                                    // Graceful degradation: disable detection and continue
-                                    loop_detection_disabled_for_session = true;
-                                    loop_detector.reset();
-                                }
-                            }
-                        }
-
-                        let attempts = repeated_tool_attempts
-                            .entry(signature_key.clone())
-                            .or_insert(0);
-                        *attempts += 1;
-                        let current_attempts = *attempts;
-                        if current_attempts > tool_repeat_limit {
-                            renderer.line(
-                            MessageStyle::Error,
-                            &format!(
-                                "Aborting repeated tool call '{}' after {} unsuccessful attempts with identical arguments.",
-                                name,
-                                current_attempts - 1
-                            ),
-                        )?;
-                            ensure_turn_bottom_gap(&mut renderer, &mut bottom_gap_applied)?;
-                            working_history.push(uni::Message::assistant(
-                            format!(
-                                "I stopped because tool '{}' kept failing with the same arguments. Please adjust the request or ask me to continue a different way.",
-                                name
-                            ),
-                        ));
-                            break 'outer TurnLoopResult::Completed;
-                        }
-
-                        // Render MCP tool calls as assistant messages instead of user input
-                        if let Some(tool_name) = name.strip_prefix("mcp_") {
-                            // Remove "mcp_" prefix
-                            let (headline, _) = describe_tool_action(tool_name, &args_val);
-
-                            // Render MCP tool call as a single message block
-                            renderer.line(MessageStyle::Info, &headline)?;
-                            renderer.line(MessageStyle::Info, &format!("MCP: {}", tool_name))?;
-
-                            // Force immediate TUI refresh to ensure proper layout
-                            handle.force_redraw();
-                            tokio::time::sleep(Duration::from_millis(10)).await;
-
-                            // Also capture for logging
-                            {
-                                let mut mcp_event = mcp_events::McpEvent::new(
-                                    "mcp".to_string(),
-                                    tool_name.to_string(),
-                                    Some(args_val.to_string()),
-                                );
-                                mcp_event.success(None);
-                                mcp_panel_state.add_event(mcp_event);
-                            }
-                        }
-                        // Note: tool summary will be rendered after execution with status
-                        let dec_id = {
-                            let mut ledger = decision_ledger.write().await;
-                            ledger.record_decision(
-                                format!("Execute tool '{}' to progress task", name),
-                                DTAction::ToolCall {
-                                    name: name.to_string(),
-                                    args: args_val.clone(),
-                                    expected_outcome: "Use tool output to decide next step"
-                                        .to_string(),
-                                },
-                                None,
-                            )
-                        };
-
-                        match ensure_tool_permission(
-                            &mut tool_registry,
-                            name,
-                            Some(&args_val),
-                            &mut renderer,
-                            &handle,
-                            &mut session,
-                            default_placeholder.clone(),
-                            &ctrl_c_state,
-                            &ctrl_c_notify,
-                            lifecycle_hooks.as_ref(),
-                            None, // justification from agent - TODO: extract from context
-                            Some(&approval_recorder),
-                            Some(&decision_ledger),
-                            Some(&tool_permission_cache),
-                        )
-                        .await
-                        {
-                            Ok(ToolPermissionFlow::Approved) => {
-                                // Force redraw immediately after modal closes to clear artifacts
-                                safe_force_redraw(&handle, &mut last_forced_redraw);
-                                // Longer delay to ensure modal is fully cleared before spinner starts
-                                tokio::time::sleep(Duration::from_millis(100)).await;
-
-                                if ctrl_c_state.is_cancel_requested() {
-                                    renderer.line_if_not_empty(MessageStyle::Output)?;
-                                    renderer.line(
-                                        MessageStyle::Info,
-                                        "Tool execution cancelled by user.",
-                                    )?;
-                                    break 'outer TurnLoopResult::Cancelled;
-                                }
-
-                                // Check if this is a read-only tool that can be cached
-                                let is_read_only_tool = matches!(
-                                    name,
-                                    "read_file"
-                                        | "list_files"
-                                        | "grep_search"
-                                        | "find_files"
-                                        | "tree_sitter_analyze"
-                                );
-
-                                // Create a progress reporter for the tool execution
-                                let progress_reporter = ProgressReporter::new();
-
-                                // Set initial progress and total
-                                progress_reporter.set_total(100).await;
-                                progress_reporter.set_progress(0).await;
-                                progress_reporter
-                                    .set_message(format!("Starting {}...", name))
-                                    .await;
-
-                                let tool_spinner = PlaceholderSpinner::with_progress(
-                                    &handle,
-                                    input_status_state.left.clone(),
-                                    input_status_state.right.clone(),
-                                    format!("Running tool: {}", name),
-                                    Some(&progress_reporter),
-                                );
-
-                                // Try to get from cache first for read-only tools
-                                let mut cache_hit = false;
-                                let params_str =
-                                    serde_json::to_string(&args_val).unwrap_or_default();
-                                let cache_key = CacheKey::new(
-                                    name,
-                                    &params_str,
-                                    "", // No specific file path for generic tools
-                                );
-
-                                let pipeline_outcome = if is_read_only_tool {
-                                    let mut tool_cache = tool_result_cache.write().await;
-                                    if let Some(cached_output) = tool_cache.get(&cache_key) {
-                                        cache_hit = true;
-                                        #[cfg(debug_assertions)]
-                                        debug!("Cache hit for tool: {}", name);
-
-                                        // Return cached result wrapped as tool success
-                                        let cached_json: serde_json::Value =
-                                            serde_json::from_str(&cached_output)
-                                                .unwrap_or(serde_json::json!({}));
-                                        ToolExecutionStatus::Success {
-                                            output: cached_json,
-                                            stdout: None,
-                                            modified_files: vec![],
-                                            command_success: true,
-                                            has_more: false,
-                                        }
-                                    } else {
-                                        drop(tool_cache);
-                                        // Force TUI refresh to ensure display stability
-                                        safe_force_redraw(&handle, &mut last_forced_redraw);
-
-                                        let result = execute_tool_with_timeout(
-                                            &mut tool_registry,
-                                            name,
-                                            args_val.clone(),
-                                            &ctrl_c_state,
-                                            &ctrl_c_notify,
-                                            Some(&progress_reporter),
-                                        )
-                                        .await;
-
-                                        // Cache successful read-only results
-                                        if let ToolExecutionStatus::Success { ref output, .. } =
-                                            result
-                                        {
-                                            let output_json = serde_json::to_string(output)
-                                                .unwrap_or_else(|_| "{}".to_string());
-                                            let mut cache = tool_result_cache.write().await;
-                                            cache.insert(cache_key, output_json);
-                                        }
-
-                                        result
-                                    }
-                                } else {
-                                    // Non-cached path for write tools
-                                    // Force TUI refresh to ensure display stability
-                                    safe_force_redraw(&handle, &mut last_forced_redraw);
-
-                                    execute_tool_with_timeout(
-                                        &mut tool_registry,
-                                        name,
-                                        args_val.clone(),
-                                        &ctrl_c_state,
-                                        &ctrl_c_notify,
-                                        Some(&progress_reporter),
-                                    )
-                                    .await
-                                };
-
-                                match pipeline_outcome {
-                                    ToolExecutionStatus::Progress(progress) => {
-                                        // Handle progress updates
-                                        progress_reporter.set_message(progress.message).await;
-                                        // Progress is already a u8 between 0-100
-                                        if progress.progress <= 100 {
-                                            progress_reporter
-                                                .set_progress(progress.progress as u64)
-                                                .await;
-                                        }
-                                        continue;
-                                    }
-                                    ToolExecutionStatus::Success {
-                                        output,
-                                        stdout,
-                                        modified_files,
-                                        command_success,
-                                        has_more,
-                                    } => {
-                                        tool_spinner.finish();
-
-                                        safe_force_redraw(&handle, &mut last_forced_redraw);
-                                        tokio::time::sleep(Duration::from_millis(50)).await;
-
-                                        session_stats.record_tool(name);
-                                        repeated_tool_attempts.remove(&signature_key);
-                                        traj.log_tool_call(
-                                            working_history.len(),
-                                            name,
-                                            &args_val,
-                                            true,
-                                        );
-
-                                        // Handle MCP events
-                                        if let Some(tool_name) = name.strip_prefix("mcp_") {
-                                            let mut mcp_event = mcp_events::McpEvent::new(
-                                                "mcp".to_string(),
-                                                tool_name.to_string(),
-                                                Some(args_val.to_string()),
-                                            );
-                                            mcp_event.success(None);
-                                            mcp_panel_state.add_event(mcp_event);
-                                        } else {
-                                            // Render tool summary with status
-                                            let exit_code =
-                                                output.get("exit_code").and_then(|v| v.as_i64());
-                                            let status_icon =
-                                                if command_success { "✓" } else { "✗" };
-                                            render_tool_call_summary_with_status(
-                                                &mut renderer,
-                                                name,
-                                                &args_val,
-                                                status_icon,
-                                                exit_code,
-                                            )?;
-                                        }
-
-                                        // Render unified tool output (handles all formatting)
-                                        render_tool_output(
-                                            &mut renderer,
-                                            Some(name),
-                                            &output,
-                                            vt_cfg.as_ref(),
-                                            Some(&token_budget),
-                                        )
-                                        .await?;
-                                        last_tool_stdout = if command_success {
-                                            stdout.clone()
-                                        } else {
-                                            None
-                                        };
-
-                                        if matches!(
-                                            name,
-                                            "write_file"
-                                                | "edit_file"
-                                                | "create_file"
-                                                | "delete_file"
-                                        ) {
-                                            any_write_effect = true;
-                                        }
-
-                                        if !modified_files.is_empty()
-                                            && confirm_changes_with_git_diff(
-                                                &modified_files,
-                                                skip_confirmations,
-                                            )
-                                            .await?
-                                        {
-                                            renderer.line(
-                                                MessageStyle::Info,
-                                                "Changes applied successfully.",
-                                            )?;
-                                            turn_modified_files
-                                                .extend(modified_files.iter().map(PathBuf::from));
-
-                                            // Invalidate cache for modified files
-                                            for file_path in &modified_files {
-                                                let mut cache = tool_result_cache.write().await;
-                                                cache.invalidate_for_path(file_path);
-                                            }
-                                        } else if !modified_files.is_empty() {
-                                            renderer
-                                                .line(MessageStyle::Info, "Changes discarded.")?;
-                                        }
-
-                                        let mut notice_lines: Vec<String> = Vec::new();
-                                        if !modified_files.is_empty() {
-                                            notice_lines.push("Files touched:".to_string());
-                                            for file in &modified_files {
-                                                notice_lines.push(format!("  - {}", file));
-                                            }
-                                            if let Some(stdout_preview) = &last_tool_stdout {
-                                                let preview: String =
-                                                    stdout_preview.chars().take(80).collect();
-                                                notice_lines
-                                                    .push(format!("stdout preview: {}", preview));
-                                            }
-                                        }
-                                        if let Some(notice) =
-                                            output.get("notice").and_then(|value| value.as_str())
-                                            && !notice.trim().is_empty()
-                                        {
-                                            notice_lines.push(notice.trim().to_string());
-                                        }
-                                        if !notice_lines.is_empty() {
-                                            renderer.line(MessageStyle::Info, "")?;
-                                            for line in notice_lines {
-                                                renderer.line(MessageStyle::Info, &line)?;
-                                            }
-                                        }
-
-                                        let content = serde_json::to_string(&output)
-                                            .unwrap_or_else(|_| "{}".to_string());
-
-                                        // Track token usage for this tool result
-                                        {
-                                            let mut counter = token_counter.write().await;
-                                            let content_type = if cache_hit {
-                                                "tool_output"
-                                            } else {
-                                                "tool_output"
-                                            };
-                                            counter.count_with_profiling(content_type, &content);
-                                        }
-
-                                        working_history.push(
-                                            uni::Message::tool_response_with_origin(
-                                                call.id.clone(),
-                                                content,
-                                                name.to_string(),
-                                            ),
-                                        );
-
-                                        let mut hook_block_reason: Option<String> = None;
-
-                                        if let Some(hooks) = &lifecycle_hooks {
-                                            match hooks
-                                                .run_post_tool_use(name, Some(&args_val), &output)
-                                                .await
-                                            {
-                                                Ok(outcome) => {
-                                                    render_hook_messages(
-                                                        &mut renderer,
-                                                        &outcome.messages,
-                                                    )?;
-                                                    for context in outcome.additional_context {
-                                                        if !context.trim().is_empty() {
-                                                            working_history.push(
-                                                                uni::Message::system(context),
-                                                            );
-                                                        }
-                                                    }
-                                                    if let Some(reason) = outcome.block_reason {
-                                                        let trimmed = reason.trim();
-                                                        if !trimmed.is_empty() {
-                                                            renderer.line(
-                                                                MessageStyle::Info,
-                                                                trimmed,
-                                                            )?;
-                                                            hook_block_reason =
-                                                                Some(trimmed.to_string());
-                                                        }
-                                                    }
-                                                }
-                                                Err(err) => {
-                                                    renderer.line(
-                                                        MessageStyle::Error,
-                                                        &format!(
-                                                            "Failed to run post-tool hooks: {}",
-                                                            err
-                                                        ),
-                                                    )?;
-                                                }
-                                            }
-                                        }
-
-                                        if let Some(reason) = hook_block_reason {
-                                            let blocked_message = format!(
-                                                "Tool execution blocked by lifecycle hooks: {}",
-                                                reason
-                                            );
-                                            working_history
-                                                .push(uni::Message::system(blocked_message));
-
-                                            {
-                                                let mut ledger = decision_ledger.write().await;
-                                                ledger.record_outcome(
-                                                    &dec_id,
-                                                    DecisionOutcome::Failure {
-                                                        error: reason.clone(),
-                                                        recovery_attempts: 0,
-                                                        context_preserved: true,
-                                                    },
-                                                );
-                                            }
-
-                                            session_end_reason = SessionEndReason::Cancelled;
-                                            break 'outer TurnLoopResult::Blocked {
-                                                reason: Some(reason),
-                                            };
-                                        }
-
-                                        {
-                                            let mut ledger = decision_ledger.write().await;
-                                            ledger.record_outcome(
-                                                &dec_id,
-                                                DecisionOutcome::Success {
-                                                    result: "tool_ok".to_string(),
-                                                    metrics: Default::default(),
-                                                },
-                                            );
-                                        }
-
-                                        let allow_short_circuit = !has_more
-                                            && command_success
-                                            && should_short_circuit_shell(input, name, &args_val);
-
-                                        if allow_short_circuit {
-                                            let reply = derive_recent_tool_output(&working_history)
-                                                .unwrap_or_else(|| {
-                                                    "Command completed successfully.".to_string()
-                                                });
-                                            renderer.line(MessageStyle::Response, &reply)?;
-                                            ensure_turn_bottom_gap(
-                                                &mut renderer,
-                                                &mut bottom_gap_applied,
-                                            )?;
-                                            working_history.push(uni::Message::assistant(reply));
-                                            let _ = last_tool_stdout.take();
-                                            break 'outer TurnLoopResult::Completed;
-                                        }
-                                    }
-                                    ToolExecutionStatus::Failure { error } => {
-                                        tool_spinner.finish();
-
-                                        safe_force_redraw(&handle, &mut last_forced_redraw);
-                                        tokio::time::sleep(Duration::from_millis(50)).await;
-
-                                        session_stats.record_tool(name);
-
-                                        // Construct a short-lived RunLoopContext for helper invocation
-                                        let mut run_ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext {
-                                            renderer: &mut renderer,
-                                            handle: &handle,
-                                            tool_registry: &mut tool_registry,
-                                            tools: &tools,
-                                            tool_result_cache: &tool_result_cache,
-                                            tool_permission_cache: &tool_permission_cache,
-                                            decision_ledger: &decision_ledger,
-                                            pruning_ledger: &pruning_ledger,
-                                            session_stats: &mut session_stats,
-                                            mcp_panel_state: &mut mcp_panel_state,
-                                            approval_recorder: approval_recorder.as_ref(),
-                                            session: &mut session,
-                                            traj: &traj,
-                                        };
-
-                                        // Delegate detailed rendering, ledger writes, MCP events, and token counting
-                                        if let Err(err) = crate::agent::runloop::unified::turn::session::handle_tool_failure(
-                                            &mut run_ctx,
-                                            name,
-                                            &args_val,
-                                            &error,
-                                            vt_cfg.as_ref(),
-                                            &token_budget,
-                                            &token_counter,
-                                            &mut working_history,
-                                            &mut last_tool_stdout,
-                                            &decision_ledger,
-                                            &dec_id,
-                                            &call.id,
-                                        )
-                                        .await
-                                        {
-                                            warn!("handle_tool_failure failed: {}", err);
-                                        }
-                                    }
-                                    ToolExecutionStatus::Timeout { error } => {
-                                        tool_spinner.finish();
-
-                                        handle.force_redraw();
-                                        tokio::time::sleep(Duration::from_millis(10)).await;
-
-                                        session_stats.record_tool(name);
-                                        renderer.line_if_not_empty(MessageStyle::Output)?;
-                                        renderer.line(
-                                            MessageStyle::Error,
-                                            &format!("Tool {} timed out after 5 minutes.", name),
-                                        )?;
-                                        traj.log_tool_call(
-                                            working_history.len(),
-                                            name,
-                                            &args_val,
-                                            false,
-                                        );
-
-                                        let err_json = error.to_json_value();
-                                        let error_message = error.message.clone();
-                                        let timeout_content = serde_json::to_string(&err_json)
-                                            .unwrap_or_else(|_| "{}".to_string());
-
-                                        // Track timeout error token usage
-                                        {
-                                            let mut counter = token_counter.write().await;
-                                            counter.count_with_profiling(
-                                                "tool_output",
-                                                &timeout_content,
-                                            );
-                                        }
-
-                                        working_history.push(
-                                            uni::Message::tool_response_with_origin(
-                                                call.id.clone(),
-                                                timeout_content,
-                                                name.to_string(),
-                                            ),
-                                        );
-                                        let _ = last_tool_stdout.take();
-                                        {
-                                            let mut ledger = decision_ledger.write().await;
-                                            ledger.record_outcome(
-                                                &dec_id,
-                                                DecisionOutcome::Failure {
-                                                    error: error_message,
-                                                    recovery_attempts: 0,
-                                                    context_preserved: true,
-                                                },
-                                            );
-                                        }
-                                    }
-                                    ToolExecutionStatus::Cancelled => {
-                                        tool_spinner.finish();
-
-                                        safe_force_redraw(&handle, &mut last_forced_redraw);
-                                        tokio::time::sleep(Duration::from_millis(50)).await;
-
-                                        renderer.line_if_not_empty(MessageStyle::Output)?;
-                                        renderer.line(
-                                            MessageStyle::Info,
-                                            "Operation cancelled by user. Stopping current turn.",
-                                        )?;
-
-                                        let cancel_error = ToolExecutionError::new(
-                                            name.to_string(),
-                                            ToolErrorType::ExecutionError,
-                                            "Tool execution cancelled by user".to_string(),
-                                        );
-                                        let err_json = cancel_error.to_json_value();
-
-                                        working_history.push(
-                                            uni::Message::tool_response_with_origin(
-                                                call.id.clone(),
-                                                serde_json::to_string(&err_json)
-                                                    .unwrap_or_else(|_| "{}".to_string()),
-                                                name.to_string(),
-                                            ),
-                                        );
-                                        let _ = last_tool_stdout.take();
-
-                                        {
-                                            let mut ledger = decision_ledger.write().await;
-                                            ledger.record_outcome(
-                                                &dec_id,
-                                                DecisionOutcome::Failure {
-                                                    error: "Cancelled by user".to_string(),
-                                                    recovery_attempts: 0,
-                                                    context_preserved: true,
-                                                },
-                                            );
-                                        }
-
-                                        break 'outer TurnLoopResult::Cancelled;
-                                    }
-                                }
-                            }
-                            Ok(ToolPermissionFlow::Denied) => {
-                                // Force redraw after modal closes
-                                safe_force_redraw(&handle, &mut last_forced_redraw);
-                                tokio::time::sleep(Duration::from_millis(50)).await;
-
-                                session_stats.record_tool(name);
-                                let denial = ToolExecutionError::new(
-                                    name.to_string(),
-                                    ToolErrorType::PolicyViolation,
-                                    format!("Tool '{}' execution denied by policy", name),
-                                )
-                                .to_json_value();
-                                traj.log_tool_call(working_history.len(), name, &args_val, false);
-                                render_tool_output(
-                                    &mut renderer,
-                                    Some(name),
-                                    &denial,
-                                    vt_cfg.as_ref(),
-                                    Some(&token_budget),
-                                )
-                                .await?;
-                                let content =
-                                    serde_json::to_string(&denial).unwrap_or("{}".to_string());
-                                working_history.push(uni::Message::tool_response_with_origin(
-                                    call.id.clone(),
-                                    content,
-                                    name.to_string(),
-                                ));
-                                {
-                                    let mut ledger = decision_ledger.write().await;
-                                    ledger.record_outcome(
-                                        &dec_id,
-                                        DecisionOutcome::Failure {
-                                            error: format!(
-                                                "Tool '{}' execution denied by policy",
-                                                name
-                                            ),
-                                            recovery_attempts: 0,
-                                            context_preserved: true,
-                                        },
-                                    );
-                                }
-                                continue;
-                            }
-                            Ok(ToolPermissionFlow::Exit) => {
-                                // Force redraw after modal closes
-                                safe_force_redraw(&handle, &mut last_forced_redraw);
-                                tokio::time::sleep(Duration::from_millis(50)).await;
-
-                                renderer.line(MessageStyle::Info, "Goodbye!")?;
-                                session_end_reason = SessionEndReason::Exit;
-                                break 'outer TurnLoopResult::Cancelled;
-                            }
-                            Ok(ToolPermissionFlow::Interrupted) => {
-                                // Force redraw after modal closes
-                                safe_force_redraw(&handle, &mut last_forced_redraw);
-                                tokio::time::sleep(Duration::from_millis(50)).await;
-
-                                break 'outer TurnLoopResult::Cancelled;
-                            }
-                            Err(err) => {
-                                // Force redraw after modal closes
-                                safe_force_redraw(&handle, &mut last_forced_redraw);
-                                tokio::time::sleep(Duration::from_millis(50)).await;
-
-                                traj.log_tool_call(working_history.len(), name, &args_val, false);
-                                renderer.line(
-                                    MessageStyle::Error,
-                                    &format!(
-                                        "Failed to evaluate policy for tool '{}': {}",
-                                        name, err
-                                    ),
-                                )?;
-                                let err_json = serde_json::json!({
-                                    "error": format!(
-                                        "Policy evaluation error for '{}' : {}",
-                                        name, err
-                                    )
-                                });
-                                working_history.push(uni::Message::tool_response_with_origin(
-                                    call.id.clone(),
-                                    err_json.to_string(),
-                                    name.to_string(),
-                                ));
-                                let _ = last_tool_stdout.take();
-                                {
-                                    let mut ledger = decision_ledger.write().await;
-                                    ledger.record_outcome(
-                                        &dec_id,
-                                        DecisionOutcome::Failure {
-                                            error: format!(
-                                                "Failed to evaluate policy for tool '{}': {}",
-                                                name, err
-                                            ),
-                                            recovery_attempts: 0,
-                                            context_preserved: true,
-                                        },
-                                    );
-                                }
-                                continue;
-                            }
-                        }
-                    }
-                    allow_follow_up = true;
-                    continue 'outer;
-                }
-
-                if let Some(mut text) = final_text {
-                    let do_review = vt_cfg
-                        .as_ref()
-                        .map(|cfg| cfg.agent.enable_self_review)
-                        .unwrap_or(false);
-                    let review_passes = vt_cfg
-                        .as_ref()
-                        .map(|cfg| cfg.agent.max_review_passes)
-                        .unwrap_or(1)
-                        .max(1);
-                    let should_run_review =
-                        do_review && (text.len() >= SELF_REVIEW_MIN_LENGTH || text.contains("```"));
-                    if should_run_review {
-                        let review_system = "You are the agent's critical code reviewer. Improve clarity, correctness, and add missing test or validation guidance. Return only the improved final answer (no meta commentary).".to_string();
-                        for _ in 0..review_passes {
-                            let review_req = uni::LLMRequest {
-                                messages: vec![uni::Message::user(format!(
-                                    "Please review and refine the following response. Return only the improved response.\n\n{}",
-                                    text
-                                ))],
-                                system_prompt: Some(review_system.clone()),
-                                tools: None,
-                                model: config.model.clone(),
-                                max_tokens: Some(2000),
-                                temperature: Some(0.5),
-                                stream: false,
-                                tool_choice: Some(uni::ToolChoice::none()),
-                                parallel_tool_calls: None,
-                                parallel_tool_config: None,
-                                reasoning_effort: vt_cfg.as_ref().and_then(|cfg| {
-                                    if provider_client.supports_reasoning_effort(&active_model) {
-                                        Some(cfg.agent.reasoning_effort)
-                                    } else {
-                                        None
-                                    }
-                                }),
-                                output_format: None,
-                                verbosity: None,
-                            };
-                            let rr = provider_client.generate(review_req).await.ok();
-                            if let Some(r) = rr.and_then(|result| result.content)
-                                && !r.trim().is_empty()
-                            {
-                                text = r;
-                            }
-                        }
-                    }
-                    let trimmed = text.trim();
-                    let suppress_response = trimmed.is_empty()
-                        || last_tool_stdout
-                            .as_ref()
-                            .map(|stdout| stdout == trimmed)
-                            .unwrap_or(false);
-
-                    // Empty responses mean we're done; avoid spinning another iteration.
-                    if trimmed.is_empty() {
-                        break TurnLoopResult::Completed;
-                    }
-
-                    let streamed_matches_output = response_streamed
-                        && response
-                            .content
-                            .as_ref()
-                            .map(|original| original == &text)
-                            .unwrap_or(false);
-
-                    if !suppress_response && !streamed_matches_output {
-                        renderer.line(MessageStyle::Response, &text)?;
-                    }
-                    ensure_turn_bottom_gap(&mut renderer, &mut bottom_gap_applied)?;
-                    working_history.push(
-                        uni::Message::assistant(text.clone())
-                            .with_reasoning(assistant_reasoning.clone()),
-                    );
-                    let _ = last_tool_stdout.take();
-                    break TurnLoopResult::Completed;
-                }
-                continue;
-            };
-
-            match turn_result {
-                TurnLoopResult::Cancelled => {
-                    if ctrl_c_state.is_exit_requested() {
-                        session_end_reason = SessionEndReason::Exit;
-                        break;
-                    }
-
-                    renderer.line_if_not_empty(MessageStyle::Output)?;
-                    renderer.line(
-                        MessageStyle::Info,
-                        "Interrupted current task. Press Ctrl+C again to exit.",
-                    )?;
-                    handle.clear_input();
-                    handle.set_placeholder(default_placeholder.clone());
-                    ctrl_c_state.clear_cancel();
-                    session_end_reason = SessionEndReason::Cancelled;
-                    continue;
-                }
-                TurnLoopResult::Aborted => {
-                    let _ = conversation_history.pop();
-                    continue;
-                }
-                TurnLoopResult::Blocked { reason: _ } => {
-                    conversation_history = working_history;
-                    handle.clear_input();
-                    handle.set_placeholder(default_placeholder.clone());
-                    continue;
-                }
-                TurnLoopResult::Completed => {
-                    conversation_history = working_history;
-
-                    // Removed: Tool response pruning after completion
-                    // Removed: Context window enforcement after completion
-
-                    if let Some(last) = conversation_history.last()
-                        && last.role == uni::MessageRole::Assistant
-                    {
-                        let text = last.content.as_text();
-                        let claims_write = text.contains("I've updated")
-                            || text.contains("I have updated")
-                            || text.contains("updated the `");
-                        if claims_write && !any_write_effect {
-                            renderer.line_if_not_empty(MessageStyle::Output)?;
-                            renderer.line(
-                                MessageStyle::Info,
-                                "Note: The assistant mentioned edits but no write tool ran.",
-                            )?;
-                        }
-                    }
-
-                    if let Some(manager) = checkpoint_manager.as_ref() {
-                        let conversation_snapshot: Vec<SessionMessage> = conversation_history
-                            .iter()
-                            .map(SessionMessage::from)
-                            .collect();
-                        let turn_number = next_checkpoint_turn;
-                        let description = conversation_history
-                            .last()
-                            .map(|msg| msg.content.as_text())
-                            .unwrap_or_default();
-                        let description = description.trim().to_string();
-                        match manager
-                            .create_snapshot(
-                                turn_number,
-                                description.as_str(),
-                                &conversation_snapshot,
-                                &turn_modified_files,
-                            )
-                            .await
-                        {
-                            Ok(Some(meta)) => {
-                                next_checkpoint_turn = meta.turn_number.saturating_add(1);
-                            }
-                            Ok(None) => {}
-                            Err(err) => {
-                                warn!(
-                                    "Failed to create checkpoint for turn {}: {}",
-                                    turn_number, err
-                                );
-                            }
-                        }
-                    }
-                }
+                &mut session_end_reason,
+            )
+            .await?;
+            // Apply canonical side-effects for the turn outcome (history, checkpoints, session end reason)
+            crate::agent::runloop::unified::turn::apply_turn_outcome(
+                &outcome,
+                &mut conversation_history,
+                &mut renderer,
+                &handle,
+                &ctrl_c_state,
+                &default_placeholder,
+                checkpoint_manager.as_ref(),
+                &mut next_checkpoint_turn,
+                &mut session_stats,
+                &mut session_end_reason,
+                &pruning_ledger,
+            )
+            .await?;
+            let _turn_result = outcome.result;
+
+            // Check for session exit and continue to next iteration otherwise.
+            if matches!(session_end_reason, SessionEndReason::Exit) {
+                break;
             }
+            continue;
         }
 
         finalize_session(
@@ -2240,4 +1019,3 @@ pub(crate) async fn run_single_agent_loop_unified(
 
     Ok(())
 }
-
