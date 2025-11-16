@@ -1336,6 +1336,14 @@ pub mod context {
 
     /// Minimum token count to prevent division by zero
     pub const MIN_TOKEN_COUNT: usize = 1;
+
+    /// Default token budget (tokens) for a single tool result when preparing model input
+    /// This is the semantic limit used for token-based truncation of tool outputs.
+    pub const DEFAULT_MODEL_INPUT_TOKEN_BUDGET: usize = 25_000;
+
+    /// Default byte fuse (bytes) applied as a secondary safeguard after token truncation
+    /// Protects against pathological payload sizes that tokenization may not catch.
+    pub const DEFAULT_MODEL_INPUT_BYTE_FUSE: usize = 10 * 1024; // 10 KiB
 }
 
 /// Chunking constants for large file handling

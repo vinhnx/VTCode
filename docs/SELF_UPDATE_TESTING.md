@@ -309,7 +309,7 @@ on: [push, pull_request]
 
 jobs:
     test:
-        runs-on: ubuntu-latest-arm64
+        runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v2
             - name: Test update check

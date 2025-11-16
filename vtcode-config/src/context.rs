@@ -156,6 +156,15 @@ pub struct ContextFeaturesConfig {
     pub max_structural_depth: usize,
     #[serde(default = "default_preserve_recent_tools")]
     pub preserve_recent_tools: usize,
+    /// Maximum tokens from a single tool result to include before truncation
+    /// Applies token-based head+tail truncation to tool outputs before model input
+    #[serde(default = "default_model_input_token_budget")]
+    pub model_input_token_budget: usize,
+
+    /// Byte failsafe fuse for tool outputs after token truncation
+    /// Protects against pathological cases and ensures reasonable payload sizes
+    #[serde(default = "default_model_input_byte_fuse")]
+    pub model_input_byte_fuse: usize,
 }
 
 impl Default for ContextFeaturesConfig {
@@ -170,6 +179,8 @@ impl Default for ContextFeaturesConfig {
             tool_aware_retention: default_tool_aware_retention_enabled(),
             max_structural_depth: default_max_structural_depth(),
             preserve_recent_tools: default_preserve_recent_tools(),
+            model_input_token_budget: default_model_input_token_budget(),
+            model_input_byte_fuse: default_model_input_byte_fuse(),
         }
     }
 }
@@ -243,4 +254,12 @@ fn default_max_structural_depth() -> usize {
 
 fn default_preserve_recent_tools() -> usize {
     context_defaults::DEFAULT_PRESERVE_RECENT_TOOLS
+}
+
+fn default_model_input_token_budget() -> usize {
+    crate::constants::context::DEFAULT_MODEL_INPUT_TOKEN_BUDGET
+}
+
+fn default_model_input_byte_fuse() -> usize {
+    crate::constants::context::DEFAULT_MODEL_INPUT_BYTE_FUSE
 }
