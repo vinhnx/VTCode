@@ -187,9 +187,7 @@ debug = 0
 incremental = false
 overflow-checks = false
 
-# Apple Silicon M4 specific optimizations for release builds
-[target.'cfg(target_arch = "aarch64")'.profile.release]
-opt-level = 3  # Use max optimization for Apple Silicon M4
+
 
 [[bin]]
 name = "vtcode"

@@ -2,6 +2,7 @@
 
 use super::traits::{ModeTool, Tool};
 use super::types::*;
+use crate::audit::permission_log::{PermissionAuditLog, PermissionDecision};
 use crate::config::CommandsConfig;
 use crate::config::constants::tools;
 use crate::exec::async_command::{AsyncProcessRunner, ProcessOptions, StreamCaptureConfig};
@@ -141,8 +142,24 @@ impl CommandTool {
             sanitize_working_dir(&self.workspace_root, input.working_dir.as_deref()).await?;
 
         // Policy check: config rules first, fallback to strict allowlist
+        let confirm_ok = input.confirm.unwrap_or(false);
         if !self.policy.allows(command) {
-            validate_command(command, &self.workspace_root, &working_dir).await?;
+            // Forward confirmation status to validator so callers can opt-in to destructive commands
+            validate_command(command, &self.workspace_root, &working_dir, confirm_ok).await?;
+        }
+
+        // Require explicit confirmation for high-risk operations even if policy allows them
+        if is_risky_command(&command) && !confirm_ok {
+            return Err(anyhow!(
+                "Command appears destructive; set the `confirm` field to true to proceed."
+            ));
+        }
+        if is_risky_command(&command) && confirm_ok {
+            // Record audit for the explicitly confirmed destructive command
+            log_audit_for_command(
+                &format_command(command),
+                "Confirmed destructive operation by agent",
+            );
         }
 
         // Check if the program (first command element) exists in PATH; if not, wrap in shell to leverage user's shell configuration
@@ -234,6 +251,59 @@ fn format_command(command: &[String]) -> String {
         .join(" ")
 }
 
+fn is_risky_command(command: &[String]) -> bool {
+    if command.is_empty() {
+        return false;
+    }
+    let program = command[0].as_str();
+    let args = &command[1..];
+
+    match program {
+        "git" => {
+            if args.is_empty() {
+                return false;
+            }
+            if args[0] == "reset"
+                && args
+                    .iter()
+                    .any(|a| a == "--hard" || a == "--merge" || a == "--keep")
+            {
+                return true;
+            }
+            if args[0] == "push" && args.iter().any(|a| a == "--force" || a == "-f") {
+                return true;
+            }
+            if args[0] == "clean" && args.iter().any(|a| a == "-f" || a == "-x" || a == "-d") {
+                return true;
+            }
+            false
+        }
+        "rm" => {
+            args.iter()
+                .any(|a| a == "-rf" || a == "-r" || a == "-f" || a == "-rf/")
+                || args.iter().any(|a| a == "/")
+        }
+        "docker" => args
+            .iter()
+            .any(|a| a == "run" && args.iter().any(|b| b == "--privileged")),
+        "kubectl" => true, // kubectl operations can be destructive; require confirmation
+        _ => false,
+    }
+}
+
+fn log_audit_for_command(command: &str, reason: &str) {
+    // Try to create an audit log at ~/.vtcode/audit and ignore errors
+    if let Some(home) = std::env::var_os("HOME") {
+        let mut audit_dir = std::path::PathBuf::from(home);
+        audit_dir.push(".vtcode");
+        audit_dir.push("audit");
+        if let Ok(mut audit_log) = PermissionAuditLog::new(audit_dir) {
+            let _ =
+                audit_log.log_command_decision(command, PermissionDecision::Allowed, reason, None);
+        }
+    }
+}
+
 fn quote_argument_posix(arg: &str) -> String {
     if arg.is_empty() {
         return "''".to_string();
@@ -279,6 +349,7 @@ mod tests {
             raw_command: None,
             shell: None,
             login: None,
+            confirm: None,
         }
     }
 
@@ -324,6 +395,30 @@ mod tests {
                 .to_string()
                 .contains("is not permitted by the execution policy")
         );
+    }
+
+    #[tokio::test]
+    async fn prepare_invocation_requires_confirm_for_git_reset_hard() {
+        let tool = make_tool();
+        let mut input = make_input(vec!["git", "reset", "--hard"]);
+        // No explicit confirm set - should error
+        let error = tool
+            .prepare_invocation(&input)
+            .await
+            .expect_err("git reset --hard should require confirmation");
+        assert!(error.to_string().contains("set the `confirm` field"));
+    }
+
+    #[tokio::test]
+    async fn prepare_invocation_allows_git_reset_with_confirm() {
+        let tool = make_tool();
+        let mut input = make_input(vec!["git", "reset", "--hard"]);
+        input.confirm = Some(true);
+        let invocation = tool
+            .prepare_invocation(&input)
+            .await
+            .expect("git reset --hard should be allowed when confirm=true");
+        assert!(invocation.display.contains("git reset"));
     }
 
     #[tokio::test]

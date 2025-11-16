@@ -71,6 +71,7 @@ pub(crate) struct SessionState {
     pub sandbox: SandboxCoordinator,
 }
 
+#[allow(dead_code)]
 pub(crate) struct SessionUISetup {
     pub renderer: AnsiRenderer,
     pub session: InlineSession,
@@ -377,6 +378,7 @@ pub(crate) async fn initialize_session(
     })
 }
 
+#[allow(dead_code)]
 pub(crate) async fn initialize_session_ui(
     config: &CoreAgentConfig,
     vt_cfg: Option<&VTCodeConfig>,

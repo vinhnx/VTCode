@@ -257,4 +257,18 @@ mod tests {
         assert!(evaluator.allows_text("bun install"));
         assert!(evaluator.allows_text("bun run check"));
     }
+
+    #[test]
+    fn allow_list_allows_exact_git_and_cargo_commands() {
+        let mut config = CommandsConfig::default();
+        // Clear default allow_list to reduce noise
+        config.allow_list.clear();
+        config.allow_list.push("git".to_string());
+        config.allow_list.push("cargo".to_string());
+        let evaluator = CommandPolicyEvaluator::from_config(&config);
+        assert!(evaluator.allows_text("git"));
+        assert!(evaluator.allows_text("cargo"));
+        assert!(evaluator.allows(&["git".into()]));
+        assert!(evaluator.allows(&["cargo".into()]));
+    }
 }

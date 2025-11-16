@@ -176,6 +176,9 @@ pub struct EnhancedTerminalInput {
     pub shell: Option<String>,
     #[serde(default)]
     pub login: Option<bool>,
+    /// Explicit confirmation to run potentially destructive operations
+    #[serde(default)]
+    pub confirm: Option<bool>,
 }
 
 /// PTY Session structure for managing interactive terminal sessions

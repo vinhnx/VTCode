@@ -248,12 +248,16 @@ strict_https_only = true
 [commands]
 # Commands that are always allowed without confirmation
 allow_list = [
-    "ls",           # List directory contents
-    "pwd",          # Print working directory
-    "git status",   # Show git status
-    "git diff",     # Show git differences
-    "cargo check",  # Check Rust code
-    "echo",         # Print text
+  "ls",           # List directory contents
+  "pwd",          # Print working directory
+  "echo",         # Print text
+  "date",         # Print date/time
+  "whoami",       # Identity
+  # Allow base verbs for tools; subcommands are validated by execpolicy
+  "git",
+  "cargo",
+  "python",       # Runtime entrypoint
+  "npm",
 ]
 
 # Additional directories to prepend to PATH when running commands
@@ -275,10 +279,16 @@ deny_list = [
 
 # Command patterns that are allowed (supports glob patterns)
 allow_glob = [
-    "git *",        # All git commands
-    "cargo *",      # All cargo commands
-    "python -m *",  # Python module commands
+  "git *",        # Allow common git workflows; destructive flags require confirm
+  "cargo *",      # Allow cargo workflows; publishing or install requires confirm
+  "python -m *",  # Python module commands
+  "npm *",
+  "node *",
 ]
+
+# When commands are potentially destructive, the agent will require an explicit confirmation flag
+# Example: set `confirm = true` in the `EnhancedTerminalInput` for `run_terminal_cmd` tool input
+#+
 
 # Command patterns that are denied (supports glob patterns)
 deny_glob = [

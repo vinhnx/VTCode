@@ -84,16 +84,17 @@ use crate::agent::runloop::unified::workspace_links::LinkedDirectory;
 use crate::hooks::lifecycle::{LifecycleHookEngine, SessionEndReason, SessionStartTrigger};
 use crate::ide_context::IdeContextBridge;
 
+#[allow(dead_code)]
 pub enum TurnLoopResult {
     Completed,
     Aborted,
     Cancelled,
     Blocked {
-        #[allow(dead_code)]
         reason: Option<String>,
     },
 }
 
+#[allow(dead_code)]
 pub enum PrepareToolCallResult {
     Approved,
     Denied,
@@ -101,8 +102,10 @@ pub enum PrepareToolCallResult {
     Interrupted,
 }
 
+#[allow(dead_code)]
 const SELF_REVIEW_MIN_LENGTH: usize = 240;
 
+#[allow(dead_code)]
 pub(crate) async fn run_turn_prepare_tool_call<
     S: vtcode_core::core::interfaces::ui::UiSession + ?Sized,
 >(
@@ -171,8 +174,10 @@ pub(crate) async fn run_turn_prepare_tool_call<
                 false,
             );
             // Build a ToolPipelineOutcome wrapper for the denial, and render via adapter
-            use crate::agent::runloop::unified::tool_pipeline::{ToolExecutionStatus, ToolPipelineOutcome};
             use crate::agent::runloop::unified::tool_output_handler::handle_pipeline_output_renderer;
+            use crate::agent::runloop::unified::tool_pipeline::{
+                ToolExecutionStatus, ToolPipelineOutcome,
+            };
             let outcome = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
                 output: denial.clone(),
                 stdout: None,
@@ -264,6 +269,7 @@ pub(crate) async fn run_turn_prepare_tool_call<
     }
 }
 
+#[allow(dead_code)]
 pub(crate) async fn run_turn_execute_tool(
     tool_registry: &mut vtcode_core::tools::registry::ToolRegistry,
     name: &str,
@@ -337,6 +343,7 @@ pub(crate) async fn run_turn_execute_tool(
     .await
 }
 
+#[allow(dead_code)]
 pub(crate) async fn run_turn_handle_tool_success(
     name: &str,
     output: serde_json::Value,
@@ -347,7 +354,7 @@ pub(crate) async fn run_turn_handle_tool_success(
     renderer: &mut AnsiRenderer,
     handle: &vtcode_core::ui::tui::InlineHandle,
     session_stats: &mut crate::agent::runloop::unified::state::SessionStats,
-    _repeated_tool_attempts: &mut std::collections::HashMap<String, usize>,
+    // repeated_tool_attempts is managed by the caller; not required here
     traj: &vtcode_core::core::trajectory::TrajectoryLogger,
     mcp_panel_state: &mut mcp_events::McpPanelState,
     tool_result_cache: &Arc<tokio::sync::RwLock<vtcode_core::tools::ToolResultCache>>,
@@ -421,11 +428,12 @@ pub(crate) async fn run_turn_handle_tool_success(
                 modified_files: modified_files.clone(),
                 command_success,
                 has_more,
-            }
+            },
         ),
         vt_cfg,
         token_budget,
-    ).await?;
+    )
+    .await?;
 
     *last_tool_stdout = if command_success {
         stdout.clone()
@@ -580,6 +588,7 @@ pub(crate) async fn run_turn_handle_tool_success(
     Ok(None)
 }
 
+#[allow(dead_code)]
 pub(crate) async fn run_turn_handle_tool_failure(
     name: &str,
     error: anyhow::Error,
@@ -634,8 +643,8 @@ pub(crate) async fn run_turn_handle_tool_failure(
 
     renderer.line(MessageStyle::Error, &error_message)?;
     // Render via the renderer adapter so all cache invalidation and MCP events are handled
-    use crate::agent::runloop::unified::tool_pipeline::{ToolExecutionStatus, ToolPipelineOutcome};
     use crate::agent::runloop::unified::tool_output_handler::handle_pipeline_output_renderer;
+    use crate::agent::runloop::unified::tool_pipeline::{ToolExecutionStatus, ToolPipelineOutcome};
     let outcome = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
         output: error_json.clone(),
         stdout: None,
@@ -685,6 +694,7 @@ pub(crate) async fn run_turn_handle_tool_failure(
     Ok(())
 }
 
+#[allow(dead_code)]
 pub(crate) async fn run_turn_handle_tool_timeout(
     name: &str,
     error: anyhow::Error,
@@ -743,6 +753,7 @@ pub(crate) async fn run_turn_handle_tool_timeout(
     Ok(())
 }
 
+#[allow(dead_code)]
 pub(crate) async fn run_turn_handle_tool_cancelled(
     name: &str,
     renderer: &mut AnsiRenderer,
@@ -789,6 +800,7 @@ pub(crate) async fn run_turn_handle_tool_cancelled(
     Ok(TurnLoopResult::Cancelled)
 }
 
+#[allow(dead_code)]
 pub(crate) async fn run_single_agent_loop_unified(
     config: &CoreAgentConfig,
     mut vt_cfg: Option<VTCodeConfig>,
@@ -836,7 +848,6 @@ pub(crate) async fn run_single_agent_loop_unified(
             trajectory: traj,
             base_system_prompt,
             full_auto_allowlist,
-            #[allow(unused_variables)]
             async_mcp_manager,
             mut mcp_panel_state,
             token_budget,
@@ -2290,7 +2301,6 @@ pub(crate) async fn run_single_agent_loop_unified(
                                             &mut renderer,
                                             &handle,
                                             &mut session_stats,
-                                            &mut repeated_tool_attempts,
                                             &traj,
                                             &mut mcp_panel_state,
                                             &tool_result_cache,
