@@ -14,13 +14,14 @@ use vtcode_core::exec::cancellation;
 use vtcode_core::tools::registry::ToolErrorType;
 use vtcode_core::tools::registry::{ToolExecutionError, ToolRegistry, ToolTimeoutCategory};
 
-use super::state::CtrlCState;
 use super::run_loop_context::RunLoopContext;
+use super::state::CtrlCState;
+use crate::agent::runloop::git::confirm_changes_with_git_diff;
 use crate::agent::runloop::unified::tool_routing::ensure_tool_permission;
+use crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner;
 use crate::hooks::lifecycle::LifecycleHookEngine;
 use vtcode_core::config::loader::VTCodeConfig;
-use crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner;
-use vtcode_core::tools::ApprovalRecorder;
+// No direct use of ApprovalRecorder or DecisionOutcome in this module; these are referenced via `RunLoopContext`.
 
 /// Default timeout for tool execution if no policy is configured
 const DEFAULT_TOOL_TIMEOUT: Duration = Duration::from_secs(300);
@@ -80,10 +81,22 @@ pub(crate) struct ToolPipelineOutcome {
 impl ToolPipelineOutcome {
     pub(crate) fn from_status(status: ToolExecutionStatus) -> Self {
         match status {
-            ToolExecutionStatus::Success { output, stdout, modified_files, command_success, has_more } => {
+            ToolExecutionStatus::Success {
+                output,
+                stdout,
+                modified_files,
+                command_success,
+                has_more,
+            } => {
                 let modified_files = modified_files;
                 ToolPipelineOutcome {
-                    status: ToolExecutionStatus::Success { output, stdout: stdout.clone(), modified_files: modified_files.clone(), command_success, has_more },
+                    status: ToolExecutionStatus::Success {
+                        output,
+                        stdout: stdout.clone(),
+                        modified_files: modified_files.clone(),
+                        command_success,
+                        has_more,
+                    },
                     stdout,
                     modified_files,
                     command_success,
@@ -110,8 +123,9 @@ pub(crate) async fn run_tool_call(
     default_placeholder: Option<String>,
     lifecycle_hooks: Option<&LifecycleHookEngine>,
     skip_confirmations: bool,
-    token_budget: &Arc<vtcode_core::core::token_budget::TokenBudgetManager>,
-    vt_cfg: Option<&VTCodeConfig>,
+    _token_budget: &Arc<vtcode_core::core::token_budget::TokenBudgetManager>,
+    _vt_cfg: Option<&VTCodeConfig>,
+    turn_index: usize,
 ) -> Result<ToolPipelineOutcome, anyhow::Error> {
     let name = call
         .function
@@ -120,7 +134,9 @@ pub(crate) async fn run_tool_call(
         .name
         .as_str()
         .to_string();
-    let args_val = call.parsed_arguments().unwrap_or_else(|_| serde_json::json!({}));
+    let args_val = call
+        .parsed_arguments()
+        .unwrap_or_else(|_| serde_json::json!({}));
 
     // Pre-flight permission check
     match ensure_tool_permission(
@@ -143,16 +159,26 @@ pub(crate) async fn run_tool_call(
     {
         Ok(super::tool_routing::ToolPermissionFlow::Approved) => {}
         Ok(super::tool_routing::ToolPermissionFlow::Denied) => {
-            return Ok(ToolPipelineOutcome::from_status(ToolExecutionStatus::Failure { error: anyhow::anyhow!("Tool permission denied") }));
+            return Ok(ToolPipelineOutcome::from_status(
+                ToolExecutionStatus::Failure {
+                    error: anyhow::anyhow!("Tool permission denied"),
+                },
+            ));
         }
         Ok(super::tool_routing::ToolPermissionFlow::Interrupted) => {
-            return Ok(ToolPipelineOutcome::from_status(ToolExecutionStatus::Cancelled));
+            return Ok(ToolPipelineOutcome::from_status(
+                ToolExecutionStatus::Cancelled,
+            ));
         }
         Ok(super::tool_routing::ToolPermissionFlow::Exit) => {
-            return Ok(ToolPipelineOutcome::from_status(ToolExecutionStatus::Cancelled));
+            return Ok(ToolPipelineOutcome::from_status(
+                ToolExecutionStatus::Cancelled,
+            ));
         }
         Err(e) => {
-            return Ok(ToolPipelineOutcome::from_status(ToolExecutionStatus::Failure { error: e }));
+            return Ok(ToolPipelineOutcome::from_status(
+                ToolExecutionStatus::Failure { error: e },
+            ));
         }
     }
 
@@ -168,7 +194,8 @@ pub(crate) async fn run_tool_call(
         let params_str = serde_json::to_string(&args_val).unwrap_or_default();
         let cache_key = vtcode_core::tools::result_cache::CacheKey::new(&name, &params_str, "");
         if let Some(cached_output) = cache.get(&cache_key) {
-            let cached_json: serde_json::Value = serde_json::from_str(&cached_output).unwrap_or(serde_json::json!({}));
+            let cached_json: serde_json::Value =
+                serde_json::from_str(&cached_output).unwrap_or(serde_json::json!({}));
             let status = ToolExecutionStatus::Success {
                 output: cached_json,
                 stdout: None,
@@ -188,7 +215,9 @@ pub(crate) async fn run_tool_call(
     let progress_reporter = ProgressReporter::new();
     progress_reporter.set_total(100).await;
     progress_reporter.set_progress(0).await;
-    progress_reporter.set_message(format!("Starting {}...", name)).await;
+    progress_reporter
+        .set_message(format!("Starting {}...", name))
+        .await;
 
     let tool_spinner = PlaceholderSpinner::with_progress(
         ctx.handle,
@@ -209,21 +238,60 @@ pub(crate) async fn run_tool_call(
     .await;
 
     match &outcome {
-        ToolExecutionStatus::Success { output, stdout, modified_files, command_success, has_more } => {
+        ToolExecutionStatus::Success {
+            output,
+            stdout: _stdout,
+            modified_files: _modified_files,
+            command_success,
+            has_more: _has_more,
+        } => {
             tool_spinner.finish();
             // Cache successful read-only results
             if is_read_only_tool && *command_success {
                 let mut cache = ctx.tool_result_cache.write().await;
-                let output_json = serde_json::to_string(&output).unwrap_or_else(|_| "{}".to_string());
+                let output_json =
+                    serde_json::to_string(&output).unwrap_or_else(|_| "{}".to_string());
                 let params_str = serde_json::to_string(&args_val).unwrap_or_default();
-                let cache_key = vtcode_core::tools::result_cache::CacheKey::new(&name, &params_str, "");
+                let cache_key =
+                    vtcode_core::tools::result_cache::CacheKey::new(&name, &params_str, "");
                 cache.insert(cache_key, output_json);
             }
         }
         _ => {}
     }
 
-    Ok(ToolPipelineOutcome::from_status(outcome))
+    let mut pipeline_outcome = ToolPipelineOutcome::from_status(outcome);
+
+    // If tool made file modifications, optionally confirm with git diff and either keep or revert
+    if !pipeline_outcome.modified_files.is_empty() {
+        let modified_files = pipeline_outcome.modified_files.clone();
+        if confirm_changes_with_git_diff(&modified_files, skip_confirmations).await? {
+            // record confirmed changes in trajectory inside ctx.traj
+            ctx.traj.log_tool_call(
+                turn_index,
+                &name,
+                &args_val,
+                pipeline_outcome.command_success,
+            );
+            // modified_files are kept as-is
+        } else {
+            // Reverted by confirm function; clear modified files
+            pipeline_outcome.modified_files.clear();
+            pipeline_outcome.command_success = false;
+        }
+    } else {
+        // Log that the tool was invoked but made no file modifications
+        ctx.traj.log_tool_call(
+            turn_index,
+            &name,
+            &args_val,
+            pipeline_outcome.command_success,
+        );
+    }
+
+    // Ledger recording is left to the run loop where a decision id is available. Return the pipeline outcome only.
+
+    Ok(pipeline_outcome)
 }
 
 /// Execute a tool with a timeout and progress reporting
@@ -532,9 +600,21 @@ fn spawn_timeout_warning_task(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use assert_fs::TempDir;
     use serde_json::json;
     use std::sync::Arc;
     use tokio::sync::Notify;
+    use vtcode_core::acp::PermissionGrant;
+    use vtcode_core::acp::permission_cache::ToolPermissionCache;
+    use vtcode_core::core::decision_tracker::DecisionTracker;
+    use vtcode_core::core::pruning_decisions::PruningDecisionLedger;
+    use vtcode_core::core::trajectory::TrajectoryLogger;
+    use vtcode_core::tools::ApprovalRecorder;
+    use vtcode_core::tools::registry::ToolRegistry;
+    use vtcode_core::tools::result_cache::ToolResultCache;
+    use vtcode_core::ui::theme;
+    use vtcode_core::ui::tui::{spawn_session, theme_from_styles};
+    use vtcode_core::utils::ansi::AnsiRenderer;
     #[tokio::test]
     async fn test_execute_tool_with_timeout() {
         // Setup test dependencies
@@ -595,6 +675,187 @@ mod tests {
             assert!(!has_more);
         } else {
             panic!("Expected Success variant");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_run_tool_call_unknown_tool_failure() {
+        let tmp = TempDir::new().unwrap();
+        let workspace = tmp.path().to_path_buf();
+
+        let mut registry = ToolRegistry::new(workspace.clone()).await;
+
+        let permission_cache_arc = Arc::new(tokio::sync::RwLock::new(ToolPermissionCache::new()));
+        {
+            let mut cache = permission_cache_arc.write().await;
+            cache.cache_grant("test_tool", PermissionGrant::Permanent);
+        }
+
+        let active_styles = theme::active_styles();
+        let theme_spec = theme_from_styles(&active_styles);
+        let mut session = spawn_session(
+            theme_spec.clone(),
+            None,
+            vtcode_core::config::types::UiSurfacePreference::Default,
+            10,
+            false,
+            None,
+        )
+        .unwrap();
+        let handle = session.clone_inline_handle();
+        let mut renderer = AnsiRenderer::with_inline_ui(
+            handle.clone(),
+            vtcode_core::config::types::HighlightConfig::default(),
+        );
+
+        let result_cache = Arc::new(tokio::sync::RwLock::new(ToolResultCache::new(10)));
+        let decision_ledger = Arc::new(tokio::sync::RwLock::new(DecisionTracker::new()));
+        let pruning_ledger = Arc::new(tokio::sync::RwLock::new(PruningDecisionLedger::new()));
+        let mut session_stats = crate::agent::runloop::unified::state::SessionStats::default();
+        let mut mcp_panel = crate::agent::runloop::mcp_events::McpPanelState::new(10, true);
+        let approval_recorder = ApprovalRecorder::new(workspace.clone());
+        let traj = TrajectoryLogger::new(&workspace);
+
+        let tools = Arc::new(tokio::sync::RwLock::new(Vec::new()));
+
+        let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext {
+            renderer: &mut renderer,
+            handle: &handle,
+            tool_registry: &mut registry,
+            tools: &tools,
+            tool_result_cache: &result_cache,
+            tool_permission_cache: &permission_cache_arc,
+            decision_ledger: &decision_ledger,
+            pruning_ledger: &pruning_ledger,
+            session_stats: &mut session_stats,
+            mcp_panel_state: &mut mcp_panel,
+            approval_recorder: &approval_recorder,
+            session: &mut session,
+            traj: &traj,
+        };
+
+        let call = vtcode_core::llm::provider::ToolCall::function(
+            "call_1".to_string(),
+            "test_tool".to_string(),
+            "{}".to_string(),
+        );
+        let ctrl_c_state = Arc::new(CtrlCState::new());
+        let ctrl_c_notify = Arc::new(Notify::new());
+
+        let outcome = run_tool_call(
+            &mut ctx,
+            &call,
+            &ctrl_c_state,
+            &ctrl_c_notify,
+            None,
+            None,
+            true,
+            &Arc::new(vtcode_core::core::token_budget::TokenBudgetManager::new(
+                4096,
+            )),
+            None,
+            0,
+        )
+        .await
+        .expect("run_tool_call must run");
+
+        assert!(matches!(
+            outcome.status,
+            ToolExecutionStatus::Failure { .. }
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_run_tool_call_read_file_success() {
+        use std::io::Write;
+        let tmp = TempDir::new().unwrap();
+        let workspace = tmp.path().to_path_buf();
+        let file_path = workspace.join("sample.txt");
+        std::fs::create_dir_all(&workspace).unwrap();
+        let mut f = std::fs::File::create(&file_path).unwrap();
+        write!(f, "hello world\n").unwrap();
+
+        let mut registry = ToolRegistry::new(workspace.clone()).await;
+
+        let permission_cache_arc = Arc::new(tokio::sync::RwLock::new(ToolPermissionCache::new()));
+        {
+            let mut cache = permission_cache_arc.write().await;
+            cache.cache_grant("read_file", PermissionGrant::Permanent);
+        }
+
+        let mut session = spawn_session(
+            theme_from_styles(&theme::active_styles()),
+            None,
+            vtcode_core::config::types::UiSurfacePreference::Default,
+            10,
+            false,
+            None,
+        )
+        .unwrap();
+        let handle = session.clone_inline_handle();
+        let mut renderer = AnsiRenderer::with_inline_ui(
+            handle.clone(),
+            vtcode_core::config::types::HighlightConfig::default(),
+        );
+
+        let result_cache = Arc::new(tokio::sync::RwLock::new(ToolResultCache::new(10)));
+        let decision_ledger = Arc::new(tokio::sync::RwLock::new(DecisionTracker::new()));
+        let pruning_ledger = Arc::new(tokio::sync::RwLock::new(PruningDecisionLedger::new()));
+        let mut session_stats = crate::agent::runloop::unified::state::SessionStats::default();
+        let mut mcp_panel = crate::agent::runloop::mcp_events::McpPanelState::new(10, true);
+        let approval_recorder = ApprovalRecorder::new(workspace.clone());
+        let traj = TrajectoryLogger::new(&workspace);
+
+        let tools = Arc::new(tokio::sync::RwLock::new(Vec::new()));
+
+        let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext {
+            renderer: &mut renderer,
+            handle: &handle,
+            tool_registry: &mut registry,
+            tools: &tools,
+            tool_result_cache: &result_cache,
+            tool_permission_cache: &permission_cache_arc,
+            decision_ledger: &decision_ledger,
+            pruning_ledger: &pruning_ledger,
+            session_stats: &mut session_stats,
+            mcp_panel_state: &mut mcp_panel,
+            approval_recorder: &approval_recorder,
+            session: &mut session,
+            traj: &traj,
+        };
+
+        let args = serde_json::json!({"path": file_path.to_string_lossy()});
+        let call = vtcode_core::llm::provider::ToolCall::function(
+            "call_2".to_string(),
+            "read_file".to_string(),
+            serde_json::to_string(&args).unwrap(),
+        );
+
+        let ctrl_c_state = Arc::new(CtrlCState::new());
+        let ctrl_c_notify = Arc::new(Notify::new());
+
+        let outcome = run_tool_call(
+            &mut ctx,
+            &call,
+            &ctrl_c_state,
+            &ctrl_c_notify,
+            None,
+            None,
+            true,
+            &Arc::new(vtcode_core::core::token_budget::TokenBudgetManager::new(
+                4096,
+            )),
+            None,
+            1,
+        )
+        .await
+        .expect("read_file run_tool_call should succeed");
+
+        match outcome.status {
+            ToolExecutionStatus::Success { output, .. } => {
+                assert_eq!(output.get("success").and_then(|v| v.as_bool()), Some(true));
+            }
+            other => panic!("Expected success, got: {:?}", other),
         }
     }
 

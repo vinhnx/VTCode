@@ -3,20 +3,28 @@ use crate::agent::runloop::sandbox::SandboxCoordinator;
 use crate::agent::runloop::telemetry::build_trajectory_logger;
 use crate::agent::runloop::welcome::{SessionBootstrap, prepare_session_bootstrap};
 use anyhow::{Context, Result};
+use chrono::Local;
 use std::str::FromStr;
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::{Notify, RwLock};
 use tokio::time::{Duration, sleep};
 use tracing::{debug, error, info, warn};
 
 use super::async_mcp_manager::AsyncMcpManager;
+use super::palettes::apply_prompt_style;
 use super::prompts::read_system_prompt;
+use super::state::CtrlCState;
 use crate::agent::runloop::ResumeSession;
 use crate::agent::runloop::context::{ContextTrimConfig, load_context_trim_config};
+use crate::agent::runloop::ui::{build_inline_header_context, render_session_banner};
+use crate::agent::runloop::unified::turn::utils::render_hook_messages;
+use crate::agent::runloop::unified::turn::workspace::load_workspace_files;
+use crate::hooks::lifecycle::LifecycleHookEngine;
+use crate::ide_context::IdeContextBridge;
+use vtcode_core::acp::ToolPermissionCache;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
-
-use vtcode_core::acp::ToolPermissionCache;
+use vtcode_core::core::agent::snapshots::{SnapshotConfig, SnapshotManager};
 use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::core::pruning_decisions::PruningDecisionLedger;
 use vtcode_core::core::token_budget::{
@@ -30,7 +38,12 @@ use vtcode_core::prompts::CustomPromptRegistry;
 use vtcode_core::tools::ToolRegistry;
 use vtcode_core::tools::build_function_declarations_with_mode;
 use vtcode_core::tools::{SearchMetrics, ToolResultCache};
+use vtcode_core::ui::theme;
+use vtcode_core::ui::tui::{InlineEventCallback, InlineHandle, InlineSession, theme_from_styles};
 use vtcode_core::ui::user_confirmation::TaskComplexity;
+use vtcode_core::utils::ansi::AnsiRenderer;
+use vtcode_core::utils::session_archive::{SessionArchive, SessionArchiveMetadata};
+use vtcode_core::utils::transcript;
 
 pub(crate) struct SessionState {
     pub session_bootstrap: SessionBootstrap,
@@ -56,6 +69,21 @@ pub(crate) struct SessionState {
 
     pub custom_prompts: CustomPromptRegistry,
     pub sandbox: SandboxCoordinator,
+}
+
+pub(crate) struct SessionUISetup {
+    pub renderer: AnsiRenderer,
+    pub session: InlineSession,
+    pub handle: InlineHandle,
+    pub ctrl_c_state: Arc<CtrlCState>,
+    pub ctrl_c_notify: Arc<Notify>,
+    pub checkpoint_manager: Option<SnapshotManager>,
+    pub session_archive: Option<SessionArchive>,
+    pub lifecycle_hooks: Option<LifecycleHookEngine>,
+    pub session_end_reason: crate::hooks::lifecycle::SessionEndReason,
+    pub context_manager: super::context_manager::ContextManager,
+    pub default_placeholder: Option<String>,
+    pub follow_up_placeholder: Option<String>,
 }
 
 pub(crate) async fn initialize_session(
@@ -346,6 +374,289 @@ pub(crate) async fn initialize_session(
         search_metrics,
         custom_prompts,
         sandbox,
+    })
+}
+
+pub(crate) async fn initialize_session_ui(
+    config: &CoreAgentConfig,
+    vt_cfg: Option<&VTCodeConfig>,
+    session_state: &mut SessionState,
+    resume_state: Option<&ResumeSession>,
+    full_auto: bool,
+) -> Result<SessionUISetup> {
+    use crate::hooks::lifecycle::{LifecycleHookEngine, SessionEndReason, SessionStartTrigger};
+    use vtcode_core::config::constants::ui;
+    use vtcode_core::ui::tui::{InlineEvent, spawn_session};
+
+    let session_trigger = if resume_state.is_some() {
+        SessionStartTrigger::Resume
+    } else {
+        SessionStartTrigger::Startup
+    };
+    let lifecycle_hooks = if let Some(vt) = vt_cfg {
+        LifecycleHookEngine::new(config.workspace.clone(), &vt.hooks, session_trigger)?
+    } else {
+        None
+    };
+
+    let context_manager = super::context_manager::ContextManager::new(
+        session_state.base_system_prompt.clone(),
+        session_state.trim_config.clone(),
+        session_state.token_budget.clone(),
+        session_state.token_budget_enabled,
+    );
+
+    let active_styles = theme::active_styles();
+    let theme_spec = theme_from_styles(&active_styles);
+    let default_placeholder = session_state
+        .session_bootstrap
+        .placeholder
+        .clone()
+        .or_else(|| Some(ui::CHAT_INPUT_PLACEHOLDER_BOOTSTRAP.to_string()));
+    let follow_up_placeholder = if session_state.session_bootstrap.placeholder.is_none() {
+        Some(ui::CHAT_INPUT_PLACEHOLDER_FOLLOW_UP.to_string())
+    } else {
+        None
+    };
+    let inline_rows = vt_cfg
+        .as_ref()
+        .map(|cfg| cfg.ui.inline_viewport_rows)
+        .unwrap_or(ui::DEFAULT_INLINE_VIEWPORT_ROWS);
+    let show_timeline_pane = vt_cfg
+        .as_ref()
+        .map(|cfg| cfg.ui.show_timeline_pane)
+        .unwrap_or(ui::INLINE_SHOW_TIMELINE_PANE);
+
+    // Set environment variable to indicate TUI mode is active
+    unsafe {
+        std::env::set_var("VTCODE_TUI_MODE", "1");
+    }
+
+    let ctrl_c_state = Arc::new(CtrlCState::new());
+    let ctrl_c_notify = Arc::new(Notify::new());
+    let interrupt_callback: InlineEventCallback = {
+        let state = ctrl_c_state.clone();
+        let notify = ctrl_c_notify.clone();
+        Arc::new(move |event: &InlineEvent| {
+            if matches!(event, InlineEvent::Interrupt) {
+                let _ = state.register_signal();
+                notify.notify_waiters();
+            }
+        })
+    };
+
+    let session = spawn_session(
+        theme_spec.clone(),
+        default_placeholder.clone(),
+        config.ui_surface,
+        inline_rows,
+        show_timeline_pane,
+        Some(interrupt_callback),
+    )
+    .context("failed to launch inline session")?;
+    let handle = session.clone_inline_handle();
+    let highlight_config = vt_cfg
+        .as_ref()
+        .map(|cfg| cfg.syntax_highlighting.clone())
+        .unwrap_or_default();
+
+    transcript::set_inline_handle(Arc::new(handle.clone()));
+
+    let mut ide_context_bridge = IdeContextBridge::from_env();
+    let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), highlight_config);
+
+    // Load workspace files asynchronously
+    let workspace_for_indexer = config.workspace.clone();
+    let workspace_for_palette = config.workspace.clone();
+    let handle_for_indexer = handle.clone();
+    tokio::spawn(async move {
+        match load_workspace_files(workspace_for_indexer).await {
+            Ok(files) => {
+                if !files.is_empty() {
+                    handle_for_indexer.load_file_palette(files, workspace_for_palette);
+                } else {
+                    tracing::debug!("No files found in workspace for file palette");
+                }
+            }
+            Err(err) => {
+                tracing::warn!("Failed to load workspace files for file palette: {}", err);
+            }
+        }
+    });
+
+    transcript::clear();
+
+    // Handle resume session display
+    if let Some(session) = resume_state {
+        let ended_local = session
+            .snapshot
+            .ended_at
+            .with_timezone(&Local)
+            .format("%Y-%m-%d %H:%M");
+        renderer.line(
+            vtcode_core::utils::ansi::MessageStyle::Info,
+            &format!(
+                "Resuming session {} · ended {} · {} messages",
+                session.identifier,
+                ended_local,
+                session.message_count()
+            ),
+        )?;
+        renderer.line(
+            vtcode_core::utils::ansi::MessageStyle::Info,
+            &format!("Previous archive: {}", session.path.display()),
+        )?;
+        renderer.line_if_not_empty(vtcode_core::utils::ansi::MessageStyle::Output)?;
+    }
+
+    // Setup session archive
+    let workspace_label = config
+        .workspace
+        .file_name()
+        .and_then(|component| component.to_str())
+        .map(|value| value.to_string())
+        .unwrap_or_else(|| "workspace".to_string());
+    let workspace_path = config.workspace.to_string_lossy().into_owned();
+    let provider_label = if config.provider.trim().is_empty() {
+        session_state.provider_client.name().to_string()
+    } else {
+        config.provider.clone()
+    };
+    let header_provider_label = provider_label.clone();
+    let archive_metadata = SessionArchiveMetadata::new(
+        workspace_label,
+        workspace_path,
+        config.model.clone(),
+        provider_label,
+        config.theme.clone(),
+        config.reasoning_effort.as_str().to_string(),
+    );
+    let mut session_archive_error: Option<String> = None;
+    let session_archive = match SessionArchive::new(archive_metadata).await {
+        Ok(archive) => Some(archive),
+        Err(err) => {
+            session_archive_error = Some(err.to_string());
+            None
+        }
+    };
+
+    if let (Some(hooks), Some(archive)) = (&lifecycle_hooks, session_archive.as_ref()) {
+        hooks
+            .update_transcript_path(Some(archive.path().to_path_buf()))
+            .await;
+    }
+
+    // Setup checkpoint manager
+    let mut checkpoint_config = SnapshotConfig::new(config.workspace.clone());
+    checkpoint_config.enabled = config.checkpointing_enabled;
+    checkpoint_config.storage_dir = config.checkpointing_storage_dir.clone();
+    checkpoint_config.max_snapshots = config.checkpointing_max_snapshots;
+    checkpoint_config.max_age_days = config.checkpointing_max_age_days;
+
+    let checkpoint_manager = match SnapshotManager::new(checkpoint_config) {
+        Ok(manager) => Some(manager),
+        Err(err) => {
+            warn!("Failed to initialize checkpoint manager: {}", err);
+            None
+        }
+    };
+
+    handle.set_theme(theme_spec.clone());
+    apply_prompt_style(&handle);
+    handle.set_placeholder(default_placeholder.clone());
+
+    let reasoning_label = vt_cfg
+        .as_ref()
+        .map(|cfg| cfg.agent.reasoning_effort.as_str().to_string())
+        .unwrap_or_else(|| config.reasoning_effort.as_str().to_string());
+
+    // Render session banner
+    render_session_banner(
+        &mut renderer,
+        config,
+        &session_state.session_bootstrap,
+        &config.model,
+        &reasoning_label,
+    )?;
+
+    // Handle IDE context
+    if let Some(bridge) = ide_context_bridge.as_mut() {
+        match bridge.snapshot() {
+            Ok(Some(context)) => {
+                session_state
+                    .conversation_history
+                    .push(uni::Message::system(context));
+            }
+            Ok(None) => {}
+            Err(err) => {
+                warn!("Failed to update IDE context snapshot: {}", err);
+            }
+        }
+    }
+
+    // Run session start hooks
+    if let Some(hooks) = &lifecycle_hooks {
+        match hooks.run_session_start().await {
+            Ok(outcome) => {
+                render_hook_messages(&mut renderer, &outcome.messages)?;
+                for context in outcome.additional_context {
+                    if !context.trim().is_empty() {
+                        session_state
+                            .conversation_history
+                            .push(uni::Message::system(context));
+                    }
+                }
+            }
+            Err(err) => {
+                renderer.line(
+                    vtcode_core::utils::ansi::MessageStyle::Error,
+                    &format!("Failed to run session start hooks: {}", err),
+                )?;
+            }
+        }
+    }
+
+    // Setup header context
+    let mode_label = match (config.ui_surface, full_auto) {
+        (vtcode_core::config::types::UiSurfacePreference::Inline, true) => "auto".to_string(),
+        (vtcode_core::config::types::UiSurfacePreference::Inline, false) => "inline".to_string(),
+        (vtcode_core::config::types::UiSurfacePreference::Alternate, _) => "alt".to_string(),
+        (vtcode_core::config::types::UiSurfacePreference::Auto, true) => "auto".to_string(),
+        (vtcode_core::config::types::UiSurfacePreference::Auto, false) => "std".to_string(),
+    };
+    let header_context = build_inline_header_context(
+        config,
+        &session_state.session_bootstrap,
+        header_provider_label,
+        config.model.clone(),
+        mode_label,
+        reasoning_label.clone(),
+    )
+    .await?;
+    handle.set_header_context(header_context);
+
+    // Handle session archive error display
+    if let Some(message) = session_archive_error {
+        renderer.line(
+            vtcode_core::utils::ansi::MessageStyle::Info,
+            &format!("Session archiving disabled: {}", message),
+        )?;
+        renderer.line_if_not_empty(vtcode_core::utils::ansi::MessageStyle::Output)?;
+    }
+
+    Ok(SessionUISetup {
+        renderer,
+        session,
+        handle,
+        ctrl_c_state,
+        ctrl_c_notify,
+        checkpoint_manager,
+        session_archive,
+        lifecycle_hooks,
+        session_end_reason: SessionEndReason::Completed,
+        context_manager,
+        default_placeholder,
+        follow_up_placeholder,
     })
 }
 

@@ -13,7 +13,7 @@ pub(super) fn safe_force_redraw(handle: &InlineHandle, last_forced_redraw: &mut 
     }
 }
 
-pub(super) fn render_hook_messages(
+pub(crate) fn render_hook_messages(
     renderer: &mut AnsiRenderer,
     messages: &[HookMessage],
 ) -> Result<()> {

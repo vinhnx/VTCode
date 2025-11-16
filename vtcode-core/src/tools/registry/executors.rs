@@ -35,6 +35,10 @@ const RUN_PTY_POLL_TIMEOUT_SECS: u64 = 5;
 const LONG_RUNNING_COMMAND_TIMEOUT_SECS: u64 = 600;
 // For known long-running commands, wait longer before returning partial output
 const RUN_PTY_POLL_TIMEOUT_LONG_RUNNING: u64 = 30;
+// PTY retry configuration
+const PTY_COMMAND_MAX_RETRIES: u32 = 2;
+const PTY_RETRY_INITIAL_DELAY_MS: u64 = 300;
+const PTY_RETRY_MAX_DELAY_MS: u64 = 2000;
 const LONG_RUNNING_COMMANDS: &[&str] = &[
     "cargo", "npm", "yarn", "pnpm", "pip", "python", "make", "docker",
 ];
@@ -1571,7 +1575,65 @@ impl ToolRegistry {
     }
 
     async fn run_ephemeral_pty_command(&mut self, setup: PtyCommandSetup) -> Result<Value> {
+        let mut retry_count = 0;
+        let max_retries = PTY_COMMAND_MAX_RETRIES;
+
+        loop {
+            let result = self.execute_single_pty_attempt(&setup, retry_count).await?;
+
+            // Check if command succeeded or if we've exhausted retries
+            let exit_code = result.0;
+            let capture = result.1;
+            let snapshot = result.2;
+
+            let should_retry =
+                exit_code.map_or(false, |code| code != 0) && retry_count < max_retries;
+
+            if !should_retry {
+                // Either succeeded (exit_code == 0) or failed with no more retries
+                let mut response = build_ephemeral_pty_response(&setup, capture, snapshot);
+                if retry_count > 0 {
+                    if let Value::Object(ref mut obj) = response {
+                        obj.insert(
+                            "retries_attempted".to_string(),
+                            Value::Number(retry_count.into()),
+                        );
+                    }
+                }
+                return Ok(response);
+            }
+
+            // Clean up failed session before retrying
+            if let Err(e) = self.pty_manager().close_session(&setup.session_id) {
+                warn!(
+                    "failed to clean up PTY session '{}' before retry: {}",
+                    setup.session_id, e
+                );
+            }
+
+            // Command failed and we have retries left - exponential backoff
+            retry_count += 1;
+            let backoff_ms = std::cmp::min(
+                PTY_RETRY_INITIAL_DELAY_MS * (2_u64.pow(retry_count - 1)),
+                PTY_RETRY_MAX_DELAY_MS,
+            );
+
+            debug!(
+                "PTY command failed with exit code {:?}, retrying (attempt {}/{}) after {}ms",
+                exit_code, retry_count, max_retries, backoff_ms
+            );
+
+            sleep(Duration::from_millis(backoff_ms)).await;
+        }
+    }
+
+    async fn execute_single_pty_attempt(
+        &mut self,
+        setup: &PtyCommandSetup,
+        retry_count: u32,
+    ) -> Result<(Option<i32>, PtyEphemeralCapture, VTCodePtySession)> {
         let mut lifecycle = PtySessionLifecycle::start(self)?;
+
         self.pty_manager()
             .create_session(
                 setup.session_id.clone(),
@@ -1581,8 +1643,10 @@ impl ToolRegistry {
             )
             .with_context(|| {
                 format!(
-                    "failed to create PTY session '{}' for command {:?}",
-                    setup.session_id, setup.command
+                    "failed to create PTY session '{}' for command {:?} (attempt {})",
+                    setup.session_id,
+                    setup.command,
+                    retry_count + 1
                 )
             })?;
         lifecycle.commit();
@@ -1594,16 +1658,81 @@ impl ToolRegistry {
             Duration::from_secs(RUN_PTY_POLL_TIMEOUT_SECS)
         };
 
-        let capture =
-            collect_ephemeral_session_output(self.pty_manager(), &setup.session_id, poll_timeout)
-                .await;
+        // Wait for full command completion, not just initial output
+        let capture = self
+            .wait_for_pty_completion(&setup.session_id, poll_timeout)
+            .await;
 
         let snapshot = self
             .pty_manager()
             .snapshot_session(&setup.session_id)
             .with_context(|| format!("failed to snapshot PTY session '{}'", setup.session_id))?;
 
-        Ok(build_ephemeral_pty_response(&setup, capture, snapshot))
+        Ok((capture.exit_code, capture, snapshot))
+    }
+
+    async fn wait_for_pty_completion(
+        &self,
+        session_id: &str,
+        poll_timeout: Duration,
+    ) -> PtyEphemeralCapture {
+        let mut output = String::new();
+        let start = Instant::now();
+        let poll_interval = Duration::from_millis(50);
+        let min_wait = Duration::from_millis(200);
+
+        loop {
+            // Read any available output
+            if let Ok(Some(new_output)) = self.pty_manager().read_session_output(session_id, true) {
+                if !new_output.is_empty() {
+                    output.push_str(&new_output);
+                }
+            }
+
+            // Check if session has completed
+            if let Ok(Some(code)) = self.pty_manager().is_session_completed(session_id) {
+                // Drain any remaining output
+                if let Ok(Some(final_output)) =
+                    self.pty_manager().read_session_output(session_id, true)
+                {
+                    output.push_str(&final_output);
+                }
+
+                return PtyEphemeralCapture {
+                    output,
+                    exit_code: Some(code),
+                    completed: true,
+                    duration: start.elapsed(),
+                };
+            }
+
+            let elapsed = start.elapsed();
+
+            // For long-running commands, wait longer for completion
+            if elapsed > poll_timeout {
+                debug!(
+                    "PTY command timeout after {:?}, returning partial output",
+                    elapsed
+                );
+                return PtyEphemeralCapture {
+                    output,
+                    exit_code: None,
+                    completed: false,
+                    duration: elapsed,
+                };
+            }
+
+            // Minimum wait before returning
+            if !output.is_empty() && elapsed > min_wait {
+                // For fast commands (< 2s), wait for completion
+                if elapsed < Duration::from_secs(2) {
+                    sleep(poll_interval).await;
+                    continue;
+                }
+            }
+
+            sleep(poll_interval).await;
+        }
     }
 
     async fn build_terminal_command_plan(
@@ -2902,62 +3031,6 @@ struct PtyEphemeralCapture {
     exit_code: Option<i32>,
     completed: bool,
     duration: Duration,
-}
-
-async fn collect_ephemeral_session_output(
-    manager: &PtyManager,
-    session_id: &str,
-    poll_timeout: Duration,
-) -> PtyEphemeralCapture {
-    let mut output = String::new();
-    let start = Instant::now();
-    let mut completed = false;
-    let mut exit_code = None;
-    let poll_interval = Duration::from_millis(50);
-    let min_wait = Duration::from_millis(200); // Wait at least 200ms for fast commands
-
-    loop {
-        if let Ok(Some(new_output)) = manager.read_session_output(session_id, true) {
-            if !new_output.is_empty() {
-                output.push_str(&new_output);
-            }
-        }
-
-        if let Ok(Some(code)) = manager.is_session_completed(session_id) {
-            completed = true;
-            exit_code = Some(code);
-            // Drain any remaining output
-            if let Ok(Some(final_output)) = manager.read_session_output(session_id, true) {
-                output.push_str(&final_output);
-            }
-            break;
-        }
-
-        let elapsed = start.elapsed();
-
-        // For long-running commands, return partial output early
-        if elapsed > poll_timeout {
-            break;
-        }
-
-        // If we have output and minimum wait time passed, check if we should return early
-        if !output.is_empty() && elapsed > min_wait {
-            // Return early if command is still running and we have output
-            // This allows the agent to show progress
-            if elapsed > Duration::from_secs(2) {
-                break;
-            }
-        }
-
-        sleep(poll_interval).await;
-    }
-
-    PtyEphemeralCapture {
-        output,
-        exit_code,
-        completed,
-        duration: start.elapsed(),
-    }
 }
 
 fn build_ephemeral_pty_response(

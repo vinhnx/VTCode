@@ -1,15 +1,16 @@
+use crate::agent::runloop::unified::state::SessionStats;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use vtcode_core::core::decision_tracker::DecisionTracker;
+use vtcode_core::core::pruning_decisions::PruningDecisionLedger;
+use vtcode_core::core::trajectory::TrajectoryLogger;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::ToolRegistry;
 use vtcode_core::tools::ToolResultCache;
-use vtcode_core::core::decision_tracker::DecisionTracker;
-use vtcode_core::core::pruning_decisions::PruningDecisionLedger;
 use vtcode_core::ui::tui::InlineHandle;
 use vtcode_core::ui::tui::InlineSession;
 use vtcode_core::utils::ansi::AnsiRenderer;
-use crate::agent::runloop::unified::state::SessionStats;
-use crate::agent::runloop::unified::mcp_tool_manager::McpToolManager;
+// use crate::agent::runloop::unified::mcp_tool_manager::McpToolManager; // unused
 use crate::agent::runloop::mcp_events::McpPanelState;
 use vtcode_core::acp::ToolPermissionCache;
 use vtcode_core::tools::ApprovalRecorder;
@@ -27,4 +28,5 @@ pub(crate) struct RunLoopContext<'a> {
     pub mcp_panel_state: &'a mut McpPanelState,
     pub approval_recorder: &'a ApprovalRecorder,
     pub session: &'a mut InlineSession,
+    pub traj: &'a TrajectoryLogger,
 }
