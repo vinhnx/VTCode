@@ -3,6 +3,29 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Version 0.43.0] - 2025-11-09
+# [Version 0.45.1] - 2025-11-17
+
+
+### Features
+    - feat: implement token-based truncation for tool outputs and update configuration
+
+
+### Refactors
+    - refactor(runloop): extract tool pipeline into  and add  — reduce run loop complexity
+
+
+### Documentation
+    - docs: update changelog for v0.45.0 [skip ci]
+
+
+### Chores
+    - chore: update npm package.json to v0.45.0 [skip ci]
+    - chore: release v0.45.0
+    - chore: update GitHub Actions workflows for improved performance and consistency; adjust dependency management and environment variables
+    - chore(runloop): make session.rs minimal exposing slash_commands
+    - chore(runloop): remove session.rs contents to extract run loop
+    - chore(runloop): Extract run_single_agent_loop_unified to run_loop.rs
+    - chore: update npm package.json to v0.44.1 [skip ci]
 # [Version 0.45.0] - 2025-11-16
 
 
