@@ -225,7 +225,6 @@ mod tests {
             verbose: false,
             theme: vtcode_core::ui::theme::DEFAULT_THEME_ID.to_string(),
             reasoning_effort: ReasoningEffortLevel::default(),
-            verbosity: None,
             ui_surface: UiSurfacePreference::default(),
             prompt_cache: PromptCachingConfig::default(),
             model_source: ModelSelectionSource::WorkspaceConfig,
