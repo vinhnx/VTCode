@@ -358,6 +358,7 @@ pub struct PtyCommandRequest {
     pub working_dir: PathBuf,
     pub timeout: Duration,
     pub size: PtySize,
+    pub max_tokens: Option<usize>,
 }
 
 pub struct PtyCommandResult {
@@ -365,6 +366,7 @@ pub struct PtyCommandResult {
     pub output: String,
     pub duration: Duration,
     pub size: PtySize,
+    pub applied_max_tokens: Option<usize>,
 }
 
 impl PtyManager {
@@ -437,6 +439,7 @@ impl PtyManager {
         self.ensure_within_workspace(&work_dir)?;
         let workspace_root = self.workspace_root.clone();
         let extra_paths = self.extra_paths.lock().clone();
+        let max_tokens = request.max_tokens; // Get max_tokens from request
 
         let sandbox_profile = self.current_sandbox_profile();
         let result = tokio::task::spawn_blocking(move || -> Result<PtyCommandResult> {
@@ -593,14 +596,41 @@ impl PtyManager {
                 .join()
                 .map_err(|panic| anyhow!("PTY command reader thread panicked: {:?}", panic))?
                 .context("failed to read PTY command output")?;
-            let output = String::from_utf8_lossy(&output_bytes).to_string();
+            let mut output = String::from_utf8_lossy(&output_bytes).to_string();
             let exit_code = exit_status_code(status);
+
+            // Apply max_tokens truncation if specified
+            let mut final_output = output;
+            if let Some(max_tokens) = max_tokens {
+                if max_tokens > 0 {
+                    use vtcode_core::core::token_budget::TokenBudgetManager;
+                    use crate::agent::runloop::token_trunc::truncate_content_by_tokens;
+
+                    let rt = tokio::runtime::Handle::current();
+                    let token_budget = TokenBudgetManager::default();
+
+                    // Count tokens in the output
+                    let output_tokens = rt.block_on(async {
+                        token_budget.count_tokens(&output).await
+                    }).unwrap_or((output.len() as f64 / TOKENS_PER_CHARACTER) as usize);
+
+                    if output_tokens > max_tokens {
+                        // Use the same head+tail truncation as file_ops
+                        let (truncated_output, _) = rt.block_on(async {
+                            truncate_content_by_tokens(&output, max_tokens, &token_budget).await
+                        });
+                        final_output = format!("{}\n[... truncated by max_tokens: {} ...]", truncated_output, max_tokens);
+                    }
+                }
+            }
+            output = final_output;
 
             Ok(PtyCommandResult {
                 exit_code,
                 output,
                 duration: start.elapsed(),
                 size,
+                applied_max_tokens: max_tokens,
             })
         })
         .await

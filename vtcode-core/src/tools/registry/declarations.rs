@@ -395,7 +395,8 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
                     "path": {"type": "string", "description": "File path"},
                     "max_bytes": {"type": "integer", "description": "Maximum bytes to read"},
                     "chunk_lines": {"type": "integer", "description": "Chunking threshold", "default": 2000},
-                    "max_lines": {"type": "integer", "description": "Alternative chunk parameter"}
+                    "max_lines": {"type": "integer", "description": "Deprecated: Alternative chunk parameter (prefer using `max_tokens` which is token-based)"},
+                    "max_tokens": {"type": "integer", "description": "Maximum tokens to include from this file (per-call token budget). Prefer token-based limits instead of lines."}
                 },
                 "required": ["path"]
             }),
@@ -627,7 +628,8 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
                     "input_base64": {"type": "string", "description": "Base64 encoded bytes"},
                     "append_newline": {"type": "boolean", "description": "Append newline", "default": false},
                     "wait_ms": {"type": "integer", "description": "Wait before capture (ms)", "default": 0},
-                    "drain": {"type": "boolean", "description": "Clear buffer after capture", "default": true}
+                    "drain": {"type": "boolean", "description": "Clear buffer after capture", "default": true},
+                    "max_tokens": {"type": "integer", "description": "Maximum tokens to include in output (per-call token budget). Prefer token-based limits for large outputs."}
                 },
                 "required": ["session_id"],
                 "additionalProperties": false
@@ -643,7 +645,8 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
                     "session_id": {"type": "string", "description": "Session ID"},
                     "drain": {"type": "boolean", "description": "Clear new output", "default": false},
                     "include_screen": {"type": "boolean", "description": "Include screen buffer", "default": true},
-                    "include_scrollback": {"type": "boolean", "description": "Include scrollback", "default": true}
+                    "include_scrollback": {"type": "boolean", "description": "Include scrollback", "default": true},
+                    "max_tokens": {"type": "integer", "description": "Maximum tokens to include in output (per-call token budget). Prefer token-based limits for large outputs."}
                 },
                 "required": ["session_id"],
                 "additionalProperties": false

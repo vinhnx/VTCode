@@ -1,10 +1,10 @@
 //! Shared token-based truncation utilities for model input aggregation
+use serde_json::Value;
 use vtcode_core::core::token_budget::TokenBudgetManager;
 use vtcode_core::core::token_constants::{
-    CODE_DETECTION_THRESHOLD, CODE_INDICATOR_CHARS, LOG_HEAD_RATIO_PERCENT, CODE_HEAD_RATIO_PERCENT,
-    TOKENS_PER_CHARACTER,
+    CODE_DETECTION_THRESHOLD, CODE_HEAD_RATIO_PERCENT, CODE_INDICATOR_CHARS,
+    LOG_HEAD_RATIO_PERCENT, TOKENS_PER_CHARACTER,
 };
-use serde_json::Value;
 
 /// Truncate content by tokens using a head+tail strategy with code-aware ratios.
 pub async fn truncate_content_by_tokens(
@@ -26,7 +26,11 @@ pub async fn truncate_content_by_tokens(
         .filter(|c| CODE_INDICATOR_CHARS.contains(*c))
         .count();
     let is_code = bracket_count > (char_count / CODE_DETECTION_THRESHOLD);
-    let head_ratio = if is_code { CODE_HEAD_RATIO_PERCENT } else { LOG_HEAD_RATIO_PERCENT };
+    let head_ratio = if is_code {
+        CODE_HEAD_RATIO_PERCENT
+    } else {
+        LOG_HEAD_RATIO_PERCENT
+    };
 
     let head_tokens = (max_tokens * head_ratio) / 100;
     let tail_tokens = max_tokens - head_tokens;
@@ -37,12 +41,16 @@ pub async fn truncate_content_by_tokens(
     let mut head_lines = Vec::new();
     let mut acc = 0usize;
     for line in &lines {
-        if acc >= head_tokens { break; }
+        if acc >= head_tokens {
+            break;
+        }
         let line_tokens = (line.len() as f64 / TOKENS_PER_CHARACTER).ceil() as usize;
         if acc + line_tokens <= head_tokens || head_lines.is_empty() {
             head_lines.push(*line);
             acc += line_tokens;
-        } else { break; }
+        } else {
+            break;
+        }
     }
 
     // Tail
@@ -50,18 +58,30 @@ pub async fn truncate_content_by_tokens(
     let mut acc_tail = 0usize;
     let mut tail_start_idx = lines.len();
     for line in lines.iter().rev() {
-        if acc_tail >= tail_tokens { break; }
+        if acc_tail >= tail_tokens {
+            break;
+        }
         let line_tokens = (line.len() as f64 / TOKENS_PER_CHARACTER).ceil() as usize;
         if acc_tail + line_tokens <= tail_tokens || tail_lines.is_empty() {
             tail_lines.push(*line);
             acc_tail += line_tokens;
             tail_start_idx -= 1;
-        } else { break; }
+        } else {
+            break;
+        }
     }
     tail_lines.reverse();
 
-    let head_content = if head_lines.is_empty() { String::new() } else { head_lines.join("\n") };
-    let tail_content = if tail_lines.is_empty() { String::new() } else { tail_lines.join("\n") };
+    let head_content = if head_lines.is_empty() {
+        String::new()
+    } else {
+        head_lines.join("\n")
+    };
+    let tail_content = if tail_lines.is_empty() {
+        String::new()
+    } else {
+        tail_lines.join("\n")
+    };
 
     if tail_start_idx > head_lines.len() {
         let truncated_lines = tail_start_idx.saturating_sub(head_lines.len());
@@ -80,7 +100,9 @@ pub async fn truncate_content_by_tokens(
 
 /// Byte fuse truncation with a clear marker, preserving UTF-8 boundaries.
 pub fn safe_truncate_to_bytes_with_marker(s: &str, max_bytes: usize) -> String {
-    if s.len() <= max_bytes { return s.to_string(); }
+    if s.len() <= max_bytes {
+        return s.to_string();
+    }
     let marker = "\n[... content truncated by byte fuse ...]";
     let budget = max_bytes.saturating_sub(marker.len());
     let cutoff = s
@@ -132,7 +154,9 @@ pub async fn aggregate_tool_output_for_model(
             output.to_string()
         };
         let (mut text, _tr) = truncate_content_by_tokens(&compact, max_tokens, token_budget).await;
-        if text.len() > byte_fuse { text = safe_truncate_to_bytes_with_marker(&text, byte_fuse); }
+        if text.len() > byte_fuse {
+            text = safe_truncate_to_bytes_with_marker(&text, byte_fuse);
+        }
         return text;
     }
 
@@ -142,10 +166,72 @@ pub async fn aggregate_tool_output_for_model(
     for (label, s) in parts.iter() {
         aggregate.push_str(&format!("--- {} ---\n", label));
         aggregate.push_str(s);
-        if !aggregate.ends_with('\n') { aggregate.push('\n'); }
+        if !aggregate.ends_with('\n') {
+            aggregate.push('\n');
+        }
     }
 
     let (mut text, _tr) = truncate_content_by_tokens(&aggregate, max_tokens, token_budget).await;
-    if text.len() > byte_fuse { text = safe_truncate_to_bytes_with_marker(&text, byte_fuse); }
+    if text.len() > byte_fuse {
+        text = safe_truncate_to_bytes_with_marker(&text, byte_fuse);
+    }
     text
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use vtcode_core::core::token_budget::TokenBudgetManager;
+
+    #[tokio::test]
+    async fn test_truncate_content_by_tokens_preserves_head_tail() {
+        let mgr = TokenBudgetManager::default();
+        // Create a content block where important data is at head and tail
+        let head = (1..=10)
+            .map(|i| format!("head-{}", i))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let tail = (1..=10)
+            .map(|i| format!("tail-{}", i))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let middle = (1..=500)
+            .map(|i| format!("middle-{}", i))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let content = format!("{}\n{}\n{}", head, middle, tail);
+        let (res, truncated) = truncate_content_by_tokens(&content, 200, &mgr).await;
+        assert!(truncated);
+        assert!(res.contains("head-1"));
+        assert!(res.contains("tail-1"));
+    }
+    #[tokio::test]
+    async fn test_safe_truncate_to_bytes_with_marker_marker_present() {
+        let marker = "\n[... content truncated by byte fuse ...]";
+        let s = "a".repeat(5000);
+        let out = safe_truncate_to_bytes_with_marker(&s, 100);
+        assert!(out.ends_with(marker));
+        assert!(out.len() <= 100 + marker.len());
+    }
+
+    #[tokio::test]
+    async fn test_aggregate_tool_output_honors_max_tokens_and_preserves_tail() {
+        let mgr = TokenBudgetManager::default();
+        let mut output = serde_json::json!({});
+        // Build a large stdout-like content with start/middle/end
+        let mut buf = String::new();
+        buf.push_str("START_LINE\n");
+        for i in 0..100 {
+            buf.push_str(&format!("MIDDLE {}\n", i));
+        }
+        buf.push_str("END_LINE\n");
+        output["stdout"] = serde_json::json!(buf);
+
+        // Small max_tokens to force truncation
+        let result = aggregate_tool_output_for_model("test_tool", &output, 50, 200, &mgr).await;
+        assert!(result.contains("START_LINE"));
+        assert!(result.contains("END_LINE"));
+        // Should be truncated (contain our truncation marker)
+        assert!(result.contains("[..."));
+    }
 }

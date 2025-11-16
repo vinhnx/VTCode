@@ -179,6 +179,9 @@ async fn main() -> Result<()> {
         Some(Commands::Man { command, output }) => {
             cli::handle_man_command(command.clone(), output.clone()).await?;
         }
+        Some(Commands::Tokens { command }) => {
+            vtcode_core::cli::token_commands::handle_token_command(command).await?;
+        }
         _ => {
             // Default to chat
             cli::handle_chat_command(core_cfg, skip_confirmations, full_auto_requested).await?;

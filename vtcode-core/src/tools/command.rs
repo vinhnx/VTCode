@@ -103,17 +103,50 @@ impl CommandTool {
             success = false;
         }
 
+        // Apply max_tokens truncation if specified
+        let mut output_stdout = stdout;
+        let mut output_stderr = stderr;
+        let applied_max_tokens = input.max_tokens;
+
+        if let Some(max_tokens) = input.max_tokens {
+            if max_tokens > 0 {
+                use vtcode_core::core::token_budget::TokenBudgetManager;
+                use crate::agent::runloop::token_trunc::truncate_content_by_tokens;
+
+                let token_budget = TokenBudgetManager::default();
+
+                // Truncate stdout based on tokens using the same head+tail strategy as file_ops
+                let stdout_tokens = token_budget.count_tokens(&output_stdout).await
+                    .unwrap_or_else(|_| (output_stdout.len() as f64 / vtcode_core::core::token_constants::TOKENS_PER_CHARACTER) as usize);
+
+                if stdout_tokens > max_tokens {
+                    let (truncated_stdout, _) = truncate_content_by_tokens(&output_stdout, max_tokens, &token_budget).await;
+                    output_stdout = format!("{}\n[... truncated by max_tokens: {} ...]", truncated_stdout, max_tokens);
+                }
+
+                // Truncate stderr based on tokens using the same head+tail strategy as file_ops
+                let stderr_tokens = token_budget.count_tokens(&output_stderr).await
+                    .unwrap_or_else(|_| (output_stderr.len() as f64 / vtcode_core::core::token_constants::TOKENS_PER_CHARACTER) as usize);
+
+                if stderr_tokens > max_tokens {
+                    let (truncated_stderr, _) = truncate_content_by_tokens(&output_stderr, max_tokens, &token_budget).await;
+                    output_stderr = format!("{}\n[... truncated by max_tokens: {} ...]", truncated_stderr, max_tokens);
+                }
+            }
+        }
+
         Ok(json!({
             "success": success,
             "exit_code": exit_code,
-            "stdout": stdout,
-            "stderr": stderr,
+            "stdout": output_stdout,
+            "stderr": output_stderr,
             "mode": "terminal",
             "pty_enabled": false,
             "command": invocation.display,
             "timed_out": result.timed_out,
             "cancelled": result.cancelled,
             "duration_ms": result.duration.as_millis(),
+            "applied_max_tokens": applied_max_tokens,
         }))
     }
 
