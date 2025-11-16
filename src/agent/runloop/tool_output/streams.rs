@@ -45,7 +45,7 @@ use smallvec::SmallVec;
 use vtcode_core::config::ToolOutputMode;
 use vtcode_core::config::constants::defaults;
 use vtcode_core::config::loader::VTCodeConfig;
-use vtcode_core::core::token_budget::{MAX_TOOL_RESPONSE_TOKENS, TokenBudgetManager};
+use vtcode_core::core::token_budget::TokenBudgetManager;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::files::truncate_text_safe;
@@ -119,14 +119,35 @@ pub(crate) async fn render_stream_section(
     };
 
     // Apply token-based truncation if TokenBudgetManager is available
-    let (effective_normalized_content, was_truncated_by_tokens) = if let Some(budget) = token_budget
-    {
-        let (truncated_content, truncated_flag) = truncate_content_by_tokens(
+    let (effective_normalized_content, was_truncated_by_tokens) = if let Some(budget) = token_budget {
+        // Resolve configurable token budget and byte fuse from config
+        let (max_tokens, byte_fuse) = if let Some(cfg) = config {
+            let ctx_cfg = &cfg.context;
+            (
+                ctx_cfg.model_input_token_budget,
+                ctx_cfg.model_input_byte_fuse,
+            )
+        } else {
+            // Defaults: use unified constants from config
+            (
+                vtcode_core::config::constants::context::DEFAULT_MODEL_INPUT_TOKEN_BUDGET,
+                vtcode_core::config::constants::context::DEFAULT_MODEL_INPUT_BYTE_FUSE,
+            )
+        };
+
+        let (mut truncated_content, mut truncated_flag) = truncate_content_by_tokens(
             normalized_content.as_ref(),
-            MAX_TOOL_RESPONSE_TOKENS,
+            max_tokens,
             budget,
         )
         .await;
+
+        // Apply byte fuse as a secondary safeguard
+        if truncated_content.len() > byte_fuse {
+            truncated_content = safe_truncate_to_bytes_with_marker(&truncated_content, byte_fuse);
+            truncated_flag = true;
+        }
+
         (Cow::Owned(truncated_content), truncated_flag)
     } else {
         (normalized_content.clone(), false)
@@ -687,6 +708,26 @@ async fn truncate_content_by_tokens(
         // Overlap, just return head
         (head_content.trim_end().to_string(), true)
     }
+}
+
+fn safe_truncate_to_bytes_with_marker(s: &str, max_bytes: usize) -> String {
+    if s.len() <= max_bytes {
+        return s.to_string();
+    }
+
+    // Leave room for marker
+    let marker = "\n[... content truncated by byte fuse ...]";
+    let budget = max_bytes.saturating_sub(marker.len());
+    let cutoff = s
+        .char_indices()
+        .take_while(|(idx, _)| *idx < budget)
+        .map(|(idx, _)| idx)
+        .last()
+        .unwrap_or(budget);
+    let mut out = String::with_capacity(cutoff + marker.len());
+    out.push_str(&s[..cutoff]);
+    out.push_str(marker);
+    out
 }
 
 fn describe_code_fence_header(language: Option<&str>) -> String {

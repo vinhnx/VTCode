@@ -326,11 +326,27 @@ pub async fn run_turn_loop(
 
                             match &tool_result {
                                 ToolExecutionStatus::Success { output, stdout: _, modified_files, command_success, has_more } => {
-                                    // Add successful tool result to history
-                                    let content = serde_json::to_string(&output).unwrap_or_else(|_| "{}".to_string());
+                                    // Add successful tool result to history (token-aware aggregation)
+                                    let (max_tokens, byte_fuse) = if let Some(cfg) = vt_cfg {
+                                        (cfg.context.model_input_token_budget, cfg.context.model_input_byte_fuse)
+                                    } else {
+                                        (
+                                            vtcode_core::config::constants::context::DEFAULT_MODEL_INPUT_TOKEN_BUDGET,
+                                            vtcode_core::config::constants::context::DEFAULT_MODEL_INPUT_BYTE_FUSE,
+                                        )
+                                    };
+
+                                    let content_for_model = crate::agent::runloop::token_trunc::aggregate_tool_output_for_model(
+                                        tool_name,
+                                        &output,
+                                        max_tokens,
+                                        byte_fuse,
+                                        &*local_token_budget,
+                                    ).await;
+
                                     working_history.push(uni::Message::tool_response_with_origin(
                                         tool_call.id.clone(),
-                                        content.clone(), // Keep a copy for rendering
+                                        content_for_model,
                                         tool_name.clone(),
                                     ));
 

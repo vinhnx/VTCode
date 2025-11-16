@@ -1134,12 +1134,12 @@ mod tests {
     #[test]
     fn test_detect_textual_tool_call_parses_function_style_block() {
         let message =
-            "```rust\nrun_terminal_cmd(\"ls -a\", workdir=WORKSPACE_DIR, max_lines=100)\n```";
+            "```rust\nrun_terminal_cmd(\"ls -a\", workdir=WORKSPACE_DIR, max_tokens=1000)\n```";
         let (name, args) = detect_textual_tool_call(message).expect("should parse");
         assert_eq!(name, "run_terminal_cmd");
         assert_eq!(args["command"], serde_json::json!(["ls", "-a"]));
         assert_eq!(args["workdir"], serde_json::json!("WORKSPACE_DIR"));
-        assert_eq!(args["max_lines"], serde_json::json!(100));
+        assert_eq!(args["max_tokens"], serde_json::json!(1000));
     }
 
     #[test]

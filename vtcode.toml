@@ -506,6 +506,14 @@ max_context_tokens = 90000
 trim_to_percent = 80
 preserve_recent_turns = 12
 
+# Token-based truncation for tool outputs before model input
+# Max tokens from a single tool result to include (head+tail strategy)
+model_input_token_budget = 25000
+
+# Secondary byte fuse applied after token truncation (in bytes)
+# Provides protection against pathological cases
+model_input_byte_fuse = 10240
+
 # Decision ledger configuration - Track important decisions
 [context.ledger]
 # Enable decision tracking and persistence
