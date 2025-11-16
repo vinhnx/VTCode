@@ -14,6 +14,10 @@ on:
     branches:
       - main
 
+env:
+  CARGO_INCREMENTAL: 0 # Disable incremental compilation for faster from-scratch builds
+  CARGO_PROFILE_TEST_DEBUG: 0 # Disable debug info in test builds for faster compilation
+
 # ensure that the workflow is only triggered once per PR,  subsequent pushes to the PR will cancel
 # and restart the workflow. See https://docs.github.com/en/actions/using-jobs/using-concurrency
 concurrency:
@@ -24,7 +28,7 @@ concurrency:
 jobs:
   large-files:
     name: Enforce Large File Budget
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-arm64
     steps:
       - uses: actions/checkout@v5
       - name: Check tracked file sizes
@@ -33,7 +37,7 @@ jobs:
   # Lint the formatting of the codebase.
   formatting:
     name: Check Formatting
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-arm64
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@master
@@ -46,7 +50,7 @@ jobs:
   # See <https://github.com/crate-ci/typos/>
   # lint-typos:
   #   name: Check Typos
-  #   runs-on: ubuntu-latest
+  #   runs-on: ubuntu-latest-arm64
   #   steps:
   #     - uses: actions/checkout@v5
   #     - uses: crate-ci/typos@master
@@ -55,7 +59,7 @@ jobs:
   # See <https://github.com/EmbarkStudios/cargo-deny>
   # dependencies:
   #   name: Check Dependencies
-  #   runs-on: ubuntu-latest
+  #   runs-on: ubuntu-latest-arm64
   #   steps:
   #     - uses: actions/checkout@v5
   #     - uses: EmbarkStudios/cargo-deny-action@v2
@@ -63,18 +67,18 @@ jobs:
   # Run cargo clippy.
   lint-clippy:
     name: Check Clippy
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-arm64
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with: { components: clippy }
       - uses: Swatinem/rust-cache@v2
-      - run: cargo clippy
+      - run: cargo clippy --locked
 
   # Run markdownlint on all markdown files in the repository.
   lint-markdown:
     name: Check Markdown
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-arm64
     steps:
       - uses: actions/checkout@v5
       - id: filter
@@ -107,7 +111,7 @@ jobs:
         with:
           toolchain: ${{ matrix.toolchain }}
       - uses: Swatinem/rust-cache@v2
-      - run: cargo check
+      - run: cargo check --locked
 
   check-cross-platform:
     name: Cross-platform check ${{ matrix.os }}
@@ -125,7 +129,7 @@ jobs:
         with:
           toolchain: ${{ matrix.toolchain }}
       - uses: Swatinem/rust-cache@v2
-      - run: cargo check
+      - run: cargo check --locked
 
   test:
     name: "Cargo test"
@@ -134,17 +138,17 @@ jobs:
       - name: "Check out the repo"
         uses: actions/checkout@v5
 
-      - uses: "actions-rs/toolchain@v1"
+      - uses: "dtolnay/rust-toolchain@stable"
         with:
-          profile: "minimal"
           toolchain: "stable"
-          override: true
 
       - uses: Swatinem/rust-cache@v2
 
-      - uses: "actions-rs/cargo@v1"
-        with:
-          command: "test"
+      - name: Install nextest
+        run: cargo install cargo-nextest --locked
+
+      - name: Run tests with nextest
+        run: cargo nextest run --locked
 
   # clippy:
   #   name: "Cargo clippy"

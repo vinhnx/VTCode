@@ -1,28 +1,27 @@
 version: 2
 updates:
-  - package-ecosystem: "npm"
-    directory: "/vscode-extension"
-    schedule:
-      interval: "monthly"
-      day: "monday"
-    open-pull-requests-limit: 2
-    groups:
-      npm-monthly-rollup:
-        patterns:
-          - "*"
-  - package-ecosystem: "cargo"
-    directory: "/"
-    schedule:
-      interval: "monthly"
-      day: "monday"
-    open-pull-requests-limit: 2
-    groups:
-      cargo-monthly-rollup:
-        patterns:
-          - "*"
+  # Maintain dependencies for GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "monthly"
-      day: "monday"
-    open-pull-requests-limit: 2
+    open-pull-requests-limit: 10
+
+  # Maintain dependencies for Rust/Cargo
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 10
+    groups:
+      # Group all Rust dependencies together
+      all-rust-deps:
+        patterns:
+          - "*"
+
+  # Maintain dependencies for Node.js/npm (for scripts/utils that might exist)
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 5

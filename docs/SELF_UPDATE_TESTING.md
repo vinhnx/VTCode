@@ -24,10 +24,11 @@ cargo run -- update check
 ```
 
 **What happens:**
-- Checks GitHub for latest release
-- Compares versions
-- Shows available updates
-- Does NOT install anything
+
+-   Checks GitHub for latest release
+-   Compares versions
+-   Shows available updates
+-   Does NOT install anything
 
 ### 2. Test Slash Command
 
@@ -43,9 +44,10 @@ cargo run
 ```
 
 **What happens:**
-- `/update` checks for updates
-- `/update status` shows configuration
-- `/update install` shows instructions (doesn't actually install)
+
+-   `/update` checks for updates
+-   `/update status` shows configuration
+-   `/update install` shows instructions (doesn't actually install)
 
 ### 3. Test Startup Check
 
@@ -60,9 +62,10 @@ cargo run
 ```
 
 **What happens:**
-- Checks for updates on startup
-- Shows notification if update available
-- Prompts for installation (but won't work with cargo run)
+
+-   Checks for updates on startup
+-   Shows notification if update available
+-   Prompts for installation (but won't work with cargo run)
 
 ### 4. Disable Startup Checks
 
@@ -262,33 +265,37 @@ cargo test --package vtcode-core update -- --nocapture
 ## Manual Testing Checklist
 
 ### Basic Functionality
-- [ ] `cargo run -- update check` works
-- [ ] `cargo run -- update config` shows configuration
-- [ ] `/update` slash command works in chat
-- [ ] `/update status` shows correct information
-- [ ] Startup check runs (when enabled)
-- [ ] Startup check skips (when disabled)
+
+-   [ ] `cargo run -- update check` works
+-   [ ] `cargo run -- update config` shows configuration
+-   [ ] `/update` slash command works in chat
+-   [ ] `/update status` shows correct information
+-   [ ] Startup check runs (when enabled)
+-   [ ] Startup check skips (when disabled)
 
 ### Configuration
-- [ ] Environment variables work
-- [ ] CLI configuration works
-- [ ] Configuration persists
-- [ ] Different channels work
-- [ ] Different frequencies work
+
+-   [ ] Environment variables work
+-   [ ] CLI configuration works
+-   [ ] Configuration persists
+-   [ ] Different channels work
+-   [ ] Different frequencies work
 
 ### Error Handling
-- [ ] Network errors handled gracefully
-- [ ] Invalid configuration handled
-- [ ] Timeout works (5 seconds)
-- [ ] CI environment detected
-- [ ] Non-interactive terminal detected
+
+-   [ ] Network errors handled gracefully
+-   [ ] Invalid configuration handled
+-   [ ] Timeout works (5 seconds)
+-   [ ] CI environment detected
+-   [ ] Non-interactive terminal detected
 
 ### Edge Cases
-- [ ] No internet connection
-- [ ] GitHub API rate limiting
-- [ ] Invalid channel name
-- [ ] Invalid frequency
-- [ ] Missing configuration
+
+-   [ ] No internet connection
+-   [ ] GitHub API rate limiting
+-   [ ] Invalid channel name
+-   [ ] Invalid frequency
+-   [ ] Missing configuration
 
 ## Automated Testing
 
@@ -301,17 +308,17 @@ name: Test Self-Update
 on: [push, pull_request]
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - name: Test update check
-        run: cargo test --package vtcode-core update
-      - name: Test CLI commands
-        run: |
-          cargo build --release
-          ./target/release/vtcode update check
-          ./target/release/vtcode update config
+    test:
+        runs-on: ubuntu-latest-arm64
+        steps:
+            - uses: actions/checkout@v2
+            - name: Test update check
+              run: cargo test --package vtcode-core update
+            - name: Test CLI commands
+              run: |
+                  cargo build --release
+                  ./target/release/vtcode update check
+                  ./target/release/vtcode update config
 ```
 
 ## Troubleshooting Tests
@@ -413,6 +420,6 @@ cargo run -- update check
 
 ## See Also
 
-- [Self-Update Guide](./guides/self-update.md)
-- [Implementation Details](./SELF_UPDATE_IMPLEMENTATION.md)
-- [Quick Reference](./SELF_UPDATE_QUICK_REFERENCE.md)
+-   [Self-Update Guide](./guides/self-update.md)
+-   [Implementation Details](./SELF_UPDATE_IMPLEMENTATION.md)
+-   [Quick Reference](./SELF_UPDATE_QUICK_REFERENCE.md)

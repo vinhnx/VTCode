@@ -6,9 +6,13 @@ on:
   push:
   pull_request:
 
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_PROFILE_TEST_DEBUG: 0
+
 jobs:
   eval:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-arm64
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -19,8 +23,11 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+
       - name: Build
-        run: cargo build --workspace --quiet
+        run: cargo build --locked --workspace --quiet
 
       - name: Run tool eval harness
         run: |
