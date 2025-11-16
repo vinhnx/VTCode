@@ -14,6 +14,7 @@ use vtcode_core::llm::provider as uni;
 /// Centralized handling for tool failures discovered in the run loop.
 /// This function renders an informative error, adds an MCP event if applicable,
 /// counts tokens, updates the decision ledger, and appends a tool response to the conversation history.
+#[allow(dead_code)]
 pub(crate) async fn handle_tool_failure(
     ctx: &mut RunLoopContext<'_>,
     name: &str,

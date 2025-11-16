@@ -4,6 +4,7 @@ use tokio::sync::Notify;
 use vtcode_core::tools::registry::ToolRegistry;
 
 /// Execute a single tool call after permissions have been approved
+#[allow(dead_code)]
 pub(crate) async fn execute_single_tool_call(
     tool_registry: &mut ToolRegistry,
     name: &str,
@@ -25,6 +26,7 @@ pub(crate) async fn execute_single_tool_call(
 }
 
 /// Execute a batch of tool calls with simplified pipeline
+#[allow(dead_code)]
 pub(crate) async fn execute_tool_pipeline(
     tool_calls: &[vtcode_core::llm::provider::ToolCall],
     tool_registry: &mut ToolRegistry,

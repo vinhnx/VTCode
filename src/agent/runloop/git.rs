@@ -8,6 +8,7 @@ pub(crate) struct GitStatusSummary {
     pub dirty: bool,
 }
 
+#[allow(dead_code)]
 fn is_git_repo() -> bool {
     std::process::Command::new("git")
         .args(["rev-parse", "--git-dir"])
@@ -53,6 +54,7 @@ pub(crate) fn git_status_summary(workspace: &Path) -> Result<Option<GitStatusSum
     Ok(Some(GitStatusSummary { branch, dirty }))
 }
 
+#[allow(dead_code)]
 pub(crate) async fn confirm_changes_with_git_diff(
     modified_files: &[String],
     skip_confirmations: bool,

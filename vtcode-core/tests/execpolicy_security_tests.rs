@@ -21,7 +21,7 @@ async fn test_ripgrep_pre_flag_blocked() {
         ".".to_string(),
     ];
 
-    let result = validate_command(&command, &root, &working_dir).await;
+    let result = validate_command(&command, &root, &working_dir, false).await;
     assert!(result.is_err(), "ripgrep --pre flag should be blocked");
     assert!(
         result.unwrap_err().to_string().contains("preprocessor"),
@@ -45,7 +45,7 @@ async fn test_ripgrep_pre_glob_flag_blocked() {
         ".".to_string(),
     ];
 
-    let result = validate_command(&command, &root, &working_dir).await;
+    let result = validate_command(&command, &root, &working_dir, false).await;
     assert!(result.is_err(), "ripgrep --pre-glob flag should be blocked");
 }
 
@@ -65,7 +65,7 @@ async fn test_ripgrep_safe_flags_allowed() {
         ".".to_string(),
     ];
 
-    let result = validate_command(&command, &root, &working_dir).await;
+    let result = validate_command(&command, &root, &working_dir, false).await;
     assert!(result.is_ok(), "safe ripgrep flags should be allowed");
 }
 
@@ -85,7 +85,7 @@ async fn test_sed_execution_flag_blocked() {
         "test_sed.txt".to_string(),
     ];
 
-    let result = validate_command(&command, &root, &working_dir).await;
+    let result = validate_command(&command, &root, &working_dir, false).await;
 
     // Cleanup
     let _ = std::fs::remove_file(&test_file);
@@ -105,7 +105,7 @@ async fn test_path_traversal_blocked() {
     // Test path traversal attempt
     let command = vec!["cat".to_string(), "../../../etc/passwd".to_string()];
 
-    let result = validate_command(&command, &root, &working_dir).await;
+    let result = validate_command(&command, &root, &working_dir, false).await;
     assert!(result.is_err(), "path traversal should be blocked");
 }
 
@@ -117,7 +117,7 @@ async fn test_absolute_path_outside_workspace_blocked() {
     // Test absolute path outside workspace
     let command = vec!["cat".to_string(), "/etc/passwd".to_string()];
 
-    let result = validate_command(&command, &root, &working_dir).await;
+    let result = validate_command(&command, &root, &working_dir, false).await;
     assert!(
         result.is_err(),
         "absolute path outside workspace should be blocked"
@@ -132,7 +132,7 @@ async fn test_disallowed_command_blocked() {
     // Test command not in allowlist
     let command = vec!["wget".to_string(), "https://evil.com".to_string()];
 
-    let result = validate_command(&command, &root, &working_dir).await;
+    let result = validate_command(&command, &root, &working_dir, false).await;
     assert!(result.is_err(), "disallowed command should be blocked");
     assert!(
         result.unwrap_err().to_string().contains("not permitted"),
@@ -148,7 +148,7 @@ async fn test_git_diff_blocked() {
     // Test git diff (should be blocked)
     let command = vec!["git".to_string(), "diff".to_string()];
 
-    let result = validate_command(&command, &root, &working_dir).await;
+    let result = validate_command(&command, &root, &working_dir, false).await;
     assert!(result.is_err(), "git diff should be blocked");
     assert!(
         result.unwrap_err().to_string().contains("git diff"),
@@ -172,7 +172,7 @@ async fn test_cp_without_recursive_flag_for_directory() {
         "test_cp_dir_copy".to_string(),
     ];
 
-    let result = validate_command(&command, &root, &working_dir).await;
+    let result = validate_command(&command, &root, &working_dir, false).await;
 
     // Cleanup
     let _ = std::fs::remove_dir_all(&test_dir);
@@ -200,7 +200,7 @@ async fn test_ls_safe_usage() {
         ".".to_string(),
     ];
 
-    let result = validate_command(&command, &root, &working_dir).await;
+    let result = validate_command(&command, &root, &working_dir, false).await;
     assert!(
         result.is_ok(),
         "safe ls usage should be allowed: {:?}",
@@ -216,7 +216,7 @@ async fn test_which_safe_usage() {
     // Test safe which usage
     let command = vec!["which".to_string(), "cargo".to_string()];
 
-    let result = validate_command(&command, &root, &working_dir).await;
+    let result = validate_command(&command, &root, &working_dir, false).await;
     assert!(result.is_ok(), "safe which usage should be allowed");
 }
 
@@ -228,7 +228,7 @@ async fn test_which_path_injection_blocked() {
     // Test which with path injection attempt
     let command = vec!["which".to_string(), "/bin/bash".to_string()];
 
-    let result = validate_command(&command, &root, &working_dir).await;
+    let result = validate_command(&command, &root, &working_dir, false).await;
     assert!(result.is_err(), "which with path should be blocked");
 }
 
@@ -240,8 +240,46 @@ async fn test_printenv_safe_usage() {
     // Test safe printenv usage
     let command = vec!["printenv".to_string(), "PATH".to_string()];
 
-    let result = validate_command(&command, &root, &working_dir).await;
+    let result = validate_command(&command, &root, &working_dir, false).await;
     assert!(result.is_ok(), "safe printenv usage should be allowed");
+}
+
+#[tokio::test]
+async fn test_git_reset_hard_requires_confirm() {
+    let root = workspace_root();
+    let working_dir = root.clone();
+
+    let command = vec!["git".to_string(), "reset".to_string(), "--hard".to_string()];
+    let result = validate_command(&command, &root, &working_dir, false).await;
+    assert!(
+        result.is_err(),
+        "git reset --hard should be blocked without confirm"
+    );
+
+    let result_confirmed = validate_command(&command, &root, &working_dir, true).await;
+    assert!(
+        result_confirmed.is_ok(),
+        "git reset --hard should be allowed with confirm=true"
+    );
+}
+
+#[tokio::test]
+async fn test_cargo_publish_requires_confirm() {
+    let root = workspace_root();
+    let working_dir = root.clone();
+
+    let command = vec!["cargo".to_string(), "publish".to_string()];
+    let result = validate_command(&command, &root, &working_dir, false).await;
+    assert!(
+        result.is_err(),
+        "cargo publish should be blocked without confirm"
+    );
+
+    let result_confirmed = validate_command(&command, &root, &working_dir, true).await;
+    assert!(
+        result_confirmed.is_ok(),
+        "cargo publish should be allowed with confirm=true"
+    );
 }
 
 #[tokio::test]
@@ -261,7 +299,7 @@ async fn test_head_with_line_count() {
         "test_head.txt".to_string(),
     ];
 
-    let result = validate_command(&command, &root, &working_dir).await;
+    let result = validate_command(&command, &root, &working_dir, false).await;
 
     // Cleanup
     let _ = std::fs::remove_file(&test_file);

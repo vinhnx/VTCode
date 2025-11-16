@@ -109,7 +109,8 @@ auto_install = true
 
 # Preferred installation methods in order of preference
 # Available: "homebrew", "apt", "cargo", "chocolatey", "scoop"
-preferred_methods = []  # Empty = auto-detect based on platform and available tools
+preferred_methods = [
+] # Empty = auto-detect based on platform and available tools
 
 # Skip installation cache and retry failed installations
 skip_cache = false
@@ -187,7 +188,6 @@ max_snapshots = 50
 
 # Maximum age of checkpoints to keep (in days)
 max_age_days = 30
-
 
 
 # Tool security configuration
@@ -277,6 +277,33 @@ allow_list = [
     "whoami",
     "hostname",
     "uname",
+    # Common Git commands that the agent may run for inspection, status, and diffs
+    "git",
+    "git status",
+    "git diff",
+    "git log",
+    "git show",
+    "git branch",
+    "git remote",
+    "git fetch",
+    "git pull",
+    "git clone",
+    "git checkout",
+    "git switch",
+    "git add",
+    "git commit",
+    # Common Cargo (Rust) commands for building, testing, linting, and inspection
+    "cargo",
+    "cargo build",
+    "cargo build --release",
+    "cargo check",
+    "cargo test",
+    "cargo run",
+    "cargo clippy",
+    "cargo fmt",
+    "cargo tree",
+    "cargo metadata",
+    "cargo doc",
 ]
 
 # Additional directories to prepend to PATH when VTCode executes commands
@@ -285,6 +312,9 @@ extra_path_entries = [
     "$HOME/.local/bin",
     "/opt/homebrew/bin",
 ]
+
+# When running destructive commands via `run_terminal_cmd`, set `confirm=true` in the tool input
+# Example: { command = ["git", "reset", "--hard"], confirm = true }
 
 # Commands that are never allowed
 deny_list = [
@@ -312,13 +342,7 @@ allow_glob = [
 ]
 
 # Command patterns that are denied (supports glob patterns)
-deny_glob = [
-    "rm -rf *",
-    "sudo *",
-    "chmod *",
-    "chown *",
-    "kubectl *",
-]
+deny_glob = ["rm -rf *", "sudo *", "chmod *", "chown *", "kubectl *"]
 
 # Regular expression patterns for allowed commands (if needed)
 allow_regex = []
@@ -592,14 +616,7 @@ cache_themes = true
 max_file_size_mb = 10
 
 # Programming languages to enable syntax highlighting for
-enabled_languages = [
-    "rust",
-    "python",
-    "javascript",
-    "typescript",
-    "go",
-    "java",
-]
+enabled_languages = ["rust", "python", "javascript", "typescript", "go", "java"]
 
 # Timeout for syntax highlighting operations (milliseconds)
 highlight_timeout_ms = 1000
@@ -743,7 +760,6 @@ enabled = true
 max_concurrent_requests = 3
 
 [mcp.providers.env]
-
 
 
 # Agent Client Protocol (ACP) - IDE integration

@@ -16,6 +16,7 @@ pub(crate) async fn persist_theme_preference(
     Ok(())
 }
 
+#[allow(dead_code)]
 pub(crate) fn ensure_turn_bottom_gap(
     renderer: &mut AnsiRenderer,
     applied: &mut bool,

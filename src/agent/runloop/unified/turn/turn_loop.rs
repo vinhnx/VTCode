@@ -27,12 +27,14 @@ use crate::agent::runloop::unified::turn::run_loop::TurnLoopResult;
 use crate::agent::runloop::mcp_events;
 use vtcode_core::config::types::AgentConfig;
 
+#[allow(dead_code)]
 pub enum LlmHandleOutcome {
     Success,
     Failure,
     Cancelled,
 }
 
+#[allow(dead_code)]
 pub enum TurnResultKind {
     Completed,
     Cancelled,
@@ -244,7 +246,7 @@ pub async fn run_turn_loop(
                 approval_recorder: ctx.approval_recorder,
                 decision_ledger: ctx.decision_ledger,
                 pruning_ledger: ctx.pruning_ledger,
-            token_budget: &local_token_budget,
+                token_budget: &local_token_budget,
                 token_counter: ctx.token_counter,
                 working_history: &mut working_history,
                 tool_registry: ctx.tool_registry,

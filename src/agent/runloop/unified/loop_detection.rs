@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use std::collections::HashMap;
 
 /// Detects potential model loops from repetitive tool calls
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct LoopDetector {
     /// Track identical tool call signatures (tool_name + args)
@@ -49,6 +50,7 @@ impl LoopDetector {
 }
 
 /// Options for user response to loop detection prompt
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LoopDetectionResponse {
     /// Keep detection enabled for future checks
@@ -59,6 +61,7 @@ pub enum LoopDetectionResponse {
 
 /// Handle loop detection prompt and return user's choice
 /// Falls back to KeepEnabled if non-interactive
+#[allow(dead_code)]
 pub fn prompt_for_loop_detection(
     interactive: bool,
     signature: &str,
@@ -74,6 +77,7 @@ pub fn prompt_for_loop_detection(
 
 /// Display loop detection prompt with interactive TUI selection
 /// Only called when interactive mode is enabled
+#[allow(dead_code)]
 fn show_loop_detection_prompt_tui(
     signature: &str,
     repeat_count: usize,

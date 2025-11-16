@@ -14,6 +14,7 @@ pub async fn validate_command(
     command: &[String],
     workspace_root: &Path,
     working_dir: &Path,
+    confirm: bool,
 ) -> Result<()> {
     if command.is_empty() {
         return Err(anyhow!("command cannot be empty"));
@@ -40,8 +41,8 @@ pub async fn validate_command(
         "hostname" => validate_hostname(args),
         "uname" => validate_uname(args),
         "wc" => validate_wc(args, workspace_root, working_dir).await,
-        "git" => validate_git(args, workspace_root, working_dir).await,
-        "cargo" => validate_cargo(args, workspace_root, working_dir).await,
+        "git" => validate_git(args, workspace_root, working_dir, confirm).await,
+        "cargo" => validate_cargo(args, workspace_root, working_dir, confirm).await,
         "python" | "python3" => validate_python(args, workspace_root, working_dir).await,
         "npm" => validate_npm(args, workspace_root, working_dir).await,
         "node" => validate_node(args, workspace_root, working_dir).await,
@@ -403,7 +404,12 @@ fn validate_which(args: &[String]) -> Result<()> {
     Ok(())
 }
 
-async fn validate_git(args: &[String], workspace_root: &Path, working_dir: &Path) -> Result<()> {
+async fn validate_git(
+    args: &[String],
+    workspace_root: &Path,
+    working_dir: &Path,
+    confirm: bool,
+) -> Result<()> {
     if args.is_empty() {
         return Err(anyhow!("git requires a subcommand"));
     }
@@ -451,11 +457,13 @@ async fn validate_git(args: &[String], workspace_root: &Path, working_dir: &Path
         // Tier 2: Safe write operations (with validation)
         "add" => return validate_git_add(subargs, workspace_root, working_dir).await,
         "commit" => return validate_git_commit(subargs),
-        "reset" => return validate_git_reset(subargs),
+        "reset" => return validate_git_reset(subargs, confirm),
         "checkout" | "switch" => {
-            return validate_git_checkout(subargs, workspace_root, working_dir).await;
+            return validate_git_checkout(subargs, workspace_root, working_dir, confirm).await;
         }
-        "restore" => return validate_git_checkout(subargs, workspace_root, working_dir).await,
+        "restore" => {
+            return validate_git_checkout(subargs, workspace_root, working_dir, confirm).await;
+        }
         "merge" => return validate_git_merge(subargs),
 
         // Tier 3: Dangerous operations (always blocked)
@@ -664,15 +672,18 @@ fn validate_git_commit(args: &[String]) -> Result<()> {
     Ok(())
 }
 
-fn validate_git_reset(args: &[String]) -> Result<()> {
+fn validate_git_reset(args: &[String], confirm: bool) -> Result<()> {
     // Block destructive reset modes
     if args.contains(&"--hard".to_string())
         || args.contains(&"--merge".to_string())
         || args.contains(&"--keep".to_string())
     {
-        return Err(anyhow!(
-            "git reset with --hard, --merge, or --keep is not permitted. Use --soft or --mixed instead."
-        ));
+        // Require explicit confirmation to perform destructive resets
+        if !confirm {
+            return Err(anyhow!(
+                "git reset with --hard, --merge, or --keep is potentially destructive. Set `confirm=true` to proceed."
+            ));
+        }
     }
 
     // Allow safe flags: --soft, --mixed, --unstage
@@ -698,16 +709,19 @@ async fn validate_git_checkout(
     args: &[String],
     workspace_root: &Path,
     working_dir: &Path,
+    confirm: bool,
 ) -> Result<()> {
     if args.is_empty() {
         return Ok(());
     }
 
-    // Block forced checkout
+    // Block forced checkout unless explicit confirm
     if args.contains(&"-f".to_string()) || args.contains(&"--force".to_string()) {
-        return Err(anyhow!(
-            "git checkout --force is not permitted. Use regular checkout instead."
-        ));
+        if !confirm {
+            return Err(anyhow!(
+                "git checkout --force is potentially destructive; set `confirm=true` to proceed."
+            ));
+        }
     }
 
     // Validate paths if provided
@@ -1294,7 +1308,12 @@ async fn validate_wc(args: &[String], workspace_root: &Path, working_dir: &Path)
     Ok(())
 }
 
-async fn validate_cargo(args: &[String], workspace_root: &Path, working_dir: &Path) -> Result<()> {
+async fn validate_cargo(
+    args: &[String],
+    workspace_root: &Path,
+    working_dir: &Path,
+    confirm: bool,
+) -> Result<()> {
     // Cargo commands - allow typical dev workflow operations
     if args.is_empty() {
         return Err(anyhow!("cargo requires a subcommand"));
@@ -1309,11 +1328,19 @@ async fn validate_cargo(args: &[String], workspace_root: &Path, working_dir: &Pa
             ensure_within_workspace(workspace_root, working_dir).await?;
             Ok(())
         }
-        // Dangerous operations that modify system or registry
-        "clean" | "install" | "uninstall" | "publish" | "yank" => Err(anyhow!(
-            "cargo {} is not permitted by the execution policy",
-            subcommand
-        )),
+        // Operations that may be destructive or publish to remote registries
+        "clean" | "install" | "uninstall" | "publish" | "yank" => {
+            if confirm {
+                // Allow with explicit confirmation
+                ensure_within_workspace(workspace_root, working_dir).await?;
+                Ok(())
+            } else {
+                Err(anyhow!(
+                    "cargo {} is potentially destructive; set `confirm=true` to proceed.",
+                    subcommand
+                ))
+            }
+        }
         other => Err(anyhow!(
             "cargo subcommand '{}' is not permitted by the execution policy",
             other

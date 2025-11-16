@@ -25,6 +25,7 @@ use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_core::utils::ansi::MessageStyle;
 
 /// Context for turn processing operations
+#[allow(dead_code)]
 pub(crate) struct TurnProcessingContext<'a> {
     pub renderer: &'a mut AnsiRenderer,
     pub handle: &'a InlineHandle,
@@ -191,6 +192,7 @@ pub(crate) async fn execute_llm_request(
 // Use `strip_harmony_syntax` and `derive_recent_tool_output` helpers from other modules
 
 /// Result of processing a single turn
+#[allow(dead_code)]
 pub(crate) enum TurnProcessingResult {
     /// Turn resulted in tool calls that need to be executed
     ToolCalls {

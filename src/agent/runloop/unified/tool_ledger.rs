@@ -3,6 +3,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use vtcode_core::core::decision_tracker::{DecisionOutcome, DecisionTracker};
 
+#[allow(dead_code)]
 pub(crate) async fn record_outcome_for_decision(
     ledger: &Arc<RwLock<DecisionTracker>>,
     decision_id: &str,

@@ -3,7 +3,7 @@ use crate::agent::runloop::unified::turn::session::slash_commands::{
 };
 use anyhow::{Context, Result};
 use chrono::Local;
-use std::collections::{BTreeSet, HashMap, VecDeque};
+use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
@@ -45,7 +45,7 @@ use crate::agent::runloop::unified::display::display_user_message;
 use crate::agent::runloop::unified::inline_events::{
     InlineEventLoopResources, InlineInterruptCoordinator, InlineLoopAction, poll_inline_loop_action,
 };
-use crate::agent::runloop::unified::loop_detection::LoopDetector;
+// loop_detection not used in session loop refactor
 use crate::agent::runloop::unified::model_selection::finalize_model_selection;
 use crate::agent::runloop::unified::palettes::{ActivePalette, apply_prompt_style};
 use crate::agent::runloop::unified::session_setup::{
@@ -59,16 +59,17 @@ use crate::agent::runloop::unified::workspace_links::LinkedDirectory;
 use crate::hooks::lifecycle::{LifecycleHookEngine, SessionEndReason, SessionStartTrigger};
 use crate::ide_context::IdeContextBridge;
 
+#[allow(dead_code)]
 enum TurnLoopResult {
     Completed,
     Aborted,
     Cancelled,
     Blocked {
-        #[allow(dead_code)]
         reason: Option<String>,
     },
 }
 
+#[allow(dead_code)]
 const SELF_REVIEW_MIN_LENGTH: usize = 240;
 
 pub(crate) async fn run_single_agent_loop_unified(
@@ -118,7 +119,6 @@ pub(crate) async fn run_single_agent_loop_unified(
             trajectory: traj,
             base_system_prompt,
             full_auto_allowlist,
-            #[allow(unused_variables)]
             async_mcp_manager,
             mut mcp_panel_state,
             token_budget,
@@ -896,37 +896,28 @@ pub(crate) async fn run_single_agent_loop_unified(
                 .filter(|&value| value > 0)
                 .unwrap_or(defaults::DEFAULT_MAX_TOOL_LOOPS);
 
-            let mut _step_count = 0usize;
-            let mut _allow_follow_up = true;
-            let mut _any_write_effect = false;
-            let mut _last_tool_stdout: Option<String> = None;
-            let mut _bottom_gap_applied = false;
-            let mut _turn_modified_files: BTreeSet<PathBuf> = BTreeSet::new();
+            // Unused turn-level locals removed after refactor
             let _tool_repeat_limit = vt_cfg
                 .as_ref()
                 .map(|cfg| cfg.tools.max_repeated_tool_calls)
                 .filter(|&value| value > 0)
                 .unwrap_or(defaults::DEFAULT_MAX_REPEATED_TOOL_CALLS);
-            let mut _repeated_tool_attempts: HashMap<String, usize> = HashMap::new();
+            // repeated tool attempts now managed in the turn loop; omitted here
 
             // Initialize loop detection
-            let loop_detection_enabled = vt_cfg
+            let _loop_detection_enabled = vt_cfg
                 .as_ref()
                 .map(|cfg| !cfg.model.skip_loop_detection)
                 .unwrap_or(true);
-            let loop_detection_threshold = vt_cfg
+            let _loop_detection_threshold = vt_cfg
                 .as_ref()
                 .map(|cfg| cfg.model.loop_detection_threshold)
                 .unwrap_or(3);
-            let loop_detection_interactive = vt_cfg
+            let _loop_detection_interactive = vt_cfg
                 .as_ref()
                 .map(|cfg| cfg.model.loop_detection_interactive)
                 .unwrap_or(true);
-            let mut _loop_detector = LoopDetector::new(
-                loop_detection_threshold,
-                loop_detection_enabled,
-                loop_detection_interactive,
-            );
+            // loop detection instance not used in the session loop path
             let mut _loop_detection_disabled_for_session = false;
 
             // New unified turn loop: use TurnLoopContext and run_turn_loop

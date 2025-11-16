@@ -29,6 +29,7 @@ const TOOL_TIMEOUT_WARNING_HEADROOM: Duration = Duration::from_secs(5);
 
 /// Status of a tool execution with progress information
 #[derive(Debug)]
+#[allow(dead_code)]
 pub(crate) struct ToolProgress {
     /// Current progress value (0-100)
     pub progress: u8,
@@ -70,6 +71,7 @@ pub(crate) enum ToolExecutionStatus {
 }
 
 /// Outcome produced by a tool pipeline run - returns a success/failure wrapper along with stdout and modified files
+#[allow(dead_code)]
 pub(crate) struct ToolPipelineOutcome {
     pub status: ToolExecutionStatus,
     pub stdout: Option<String>,
@@ -115,6 +117,7 @@ impl ToolPipelineOutcome {
 }
 
 /// Execute tool call and handle permission, caching and common rendering.
+#[allow(dead_code)]
 pub(crate) async fn run_tool_call(
     ctx: &mut RunLoopContext<'_>,
     call: &vtcode_core::llm::provider::ToolCall,

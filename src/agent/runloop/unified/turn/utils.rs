@@ -6,6 +6,7 @@ use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use crate::hooks::lifecycle::{HookMessage, HookMessageLevel};
 
+#[allow(dead_code)]
 pub(super) fn safe_force_redraw(handle: &InlineHandle, last_forced_redraw: &mut Instant) {
     if last_forced_redraw.elapsed() > std::time::Duration::from_millis(100) {
         handle.force_redraw();

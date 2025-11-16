@@ -15,6 +15,7 @@ use crate::agent::runloop::mcp_events::McpPanelState;
 use vtcode_core::acp::ToolPermissionCache;
 use vtcode_core::tools::ApprovalRecorder;
 
+#[allow(dead_code)]
 pub(crate) struct RunLoopContext<'a> {
     pub renderer: &'a mut AnsiRenderer,
     pub handle: &'a InlineHandle,
@@ -32,6 +33,7 @@ pub(crate) struct RunLoopContext<'a> {
 }
 
 // Lightweight adapter that provides a smaller context for per-turn operations.
+#[allow(dead_code)]
 pub(crate) struct TurnExecutionContext<'a> {
     pub renderer: &'a mut AnsiRenderer,
     pub handle: &'a InlineHandle,
