@@ -66,7 +66,8 @@ impl AcpPermissionCache {
 
     /// Clear only temporary denials (for retries)
     pub fn clear_temporary_denials(&mut self) {
-        self.grants.retain(|_, grant| *grant != PermissionGrant::TemporaryDenial);
+        self.grants
+            .retain(|_, grant| *grant != PermissionGrant::TemporaryDenial);
     }
 
     /// Clear all cached permissions
@@ -180,7 +181,8 @@ impl ToolPermissionCache {
 
     /// Clear only temporary denials (for retries)
     pub fn clear_temporary_denials(&mut self) {
-        self.grants.retain(|_, grant| *grant != PermissionGrant::TemporaryDenial);
+        self.grants
+            .retain(|_, grant| *grant != PermissionGrant::TemporaryDenial);
     }
 
     /// Clear all cached permissions
@@ -430,7 +432,10 @@ mod tests {
 
         // Policy denials and session grants should remain
         assert!(cache.is_denied(&policy_denied));
-        assert_eq!(cache.get_permission(&allowed), Some(PermissionGrant::Session));
+        assert_eq!(
+            cache.get_permission(&allowed),
+            Some(PermissionGrant::Session)
+        );
 
         // Temporary denials should be gone
         assert!(!cache.is_temporarily_denied(&temp_denied));

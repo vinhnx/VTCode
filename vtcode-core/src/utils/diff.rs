@@ -145,11 +145,12 @@ fn myers_diff(old: &[char], new: &[char]) -> Vec<Edit> {
         for k in (-(d as i32)..=(d as i32)).step_by(2) {
             let k_idx = (k + max_d as i32) as usize;
 
-            let (mut x, prev_x) = if k == -(d as i32) || (k != d as i32 && v[k_idx - 1] < v[k_idx + 1]) {
-                (v[k_idx + 1], 1)
-            } else {
-                (v[k_idx - 1] + 1, 0)
-            };
+            let (mut x, prev_x) =
+                if k == -(d as i32) || (k != d as i32 && v[k_idx - 1] < v[k_idx + 1]) {
+                    (v[k_idx + 1], 1)
+                } else {
+                    (v[k_idx - 1] + 1, 0)
+                };
 
             let mut y = (x as i32 - k) as usize;
 
@@ -173,7 +174,14 @@ fn myers_diff(old: &[char], new: &[char]) -> Vec<Edit> {
 }
 
 /// Backtracks the Myers diff to reconstruct the edit sequence.
-fn backtrack_myers(old: &[char], new: &[char], v_index: &[Vec<usize>], d: usize, mut k: i32, max_d: usize) -> Vec<Edit> {
+fn backtrack_myers(
+    old: &[char],
+    new: &[char],
+    v_index: &[Vec<usize>],
+    d: usize,
+    mut k: i32,
+    max_d: usize,
+) -> Vec<Edit> {
     let mut edits = Vec::new();
     let mut x = old.len();
     let mut y = new.len();
@@ -191,7 +199,10 @@ fn backtrack_myers(old: &[char], new: &[char], v_index: &[Vec<usize>], d: usize,
         let prev_k = k;
         let prev_k_idx = (prev_k + max_d as i32) as usize;
         let prev_x_val = if cur_d > 0 {
-            if prev_k == -(cur_d as i32) || (prev_k != cur_d as i32 && v_index[cur_d - 1][prev_k_idx - 1] < v_index[cur_d - 1][prev_k_idx + 1]) {
+            if prev_k == -(cur_d as i32)
+                || (prev_k != cur_d as i32
+                    && v_index[cur_d - 1][prev_k_idx - 1] < v_index[cur_d - 1][prev_k_idx + 1])
+            {
                 v_index[cur_d - 1][prev_k_idx + 1]
             } else {
                 v_index[cur_d - 1][prev_k_idx - 1] + 1
