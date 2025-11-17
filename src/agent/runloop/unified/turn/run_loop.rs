@@ -1639,14 +1639,16 @@ pub(crate) async fn run_single_agent_loop_unified(
                 .as_ref()
                 .map(|cfg| !cfg.model.skip_loop_detection)
                 .unwrap_or(true);
+            // Use a lower threshold (2) to catch repeated calls faster.
+            // count > threshold means: 1st call (1>2=false), 2nd call (2>2=false), 3rd (3>2=true) = triggers at 3rd
             let loop_detection_threshold = vt_cfg
                 .as_ref()
                 .map(|cfg| cfg.model.loop_detection_threshold)
-                .unwrap_or(3);
+                .unwrap_or(2);
             let loop_detection_interactive = vt_cfg
                 .as_ref()
                 .map(|cfg| cfg.model.loop_detection_interactive)
-                .unwrap_or(true);
+                .unwrap_or(false);
             let mut loop_detector = LoopDetector::new(
                 loop_detection_threshold,
                 loop_detection_enabled,
