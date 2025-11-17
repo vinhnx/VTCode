@@ -2121,7 +2121,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                         let failed_attempts = repeated_tool_attempts
                             .entry(signature_key.clone())
                             .or_insert(0);
-                        if *failed_attempts > tool_repeat_limit {
+                        if *failed_attempts >= tool_repeat_limit {
                             renderer.line(
                                 MessageStyle::Error,
                                 &format!(

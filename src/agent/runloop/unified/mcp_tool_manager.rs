@@ -47,10 +47,10 @@ impl McpToolManager {
 
                 let message = if !added_tools.is_empty() {
                     if added_tools.len() == 1 {
-                        format!("Discovered new MCP tool: {}", added_tools[0])
+                        format!("✓ Discovered new MCP tool: {}", added_tools[0])
                     } else {
                         format!(
-                            "Discovered {} new MCP tools: {}",
+                            "✓ Discovered {} new MCP tools: {}",
                             added_tools.len(),
                             added_tools.join(", ")
                         )
@@ -62,12 +62,12 @@ impl McpToolManager {
                         .saturating_sub(last_known_mcp_tools.len());
                     if added_count > 0 {
                         format!(
-                            "Discovered {} new MCP tool{}",
+                            "✓ Discovered {} new MCP tool{}",
                             added_count,
                             if added_count == 1 { "" } else { "s" }
                         )
                     } else {
-                        "MCP tools updated".to_string()
+                        "✓ MCP tools updated".to_string()
                     }
                 };
 
@@ -86,7 +86,7 @@ impl McpToolManager {
         }
     }
 
-    /// Enumerate MCP tools after initial setup, identify newly added ones, and update the tool registry  
+    /// Enumerate MCP tools after initial setup, identify newly added ones, and update the tool registry
     pub async fn enumerate_mcp_tools_after_initial_setup(
         _tool_registry: &mut vtcode_core::tools::ToolRegistry,
         tools: &tokio::sync::RwLock<Vec<uni::ToolDefinition>>,
@@ -125,10 +125,10 @@ impl McpToolManager {
 
         let message = if !added_tools.is_empty() {
             if added_tools.len() == 1 {
-                format!("Discovered new MCP tool: {}", added_tools[0])
+                format!("✓ Discovered new MCP tool: {}", added_tools[0])
             } else {
                 format!(
-                    "Discovered {} new MCP tools: {}",
+                    "✓ Discovered {} new MCP tools: {}",
                     added_tools.len(),
                     added_tools.join(", ")
                 )
@@ -138,12 +138,12 @@ impl McpToolManager {
             let added_count = mcp_tools.len().saturating_sub(last_known_mcp_tools.len());
             if added_count > 0 {
                 format!(
-                    "Discovered {} new MCP tool{}",
+                    "✓ Discovered {} new MCP tool{}",
                     added_count,
                     if added_count == 1 { "" } else { "s" }
                 )
             } else {
-                "MCP tools updated".to_string()
+                "✓ MCP tools updated".to_string()
             }
         };
 
