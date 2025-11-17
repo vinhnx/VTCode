@@ -463,7 +463,7 @@ fn parse_retention_duration(input: &str) -> anyhow::Result<Duration> {
     // Enforce a reasonable retention window: at least 1s and max 30 days
     const MIN_SECONDS: u64 = 1;
     const MAX_SECONDS: u64 = 30 * 24 * 60 * 60; // 30 days
-    if seconds < MIN_SECONDS || seconds > MAX_SECONDS {
+    if !((MIN_SECONDS..=MAX_SECONDS).contains(&seconds)) {
         anyhow::bail!("prompt_cache_retention must be between 1s and 30d");
     }
 

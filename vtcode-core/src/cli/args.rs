@@ -838,9 +838,7 @@ impl Cli {
         // Resolve candidate path
         let explicit_path = self.config.iter().find_map(|entry| {
             let trimmed = entry.trim();
-            if trimmed.contains('=') {
-                None
-            } else if trimmed.is_empty() {
+            if trimmed.contains('=') || trimmed.is_empty() {
                 None
             } else {
                 Some(PathBuf::from(trimmed))
