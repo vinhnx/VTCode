@@ -168,9 +168,9 @@ impl LLMProvider for LmStudioProvider {
     }
 
     fn supported_models(&self) -> Vec<String> {
-        // For now, return hardcoded models to maintain compatibility
-        // In the future, we could fetch dynamic models, but this needs to be done
-        // in a way that doesn't make network calls for every supported_models() call
+        // Hardcoded models prevent expensive network calls. Future enhancements:
+        // 1. Lazy initialization via once_cell to fetch models at startup
+        // 2. Dynamic fetching with proper caching to avoid repeated network calls
         models::lmstudio::SUPPORTED_MODELS
             .iter()
             .map(|model| model.to_string())
@@ -184,14 +184,7 @@ impl LLMProvider for LmStudioProvider {
             return Err(LLMError::InvalidRequest(formatted_error));
         }
 
-        // First check if it's one of the known hardcoded models
-        if models::lmstudio::SUPPORTED_MODELS.contains(&request.model.as_str()) {
-            // Model is in the known list, proceed with validation
-        } else {
-            // For now, we'll allow any model that isn't explicitly unsupported
-            // In a future enhancement, we could validate against the actual dynamic list
-        }
-
+        // Validate messages against provider's requirements
         for message in &request.messages {
             if let Err(err) = message.validate_for_provider("openai") {
                 let formatted = error_display::format_llm_error("LM Studio", &err);

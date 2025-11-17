@@ -118,15 +118,16 @@ impl ApprovalPattern {
 /// Manager for approval pattern learning and justifications
 pub struct JustificationManager {
     cache_dir: PathBuf,
-    patterns: HashMap<String, ApprovalPattern>,
+    patterns: std::sync::Arc<std::sync::Mutex<HashMap<String, ApprovalPattern>>>,
 }
 
 impl JustificationManager {
     /// Create a new justification manager
     pub fn new(cache_dir: PathBuf) -> Self {
+        let patterns = std::sync::Arc::new(std::sync::Mutex::new(HashMap::new()));
         let manager = Self {
             cache_dir,
-            patterns: HashMap::new(),
+            patterns,
         };
 
         // Try to load existing patterns
@@ -138,50 +139,61 @@ impl JustificationManager {
     /// Load approval patterns from disk
     fn load_patterns(&self) -> Result<()> {
         let patterns_file = self.cache_dir.join("approval_patterns.json");
-        if patterns_file.exists() {
-            let _content = fs::read_to_string(&patterns_file)?;
-            // Note: We can't mutate self in a const context, so this would need RefCell
-            // For now, just validate the file is readable
+        if !patterns_file.exists() {
+            return Ok(());
         }
+        
+        let content = fs::read_to_string(&patterns_file)?;
+        let loaded_patterns: HashMap<String, ApprovalPattern> = serde_json::from_str(&content)?;
+        
+        let mut patterns = self.patterns.lock().map_err(|e| anyhow::anyhow!("Failed to lock patterns: {}", e))?;
+        *patterns = loaded_patterns;
+        
         Ok(())
     }
 
     /// Get approval pattern for a tool
     pub fn get_pattern(&self, tool_name: &str) -> Option<ApprovalPattern> {
-        self.patterns.get(tool_name).cloned()
+        if let Ok(patterns) = self.patterns.lock() {
+            patterns.get(tool_name).cloned()
+        } else {
+            None
+        }
     }
 
     /// Record user approval decision
-    pub fn record_decision(&mut self, tool_name: &str, approved: bool, reason: Option<String>) {
-        let pattern = self
-            .patterns
-            .entry(tool_name.to_string())
-            .or_insert_with(|| ApprovalPattern {
-                tool_name: tool_name.to_string(),
-                approve_count: 0,
-                deny_count: 0,
-                last_decision: None,
-                recent_reason: None,
-            });
+    pub fn record_decision(&self, tool_name: &str, approved: bool, reason: Option<String>) {
+        if let Ok(mut patterns) = self.patterns.lock() {
+            let pattern = patterns
+                .entry(tool_name.to_string())
+                .or_insert_with(|| ApprovalPattern {
+                    tool_name: tool_name.to_string(),
+                    approve_count: 0,
+                    deny_count: 0,
+                    last_decision: None,
+                    recent_reason: None,
+                });
 
-        if approved {
-            pattern.approve_count += 1;
-        } else {
-            pattern.deny_count += 1;
+            if approved {
+                pattern.approve_count += 1;
+            } else {
+                pattern.deny_count += 1;
+            }
+
+            pattern.last_decision = Some(approved);
+            pattern.recent_reason = reason;
+
+            // Persist to disk
+            let _ = self.persist_patterns();
         }
-
-        pattern.last_decision = Some(approved);
-        pattern.recent_reason = reason;
-
-        // Persist to disk
-        let _ = self.persist_patterns();
     }
 
     /// Persist patterns to disk
     fn persist_patterns(&self) -> Result<()> {
         fs::create_dir_all(&self.cache_dir)?;
         let patterns_file = self.cache_dir.join("approval_patterns.json");
-        let content = serde_json::to_string_pretty(&self.patterns)?;
+        let patterns = self.patterns.lock().map_err(|e| anyhow::anyhow!("Failed to lock patterns: {}", e))?;
+        let content = serde_json::to_string_pretty(&*patterns)?;
         fs::write(&patterns_file, content)?;
         Ok(())
     }
@@ -257,7 +269,7 @@ mod tests {
     #[test]
     fn test_justification_manager_basic() {
         let temp_dir = std::env::temp_dir().join(format!("vtcode_test_{}", std::process::id()));
-        let mut manager = JustificationManager::new(temp_dir.clone());
+        let manager = JustificationManager::new(temp_dir.clone());
 
         manager.record_decision("read_file", true, None);
         manager.record_decision("read_file", true, None);
