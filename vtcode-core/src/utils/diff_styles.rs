@@ -14,12 +14,13 @@ pub struct DiffColorPalette {
 
 impl DiffColorPalette {
     /// Green on dark green for additions, red on dark red for deletions
+    /// Background colors use 50% brightness (0, 32, 0) and (32, 0, 0) for reduced eye strain
     pub fn default() -> Self {
         Self {
             added_fg: RgbColor(200, 255, 200),
-            added_bg: RgbColor(0, 64, 0),
+            added_bg: RgbColor(0, 32, 0), // Reduced from (0, 64, 0) - 50% brightness
             removed_fg: RgbColor(255, 200, 200),
-            removed_bg: RgbColor(64, 0, 0),
+            removed_bg: RgbColor(32, 0, 0), // Reduced from (64, 0, 0) - 50% brightness
             header_color: AnsiColor::Cyan,
         }
     }
@@ -49,9 +50,9 @@ mod tests {
     fn test_diff_palette_defaults() {
         let palette = DiffColorPalette::default();
         assert_eq!(palette.added_fg, RgbColor(200, 255, 200));
-        assert_eq!(palette.added_bg, RgbColor(0, 64, 0));
+        assert_eq!(palette.added_bg, RgbColor(0, 32, 0));
         assert_eq!(palette.removed_fg, RgbColor(255, 200, 200));
-        assert_eq!(palette.removed_bg, RgbColor(64, 0, 0));
+        assert_eq!(palette.removed_bg, RgbColor(32, 0, 0));
     }
 
     #[test]

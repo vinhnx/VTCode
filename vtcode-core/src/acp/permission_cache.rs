@@ -14,8 +14,11 @@ pub enum PermissionGrant {
     Session,
     /// Allow permanently (stored to disk)
     Permanent,
-    /// Explicitly denied
+    /// Explicitly denied by policy
     Denied,
+    /// Temporary denial from execution failure (not policy-based)
+    /// Should be invalidated on retry
+    TemporaryDenial,
 }
 
 /// Session-scoped permission cache for ACP hosts (Zed, VS Code, etc.)
@@ -61,6 +64,11 @@ impl AcpPermissionCache {
         self.grants.remove(path);
     }
 
+    /// Clear only temporary denials (for retries)
+    pub fn clear_temporary_denials(&mut self) {
+        self.grants.retain(|_, grant| *grant != PermissionGrant::TemporaryDenial);
+    }
+
     /// Clear all cached permissions
     pub fn clear(&mut self) {
         self.grants.clear();
@@ -86,11 +94,19 @@ impl AcpPermissionCache {
         }
     }
 
-    /// Check if path is denied (skip prompting)
+    /// Check if path is denied by policy (not execution failure)
     pub fn is_denied(&self, path: &PathBuf) -> bool {
         self.grants
             .get(path)
             .map(|g| *g == PermissionGrant::Denied)
+            .unwrap_or(false)
+    }
+
+    /// Check if path has a temporary denial (execution failure, not policy)
+    pub fn is_temporarily_denied(&self, path: &PathBuf) -> bool {
+        self.grants
+            .get(path)
+            .map(|g| *g == PermissionGrant::TemporaryDenial)
             .unwrap_or(false)
     }
 
@@ -162,6 +178,11 @@ impl ToolPermissionCache {
         self.grants.remove(tool_name);
     }
 
+    /// Clear only temporary denials (for retries)
+    pub fn clear_temporary_denials(&mut self) {
+        self.grants.retain(|_, grant| *grant != PermissionGrant::TemporaryDenial);
+    }
+
     /// Clear all cached permissions
     pub fn clear(&mut self) {
         self.grants.clear();
@@ -169,11 +190,19 @@ impl ToolPermissionCache {
         self.misses = 0;
     }
 
-    /// Check if tool execution is denied (skip prompting)
+    /// Check if tool execution is denied by policy (not execution failure)
     pub fn is_denied(&self, tool_name: &str) -> bool {
         self.grants
             .get(tool_name)
             .map(|g| *g == PermissionGrant::Denied)
+            .unwrap_or(false)
+    }
+
+    /// Check if tool has a temporary denial (execution failure, not policy)
+    pub fn is_temporarily_denied(&self, tool_name: &str) -> bool {
+        self.grants
+            .get(tool_name)
+            .map(|g| *g == PermissionGrant::TemporaryDenial)
             .unwrap_or(false)
     }
 
@@ -332,13 +361,16 @@ mod tests {
         let once_path = test_path("once.rs");
         let session_path = test_path("session.rs");
         let denied_path = test_path("denied.rs");
+        let temp_denied_path = test_path("temp_denied.rs");
 
         cache.cache_grant(once_path.clone(), PermissionGrant::Once);
         cache.cache_grant(session_path.clone(), PermissionGrant::Session);
         cache.cache_grant(denied_path.clone(), PermissionGrant::Denied);
+        cache.cache_grant(temp_denied_path.clone(), PermissionGrant::TemporaryDenial);
 
-        // "Once" grants can't be reused
+        // "Once" and "TemporaryDenial" grants can't be reused
         assert!(!cache.can_use_cached(&once_path));
+        assert!(!cache.can_use_cached(&temp_denied_path));
 
         // Session and Permanent grants can be reused
         assert!(cache.can_use_cached(&session_path));
@@ -364,5 +396,44 @@ mod tests {
         }
 
         assert_eq!(cache.stats().hits, 5);
+    }
+
+    #[test]
+    fn test_distinguishes_denied_from_temporary_denial() {
+        let mut cache = AcpPermissionCache::new();
+        let denied_path = test_path("denied.rs");
+        let temp_denied_path = test_path("temp_denied.rs");
+
+        cache.cache_grant(denied_path.clone(), PermissionGrant::Denied);
+        cache.cache_grant(temp_denied_path.clone(), PermissionGrant::TemporaryDenial);
+
+        // Both should be identified correctly
+        assert!(cache.is_denied(&denied_path));
+        assert!(!cache.is_denied(&temp_denied_path));
+
+        assert!(!cache.is_temporarily_denied(&denied_path));
+        assert!(cache.is_temporarily_denied(&temp_denied_path));
+    }
+
+    #[test]
+    fn test_clear_temporary_denials_preserves_policy_denials() {
+        let mut cache = AcpPermissionCache::new();
+        let policy_denied = test_path("policy_denied.rs");
+        let temp_denied = test_path("temp_denied.rs");
+        let allowed = test_path("allowed.rs");
+
+        cache.cache_grant(policy_denied.clone(), PermissionGrant::Denied);
+        cache.cache_grant(temp_denied.clone(), PermissionGrant::TemporaryDenial);
+        cache.cache_grant(allowed.clone(), PermissionGrant::Session);
+
+        cache.clear_temporary_denials();
+
+        // Policy denials and session grants should remain
+        assert!(cache.is_denied(&policy_denied));
+        assert_eq!(cache.get_permission(&allowed), Some(PermissionGrant::Session));
+
+        // Temporary denials should be gone
+        assert!(!cache.is_temporarily_denied(&temp_denied));
+        assert_eq!(cache.get_permission(&temp_denied), None);
     }
 }

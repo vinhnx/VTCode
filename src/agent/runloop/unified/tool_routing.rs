@@ -296,12 +296,14 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
     if let Some(cache) = tool_permission_cache {
         let permission_cache = cache.read().await;
 
-        // Check if tool access is denied
+        // Check if tool access is denied by policy (not execution failure)
+        // Only reject on explicit policy denials, not temporary execution failures
         if permission_cache.is_denied(tool_name) {
             return Ok(ToolPermissionFlow::Denied);
         }
 
         // Check if we have cached permission that can be reused
+        // Temporary denials are NOT reusable; they should be retried
         if permission_cache.can_use_cached(tool_name) {
             tracing::debug!("Using cached ACP permission for tool: {}", tool_name);
             return Ok(ToolPermissionFlow::Approved);

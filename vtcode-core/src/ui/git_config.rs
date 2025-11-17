@@ -57,6 +57,8 @@ impl Default for GitColorConfig {
 
 impl GitColorConfig {
     /// Create Git color config with default values
+    /// Uses dimmed colors (50% brightness) for git status and background colors
+    /// to reduce eye strain during long development sessions
     pub fn with_defaults() -> Self {
         Self {
             diff_new: crate::utils::style_helpers::style_from_color_name("green"),
@@ -65,9 +67,10 @@ impl GitColorConfig {
             diff_header: Style::new(),
             diff_meta: Style::new(),
             diff_frag: crate::utils::style_helpers::style_from_color_name("cyan"),
-            status_added: crate::utils::style_helpers::style_from_color_name("green"),
-            status_modified: crate::utils::style_helpers::style_from_color_name("red"),
-            status_deleted: crate::utils::style_helpers::style_from_color_name("red"),
+            // Use dimmed green and red for git status to reduce brightness (50% ANSI)
+            status_added: crate::utils::style_helpers::style_from_color_name("green:dimmed"),
+            status_modified: crate::utils::style_helpers::style_from_color_name("red:dimmed"),
+            status_deleted: crate::utils::style_helpers::style_from_color_name("red:dimmed"),
             status_untracked: Style::new(),
             branch_current: Style::new(),
             branch_local: Style::new(),
