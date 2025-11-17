@@ -209,8 +209,8 @@ pub async fn run_turn_loop(
     let mut any_write_effect = false;
     let mut turn_modified_files = BTreeSet::new();
 
-    // Add the user input to the working history
-    working_history.push(uni::Message::user(input.to_string()));
+    // NOTE: The user input is already in working_history from the caller (session_loop or run_loop)
+    // Do NOT add it again here, as it will cause duplicate messages in the conversation
 
     // Process up to max_tool_loops iterations to handle tool calls
     let max_tool_loops = vt_cfg
