@@ -2087,34 +2087,47 @@ pub(crate) async fn run_single_agent_loop_unified(
                             };
 
                         if is_loop_detected {
-                            // Get user's choice with context information
-                            match prompt_for_loop_detection(
-                                loop_detection_interactive,
-                                &signature_key,
-                                repeat_count,
-                            ) {
-                                Ok(LoopDetectionResponse::KeepEnabled) => {
-                                    renderer.line(
-                                        MessageStyle::Info,
-                                        "Loop detection remains enabled. Skipping this tool call.",
-                                    )?;
-                                    // Reset only this signature for fresh monitoring
-                                    loop_detector.reset_signature(&signature_key);
-                                    continue; // Skip processing this tool call
+                            if loop_detection_interactive {
+                                // Get user's choice with context information (interactive mode)
+                                match prompt_for_loop_detection(
+                                    loop_detection_interactive,
+                                    &signature_key,
+                                    repeat_count,
+                                ) {
+                                    Ok(LoopDetectionResponse::KeepEnabled) => {
+                                        renderer.line(
+                                            MessageStyle::Info,
+                                            "Loop detection remains enabled. Skipping this tool call.",
+                                        )?;
+                                        // Reset only this signature for fresh monitoring
+                                        loop_detector.reset_signature(&signature_key);
+                                        continue; // Skip processing this tool call
+                                    }
+                                    Ok(LoopDetectionResponse::DisableForSession) => {
+                                        renderer.line(MessageStyle::Info, "Loop detection disabled for this session. Proceeding with tool call.")?;
+                                        loop_detection_disabled_for_session = true;
+                                        // Clear all tracking for fresh start after user override
+                                        loop_detector.reset();
+                                        // Continue processing the tool call below
+                                    }
+                                    Err(e) => {
+                                        warn!("Loop detection prompt failed: {}", e);
+                                        // Graceful degradation: disable detection and continue
+                                        loop_detection_disabled_for_session = true;
+                                        loop_detector.reset();
+                                    }
                                 }
-                                Ok(LoopDetectionResponse::DisableForSession) => {
-                                    renderer.line(MessageStyle::Info, "Loop detection disabled for this session. Proceeding with tool call.")?;
-                                    loop_detection_disabled_for_session = true;
-                                    // Clear all tracking for fresh start after user override
-                                    loop_detector.reset();
-                                    // Continue processing the tool call below
-                                }
-                                Err(e) => {
-                                    warn!("Loop detection prompt failed: {}", e);
-                                    // Graceful degradation: disable detection and continue
-                                    loop_detection_disabled_for_session = true;
-                                    loop_detector.reset();
-                                }
+                            } else {
+                                // Non-interactive mode: break out of the loop and notify user
+                                renderer.line(
+                                    MessageStyle::Error,
+                                    &format!(
+                                        "Detected infinite loop: tool '{}' called {} times with identical arguments. Breaking out of tool loop.",
+                                        name, repeat_count
+                                    ),
+                                )?;
+                                ensure_turn_bottom_gap(&mut renderer, &mut bottom_gap_applied)?;
+                                break 'outer TurnLoopResult::Completed;
                             }
                         }
 
