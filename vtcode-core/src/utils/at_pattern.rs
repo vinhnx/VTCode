@@ -74,7 +74,7 @@ pub async fn parse_at_patterns(input: &str, base_dir: &Path) -> Result<MessageCo
         }
 
         // Try to read the file as an image
-        let image_path = base_dir.join(normalized_path);
+        let image_path = base_dir.join(&normalized_path);
 
         match read_image_file(&image_path).await {
             Ok(image_data) => {
@@ -132,10 +132,9 @@ fn normalize_path(path: &str) -> String {
         return String::new(); // Indicates invalid path
     }
 
-    // Prevent absolute paths (security)
+    // Block absolute paths for security - all image references must be relative to workspace
     if path.starts_with('/') || (cfg!(windows) && path.contains(':')) {
-        // For now, we'll allow relative paths only
-        return String::new();
+        return String::new(); // Indicates invalid path
     }
 
     path.to_string()
