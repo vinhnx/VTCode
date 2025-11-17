@@ -8,8 +8,23 @@ use crate::config::PtyConfig;
 
 use super::PtyManager;
 
+/// RAII guard to automatically decrement session count when dropped
+#[derive(Debug)]
+pub struct PtySessionGuard {
+    active_sessions: Arc<AtomicUsize>,
+}
+
+impl Drop for PtySessionGuard {
+    fn drop(&mut self) {
+        let current = self.active_sessions.load(Ordering::SeqCst);
+        if current > 0 {
+            self.active_sessions.fetch_sub(1, Ordering::SeqCst);
+        }
+    }
+}
+
 #[derive(Clone)]
-pub(super) struct PtySessionManager {
+pub struct PtySessionManager {
     config: PtyConfig,
     manager: PtyManager,
     active_sessions: Arc<AtomicUsize>,
@@ -42,7 +57,9 @@ impl PtySessionManager {
         self.active_sessions.load(Ordering::SeqCst) < self.config.max_sessions
     }
 
-    pub fn start_session(&self) -> Result<()> {
+    /// Start a PTY session and return an RAII guard that will automatically decrement
+    /// the session count when dropped, even if an error occurs during execution.
+    pub fn start_session(&self) -> Result<PtySessionGuard> {
         if !self.can_start_session() {
             return Err(anyhow!(
                 "Maximum PTY sessions ({}) exceeded. Current active sessions: {}",
@@ -52,7 +69,9 @@ impl PtySessionManager {
         }
 
         self.active_sessions.fetch_add(1, Ordering::SeqCst);
-        Ok(())
+        Ok(PtySessionGuard {
+            active_sessions: Arc::clone(&self.active_sessions),
+        })
     }
 
     pub fn end_session(&self) {

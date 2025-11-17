@@ -22,10 +22,67 @@ pub(crate) async fn render_terminal_command_panel(
     allow_ansi: bool,
     token_budget: Option<&TokenBudgetManager>,
 ) -> Result<()> {
-    let stdout_raw = payload.get("stdout").and_then(Value::as_str).unwrap_or("");
-    let stderr_raw = payload.get("stderr").and_then(Value::as_str).unwrap_or("");
-    let command_tokens = parse_command_tokens(payload);
-    let stdout = preprocess_terminal_stdout(command_tokens.as_deref(), stdout_raw);
+    // Check if stdout is JSON containing command output (from execute_code tool)
+    let mut stdout_raw = payload.get("stdout").and_then(Value::as_str).unwrap_or("");
+    let mut stderr_raw = payload.get("stderr").and_then(Value::as_str).unwrap_or("");
+    let mut unwrapped_payload = payload.clone();
+
+    // If stdout looks like JSON with stdout/stderr/returncode, unwrap it
+    if let Ok(inner_json) = serde_json::from_str::<Value>(stdout_raw) {
+        if inner_json.get("stdout").is_some()
+            || inner_json.get("stderr").is_some()
+            || inner_json.get("returncode").is_some()
+        {
+            unwrapped_payload = inner_json;
+            stdout_raw = unwrapped_payload
+                .get("stdout")
+                .and_then(Value::as_str)
+                .unwrap_or("");
+            stderr_raw = unwrapped_payload
+                .get("stderr")
+                .and_then(Value::as_str)
+                .unwrap_or("");
+        }
+    }
+
+    let output_raw = unwrapped_payload
+        .get("output")
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    let command_tokens = parse_command_tokens(&unwrapped_payload);
+
+    // Check for session completion status (is_exited indicates if process is still running)
+    let is_completed = unwrapped_payload
+        .get("is_exited")
+        .and_then(Value::as_bool)
+        .unwrap_or(true);
+    let exit_code = unwrapped_payload.get("exit_code").and_then(Value::as_i64);
+    let command = unwrapped_payload
+        .get("command")
+        .and_then(Value::as_str)
+        .unwrap_or("unknown");
+    let session_id = unwrapped_payload.get("id").and_then(Value::as_str);
+    let working_dir = unwrapped_payload
+        .get("working_directory")
+        .and_then(Value::as_str);
+    let rows = unwrapped_payload
+        .get("rows")
+        .and_then(Value::as_u64)
+        .unwrap_or(24);
+    let cols = unwrapped_payload
+        .get("cols")
+        .and_then(Value::as_u64)
+        .unwrap_or(80);
+
+    // If there's an 'output' field, this is likely a PTY session result
+    let is_pty_session = unwrapped_payload.get("id").is_some()
+        && (output_raw.is_empty() == false || stdout_raw.is_empty() && stderr_raw.is_empty());
+
+    let stdout = if is_pty_session {
+        preprocess_terminal_stdout(command_tokens.as_deref(), output_raw)
+    } else {
+        preprocess_terminal_stdout(command_tokens.as_deref(), stdout_raw)
+    };
     let stderr = preprocess_terminal_stdout(command_tokens.as_deref(), stderr_raw);
 
     let output_mode = vt_config
@@ -33,28 +90,95 @@ pub(crate) async fn render_terminal_command_panel(
         .unwrap_or(ToolOutputMode::Compact);
     let tail_limit = resolve_stdout_tail_limit(vt_config);
 
+    // Display session status header if this is a PTY session
+    if is_pty_session {
+        if let Some(session_id) = session_id {
+            let status_symbol = if !is_completed { "[RUN]" } else { "[END]" };
+            let status_text = if !is_completed {
+                "RUNNING"
+            } else {
+                "COMPLETED"
+            };
+            let exit_info = if let Some(code) = exit_code {
+                format!(" (exit code: {})", code)
+            } else {
+                String::new()
+            };
+
+            renderer.line(
+                MessageStyle::Info,
+                &format!(
+                    "{} [{} - {}x{}] Session: {} | Command: {}{}{}",
+                    status_symbol,
+                    status_text,
+                    cols,
+                    rows,
+                    session_id,
+                    command,
+                    if let Some(wd) = working_dir {
+                        format!(" | Working directory: {}", wd)
+                    } else {
+                        String::new()
+                    },
+                    exit_info
+                ),
+            )?;
+
+            // Add a visual separator for terminal view
+            renderer.line(MessageStyle::Info, &"─".repeat(60))?;
+
+            // If this is a running session, also show the command being executed
+            if !is_completed {
+                renderer.line(MessageStyle::Response, &format!("$ {}", command))?;
+            }
+        }
+    }
+
+    // Render stdin if available (user input to the terminal) - simulating command prompt
+    if let Some(stdin) = unwrapped_payload.get("stdin").and_then(Value::as_str) {
+        if !stdin.trim().is_empty() {
+            // Show the input as if it came from a command prompt
+            let prompt = format!("$ {}", stdin.trim());
+            renderer.line(MessageStyle::Response, &prompt)?;
+        }
+    }
+
+    // If the process is still running, add an indicator to show it's still active
+    if is_pty_session && !is_completed {
+        renderer.line(MessageStyle::Info, "... command still running ...")?;
+    }
+
     if stdout.trim().is_empty() && stderr.trim().is_empty() {
-        renderer.line(MessageStyle::Info, "(no output)")?;
+        if !is_pty_session || is_completed {
+            renderer.line(MessageStyle::Info, "(no output)")?;
+        } else if is_pty_session && !is_completed {
+            // For running PTY sessions with no output yet, don't show "no output"
+            // since the process may still be starting up or processing
+        }
         return Ok(());
     }
 
+    // Render stdout/PTY output
     if !stdout.trim().is_empty() {
+        let label = if is_pty_session { "" } else { "stdout" }; // Don't label PTY output as stdout
         render_stream_section(
             renderer,
-            "",
+            label,
             stdout.as_ref(),
             output_mode,
             tail_limit,
             Some(tools::RUN_COMMAND),
             git_styles,
             ls_styles,
-            MessageStyle::Response,
+            MessageStyle::Response, // This is the normal terminal output
             allow_ansi,
             vt_config,
             token_budget,
         )
         .await?;
     }
+
+    // Render stderr if present, even for PTY sessions
     if !stderr.as_ref().trim().is_empty() {
         render_stream_section(
             renderer,
@@ -65,12 +189,31 @@ pub(crate) async fn render_terminal_command_panel(
             Some(tools::RUN_COMMAND),
             git_styles,
             ls_styles,
-            MessageStyle::Error,
+            MessageStyle::Error, // Error output
             allow_ansi,
             vt_config,
             token_budget,
         )
         .await?;
+    }
+
+    // Add session completion note if completed
+    if is_pty_session && is_completed {
+        if let Some(session_id) = session_id {
+            let exit_info = if let Some(code) = exit_code {
+                if code == 0 {
+                    " [SUCCESS]".to_string()
+                } else {
+                    format!(" [EXIT: {}]", code)
+                }
+            } else {
+                " [COMPLETE]".to_string()
+            };
+            renderer.line(
+                MessageStyle::Info,
+                &format!("[Session {}{}]", session_id, exit_info),
+            )?;
+        }
     }
 
     Ok(())
@@ -393,5 +536,17 @@ warning: something
     fn strip_rust_columns_returns_none_when_unmodified() {
         let sample = "no diagnostics here";
         assert!(strip_rust_diagnostic_columns_from_str(sample).is_none());
+    }
+
+    #[test]
+    fn detects_nested_json_command_output() {
+        let nested_json = r#"{"stdout": "test output", "stderr": "test error", "returncode": 0}"#;
+        if let Ok(parsed) = serde_json::from_str::<Value>(nested_json) {
+            assert!(parsed.get("stdout").is_some());
+            assert!(parsed.get("stderr").is_some());
+            assert!(parsed.get("returncode").is_some());
+        } else {
+            panic!("Failed to parse nested JSON");
+        }
     }
 }

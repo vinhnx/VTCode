@@ -38,6 +38,7 @@ pub mod agent;
 pub mod context_pruner;
 pub mod decision_tracker;
 pub mod error_recovery;
+pub mod global_token_manager;
 pub mod interfaces;
 pub mod orchestrator_retry;
 pub mod prompt_caching;
@@ -47,7 +48,6 @@ pub mod timeout_detector;
 pub mod token_budget;
 pub mod token_constants;
 pub mod token_estimator;
-pub mod global_token_manager;
 pub mod trajectory;
 
 // Re-export main types

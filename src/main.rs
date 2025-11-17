@@ -180,7 +180,9 @@ async fn main() -> Result<()> {
             cli::handle_man_command(command.clone(), output.clone()).await?;
         }
         Some(Commands::Tokens { command }) => {
-            vtcode_core::cli::token_commands::handle_token_command(command).await?;
+            vtcode_core::cli::token_commands::handle_token_command(command)
+                .await
+                .map_err(|e| anyhow::anyhow!("{:?}", e))?;
         }
         _ => {
             // Default to chat

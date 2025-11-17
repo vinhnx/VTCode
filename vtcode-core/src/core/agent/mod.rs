@@ -9,6 +9,7 @@ pub mod core;
 pub mod events;
 pub mod examples;
 
+pub mod runloop;
 pub mod runner;
 pub mod snapshots;
 pub mod stats;

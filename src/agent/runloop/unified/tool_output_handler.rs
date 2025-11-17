@@ -62,17 +62,28 @@ pub(crate) async fn handle_pipeline_output(
             }
 
             // Extract and record max_tokens usage if present in tool output
-            if let Some(applied_max_tokens) = output.get("applied_max_tokens").and_then(|v| v.as_u64()) {
-                let context = format!("Tool: {}, Command: {}", name,
-                    output.get("command")
+            if let Some(applied_max_tokens) =
+                output.get("applied_max_tokens").and_then(|v| v.as_u64())
+            {
+                let context = format!(
+                    "Tool: {}, Command: {}",
+                    name,
+                    output
+                        .get("command")
                         .and_then(|v| v.as_str())
-                        .unwrap_or_else(|| args_val.to_string())
+                        .unwrap_or(&args_val.to_string())
                 );
-                let _ = token_budget.record_max_tokens_usage(name, Some(applied_max_tokens as usize), &context).await;
+                let _ = token_budget
+                    .record_max_tokens_usage(name, Some(applied_max_tokens as usize), &context)
+                    .await;
 
                 // Also record to global token budget for CLI access
-                if let Some(global_token_budget) = vtcode_core::core::global_token_manager::get_global_token_budget() {
-                    let _ = global_token_budget.record_max_tokens_usage(name, Some(applied_max_tokens as usize), &context).await;
+                if let Some(global_token_budget) =
+                    vtcode_core::core::global_token_manager::get_global_token_budget()
+                {
+                    let _ = global_token_budget
+                        .record_max_tokens_usage(name, Some(applied_max_tokens as usize), &context)
+                        .await;
                 }
             }
 
@@ -182,17 +193,28 @@ pub(crate) async fn handle_pipeline_output_renderer(
             }
 
             // Extract and record max_tokens usage if present in tool output
-            if let Some(applied_max_tokens) = output.get("applied_max_tokens").and_then(|v| v.as_u64()) {
-                let context = format!("Tool: {}, Command: {}", name,
-                    output.get("command")
+            if let Some(applied_max_tokens) =
+                output.get("applied_max_tokens").and_then(|v| v.as_u64())
+            {
+                let context = format!(
+                    "Tool: {}, Command: {}",
+                    name,
+                    output
+                        .get("command")
                         .and_then(|v| v.as_str())
-                        .unwrap_or_else(|| args_val.to_string())
+                        .unwrap_or(&args_val.to_string())
                 );
-                let _ = token_budget.record_max_tokens_usage(name, Some(applied_max_tokens as usize), &context).await;
+                let _ = token_budget
+                    .record_max_tokens_usage(name, Some(applied_max_tokens as usize), &context)
+                    .await;
 
                 // Also record to global token budget for CLI access
-                if let Some(global_token_budget) = vtcode_core::core::global_token_manager::get_global_token_budget() {
-                    let _ = global_token_budget.record_max_tokens_usage(name, Some(applied_max_tokens as usize), &context).await;
+                if let Some(global_token_budget) =
+                    vtcode_core::core::global_token_manager::get_global_token_budget()
+                {
+                    let _ = global_token_budget
+                        .record_max_tokens_usage(name, Some(applied_max_tokens as usize), &context)
+                        .await;
                 }
             }
 

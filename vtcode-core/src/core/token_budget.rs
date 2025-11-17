@@ -459,7 +459,8 @@ impl TokenBudgetManager {
         if !max_tokens_history.is_empty() {
             report.push_str("\nRecent max_tokens Usage:\n");
             for usage in max_tokens_history.iter().rev().take(10) {
-                let applied = usage.applied_max_tokens
+                let applied = usage
+                    .applied_max_tokens
                     .map(|n| n.to_string())
                     .unwrap_or_else(|| "None".to_string());
                 report.push_str(&format!(
@@ -479,7 +480,12 @@ impl TokenBudgetManager {
     }
 
     /// Record max_tokens usage for a tool call
-    pub async fn record_max_tokens_usage(&self, tool_name: &str, applied_max_tokens: Option<usize>, context: &str) {
+    pub async fn record_max_tokens_usage(
+        &self,
+        tool_name: &str,
+        applied_max_tokens: Option<usize>,
+        context: &str,
+    ) {
         let mut history = self.max_tokens_history.write().await;
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)

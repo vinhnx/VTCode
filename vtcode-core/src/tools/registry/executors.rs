@@ -1708,20 +1708,6 @@ impl ToolRegistry {
 
             let elapsed = start.elapsed();
 
-            // For long-running commands, wait longer for completion
-            if elapsed > poll_timeout {
-                debug!(
-                    "PTY command timeout after {:?}, returning partial output",
-                    elapsed
-                );
-                return PtyEphemeralCapture {
-                    output,
-                    exit_code: None,
-                    completed: false,
-                    duration: elapsed,
-                };
-            }
-
             // Minimum wait before returning
             if !output.is_empty() && elapsed > min_wait {
                 // For fast commands (< 2s), wait for completion
@@ -1729,6 +1715,31 @@ impl ToolRegistry {
                     sleep(poll_interval).await;
                     continue;
                 }
+            }
+
+            // For agent loop: if we're dealing with long-running commands, wait much longer
+            // The original poll_timeout was too aggressive for build processes
+            let effective_timeout =
+                if poll_timeout >= Duration::from_secs(RUN_PTY_POLL_TIMEOUT_LONG_RUNNING) {
+                    // For long-running commands (like cargo, npm), use extended timeout
+                    Duration::from_secs(600) // 10 minutes for long-running commands
+                } else {
+                    // For regular commands, use original timeout behavior
+                    Duration::from_secs(60) // 1 minute for regular commands
+                };
+
+            // Check if we've exceeded the effective timeout
+            if elapsed > effective_timeout {
+                debug!(
+                    "PTY command exceeded timeout of {:?} (original: {:?}), returning partial output",
+                    effective_timeout, poll_timeout
+                );
+                return PtyEphemeralCapture {
+                    output,
+                    exit_code: None, // Indicate still running
+                    completed: false,
+                    duration: elapsed,
+                };
             }
 
             sleep(poll_interval).await;
@@ -1765,6 +1776,7 @@ impl ToolRegistry {
                 self.pty_config().default_rows,
                 self.pty_config().default_cols,
             ),
+            max_tokens: input.max_tokens,
         };
 
         let working_directory = self.pty_manager().describe_working_dir(&working_dir_path);
@@ -1872,8 +1884,36 @@ impl ToolRegistry {
             }
         };
 
+        // Check if the session is still running (should be, since we just created it)
+        let is_completed = match self.pty_manager().is_session_completed(&session_id) {
+            Ok(Some(exit_code)) => {
+                // Process has exited with code
+                Some(exit_code)
+            }
+            Ok(None) => {
+                // Process is still running
+                None
+            }
+            Err(_) => {
+                // Error checking status, assume completed
+                Some(-1) // Use -1 to indicate error state
+            }
+        };
+
         let mut response = snapshot_to_map(result, PtySnapshotViewOptions::default());
         response.insert("success".to_string(), Value::Bool(true));
+
+        // Add status information
+        match is_completed {
+            Some(exit_code) => {
+                response.insert("is_exited".to_string(), Value::Bool(true));
+                response.insert("exit_code".to_string(), Value::Number(exit_code.into()));
+            }
+            None => {
+                response.insert("is_exited".to_string(), Value::Bool(false)); // Still running
+                response.insert("exit_code".to_string(), Value::Null); // No exit code yet
+            }
+        }
 
         Ok(Value::Object(response))
     }
@@ -1906,8 +1946,19 @@ impl ToolRegistry {
             .with_context(|| format!("failed to close PTY session '{session_id}'"))?;
         self.end_pty_session();
 
+        // For a closed session, we can report completion status if it was still running
+        let exit_code = match self.pty_manager().is_session_completed(session_id.as_str()) {
+            Ok(Some(code)) => Some(code),
+            Ok(None) => Some(0), // If not completed, we force closed it with code 0
+            Err(_) => Some(-1),  // Error state
+        };
+
         let mut response = snapshot_to_map(metadata, PtySnapshotViewOptions::default());
         response.insert("success".to_string(), Value::Bool(true));
+        if let Some(code) = exit_code {
+            response.insert("is_exited".to_string(), Value::Bool(true));
+            response.insert("exit_code".to_string(), Value::Number(code.into()));
+        }
 
         Ok(Value::Object(response))
     }
@@ -1938,6 +1989,25 @@ impl ToolRegistry {
             .snapshot_session(input.session_id.as_str())
             .with_context(|| format!("failed to snapshot PTY session '{}'", input.session_id))?;
 
+        // Check if the session is still running
+        let is_completed = match self
+            .pty_manager()
+            .is_session_completed(input.session_id.as_str())
+        {
+            Ok(Some(exit_code)) => {
+                // Process has exited with code
+                Some(exit_code)
+            }
+            Ok(None) => {
+                // Process is still running
+                None
+            }
+            Err(_) => {
+                // Error checking status, assume completed
+                Some(-1) // Use -1 to indicate error state
+            }
+        };
+
         let mut response = snapshot_to_map(snapshot, PtySnapshotViewOptions::default());
         response.insert("success".to_string(), Value::Bool(true));
         response.insert("written_bytes".to_string(), Value::from(written));
@@ -1947,6 +2017,25 @@ impl ToolRegistry {
         );
         if let Some(output) = output {
             response.insert("output".to_string(), Value::String(strip_ansi(&output)));
+        }
+
+        // Add the input that was sent as stdin (if it's valid UTF-8)
+        if !input.buffer.is_empty() {
+            if let Ok(input_str) = std::str::from_utf8(&input.buffer) {
+                response.insert("stdin".to_string(), Value::String(input_str.to_string()));
+            }
+        }
+
+        // Add status information
+        match is_completed {
+            Some(exit_code) => {
+                response.insert("is_exited".to_string(), Value::Bool(true));
+                response.insert("exit_code".to_string(), Value::Number(exit_code.into()));
+            }
+            None => {
+                response.insert("is_exited".to_string(), Value::Bool(false)); // Still running
+                response.insert("exit_code".to_string(), Value::Null); // No exit code yet
+            }
         }
 
         Ok(Value::Object(response))
@@ -1972,10 +2061,75 @@ impl ToolRegistry {
                 format!("failed to snapshot PTY session '{}'", view_args.session_id)
             })?;
 
+        // Check if the session is still running
+        let is_completed = match self
+            .pty_manager()
+            .is_session_completed(view_args.session_id.as_str())
+        {
+            Ok(Some(exit_code)) => {
+                // Process has exited with code
+                Some(exit_code)
+            }
+            Ok(None) => {
+                // Process is still running
+                None
+            }
+            Err(_) => {
+                // Error checking status, assume completed
+                Some(-1) // Use -1 to indicate error state
+            }
+        };
+
         let mut response = snapshot_to_map(snapshot, view_args.view);
         response.insert("success".to_string(), Value::Bool(true));
-        if let Some(output) = output {
-            response.insert("output".to_string(), Value::String(strip_ansi(&output)));
+
+        // Apply max_tokens truncation if specified
+        let processed_output = if let Some(output) = output {
+            if let Some(max_tokens) = view_args.max_tokens {
+                if max_tokens > 0 {
+                    use crate::core::agent::runloop::token_trunc::truncate_content_by_tokens;
+                    use crate::core::token_budget::TokenBudgetManager;
+
+                    // Use a temporary token budget manager for truncation
+                    let token_budget = TokenBudgetManager::default();
+
+                    // This needs to be inside an async block since truncate_content_by_tokens is async
+                    let rt = tokio::runtime::Handle::current();
+                    let (truncated_output, _) = rt.block_on(async {
+                        truncate_content_by_tokens(&output, max_tokens, &token_budget).await
+                    });
+
+                    format!(
+                        "{}\n[... truncated by max_tokens: {} ...]",
+                        truncated_output, max_tokens
+                    )
+                } else {
+                    output // Keep original if max_tokens is not valid
+                }
+            } else {
+                output // Keep original if no max_tokens specified
+            }
+        } else {
+            String::new() // No output to process
+        };
+
+        if !processed_output.is_empty() {
+            response.insert(
+                "output".to_string(),
+                Value::String(strip_ansi(&processed_output)),
+            );
+        }
+
+        // Add status information
+        match is_completed {
+            Some(exit_code) => {
+                response.insert("is_exited".to_string(), Value::Bool(true));
+                response.insert("exit_code".to_string(), Value::Number(exit_code.into()));
+            }
+            None => {
+                response.insert("is_exited".to_string(), Value::Bool(false)); // Still running
+                response.insert("exit_code".to_string(), Value::Null); // No exit code yet
+            }
         }
 
         Ok(Value::Object(response))
@@ -2152,6 +2306,7 @@ fn build_terminal_command_response(
     json!({
         "success": result.exit_code == 0,
         "exit_code": result.exit_code,
+        "is_exited": true,
         "stdout": result.output,
         "stderr": "",
         "output": result.output,
@@ -2159,8 +2314,11 @@ fn build_terminal_command_response(
         "pty_enabled": true,
         "command": command_display,
         "working_directory": working_directory,
+        "working_dir": working_directory,
         "timeout_secs": timeout_secs,
         "duration_ms": result.duration.as_millis(),
+        "rows": result.size.rows,
+        "cols": result.size.cols,
         "pty": {
             "rows": result.size.rows,
             "cols": result.size.cols,
@@ -3079,15 +3237,21 @@ fn build_ephemeral_pty_response(
         "command": setup.command.clone(),
         "output": strip_ansi(&output),
         "code": code,
+        "exit_code": code,
         "status": status,
         "message": message,
         "mode": "pty",
+        "is_exited": completed,
         "session_id": session_reference,
+        "id": setup.session_id.clone(),
+        "rows": snapshot.rows,
+        "cols": snapshot.cols,
         "pty": {
             "rows": snapshot.rows,
             "cols": snapshot.cols,
         },
         "working_directory": setup.working_dir_display.clone(),
+        "working_dir": setup.working_dir_display.clone(),
         "timeout_secs": setup.timeout_secs,
         "duration_ms": if completed { duration.as_millis() } else { 0 },
     })

@@ -266,89 +266,38 @@ run_terminal_cmd = "allow"
 send_pty_input = "allow"
 update_plan = "allow"
 write_file = "allow"
-# Command security - Define safe and dangerous command patterns
+# Command security configuration
+# Note: Safe command defaults are built into vtcode-core (80+ commands)
+# This section allows adding CUSTOM commands beyond the defaults
+# For the full list of safe/blocked commands, see: docs/COMMAND_SECURITY_MODEL.md
 [commands]
-# Commands that are always allowed without confirmation
-allow_list = [
-    "ls",
-    "pwd",
-    "echo",
-    "date",
-    "whoami",
-    "hostname",
-    "uname",
-    # Common Git commands that the agent may run for inspection, status, and diffs
-    "git",
-    "git status",
-    "git diff",
-    "git log",
-    "git show",
-    "git branch",
-    "git remote",
-    "git fetch",
-    "git pull",
-    "git clone",
-    "git checkout",
-    "git switch",
-    "git add",
-    "git commit",
-    # Common Cargo (Rust) commands for building, testing, linting, and inspection
-    "cargo",
-    "cargo build",
-    "cargo build --release",
-    "cargo check",
-    "cargo test",
-    "cargo run",
-    "cargo clippy",
-    "cargo fmt",
-    "cargo tree",
-    "cargo metadata",
-    "cargo doc",
-]
+# Add custom commands here that aren't in the built-in safe list
+# Example: allow_list = ["my-custom-tool", "special-build-script"]
+allow_list = []
 
-# Additional directories to prepend to PATH when VTCode executes commands
-extra_path_entries = [
-    "$HOME/.cargo/bin",
-    "$HOME/.local/bin",
-    "/opt/homebrew/bin",
-]
+# Add custom PATH entries for non-standard tool locations (optional)
+# Note: Built-in entries already include ~/.cargo/bin, ~/.local/bin, /opt/homebrew/bin
+extra_path_entries = []
 
-# When running destructive commands via `run_terminal_cmd`, set `confirm=true` in the tool input
-# Example: { command = ["git", "reset", "--hard"], confirm = true }
+# Optional: Custom environment variables for command execution
+# To set custom variables, uncomment and edit:
+# [commands.environment]
+# RUST_BACKTRACE = "1"
+# CUSTOM_VAR = "value"
 
-# Commands that are never allowed
-deny_list = [
-    "rm -rf /",
-    "rm -rf ~",
-    "shutdown",
-    "reboot",
-    "sudo *",
-    ":(){ :|:& };:",
-]
+# Optional: Rust-specific configuration
+# To customize cargo execution, uncomment and edit:
+# [commands.rust]
+# cargo_timeout_seconds = 120
+# cargo_environment_overrides = { CARGO_TERM_COLOR = "never" }
 
-# Command patterns that are allowed (supports glob patterns)
-allow_glob = [
-    "git *",
-    "cargo *",
-    "python *",
-    "npm *",
-    "node *",
-    "cat *",
-    "head *",
-    "tail *",
-    "grep *",
-    "find *",
-    "wc *",
-]
-
-# Command patterns that are denied (supports glob patterns)
-deny_glob = ["rm -rf *", "sudo *", "chmod *", "chown *", "kubectl *"]
-
-# Regular expression patterns for allowed commands (if needed)
-allow_regex = []
-
-# Regular expression patterns for denied commands (if needed)
-deny_regex = []
+# Optional: Custom command patterns for project-specific tools
+# All safe/dangerous defaults are built into vtcode-core
+# Add project-specific patterns here:
+# allow_glob = ["my-tool *", "custom-build *"]
+# deny_glob = ["docker run *"]
+# allow_regex = []
+# deny_regex = []
 
 # Permission system enhancements - Command resolution, audit logging, and caching
 [permissions]
@@ -392,11 +341,11 @@ auto_apply_detected_patches = false
 # Tool output display mode
 # "compact" - Concise tool output
 # "full" - Detailed tool output
-tool_output_mode = "full"
+tool_output_mode = "compact"
 
 # Maximum number of lines to display in tool output (prevents transcript flooding)
 # Lines beyond this limit are truncated to a tail preview
-tool_output_max_lines = 600
+tool_output_max_lines = 50
 
 # Maximum bytes threshold for spooling tool output to disk
 # Output exceeding this size is written to .vtcode/tool-output/*.log
@@ -407,7 +356,7 @@ tool_output_spool_bytes = 200000
 # tool_output_spool_dir = "/path/to/custom/spool/dir"
 
 # Allow ANSI escape sequences in tool output (enables colors but may cause layout issues)
-allow_tool_ansi = true
+allow_tool_ansi = false
 
 # Number of rows to allocate for inline UI viewport
 inline_viewport_rows = 16
@@ -449,7 +398,8 @@ enabled = true
 default_rows = 24
 
 # Default number of terminal columns for PTY sessions
-default_cols = 80
+# Increased to prevent line wrapping issues with unicode characters
+default_cols = 120
 
 # Maximum number of concurrent PTY sessions
 max_sessions = 10
@@ -458,10 +408,11 @@ max_sessions = 10
 command_timeout_seconds = 300
 
 # Number of recent lines to show in PTY output
-stdout_tail_lines = 20
+# Reduced to prevent display clutter
+stdout_tail_lines = 5
 
 # Total lines to keep in PTY scrollback buffer
-scrollback_lines = 400
+scrollback_lines = 100
 
 # Preferred shell program for PTY sessions (defaults to $SHELL or auto-detect)
 # preferred_shell = "/bin/zsh"

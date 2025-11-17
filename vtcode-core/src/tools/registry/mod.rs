@@ -25,6 +25,7 @@ pub use declarations::{
 pub use error::{ToolErrorType, ToolExecutionError, classify_error};
 pub use justification::{ApprovalPattern, JustificationManager, ToolJustification};
 pub use justification_extractor::JustificationExtractor;
+pub use pty::{PtySessionGuard, PtySessionManager};
 pub use registration::{ToolExecutorFn, ToolHandler, ToolRegistration};
 pub use risk_scorer::{RiskLevel, ToolRiskContext, ToolRiskScorer, ToolSource, WorkspaceTrust};
 pub use telemetry::ToolTelemetryEvent;
@@ -32,7 +33,6 @@ pub use telemetry::ToolTelemetryEvent;
 use builtins::register_builtin_tools;
 use inventory::ToolInventory;
 use policy::ToolPolicyGateway;
-use pty::PtySessionManager;
 use utils::normalize_tool_output;
 
 #[cfg(test)]
@@ -343,7 +343,7 @@ impl ToolRegistry {
         let mut inventory = ToolInventory::new(workspace_root.clone());
         register_builtin_tools(&mut inventory, todo_planning_enabled);
 
-        let pty_sessions = PtySessionManager::new(workspace_root.clone(), pty_config);
+        let pty_sessions = pty::PtySessionManager::new(workspace_root.clone(), pty_config);
 
         let policy_gateway = match policy_manager {
             Some(pm) => ToolPolicyGateway::with_policy_manager(pm),
@@ -515,7 +515,7 @@ impl ToolRegistry {
         self.pty_sessions.can_start_session()
     }
 
-    pub fn start_pty_session(&self) -> Result<()> {
+    pub fn start_pty_session(&self) -> Result<pty::PtySessionGuard> {
         self.pty_sessions.start_session()
     }
 
@@ -804,31 +804,37 @@ impl ToolRegistry {
             return Ok(error.to_json_value());
         }
 
-        // Start PTY session if needed
-        if needs_pty {
-            if let Err(err) = self.start_pty_session() {
-                let error = ToolExecutionError::with_original_error(
-                    tool_name.to_string(),
-                    ToolErrorType::ExecutionError,
-                    "Failed to start PTY session".to_string(),
-                    err.to_string(),
-                );
+        // Start PTY session if needed (using RAII guard for automatic cleanup)
+        let _pty_guard = if needs_pty {
+            match self.start_pty_session() {
+                Ok(guard) => Some(guard),
+                Err(err) => {
+                    let error = ToolExecutionError::with_original_error(
+                        tool_name.to_string(),
+                        ToolErrorType::ExecutionError,
+                        "Failed to start PTY session".to_string(),
+                        err.to_string(),
+                    );
 
-                // Record the failed execution
-                let record = ToolExecutionRecord {
-                    tool_name: tool_name.to_string(),
-                    args: args_for_recording,
-                    result: Err("Failed to start PTY session".to_string()),
-                    timestamp: SystemTime::now(),
-                    success: false,
-                };
-                self.execution_history.add_record(record);
+                    // Record the failed execution
+                    let record = ToolExecutionRecord {
+                        tool_name: tool_name.to_string(),
+                        args: args_for_recording,
+                        result: Err("Failed to start PTY session".to_string()),
+                        timestamp: SystemTime::now(),
+                        success: false,
+                    };
+                    self.execution_history.add_record(record);
 
-                return Ok(error.to_json_value());
+                    return Ok(error.to_json_value());
+                }
             }
-        }
+        } else {
+            None
+        };
 
         // Execute the appropriate tool based on its type
+        // The _pty_guard will automatically decrement the session count when dropped
         let result = if is_mcp_tool {
             let mcp_name =
                 mcp_tool_name.expect("mcp_tool_name should be set when is_mcp_tool is true");
@@ -872,10 +878,7 @@ impl ToolRegistry {
             return Ok(error.to_json_value());
         };
 
-        // Clean up PTY session if we started one
-        if needs_pty {
-            self.end_pty_session();
-        }
+        // PTY session will be automatically cleaned up when _pty_guard is dropped
 
         // Handle the execution result and record it
         let execution_result = match result {

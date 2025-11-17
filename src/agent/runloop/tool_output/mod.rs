@@ -74,6 +74,20 @@ pub(crate) async fn render_tool_output(
         Some(tools::READ_FILE) => {
             return render_read_file_output(renderer, val);
         }
+        Some(tools::EXECUTE_CODE) => {
+            let git_styles = GitStyles::new();
+            let ls_styles = LsStyles::from_env();
+            return render_terminal_command_panel(
+                renderer,
+                val,
+                &git_styles,
+                &ls_styles,
+                vt_config,
+                allow_tool_ansi,
+                token_budget,
+            )
+            .await;
+        }
         _ => {}
     }
 
