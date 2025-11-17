@@ -119,8 +119,9 @@ impl ModernTui {
         let mut stdout = io::stderr();
         execute!(stdout, EnterAlternateScreen).context("failed to enter alternate screen")?;
         if self.mouse {
-            execute!(stdout, event::EnableMouseCapture)
-                .context("failed to enable mouse capture")?;
+            // Mouse functionality disabled
+            // execute!(stdout, event::EnableMouseCapture)
+            //     .context("failed to enable mouse capture")?;
         }
         if self.paste {
             execute!(stdout, EnableBracketedPaste)
@@ -211,8 +212,9 @@ impl ModernTui {
         execute!(io::stderr(), LeaveAlternateScreen)
             .context("failed to leave alternate screen")?;
         if self.mouse {
-            execute!(io::stderr(), event::DisableMouseCapture)
-                .context("failed to disable mouse capture")?;
+            // Mouse functionality disabled
+            // execute!(io::stderr(), event::DisableMouseCapture)
+            //     .context("failed to disable mouse capture")?;
         }
         execute!(io::stderr(), DisableBracketedPaste)
             .context("failed to disable bracketed paste")?;
@@ -252,8 +254,9 @@ impl ModernTui {
         execute!(io::stderr(), EnterAlternateScreen)
             .context("failed to enter alternate screen")?;
         if self.mouse {
-            execute!(io::stderr(), event::EnableMouseCapture)
-                .context("failed to enable mouse capture")?;
+            // Mouse functionality disabled
+            // execute!(io::stderr(), event::EnableMouseCapture)
+            //     .context("failed to enable mouse capture")?;
         }
         if self.paste {
             execute!(io::stderr(), EnableBracketedPaste)

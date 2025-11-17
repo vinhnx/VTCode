@@ -4,7 +4,6 @@ use super::traits::{CacheableTool, FileTool, ModeTool, Tool};
 use super::types::*;
 use crate::config::constants::diff;
 use crate::tools::grep_file::{GrepSearchInput, GrepSearchManager};
-use crate::utils::diff::{DiffOptions, compute_diff};
 use crate::utils::image_processing::read_image_file;
 use crate::utils::vtcodegitignore::should_exclude_file;
 use anyhow::{Context, Result, anyhow};
@@ -13,7 +12,9 @@ use base64::Engine;
 use serde_json::{Value, json};
 use std::borrow::Cow;
 use std::collections::HashSet;
+use std::io::Write;
 use std::path::{Component, Path, PathBuf};
+use std::process::Command;
 use std::sync::Arc;
 use tokio::io::AsyncSeekExt;
 use tracing::{info, warn};
@@ -1140,18 +1141,12 @@ fn build_diff_preview(path: &str, before: Option<&str>, after: &str) -> Value {
     let previous = before.unwrap_or("");
     let old_header = format!("a/{path}");
     let new_header = format!("b/{path}");
-    let bundle = compute_diff(
-        previous,
-        after,
-        DiffOptions {
-            context_lines: diff::CONTEXT_RADIUS,
-            old_label: Some(&old_header),
-            new_label: Some(&new_header),
-            ..Default::default()
-        },
-    );
 
-    if bundle.is_empty || bundle.formatted.trim().is_empty() {
+    // Use git diff algorithm which provides better, unified output format
+    // This can be executed via run_terminal_cmd for consistency
+    let diff_output = generate_git_style_diff(previous, after, &old_header, &new_header);
+
+    if diff_output.trim().is_empty() {
         return json!({
             "content": "",
             "truncated": false,
@@ -1161,11 +1156,7 @@ fn build_diff_preview(path: &str, before: Option<&str>, after: &str) -> Value {
         });
     }
 
-    let mut lines: Vec<String> = bundle
-        .formatted
-        .lines()
-        .map(|line| line.to_string())
-        .collect();
+    let mut lines: Vec<String> = diff_output.lines().map(|line| line.to_string()).collect();
     let mut truncated = false;
     let mut omitted = 0usize;
 
@@ -1194,6 +1185,69 @@ fn build_diff_preview(path: &str, before: Option<&str>, after: &str) -> Value {
         "omitted_line_count": omitted,
         "skipped": false
     })
+}
+
+/// Generate unified diff using git diff --no-index command.
+///
+/// Uses the optimized git diff rendering system unified with run_terminal_cmd:
+/// - Produces standard unified diff format with file headers ("--- a/", "+++ b/")
+/// - Hunk headers with line counts ("@@ -1,3 +1,3 @@")
+/// - Line prefixes: '+' (additions), '-' (deletions), ' ' (context)
+///
+/// The rendering system in src/agent/runloop/tool_output/files.rs detects these
+/// markers and applies proper ANSI styling for terminal display.
+fn generate_git_style_diff(old: &str, new: &str, old_label: &str, new_label: &str) -> String {
+    match git_diff(old, new, old_label, new_label) {
+        Ok(output) => output,
+        Err(e) => {
+            warn!("git diff failed: {}, returning empty diff", e);
+            String::new()
+        }
+    }
+}
+
+/// Execute git diff --no-index using temporary files.
+///
+/// This is the unified approach for diff generation across write_files and run_terminal_cmd.
+/// Returns standard unified diff format that matches what git shows in terminal.
+fn git_diff(old: &str, new: &str, old_label: &str, new_label: &str) -> Result<String> {
+    // Create temporary files for old and new content
+    let mut old_file = tempfile::NamedTempFile::new()
+        .with_context(|| "failed to create temp file for old content")?;
+    old_file
+        .write_all(old.as_bytes())
+        .with_context(|| "failed to write old content to temp file")?;
+
+    let mut new_file = tempfile::NamedTempFile::new()
+        .with_context(|| "failed to create temp file for new content")?;
+    new_file
+        .write_all(new.as_bytes())
+        .with_context(|| "failed to write new content to temp file")?;
+
+    let old_path = old_file.path().to_path_buf();
+    let new_path = new_file.path().to_path_buf();
+
+    // Execute git diff with context radius matching config
+    let output = Command::new("git")
+        .args([
+            "diff",
+            "--no-index",
+            &format!("--unified={}", diff::CONTEXT_RADIUS),
+        ])
+        .arg(&old_path)
+        .arg(&new_path)
+        .output()
+        .with_context(|| "git diff command execution failed")?;
+
+    let mut result = String::from_utf8_lossy(&output.stdout).to_string();
+
+    // Replace temporary file paths with actual labels
+    let old_str = old_path.display().to_string();
+    let new_str = new_path.display().to_string();
+    result = result.replace(&format!("a/{old_str}"), &format!("a/{old_label}"));
+    result = result.replace(&format!("b/{new_str}"), &format!("b/{new_label}"));
+
+    Ok(result)
 }
 
 #[cfg(test)]

@@ -2,10 +2,225 @@
 
 use anstyle::{AnsiColor, Color, Reset, Style};
 use anstyle_git;
-use dissimilar::{Chunk, diff};
 use serde::Serialize;
 use std::cmp::min;
 use std::collections::HashMap;
+
+/// Represents a chunk of text in a diff (Equal, Delete, or Insert).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Chunk<'a> {
+    Equal(&'a str),
+    Delete(&'a str),
+    Insert(&'a str),
+}
+
+/// Compute an optimal diff between two strings using Myers algorithm.
+/// Returns a sequence of chunks representing the diff.
+///
+/// Myers diff algorithm is proven optimal for minimum edit distance.
+/// Time complexity: O((N+M)D) where N,M are lengths and D is edit distance.
+fn compute_diff_chunks<'a>(old: &'a str, new: &'a str) -> Vec<Chunk<'a>> {
+    if old.is_empty() && new.is_empty() {
+        return Vec::new();
+    }
+    if old.is_empty() {
+        return vec![Chunk::Insert(new)];
+    }
+    if new.is_empty() {
+        return vec![Chunk::Delete(old)];
+    }
+
+    // Strip common prefix and suffix first (optimization)
+    let mut prefix_len = 0;
+    for (o, n) in old.chars().zip(new.chars()) {
+        if o == n {
+            prefix_len += o.len_utf8();
+        } else {
+            break;
+        }
+    }
+
+    let mut suffix_len = 0;
+    let old_rest = &old[prefix_len..];
+    let new_rest = &new[prefix_len..];
+
+    let old_chars: Vec<char> = old_rest.chars().collect();
+    let new_chars: Vec<char> = new_rest.chars().collect();
+
+    for (o, n) in old_chars.iter().rev().zip(new_chars.iter().rev()) {
+        if o == n {
+            suffix_len += o.len_utf8();
+        } else {
+            break;
+        }
+    }
+
+    let old_middle_end = old_rest.len() - suffix_len;
+    let new_middle_end = new_rest.len() - suffix_len;
+
+    let old_middle = &old_rest[..old_middle_end];
+    let new_middle = &new_rest[..new_middle_end];
+
+    let mut result = Vec::new();
+
+    // Add common prefix
+    if prefix_len > 0 {
+        result.push(Chunk::Equal(&old[..prefix_len]));
+    }
+
+    // Compute optimal diff for the middle section
+    if !old_middle.is_empty() || !new_middle.is_empty() {
+        let old_chars: Vec<char> = old_middle.chars().collect();
+        let new_chars: Vec<char> = new_middle.chars().collect();
+        let edits = myers_diff(&old_chars, &new_chars);
+
+        // Convert edits back to chunks with proper string slicing
+        let mut old_pos = 0;
+        let mut new_pos = 0;
+
+        for edit in edits {
+            match edit {
+                Edit::Equal => {
+                    old_pos += 1;
+                    new_pos += 1;
+                }
+                Edit::Delete => {
+                    // Find the byte position for this character in old_middle
+                    let ch = old_chars[old_pos];
+                    let byte_start = old_middle.char_indices().nth(old_pos).unwrap().0;
+                    let byte_end = byte_start + ch.len_utf8();
+                    result.push(Chunk::Delete(&old_middle[byte_start..byte_end]));
+                    old_pos += 1;
+                }
+                Edit::Insert => {
+                    // Find the byte position for this character in new_middle
+                    let ch = new_chars[new_pos];
+                    let byte_start = new_middle.char_indices().nth(new_pos).unwrap().0;
+                    let byte_end = byte_start + ch.len_utf8();
+                    result.push(Chunk::Insert(&new_middle[byte_start..byte_end]));
+                    new_pos += 1;
+                }
+            }
+        }
+    }
+
+    // Add common suffix
+    if suffix_len > 0 {
+        result.push(Chunk::Equal(&old[old.len() - suffix_len..]));
+    }
+
+    result
+}
+
+/// Represents a single edit operation in Myers diff.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Edit {
+    Equal,
+    Delete,
+    Insert,
+}
+
+/// Myers diff algorithm: finds optimal minimum edit distance.
+/// Works on character sequences, returns edit operations.
+fn myers_diff(old: &[char], new: &[char]) -> Vec<Edit> {
+    let n = old.len();
+    let m = new.len();
+
+    // Handle simple cases
+    if n == 0 {
+        return vec![Edit::Insert; m];
+    }
+    if m == 0 {
+        return vec![Edit::Delete; n];
+    }
+
+    // V array stores the endpoints of furthest reaching paths for each diagonal
+    let max_d = n + m;
+    let mut v = vec![0; 2 * max_d + 1];
+    let mut v_index = vec![vec![0; 2 * max_d + 1]; max_d + 1];
+
+    v[max_d] = 0;
+
+    for d in 0..=max_d {
+        for k in (-(d as i32)..=(d as i32)).step_by(2) {
+            let k_idx = (k + max_d as i32) as usize;
+
+            let (mut x, prev_x) = if k == -(d as i32) || (k != d as i32 && v[k_idx - 1] < v[k_idx + 1]) {
+                (v[k_idx + 1], 1)
+            } else {
+                (v[k_idx - 1] + 1, 0)
+            };
+
+            let mut y = (x as i32 - k) as usize;
+
+            while x < n && y < m && old[x] == new[y] {
+                x += 1;
+                y += 1;
+            }
+
+            v[k_idx] = x;
+            v_index[d][k_idx] = prev_x;
+
+            if x >= n && y >= m {
+                // Backtrack to find the path
+                return backtrack_myers(old, new, &v_index, d, k, max_d);
+            }
+        }
+    }
+
+    // Fallback: shouldn't reach here
+    vec![]
+}
+
+/// Backtracks the Myers diff to reconstruct the edit sequence.
+fn backtrack_myers(old: &[char], new: &[char], v_index: &[Vec<usize>], d: usize, mut k: i32, max_d: usize) -> Vec<Edit> {
+    let mut edits = Vec::new();
+    let mut x = old.len();
+    let mut y = new.len();
+
+    for cur_d in (0..=d).rev() {
+        let k_idx = (k + max_d as i32) as usize;
+        let prev_x = v_index[cur_d][k_idx];
+
+        if prev_x == 1 {
+            k -= 1;
+        } else if prev_x == 0 {
+            k += 1;
+        }
+
+        let prev_k = k;
+        let prev_k_idx = (prev_k + max_d as i32) as usize;
+        let prev_x_val = if cur_d > 0 {
+            if prev_k == -(cur_d as i32) || (prev_k != cur_d as i32 && v_index[cur_d - 1][prev_k_idx - 1] < v_index[cur_d - 1][prev_k_idx + 1]) {
+                v_index[cur_d - 1][prev_k_idx + 1]
+            } else {
+                v_index[cur_d - 1][prev_k_idx - 1] + 1
+            }
+        } else {
+            0
+        };
+
+        let prev_y = (prev_x_val as i32 - prev_k) as usize;
+
+        // Determine what operation happened
+        while x > prev_x_val || y > prev_y {
+            if x > prev_x_val && y > prev_y && old[x - 1] == new[y - 1] {
+                edits.push(Edit::Equal);
+                x -= 1;
+                y -= 1;
+            } else if y > prev_y {
+                edits.push(Edit::Insert);
+                y -= 1;
+            } else {
+                edits.push(Edit::Delete);
+                x -= 1;
+            }
+        }
+    }
+
+    edits.reverse();
+    edits
+}
 
 /// Options for diff generation.
 #[derive(Debug, Clone)]
@@ -141,7 +356,7 @@ fn collect_line_records<'a>(
     let mut old_index = 0usize;
     let mut new_index = 0usize;
 
-    for chunk in diff(old_encoded.as_str(), new_encoded.as_str()) {
+    for chunk in compute_diff_chunks(old_encoded.as_str(), new_encoded.as_str()) {
         match chunk {
             Chunk::Equal(text) => {
                 for _ in text.chars() {

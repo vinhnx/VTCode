@@ -350,10 +350,12 @@ impl Session {
             }
             CrosstermEvent::Mouse(MouseEvent { kind, .. }) => match kind {
                 MouseEventKind::ScrollDown => {
-                    self.handle_scroll_down(events, callback);
+                    // Scroll mouse functionality disabled
+                    // self.handle_scroll_down(events, callback);
                 }
                 MouseEventKind::ScrollUp => {
-                    self.handle_scroll_up(events, callback);
+                    // Scroll mouse functionality disabled
+                    // self.handle_scroll_up(events, callback);
                 }
                 _ => {}
             },
@@ -2061,37 +2063,39 @@ impl Session {
                 Some(InlineEvent::ScrollPageDown)
             }
             KeyCode::Up => {
-                let history_requested = if self.input_enabled && (has_alt || has_command) {
-                    true
-                } else if self.input_enabled {
-                    self.current_max_scroll_offset() == 0
-                } else {
-                    false
-                };
+                // History navigation via up arrow disabled to prevent cursor flickering
+                // let history_requested = if self.input_enabled && (has_alt || has_command) {
+                //     true
+                // } else if self.input_enabled {
+                //     self.current_max_scroll_offset() == 0
+                // } else {
+                //     false
+                // };
 
-                if history_requested && self.navigate_history_previous() {
-                    return None;
-                }
+                // if history_requested && self.navigate_history_previous() {
+                //     return None;
+                // }
 
-                // Only scroll transcript if not navigating history
+                // Scroll transcript (only when not at top)
                 self.scroll_line_up();
                 self.mark_dirty();
                 Some(InlineEvent::ScrollLineUp)
             }
             KeyCode::Down => {
-                let history_requested = if self.input_enabled && (has_alt || has_command) {
-                    true
-                } else if self.input_enabled {
-                    self.current_max_scroll_offset() == 0
-                } else {
-                    false
-                };
+                // History navigation via down arrow disabled to prevent cursor flickering
+                // let history_requested = if self.input_enabled && (has_alt || has_command) {
+                //     true
+                // } else if self.input_enabled {
+                //     self.current_max_scroll_offset() == 0
+                // } else {
+                //     false
+                // };
 
-                if history_requested && self.navigate_history_next() {
-                    return None;
-                }
+                // if history_requested && self.navigate_history_next() {
+                //     return None;
+                // }
 
-                // Only scroll transcript if not navigating history
+                // Scroll transcript (only when not at bottom)
                 self.scroll_line_down();
                 self.mark_dirty();
                 Some(InlineEvent::ScrollLineDown)
@@ -2466,23 +2470,27 @@ impl Session {
     }
 
     fn navigate_history_previous(&mut self) -> bool {
-        if let Some(entry) = self.input_manager.go_to_previous_history() {
-            self.input_manager.set_content(entry);
-            self.mark_dirty();
-            true
-        } else {
-            false
-        }
+        // History navigation disabled to prevent cursor flickering
+        // if let Some(entry) = self.input_manager.go_to_previous_history() {
+        //     self.input_manager.set_content(entry);
+        //     self.mark_dirty();
+        //     true
+        // } else {
+        //     false
+        // }
+        false // No history navigation
     }
 
     fn navigate_history_next(&mut self) -> bool {
-        if let Some(entry) = self.input_manager.go_to_next_history() {
-            self.input_manager.set_content(entry);
-            self.mark_dirty();
-            true
-        } else {
-            false
-        }
+        // History navigation disabled to prevent cursor flickering
+        // if let Some(entry) = self.input_manager.go_to_next_history() {
+        //     self.input_manager.set_content(entry);
+        //     self.mark_dirty();
+        //     true
+        // } else {
+        //     false
+        // }
+        false // No history navigation
     }
 
     fn move_left(&mut self) {
