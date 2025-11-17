@@ -410,6 +410,7 @@ impl Session {
     /// Scrolls the transcript down by one line, marks the session as needing
     /// redraw, and emits the ScrollLineDown event.
     #[inline]
+    #[allow(dead_code)]
     fn handle_scroll_down(
         &mut self,
         events: &UnboundedSender<InlineEvent>,
@@ -425,6 +426,7 @@ impl Session {
     /// Scrolls the transcript up by one line, marks the session as needing
     /// redraw, and emits the ScrollLineUp event.
     #[inline]
+    #[allow(dead_code)]
     fn handle_scroll_up(
         &mut self,
         events: &UnboundedSender<InlineEvent>,
@@ -2445,6 +2447,7 @@ impl Session {
         self.input_manager.add_to_history(submitted.to_string());
     }
 
+    #[allow(dead_code)]
     fn navigate_history_previous(&mut self) -> bool {
         // History navigation disabled to prevent cursor flickering
         // if let Some(entry) = self.input_manager.go_to_previous_history() {
@@ -2457,6 +2460,7 @@ impl Session {
         false // No history navigation
     }
 
+    #[allow(dead_code)]
     fn navigate_history_next(&mut self) -> bool {
         // History navigation disabled to prevent cursor flickering
         // if let Some(entry) = self.input_manager.go_to_next_history() {
