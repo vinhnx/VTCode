@@ -2063,38 +2063,14 @@ impl Session {
                 Some(InlineEvent::ScrollPageDown)
             }
             KeyCode::Up => {
-                // History navigation via up arrow disabled to prevent cursor flickering
-                // let history_requested = if self.input_enabled && (has_alt || has_command) {
-                //     true
-                // } else if self.input_enabled {
-                //     self.current_max_scroll_offset() == 0
-                // } else {
-                //     false
-                // };
-
-                // if history_requested && self.navigate_history_previous() {
-                //     return None;
-                // }
-
+                // History navigation disabled to prevent cursor flickering
                 // Scroll transcript (only when not at top)
                 self.scroll_line_up();
                 self.mark_dirty();
                 Some(InlineEvent::ScrollLineUp)
             }
             KeyCode::Down => {
-                // History navigation via down arrow disabled to prevent cursor flickering
-                // let history_requested = if self.input_enabled && (has_alt || has_command) {
-                //     true
-                // } else if self.input_enabled {
-                //     self.current_max_scroll_offset() == 0
-                // } else {
-                //     false
-                // };
-
-                // if history_requested && self.navigate_history_next() {
-                //     return None;
-                // }
-
+                // History navigation disabled to prevent cursor flickering
                 // Scroll transcript (only when not at bottom)
                 self.scroll_line_down();
                 self.mark_dirty();
