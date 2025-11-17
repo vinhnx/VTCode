@@ -29,7 +29,7 @@ impl ApprovalRecorder {
         approved: bool,
         reason: Option<String>,
     ) -> Result<()> {
-        let mut manager = self.manager.write().await;
+        let manager = self.manager.write().await;
         manager.record_decision(tool_name, approved, reason);
         Ok(())
     }

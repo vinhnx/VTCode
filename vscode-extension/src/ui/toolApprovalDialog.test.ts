@@ -133,7 +133,7 @@ describe('ToolApprovalDialog', () => {
             dialog.showToolSummary('test-tool', true, 'Completed successfully');
 
             expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-                '✅ test-tool completed successfully: Completed successfully'
+                'test-tool completed successfully: Completed successfully'
             );
         });
 
@@ -141,7 +141,7 @@ describe('ToolApprovalDialog', () => {
             dialog.showToolSummary('test-tool', false);
 
             expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-                '❌ test-tool failed'
+                'test-tool failed'
             );
         });
 
@@ -149,7 +149,7 @@ describe('ToolApprovalDialog', () => {
             dialog.showToolSummary('test-tool', true);
 
             expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-                '✅ test-tool completed successfully'
+                'test-tool completed successfully'
             );
         });
     });

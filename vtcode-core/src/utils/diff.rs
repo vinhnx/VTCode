@@ -328,11 +328,7 @@ fn format_colored_diff(hunks: &[DiffHunk], options: &DiffOptions<'_>) -> String 
                 display_content,
                 Reset.render()
             ));
-
-            // Add newline after reset if the original line had one
-            if has_newline {
-                output.push('\n');
-            }
+            output.push('\n');
 
             if options.missing_newline_hint && !line.text.ends_with('\n') {
                 let eof_hint = "\\ No newline at end of file";
