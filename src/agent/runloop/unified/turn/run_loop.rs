@@ -2118,18 +2118,16 @@ pub(crate) async fn run_single_agent_loop_unified(
                             }
                         }
 
-                        let attempts = repeated_tool_attempts
+                        let failed_attempts = repeated_tool_attempts
                             .entry(signature_key.clone())
                             .or_insert(0);
-                        *attempts += 1;
-                        let current_attempts = *attempts;
-                        if current_attempts > tool_repeat_limit {
+                        if *failed_attempts > tool_repeat_limit {
                             renderer.line(
                             MessageStyle::Error,
                             &format!(
-                                "Aborting repeated tool call '{}' after {} unsuccessful attempts with identical arguments.",
+                                "Aborting: tool '{}' failed {} times with identical arguments.",
                                 name,
-                                current_attempts - 1
+                                *failed_attempts
                             ),
                         )?;
                             ensure_turn_bottom_gap(&mut renderer, &mut bottom_gap_applied)?;
@@ -2287,6 +2285,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         has_more,
                                     } => {
                                         tool_spinner.finish();
+                                        // Reset the repeat counter on successful execution
+                                        repeated_tool_attempts.remove(&signature_key);
                                         if let Some(res) = run_turn_handle_tool_success(
                                             name,
                                             output,
@@ -2324,6 +2324,12 @@ pub(crate) async fn run_single_agent_loop_unified(
                                     ToolExecutionStatus::Failure { error } => {
                                         tool_spinner.finish();
 
+                                        // Increment failure counter for this tool signature
+                                        let failed_attempts = repeated_tool_attempts
+                                            .entry(signature_key.clone())
+                                            .or_insert(0);
+                                        *failed_attempts += 1;
+
                                         // Convert the tool error into anyhow for the helper
                                         let any_err = anyhow::anyhow!(format!("{:?}", error));
                                         // Call the centralized failure handler
@@ -2350,6 +2356,12 @@ pub(crate) async fn run_single_agent_loop_unified(
                                     }
                                     ToolExecutionStatus::Timeout { error } => {
                                         tool_spinner.finish();
+
+                                        // Increment failure counter for timeout as well
+                                        let failed_attempts = repeated_tool_attempts
+                                            .entry(signature_key.clone())
+                                            .or_insert(0);
+                                        *failed_attempts += 1;
 
                                         // Convert and delegate to timeout handler
                                         let any_err = anyhow::anyhow!(format!("{:?}", error));
