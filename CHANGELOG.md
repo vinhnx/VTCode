@@ -3,6 +3,38 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Version 0.43.0] - 2025-11-09
+# [Version 0.45.4] - 2025-11-17
+
+
+### Bug Fixes
+    - fix: suppress dead_code warnings for intentionally disabled features
+    - fix: prevent infinite tool loops by using >= instead of >
+    - fix: resolve clippy warnings (range_contains, doc comments, identical blocks)
+    - fix: improve tool failure handling by tracking failed attempts
+    - fix: truncate verbose reasoning output to reduce noise during tool execution
+    - fix(llm): update lmstudio provider: remove stale 'For now' comment and simplify validation; update related utility and policy files
+
+
+### Refactors
+    - refactor: replace dissimilar with optimized Myers diff algorithm
+    - refactor: organize documentation into docs/phases and docs/scroll subdirectories; consolidate PHASE5 and SCROLL artifacts for better maintainability
+
+
+### Documentation
+    - docs: update AGENTS.md with comprehensive agent guide and tool usage guidelines
+    - docs: update changelog for v0.45.3 [skip ci]
+    - docs: reorganize root-level docs into docs/ subdirectories per AGENTS.md
+    - docs: clarify run_terminal_cmd usage for git, cargo, and one-off shell commands
+
+
+### Style Changes
+    - style: apply cargo fmt
+
+
+### Chores
+    - chore: update npm package.json to v0.45.3 [skip ci]
+    - chore: release v0.45.3
+    - chore: update npm package.json to v0.45.2 [skip ci]
 # [Version 0.45.3] - 2025-11-17
 
 
