@@ -2457,6 +2457,10 @@ pub(crate) async fn run_single_agent_loop_unified(
                 }
 
                 if let Some(mut text) = final_text {
+                    // Store the original response content before self-review modifies it.
+                    // This is needed to correctly detect if content was already streamed.
+                    let original_text = text.clone();
+
                     let do_review = vt_cfg
                         .as_ref()
                         .map(|cfg| cfg.agent.enable_self_review)
@@ -2515,11 +2519,13 @@ pub(crate) async fn run_single_agent_loop_unified(
                         break TurnLoopResult::Completed;
                     }
 
+                    // Check if the original content (before self-review) was already streamed.
+                    // This prevents duplicate rendering when self-review modifies the response.
                     let streamed_matches_output = response_streamed
                         && response
                             .content
                             .as_ref()
-                            .map(|original| original == &text)
+                            .map(|original| original == &original_text)
                             .unwrap_or(false);
 
                     if !suppress_response && !streamed_matches_output {
