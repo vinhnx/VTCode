@@ -52,7 +52,6 @@ pub const MIN_TOKEN_COUNT: usize = 1;
 
 /// Display-level constants (UI safety limits, not semantic)
 /// These apply AFTER token-based truncation to prevent TUI lag
-
 /// Maximum line length in characters to prevent TUI hang
 /// Long lines are wrapped or truncated at display time
 pub const MAX_LINE_LENGTH_FOR_DISPLAY: usize = 150;
