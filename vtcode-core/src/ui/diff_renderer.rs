@@ -159,24 +159,6 @@ impl DiffRenderer {
         output.push_str(&self.render_summary(diff));
         output.push('\n');
 
-        // Unified diff header - CRITICAL: Apply Reset after each line to prevent color bleed
-        if self.use_colors {
-            let header_style = self.palette.line_header.render();
-            let reset = Reset.render();
-
-            output.push_str(&format!(
-                "{}--- a/{}{}\n",
-                header_style, diff.file_path, reset
-            ));
-            output.push_str(&format!(
-                "{}+++ b/{}{}\n",
-                header_style, diff.file_path, reset
-            ));
-        } else {
-            output.push_str(&format!("--- a/{}\n", diff.file_path));
-            output.push_str(&format!("+++ b/{}\n", diff.file_path));
-        }
-
         for line in &diff.lines {
             output.push_str(&self.render_line(line));
             output.push('\n');

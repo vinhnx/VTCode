@@ -331,9 +331,8 @@ export class ToolApprovalDialog {
      * Show a summary of tool execution results
      */
     public showToolSummary(toolName: string, success: boolean, details?: string): void {
-        const icon = success ? '✅' : '❌';
-        const message = `${icon} ${toolName} ${success ? 'completed successfully' : 'failed'}`;
-        
+        const message = `${toolName} ${success ? 'completed successfully' : 'failed'}`;
+
         if (details) {
             vscode.window.showInformationMessage(`${message}: ${details}`);
         } else {

@@ -402,6 +402,8 @@ impl Drop for PlaceholderSpinner {
 const REASONING_HEADING: &str = "Thinking";
 const REASONING_PREFIX: &str = "Thinking: ";
 const INLINE_REASONING_RENDER_CHUNK: usize = 120;
+/// Maximum reasoning to display; longer reasoning is truncated with ellipsis
+const MAX_REASONING_DISPLAY_CHARS: usize = 500;
 
 fn map_render_error(provider_name: &str, err: Error) -> uni::LLMError {
     let formatted_error = error_display::format_llm_error(
@@ -578,12 +580,22 @@ impl StreamingReasoningState {
             self.cli_pending_indent = false;
         }
 
+        // Truncate reasoning tokens to prevent excessive verbosity
+        let truncated_delta = if self.aggregated.len() > MAX_REASONING_DISPLAY_CHARS {
+            "" // Don't render more if we've exceeded the limit
+        } else if self.aggregated.len() + delta.len() > MAX_REASONING_DISPLAY_CHARS {
+            let remaining = MAX_REASONING_DISPLAY_CHARS - self.aggregated.len();
+            &delta[..remaining.min(delta.len())]
+        } else {
+            delta
+        };
+
         stream_plain_response_delta(
             renderer,
             MessageStyle::Reasoning,
             MessageStyle::Reasoning.indent(),
             &mut self.cli_pending_indent,
-            delta,
+            truncated_delta,
         )
     }
 
@@ -595,8 +607,18 @@ impl StreamingReasoningState {
         Ok(())
     }
 
-    fn display_lines(&self) -> Vec<String> {
+    /// Truncate reasoning to prevent excessive verbosity in streaming output
+    fn truncate_for_display(&self) -> String {
         let trimmed = self.aggregated.trim_matches(['\r', '\n']);
+        if trimmed.len() > MAX_REASONING_DISPLAY_CHARS {
+            format!("{}...", &trimmed[..MAX_REASONING_DISPLAY_CHARS])
+        } else {
+            trimmed.to_string()
+        }
+    }
+
+    fn display_lines(&self) -> Vec<String> {
+        let trimmed = self.truncate_for_display();
         if trimmed.is_empty() {
             return Vec::new();
         }

@@ -141,7 +141,7 @@ pub(crate) fn derive_recent_tool_output(history: &[uni::Message]) -> Option<Stri
     // If command succeeded with no output, show a brief success message
     if success {
         if let Some(cmd) = command {
-            return Some(format!("✓ {}", cmd));
+            return Some(cmd.to_string());
         }
         // Try to extract tool name or other context from the response
         if let Some(tool_name) = value
@@ -149,16 +149,16 @@ pub(crate) fn derive_recent_tool_output(history: &[uni::Message]) -> Option<Stri
             .and_then(|v| v.as_str())
             .filter(|s| !s.is_empty())
         {
-            return Some(format!("✓ {} executed successfully", tool_name));
+            return Some(format!("{} executed successfully", tool_name));
         }
         if let Some(action) = value
             .get("action")
             .and_then(|v| v.as_str())
             .filter(|s| !s.is_empty())
         {
-            return Some(format!("✓ {}", action));
+            return Some(action.to_string());
         }
-        return Some("✓ Operation completed successfully".to_string());
+        return Some("Operation completed successfully".to_string());
     }
 
     // If command failed with no output, show failure

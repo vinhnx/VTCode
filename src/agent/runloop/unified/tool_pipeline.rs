@@ -41,7 +41,7 @@ pub(crate) struct ToolProgress {
 #[derive(Debug)]
 #[allow(dead_code)]
 pub(crate) enum ToolExecutionStatus {
-    /// Tool completed successfully
+    /// Tool completed
     Success {
         /// Tool output
         output: Value,
@@ -471,7 +471,7 @@ async fn execute_tool_with_progress(
 
                         progress_reporter.set_progress(100).await;
                         progress_reporter
-                            .set_message(format!("{} completed successfully", name))
+                            .set_message(format!("{} completed", name))
                             .await;
                         process_tool_output(output)
                     }
