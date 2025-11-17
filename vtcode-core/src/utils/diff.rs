@@ -312,20 +312,37 @@ fn format_colored_diff(hunks: &[DiffHunk], options: &DiffOptions<'_>) -> String 
             let mut display = String::with_capacity(line.text.len() + 2);
             display.push(prefix);
             display.push_str(&line.text);
-            if !line.text.ends_with('\n') {
-                display.push('\n');
+
+            // CRITICAL: Apply Reset before newline to prevent color bleeding
+            // The newline should NOT be part of the styled content
+            let has_newline = display.ends_with('\n');
+            let display_content = if has_newline {
+                &display[..display.len() - 1]
+            } else {
+                &display
+            };
+
+            output.push_str(&format!(
+                "{}{}{}",
+                style.render(),
+                display_content,
+                Reset.render()
+            ));
+
+            // Add newline after reset if the original line had one
+            if has_newline {
+                output.push('\n');
             }
 
-            output.push_str(&format!("{}{}{}", style.render(), display, Reset.render()));
-
             if options.missing_newline_hint && !line.text.ends_with('\n') {
-                let eof_hint = "\\ No newline at end of file\n";
+                let eof_hint = "\\ No newline at end of file";
                 output.push_str(&format!(
                     "{}{}{}",
                     context_style.render(),
                     eof_hint,
                     Reset.render()
                 ));
+                output.push('\n');
             }
         }
     }

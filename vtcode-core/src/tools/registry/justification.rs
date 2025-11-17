@@ -142,13 +142,16 @@ impl JustificationManager {
         if !patterns_file.exists() {
             return Ok(());
         }
-        
+
         let content = fs::read_to_string(&patterns_file)?;
         let loaded_patterns: HashMap<String, ApprovalPattern> = serde_json::from_str(&content)?;
-        
-        let mut patterns = self.patterns.lock().map_err(|e| anyhow::anyhow!("Failed to lock patterns: {}", e))?;
+
+        let mut patterns = self
+            .patterns
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Failed to lock patterns: {}", e))?;
         *patterns = loaded_patterns;
-        
+
         Ok(())
     }
 
@@ -164,15 +167,16 @@ impl JustificationManager {
     /// Record user approval decision
     pub fn record_decision(&self, tool_name: &str, approved: bool, reason: Option<String>) {
         if let Ok(mut patterns) = self.patterns.lock() {
-            let pattern = patterns
-                .entry(tool_name.to_string())
-                .or_insert_with(|| ApprovalPattern {
-                    tool_name: tool_name.to_string(),
-                    approve_count: 0,
-                    deny_count: 0,
-                    last_decision: None,
-                    recent_reason: None,
-                });
+            let pattern =
+                patterns
+                    .entry(tool_name.to_string())
+                    .or_insert_with(|| ApprovalPattern {
+                        tool_name: tool_name.to_string(),
+                        approve_count: 0,
+                        deny_count: 0,
+                        last_decision: None,
+                        recent_reason: None,
+                    });
 
             if approved {
                 pattern.approve_count += 1;
@@ -192,7 +196,10 @@ impl JustificationManager {
     fn persist_patterns(&self) -> Result<()> {
         fs::create_dir_all(&self.cache_dir)?;
         let patterns_file = self.cache_dir.join("approval_patterns.json");
-        let patterns = self.patterns.lock().map_err(|e| anyhow::anyhow!("Failed to lock patterns: {}", e))?;
+        let patterns = self
+            .patterns
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Failed to lock patterns: {}", e))?;
         let content = serde_json::to_string_pretty(&*patterns)?;
         fs::write(&patterns_file, content)?;
         Ok(())
