@@ -541,6 +541,11 @@ update_vscode_extension_version() {
     if command -v jq >/dev/null 2>&1; then
         jq --arg new_version "$version" '.version = $new_version' "$package_json" > "$package_json.tmp" && mv "$package_json.tmp" "$package_json"
         print_info "VSCode extension version updated to $version"
+
+        # Stage and commit the updated package.json file
+        git add "$package_json"
+        git commit -m "chore: update VSCode extension package.json to v$version [skip ci]" --no-verify
+        print_info "Committed VSCode extension package.json with version $version"
     else
         print_warning 'jq not found; skipping VSCode extension version update'
     fi
