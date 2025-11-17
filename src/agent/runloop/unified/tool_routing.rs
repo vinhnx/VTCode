@@ -97,7 +97,7 @@ pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
     if let Some(recorder) = approval_recorder {
         if let Some(suggestion) = recorder.get_auto_approval_suggestion(tool_name).await {
             description_lines.push(String::new());
-            description_lines.push(format!("💡 {}", suggestion));
+            description_lines.push(format!("Suggestion: {}", suggestion));
         }
     }
 

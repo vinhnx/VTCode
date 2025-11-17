@@ -71,6 +71,8 @@ pub(crate) async fn confirm_changes_with_git_diff(
     for file in modified_files {
         let output = std::process::Command::new("git")
             .args(["diff", file])
+            // Disable pager and force no-color to avoid encoding issues with external pagers
+            .env("GIT_PAGER", "cat")
             .output()
             .with_context(|| format!("Failed to run git diff for {}", file))?;
 

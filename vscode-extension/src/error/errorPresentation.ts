@@ -151,7 +151,7 @@ export class ErrorPresentationHandler {
         let output = `**${presentation.title}**\n\n${presentation.message}`;
 
         if (presentation.suggestion) {
-            output += `\n\n💡 **Suggestion:** ${presentation.suggestion}`;
+            output += `\n\n**Suggestion:** ${presentation.suggestion}`;
         }
 
         if (presentation.details) {

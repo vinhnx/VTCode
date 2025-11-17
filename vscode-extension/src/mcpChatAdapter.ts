@@ -171,7 +171,7 @@ export class McpChatAdapter {
             this.outputChannel.appendLine(
                 `[MCP] Reloaded successfully. ${tools.length} tools available.`
             );
-            return `✅ Reloaded MCP providers. ${tools.length} tools available.`;
+            return `Reloaded MCP providers. ${tools.length} tools available.`;
         } catch (error) {
             const errorMsg =
                 error instanceof Error ? error.message : String(error);
