@@ -625,7 +625,7 @@ impl Session {
         let paragraph = Paragraph::new(visible_lines)
             .style(self.default_style())
             .wrap(Wrap { trim: true });
-        
+
         // Only clear if content actually changed, not on viewport-only scroll
         // This is a significant optimization: avoids expensive Clear operation on most scrolls
         if self.transcript_content_changed {

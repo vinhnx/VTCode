@@ -2123,13 +2123,12 @@ pub(crate) async fn run_single_agent_loop_unified(
                             .or_insert(0);
                         if *failed_attempts > tool_repeat_limit {
                             renderer.line(
-                            MessageStyle::Error,
-                            &format!(
-                                "Aborting: tool '{}' failed {} times with identical arguments.",
-                                name,
-                                *failed_attempts
-                            ),
-                        )?;
+                                MessageStyle::Error,
+                                &format!(
+                                    "Aborting: tool '{}' failed {} times with identical arguments.",
+                                    name, *failed_attempts
+                                ),
+                            )?;
                             ensure_turn_bottom_gap(&mut renderer, &mut bottom_gap_applied)?;
                             working_history.push(uni::Message::assistant(
                             format!(
