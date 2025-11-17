@@ -23,14 +23,15 @@ env:
   CARGO_PROFILE_TEST_DEBUG: 0
   RUSTFLAGS: "-D warnings"
 
-# Time out jobs after 15 minutes to prevent resource waste
+# Set default shell
 defaults:
   run:
-    timeout-minutes: 15
+    shell: bash
 
 jobs:
   eval:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v5

@@ -54,10 +54,10 @@ env:
   CARGO_PROFILE_TEST_DEBUG: 0
   VTCODE_SKIP_AUTO_CROSS: 1 # Skip automatic cross installation in CI
 
-# Time out jobs after 45 minutes to prevent resource waste (release process can be intensive)
+# Set default shell
 defaults:
   run:
-    timeout-minutes: 45
+    shell: bash
 
 permissions:
   contents: write
@@ -66,6 +66,7 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Checkout code
         uses: actions/checkout@v5

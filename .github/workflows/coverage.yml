@@ -23,15 +23,16 @@ env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
 
-# Time out jobs after 30 minutes to prevent resource waste (coverage can be more intensive)
+# Set default shell
 defaults:
   run:
-    timeout-minutes: 30
+    shell: bash
 
 jobs:
   coverage:
     name: Code coverage
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v5
