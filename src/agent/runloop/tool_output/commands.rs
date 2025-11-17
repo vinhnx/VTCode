@@ -108,13 +108,12 @@ pub(crate) async fn render_terminal_command_panel(
             renderer.line(
                 MessageStyle::Info,
                 &format!(
-                    "{} [{} - {}x{}] Session: {} | Command: {}{}{}",
+                    "{} [{} - {}x{}] Session: {}{}{}",
                     status_symbol,
                     status_text,
                     cols,
                     rows,
                     session_id,
-                    command,
                     if let Some(wd) = working_dir {
                         format!(" | Working directory: {}", wd)
                     } else {
@@ -127,10 +126,8 @@ pub(crate) async fn render_terminal_command_panel(
             // Add a visual separator for terminal view
             renderer.line(MessageStyle::Info, &"─".repeat(60))?;
 
-            // If this is a running session, also show the command being executed
-            if !is_completed {
-                renderer.line(MessageStyle::Response, &format!("$ {}", command))?;
-            }
+            // Show the full command being executed (for both running and completed sessions)
+            renderer.line(MessageStyle::Response, &format!("$ {}", command))?;
         }
     }
 

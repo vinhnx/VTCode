@@ -3563,7 +3563,7 @@ impl Session {
         max_width: usize,
         kind: InlineMessageKind,
     ) -> Vec<Line<'static>> {
-        if max_width == 0 || kind != InlineMessageKind::Agent {
+        if max_width == 0 {
             return lines;
         }
 
@@ -3592,15 +3592,20 @@ impl Session {
                 next_in_fenced_block = !in_fenced_block;
             }
 
-            if !in_fenced_block
+            // Extend diff line backgrounds to full width
+            let processed_line = if self.is_diff_line(&line) {
+                self.pad_diff_line(&line, max_width)
+            } else if kind == InlineMessageKind::Agent
+                && !in_fenced_block
                 && !is_fence_line
                 && self.should_justify_message_line(&line, max_width, is_last)
             {
-                justified.push(self.justify_message_line(&line, max_width));
+                self.justify_message_line(&line, max_width)
             } else {
-                justified.push(line);
-            }
+                line
+            };
 
+            justified.push(processed_line);
             in_fenced_block = next_in_fenced_block;
         }
 
@@ -3648,6 +3653,62 @@ impl Session {
         } else {
             line.clone()
         }
+    }
+
+    fn is_diff_line(&self, line: &Line<'static>) -> bool {
+        // Detect actual diff lines: must start with +, -, or space (diff markers)
+        // AND have background color styling applied (from git diff coloring)
+        // This avoids false positives from regular text that happens to start with these chars
+        if line.spans.is_empty() {
+            return false;
+        }
+
+        // Check if any span has background color (diff lines from render have colored backgrounds)
+        let has_bg_color = line.spans.iter().any(|span| span.style.bg.is_some());
+        if !has_bg_color {
+            return false;
+        }
+
+        // Must start with a diff marker character in the first span
+        let first_span_char = line.spans[0].content.chars().next();
+        matches!(first_span_char, Some('+') | Some('-') | Some(' '))
+    }
+
+    fn pad_diff_line(&self, line: &Line<'static>, max_width: usize) -> Line<'static> {
+        if max_width == 0 || line.spans.is_empty() {
+            return line.clone();
+        }
+
+        // Calculate actual display width using Unicode width rules
+        let line_width: usize = line
+            .spans
+            .iter()
+            .map(|s| {
+                s.content
+                    .chars()
+                    .map(|ch| unicode_width::UnicodeWidthChar::width(ch).unwrap_or(1))
+                    .sum::<usize>()
+            })
+            .sum();
+
+        let padding_needed = max_width.saturating_sub(line_width);
+        if padding_needed == 0 {
+            return line.clone();
+        }
+
+        // Find the background style from the span that has background color
+        // This preserves the exact coloring from the diff renderer
+        let bg_style = line
+            .spans
+            .iter()
+            .find(|span| span.style.bg.is_some())
+            .map(|span| span.style)
+            .unwrap_or(Style::default());
+
+        // Clone and extend spans with padding
+        let mut new_spans = line.spans.clone();
+        new_spans.push(Span::styled(" ".repeat(padding_needed), bg_style));
+        Line::from(new_spans)
     }
 
     fn prepare_transcript_scroll(
