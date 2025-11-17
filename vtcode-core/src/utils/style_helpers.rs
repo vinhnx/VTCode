@@ -24,7 +24,7 @@ impl ColorPalette {
             info: Color::Ansi(AnsiColor::Cyan),
             accent: Color::Ansi(AnsiColor::Blue),
             primary: Color::Ansi(AnsiColor::BrightWhite),
-            muted: Color::Ansi(AnsiColor::White),
+            muted: Color::Ansi(AnsiColor::BrightBlack),
         }
     }
 }
@@ -56,12 +56,21 @@ pub fn render_styled(text: &str, color: Color, effects: Option<String>) -> Strin
         style = style.effects(ansi_effects);
     }
 
-    format!("{}{}{}", style, text, style.render_reset())
+    // Use static reset code instead of render_reset to ensure proper termination
+    format!("{}{}\x1b[0m", style, text)
 }
 
 /// Build style from CSS/terminal color name
+/// Supports dimmed variants by appending `:dimmed` suffix, e.g. "green:dimmed"
 pub fn style_from_color_name(name: &str) -> Style {
-    let color = match name.to_lowercase().as_str() {
+    let (color_name, dimmed) = if let Some(idx) = name.find(':') {
+        let (color, modifier) = name.split_at(idx);
+        (color, modifier.strip_prefix(':').unwrap_or(""))
+    } else {
+        (name, "")
+    };
+
+    let color = match color_name.to_lowercase().as_str() {
         "red" => Color::Ansi(AnsiColor::Red),
         "green" => Color::Ansi(AnsiColor::Green),
         "blue" => Color::Ansi(AnsiColor::Blue),
@@ -73,7 +82,11 @@ pub fn style_from_color_name(name: &str) -> Style {
         _ => return Style::new(),
     };
 
-    Style::new().fg_color(Some(color))
+    let mut style = Style::new().fg_color(Some(color));
+    if dimmed.eq_ignore_ascii_case("dimmed") {
+        style = style.dimmed();
+    }
+    style
 }
 
 /// Create a bold colored style from AnsiColor
@@ -169,5 +182,30 @@ mod tests {
     fn test_dimmed_color() {
         let style = dimmed_color(AnsiColor::Yellow);
         assert!(!style.to_string().is_empty());
+    }
+
+    #[test]
+    fn test_style_from_color_name_with_dimmed_modifier() {
+        let style = style_from_color_name("green:dimmed");
+        assert!(!style.to_string().is_empty());
+        assert!(style.get_effects().contains(anstyle::Effects::DIMMED));
+    }
+
+    #[test]
+    fn test_style_from_color_name_with_dimmed_case_insensitive() {
+        let style_lower = style_from_color_name("red:dimmed");
+        let style_upper = style_from_color_name("red:DIMMED");
+
+        assert!(!style_lower.to_string().is_empty());
+        assert!(!style_upper.to_string().is_empty());
+        assert!(style_lower.get_effects().contains(anstyle::Effects::DIMMED));
+        assert!(style_upper.get_effects().contains(anstyle::Effects::DIMMED));
+    }
+
+    #[test]
+    fn test_style_from_color_name_without_modifier() {
+        let style = style_from_color_name("blue");
+        assert!(!style.to_string().is_empty());
+        assert!(!style.get_effects().contains(anstyle::Effects::DIMMED));
     }
 }
