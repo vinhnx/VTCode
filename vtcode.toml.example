@@ -247,56 +247,297 @@ strict_https_only = true
 # Command security - Define safe and dangerous command patterns
 [commands]
 # Commands that are always allowed without confirmation
+# For non-powered users: all safe, known commands are enabled by default
+# These safe commands help the agent use system and build tools properly
 allow_list = [
+  # File system and basic utilities
   "ls",           # List directory contents
   "pwd",          # Print working directory
+  "cat",          # Display file contents
+  "head",         # Show first lines
+  "tail",         # Show last lines
+  "grep",         # Search text patterns
+  "find",         # Find files
+  "wc",           # Count lines/words
+  "sort",         # Sort lines
+  "uniq",         # Remove duplicates
+  "cut",          # Extract columns
+  "awk",          # Text processing
+  "sed",          # Stream editor
   "echo",         # Print text
+  "printf",       # Formatted print
   "date",         # Print date/time
-  "whoami",       # Identity
-  # Allow base verbs for tools; subcommands are validated by execpolicy
+  "which",        # Locate commands
+  "file",         # File type detection
+  "stat",         # File status
+  "tree",         # Directory tree
+  "diff",         # Compare files
+  "patch",        # Apply patches
+  "whoami",       # Current user
+  "hostname",     # System hostname
+  "uname",        # System info
+  # Compression utilities
+  "tar",
+  "zip",
+  "unzip",
+  "gzip",
+  "gunzip",
+  "bzip2",
+  "bunzip2",
+  "xz",
+  "unxz",
+  # Version control systems
   "git",
-  "cargo",
-  "python",       # Runtime entrypoint
-  "npm",
+  "hg",
+  "svn",
+  "git-lfs",
+  # Git workflow commands
+  "git status",
+  "git diff",
+  "git log",
+  "git show",
+  "git branch",
+  "git remote",
+  "git fetch",
+  "git pull",
+  "git clone",
+  "git checkout",
+  "git switch",
+  "git add",
+  "git commit",
+  "git stash",
+  "git tag",
+  # Build systems
+  "make",
+  "cmake",
+  "ninja",
+  "meson",
+  "bazel",
+  # Rust/Cargo ecosystem
+  "cargo",        # Rust package manager
+  "cargo build",
+  "cargo build --release",
+  "cargo build --profile release",
+  "cargo check",
+  "cargo test",
+  "cargo run",
+  "cargo clippy",
+  "cargo fmt",
+  "cargo tree",
+  "cargo metadata",
+  "cargo doc",
+  "cargo nextest",
+  "cargo nextest run",
+  "rustc",
+  "rustfmt",
+  "rustup",
+  # Python ecosystem
+  "python",       # Python interpreter
+  "python3",
+  "pip",          # Package installer
+  "pip3",
+  "virtualenv",   # Virtual environments
+  "pytest",
+  "black",        # Code formatter
+  "flake8",       # Linter
+  "mypy",         # Type checker
+  "ruff",         # Fast linter
+  # Node.js/npm ecosystem
+  "npm",          # JavaScript package manager
+  "node",         # JavaScript runtime
+  "yarn",         # Alternative package manager
+  "pnpm",         # Performant package manager
+  "bun",          # Fast JavaScript runtime
+  "npx",          # Run packages
+  # Go ecosystem
+  "go",           # Go compiler
+  "gofmt",        # Code formatter
+  "golint",       # Linter
+  # Java ecosystem
+  "java",         # Java runtime
+  "javac",        # Java compiler
+  "mvn",          # Maven build tool
+  "gradle",       # Gradle build tool
+  # C/C++ ecosystem
+  "gcc",          # C compiler
+  "g++",          # C++ compiler
+  "clang",        # Alternative C compiler
+  "clang++",      # Alternative C++ compiler
+  # Container tools
+  "docker",       # Container platform
+  "docker-compose",  # Container orchestration
+  # System info utilities
+  "ps",           # Process listing
+  "top",          # Process monitor
+  "htop",         # Interactive process monitor
+  "df",           # Disk usage
+  "du",           # Directory usage
 ]
 
 # Additional directories to prepend to PATH when running commands
+# Enables agent to find user-installed tools and language runtime binaries
 extra_path_entries = [
-  "$HOME/.cargo/bin",
-  "$HOME/.local/bin",
-  "/opt/homebrew/bin",
+  "$HOME/.cargo/bin",      # Rust tools
+  "$HOME/.cargo/env",      # Rust environment
+  "$HOME/.local/bin",      # Local user binaries
+  "$HOME/.nvm/versions/node/*/bin",  # Node.js versions
+  "/opt/homebrew/bin",     # Homebrew (macOS)
 ]
 
-# Commands that are never allowed
+# Commands that are never allowed - Explicit dangerous command patterns
+# These are blocked regardless of any allow rules
 deny_list = [
+    # Destructive root filesystem operations
     "rm -rf /",        # Delete root directory (dangerous)
     "rm -rf ~",        # Delete home directory (dangerous)
+    "rm -rf /*",       # Delete root contents
+    "rm -rf /home",    # Delete home directory (system-wide)
+    "rm -rf /usr",     # Delete user binaries (destructive)
+    "rm -rf /etc",     # Delete system config (destructive)
+    "rm -rf /var",     # Delete variable data (destructive)
+    "rm -rf /opt",     # Delete optional software (destructive)
+    # System shutdown/reboot operations
     "shutdown",        # Shut down system (dangerous)
     "reboot",          # Reboot system (dangerous)
-    "sudo *",          # Any sudo command (dangerous)
+    "halt",            # Halt system (dangerous)
+    "poweroff",        # Power off system (dangerous)
+    "init 0",          # Init shutdown (dangerous)
+    "init 6",          # Init reboot (dangerous)
+    "systemctl poweroff",    # Systemd shutdown (dangerous)
+    "systemctl reboot",      # Systemd reboot (dangerous)
+    "systemctl halt",        # Systemd halt (dangerous)
+    # Privilege escalation attempts
+    "sudo rm",         # Sudo remove (dangerous)
+    "sudo chmod",      # Sudo permission change (dangerous)
+    "sudo chown",      # Sudo ownership change (dangerous)
+    "sudo passwd",     # Sudo password change (dangerous)
+    "sudo su",         # Sudo shell (dangerous)
+    "sudo -i",         # Sudo interactive (dangerous)
+    "sudo bash",       # Sudo bash shell (dangerous)
+    "su root",         # Switch to root (dangerous)
+    "su -",            # Switch to root (dangerous)
+    # Filesystem destruction
+    "format",          # Format disk (dangerous)
+    "fdisk",           # Partition disk (dangerous)
+    "mkfs",            # Make filesystem (dangerous)
+    "mkfs.ext4",       # Make ext4 filesystem (dangerous)
+    "mkfs.xfs",        # Make xfs filesystem (dangerous)
+    "mkfs.vfat",       # Make vfat filesystem (dangerous)
+    "dd if=/dev/zero",     # Overwrite with zeros (dangerous)
+    "dd if=/dev/random",    # Overwrite with random (dangerous)
+    "dd if=/dev/urandom",   # Overwrite with urandom (dangerous)
+    # Shell exploits
     ":(){ :|:& };:",   # Fork bomb (dangerous)
+    "nohup bash -i",   # Background shell (dangerous)
+    "exec bash -i",    # Replace shell (dangerous)
+    "eval",            # Execute strings (dangerous)
+    "source /etc/bashrc",   # Source system config (dangerous)
+    "source ~/.bashrc",     # Source user config (dangerous)
+    # Permission/ownership changes
+    "chmod 777",       # World-writable permissions (dangerous)
+    "chmod -R 777",    # Recursive world-writable (dangerous)
+    "chown -R",        # Recursive ownership change (dangerous)
+    "chgrp -R",        # Recursive group change (dangerous)
+    # SSH key exposure
+    "rm ~/.ssh/*",     # Delete SSH keys (dangerous)
+    "rm -r ~/.ssh",    # Delete SSH directory (dangerous)
+    # Sensitive file access
+    "cat /etc/passwd",      # Expose user data (dangerous)
+    "cat /etc/shadow",      # Expose password hashes (dangerous)
+    "cat ~/.ssh/id_*",      # Expose private keys (dangerous)
+    "tail -f /var/log",     # Monitor system logs (dangerous)
+    "head -n 1 /var/log",   # Read system logs (dangerous)
 ]
 
 # Command patterns that are allowed (supports glob patterns)
+# Glob patterns enable safe workflows for common development tasks
 allow_glob = [
+  # Version control workflows
   "git *",        # Allow common git workflows; destructive flags require confirm
-  "cargo *",      # Allow cargo workflows; publishing or install requires confirm
-  "python -m *",  # Python module commands
-  "npm *",
-  "node *",
+  "hg *",         # Mercurial workflows
+  "svn *",        # Subversion workflows
+  # Build and compilation workflows
+  "cargo *",      # Allow cargo workflows; publishing requires confirm
+  "cargo nextest *",  # Test execution
+  "rustc *",      # Rust compiler
+  "rustfmt *",    # Code formatter
+  "make *",       # Make build system
+  "cmake *",      # CMake build system
+  "ninja *",      # Ninja build system
+  # Python workflows
+  "python *",     # Python commands
+  "python3 *",    # Python 3 commands
+  "pip *",        # Package installation
+  "pip3 *",       # Python 3 package installation
+  "virtualenv *", # Virtual environment
+  "pytest *",     # Test execution
+  # Node.js workflows
+  "npm *",        # NPM commands
+  "npm run *",    # NPM scripts
+  "node *",       # Node runtime
+  "yarn *",       # Yarn package manager
+  "yarn run *",   # Yarn scripts
+  "pnpm *",       # PNPM package manager
+  "pnpm run *",   # PNPM scripts
+  "bun *",        # Bun runtime
+  "bun run *",    # Bun scripts
+  "npx *",        # Execute packages
+  # Go workflows
+  "go *",         # Go compiler
+  "gofmt *",      # Go formatter
+  # Java workflows
+  "javac *",      # Java compiler
+  "java *",       # Java runtime
+  "mvn *",        # Maven build
+  "gradle *",     # Gradle build
+  # C/C++ workflows
+  "gcc *",        # C compiler
+  "g++ *",        # C++ compiler
+  "clang *",      # Alternative C compiler
+  "clang++ *",    # Alternative C++ compiler
+  # Container workflows
+  "docker *",     # Docker commands
+  "docker-compose *",  # Docker compose
+  # File operations (read-only safe operations)
+  "cat *",        # File viewing
+  "head *",       # View start of files
+  "tail *",       # View end of files
+  "grep *",       # Search files
+  "find *",       # Find files
+  "wc *",         # Count content
+  "diff *",       # Compare files
+  "tar *",        # Archive operations
+  "zip *",        # ZIP compression
+  "unzip *",      # ZIP extraction
+  "gzip *",       # GZIP compression
+  "gunzip *",     # GZIP extraction
 ]
 
 # When commands are potentially destructive, the agent will require an explicit confirmation flag
 # Example: set `confirm = true` in the `EnhancedTerminalInput` for `run_terminal_cmd` tool input
-#+
 
 # Command patterns that are denied (supports glob patterns)
+# These patterns are always blocked to prevent dangerous operations
 deny_glob = [
-    "rm *",         # All rm commands
-    "sudo *",       # All sudo commands
-    "chmod *",      # All chmod commands
-    "chown *",      # All chown commands
-    "kubectl *",    # All kubectl commands (admin access)
+    "rm *",           # Delete operations (potentially destructive)
+    "rmdir *",        # Directory removal
+    "sudo *",         # Privilege escalation
+    "chmod *",        # Permission changes
+    "chown *",        # Ownership changes
+    "kill *",         # Process termination
+    "pkill *",        # Process killing by pattern
+    "systemctl *",    # System service management
+    "service *",      # Legacy service management
+    "mount *",        # Filesystem mounting
+    "umount *",       # Filesystem unmounting
+    "dd *",           # Direct disk access
+    "mkfs *",         # Filesystem creation
+    "fdisk *",        # Disk partitioning
+    "docker run *",   # Docker container creation (requires careful review)
+    "kubectl *",      # Kubernetes operations
+    "shutdown *",     # System shutdown
+    "reboot *",       # System reboot
+    "halt *",         # System halt
 ]
 
 # Regular expression patterns for allowed commands (if needed)

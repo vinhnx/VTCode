@@ -48,6 +48,7 @@ pub fn as_factory_config(source: &dyn ProviderConfig) -> vtcode_core::llm::facto
         base_url: source.base_url().map(Cow::into_owned),
         model: source.model().map(Cow::into_owned),
         prompt_cache: source.prompt_cache().map(|cfg| cfg.into_owned()),
+        timeouts: None,
     }
 }
 
