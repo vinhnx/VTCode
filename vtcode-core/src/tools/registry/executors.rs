@@ -2093,11 +2093,9 @@ impl ToolRegistry {
                     // Use a temporary token budget manager for truncation
                     let token_budget = TokenBudgetManager::default();
 
-                    // This needs to be inside an async block since truncate_content_by_tokens is async
-                    let rt = tokio::runtime::Handle::current();
-                    let (truncated_output, _) = rt.block_on(async {
-                        truncate_content_by_tokens(&output, max_tokens, &token_budget).await
-                    });
+                    // Since we're already in an async context, we can await directly
+                    let (truncated_output, _) =
+                        truncate_content_by_tokens(&output, max_tokens, &token_budget).await;
 
                     format!(
                         "{}\n[... truncated by max_tokens: {} ...]",

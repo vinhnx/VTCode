@@ -153,8 +153,29 @@ impl DiffRenderer {
 
     pub fn render_diff(&self, diff: &FileDiff) -> String {
         let mut output = String::new();
+
+        // File header with edit indicator
+        output.push_str("─ ");
         output.push_str(&self.render_summary(diff));
         output.push('\n');
+
+        // Unified diff header - CRITICAL: Apply Reset after each line to prevent color bleed
+        if self.use_colors {
+            let header_style = self.palette.line_header.render();
+            let reset = Reset.render();
+
+            output.push_str(&format!(
+                "{}--- a/{}{}\n",
+                header_style, diff.file_path, reset
+            ));
+            output.push_str(&format!(
+                "{}+++ b/{}{}\n",
+                header_style, diff.file_path, reset
+            ));
+        } else {
+            output.push_str(&format!("--- a/{}\n", diff.file_path));
+            output.push_str(&format!("+++ b/{}\n", diff.file_path));
+        }
 
         for line in &diff.lines {
             output.push_str(&self.render_line(line));
@@ -165,15 +186,15 @@ impl DiffRenderer {
     }
 
     fn render_summary(&self, diff: &FileDiff) -> String {
-        let bullet = self.paint(&self.palette.bullet, "•");
-        let label = self.paint(&self.palette.label, "Edited");
+        let bullet = self.paint(&self.palette.bullet, "▸");
+        let label = self.paint(&self.palette.label, "Edit");
         let path = self.paint(&self.palette.path, &diff.file_path);
         let additions = format!("+{}", diff.stats.additions);
         let deletions = format!("-{}", diff.stats.deletions);
         let added_span = self.paint(&self.palette.stat_added, &additions);
         let removed_span = self.paint(&self.palette.stat_removed, &deletions);
         format!(
-            "{} {} {} ({} {})",
+            "{} {} {} {} {}",
             bullet, label, path, added_span, removed_span
         )
     }
@@ -196,17 +217,17 @@ impl DiffRenderer {
             let number_text = line_number
                 .map(|n| format!("{:>4}", n))
                 .unwrap_or_else(|| "    ".to_string());
-            rendered.push_str(&self.paint(&self.palette.line_number, &format!("{} ", number_text)));
+            rendered.push_str(&self.paint(&self.palette.line_number, &number_text));
+            rendered.push(' ');
         }
 
         let content = match line.line_type {
             DiffLineType::Header => line.content.clone(),
-            DiffLineType::Context => format!("{}{}", prefix, line.content),
             _ => {
                 if line.content.is_empty() {
                     prefix.to_string()
                 } else {
-                    format!("{prefix} {}", line.content)
+                    format!("{} {}", prefix, line.content)
                 }
             }
         };
@@ -217,6 +238,8 @@ impl DiffRenderer {
 
     fn paint(&self, style: &Style, text: &str) -> String {
         if self.use_colors {
+            // CRITICAL: Apply style and reset without including newlines in the styled block
+            // This ensures Reset appears before any line terminators, preventing color bleed
             format!("{}{}{}", style.render(), text, Reset.render())
         } else {
             text.to_string()
@@ -418,14 +441,15 @@ impl DiffChatRenderer {
         files_affected: usize,
         success: bool,
     ) -> String {
-        let status = if success { "[Success]" } else { "[Failure]" };
-        let mut summary = format!("\n{} {}\n", status, operation);
-        summary.push_str(&format!(" Files affected: {}\n", files_affected));
+        let status_indicator = if success { "✓" } else { "✗" };
+        let status_label = if success { "Success" } else { "Failure" };
+        let mut summary = format!("\n{} [{}] {}\n", status_indicator, status_label, operation);
+        summary.push_str(&format!("└─ {} file(s) affected\n", files_affected));
 
         if success {
-            summary.push_str("Operation completed successfully!\n");
+            summary.push_str("   Operation completed successfully\n");
         } else {
-            summary.push_str(" Operation completed with errors\n");
+            summary.push_str("   Operation completed with errors\n");
         }
 
         summary
