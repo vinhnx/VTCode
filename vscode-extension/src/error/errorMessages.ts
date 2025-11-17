@@ -197,7 +197,7 @@ export function formatErrorMessage(
 	originalError?: Error | string
 ): string {
 	const msg = getErrorMessage(errorCode, originalError);
-	let output = `❌ ${msg.title}\n`;
+	let output = `${msg.title}\n`;
 
 	if (msg.description) {
 		output += `\n${msg.description}\n`;

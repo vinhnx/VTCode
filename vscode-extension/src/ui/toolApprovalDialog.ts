@@ -208,7 +208,7 @@ export class ToolApprovalDialog {
     private assessImpact(toolName: string, args: Record<string, unknown>): string | undefined {
         switch (toolName.toLowerCase()) {
             case 'delete_file':
-                return '⚠️ File will be permanently deleted';
+                return 'File will be permanently deleted';
             
             case 'apply_diff':
                 return '💾 File contents will be modified';
@@ -216,7 +216,7 @@ export class ToolApprovalDialog {
             case 'run_terminal_cmd': {
                 const command = args.command as string || '';
                 if (command.includes('rm ') || command.includes('delete')) {
-                    return '⚠️ Potentially destructive command';
+                    return 'Potentially destructive command';
                 }
                 return '💻 Command will be executed in terminal';
             }
@@ -261,7 +261,7 @@ export class ToolApprovalDialog {
      */
     private previewFileDelete(args: Record<string, unknown>): string {
         const path = args.path as string || 'unknown file';
-        return `⚠️ File will be permanently deleted: ${path}`;
+        return `File will be permanently deleted: ${path}`;
     }
 
     /**
@@ -289,8 +289,7 @@ export class ToolApprovalDialog {
         }
         
         // Add risk indicator
-        const riskEmoji = riskLevel === 'high' ? '🔴' : riskLevel === 'medium' ? '🟡' : '🟢';
-        parts.push(`\nRisk Level: ${riskEmoji} ${riskLevel.toUpperCase()}`);
+        parts.push(`\nRisk Level: ${riskLevel.toUpperCase()}`);
         
         return parts.join('\n');
     }

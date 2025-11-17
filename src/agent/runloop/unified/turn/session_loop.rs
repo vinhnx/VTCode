@@ -566,10 +566,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                             mcp_catalog_initialized = true;
                         }
                         McpInitStatus::Error { message } => {
-                            renderer.line(
-                                MessageStyle::Error,
-                                &format!("⚠️  MCP Error: {}", message),
-                            )?;
+                            renderer
+                                .line(MessageStyle::Error, &format!("MCP Error: {}", message))?;
                             renderer.line_if_not_empty(MessageStyle::Output)?;
                             mcp_catalog_initialized = true;
                         }

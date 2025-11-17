@@ -189,11 +189,11 @@ export class EnhancedChatViewProvider extends ChatViewProvider {
             await this.mcpManager.loadProviders(workspaceFolders[0].uri.fsPath);
             const tools = this.mcpManager.getAvailableTools();
             this.sendSystemMessage(
-                `✅ Reloaded MCP providers. ${tools.length} tools available.`
+                `Reloaded MCP providers. ${tools.length} tools available.`
             );
         } catch (error) {
             this.sendSystemMessage(
-                `❌ Failed to reload MCP providers: ${
+                `Failed to reload MCP providers: ${
                     error instanceof Error ? error.message : String(error)
                 }`,
                 "error"

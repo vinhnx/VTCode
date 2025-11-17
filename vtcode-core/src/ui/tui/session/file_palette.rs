@@ -742,7 +742,8 @@ mod tests {
 
         // Test non-matches
         assert!(FilePalette::simple_fuzzy_match("src/main.rs", "xyz").is_none());
-        assert!(FilePalette::simple_fuzzy_match("src/main.rs", "msr").is_none()); // Wrong order
+        assert!(FilePalette::simple_fuzzy_match("src/main.rs", "msr").is_none());
+        // Wrong order
     }
 
     #[test]

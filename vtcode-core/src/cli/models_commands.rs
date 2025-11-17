@@ -67,7 +67,7 @@ async fn handle_list_models(_cli: &Cli) -> Result<()> {
 
             for model in models.iter().take(3) {
                 let is_current_model = current_model == model;
-                let model_status = if is_current_model { "⭐" } else { "  " };
+                let model_status = if is_current_model { "*" } else { "  " };
                 let colored_model = if is_current_model {
                     cyan(&bold(model))
                 } else {

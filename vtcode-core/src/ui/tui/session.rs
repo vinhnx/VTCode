@@ -1,4 +1,4 @@
-use std::{cmp::min, mem};
+use std::{cmp::min, mem, sync::Arc};
 
 use ansi_to_tui::IntoText;
 use anstyle::{AnsiColor, Color as AnsiColorEnum, Effects, RgbColor};
@@ -103,6 +103,8 @@ pub struct Session {
     cursor_visible: bool,
     needs_redraw: bool,
     needs_full_clear: bool,
+    /// Track if transcript content changed (not just scroll position)
+    transcript_content_changed: bool,
     should_exit: bool,
     view_rows: u16,
     input_height: u16,
@@ -112,6 +114,9 @@ pub struct Session {
 
     // --- Rendering ---
     transcript_cache: Option<TranscriptReflowCache>,
+    /// Cache of visible lines by (scroll_offset, width) - shared via Arc for zero-copy reads
+    /// Avoids expensive clone on cache hits
+    visible_lines_cache: Option<(usize, u16, Arc<Vec<Line<'static>>>)>,
     queued_inputs: Vec<String>,
     queue_overlay_cache: Option<QueueOverlay>,
     queue_overlay_version: u64,
@@ -174,6 +179,7 @@ impl Session {
             cursor_visible: true,
             needs_redraw: true,
             needs_full_clear: false,
+            transcript_content_changed: true,
             should_exit: false,
             view_rows: resolved_rows,
             input_height: Self::input_block_height_for_lines(1),
@@ -183,6 +189,7 @@ impl Session {
 
             // --- Rendering ---
             transcript_cache: None,
+            visible_lines_cache: None,
             queued_inputs: Vec::new(),
             queue_overlay_cache: None,
             queue_overlay_version: 0,
@@ -227,12 +234,15 @@ impl Session {
         match command {
             InlineCommand::AppendLine { kind, segments } => {
                 self.push_line(kind, segments);
+                self.transcript_content_changed = true;
             }
             InlineCommand::Inline { kind, segment } => {
                 self.append_inline(kind, segment);
+                self.transcript_content_changed = true;
             }
             InlineCommand::ReplaceLast { count, kind, lines } => {
                 self.replace_last(count, kind, lines);
+                self.transcript_content_changed = true;
             }
             InlineCommand::SetPrompt { prefix, style } => {
                 self.prompt_prefix = prefix;
@@ -570,7 +580,6 @@ impl Session {
     }
 
     fn render_transcript(&mut self, frame: &mut Frame<'_>, area: Rect) {
-        frame.render_widget(Clear, area);
         if area.height == 0 || area.width == 0 {
             return;
         }
@@ -604,8 +613,9 @@ impl Session {
 
         let visible_start = vertical_offset;
         let scroll_area = Rect::new(inner.x, inner.y, content_width, inner.height);
+        // Use cached visible lines to avoid re-cloning on viewport-only scrolls
         let mut visible_lines =
-            self.collect_transcript_window(content_width, visible_start, viewport_rows);
+            self.collect_transcript_window_cached(content_width, visible_start, viewport_rows);
         let fill_count = viewport_rows.saturating_sub(visible_lines.len());
         if fill_count > 0 {
             let target_len = visible_lines.len() + fill_count;
@@ -615,7 +625,13 @@ impl Session {
         let paragraph = Paragraph::new(visible_lines)
             .style(self.default_style())
             .wrap(Wrap { trim: true });
-        frame.render_widget(Clear, scroll_area);
+        
+        // Only clear if content actually changed, not on viewport-only scroll
+        // This is a significant optimization: avoids expensive Clear operation on most scrolls
+        if self.transcript_content_changed {
+            frame.render_widget(Clear, scroll_area);
+            self.transcript_content_changed = false;
+        }
         frame.render_widget(paragraph, scroll_area);
     }
 
@@ -2814,35 +2830,41 @@ impl Session {
     }
 
     fn scroll_line_up(&mut self) {
-        let previous = self.scroll_manager.offset();
+        let previous_offset = self.scroll_manager.offset();
         self.scroll_manager.scroll_up(1);
-        if self.scroll_manager.offset() != previous {
-            self.needs_full_clear = true;
+        // Only invalidate cache if scroll actually changed (not at top)
+        if self.scroll_manager.offset() != previous_offset {
+            self.visible_lines_cache = None;
         }
+        // mark_dirty() is called by handle_scroll_up() which calls this
     }
 
     fn scroll_line_down(&mut self) {
-        let previous = self.scroll_manager.offset();
+        let previous_offset = self.scroll_manager.offset();
         self.scroll_manager.scroll_down(1);
-        if self.scroll_manager.offset() != previous {
-            self.needs_full_clear = true;
+        // Only invalidate cache if scroll actually changed (not at bottom)
+        if self.scroll_manager.offset() != previous_offset {
+            self.visible_lines_cache = None;
         }
+        // mark_dirty() is called by handle_scroll_down() which calls this
     }
 
     fn scroll_page_up(&mut self) {
-        let previous = self.scroll_manager.offset();
+        let previous_offset = self.scroll_manager.offset();
         self.scroll_manager.scroll_up(self.viewport_height().max(1));
-        if self.scroll_manager.offset() != previous {
-            self.needs_full_clear = true;
+        // Only invalidate cache if scroll actually changed
+        if self.scroll_manager.offset() != previous_offset {
+            self.visible_lines_cache = None;
         }
     }
 
     fn scroll_page_down(&mut self) {
-        let previous = self.scroll_manager.offset();
         let page = self.viewport_height().max(1);
+        let previous_offset = self.scroll_manager.offset();
         self.scroll_manager.scroll_down(page);
-        if self.scroll_manager.offset() != previous {
-            self.needs_full_clear = true;
+        // Only invalidate cache if scroll actually changed
+        if self.scroll_manager.offset() != previous_offset {
+            self.visible_lines_cache = None;
         }
     }
 
@@ -2869,6 +2891,33 @@ impl Session {
 
     fn invalidate_transcript_cache(&mut self) {
         self.transcript_cache = None;
+        // Also invalidate visible lines cache when content changes
+        self.visible_lines_cache = None;
+        // Mark that content changed so we clear transcript on next render
+        self.transcript_content_changed = true;
+    }
+
+    fn collect_transcript_window_cached(
+        &mut self,
+        width: u16,
+        start_row: usize,
+        max_rows: usize,
+    ) -> Vec<Line<'static>> {
+        // Check if we have cached visible lines for this exact position and width
+        if let Some((cached_offset, cached_width, cached_lines)) = &self.visible_lines_cache {
+            if *cached_offset == start_row && *cached_width == width {
+                // Reuse cached lines from Arc (zero-copy, no allocation)
+                return (**cached_lines).clone();
+            }
+        }
+
+        // Not in cache, fetch from transcript
+        let visible_lines = self.collect_transcript_window(width, start_row, max_rows);
+
+        // Cache for next render if scroll position unchanged (wrapped in Arc for cheap sharing)
+        self.visible_lines_cache = Some((start_row, width, Arc::new(visible_lines.clone())));
+
+        visible_lines
     }
 
     fn ensure_scroll_metrics(&mut self) {

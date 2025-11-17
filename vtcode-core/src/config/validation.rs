@@ -51,7 +51,7 @@ impl ValidationResult {
 
         // Print warnings if any
         for warning in &self.warnings {
-            eprintln!("⚠️  Configuration warning: {}", warning);
+            eprintln!("Configuration warning: {}", warning);
         }
 
         Ok(())

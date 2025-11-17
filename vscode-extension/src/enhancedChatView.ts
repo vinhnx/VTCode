@@ -627,7 +627,7 @@ export class EnhancedChatViewProvider implements vscode.WebviewViewProvider {
             await this.saveTranscript();
 
             this.sendSystemMessage(
-                `✅ Tool ${toolName} completed in ${executionTime}ms`
+                `Tool ${toolName} completed in ${executionTime}ms`
             );
         } catch (error) {
             this.sendSystemMessage(
@@ -946,7 +946,7 @@ export class EnhancedChatViewProvider implements vscode.WebviewViewProvider {
                 await this.saveTranscript();
 
                 this.sendSystemMessage(
-                    `✅ Tool ${toolCall.name} completed in ${executionTime}ms`
+                    `Tool ${toolCall.name} completed in ${executionTime}ms`
                 );
             } catch (error) {
                 this.sendSystemMessage(
@@ -970,7 +970,7 @@ export class EnhancedChatViewProvider implements vscode.WebviewViewProvider {
             });
             await this.saveArchivedTranscripts();
             this.sendSystemMessage(
-                `✅ Transcript archived (${this.transcript.length} messages)`
+                `Transcript archived (${this.transcript.length} messages)`
             );
         } else {
             this.sendSystemMessage(
@@ -1022,7 +1022,7 @@ export class EnhancedChatViewProvider implements vscode.WebviewViewProvider {
                     Buffer.from(content, "utf-8")
                 );
                 this.sendSystemMessage(
-                    `✅ Transcript exported to ${uri.fsPath}`
+                    `Transcript exported to ${uri.fsPath}`
                 );
             }
         } catch (error) {
@@ -1291,7 +1291,7 @@ export class EnhancedChatViewProvider implements vscode.WebviewViewProvider {
         const message = this.transcript.find((m) => m.id === messageId);
         if (message) {
             await vscode.env.clipboard.writeText(message.content);
-            this.sendSystemMessage("✅ Message copied to clipboard");
+            this.sendSystemMessage("Message copied to clipboard");
         }
     }
 

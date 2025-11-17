@@ -83,7 +83,7 @@ impl ToolErrorContext {
     pub fn format_for_user(&self) -> String {
         let mut output = String::new();
 
-        output.push_str(&format!("❌ {} failed\n", self.tool_name));
+        output.push_str(&format!("{} failed\n", self.tool_name));
         output.push_str(&format!("   Error: {}\n", self.message));
 
         if let Some(file) = &self.file_path {
@@ -101,7 +101,7 @@ impl ToolErrorContext {
         }
 
         if !self.suggestions.is_empty() {
-            output.push_str("\n   💡 Suggestions:\n");
+            output.push_str("\n   Suggestions:\n");
             for (i, suggestion) in self.suggestions.iter().enumerate() {
                 output.push_str(&format!("   {}. {}\n", i + 1, suggestion));
             }

@@ -712,6 +712,9 @@ impl InlineSink {
 
         let had_trailing_newline = text.ends_with('\n');
 
+        // Attempt to parse ANSI codes, with fallback to plain text
+        // Note: ansi-to-tui may have issues with UTF-8 multi-byte chars mixed with ANSI codes,
+        // so we validate UTF-8 integrity after parsing
         if let Ok(parsed) = text.as_bytes().into_text() {
             let mut converted_lines = Vec::with_capacity(parsed.lines.len().max(1));
             let mut plain_lines = Vec::with_capacity(parsed.lines.len().max(1));
@@ -723,6 +726,7 @@ impl InlineSink {
                 let line_style = base_style.patch(line.style);
 
                 for span in &line.spans {
+                    // Clone content as a Cow<str> - which should always be valid UTF-8
                     let content = span.content.clone().into_owned();
                     if content.is_empty() {
                         continue;
@@ -754,6 +758,7 @@ impl InlineSink {
             return (converted_lines, plain_lines);
         }
 
+        // Fallback: Process as plain text without ANSI parsing
         let mut converted_lines = Vec::new();
         let mut plain_lines = Vec::new();
 

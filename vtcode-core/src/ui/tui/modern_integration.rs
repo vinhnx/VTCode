@@ -1,12 +1,12 @@
 //! Integration module to bridge the modern TUI with the existing Session-based UI
 
-use anyhow::Result;
-use tokio::sync::mpsc;
+use crate::config::types::UiSurfacePreference;
 use crate::ui::tui::session::Session;
 use crate::ui::tui::types::{InlineCommand, InlineEvent, InlineEventCallback, InlineTheme};
-use crate::config::types::UiSurfacePreference;
+use anyhow::Result;
+use tokio::sync::mpsc;
 
-use super::modern_tui::{ModernTui, Event};
+use super::modern_tui::{Event, ModernTui};
 
 pub async fn run_modern_tui(
     mut command_rx: mpsc::UnboundedReceiver<InlineCommand>,
@@ -46,8 +46,8 @@ pub async fn run_modern_tui(
                     None => break, // Channel closed
                 }
             },
-            
-            // Handle terminal events 
+
+            // Handle terminal events
             maybe_event = tui.event_rx.recv() => {
                 match maybe_event {
                     Some(event) => {
@@ -72,12 +72,12 @@ pub async fn run_modern_tui(
                                 if let Some(inline_event) = session.process_key(key_event) {
                                     // Send event to agent
                                     let _ = event_tx.send(inline_event.clone());
-                                    
+
                                     // Also call the callback if present
                                     if let Some(ref callback) = event_callback {
                                         callback(&inline_event);
                                     }
-                                    
+
                                     // Handle special events like submit
                                     if let InlineEvent::Submit(_) = inline_event {
                                         session.mark_dirty();
@@ -95,10 +95,8 @@ pub async fn run_modern_tui(
                                     }
                                     _ => {}
                                 }
-                                // Redraw after mouse event
-                                tui.terminal.draw(|frame| {
-                                    session.render(frame);
-                                })?;
+                                // Note: Let the main render loop handle drawing to avoid double-render
+                                // which causes latency. The session.mark_dirty() is called by scroll methods.
                             }
                             Event::Paste(content) => {
                                 session.insert_text(&content);
@@ -138,7 +136,7 @@ pub async fn run_modern_tui(
 
     // Exit the TUI
     tui.exit().await?;
-    
+
     Ok(())
 }
 
@@ -153,14 +151,14 @@ pub fn spawn_modern_session(
 ) -> Result<super::InlineSession> {
     // Initialize panic hook to restore terminal state if a panic occurs
     crate::ui::tui::panic_hook::init_panic_hook();
-    
+
     let (command_tx, command_rx) = mpsc::unbounded_channel();
     let (event_tx, event_rx) = mpsc::unbounded_channel();
 
     tokio::spawn(async move {
         // Create a guard to mark TUI as initialized during the session
         let _guard = crate::ui::tui::panic_hook::TuiPanicGuard::new();
-        
+
         if let Err(error) = run_modern_tui(
             command_rx,
             event_tx,
@@ -170,7 +168,9 @@ pub fn spawn_modern_session(
             inline_rows,
             show_timeline_pane,
             event_callback,
-        ).await {
+        )
+        .await
+        {
             tracing::error!(%error, "modern inline session terminated unexpectedly");
         }
     });

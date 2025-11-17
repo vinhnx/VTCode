@@ -139,12 +139,15 @@ impl TranscriptReflowCache {
                 0
             };
 
-            for (_line_idx, line) in msg.lines.iter().enumerate().skip(skip_lines) {
-                if result.len() >= remaining_rows {
-                    break;
-                }
-                result.push(line.clone());
-            }
+            // Optimize: avoid enumerate(), just use skip()
+            let target_count = remaining_rows - result.len();
+            result.extend(
+                msg.lines
+                    .iter()
+                    .skip(skip_lines)
+                    .take(target_count)
+                    .cloned(),
+            );
 
             if result.len() >= remaining_rows {
                 break;

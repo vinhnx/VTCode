@@ -1254,7 +1254,7 @@ impl ToolRegistry {
                 let backup_warning = if has_git_backup {
                     "\nGit backup detected - can be recovered if needed."
                 } else {
-                    "\n⚠️  No git backup detected - deletion is permanent!"
+                    "\nNo git backup detected - deletion is permanent!"
                 };
 
                 let prompt_msg = format!(

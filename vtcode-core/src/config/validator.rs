@@ -216,7 +216,7 @@ impl ValidationResult {
         if !self.errors.is_empty() {
             output.push_str("Configuration Errors:\n");
             for error in &self.errors {
-                output.push_str(&format!("  ❌ {}\n", error));
+                output.push_str(&format!("  Error: {}\n", error));
             }
             output.push('\n');
         }
@@ -224,7 +224,7 @@ impl ValidationResult {
         if !self.warnings.is_empty() {
             output.push_str("Configuration Warnings:\n");
             for warning in &self.warnings {
-                output.push_str(&format!("  ⚠️  {}\n", warning));
+                output.push_str(&format!("  Warning: {}\n", warning));
             }
         }
 
