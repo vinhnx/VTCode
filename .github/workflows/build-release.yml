@@ -13,10 +13,10 @@ env:
   CARGO_PROFILE_RELEASE_CODEGEN_UNITS: 1
   RUSTFLAGS: "-D warnings"
 
-# Time out jobs after 30 minutes to prevent resource waste (release builds can be intensive)
+# Set default shell
 defaults:
   run:
-    timeout-minutes: 30
+    shell: bash
 
 jobs:
   build:
@@ -37,6 +37,7 @@ jobs:
             name: x86_64-pc-windows-msvc
 
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
 
     steps:
       - name: Checkout code

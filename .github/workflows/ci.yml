@@ -49,10 +49,10 @@ env:
   CARGO_PROFILE_TEST_DEBUG: 0 # Disable debug info in test builds for faster compilation
   RUSTFLAGS: "-D warnings" # Deny warnings in CI builds
 
-# Time out jobs after 20 minutes to prevent resource waste
+# Set default shell and working directory
 defaults:
   run:
-    timeout-minutes: 20
+    shell: bash
 
 # ensure that the workflow is only triggered once per PR,  subsequent pushes to the PR will cancel
 # and restart the workflow. See https://docs.github.com/en/actions/using-jobs/using-concurrency
@@ -65,6 +65,7 @@ jobs:
   large-files:
     name: Enforce Large File Budget
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
       - name: Check tracked file sizes
@@ -74,6 +75,7 @@ jobs:
   formatting:
     name: Check Formatting
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@master
@@ -104,6 +106,7 @@ jobs:
   lint-clippy:
     name: Check Clippy
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
@@ -115,6 +118,7 @@ jobs:
   lint-markdown:
     name: Check Markdown
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
       - id: filter
@@ -136,6 +140,7 @@ jobs:
   check:
     name: Check code
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@master
@@ -154,6 +159,7 @@ jobs:
         os: [windows-latest, macos-latest]
         toolchain: ["stable"]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@master
@@ -165,6 +171,7 @@ jobs:
   test:
     name: "Cargo test"
     runs-on: "ubuntu-latest"
+    timeout-minutes: 20
     steps:
       - name: "Check out the repo"
         uses: actions/checkout@v5
