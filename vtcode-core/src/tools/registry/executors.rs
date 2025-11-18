@@ -1468,13 +1468,12 @@ impl ToolRegistry {
             .as_object_mut()
             .ok_or_else(|| anyhow!("shell expects an object payload"))?;
         
-        // Extract 'cmd' and rename to 'command' for internal PTY handler
-        let cmd = map.remove("cmd").ok_or_else(|| anyhow!("shell requires a 'cmd' parameter"))?;
-        if cmd.is_string() {
-            map.insert("command".to_string(), cmd);
-        } else {
-            return Err(anyhow!("'cmd' must be a string"));
-        }
+        // Extract 'cmd', validate it's a string, and rename to 'command' for PTY handler
+        match map.remove("cmd") {
+            Some(v @ Value::String(_)) => map.insert("command".to_string(), v),
+            Some(_) => return Err(anyhow!("'cmd' must be a string")),
+            None => return Err(anyhow!("shell requires 'cmd' parameter")),
+        };
 
         // Set default timeout if not provided
         map.entry("timeout_secs".to_string())
