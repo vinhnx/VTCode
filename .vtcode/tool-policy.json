@@ -3,7 +3,6 @@
   "available_tools": [
     "analyze_agent",
     "apply_patch",
-    "bash",
     "close_pty_session",
     "create_file",
     "create_pty_session",
@@ -17,6 +16,8 @@
     "list_pty_sessions",
     "list_skills",
     "load_skill",
+    "mcp::fetch::fetch",
+    "mcp::time::convert_time",
     "mcp::time::get_current_time",
     "read_file",
     "read_pty_session",
@@ -25,6 +26,7 @@
     "search_skills",
     "search_tools",
     "send_pty_input",
+    "shell",
     "update_plan",
     "web_fetch",
     "write_file"
@@ -55,7 +57,7 @@
     "analyze_agent": "prompt",
     "debug_agent": "prompt",
     "get_errors": "prompt",
-    "bash": "allow"
+    "shell": "prompt"
   },
   "constraints": {
     "curl": {
@@ -220,7 +222,13 @@
     "providers": {
       "time": {
         "tools": {
-          "get_current_time": "allow"
+          "get_current_time": "allow",
+          "convert_time": "prompt"
+        }
+      },
+      "fetch": {
+        "tools": {
+          "fetch": "prompt"
         }
       }
     }
