@@ -1464,25 +1464,21 @@ impl ToolRegistry {
 
     /// Unified shell command execution (one-off and interactive modes)
     async fn execute_shell_command(&mut self, mut args: Value) -> Result<Value> {
-        // Get mutable map
         let map = args
             .as_object_mut()
             .ok_or_else(|| anyhow!("shell expects an object payload"))?;
         
-        // Validate that 'cmd' parameter exists and is a string
-        map.get("cmd")
-            .ok_or_else(|| anyhow!("shell requires a 'cmd' parameter"))?
-            .as_str()
-            .ok_or_else(|| anyhow!("'cmd' must be a string"))?;
-
-        // Convert 'cmd' to 'command' for PTY handler
-        if let Some(cmd_value) = map.remove("cmd") {
-            map.insert("command".to_string(), cmd_value);
+        // Extract 'cmd' and rename to 'command' for internal PTY handler
+        let cmd = map.remove("cmd").ok_or_else(|| anyhow!("shell requires a 'cmd' parameter"))?;
+        if cmd.is_string() {
+            map.insert("command".to_string(), cmd);
+        } else {
+            return Err(anyhow!("'cmd' must be a string"));
         }
 
         // Set default timeout if not provided
         map.entry("timeout_secs".to_string())
-            .or_insert(json!(DEFAULT_TERMINAL_TIMEOUT_SECS));
+            .or_insert_with(|| json!(DEFAULT_TERMINAL_TIMEOUT_SECS));
 
         self.execute_run_pty_command(args).await
     }
