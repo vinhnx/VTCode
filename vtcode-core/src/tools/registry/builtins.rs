@@ -38,14 +38,6 @@ pub(super) fn builtin_tool_registrations() -> Vec<ToolRegistration> {
             ToolRegistry::update_plan_executor,
         ),
         ToolRegistration::new(
-            tools::RUN_COMMAND,
-            CapabilityLevel::Bash,
-            true,
-            ToolRegistry::run_command_executor,
-        )
-        .with_deprecated(true)
-        .with_deprecation_message("Use PTY session tools (create_pty_session, send_pty_input, read_pty_session) instead for better session management"),
-        ToolRegistration::new(
             tools::CREATE_PTY_SESSION,
             CapabilityLevel::Bash,
             false,

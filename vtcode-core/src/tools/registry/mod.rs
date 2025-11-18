@@ -1218,7 +1218,7 @@ mod tests {
         let available = registry.available_tools().await;
 
         assert!(available.contains(&tools::READ_FILE.to_string()));
-        assert!(available.contains(&tools::RUN_COMMAND.to_string()));
+        assert!(available.contains(&tools::RUN_PTY_CMD.to_string()));
         Ok(())
     }
 
@@ -1255,7 +1255,7 @@ mod tests {
         assert!(registry.preflight_tool_permission(tools::READ_FILE).await?);
         assert!(
             !registry
-                .preflight_tool_permission(tools::RUN_COMMAND)
+                .preflight_tool_permission(tools::RUN_PTY_CMD)
                 .await?
         );
 

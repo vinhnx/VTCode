@@ -919,7 +919,7 @@ impl AgentRunner {
                         let args_json = serde_json::to_string(&args_value)?;
                         effective_tool_calls = Some(vec![ToolCall::function(
                             call_id,
-                            tools::RUN_COMMAND.to_string(),
+                            tools::RUN_PTY_CMD.to_string(),
                             args_json,
                         )]);
                     }
@@ -1942,8 +1942,8 @@ impl AgentRunner {
 
     /// Execute a tool by name with given arguments
     async fn execute_tool(&self, tool_name: &str, args: &Value) -> Result<Value> {
-        // Enforce per-agent shell policies for RUN_COMMAND
-        let is_shell = tool_name == tools::RUN_COMMAND;
+        // Enforce per-agent shell policies for RUN_PTY_CMD
+        let is_shell = tool_name == tools::RUN_PTY_CMD;
         if is_shell {
             let cfg = ConfigManager::load()
                 .or_else(|_| ConfigManager::load_from_workspace("."))

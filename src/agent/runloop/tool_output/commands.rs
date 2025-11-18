@@ -167,7 +167,7 @@ pub(crate) async fn render_terminal_command_panel(
             stdout.as_ref(),
             output_mode,
             tail_limit,
-            Some(tools::RUN_COMMAND),
+            Some(tools::RUN_PTY_CMD),
             git_styles,
             ls_styles,
             MessageStyle::Response, // This is the normal terminal output
@@ -186,7 +186,7 @@ pub(crate) async fn render_terminal_command_panel(
             stderr.as_ref(),
             output_mode,
             tail_limit,
-            Some(tools::RUN_COMMAND),
+            Some(tools::RUN_PTY_CMD),
             git_styles,
             ls_styles,
             MessageStyle::Error, // Error output

@@ -170,6 +170,5 @@ const DEFAULT_TOOL_POLICIES: &[(&str, ToolPolicy)] = &[
     (tools::RESIZE_PTY_SESSION, ToolPolicy::Allow),
     (tools::SEND_PTY_INPUT, ToolPolicy::Prompt),
     (tools::CLOSE_PTY_SESSION, ToolPolicy::Allow),
-    (tools::RUN_COMMAND, ToolPolicy::Prompt),
     (tools::WEB_FETCH, ToolPolicy::Prompt),
 ];

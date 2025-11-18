@@ -420,14 +420,14 @@ impl ZedAgent {
                 })
                 .collect::<Vec<_>>();
 
-        if available_local_tools.contains(tools::RUN_COMMAND)
+        if available_local_tools.contains(tools::RUN_PTY_CMD)
             && let Some(run_decl) = build_function_declarations()
                 .into_iter()
-                .find(|decl| decl.name == tools::RUN_COMMAND)
+                .find(|decl| decl.name == tools::RUN_PTY_CMD)
         {
             let already_registered = local_definitions
                 .iter()
-                .any(|definition| definition.function_name() == tools::RUN_COMMAND);
+                .any(|definition| definition.function_name() == tools::RUN_PTY_CMD);
             if !already_registered {
                 local_definitions.push(ToolDefinition::function(
                     run_decl.name.clone(),
@@ -1066,7 +1066,7 @@ impl ZedAgent {
         session_id: &acp::SessionId,
         args: &Value,
     ) -> ToolExecutionReport {
-        if tool_name == tools::RUN_COMMAND
+        if tool_name == tools::RUN_PTY_CMD
             && let Some(report) = self
                 .execute_terminal_via_client(tool_name, client, session_id, args)
                 .await

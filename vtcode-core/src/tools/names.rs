@@ -13,7 +13,7 @@ pub fn canonical_tool_name<'a>(name: &'a str) -> Cow<'a, str> {
         | "run"
         | "terminalrun"
         | "terminal_cmd"
-        | "terminalcommand" => Cow::Borrowed(tools::RUN_COMMAND),
+        | "terminalcommand" => Cow::Borrowed(tools::RUN_PTY_CMD),
         _ => Cow::Borrowed(name),
     }
 }
@@ -21,7 +21,7 @@ pub fn canonical_tool_name<'a>(name: &'a str) -> Cow<'a, str> {
 /// Return known aliases for a canonical tool name.
 pub fn tool_aliases(name: &str) -> &'static [&'static str] {
     match name {
-        tools::RUN_COMMAND => &[
+        tools::RUN_PTY_CMD => &[
             "run_pty_cmd",
             "run_terminal_cmd",
             "run_terminal_command",

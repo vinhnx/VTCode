@@ -109,7 +109,7 @@ pub(crate) async fn render_stream_section(
     let is_mcp_tool = tool_name.is_some_and(|name| name.starts_with("mcp_"));
     let is_run_command = matches!(
         tool_name,
-        Some(vtcode_core::config::constants::tools::RUN_COMMAND)
+        Some(vtcode_core::config::constants::tools::RUN_PTY_CMD)
     );
     let force_tail_mode = is_run_command;
     let normalized_content = if allow_ansi {

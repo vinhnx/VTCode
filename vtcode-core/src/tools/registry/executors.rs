@@ -714,10 +714,6 @@ impl ToolRegistry {
         Box::pin(async move { tool.execute(args).await })
     }
 
-    pub(super) fn run_command_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move { self.execute_run_command(args).await })
-    }
-
     pub(super) fn create_pty_session_executor(
         &mut self,
         args: Value,
@@ -1477,23 +1473,6 @@ impl ToolRegistry {
     }
 
     /// Unified command execution that combines terminal and PTY modes
-    async fn execute_run_command(&mut self, mut args: Value) -> Result<Value> {
-        normalize_run_command_payload(&mut args)?;
-
-        let resolved_mode = resolve_run_mode(&args);
-        ensure_default_timeout(
-            &mut args,
-            "run_command expects an object payload",
-            resolved_mode.default_timeout(),
-        )?;
-
-        if resolved_mode.is_pty() {
-            self.execute_run_pty_command(args).await
-        } else {
-            self.execute_run_terminal_internal(args).await
-        }
-    }
-
     async fn execute_run_terminal_internal(&mut self, mut args: Value) -> Result<Value> {
         match prepare_terminal_execution(&mut args)? {
             TerminalExecution::Pty { args } => self.execute_run_pty_command(args).await,
@@ -2203,15 +2182,6 @@ fn normalize_payload<'a>(
     }
     copy_value_if_absent(map, "cwd", "working_dir");
     Ok(map)
-}
-
-fn normalize_run_command_payload(args: &mut Value) -> Result<()> {
-    normalize_payload(
-        args,
-        "run_command expects an object payload",
-        "bash_command is no longer supported. Use run_command instead.",
-    )?;
-    Ok(())
 }
 
 fn normalize_terminal_payload(args: &mut Value) -> Result<()> {

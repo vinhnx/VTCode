@@ -28,7 +28,6 @@ const AUTO_ALLOW_TOOLS: &[&str] = &[
     tools::GREP_FILE,
     tools::LIST_FILES,
     tools::UPDATE_PLAN,
-    tools::RUN_COMMAND,
     tools::READ_FILE,
     tools::EDIT_FILE,
 ];

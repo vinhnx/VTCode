@@ -33,7 +33,18 @@
 -   **Naming**: snake_case (functions/vars), PascalCase (types)
 -   **Formatting**: 4 spaces, early returns over nested ifs, descriptive variable names
 -   **No emojis, no hardcoded values** (read from vtcode.toml/constants.rs)
--   **Docs**: All .md files in `./docs/` only (not root)
+
+## Documentation Guidelines
+
+-   **All .md files in `./docs/` only** - NO markdown files in root directory
+-   **Don't create excessive markdown files** - Maximum 1-2 per task/feature
+-   **Consolidate related docs** - Group similar documentation (e.g., all optimization guides under `docs/optimization/`)
+-   **Keep root clean** - Only CHANGELOG.md, README.md, CONTRIBUTING.md allowed at root
+-   **IMPORTANT**: After completing a task, review generated .md files:
+    -   Keep only essential documentation
+    -   Archive or delete temporary/intermediate reports
+    -   Move remaining docs to `./docs/` subdirectories
+    -   Example: Cleanup reports → `docs/cleanup/`, optimization guides → `docs/optimization/`
 
 ## Performance Optimization Guides
 
@@ -162,6 +173,34 @@ result = {"count": len(test_files), "files": test_files[:20]}
 -   Save skills for repeated patterns (80%+ reuse ratio documented)
 -   Regularly run `cargo clippy` and `cargo fmt` to maintain code quality
 -   Documents: every documents must be grouped in ./docs/, no documents in root folder. Ideally create grouped documents folder inside ./docs/ if there are many documents about one topic.
+
+## Dependency Management
+
+### Before Adding Dependencies
+
+When implementing features that might require new crates:
+
+1. **Verify necessity** - Is this truly needed?
+2. **Check for lighter alternatives** - Compare options (size, features, maintenance)
+3. **Check if stdlib has it** - Don't add deps for simple functionality
+4. **Document reason in commit** - Why is this dependency needed?
+5. **Consider making it optional** - Feature-gate if not always needed
+6. **Run `cargo machete` after changes** - Catch unused deps immediately
+
+### Maintenance
+
+-   Run `cargo machete` to identify unused dependencies
+-   Run `cargo clippy --all-targets` for code quality
+-   Monitor with `cargo outdated` for security updates
+
+### What NOT to Do
+
+-   Don't re-add removed dependencies without justification
+-   Don't expand feature flags unnecessarily (keep lean)
+-   Don't ignore `cargo machete` warnings
+-   Don't commit unused dependencies
+
+---
 
 ## Execution Algorithm (with Decision Points)
 
