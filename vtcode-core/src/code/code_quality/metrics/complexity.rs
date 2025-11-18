@@ -140,3 +140,9 @@ impl ComplexityAnalyzer {
         mi.max(0.0).min(100.0)
     }
 }
+
+impl Default for ComplexityAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}

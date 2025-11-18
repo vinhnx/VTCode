@@ -359,7 +359,7 @@ pub async fn run_turn_loop(
                                         &output,
                                         applied_max_tokens.unwrap_or(max_tokens),
                                         byte_fuse,
-                                        &*local_token_budget,
+                                        &local_token_budget,
                                     ).await;
 
                                     working_history.push(uni::Message::tool_response_with_origin(
@@ -385,7 +385,7 @@ pub async fn run_turn_loop(
                                         &args_val,
                                         &pipeline_outcome,
                                         vt_cfg,
-                                        &*local_token_budget,
+                                        &local_token_budget,
                                         _traj,
                                     )
                                     .await?;
@@ -643,7 +643,7 @@ pub async fn run_turn_loop(
                                         &call_args_val,
                                         &pipeline_outcome,
                                         vt_cfg,
-                                        &*local_token_budget,
+                                        &local_token_budget,
                                         _traj,
                                     )
                                     .await?;

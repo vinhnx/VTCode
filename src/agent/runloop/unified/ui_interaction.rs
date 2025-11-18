@@ -189,7 +189,7 @@ fn get_progress_style_context(message: &str) -> ProgressStyleContext {
         || message.contains("sending")
         || message.contains("receiving")
     {
-        ProgressStyleContext::LLM
+        ProgressStyleContext::Llm
     } else if message.contains("tool")
         || message.contains("executing")
         || message.contains("running")
@@ -202,7 +202,7 @@ fn get_progress_style_context(message: &str) -> ProgressStyleContext {
 
 #[derive(Clone, Copy)]
 enum ProgressStyleContext {
-    LLM,
+    Llm,
     Tool,
     General,
 }
@@ -298,7 +298,7 @@ impl PlaceholderSpinner {
                     } else if progress.total == 0 && !progress.message.is_empty() {
                         // For indeterminate progress, show context-aware activity indicator
                         let activity_indicator = match context {
-                            ProgressStyleContext::LLM => {
+                            ProgressStyleContext::Llm => {
                                 // Use pulsing dots for LLM operations (thinking/processing)
                                 let dots_count = (frames.tick / 3 % 4) as usize;
                                 "⠋⠙⠹⠸".chars().nth(dots_count).unwrap_or('⠋').to_string()

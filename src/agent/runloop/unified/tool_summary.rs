@@ -50,7 +50,7 @@ pub(crate) fn render_tool_call_summary_with_status(
 
     // Details in dim gray if present - these are the call parameters
     if !details.is_empty() {
-        line.push_str(" ");
+        line.push(' ');
         line.push_str(&render_styled(
             &format!("· {}", details.join(" · ")),
             palette.muted,
@@ -87,7 +87,7 @@ pub(crate) fn render_tool_call_summary_with_status(
                 .collect();
 
             if !all_params.is_empty() {
-                line.push_str(" ");
+                line.push(' ');
                 line.push_str(&render_styled(
                     &format!("· {}", all_params.join(" · ")),
                     palette.muted,
@@ -104,7 +104,7 @@ pub(crate) fn render_tool_call_summary_with_status(
         } else {
             palette.error
         };
-        line.push_str(" ");
+        line.push(' ');
         line.push_str(&render_styled(
             &format!("(exit: {})", code),
             code_color,

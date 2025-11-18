@@ -614,7 +614,9 @@ mod tests {
     impl ScopedEnvVar {
         fn set(key: &str, value: &str) -> Self {
             let original = std::env::var(key).ok();
-            std::env::set_var(key, value);
+            unsafe {
+                std::env::set_var(key, value);
+            }
             Self {
                 key: key.to_string(),
                 original,
@@ -625,9 +627,9 @@ mod tests {
     impl Drop for ScopedEnvVar {
         fn drop(&mut self) {
             if let Some(ref orig) = self.original {
-                let _ = std::env::set_var(&self.key, orig);
+                let _ = unsafe { std::env::set_var(&self.key, orig) };
             } else {
-                let _ = std::env::remove_var(&self.key);
+                let _ = unsafe { std::env::remove_var(&self.key) };
             }
         }
     }
@@ -635,7 +637,7 @@ mod tests {
     fn resolve_runtime_disallows_agent_exe_via_env() {
         let tempdir = tempdir().expect("tempdir");
         let workspace = tempdir.path().to_path_buf();
-        let mut coordinator = SandboxCoordinator::new(workspace);
+        let coordinator = SandboxCoordinator::new(workspace);
         // Get current executable and set SRT_PATH to point to it using a scoped env
         let current = std::env::current_exe().expect("current exe");
         let _scoped = ScopedEnvVar::set(SRT_PATH_ENV, &current.to_string_lossy().to_string());
@@ -649,7 +651,7 @@ mod tests {
     fn resolve_runtime_disallows_agent_exe_via_path_which() {
         let tempdir = tempdir().expect("tempdir");
         let workspace = tempdir.path().to_path_buf();
-        let mut coordinator = SandboxCoordinator::new(workspace);
+        let coordinator = SandboxCoordinator::new(workspace);
         // Create a bin dir and place a stub `srt` pointing to current_exe
         let bin_dir = tempdir.path().join("bin");
         std::fs::create_dir_all(&bin_dir).expect("create bin");
@@ -721,10 +723,9 @@ mod tests {
             .expect("initialize session");
 
         // Setup UI (inline session, handle, renderer)
-        let mut ui_setup =
-            initialize_session_ui(&core_config, None, &mut session_state, None, false)
-                .await
-                .expect("initialize session ui");
+        let ui_setup = initialize_session_ui(&core_config, None, &mut session_state, None, false)
+            .await
+            .expect("initialize session ui");
 
         // Create a bin dir on PATH that has an `srt` symlink pointing to the current exe
         let bin_dir = tmp.path().join("bin");
@@ -771,12 +772,13 @@ mod tests {
         let tools = session_state.tools.clone();
 
         // Compose the SlashCommandContext
-        let mut ctx = SlashCommandContext {
+        let mut vt_cfg: Option<vtcode_core::config::loader::VTCodeConfig> = None;
+        let ctx = SlashCommandContext {
             renderer: &mut renderer,
             handle: &handle,
             session: &mut session,
             config: &mut core_config,
-            vt_cfg: &mut None,
+            vt_cfg: &mut vt_cfg,
             provider_client: &mut session_state.provider_client,
             session_bootstrap: &session_state.session_bootstrap,
             model_picker_state: &mut model_picker_state,

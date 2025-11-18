@@ -133,6 +133,11 @@ impl ToolRegistry {
     }
 
     pub async fn run_terminal_cmd(&mut self, args: Value) -> Result<Value> {
+        // Check for validation errors from parameter conversion
+        if let Some(err_msg) = args.get("_validation_error").and_then(|v| v.as_str()) {
+            return Err(anyhow!("{}", err_msg));
+        }
+
         let cfg = ConfigManager::load()
             .or_else(|_| ConfigManager::load_from_workspace("."))
             .or_else(|_| ConfigManager::load_from_file("vtcode.toml"))

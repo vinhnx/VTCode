@@ -39,8 +39,11 @@ async fn handle_list_models(_cli: &Cli) -> Result<()> {
     println!();
 
     let config = load_user_config().await.unwrap_or_default();
-    let factory = get_factory().lock().unwrap();
-    let providers = factory.list_providers();
+    let factory = {
+        let guard = get_factory().lock().unwrap();
+        guard.list_providers()
+    }; // Lock is released here when guard goes out of scope
+    let providers = factory;
 
     for provider_name in &providers {
         let is_current = config.preferences.default_provider == *provider_name;
@@ -156,8 +159,10 @@ fn is_provider_configured(config: &DotConfig, provider: &str) -> bool {
 
 /// Set default provider
 async fn handle_set_provider(_cli: &Cli, provider: &str) -> Result<()> {
-    let factory = get_factory().lock().unwrap();
-    let available = factory.list_providers();
+    let available = {
+        let factory = get_factory().lock().unwrap();
+        factory.list_providers()
+    }; // Lock is released here when factory guard goes out of scope
 
     if !available.contains(&provider.to_string()) {
         return Err(anyhow!(
@@ -167,8 +172,10 @@ async fn handle_set_provider(_cli: &Cli, provider: &str) -> Result<()> {
         ));
     }
 
-    drop(factory); // Release the factory lock before awaiting
-    let manager = get_dot_manager().lock().unwrap();
+    let manager = {
+        let guard = get_dot_manager().lock().unwrap();
+        guard.clone()
+    }; // Lock is released here when guard goes out of scope
     manager
         .update_config(|config| {
             config.preferences.default_provider = provider.to_string();
@@ -190,9 +197,10 @@ async fn handle_set_provider(_cli: &Cli, provider: &str) -> Result<()> {
 
 /// Set default model
 async fn handle_set_model(_cli: &Cli, model: &str) -> Result<()> {
-    let manager = get_dot_manager().lock().unwrap();
-    drop(manager); // Release the lock before awaiting
-    let manager = get_dot_manager().lock().unwrap();
+    let manager = {
+        let guard = get_dot_manager().lock().unwrap();
+        guard.clone()
+    }; // Lock is released here when guard goes out of scope
     manager
         .update_config(|config| {
             config.preferences.default_model = model.to_string();
@@ -211,9 +219,12 @@ async fn handle_config_provider(
     base_url: Option<&str>,
     model: Option<&str>,
 ) -> Result<()> {
-    let manager = get_dot_manager().lock().unwrap();
+    // First, load the config
+    let manager = {
+        let guard = get_dot_manager().lock().unwrap();
+        guard.clone()
+    }; // Lock is released here when guard goes out of scope
     let mut config = manager.load_config().await?;
-    drop(manager); // Release the lock before configuration processing
 
     match provider {
         "openai" | "anthropic" | "gemini" | "openrouter" | "deepseek" | "xai" | "ollama"
@@ -223,7 +234,11 @@ async fn handle_config_provider(
         _ => return Err(anyhow!("Unsupported provider: {}", provider)),
     }
 
-    let manager = get_dot_manager().lock().unwrap();
+    // Then save the config
+    let manager = {
+        let guard = get_dot_manager().lock().unwrap();
+        guard.clone()
+    }; // Lock is released here when guard goes out of scope
     manager.save_config(&config).await?;
 
     Ok(())

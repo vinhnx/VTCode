@@ -66,6 +66,15 @@ impl CommandTool {
         // then override specific variables for consistent terminal behavior.
         // This matches the PTY environment setup in pty.rs:set_command_environment()
         let mut env: HashMap<OsString, OsString> = std::env::vars_os().collect();
+
+        // Ensure HOME is set - this is crucial for proper path expansion in cargo and other tools
+        let home_key = OsString::from("HOME");
+        if !env.contains_key(&home_key) {
+            if let Some(home_dir) = dirs::home_dir() {
+                env.insert(home_key.clone(), OsString::from(home_dir.as_os_str()));
+            }
+        }
+
         if !self.extra_path_entries.is_empty() {
             let path_key = OsString::from("PATH");
             let current_path = env.get(&path_key).map(|value| value.as_os_str());

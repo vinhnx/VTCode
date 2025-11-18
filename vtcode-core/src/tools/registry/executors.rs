@@ -2356,11 +2356,42 @@ fn collect_command_vector(
     type_error: &str,
 ) -> Result<Vec<String>> {
     let map = value_as_object(args, missing_error)?;
-    let array = map
-        .get("command")
-        .ok_or_else(|| anyhow!(missing_error.to_string()))?
-        .as_array()
-        .ok_or_else(|| anyhow!(missing_error.to_string()))?;
+    // Prefer explicit `command` array if present
+    let array_opt = map.get("command");
+
+    let array = if let Some(Value::Array(arr)) = array_opt {
+        arr
+    } else if array_opt.is_some() {
+        return Err(anyhow!(missing_error.to_string()));
+    } else {
+        // No explicit `command` array found; try to collect dotted `command.N` entries
+        let mut entries: Vec<(usize, String)> = Vec::new();
+        for (key, value) in map.iter() {
+            if let Some(idx_str) = key.strip_prefix("command.") {
+                if let Ok(idx) = idx_str.parse::<usize>() {
+                    let Some(seg) = value.as_str() else {
+                        return Err(anyhow!(type_error.to_string()));
+                    };
+                    entries.push((idx, seg.to_string()));
+                }
+            }
+        }
+        if !entries.is_empty() {
+            entries.sort_unstable_by_key(|(idx, _)| *idx);
+            let min_index = entries.first().unwrap().0;
+            let max_index = entries.last().unwrap().0;
+            let mut computed = vec![String::new(); max_index + 1 - min_index];
+            for (idx, seg) in entries.into_iter() {
+                let position = if min_index == 1 { idx - 1 } else { idx };
+                if position >= computed.len() {
+                    computed.resize(position + 1, String::new());
+                }
+                computed[position] = seg;
+            }
+            return Ok(computed);
+        }
+        return Err(anyhow!(missing_error.to_string()));
+    };
 
     array
         .iter()
@@ -2480,6 +2511,11 @@ struct TerminalCommandPayload {
 impl TerminalCommandPayload {
     fn parse(args: &mut Value) -> Result<Self> {
         normalize_terminal_payload(args)?;
+
+        // Check for validation errors from parameter conversion
+        if let Some(err_msg) = args.get("_validation_error").and_then(|v| v.as_str()) {
+            return Err(anyhow!("{}", err_msg));
+        }
 
         let mode_label = run_mode_label(args);
         let shell_hint = args
@@ -2677,10 +2713,43 @@ fn parse_command_parts(
         Some(_) => {
             return Err(anyhow!("command must be a string or string array"));
         }
-        None => {
-            return Err(anyhow!("{}", missing_error));
-        }
+        None => Vec::new(),
     };
+
+    // If we didn't get a command array or string, try to pick up dotted command.N args
+    if parts.is_empty() {
+        let mut entries: Vec<(usize, String)> = Vec::new();
+        for (k, v) in payload.iter() {
+            if let Some(idx_str) = k.strip_prefix("command.") {
+                if let Ok(idx) = idx_str.parse::<usize>() {
+                    let Some(seg) = v.as_str() else {
+                        return Err(anyhow!("command array must contain only strings"));
+                    };
+                    entries.push((idx, seg.to_string()));
+                }
+            }
+        }
+        if !entries.is_empty() {
+            entries.sort_unstable_by_key(|(idx, _)| *idx);
+            let min_index = entries.first().unwrap().0;
+            let max_index = entries.last().unwrap().0;
+            let mut computed_parts = vec![String::new(); max_index + 1 - min_index];
+            for (idx, seg) in entries.into_iter() {
+                let position = if min_index == 1 { idx - 1 } else { idx };
+                if position >= computed_parts.len() {
+                    computed_parts.resize(position + 1, String::new());
+                }
+                computed_parts[position] = seg;
+            }
+            if computed_parts.is_empty() {
+                return Err(anyhow!("{}", missing_error));
+            }
+            if computed_parts[0].trim().is_empty() {
+                return Err(anyhow!("{}", empty_error));
+            }
+            parts = computed_parts;
+        }
+    }
 
     if let Some(args_value) = payload.get("args") {
         let args_array = args_value

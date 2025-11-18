@@ -21,7 +21,8 @@ use crate::agent::runloop::context::ContextTrimConfig;
 use crate::agent::runloop::mcp_events;
 use crate::agent::runloop::model_picker::{ModelPickerStart, ModelPickerState};
 use crate::agent::runloop::sandbox::SandboxCoordinator;
-use crate::agent::runloop::slash_commands::{McpCommandAction, SlashCommandOutcome};
+use crate::agent::runloop::slash_commands::McpCommandAction;
+pub use crate::agent::runloop::slash_commands::SlashCommandOutcome;
 use crate::agent::runloop::unified::async_mcp_manager::AsyncMcpManager;
 use crate::agent::runloop::unified::context_manager::ContextManager;
 use crate::agent::runloop::unified::diagnostics::run_doctor_diagnostics;
@@ -48,14 +49,14 @@ use webbrowser;
 
 use super::super::config_modal::{MODAL_CLOSE_HINT, load_config_modal_content};
 
-pub(crate) enum SlashCommandControl {
+pub enum SlashCommandControl {
     Continue,
     SubmitPrompt(String),
     BreakWithReason(SessionEndReason),
     BreakWithoutReason,
 }
 
-pub(crate) struct SlashCommandContext<'a> {
+pub struct SlashCommandContext<'a> {
     pub renderer: &'a mut AnsiRenderer,
     pub handle: &'a InlineHandle,
     pub session: &'a mut InlineSession,
@@ -88,7 +89,7 @@ pub(crate) struct SlashCommandContext<'a> {
     pub tool_permission_cache: &'a Arc<RwLock<vtcode_core::acp::ToolPermissionCache>>,
 }
 
-pub(crate) async fn handle_outcome(
+pub async fn handle_outcome(
     outcome: SlashCommandOutcome,
     ctx: SlashCommandContext<'_>,
 ) -> Result<SlashCommandControl> {

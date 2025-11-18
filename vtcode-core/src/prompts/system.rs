@@ -100,9 +100,10 @@ Modifying files?
 └─ Complex diff? → apply_patch
 
 Running commands?
-├─ Interactive shell? → create_pty_session → send_pty_input → read_pty_session
-└─ One-off command? → run_terminal_cmd
+├─ Interactive multi-step shell? → create_pty_session → send_pty_input → read_pty_session → close_pty_session
+└─ One-off command? → run_terminal_cmd (ALWAYS use for: cargo, git, npm, python, etc.)
   (AVOID: raw grep/find bash; use grep_file instead)
+  (AVOID: create_pty_session for single commands; only for interactive workflows)
 
 Processing 100+ items?
 └─ execute_code (Python/JavaScript) for filtering/aggregation
@@ -138,14 +139,27 @@ Done?
 - Whole-file writes → write_file (when many changes)
 - Structured diffs → apply_patch (for complex changes)
 
+**Command Execution Decision Tree**:
+```
+Is this a single one-off command (e.g., cargo fmt, git status, npm test)?
+├─ YES → Use run_terminal_cmd (ALWAYS this choice)
+└─ NO → Is this an interactive multi-step workflow requiring user input or state?
+    ├─ YES (e.g., gdb debugging, node REPL, vim editing) → Use create_pty_session → send_pty_input → read_pty_session
+    └─ NO → Still use run_terminal_cmd (default choice)
+```
+
 **Command Execution Strategy**:
-- One-off commands → run_terminal_cmd (for git, cargo, python, npm, node, etc.)
+- **DEFAULT: Use run_terminal_cmd for ALL one-off commands**
+  - Examples: `cargo fmt`, `cargo check`, `cargo test`, `git status`, `npm install`, `python script.py`
   - Response contains `"status": "completed"` or `"status": "running"`
   - If status is `"completed"` → command finished; use the `code` field (0=success, 1+=error) and output
   - If status is `"running"` → command is still executing (long-running like cargo check); backend continues polling automatically; DO NOT call read_pty_session; just inform user and move on
   - The backend waits up to 5 seconds internally; longer commands will return "running" status with partial output
   - IMPORTANT: Do NOT keep polling manually or call read_pty_session if you see session_id; the backend handles it
-- Interactive work → PTY sessions (create_pty_session → send_pty_input → read_pty_session → close_pty_session)
+- **ONLY use PTY sessions for interactive multi-step workflows** (e.g., debugging with gdb, interactive shells like node REPL, step-by-step Python debugging)
+  - Workflow: create_pty_session → send_pty_input → read_pty_session → (repeat as needed) → close_pty_session
+  - Do NOT use PTY for simple commands like `cargo fmt` or `git status`
+  - When you send_pty_input and get a response, read_pty_session will show the output
 - AVOID: raw grep/find bash (use grep_file instead)
 - Safe commands auto-execute: git (read/safe writes), cargo (build/test/check), python/node/npm dev commands
 - Complex or destructive operations still require confirmation

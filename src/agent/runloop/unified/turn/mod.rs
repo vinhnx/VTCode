@@ -2,7 +2,7 @@ mod config_modal;
 mod finalization;
 mod harmony;
 mod run_loop;
-mod session;
+pub mod session;
 mod session_loop;
 mod tool_execution;
 mod turn_loop;

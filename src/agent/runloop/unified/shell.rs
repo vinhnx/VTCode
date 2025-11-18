@@ -141,7 +141,7 @@ pub(crate) fn derive_recent_tool_output(history: &[uni::Message]) -> Option<Stri
     // If command succeeded with no output, show a brief success message
     if success {
         if let Some(cmd) = command {
-            return Some(cmd.to_string());
+            return Some(format!("✓ {}", cmd));
         }
         // Try to extract tool name or other context from the response
         if let Some(tool_name) = value

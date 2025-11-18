@@ -613,7 +613,7 @@ pub(crate) async fn run_turn_handle_tool_failure(
     session_stats.record_tool(name);
 
     // Display a simple failure message and log
-    let failure_msg = format!("Tool '{}' failed: {}", name, error.to_string());
+    let failure_msg = format!("Tool '{}' failed: {}", name, error);
     renderer.line(MessageStyle::Error, &failure_msg)?;
 
     traj.log_tool_call(working_history.len(), name, &serde_json::json!({}), false);
@@ -1763,7 +1763,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                     decision_ledger: &Arc<
                         tokio::sync::RwLock<vtcode_core::core::decision_tracker::DecisionTracker>,
                     >,
-                    working_history: &Vec<uni::Message>,
+                    working_history: &[uni::Message],
                     tools: &Arc<tokio::sync::RwLock<Vec<uni::ToolDefinition>>>,
                 ) {
                     let mut ledger = decision_ledger.write().await;
@@ -2101,6 +2101,14 @@ pub(crate) async fn run_single_agent_loop_unified(
                                             MessageStyle::Info,
                                             "Loop detection remains enabled. Skipping this tool call.",
                                         )?;
+                                        // Add feedback to conversation history so LLM doesn't repeat the same tool
+                                        let loop_feedback = format!(
+                                            "I've detected that I was calling tool '{}' repeatedly with the same arguments. This indicates I'm stuck in a loop. I will not call this tool again with the same arguments. Please help me break out of this loop by providing guidance on a different approach or adjustment to my request.",
+                                            name
+                                        );
+                                        working_history
+                                            .push(uni::Message::assistant(loop_feedback.clone()));
+                                        renderer.line(MessageStyle::Info, &loop_feedback)?;
                                         // Reset only this signature for fresh monitoring
                                         loop_detector.reset_signature(&signature_key);
                                         continue; // Skip processing this tool call
@@ -2216,7 +2224,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                             &call.id,
                             &dec_id,
                             vt_cfg.as_ref(),
-                            &*token_budget,
+                            &token_budget,
                             &mut last_forced_redraw,
                         )
                         .await
@@ -2362,7 +2370,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                             &decision_ledger,
                                             Some(&tool_result_cache),
                                             vt_cfg.as_ref(),
-                                            &*token_budget,
+                                            &token_budget,
                                         )
                                         .await?;
                                         // continue the outer loop
