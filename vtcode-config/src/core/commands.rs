@@ -18,7 +18,7 @@ pub struct CommandsConfig {
     #[serde(default)]
     pub deny_list: Vec<String>,
 
-    /// Glob patterns allowed for shell commands (applies to run_terminal_cmd/Bash)
+    /// Glob patterns allowed for shell commands (applies to Bash)
     #[serde(default)]
     pub allow_glob: Vec<String>,
 

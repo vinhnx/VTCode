@@ -183,7 +183,7 @@ read_file = "allow"               # Read files (no confirmation needed)
 read_pty_session = "allow"        # Read PTY session output (no confirmation needed)
 resize_pty_session = "allow"      # Resize PTY sessions (no confirmation needed)
 run_pty_cmd = "prompt"            # Run commands in PTY (requires confirmation)
-run_terminal_cmd = "prompt"       # Run terminal commands (requires confirmation)
+
 send_pty_input = "prompt"         # Send input to PTY (requires confirmation)
 update_plan = "allow"             # Update task plans (no confirmation needed)
 web_fetch = "prompt"              # Fetch web content (requires confirmation)

@@ -41,7 +41,7 @@ use crate::config::{CommandsConfig, PtyConfig, TimeoutsConfig, ToolsConfig};
 use crate::tool_policy::{ToolPolicy, ToolPolicyManager};
 use crate::tools::file_ops::FileOpsTool;
 use crate::tools::grep_file::GrepSearchManager;
-use crate::tools::names::{canonical_tool_name, tool_aliases};
+use crate::tools::names::canonical_tool_name;
 use crate::tools::pty::PtyManager;
 use anyhow::Result;
 use serde_json::Value;
@@ -366,14 +366,7 @@ impl ToolRegistry {
     }
 
     async fn sync_policy_catalog(&mut self) {
-        let mut available = self.inventory.available_tools();
-        let mut alias_entries = Vec::new();
-        for tool in &available {
-            for alias in tool_aliases(tool) {
-                alias_entries.push(alias.to_string());
-            }
-        }
-        available.extend(alias_entries);
+        let available = self.inventory.available_tools();
         let mcp_keys = self.mcp_policy_keys();
         self.policy_gateway
             .sync_available_tools(available, &mcp_keys)
@@ -388,18 +381,7 @@ impl ToolRegistry {
     /// # Returns
     /// `Result<()>` indicating success or an error if the tool is already registered
     pub fn register_tool(&mut self, registration: ToolRegistration) -> Result<()> {
-        // Clone the name since we need it after moving registration
-        let tool_name = registration.name().to_string();
-
-        // Register the tool
-        self.inventory.register_tool(registration)?;
-
-        // Register any aliases for the tool
-        for alias in tool_aliases(&tool_name) {
-            self.inventory.add_alias(alias, &tool_name);
-        }
-
-        Ok(())
+        self.inventory.register_tool(registration)
     }
 
     /// Get a list of all available tools, including MCP tools

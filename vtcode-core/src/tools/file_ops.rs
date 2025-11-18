@@ -1293,7 +1293,7 @@ fn build_diff_preview(path: &str, before: Option<&str>, after: &str) -> Value {
     let new_header = format!("b/{path}");
 
     // Use git diff algorithm which provides better, unified output format
-    // This can be executed via run_terminal_cmd for consistency
+    // This can be executed via run_pty_cmd for consistency
     let diff_output = generate_git_style_diff(previous, after, &old_header, &new_header);
 
     if diff_output.trim().is_empty() {
@@ -1339,7 +1339,7 @@ fn build_diff_preview(path: &str, before: Option<&str>, after: &str) -> Value {
 
 /// Generate unified diff using git diff --no-index command.
 ///
-/// Uses the optimized git diff rendering system unified with run_terminal_cmd:
+/// Uses the optimized git diff rendering system unified with run_pty_cmd:
 /// - Produces standard unified diff format with file headers ("--- a/", "+++ b/")
 /// - Hunk headers with line counts ("@@ -1,3 +1,3 @@")
 /// - Line prefixes: '+' (additions), '-' (deletions), ' ' (context)
@@ -1358,7 +1358,7 @@ fn generate_git_style_diff(old: &str, new: &str, old_label: &str, new_label: &st
 
 /// Execute git diff --no-index using temporary files.
 ///
-/// This is the unified approach for diff generation across write_files and run_terminal_cmd.
+/// This is the unified approach for diff generation across write_files and run_pty_cmd.
 /// Returns standard unified diff format that matches what git shows in terminal.
 fn git_diff(old: &str, new: &str, old_label: &str, new_label: &str) -> Result<String> {
     // Create temporary files for old and new content

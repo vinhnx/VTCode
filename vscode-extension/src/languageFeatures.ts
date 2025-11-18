@@ -238,10 +238,10 @@ const SECTION_KEYS: Record<string, Record<string, KeyMetadata>> = {
             documentation: "Policy override for shell execution.",
             insertText: 'bash = "${1|allow,prompt,deny|}"',
         },
-        run_terminal_cmd: {
-            detail: "run_terminal_cmd policy",
-            documentation: "Policy override for standard terminal commands.",
-            insertText: 'run_terminal_cmd = "${1|allow,prompt,deny|}"',
+        run_pty_cmd: {
+            detail: "run_pty_cmd policy",
+            documentation: "Policy override for standard pty commands.",
+            insertText: 'run_pty_cmd = "${1|allow,prompt,deny|}"',
         },
         write_file: {
             detail: "write_file policy",

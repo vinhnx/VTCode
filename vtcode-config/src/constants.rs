@@ -733,6 +733,7 @@ pub mod tools {
     /// Sole content-search tool (ripgrep-backed)
     pub const GREP_FILE: &str = "grep_file";
     pub const LIST_FILES: &str = "list_files";
+    pub const BASH: &str = "bash";
     /// Deprecated: Use PTY session tools (create_pty_session, send_pty_input, read_pty_session) instead
     pub const RUN_PTY_CMD: &str = "run_pty_cmd";
     pub const CREATE_PTY_SESSION: &str = "create_pty_session";
@@ -1356,10 +1357,6 @@ pub mod chunking {
 
     /// Number of lines to read from end of file when chunking
     pub const CHUNK_END_LINES: usize = 800;
-
-    // DEPRECATED: Terminal output truncation now uses token-based limits instead of line limits
-    // See: src/agent/runloop/tool_output/streams.rs (MAX_TOOL_RESPONSE_TOKENS: 25_000)
-    // These constants are no longer used and can be safely removed when cleaning up
 
     /// Maximum content size for write_file before chunking (in bytes)
     pub const MAX_WRITE_CONTENT_SIZE: usize = 500_000; // 500KB

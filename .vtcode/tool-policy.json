@@ -53,8 +53,7 @@
     "search_tools": "prompt",
     "analyze_agent": "prompt",
     "debug_agent": "prompt",
-    "get_errors": "prompt",
-    "run_pty_cmd": "allow"
+    "get_errors": "prompt"
   },
   "constraints": {
     "curl": {

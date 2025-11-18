@@ -76,14 +76,14 @@
 
 ## Tool Usage Guidelines
 
--   **Tier 1 - Essential**: list_files, read_file, write_file, grep_file, edit_file, run_terminal_cmd
+-   **Tier 1 - Essential**: list_files, read_file, write_file, grep_file, edit_file
 -   **Tier 2 - Control**: update_plan (TODO list), PTY sessions (create/send/read/close)
 -   **Tier 3 - Advanced**: apply_patch, search_tools
 -   **Tier 4 - Data Processing**: execute_code, save_skill, load_skill
 -   **Command Execution Strategy**:
     -   Interactive work → PTY sessions (create_pty_session → send_pty_input → read_pty_session → close_pty_session)
-    -   One-off commands → run_terminal_cmd
-    -   AVOID: raw grep/find bash (use grep_file instead)
+    -   One-off commands → Bash tool
+    -   AVOID: raw grep/find bash (use Grep instead)
 -   **File Editing Strategy**:
     -   Exact replacements → edit_file (preferred for speed + precision)
     -   Whole-file writes → write_file (when many changes)
@@ -244,13 +244,13 @@ else
 
 **IMPORTANT:** Search BEFORE reading whole files. Never read 5+ files without searching first.
 
-**grep_file Best Practices:**
+**Grep Best Practices:**
 
 -   Start narrow: Search specific directory/file type with `glob` or `path` parameter
 -   Use `max_results` to limit output (default 100)
 -   Combine `literal: true` for exact matches or regex for patterns
--   Example: Find all function definitions: `grep_file(pattern="^fn ", path="src", glob="*.rs")`
--   Example: Find TODO comments: `grep_file(pattern="TODO|FIXME", case_sensitive=false)`
+-   Example: Find all function definitions: `Grep(pattern="^fn ", path="src", glob="*.rs")`
+-   Example: Find TODO comments: `Grep(pattern="TODO|FIXME", caseSensitive=false)`
 
 ### Phase 3: Execution
 
