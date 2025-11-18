@@ -716,8 +716,21 @@ impl PtyManager {
         } else {
             // Always use login shell for command execution to ensure user's PATH and environment
             // is properly initialized from their shell configuration files (~/.bashrc, ~/.zshrc, etc)
+            // The '-l' flag forces login shell mode which sources all initialization files
+            // The '-c' flag executes the command
+            // This combination ensures development tools like cargo, npm, etc. are in PATH
             let shell = resolve_fallback_shell();
             let full_command = join(std::iter::once(program.clone()).chain(args.iter().cloned()));
+
+            // Verify we have a valid command string
+            if full_command.is_empty() {
+                return Err(anyhow!(
+                    "Failed to construct command string from program '{}' and args {:?}",
+                    program,
+                    args
+                ));
+            }
+
             (
                 shell.clone(),
                 vec!["-lc".to_string(), full_command.clone()],
