@@ -1464,30 +1464,44 @@ impl ToolRegistry {
 
     /// Unified shell command execution (one-off and interactive modes)
     async fn execute_shell_command(&mut self, mut args: Value) -> Result<Value> {
-        // Convert shell tool args to run_command format
         let obj = value_as_object(&mut args, "shell expects an object payload")?;
         
-        // Extract the command
+        // Extract command string
         let cmd = obj
             .get("cmd")
             .ok_or_else(|| anyhow!("shell requires a 'cmd' parameter"))?
             .as_str()
             .ok_or_else(|| anyhow!("'cmd' must be a string"))?;
 
-        // Build run_command args
-        let mut run_cmd_args = json!({
+        // Extract other parameters
+        let timeout_secs = obj
+            .get("timeout_secs")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(DEFAULT_TERMINAL_TIMEOUT_SECS);
+        
+        let cwd = obj.get("cwd").and_then(|v| v.as_str()).map(|s| s.to_string());
+        let confirm = obj.get("confirm").and_then(|v| v.as_bool()).unwrap_or(false);
+
+        // Create payload for PTY command
+        let mut payload = json!({
             "command": cmd,
-            "timeout_secs": obj.get("timeout_secs").cloned().unwrap_or(json!(DEFAULT_TERMINAL_TIMEOUT_SECS)),
-            "cwd": obj.get("cwd").cloned(),
-            "confirm": obj.get("confirm").cloned(),
+            "timeout_secs": timeout_secs
         });
 
-        // Remove null values
-        if let Some(obj) = run_cmd_args.as_object_mut() {
-            obj.retain(|_, v| !v.is_null());
+        if let Some(cwd_val) = cwd {
+            if let Value::Object(ref mut obj) = payload {
+                obj.insert("cwd".to_string(), json!(cwd_val));
+            }
         }
 
-        self.execute_run_command(run_cmd_args).await
+        if confirm {
+            if let Value::Object(ref mut obj) = payload {
+                obj.insert("confirm".to_string(), json!(true));
+            }
+        }
+
+        // Execute as PTY command
+        self.execute_run_pty_command(payload).await
     }
 
     async fn execute_run_command(&mut self, mut args: Value) -> Result<Value> {
