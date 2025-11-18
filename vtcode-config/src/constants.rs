@@ -733,8 +733,9 @@ pub mod tools {
     /// Sole content-search tool (ripgrep-backed)
     pub const GREP_FILE: &str = "grep_file";
     pub const LIST_FILES: &str = "list_files";
-    pub const BASH: &str = "bash";
-    /// Primary command execution tool (PTY mode)
+    /// Unified shell command execution (one-off and interactive)
+    pub const SHELL: &str = "shell";
+    /// Deprecated: Use 'shell' tool instead
     pub const RUN_PTY_CMD: &str = "run_pty_cmd";
     pub const CREATE_PTY_SESSION: &str = "create_pty_session";
     pub const LIST_PTY_SESSIONS: &str = "list_pty_sessions";

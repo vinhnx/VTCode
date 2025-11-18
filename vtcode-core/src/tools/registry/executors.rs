@@ -696,8 +696,8 @@ impl ToolRegistry {
         Box::pin(async move { tool.execute(args).await })
     }
 
-    pub(super) fn bash_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move { self.execute_bash_command(args).await })
+    pub(super) fn shell_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
+        Box::pin(async move { self.execute_shell_command(args).await })
     }
 
     pub(super) fn run_command_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
@@ -1462,15 +1462,15 @@ impl ToolRegistry {
         }))
     }
 
-    /// Unified command execution that combines terminal and PTY modes
-    async fn execute_bash_command(&mut self, mut args: Value) -> Result<Value> {
-        // Convert bash tool args to run_command format
-        let obj = value_as_object(&mut args, "bash expects an object payload")?;
+    /// Unified shell command execution (one-off and interactive modes)
+    async fn execute_shell_command(&mut self, mut args: Value) -> Result<Value> {
+        // Convert shell tool args to run_command format
+        let obj = value_as_object(&mut args, "shell expects an object payload")?;
         
         // Extract the command
         let cmd = obj
             .get("cmd")
-            .ok_or_else(|| anyhow!("bash requires a 'cmd' parameter"))?
+            .ok_or_else(|| anyhow!("shell requires a 'cmd' parameter"))?
             .as_str()
             .ok_or_else(|| anyhow!("'cmd' must be a string"))?;
 

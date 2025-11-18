@@ -76,8 +76,8 @@ Modifying files?
 
 Running commands?
 ├─ Interactive shell? → create_pty_session → send_pty_input → read_pty_session
-└─ One-off command? → Bash tool
-(Use Bash for: git, cargo, shell scripts, etc. AVOID: raw grep/find bash; use Grep instead)
+└─ One-off command? → shell tool
+(Use shell for: git, cargo, shell scripts, etc. AVOID: raw grep/find bash; use Grep instead)
 
 Processing 100+ items?
 └─ execute_code (Python/JavaScript) for filtering/aggregation
@@ -89,7 +89,7 @@ Done?
 
 # Tool Usage Guidelines
 
-**Tier 1 - Essential**: list_files, read_file, write_file, grep_file, edit_file, Bash
+**Tier 1 - Essential**: list_files, read_file, write_file, grep_file, edit_file, shell
 
 **Tier 2 - Control**: update_plan (TODO list), PTY sessions (create/send/read/close)
 
@@ -121,7 +121,7 @@ Self-Diagnostic and Error Recovery:
 
 **Command Execution Strategy**:
 - Interactive work → PTY sessions (create_pty_session → send_pty_input → read_pty_session → close_pty_session)
-- One-off commands → Bash tool (e.g., `git diff`, `git status`, `git log`, `cargo build`, `cargo test`, `cargo fmt`, etc.)
+- One-off commands → shell tool (e.g., `git diff`, `git status`, `git log`, `cargo build`, `cargo test`, `cargo fmt`, etc.)
 - AVOID: raw grep/find bash (use Grep instead); do NOT use bash for searching files—use dedicated tools
 
 # Code Execution Patterns

@@ -3,6 +3,7 @@
   "available_tools": [
     "analyze_agent",
     "apply_patch",
+    "bash",
     "close_pty_session",
     "create_file",
     "create_pty_session",
@@ -53,7 +54,8 @@
     "search_tools": "prompt",
     "analyze_agent": "prompt",
     "debug_agent": "prompt",
-    "get_errors": "prompt"
+    "get_errors": "prompt",
+    "bash": "allow"
   },
   "constraints": {
     "curl": {
