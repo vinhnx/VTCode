@@ -11,10 +11,14 @@ pub async fn handle_create_project_command(
     name: &str,
     features: &[String],
 ) -> Result<()> {
-    println!("{}", style("Create project mode selected").blue().bold());
-    println!("Project name: {}", name);
-    println!("Features: {:?}", features);
-    println!("Workspace: {}", config.workspace.display());
+    println!("{}", style("[CREATE]").blue().bold());
+    println!("  {:16} {}", "name", name);
+    println!("  {:16} {}", "workspace", config.workspace.display());
+    if !features.is_empty() {
+        println!("  {:16} {}\n", "features", features.join(", "));
+    } else {
+        println!();
+    }
 
     // Project creation implementation
     let project_path = config.workspace.join(name);

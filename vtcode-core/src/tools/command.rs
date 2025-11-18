@@ -10,6 +10,7 @@ use crate::exec::cancellation;
 use crate::execpolicy::{sanitize_working_dir, validate_command};
 use crate::tools::command_policy::CommandPolicyEvaluator;
 use crate::tools::path_env;
+use crate::tools::shell::resolve_fallback_shell;
 use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
 use serde_json::{Value, json};
@@ -216,30 +217,43 @@ impl CommandTool {
             );
         }
 
-        // Check if the program (first command element) exists in PATH; if not, wrap in shell to leverage user's shell configuration
-        // This is similar to the PTY implementation that wraps commands in shell when not found in PATH
-        let resolved_invocation = if let Some(resolved_path) =
-            path_env::resolve_program_path(program, &self.extra_path_entries)
-        {
-            // Program found, execute resolved path directly to avoid PATH lookups
-            CommandInvocation {
-                program: resolved_path,
-                args: command[1..].to_vec(),
-                display: input
-                    .raw_command
+        // If the program name includes a path separator or is absolute, execute it directly as provided
+        // (unless the caller explicitly requested a shell override). Otherwise, always use the
+        // user's login shell in `-lc` mode so PATH and environment are initialized consistently.
+        let resolved_invocation =
+            if program.contains(std::path::MAIN_SEPARATOR) || program.contains('/') {
+                // Program provided as absolute/relative path: run directly
+                CommandInvocation {
+                    program: program.to_string(),
+                    args: command[1..].to_vec(),
+                    display: input
+                        .raw_command
+                        .clone()
+                        .unwrap_or_else(|| format_command(command)),
+                }
+            } else {
+                // Honor explicit shell override provided in the input. If the caller set `login` to
+                // false, use `-c` (no login). Otherwise use `-lc` to force login shell semantics.
+                let shell = input
+                    .shell
                     .clone()
-                    .unwrap_or_else(|| format_command(command)),
-            }
-        } else {
-            // Program not found in PATH, wrap in shell to leverage user's PATH (like .zshrc, .bashrc)
-            let shell = "/bin/sh";
-            let full_command = format_command(command);
-            CommandInvocation {
-                program: shell.to_string(),
-                args: vec!["-c".to_string(), full_command.clone()],
-                display: full_command,
-            }
-        };
+                    .filter(|s| !s.trim().is_empty())
+                    .unwrap_or_else(|| resolve_fallback_shell());
+                let use_login = input.login.unwrap_or(true);
+                let full_command = format_command(command);
+                CommandInvocation {
+                    program: shell,
+                    args: vec![
+                        if use_login {
+                            "-lc".to_string()
+                        } else {
+                            "-c".to_string()
+                        },
+                        full_command.clone(),
+                    ],
+                    display: full_command,
+                }
+            };
 
         Ok(resolved_invocation)
     }
@@ -418,8 +432,9 @@ mod tests {
         let tool = make_tool();
         let input = make_input(vec!["ls"]);
         let invocation = tool.prepare_invocation(&input).await.expect("invocation");
-        assert_eq!(invocation.program, "ls");
-        assert!(invocation.args.is_empty());
+        let shell = resolve_fallback_shell();
+        assert_eq!(invocation.program, shell);
+        assert_eq!(invocation.args, vec!["-lc".to_string(), "ls".to_string()]);
         assert_eq!(invocation.display, "ls");
     }
 
@@ -431,8 +446,12 @@ mod tests {
             .prepare_invocation(&input)
             .await
             .expect("cargo check should be allowed");
-        assert_eq!(invocation.program, "cargo");
-        assert_eq!(invocation.args, vec!["check".to_string()]);
+        let shell = resolve_fallback_shell();
+        assert_eq!(invocation.program, shell);
+        assert_eq!(
+            invocation.args,
+            vec!["-lc".to_string(), "cargo check".to_string()]
+        );
         assert_eq!(invocation.display, "cargo check");
     }
 
@@ -486,7 +505,23 @@ mod tests {
             .prepare_invocation(&input)
             .await
             .expect("custom allow list should enable command");
-        assert_eq!(invocation.program, "/bin/sh");
+        let shell = resolve_fallback_shell();
+        assert_eq!(invocation.program, shell);
+        assert_eq!(
+            invocation.args,
+            vec!["-lc".to_string(), "my-build".to_string()]
+        );
+    }
+
+    #[tokio::test]
+    async fn prepare_invocation_respects_shell_override_and_login_false() {
+        let cwd = std::env::current_dir().expect("current dir");
+        let tool = CommandTool::new(cwd);
+        let mut input = make_input(vec!["my-build"]);
+        input.shell = Some("/bin/sh".to_string());
+        input.login = Some(false);
+        let invocation = tool.prepare_invocation(&input).await.expect("invocation");
+        assert_eq!(invocation.program, "/bin/sh".to_string());
         assert_eq!(
             invocation.args,
             vec!["-c".to_string(), "my-build".to_string()]
@@ -532,6 +567,20 @@ mod tests {
             .await
             .expect_err("deny list should block cargo");
         assert!(error.to_string().contains("is not permitted"));
+    }
+
+    #[tokio::test]
+    async fn prepare_invocation_uses_shell_for_sandbox_runtime() {
+        let tool = make_tool();
+        let input = make_input(vec!["srt", "run"]);
+        let invocation = tool.prepare_invocation(&input).await.expect("invocation");
+        let shell = resolve_fallback_shell();
+        assert_eq!(invocation.program, shell);
+        assert_eq!(
+            invocation.args,
+            vec!["-lc".to_string(), "srt run".to_string()]
+        );
+        assert_eq!(invocation.display, "srt run");
     }
 
     #[tokio::test]

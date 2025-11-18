@@ -202,7 +202,7 @@ pub struct VTCodePtySession {
 }
 // Default value functions
 fn default_max_items() -> usize {
-    1000
+    500 // Reasonable limit to prevent overwhelming output
 }
 
 fn default_list_path() -> String {

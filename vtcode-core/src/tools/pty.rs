@@ -19,6 +19,7 @@ use crate::audit::PermissionAuditLog;
 use crate::config::{CommandsConfig, PtyConfig};
 use crate::sandbox::SandboxProfile;
 use crate::tools::path_env;
+use crate::tools::shell::resolve_fallback_shell;
 use crate::tools::types::VTCodePtySession;
 
 #[derive(Clone)]
@@ -445,7 +446,8 @@ impl PtyManager {
         let result = tokio::task::spawn_blocking(move || -> Result<PtyCommandResult> {
             let timeout_duration = Duration::from_millis(timeout);
 
-            // Try to resolve the program path. If not found, wrap in shell.
+            // Always use login shell for command execution to ensure user's PATH and environment
+            // is properly initialized from their shell configuration files (~/.bashrc, ~/.zshrc, etc)
             let (exec_program, exec_args, display_program, env_profile, _use_shell_wrapper) =
                 if let Some(profile) = sandbox_profile.clone() {
                     let command_string =
@@ -461,19 +463,13 @@ impl PtyManager {
                         Some(profile),
                         false,
                     )
-                } else if let Some(resolved_path) =
-                    path_env::resolve_program_path(&program, &extra_paths)
-                {
-                    // Program found in PATH, use resolved executable directly
-                    (resolved_path, args.clone(), program.clone(), None, false)
                 } else {
-                    // Program not found in PATH, wrap in shell to leverage user's PATH
-                    let shell = "/bin/sh";
+                    let shell = resolve_fallback_shell();
                     let full_command =
                         join(std::iter::once(program.clone()).chain(args.iter().cloned()));
                     (
-                        shell.to_string(),
-                        vec!["-c".to_string(), full_command.clone()],
+                        shell.clone(),
+                        vec!["-lc".to_string(), full_command.clone()],
                         program.clone(),
                         None,
                         true,
@@ -717,16 +713,14 @@ impl PtyManager {
                 program.clone(),
                 Some(profile),
             )
-        } else if let Some(resolved_path) = path_env::resolve_program_path(&program, &extra_paths) {
-            // Program found in PATH, use it directly
-            (resolved_path, args.clone(), program.clone(), None)
         } else {
-            // Program not found in PATH, wrap in shell to leverage user's PATH
-            let shell = "/bin/sh";
+            // Always use login shell for command execution to ensure user's PATH and environment
+            // is properly initialized from their shell configuration files (~/.bashrc, ~/.zshrc, etc)
+            let shell = resolve_fallback_shell();
             let full_command = join(std::iter::once(program.clone()).chain(args.iter().cloned()));
             (
-                shell.to_string(),
-                vec!["-c".to_string(), full_command.clone()],
+                shell.clone(),
+                vec!["-lc".to_string(), full_command.clone()],
                 program.clone(),
                 None,
             )
@@ -1087,6 +1081,10 @@ fn is_shell_program(program: &str) -> bool {
         "bash" | "sh" | "zsh" | "fish" | "dash" | "ash" | "busybox"
     )
 }
+
+/// Resolve the fallback shell for command execution when program is not found.
+/// Prefers the user's configured shell, respecting environment variables and system detection.
+// resolve_fallback_shell moved to tools::shell
 
 /// Resolve program path - if program doesn't exist in PATH, return None to signal shell fallback.
 /// This allows the shell to find programs installed in user-specific directories.

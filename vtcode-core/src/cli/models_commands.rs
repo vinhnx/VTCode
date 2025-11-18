@@ -38,8 +38,8 @@ async fn handle_list_models(_cli: &Cli) -> Result<()> {
     println!("{}", underline(&bold("Available Providers & Models")));
     println!();
 
-    let factory = get_factory().lock().unwrap();
     let config = load_user_config().await.unwrap_or_default();
+    let factory = get_factory().lock().unwrap();
     let providers = factory.list_providers();
 
     for provider_name in &providers {
@@ -167,6 +167,7 @@ async fn handle_set_provider(_cli: &Cli, provider: &str) -> Result<()> {
         ));
     }
 
+    drop(factory); // Release the factory lock before awaiting
     let manager = get_dot_manager().lock().unwrap();
     manager
         .update_config(|config| {
@@ -190,6 +191,8 @@ async fn handle_set_provider(_cli: &Cli, provider: &str) -> Result<()> {
 /// Set default model
 async fn handle_set_model(_cli: &Cli, model: &str) -> Result<()> {
     let manager = get_dot_manager().lock().unwrap();
+    drop(manager); // Release the lock before awaiting
+    let manager = get_dot_manager().lock().unwrap();
     manager
         .update_config(|config| {
             config.preferences.default_model = model.to_string();
@@ -210,6 +213,7 @@ async fn handle_config_provider(
 ) -> Result<()> {
     let manager = get_dot_manager().lock().unwrap();
     let mut config = manager.load_config().await?;
+    drop(manager); // Release the lock before configuration processing
 
     match provider {
         "openai" | "anthropic" | "gemini" | "openrouter" | "deepseek" | "xai" | "ollama"
@@ -219,6 +223,7 @@ async fn handle_config_provider(
         _ => return Err(anyhow!("Unsupported provider: {}", provider)),
     }
 
+    let manager = get_dot_manager().lock().unwrap();
     manager.save_config(&config).await?;
 
     Ok(())

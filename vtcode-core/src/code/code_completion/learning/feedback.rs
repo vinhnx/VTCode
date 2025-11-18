@@ -11,6 +11,12 @@ struct FeedbackEntry {
     timestamp: std::time::SystemTime,
 }
 
+impl Default for FeedbackProcessor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FeedbackProcessor {
     pub fn new() -> Self {
         Self {

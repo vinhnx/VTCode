@@ -138,6 +138,7 @@ pub mod pty;
 pub mod registry;
 pub mod result_cache;
 pub mod search_metrics;
+pub mod shell;
 pub mod traits;
 pub mod tree_sitter;
 pub mod types;

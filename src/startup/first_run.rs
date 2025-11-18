@@ -91,15 +91,12 @@ async fn run_first_run_setup(
     let mut renderer = AnsiRenderer::stdout();
     renderer.line(
         MessageStyle::Info,
-        "┌────────────────────────────────────────────┐",
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
     )?;
+    renderer.line(MessageStyle::Info, "  VT Code - First-time setup wizard")?;
     renderer.line(
         MessageStyle::Info,
-        "│        VT Code first-time setup wizard      │",
-    )?;
-    renderer.line(
-        MessageStyle::Info,
-        "└────────────────────────────────────────────┘",
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
     )?;
     let (provider, model, trust) = match mode {
         SetupMode::Interactive => {

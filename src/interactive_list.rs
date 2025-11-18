@@ -17,28 +17,25 @@ use ratatui::widgets::{
     Block, BorderType, Borders, List, ListDirection, ListItem, ListState, Paragraph, Wrap,
 };
 
-const CONTROLS_HINT: &str =
-    "Use ↑/↓ or j/k to move • Home/End to jump • Enter to confirm • Esc to cancel";
-const NUMBER_JUMP_HINT: &str = "Tip: type a number to jump directly to an option.";
+const CONTROLS_HINT: &str = "↑/↓ j/k to move  •  Home/End to jump  •  Enter confirm  •  Esc cancel";
+const NUMBER_JUMP_HINT: &str = "Tip: Type number to jump";
 
 /// Ratatui style definitions for interactive list UI
 mod styles {
     use ratatui::style::{Color, Modifier, Style};
 
-    /// Item number in bright blue bold
-    pub const ITEM_NUMBER: Style = Style::new()
-        .fg(Color::LightBlue)
-        .add_modifier(Modifier::BOLD);
+    /// Item number in bright cyan bold
+    pub const ITEM_NUMBER: Style = Style::new().fg(Color::Cyan).add_modifier(Modifier::BOLD);
 
-    /// Description text in gray
-    pub const DESCRIPTION: Style = Style::new().fg(Color::Gray);
+    /// Description text in light gray for better contrast
+    pub const DESCRIPTION: Style = Style::new().fg(Color::DarkGray);
 
     /// Default list text in white
     pub const DEFAULT_TEXT: Style = Style::new().fg(Color::White);
 
-    /// Highlighted selection in cyan bold reversed
+    /// Highlighted selection in green bold reversed
     pub const HIGHLIGHT: Style = Style::new()
-        .fg(Color::Cyan)
+        .fg(Color::Green)
         .add_modifier(Modifier::BOLD.union(Modifier::REVERSED));
 }
 
@@ -110,10 +107,11 @@ pub fn run_interactive_selection(
                     let layout = Layout::default()
                         .direction(Direction::Vertical)
                         .margin(1)
+                        .vertical_margin(1)
                         .constraints([
                             Constraint::Length(
                                 instruction_height
-                                    .min(area.height.saturating_sub(footer_height + 3)),
+                                    .min(area.height.saturating_sub(footer_height + 5)),
                             ),
                             Constraint::Min(5),
                             Constraint::Length(footer_height),
@@ -135,7 +133,7 @@ pub fn run_interactive_selection(
                         .enumerate()
                         .map(|(idx, entry)| {
                             let mut lines = vec![Line::from(vec![
-                                Span::styled(format!("{:>2}. ", idx + 1), styles::ITEM_NUMBER),
+                                Span::styled(format!("{:2}. ", idx + 1), styles::ITEM_NUMBER),
                                 Span::raw(entry.title.clone()),
                             ])];
                             if let Some(description) = entry.description.as_ref()
@@ -143,7 +141,7 @@ pub fn run_interactive_selection(
                                 && description != &entry.title
                             {
                                 lines.push(Line::from(Span::styled(
-                                    description.clone(),
+                                    format!("    {}", description),
                                     styles::DESCRIPTION,
                                 )));
                             }
@@ -168,19 +166,24 @@ pub fn run_interactive_selection(
                     frame.render_stateful_widget(list, layout[1], &mut list_state);
 
                     let current = &entries[selected_index];
-                    let mut summary_lines = vec![Line::from(Span::styled(
-                        format!("Selected: {}", current.title),
+                    let mut summary_lines = vec![];
+
+                    summary_lines.push(Line::from(Span::styled(
+                        format!("{}", current.title),
                         Style::default().add_modifier(Modifier::BOLD),
-                    ))];
+                    )));
+
                     if let Some(description) = current.description.as_ref()
                         && !description.is_empty()
                         && description != &current.title
                     {
                         summary_lines.push(Line::from(Span::styled(
-                            description.clone(),
+                            format!("  {}", description),
                             styles::DESCRIPTION,
                         )));
                     }
+
+                    summary_lines.push(Line::from(Span::raw(""))); // Blank line
                     summary_lines.push(Line::from(Span::raw(CONTROLS_HINT)));
                     summary_lines.push(Line::from(Span::styled(
                         NUMBER_JUMP_HINT,

@@ -574,7 +574,7 @@ pub(crate) async fn run_turn_handle_tool_success(
         );
 
     if allow_short_circuit {
-        let reply = derive_recent_tool_output(&working_history)
+        let reply = derive_recent_tool_output(working_history)
             .unwrap_or_else(|| "Command completed successfully.".to_string());
         renderer.line(MessageStyle::Response, &reply)?;
         ensure_turn_bottom_gap(renderer, bottom_gap_applied)?;
