@@ -280,24 +280,7 @@ impl ToolRegistry {
                         || msg.contains("command failed")
                         || msg.contains("exit code")
                 }) {
-                    suggestions
-                        .push("Command execution errors: Verify command availability".to_string());
-                    if error_messages
-                        .iter()
-                        .any(|msg| msg.contains("command not found"))
-                    {
-                        suggestions.push(
-                            "Command not found: Ensure the tool is installed and in PATH"
-                                .to_string(),
-                        );
-                        suggestions.push(
-                            "Try running 'which <command>' to verify installation".to_string(),
-                        );
-                        suggestions.push(
-                            "For development tools (cargo, npm, etc.), ensure shell initialization includes ~/.bashrc or ~/.zshrc"
-                                .to_string(),
-                        );
-                    }
+                    suggestions.push("Command execution errors: Verify command availability with 'list_files' or check PATH environment".to_string());
                     suggestions.push(
                         "Use 'run_terminal_cmd' to test commands manually before automation"
                             .to_string(),
@@ -712,6 +695,10 @@ impl ToolRegistry {
     pub(super) fn list_files_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
         let tool = self.inventory.file_ops_tool().clone();
         Box::pin(async move { tool.execute(args).await })
+    }
+
+    pub(super) fn run_command_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
+        Box::pin(async move { self.execute_run_command(args).await })
     }
 
     pub(super) fn create_pty_session_executor(
@@ -1473,6 +1460,23 @@ impl ToolRegistry {
     }
 
     /// Unified command execution that combines terminal and PTY modes
+    async fn execute_run_command(&mut self, mut args: Value) -> Result<Value> {
+        normalize_run_command_payload(&mut args)?;
+
+        let resolved_mode = resolve_run_mode(&args);
+        ensure_default_timeout(
+            &mut args,
+            "run_command expects an object payload",
+            resolved_mode.default_timeout(),
+        )?;
+
+        if resolved_mode.is_pty() {
+            self.execute_run_pty_command(args).await
+        } else {
+            self.execute_run_terminal_internal(args).await
+        }
+    }
+
     async fn execute_run_terminal_internal(&mut self, mut args: Value) -> Result<Value> {
         match prepare_terminal_execution(&mut args)? {
             TerminalExecution::Pty { args } => self.execute_run_pty_command(args).await,
@@ -2184,6 +2188,15 @@ fn normalize_payload<'a>(
     Ok(map)
 }
 
+fn normalize_run_command_payload(args: &mut Value) -> Result<()> {
+    normalize_payload(
+        args,
+        "run_command expects an object payload",
+        "bash_command is no longer supported. Use run_command instead.",
+    )?;
+    Ok(())
+}
+
 fn normalize_terminal_payload(args: &mut Value) -> Result<()> {
     {
         let map = normalize_payload(
@@ -2498,11 +2511,6 @@ struct TerminalCommandPayload {
 impl TerminalCommandPayload {
     fn parse(args: &mut Value) -> Result<Self> {
         normalize_terminal_payload(args)?;
-
-        // Check for validation errors from parameter conversion
-        if let Some(err_msg) = args.get("_validation_error").and_then(|v| v.as_str()) {
-            return Err(anyhow!("{}", err_msg));
-        }
 
         let mode_label = run_mode_label(args);
         let shell_hint = args
@@ -3276,18 +3284,6 @@ fn build_ephemeral_pty_response(
         if let Some(exit_code) = code {
             if exit_code == 0 {
                 "Command completed successfully".to_string()
-            } else if exit_code == 127 {
-                // Exit code 127 specifically indicates command not found
-                let cmd_name = setup
-                    .command
-                    .first()
-                    .map(|s| s.as_str())
-                    .unwrap_or("command");
-                format!(
-                    "Command '{}' not found (exit code 127). Ensure it's installed and in PATH. \
-                     For dev tools (cargo, npm, etc.), verify shell initialization sources ~/.bashrc or ~/.zshrc",
-                    cmd_name
-                )
             } else {
                 format!("Command failed with exit code {}", exit_code)
             }
