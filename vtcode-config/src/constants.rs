@@ -734,7 +734,7 @@ pub mod tools {
     pub const GREP_FILE: &str = "grep_file";
     pub const LIST_FILES: &str = "list_files";
     pub const BASH: &str = "bash";
-    /// Deprecated: Use PTY session tools (create_pty_session, send_pty_input, read_pty_session) instead
+    /// Primary command execution tool (PTY mode)
     pub const RUN_PTY_CMD: &str = "run_pty_cmd";
     pub const CREATE_PTY_SESSION: &str = "create_pty_session";
     pub const LIST_PTY_SESSIONS: &str = "list_pty_sessions";
