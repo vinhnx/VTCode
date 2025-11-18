@@ -280,7 +280,24 @@ impl ToolRegistry {
                         || msg.contains("command failed")
                         || msg.contains("exit code")
                 }) {
-                    suggestions.push("Command execution errors: Verify command availability with 'list_files' or check PATH environment".to_string());
+                    suggestions
+                        .push("Command execution errors: Verify command availability".to_string());
+                    if error_messages
+                        .iter()
+                        .any(|msg| msg.contains("command not found"))
+                    {
+                        suggestions.push(
+                            "Command not found: Ensure the tool is installed and in PATH"
+                                .to_string(),
+                        );
+                        suggestions.push(
+                            "Try running 'which <command>' to verify installation".to_string(),
+                        );
+                        suggestions.push(
+                            "For development tools (cargo, npm, etc.), ensure shell initialization includes ~/.bashrc or ~/.zshrc"
+                                .to_string(),
+                        );
+                    }
                     suggestions.push(
                         "Use 'run_terminal_cmd' to test commands manually before automation"
                             .to_string(),
@@ -3289,6 +3306,18 @@ fn build_ephemeral_pty_response(
         if let Some(exit_code) = code {
             if exit_code == 0 {
                 "Command completed successfully".to_string()
+            } else if exit_code == 127 {
+                // Exit code 127 specifically indicates command not found
+                let cmd_name = setup
+                    .command
+                    .first()
+                    .map(|s| s.as_str())
+                    .unwrap_or("command");
+                format!(
+                    "Command '{}' not found (exit code 127). Ensure it's installed and in PATH. \
+                     For dev tools (cargo, npm, etc.), verify shell initialization sources ~/.bashrc or ~/.zshrc",
+                    cmd_name
+                )
             } else {
                 format!("Command failed with exit code {}", exit_code)
             }
