@@ -251,12 +251,12 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
             parameters: json!({
                 "type": "object",
                 "properties": {
-                    "cmd": {"type": "string", "description": "Shell command to execute (e.g., 'git diff', 'cargo test', 'npm install')"},
+                    "command": {"type": "string", "description": "Shell command to execute (e.g., 'git diff', 'cargo test', 'npm install')"},
                     "cwd": {"type": "string", "description": "Working directory for the command (relative or absolute)"},
                     "timeout_secs": {"type": "integer", "description": "Timeout in seconds. Default 180 for commands, longer for cargo/build commands", "default": 180},
                     "confirm": {"type": "boolean", "description": "Require confirmation before executing destructive commands (rm, git reset, etc)", "default": false}
                 },
-                "required": ["cmd"]
+                "required": ["command"]
             }),
         },
 

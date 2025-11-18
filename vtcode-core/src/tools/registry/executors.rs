@@ -697,7 +697,7 @@ impl ToolRegistry {
     }
 
     pub(super) fn shell_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move { self.execute_shell_command(args).await })
+        Box::pin(async move { self.execute_run_pty_command(args).await })
     }
 
     pub(super) fn run_command_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
@@ -1460,26 +1460,6 @@ impl ToolRegistry {
                 "truncated": false
             },
         }))
-    }
-
-    /// Unified shell command execution (one-off and interactive modes)
-    async fn execute_shell_command(&mut self, mut args: Value) -> Result<Value> {
-        let map = args
-            .as_object_mut()
-            .ok_or_else(|| anyhow!("shell expects an object payload"))?;
-        
-        // Extract 'cmd', validate it's a string, and rename to 'command' for PTY handler
-        match map.remove("cmd") {
-            Some(v @ Value::String(_)) => map.insert("command".to_string(), v),
-            Some(_) => return Err(anyhow!("'cmd' must be a string")),
-            None => return Err(anyhow!("shell requires 'cmd' parameter")),
-        };
-
-        // Set default timeout if not provided
-        map.entry("timeout_secs".to_string())
-            .or_insert_with(|| json!(DEFAULT_TERMINAL_TIMEOUT_SECS));
-
-        self.execute_run_pty_command(args).await
     }
 
     async fn execute_run_command(&mut self, mut args: Value) -> Result<Value> {
