@@ -643,7 +643,45 @@ impl ZedAgent {
             return Ok(segments);
         }
 
-        Err("run_terminal_cmd requires a 'command' array".to_string())
+        // Support dotted `command.N` arguments commonly produced by some tool call formats
+        if let Value::Object(map) = args {
+            let mut items: Vec<(usize, String)> = Vec::new();
+            for (key, value) in map.iter() {
+                if let Some(index_str) = key.strip_prefix("command.") {
+                    if let Ok(index) = index_str.parse::<usize>() {
+                        let Some(segment) = value.as_str() else {
+                            return Err("command array must contain only strings".to_string());
+                        };
+                        items.push((index, segment.to_string()));
+                    }
+                }
+            }
+            if !items.is_empty() {
+                // Sort by index and normalize 1-based indexing to 0-based if needed
+                items.sort_unstable_by_key(|(idx, _)| *idx);
+                let min_index = items.first().unwrap().0;
+                let max_index = items.last().unwrap().0;
+                let mut parts = vec![String::new(); max_index + 1 - min_index];
+                for (idx, seg) in items.into_iter() {
+                    let position = if min_index == 1 { idx - 1 } else { idx };
+                    if position >= parts.len() {
+                        // Resize if needed (shouldn't be necessary but be defensive)
+                        parts.resize(position + 1, String::new());
+                    }
+                    parts[position] = seg;
+                }
+                // Validate non-empty and executable at index 0
+                if parts.is_empty() {
+                    return Err("command array cannot be empty".to_string());
+                }
+                if parts[0].trim().is_empty() {
+                    return Err("command executable cannot be empty".to_string());
+                }
+                return Ok(parts);
+            }
+        }
+
+        Err("run_terminal_cmd requires a 'command' field (string/array or indexed command.N entries)".to_string())
     }
 
     fn resolve_terminal_working_dir(&self, args: &Value) -> Result<Option<PathBuf>, String> {
@@ -2184,7 +2222,36 @@ mod tests {
         assert!(result.is_err());
         assert_eq!(
             result.unwrap_err(),
-            "run_terminal_cmd requires a 'command' array"
+            "run_terminal_cmd requires a 'command' field (string/array or indexed command.N entries)"
+        );
+    }
+
+    #[test]
+    fn parse_terminal_command_accepts_indexed_arguments_zero_based() {
+        let args = json!({ "command.0": "python", "command.1": "-c", "command.2": "print('hi')" });
+        let result = ZedAgent::parse_terminal_command(&args);
+        assert!(result.is_ok());
+        let cmd = result.unwrap();
+        assert_eq!(cmd, vec!["python", "-c", "print('hi')"]);
+    }
+
+    #[test]
+    fn parse_terminal_command_accepts_indexed_arguments_one_based() {
+        let args = json!({ "command.1": "ls", "command.2": "-a" });
+        let result = ZedAgent::parse_terminal_command(&args);
+        assert!(result.is_ok());
+        let cmd = result.unwrap();
+        assert_eq!(cmd, vec!["ls", "-a"]);
+    }
+
+    #[test]
+    fn parse_terminal_command_rejects_non_string_indexed_argument() {
+        let args = json!({ "command.0": 1 });
+        let result = ZedAgent::parse_terminal_command(&args);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err(),
+            "command array must contain only strings"
         );
     }
 }

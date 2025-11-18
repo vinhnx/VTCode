@@ -68,15 +68,17 @@ echo "Setup complete"
         assert!(result.is_none());
 
         // Test with non-empty config - should return Some
-        let mut hooks_config = LifecycleHooksConfig::default();
-        hooks_config.session_start = vec![HookGroupConfig {
-            matcher: None,
-            hooks: vec![HookCommandConfig {
-                kind: Default::default(),
-                command: "echo 'test'".to_string(),
-                timeout_seconds: None,
+        let hooks_config = LifecycleHooksConfig {
+            session_start: vec![HookGroupConfig {
+                matcher: None,
+                hooks: vec![HookCommandConfig {
+                    kind: Default::default(),
+                    command: "echo 'test'".to_string(),
+                    timeout_seconds: None,
+                }],
             }],
-        }];
+            ..Default::default()
+        };
 
         let config = HooksConfig {
             lifecycle: hooks_config,
@@ -102,16 +104,18 @@ echo "Setup complete"
         let workspace = temp_dir.path();
 
         // Create a simple hook that outputs JSON
-        let mut hooks_config = LifecycleHooksConfig::default();
-        hooks_config.session_start = vec![HookGroupConfig {
-            matcher: None, // Match all
-            hooks: vec![HookCommandConfig {
-                kind: Default::default(),
-                command: "printf '{\"additional_context\": \"Session started successfully\"}'"
-                    .to_string(),
-                timeout_seconds: None,
+        let hooks_config = LifecycleHooksConfig {
+            session_start: vec![HookGroupConfig {
+                matcher: None, // Match all
+                hooks: vec![HookCommandConfig {
+                    kind: Default::default(),
+                    command: "printf '{\"additional_context\": \"Session started successfully\"}'"
+                        .to_string(),
+                    timeout_seconds: None,
+                }],
             }],
-        }];
+            ..Default::default()
+        };
 
         let config = HooksConfig {
             lifecycle: hooks_config,
@@ -148,15 +152,17 @@ echo "Setup complete"
         let workspace = temp_dir.path();
 
         // Create a hook that outputs plain text
-        let mut hooks_config = LifecycleHooksConfig::default();
-        hooks_config.session_start = vec![HookGroupConfig {
-            matcher: None, // Match all
-            hooks: vec![HookCommandConfig {
-                kind: Default::default(),
-                command: "printf 'Plain text context'".to_string(),
-                timeout_seconds: None,
+        let hooks_config = LifecycleHooksConfig {
+            session_start: vec![HookGroupConfig {
+                matcher: None, // Match all
+                hooks: vec![HookCommandConfig {
+                    kind: Default::default(),
+                    command: "printf 'Plain text context'".to_string(),
+                    timeout_seconds: None,
+                }],
             }],
-        }];
+            ..Default::default()
+        };
 
         let config = HooksConfig {
             lifecycle: hooks_config,
@@ -186,15 +192,17 @@ echo "Setup complete"
         let workspace = temp_dir.path();
 
         // Create a hook for session end that outputs a message
-        let mut hooks_config = LifecycleHooksConfig::default();
-        hooks_config.session_end = vec![HookGroupConfig {
-            matcher: None, // Match all
-            hooks: vec![HookCommandConfig {
-                kind: Default::default(),
-                command: "echo 'Cleanup complete'".to_string(),
-                timeout_seconds: None,
+        let hooks_config = LifecycleHooksConfig {
+            session_end: vec![HookGroupConfig {
+                matcher: None, // Match all
+                hooks: vec![HookCommandConfig {
+                    kind: Default::default(),
+                    command: "echo 'Cleanup complete'".to_string(),
+                    timeout_seconds: None,
+                }],
             }],
-        }];
+            ..Default::default()
+        };
 
         let config = HooksConfig {
             lifecycle: hooks_config,
@@ -228,15 +236,17 @@ echo "Setup complete"
         let workspace = temp_dir.path();
 
         // Create a config with user prompt hooks
-        let mut hooks_config = LifecycleHooksConfig::default();
-        hooks_config.user_prompt_submit = vec![HookGroupConfig {
-            matcher: None, // Match all prompts
-            hooks: vec![HookCommandConfig {
-                kind: Default::default(),
-                command: "printf 'Processing prompt...'".to_string(),
-                timeout_seconds: None,
+        let hooks_config = LifecycleHooksConfig {
+            user_prompt_submit: vec![HookGroupConfig {
+                matcher: None, // Match all prompts
+                hooks: vec![HookCommandConfig {
+                    kind: Default::default(),
+                    command: "printf 'Processing prompt...'".to_string(),
+                    timeout_seconds: None,
+                }],
             }],
-        }];
+            ..Default::default()
+        };
 
         let config = HooksConfig {
             lifecycle: hooks_config,
@@ -268,15 +278,17 @@ echo "Setup complete"
         let workspace = temp_dir.path();
 
         // Create a hook that returns exit code 2 to block the prompt
-        let mut hooks_config = LifecycleHooksConfig::default();
-        hooks_config.user_prompt_submit = vec![HookGroupConfig {
-            matcher: None, // Match all prompts
-            hooks: vec![HookCommandConfig {
-                kind: Default::default(),
-                command: "echo 'Prompt blocked' >&2; exit 2".to_string(),
-                timeout_seconds: None,
+        let hooks_config = LifecycleHooksConfig {
+            user_prompt_submit: vec![HookGroupConfig {
+                matcher: None, // Match all prompts
+                hooks: vec![HookCommandConfig {
+                    kind: Default::default(),
+                    command: "echo 'Prompt blocked' >&2; exit 2".to_string(),
+                    timeout_seconds: None,
+                }],
             }],
-        }];
+            ..Default::default()
+        };
 
         let config = HooksConfig {
             lifecycle: hooks_config,
@@ -307,15 +319,17 @@ echo "Setup complete"
         let workspace = temp_dir.path();
 
         // Create a pre-tool hook that doesn't block
-        let mut hooks_config = LifecycleHooksConfig::default();
-        hooks_config.pre_tool_use = vec![HookGroupConfig {
-            matcher: Some(".*".to_string()), // Match all tools using regex
-            hooks: vec![HookCommandConfig {
-                kind: Default::default(),
-                command: "echo 'Pre-tool processing'".to_string(),
-                timeout_seconds: None,
+        let hooks_config = LifecycleHooksConfig {
+            pre_tool_use: vec![HookGroupConfig {
+                matcher: Some(".*".to_string()), // Match all tools using regex
+                hooks: vec![HookCommandConfig {
+                    kind: Default::default(),
+                    command: "echo 'Pre-tool processing'".to_string(),
+                    timeout_seconds: None,
+                }],
             }],
-        }];
+            ..Default::default()
+        };
 
         let config = HooksConfig {
             lifecycle: hooks_config,
@@ -358,15 +372,17 @@ echo "Setup complete"
         let workspace = temp_dir.path();
 
         // Create a pre-tool hook that blocks with exit code 2
-        let mut hooks_config = LifecycleHooksConfig::default();
-        hooks_config.pre_tool_use = vec![HookGroupConfig {
-            matcher: Some("TestTool".to_string()), // Match specific tool
-            hooks: vec![HookCommandConfig {
-                kind: Default::default(),
-                command: "printf 'Tool blocked' >&2; exit 2".to_string(),
-                timeout_seconds: None,
+        let hooks_config = LifecycleHooksConfig {
+            pre_tool_use: vec![HookGroupConfig {
+                matcher: Some("TestTool".to_string()), // Match specific tool
+                hooks: vec![HookCommandConfig {
+                    kind: Default::default(),
+                    command: "printf 'Tool blocked' >&2; exit 2".to_string(),
+                    timeout_seconds: None,
+                }],
             }],
-        }];
+            ..Default::default()
+        };
 
         let config = HooksConfig {
             lifecycle: hooks_config,
@@ -401,15 +417,17 @@ echo "Setup complete"
         let workspace = temp_dir.path();
 
         // Create a pre-tool hook that allows with JSON response
-        let mut hooks_config = LifecycleHooksConfig::default();
-        hooks_config.pre_tool_use = vec![HookGroupConfig {
-            matcher: Some("TestTool".to_string()), // Match specific tool
-            hooks: vec![HookCommandConfig {
-                kind: Default::default(),
-                command: r#"printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow"}}\n'"#.to_string(),
-                timeout_seconds: None,
+        let hooks_config = LifecycleHooksConfig {
+            pre_tool_use: vec![HookGroupConfig {
+                matcher: Some("TestTool".to_string()), // Match specific tool
+                hooks: vec![HookCommandConfig {
+                    kind: Default::default(),
+                    command: r#"printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow"}}\n'"#.to_string(),
+                    timeout_seconds: None,
+                }],
             }],
-        }];
+            ..Default::default()
+        };
 
         let config = HooksConfig {
             lifecycle: hooks_config,
@@ -438,15 +456,17 @@ echo "Setup complete"
         let workspace = temp_dir.path();
 
         // Create a post-tool hook
-        let mut hooks_config = LifecycleHooksConfig::default();
-        hooks_config.post_tool_use = vec![HookGroupConfig {
-            matcher: Some("TestTool".to_string()), // Match specific tool
-            hooks: vec![HookCommandConfig {
-                kind: Default::default(),
-                command: "echo 'Post-tool processing complete'".to_string(),
-                timeout_seconds: None,
+        let hooks_config = LifecycleHooksConfig {
+            post_tool_use: vec![HookGroupConfig {
+                matcher: Some("TestTool".to_string()), // Match specific tool
+                hooks: vec![HookCommandConfig {
+                    kind: Default::default(),
+                    command: "echo 'Post-tool processing complete'".to_string(),
+                    timeout_seconds: None,
+                }],
             }],
-        }];
+            ..Default::default()
+        };
 
         let config = HooksConfig {
             lifecycle: hooks_config,
@@ -486,15 +506,17 @@ echo "Setup complete"
         let workspace = temp_dir.path();
 
         // Create a hook with a short timeout that will exceed it
-        let mut hooks_config = LifecycleHooksConfig::default();
-        hooks_config.session_start = vec![HookGroupConfig {
-            matcher: None,
-            hooks: vec![HookCommandConfig {
-                kind: Default::default(),
-                command: "sleep 2".to_string(), // Sleep longer than timeout
-                timeout_seconds: Some(1),       // 1 second timeout
+        let hooks_config = LifecycleHooksConfig {
+            session_start: vec![HookGroupConfig {
+                matcher: None,
+                hooks: vec![HookCommandConfig {
+                    kind: Default::default(),
+                    command: "sleep 2".to_string(), // Sleep longer than timeout
+                    timeout_seconds: Some(1),       // 1 second timeout
+                }],
             }],
-        }];
+            ..Default::default()
+        };
 
         let config = HooksConfig {
             lifecycle: hooks_config,
@@ -528,25 +550,27 @@ echo "Setup complete"
         let workspace = temp_dir.path();
 
         // Create hooks with different matchers
-        let mut hooks_config = LifecycleHooksConfig::default();
-        hooks_config.pre_tool_use = vec![
-            HookGroupConfig {
-                matcher: Some("Write".to_string()), // Match Write tool
-                hooks: vec![HookCommandConfig {
-                    kind: Default::default(),
-                    command: "echo 'Write tool matched'".to_string(),
-                    timeout_seconds: None,
-                }],
-            },
-            HookGroupConfig {
-                matcher: Some("Bash".to_string()), // Match Bash tool
-                hooks: vec![HookCommandConfig {
-                    kind: Default::default(),
-                    command: "echo 'Bash tool matched'".to_string(),
-                    timeout_seconds: None,
-                }],
-            },
-        ];
+        let hooks_config = LifecycleHooksConfig {
+            pre_tool_use: vec![
+                HookGroupConfig {
+                    matcher: Some("Write".to_string()), // Match Write tool
+                    hooks: vec![HookCommandConfig {
+                        kind: Default::default(),
+                        command: "echo 'Write tool matched'".to_string(),
+                        timeout_seconds: None,
+                    }],
+                },
+                HookGroupConfig {
+                    matcher: Some("Bash".to_string()), // Match Bash tool
+                    hooks: vec![HookCommandConfig {
+                        kind: Default::default(),
+                        command: "echo 'Bash tool matched'".to_string(),
+                        timeout_seconds: None,
+                    }],
+                },
+            ],
+            ..Default::default()
+        };
 
         let config = HooksConfig {
             lifecycle: hooks_config,
@@ -595,15 +619,17 @@ echo "Setup complete"
         let workspace = temp_dir.path();
 
         // Create hooks with regex matchers
-        let mut hooks_config = LifecycleHooksConfig::default();
-        hooks_config.user_prompt_submit = vec![HookGroupConfig {
-            matcher: Some(".*security.*".to_string()), // Match prompts containing "security"
-            hooks: vec![HookCommandConfig {
-                kind: Default::default(),
-                command: "echo 'Security prompt detected'".to_string(),
-                timeout_seconds: None,
+        let hooks_config = LifecycleHooksConfig {
+            user_prompt_submit: vec![HookGroupConfig {
+                matcher: Some(".*security.*".to_string()), // Match prompts containing "security"
+                hooks: vec![HookCommandConfig {
+                    kind: Default::default(),
+                    command: "echo 'Security prompt detected'".to_string(),
+                    timeout_seconds: None,
+                }],
             }],
-        }];
+            ..Default::default()
+        };
 
         let config = HooksConfig {
             lifecycle: hooks_config,

@@ -62,8 +62,13 @@ Instead of attempting static path resolution, **always execute commands through 
     - Works with all POSIX shells (bash, zsh, sh, fish, dash)
 
 4. **Updated both execution paths**:
+
     - Blocking command execution (async PTY commands)
     - Session command execution (interactive PTY sessions)
+
+5. **Robust tool argument parsing**:
+    - The agent now accepts `command` as a string or array, and also supports dotted `command.N` index arguments.
+    - This resolves cases where textual tool call parsers or external clients provided `command.N` style arguments, which previously produced a `run_terminal_cmd requires a 'command' array` error.
 
 ### Code Changes
 

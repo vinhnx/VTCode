@@ -46,13 +46,34 @@ fn expand_environment_variables(input: &str) -> String {
                 .or_else(|| caps.get(2))
                 .map(|m| m.as_str())
                 .unwrap_or_default();
-            std::env::var(var_name).unwrap_or_default()
+            // Try to get the environment variable, with special handling for HOME
+            match var_name {
+                "HOME" => std::env::var("HOME")
+                    .or_else(|_| std::env::var("USERPROFILE"))
+                    .unwrap_or_else(|_| {
+                        dirs::home_dir()
+                            .map(|p| p.display().to_string())
+                            .unwrap_or_default()
+                    }),
+                _ => std::env::var(var_name).unwrap_or_default(),
+            }
         })
         .into_owned();
 
     WINDOWS_ENV_PATTERN
         .replace_all(&unix_expanded, |caps: &regex::Captures<'_>| {
-            std::env::var(&caps[1]).unwrap_or_default()
+            let var_name = &caps[1];
+            // Try to get the environment variable, with special handling for HOME/USERPROFILE
+            match var_name {
+                "HOME" | "USERPROFILE" => std::env::var("USERPROFILE")
+                    .or_else(|_| std::env::var("HOME"))
+                    .unwrap_or_else(|_| {
+                        dirs::home_dir()
+                            .map(|p| p.display().to_string())
+                            .unwrap_or_default()
+                    }),
+                _ => std::env::var(var_name).unwrap_or_default(),
+            }
         })
         .into_owned()
 }
@@ -77,6 +98,7 @@ pub(crate) fn compute_extra_search_paths(
 }
 
 /// Attempt to resolve a program against the provided path iterator.
+#[allow(dead_code)] // Function is deprecated but kept for explicit path iteration tests
 pub(crate) fn resolve_program_path_from_paths(
     program: &str,
     paths: impl Iterator<Item = PathBuf>,

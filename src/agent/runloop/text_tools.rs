@@ -458,6 +458,18 @@ fn parse_tool_name_from_reference(tool_ref: &str) -> &str {
 fn convert_harmony_args_to_tool_format(tool_name: &str, parsed: Value) -> Value {
     match tool_name {
         "run_terminal_cmd" | "bash" => {
+            let mut result = serde_json::Map::new();
+
+            // Preserve other parameters from the original parsed object
+            if let Some(map) = parsed.as_object() {
+                for (key, value) in map {
+                    if key != "cmd" && key != "command" {
+                        result.insert(key.to_string(), value.clone());
+                    }
+                }
+            }
+
+            // Handle command parameter - try multiple sources
             if let Some(cmd) = parsed.get("cmd").and_then(|v| v.as_array()) {
                 let command: Vec<String> = cmd
                     .iter()
@@ -466,37 +478,63 @@ fn convert_harmony_args_to_tool_format(tool_name: &str, parsed: Value) -> Value 
 
                 // Validate non-empty command and executable
                 if command.is_empty() || command[0].trim().is_empty() {
-                    return serde_json::json!({
-                        "command": command,
-                        "_validation_error": "command executable cannot be empty"
-                    });
+                    result.insert(
+                        "_validation_error".to_string(),
+                        serde_json::json!("command executable cannot be empty"),
+                    );
+                    return Value::Object(result);
                 }
 
-                serde_json::json!({
-                    "command": command
-                })
+                result.insert("command".to_string(), serde_json::json!(command));
+                Value::Object(result)
             } else if let Some(cmd_str) = parsed.get("cmd").and_then(|v| v.as_str()) {
-                // Validate non-empty command string
+                // Handle string command from 'cmd' parameter
                 if cmd_str.trim().is_empty() {
-                    return serde_json::json!({
-                        "command": [cmd_str],
-                        "_validation_error": "command executable cannot be empty"
-                    });
+                    result.insert(
+                        "_validation_error".to_string(),
+                        serde_json::json!("command executable cannot be empty"),
+                    );
+                    return Value::Object(result);
                 }
 
-                // Parse the command string into separate arguments using shell parsing
-                // This handles cases like "cargo fmt" -> ["cargo", "fmt"]
-                // and "git commit -m 'message'" -> ["git", "commit", "-m", "message"]
-                match shell_split(cmd_str) {
-                    Ok(args) if !args.is_empty() => serde_json::json!({
-                        "command": args
-                    }),
-                    Ok(_) | Err(_) => serde_json::json!({
-                        "command": [cmd_str]
-                    }),
+                result.insert("command".to_string(), serde_json::json!(cmd_str));
+                Value::Object(result)
+            } else if let Some(cmd) = parsed.get("command").and_then(|v| v.as_array()) {
+                // Fallback: handle 'command' array parameter
+                let command: Vec<String> = cmd
+                    .iter()
+                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                    .collect();
+
+                if command.is_empty() || command[0].trim().is_empty() {
+                    result.insert(
+                        "_validation_error".to_string(),
+                        serde_json::json!("command executable cannot be empty"),
+                    );
+                    return Value::Object(result);
                 }
+
+                result.insert("command".to_string(), serde_json::json!(command));
+                Value::Object(result)
+            } else if let Some(cmd_str) = parsed.get("command").and_then(|v| v.as_str()) {
+                // Fallback: handle 'command' string parameter
+                if cmd_str.trim().is_empty() {
+                    result.insert(
+                        "_validation_error".to_string(),
+                        serde_json::json!("command executable cannot be empty"),
+                    );
+                    return Value::Object(result);
+                }
+
+                result.insert("command".to_string(), serde_json::json!(cmd_str));
+                Value::Object(result)
             } else {
-                parsed
+                // No command found - return error
+                result.insert(
+                    "_validation_error".to_string(),
+                    serde_json::json!("no 'cmd' or 'command' parameter provided"),
+                );
+                Value::Object(result)
             }
         }
         "list_files" => {

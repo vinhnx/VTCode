@@ -1023,6 +1023,15 @@ fn set_command_environment(
 ) {
     // Inherit environment from parent process to preserve PATH and other important variables
     let mut env_map: HashMap<OsString, OsString> = std::env::vars_os().collect();
+
+    // Ensure HOME is set - this is crucial for proper path expansion in cargo and other tools
+    let home_key = OsString::from("HOME");
+    if !env_map.contains_key(&home_key) {
+        if let Some(home_dir) = dirs::home_dir() {
+            env_map.insert(home_key.clone(), OsString::from(home_dir.as_os_str()));
+        }
+    }
+
     let path_key = OsString::from("PATH");
     let current_path = env_map.get(&path_key).map(|value| value.as_os_str());
     if let Some(merged) = path_env::merge_path_env(current_path, extra_paths) {

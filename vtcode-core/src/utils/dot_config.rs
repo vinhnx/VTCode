@@ -483,25 +483,37 @@ pub fn get_dot_manager() -> &'static Mutex<DotManager> {
 
 /// Initialize dot folder (should be called at startup)
 pub async fn initialize_dot_folder() -> Result<(), DotError> {
-    let manager = get_dot_manager().lock().unwrap().clone();
+    let manager = {
+        let guard = get_dot_manager().lock().unwrap();
+        guard.clone()
+    }; // Lock is released here when guard goes out of scope
     manager.initialize().await
 }
 
 /// Load user configuration
 pub async fn load_user_config() -> Result<DotConfig, DotError> {
-    let manager = get_dot_manager().lock().unwrap().clone();
+    let manager = {
+        let guard = get_dot_manager().lock().unwrap();
+        guard.clone()
+    }; // Lock is released here when guard goes out of scope
     manager.load_config().await
 }
 
 /// Save user configuration
 pub async fn save_user_config(config: &DotConfig) -> Result<(), DotError> {
-    let manager = get_dot_manager().lock().unwrap().clone();
+    let manager = {
+        let guard = get_dot_manager().lock().unwrap();
+        guard.clone()
+    }; // Lock is released here when guard goes out of scope
     manager.save_config(config).await
 }
 
 /// Persist the preferred UI theme in the user's dot configuration.
 pub async fn update_theme_preference(theme: &str) -> Result<(), DotError> {
-    let manager = get_dot_manager().lock().unwrap().clone();
+    let manager = {
+        let guard = get_dot_manager().lock().unwrap();
+        guard.clone()
+    }; // Lock is released here when guard goes out of scope
     manager
         .update_config(|cfg| cfg.preferences.theme = theme.to_string())
         .await
@@ -509,7 +521,10 @@ pub async fn update_theme_preference(theme: &str) -> Result<(), DotError> {
 
 /// Persist the preferred provider and model combination.
 pub async fn update_model_preference(provider: &str, model: &str) -> Result<(), DotError> {
-    let manager = get_dot_manager().lock().unwrap().clone();
+    let manager = {
+        let guard = get_dot_manager().lock().unwrap();
+        guard.clone()
+    }; // Lock is released here when guard goes out of scope
     manager
         .update_config(|cfg| {
             cfg.preferences.default_provider = provider.to_string();

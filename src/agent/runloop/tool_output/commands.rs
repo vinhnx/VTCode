@@ -57,10 +57,15 @@ pub(crate) async fn render_terminal_command_panel(
         .and_then(Value::as_bool)
         .unwrap_or(true);
     let exit_code = unwrapped_payload.get("exit_code").and_then(Value::as_i64);
-    let command = unwrapped_payload
-        .get("command")
-        .and_then(Value::as_str)
-        .unwrap_or("unknown");
+    let command = if let Some(tokens) = &command_tokens {
+        tokens.join(" ")
+    } else {
+        unwrapped_payload
+            .get("command")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown")
+            .to_string()
+    };
     let session_id = unwrapped_payload.get("id").and_then(Value::as_str);
     let working_dir = unwrapped_payload
         .get("working_directory")
@@ -92,42 +97,45 @@ pub(crate) async fn render_terminal_command_panel(
 
     // Display session status header if this is a PTY session
     if is_pty_session {
-        if let Some(session_id) = session_id {
-            let status_symbol = if !is_completed { "[RUN]" } else { "[END]" };
-            let status_text = if !is_completed {
-                "RUNNING"
+        if session_id.is_some() {
+            let status_symbol = if !is_completed { "▶" } else { "✓" };
+            let status_badge = if !is_completed {
+                format!("{} RUN", status_symbol)
             } else {
-                "COMPLETED"
-            };
-            let exit_info = if let Some(code) = exit_code {
-                format!(" (exit code: {})", code)
-            } else {
-                String::new()
+                format!("{} OK", status_symbol)
             };
 
-            renderer.line(
-                MessageStyle::Info,
-                &format!(
-                    "{} [{} - {}x{}] Session: {}{}{}",
-                    status_symbol,
-                    status_text,
-                    cols,
-                    rows,
-                    session_id,
-                    if let Some(wd) = working_dir {
-                        format!(" | Working directory: {}", wd)
+            // Compact header: status · command · session info
+            let header = if working_dir.is_some() {
+                format!(
+                    "{} · {} · {}x{}",
+                    status_badge,
+                    if command.len() > 40 {
+                        format!("{}…", &command[..37])
                     } else {
-                        String::new()
+                        command.clone()
                     },
-                    exit_info
-                ),
-            )?;
+                    cols,
+                    rows
+                )
+            } else {
+                format!(
+                    "{} · {}",
+                    status_badge,
+                    if command.len() > 50 {
+                        format!("{}…", &command[..47])
+                    } else {
+                        command.clone()
+                    }
+                )
+            };
 
-            // Add a visual separator for terminal view
-            renderer.line(MessageStyle::Info, &"─".repeat(60))?;
+            renderer.line(MessageStyle::Info, &header)?;
 
-            // Show the full command being executed (for both running and completed sessions)
-            renderer.line(MessageStyle::Response, &format!("$ {}", command))?;
+            // Show full command only on separate line if truncated
+            if command.len() > 50 || working_dir.is_some() {
+                renderer.line(MessageStyle::Response, &format!("$ {}", command))?;
+            }
         }
     }
 
@@ -138,11 +146,6 @@ pub(crate) async fn render_terminal_command_panel(
             let prompt = format!("$ {}", stdin.trim());
             renderer.line(MessageStyle::Response, &prompt)?;
         }
-    }
-
-    // If the process is still running, add an indicator to show it's still active
-    if is_pty_session && !is_completed {
-        renderer.line(MessageStyle::Info, "... command still running ...")?;
     }
 
     if stdout.trim().is_empty() && stderr.trim().is_empty() {
@@ -196,21 +199,16 @@ pub(crate) async fn render_terminal_command_panel(
 
     // Add session completion note if completed
     if is_pty_session && is_completed {
-        if let Some(session_id) = session_id {
-            let exit_info = if let Some(code) = exit_code {
-                if code == 0 {
-                    " [SUCCESS]".to_string()
-                } else {
-                    format!(" [EXIT: {}]", code)
-                }
+        let exit_badge = if let Some(code) = exit_code {
+            if code == 0 {
+                "exit 0".to_string()
             } else {
-                " [COMPLETE]".to_string()
-            };
-            renderer.line(
-                MessageStyle::Info,
-                &format!("[Session {}{}]", session_id, exit_info),
-            )?;
-        }
+                format!("exit {}", code)
+            }
+        } else {
+            "done".to_string()
+        };
+        renderer.line(MessageStyle::Info, &format!("✓ {}", exit_badge))?;
     }
 
     Ok(())
@@ -545,5 +543,32 @@ warning: something
         } else {
             panic!("Failed to parse nested JSON");
         }
+    }
+
+    #[test]
+    fn parse_command_tokens_handles_array_format() {
+        let payload = serde_json::json!({
+            "command": ["cargo", "fmt"]
+        });
+        let tokens = parse_command_tokens(&payload);
+        assert_eq!(tokens, Some(vec!["cargo".to_string(), "fmt".to_string()]));
+    }
+
+    #[test]
+    fn parse_command_tokens_handles_string_format() {
+        let payload = serde_json::json!({
+            "command": "cargo fmt"
+        });
+        let tokens = parse_command_tokens(&payload);
+        assert_eq!(tokens, Some(vec!["cargo".to_string(), "fmt".to_string()]));
+    }
+
+    #[test]
+    fn parse_command_tokens_returns_none_for_empty_array() {
+        let payload = serde_json::json!({
+            "command": []
+        });
+        let tokens = parse_command_tokens(&payload);
+        assert_eq!(tokens, None);
     }
 }

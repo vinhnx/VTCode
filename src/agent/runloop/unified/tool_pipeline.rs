@@ -505,6 +505,19 @@ async fn execute_tool_with_progress(
 
 /// Process the output from a tool execution and convert it to a ToolExecutionStatus
 fn process_tool_output(output: Value) -> ToolExecutionStatus {
+    // Check if the output contains an error object
+    if output.get("error").is_some() {
+        let error_msg = output
+            .get("error")
+            .and_then(|e| e.get("message"))
+            .and_then(|m| m.as_str())
+            .unwrap_or("Unknown tool execution error")
+            .to_string();
+        return ToolExecutionStatus::Failure {
+            error: anyhow::anyhow!(error_msg),
+        };
+    }
+
     let exit_code = output
         .get("exit_code")
         .and_then(|value| value.as_i64())

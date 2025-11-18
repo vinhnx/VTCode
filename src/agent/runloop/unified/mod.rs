@@ -1,6 +1,6 @@
-mod async_mcp_manager;
+pub mod async_mcp_manager;
 
-mod context_manager;
+pub mod context_manager;
 
 mod diagnostics;
 mod display;
@@ -15,16 +15,16 @@ mod palettes;
 mod progress;
 mod prompts;
 pub(crate) mod run_loop_context;
-mod session_setup;
+pub mod session_setup;
 mod shell;
-mod state;
+pub mod state;
 mod status_line;
 mod tool_ledger;
 mod tool_output_handler;
 mod tool_pipeline;
 mod tool_routing;
 mod tool_summary;
-mod turn;
+pub mod turn;
 mod ui_interaction;
 mod workspace_links;
 

@@ -168,7 +168,6 @@ impl Default for LLMFactory {
     }
 }
 
-/// Global factory instance
 use std::sync::{LazyLock, Mutex};
 
 static FACTORY: LazyLock<Mutex<LLMFactory>> = LazyLock::new(|| Mutex::new(LLMFactory::new()));

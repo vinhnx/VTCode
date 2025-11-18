@@ -192,40 +192,40 @@ impl LintingOrchestrator {
 
     fn parse_eslint_output(&self, output: &str, base_path: &Path) -> Vec<LintFinding> {
         let mut findings = Vec::new();
-        if let Ok(json) = serde_json::from_str::<Value>(output) {
-            if let Some(arr) = json.as_array() {
-                for file in arr {
-                    let path = file.get("filePath").and_then(Value::as_str).unwrap_or("");
-                    if let Some(messages) = file.get("messages").and_then(Value::as_array) {
-                        for m in messages {
-                            let line = m.get("line").and_then(Value::as_u64).unwrap_or(0);
-                            let column = m.get("column").and_then(Value::as_u64).unwrap_or(0);
-                            let rule = m
-                                .get("ruleId")
-                                .and_then(Value::as_str)
-                                .unwrap_or("")
-                                .to_string();
-                            let severity =
-                                match m.get("severity").and_then(Value::as_u64).unwrap_or(0) {
-                                    2 => LintSeverity::Error,
-                                    1 => LintSeverity::Warning,
-                                    _ => LintSeverity::Info,
-                                };
-                            let msg = m
-                                .get("message")
-                                .and_then(Value::as_str)
-                                .unwrap_or("")
-                                .to_string();
-                            findings.push(LintFinding {
-                                file_path: base_path.join(path),
-                                line: line as usize,
-                                column: column as usize,
-                                severity,
-                                rule,
-                                message: msg,
-                                suggestion: m.get("fix").map(|_| "fix available".to_string()),
-                            });
-                        }
+        if let Ok(json) = serde_json::from_str::<Value>(output)
+            && let Some(arr) = json.as_array()
+        {
+            for file in arr {
+                let path = file.get("filePath").and_then(Value::as_str).unwrap_or("");
+                if let Some(messages) = file.get("messages").and_then(Value::as_array) {
+                    for m in messages {
+                        let line = m.get("line").and_then(Value::as_u64).unwrap_or(0);
+                        let column = m.get("column").and_then(Value::as_u64).unwrap_or(0);
+                        let rule = m
+                            .get("ruleId")
+                            .and_then(Value::as_str)
+                            .unwrap_or("")
+                            .to_string();
+                        let severity = match m.get("severity").and_then(Value::as_u64).unwrap_or(0)
+                        {
+                            2 => LintSeverity::Error,
+                            1 => LintSeverity::Warning,
+                            _ => LintSeverity::Info,
+                        };
+                        let msg = m
+                            .get("message")
+                            .and_then(Value::as_str)
+                            .unwrap_or("")
+                            .to_string();
+                        findings.push(LintFinding {
+                            file_path: base_path.join(path),
+                            line: line as usize,
+                            column: column as usize,
+                            severity,
+                            rule,
+                            message: msg,
+                            suggestion: m.get("fix").map(|_| "fix available".to_string()),
+                        });
                     }
                 }
             }
@@ -235,37 +235,37 @@ impl LintingOrchestrator {
 
     fn parse_pylint_output(&self, output: &str, base_path: &Path) -> Vec<LintFinding> {
         let mut findings = Vec::new();
-        if let Ok(json) = serde_json::from_str::<Value>(output) {
-            if let Some(arr) = json.as_array() {
-                for item in arr {
-                    let path = item.get("path").and_then(Value::as_str).unwrap_or("");
-                    let line = item.get("line").and_then(Value::as_u64).unwrap_or(0);
-                    let column = item.get("column").and_then(Value::as_u64).unwrap_or(0);
-                    let rule = item
-                        .get("symbol")
-                        .and_then(Value::as_str)
-                        .unwrap_or("")
-                        .to_string();
-                    let msg = item
-                        .get("message")
-                        .and_then(Value::as_str)
-                        .unwrap_or("")
-                        .to_string();
-                    let severity = match item.get("type").and_then(Value::as_str).unwrap_or("") {
-                        "error" | "fatal" => LintSeverity::Error,
-                        "warning" => LintSeverity::Warning,
-                        _ => LintSeverity::Info,
-                    };
-                    findings.push(LintFinding {
-                        file_path: base_path.join(path),
-                        line: line as usize,
-                        column: column as usize,
-                        severity,
-                        rule,
-                        message: msg,
-                        suggestion: None,
-                    });
-                }
+        if let Ok(json) = serde_json::from_str::<Value>(output)
+            && let Some(arr) = json.as_array()
+        {
+            for item in arr {
+                let path = item.get("path").and_then(Value::as_str).unwrap_or("");
+                let line = item.get("line").and_then(Value::as_u64).unwrap_or(0);
+                let column = item.get("column").and_then(Value::as_u64).unwrap_or(0);
+                let rule = item
+                    .get("symbol")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_string();
+                let msg = item
+                    .get("message")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_string();
+                let severity = match item.get("type").and_then(Value::as_str).unwrap_or("") {
+                    "error" | "fatal" => LintSeverity::Error,
+                    "warning" => LintSeverity::Warning,
+                    _ => LintSeverity::Info,
+                };
+                findings.push(LintFinding {
+                    file_path: base_path.join(path),
+                    line: line as usize,
+                    column: column as usize,
+                    severity,
+                    rule,
+                    message: msg,
+                    suggestion: None,
+                });
             }
         }
         findings

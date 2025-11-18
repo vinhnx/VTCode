@@ -35,6 +35,13 @@
 -   **No emojis, no hardcoded values** (read from vtcode.toml/constants.rs)
 -   **Docs**: All .md files in `./docs/` only (not root)
 
+## Performance Optimization Guides
+
+-   **TUI Scroll & ANSI Rendering**: See `docs/TUI_SCROLL_ANSI_OPTIMIZATION.md` for comprehensive scroll performance and ANSI code rendering strategies
+-   **Quick Start Implementation**: See `docs/SCROLL_OPTIMIZATION_IMPL.md` for priority optimizations with code examples
+-   **Benchmarking**: See `docs/SCROLL_BENCHMARKS.md` for performance testing, profiling, and regression detection
+-   **Terminal Output Format**: See `docs/TERMINAL_OUTPUT_OPTIMIZATION.md` for compact terminal command output (40-50% reduction in lines)
+
 ## Tool Selection Decision Tree (Claude Code Pattern)
 
 **Discovery → Context → Execute → Verify → Reply**
