@@ -1464,44 +1464,27 @@ impl ToolRegistry {
 
     /// Unified shell command execution (one-off and interactive modes)
     async fn execute_shell_command(&mut self, mut args: Value) -> Result<Value> {
-        let obj = value_as_object(&mut args, "shell expects an object payload")?;
+        // Get mutable map
+        let map = args
+            .as_object_mut()
+            .ok_or_else(|| anyhow!("shell expects an object payload"))?;
         
-        // Extract command string
-        let cmd = obj
-            .get("cmd")
+        // Validate that 'cmd' parameter exists and is a string
+        map.get("cmd")
             .ok_or_else(|| anyhow!("shell requires a 'cmd' parameter"))?
             .as_str()
             .ok_or_else(|| anyhow!("'cmd' must be a string"))?;
 
-        // Extract other parameters
-        let timeout_secs = obj
-            .get("timeout_secs")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(DEFAULT_TERMINAL_TIMEOUT_SECS);
-        
-        let cwd = obj.get("cwd").and_then(|v| v.as_str()).map(|s| s.to_string());
-        let confirm = obj.get("confirm").and_then(|v| v.as_bool()).unwrap_or(false);
-
-        // Create payload for PTY command
-        let mut payload = json!({
-            "command": cmd,
-            "timeout_secs": timeout_secs
-        });
-
-        if let Some(cwd_val) = cwd {
-            if let Value::Object(ref mut obj) = payload {
-                obj.insert("cwd".to_string(), json!(cwd_val));
-            }
+        // Convert 'cmd' to 'command' for PTY handler
+        if let Some(cmd_value) = map.remove("cmd") {
+            map.insert("command".to_string(), cmd_value);
         }
 
-        if confirm {
-            if let Value::Object(ref mut obj) = payload {
-                obj.insert("confirm".to_string(), json!(true));
-            }
-        }
+        // Set default timeout if not provided
+        map.entry("timeout_secs".to_string())
+            .or_insert(json!(DEFAULT_TERMINAL_TIMEOUT_SECS));
 
-        // Execute as PTY command
-        self.execute_run_pty_command(payload).await
+        self.execute_run_pty_command(args).await
     }
 
     async fn execute_run_command(&mut self, mut args: Value) -> Result<Value> {
