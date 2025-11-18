@@ -833,12 +833,11 @@ fn inline_code_style(theme_styles: &ThemeStyles, base_style: Style) -> Style {
         .secondary
         .get_fg_color()
         .or_else(|| base_style.get_fg_color());
-    let bg = Some(theme_styles.background.into());
     let mut style = base_style;
     if let Some(fg_color) = fg {
         style = style.fg_color(Some(fg_color));
     }
-    style.bg_color(bg).bold()
+    style.bold()
 }
 
 fn heading_style(level: HeadingLevel, theme_styles: &ThemeStyles, base_style: Style) -> Style {

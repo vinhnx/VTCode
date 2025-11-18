@@ -112,8 +112,6 @@ fn canonicalize_tool_result(name: String, args: Value) -> Option<(String, Value)
 
 const TEXTUAL_TOOL_PREFIXES: &[&str] = &["default_api."];
 const DIRECT_FUNCTION_ALIASES: &[&str] = &[
-    "run_terminal_cmd",
-    "run_terminal_command",
     "run",
     "run_cmd",
     "runcommand",
@@ -417,12 +415,12 @@ fn parse_channel_tool_call(text: &str) -> Option<(String, Value)> {
             parse_tool_name_from_reference(after_to.trim())
         }
     } else if channel_text.contains("container.exec") || channel_text.contains("exec") {
-        "run_terminal_cmd"
+        "run_pty_cmd"
     } else if channel_text.contains("read") || channel_text.contains("file") {
         "read_file"
     } else {
-        // Default to terminal command
-        "run_terminal_cmd"
+        // Default to pty command
+        "run_pty_cmd"
     };
 
     // Extract JSON from message
@@ -442,7 +440,7 @@ fn parse_tool_name_from_reference(tool_ref: &str) -> &str {
         "repo_browser.list_files" | "list_files" => "list_files",
         "repo_browser.read_file" | "read_file" => "read_file",
         "repo_browser.write_file" | "write_file" => "write_file",
-        "container.exec" | "exec" | "bash" => "run_terminal_cmd",
+        "container.exec" | "exec" | "bash" => "run_pty_cmd",
         "grep" => "grep_file",
         _ => {
             // Try to extract the function name after the last dot
@@ -457,7 +455,7 @@ fn parse_tool_name_from_reference(tool_ref: &str) -> &str {
 
 fn convert_harmony_args_to_tool_format(tool_name: &str, parsed: Value) -> Value {
     match tool_name {
-        "run_terminal_cmd" | "bash" => {
+        "run_pty_cmd" | "bash" => {
             let mut result = serde_json::Map::new();
 
             // Preserve other parameters from the original parsed object
@@ -677,7 +675,7 @@ fn parse_structured_block(block: &str) -> Option<(String, Value)> {
         .map(str::trim)
         .filter(|value| !value.is_empty())?;
 
-    // Check if the name contains an assignment like "run_terminal_cmd args=" or "run_terminal_cmd args ="
+    // Check if the name contains an assignment like "run_pty_cmd args=" or "run_pty_cmd args ="
     let name = if let Some(pos) = raw_name.find(" args=") {
         // Extract just the function name part before " args="
         raw_name[..pos].trim().to_string()
@@ -1172,9 +1170,9 @@ mod tests {
     #[test]
     fn test_detect_textual_tool_call_parses_function_style_block() {
         let message =
-            "```rust\nrun_terminal_cmd(\"ls -a\", workdir=WORKSPACE_DIR, max_tokens=1000)\n```";
+            "```rust\nrun_pty_cmd(\"ls -a\", workdir=WORKSPACE_DIR, max_tokens=1000)\n```";
         let (name, args) = detect_textual_tool_call(message).expect("should parse");
-        assert_eq!(name, "run_terminal_cmd");
+        assert_eq!(name, "run_pty_cmd");
         assert_eq!(args["command"], serde_json::json!(["ls", "-a"]));
         assert_eq!(args["workdir"], serde_json::json!("WORKSPACE_DIR"));
         assert_eq!(args["max_tokens"], serde_json::json!(1000));
@@ -1182,9 +1180,10 @@ mod tests {
 
     #[test]
     fn test_detect_textual_tool_call_skips_non_tool_function_blocks() {
-        let message = "```rust\nprintf!(\"hi\");\n```\n```rust\nrun_terminal_cmd {\n    command: \"pwd\"\n}\n```";
+        let message =
+            "```rust\nprintf!(\"hi\");\n```\n```rust\nrun_pty_cmd {\n    command: \"pwd\"\n}\n```";
         let (name, args) = detect_textual_tool_call(message).expect("should parse");
-        assert_eq!(name, "run_terminal_cmd");
+        assert_eq!(name, "run_pty_cmd");
         assert_eq!(args["command"], serde_json::json!(["pwd"]));
     }
 
@@ -1206,10 +1205,9 @@ mod tests {
 
     #[test]
     fn test_detect_tagged_tool_call_parses_basic_command() {
-        let message =
-            "<tool_call>run_terminal_cmd\n<arg_key>command\n<arg_value>ls -a\n</tool_call>";
+        let message = "<tool_call>run_pty_cmd\n<arg_key>command\n<arg_value>ls -a\n</tool_call>";
         let (name, args) = detect_textual_tool_call(message).expect("should parse");
-        assert_eq!(name, "run_terminal_cmd");
+        assert_eq!(name, "run_pty_cmd");
         assert_eq!(
             args,
             serde_json::json!({
@@ -1220,9 +1218,9 @@ mod tests {
 
     #[test]
     fn test_detect_tagged_tool_call_respects_indexed_arguments() {
-        let message = "<tool_call>run_terminal_cmd\n<arg_key>command.0\n<arg_value>python\n<arg_key>command.1\n<arg_value>-c\n<arg_key>command.2\n<arg_value>print('hi')\n</tool_call>";
+        let message = "<tool_call>run_pty_cmd\n<arg_key>command.0\n<arg_value>python\n<arg_key>command.1\n<arg_value>-c\n<arg_key>command.2\n<arg_value>print('hi')\n</tool_call>";
         let (name, args) = detect_textual_tool_call(message).expect("should parse");
-        assert_eq!(name, "run_terminal_cmd");
+        assert_eq!(name, "run_pty_cmd");
         assert_eq!(
             args,
             serde_json::json!({
@@ -1233,9 +1231,9 @@ mod tests {
 
     #[test]
     fn test_detect_tagged_tool_call_handles_one_based_indexes() {
-        let message = "<tool_call>run_terminal_cmd\n<arg_key>command.1\n<arg_value>ls\n<arg_key>command.2\n<arg_value>-a\n</tool_call>";
+        let message = "<tool_call>run_pty_cmd\n<arg_key>command.1\n<arg_value>ls\n<arg_key>command.2\n<arg_value>-a\n</tool_call>";
         let (name, args) = detect_textual_tool_call(message).expect("should parse");
-        assert_eq!(name, "run_terminal_cmd");
+        assert_eq!(name, "run_pty_cmd");
         assert_eq!(
             args,
             serde_json::json!({
@@ -1246,9 +1244,9 @@ mod tests {
 
     #[test]
     fn test_detect_rust_struct_tool_call_parses_command_block() {
-        let message = "Here you go:\n```rust\nrun_terminal_cmd {\n    command: \"ls -a\",\n    workdir: \"/tmp\",\n    timeout: 5.0\n}\n```";
+        let message = "Here you go:\n```rust\nrun_pty_cmd {\n    command: \"ls -a\",\n    workdir: \"/tmp\",\n    timeout: 5.0\n}\n```";
         let (name, args) = detect_textual_tool_call(message).expect("should parse");
-        assert_eq!(name, "run_terminal_cmd");
+        assert_eq!(name, "run_pty_cmd");
         assert_eq!(
             args,
             serde_json::json!({
@@ -1261,9 +1259,10 @@ mod tests {
 
     #[test]
     fn test_detect_rust_struct_tool_call_handles_trailing_commas() {
-        let message = "```rust\nrun_terminal_cmd {\n    command: \"git status\",\n    workdir: \".\",\n}\n```";
+        let message =
+            "```rust\nrun_pty_cmd {\n    command: \"git status\",\n    workdir: \".\",\n}\n```";
         let (name, args) = detect_textual_tool_call(message).expect("should parse");
-        assert_eq!(name, "run_terminal_cmd");
+        assert_eq!(name, "run_pty_cmd");
         assert_eq!(
             args,
             serde_json::json!({
@@ -1276,9 +1275,9 @@ mod tests {
     #[test]
     fn test_detect_rust_struct_tool_call_handles_semicolons() {
         let message =
-            "```rust\nrun_terminal_cmd {\n    command = \"pwd\";\n    workdir = \"/tmp\";\n}\n```";
+            "```rust\nrun_pty_cmd {\n    command = \"pwd\";\n    workdir = \"/tmp\";\n}\n```";
         let (name, args) = detect_textual_tool_call(message).expect("should parse");
-        assert_eq!(name, "run_terminal_cmd");
+        assert_eq!(name, "run_pty_cmd");
         assert_eq!(
             args,
             serde_json::json!({
@@ -1292,7 +1291,7 @@ mod tests {
     fn test_detect_rust_struct_tool_call_maps_run_alias() {
         let message = "```rust\nrun {\n    command: \"ls\",\n    args: [\"-a\"]\n}\n```";
         let (name, args) = detect_textual_tool_call(message).expect("should parse");
-        assert_eq!(name, "run_terminal_cmd");
+        assert_eq!(name, "run_pty_cmd");
         assert_eq!(
             args,
             serde_json::json!({
@@ -1306,7 +1305,7 @@ mod tests {
     fn test_detect_textual_function_maps_run_alias() {
         let message = "run(command: \"npm\", args: [\"test\"])";
         let (name, args) = detect_textual_tool_call(message).expect("should parse");
-        assert_eq!(name, "run_terminal_cmd");
+        assert_eq!(name, "run_pty_cmd");
         assert_eq!(
             args,
             serde_json::json!({
@@ -1318,9 +1317,9 @@ mod tests {
 
     #[test]
     fn test_detect_textual_tool_call_canonicalizes_name_variants() {
-        let message = "```rust\nRun Terminal Cmd {\n    command = \"pwd\";\n}\n```";
+        let message = "```rust\nRun Pty Cmd {\n    command = \"pwd\";\n}\n```";
         let (name, args) = detect_textual_tool_call(message).expect("should parse");
-        assert_eq!(name, "run_terminal_cmd");
+        assert_eq!(name, "run_pty_cmd");
         assert_eq!(args, serde_json::json!({ "command": ["pwd"] }));
     }
 
@@ -1372,7 +1371,7 @@ mode: overwrite
 
     #[test]
     fn test_extract_code_fence_blocks_collects_languages() {
-        let message = "```bash\nTZ=Asia/Tokyo date +\"%Y-%m-%d %H:%M:%S %Z\"\n```\n```rust\nrun_terminal_cmd {\n    command: \"ls -a\"\n}\n```";
+        let message = "```bash\nTZ=Asia/Tokyo date +\"%Y-%m-%d %H:%M:%S %Z\"\n```\n```rust\nrun_pty_cmd {\n    command: \"ls -a\"\n}\n```";
         let blocks = extract_code_fence_blocks(message);
         assert_eq!(blocks.len(), 2);
         assert_eq!(blocks[0].language.as_deref(), Some("bash"));
@@ -1383,7 +1382,7 @@ mode: overwrite
         assert_eq!(blocks[1].language.as_deref(), Some("rust"));
         assert_eq!(
             blocks[1].lines,
-            vec!["run_terminal_cmd {", "    command: \"ls -a\"", "}"]
+            vec!["run_pty_cmd {", "    command: \"ls -a\"", "}"]
         );
     }
 
@@ -1400,7 +1399,7 @@ mode: overwrite
     fn test_parse_harmony_channel_tool_call_without_constrain() {
         let message = "<|start|>assistant<|channel|>commentary to=container.exec<|message|>{\"cmd\":[\"ls\", \"-la\"]}<|call|>";
         let (name, args) = detect_textual_tool_call(message).expect("should parse harmony format");
-        assert_eq!(name, "run_terminal_cmd");
+        assert_eq!(name, "run_pty_cmd");
         assert_eq!(args["command"], serde_json::json!(["ls", "-la"]));
     }
 
@@ -1409,14 +1408,14 @@ mode: overwrite
         let message =
             "<|start|>assistant<|channel|>commentary to=bash<|message|>{\"cmd\":\"pwd\"}<|call|>";
         let (name, args) = detect_textual_tool_call(message).expect("should parse harmony format");
-        assert_eq!(name, "run_terminal_cmd");
+        assert_eq!(name, "run_pty_cmd");
         assert_eq!(args["command"], serde_json::json!(["pwd"]));
     }
 
     #[test]
     fn test_convert_harmony_args_rejects_empty_command_array() {
         let parsed = serde_json::json!({ "cmd": [] });
-        let result = convert_harmony_args_to_tool_format("run_terminal_cmd", parsed);
+        let result = convert_harmony_args_to_tool_format("run_pty_cmd", parsed);
         assert!(result.get("_validation_error").is_some());
         assert_eq!(
             result["_validation_error"],
@@ -1427,7 +1426,7 @@ mode: overwrite
     #[test]
     fn test_convert_harmony_args_rejects_empty_command_string() {
         let parsed = serde_json::json!({ "cmd": "" });
-        let result = convert_harmony_args_to_tool_format("run_terminal_cmd", parsed);
+        let result = convert_harmony_args_to_tool_format("run_pty_cmd", parsed);
         assert!(result.get("_validation_error").is_some());
         assert_eq!(
             result["_validation_error"],
@@ -1438,21 +1437,21 @@ mode: overwrite
     #[test]
     fn test_convert_harmony_args_rejects_whitespace_only_command() {
         let parsed = serde_json::json!({ "cmd": "   " });
-        let result = convert_harmony_args_to_tool_format("run_terminal_cmd", parsed);
+        let result = convert_harmony_args_to_tool_format("run_pty_cmd", parsed);
         assert!(result.get("_validation_error").is_some());
     }
 
     #[test]
     fn test_convert_harmony_args_rejects_empty_executable_in_array() {
         let parsed = serde_json::json!({ "cmd": ["", "arg1"] });
-        let result = convert_harmony_args_to_tool_format("run_terminal_cmd", parsed);
+        let result = convert_harmony_args_to_tool_format("run_pty_cmd", parsed);
         assert!(result.get("_validation_error").is_some());
     }
 
     #[test]
     fn test_convert_harmony_args_accepts_valid_command_array() {
         let parsed = serde_json::json!({ "cmd": ["ls", "-la"] });
-        let result = convert_harmony_args_to_tool_format("run_terminal_cmd", parsed);
+        let result = convert_harmony_args_to_tool_format("run_pty_cmd", parsed);
         assert!(result.get("_validation_error").is_none());
         assert_eq!(result["command"], serde_json::json!(["ls", "-la"]));
     }
@@ -1460,7 +1459,7 @@ mode: overwrite
     #[test]
     fn test_convert_harmony_args_accepts_valid_command_string() {
         let parsed = serde_json::json!({ "cmd": "echo test" });
-        let result = convert_harmony_args_to_tool_format("run_terminal_cmd", parsed);
+        let result = convert_harmony_args_to_tool_format("run_pty_cmd", parsed);
         assert!(result.get("_validation_error").is_none());
         assert_eq!(result["command"], serde_json::json!(["echo test"]));
     }

@@ -128,7 +128,7 @@ export class ToolApprovalDialog {
      */
     private generatePreview(toolName: string, args: Record<string, unknown>): string {
         switch (toolName.toLowerCase()) {
-            case 'run_terminal_cmd':
+            case 'run_pty_cmd':
             case 'run_shell_command':
                 return this.previewShellCommand(args);
             
@@ -156,7 +156,7 @@ export class ToolApprovalDialog {
      */
     private assessRiskLevel(toolName: string, args: Record<string, unknown>): 'low' | 'medium' | 'high' {
         const riskyTools = ['delete_file', 'format_disk', 'rm_rf'];
-        const mediumRiskTools = ['apply_diff', 'edit_file', 'run_terminal_cmd'];
+        const mediumRiskTools = ['apply_diff', 'edit_file', 'run_pty_cmd'];
         
         const normalizedName = toolName.toLowerCase();
         
@@ -176,7 +176,7 @@ export class ToolApprovalDialog {
      */
     private getToolDescription(toolName: string): string | undefined {
         const descriptions: Record<string, string> = {
-            'run_terminal_cmd': 'Execute a command in the terminal',
+            'run_pty_cmd': 'Execute a command in the terminal',
             'apply_diff': 'Apply changes to a file',
             'create_file': 'Create a new file',
             'delete_file': 'Delete a file permanently',
@@ -213,7 +213,7 @@ export class ToolApprovalDialog {
             case 'apply_diff':
                 return '💾 File contents will be modified';
             
-            case 'run_terminal_cmd': {
+            case 'run_pty_cmd': {
                 const command = args.command as string || '';
                 if (command.includes('rm ') || command.includes('delete')) {
                     return 'Potentially destructive command';

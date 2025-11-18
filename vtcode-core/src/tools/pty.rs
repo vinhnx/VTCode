@@ -282,6 +282,20 @@ impl PtyScrollback {
     }
 }
 
+/// PTY session handle with exclusive access to all PTY resources.
+///
+/// ## Lock Ordering (CRITICAL - must be respected to avoid deadlock)
+/// When acquiring multiple locks, always follow this order:
+/// 1. writer (PTY input stream)
+/// 2. child (PTY child process)
+/// 3. master (PTY master terminal)
+/// 4. reader_thread (background reader thread handle)
+/// 5. terminal (VT100 parser) - acquired via Arc, can be held alongside others
+/// 6. scrollback (output buffer) - acquired via Arc, can be held alongside others
+/// 7. last_input (command echo state)
+///
+/// Note: Some Arc-wrapped locks can be held simultaneously with others since Arc sharing
+/// is safe. Single-lock methods don't need to follow this order.
 struct PtySessionHandle {
     master: Mutex<Box<dyn MasterPty + Send>>,
     child: Mutex<Box<dyn Child + Send>>,
@@ -293,16 +307,76 @@ struct PtySessionHandle {
     last_input: Mutex<Option<CommandEchoState>>,
 }
 
+impl Drop for PtySessionHandle {
+    fn drop(&mut self) {
+        // Ensure cleanup even if close_session() wasn't called
+        // Follow lock order: writer -> child -> reader_thread -> (no other locks in drop)
+
+        // Close writer
+        {
+            let mut writer = self.writer.lock();
+            if let Some(mut w) = writer.take() {
+                let _ = w.write_all(b"exit\n");
+                let _ = w.flush();
+            }
+        }
+
+        // Kill child if still running
+        {
+            let mut child = self.child.lock();
+            if let Ok(None) = child.try_wait() {
+                // Child still running, terminate it
+                let _ = child.kill();
+            }
+        }
+
+        // Join reader thread with timeout to prevent hangs
+        {
+            let mut thread_guard = self.reader_thread.lock();
+            if let Some(reader_thread) = thread_guard.take() {
+                // Use timeout to prevent infinite hang in Drop
+                let join_result = std::thread::spawn(move || {
+                    // Give reader thread up to 5 seconds to finish
+                    let start = std::time::Instant::now();
+                    loop {
+                        if reader_thread.is_finished() {
+                            let _ = reader_thread.join();
+                            break;
+                        }
+                        if start.elapsed() > Duration::from_secs(5) {
+                            warn!("PTY reader thread did not finish within timeout");
+                            break;
+                        }
+                        std::thread::sleep(Duration::from_millis(10));
+                    }
+                })
+                .join();
+
+                if join_result.is_err() {
+                    warn!("PTY reader thread cleanup panicked");
+                }
+            }
+        }
+    }
+}
+
 impl PtySessionHandle {
     fn snapshot_metadata(&self) -> VTCodePtySession {
         let mut metadata = self.metadata.clone();
-        {
+
+        // Lock order: master -> terminal -> scrollback (respect documented order)
+        // Note: master is acquired first (single-threaded access)
+        let master_size = {
             let master = self.master.lock();
-            if let Ok(size) = master.get_size() {
-                metadata.rows = size.rows;
-                metadata.cols = size.cols;
-            }
+            master.get_size().ok()
+        };
+
+        if let Some(size) = master_size {
+            metadata.rows = size.rows;
+            metadata.cols = size.cols;
         }
+
+        // terminal and scrollback are Arc-wrapped, can be acquired independently
         {
             let parser = self.terminal.lock();
             let contents = parser.screen().contents();
@@ -315,6 +389,7 @@ impl PtySessionHandle {
                 metadata.scrollback = Some(contents);
             }
         }
+
         metadata
     }
 
@@ -870,46 +945,59 @@ impl PtyManager {
     ) -> Result<usize> {
         let handle = self.session_handle(session_id)?;
 
-        if let Ok(input_text) = std::str::from_utf8(data) {
+        // Acquire last_input lock once and update conditionally
+        {
             let mut last_input = handle.last_input.lock();
-            *last_input = CommandEchoState::new(input_text, append_newline);
-        } else {
-            let mut last_input = handle.last_input.lock();
-            *last_input = None;
+            *last_input = if let Ok(input_text) = std::str::from_utf8(data) {
+                CommandEchoState::new(input_text, append_newline)
+            } else {
+                None
+            };
         }
 
-        let mut writer_guard = handle.writer.lock();
-        let writer = writer_guard
-            .as_mut()
-            .ok_or_else(|| anyhow!("PTY session '{}' is no longer writable", session_id))?;
+        // Acquire writer lock once for all write operations
+        {
+            let mut writer_guard = handle.writer.lock();
+            let writer = writer_guard
+                .as_mut()
+                .ok_or_else(|| anyhow!("PTY session '{}' is no longer writable", session_id))?;
 
-        writer
-            .write_all(data)
-            .context("failed to write input to PTY session")?;
-        let mut written = data.len();
-        if append_newline {
             writer
-                .write_all(b"\n")
-                .context("failed to write newline to PTY session")?;
-            written += 1;
-        }
-        writer
-            .flush()
-            .context("failed to flush PTY session input")?;
+                .write_all(data)
+                .context("failed to write input to PTY session")?;
 
+            if append_newline {
+                writer
+                    .write_all(b"\n")
+                    .context("failed to write newline to PTY session")?;
+            }
+
+            writer
+                .flush()
+                .context("failed to flush PTY session input")?;
+        }
+
+        let written = data.len() + if append_newline { 1 } else { 0 };
         Ok(written)
     }
 
     pub fn resize_session(&self, session_id: &str, size: PtySize) -> Result<VTCodePtySession> {
         let handle = self.session_handle(session_id)?;
+
+        // Lock order: master -> terminal (Arc-wrapped, separate scope)
         {
             let master = handle.master.lock();
             master
                 .resize(size)
                 .context("failed to resize PTY session")?;
         }
-        let mut parser = handle.terminal.lock();
-        parser.set_size(size.rows, size.cols);
+
+        // Terminal lock acquired separately (Arc, safe to interleave)
+        {
+            let mut parser = handle.terminal.lock();
+            parser.set_size(size.rows, size.cols);
+        }
+
         Ok(handle.snapshot_metadata())
     }
 
@@ -929,6 +1017,7 @@ impl PtyManager {
     }
 
     pub fn close_session(&self, session_id: &str) -> Result<VTCodePtySession> {
+        // Remove session from global map first
         let handle = {
             let mut sessions = self.inner.sessions.lock();
             sessions
@@ -936,6 +1025,9 @@ impl PtyManager {
                 .ok_or_else(|| anyhow!("PTY session '{}' not found", session_id))?
         };
 
+        // Lock order: writer -> child -> reader_thread (follow documented order)
+
+        // 1. Close writer
         {
             let mut writer_guard = handle.writer.lock();
             if let Some(mut writer) = writer_guard.take() {
@@ -944,16 +1036,20 @@ impl PtyManager {
             }
         }
 
-        let mut child = handle.child.lock();
-        if child
-            .try_wait()
-            .context("failed to poll PTY session status")?
-            .is_none()
+        // 2. Terminate child process
         {
-            child.kill().context("failed to terminate PTY session")?;
-            let _ = child.wait();
+            let mut child = handle.child.lock();
+            if child
+                .try_wait()
+                .context("failed to poll PTY session status")?
+                .is_none()
+            {
+                child.kill().context("failed to terminate PTY session")?;
+                let _ = child.wait();
+            }
         }
 
+        // 3. Join reader thread
         {
             let mut thread_guard = handle.reader_thread.lock();
             if let Some(reader_thread) = thread_guard.take() {
@@ -966,6 +1062,7 @@ impl PtyManager {
             }
         }
 
+        // Snapshot metadata calls snapshot_metadata() which acquires master, terminal, scrollback locks
         Ok(handle.snapshot_metadata())
     }
 
@@ -1104,9 +1201,7 @@ fn is_shell_program(program: &str) -> bool {
     )
 }
 
-/// Resolve the fallback shell for command execution when program is not found.
-/// Prefers the user's configured shell, respecting environment variables and system detection.
-// resolve_fallback_shell moved to tools::shell
+// Note: resolve_fallback_shell moved to tools::shell module
 
 /// Resolve program path - if program doesn't exist in PATH, return None to signal shell fallback.
 /// This allows the shell to find programs installed in user-specific directories.

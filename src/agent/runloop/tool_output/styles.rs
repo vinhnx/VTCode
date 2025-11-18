@@ -173,16 +173,11 @@ mod tests {
     fn detects_git_diff_styling() {
         let git = GitStyles::new();
         let ls = LsStyles::from_components(HashMap::new(), Vec::new());
-        let added = select_line_style(Some("run_terminal_cmd"), "+added line", &git, &ls);
+        let added = select_line_style(Some("run_pty_cmd"), "+added line", &git, &ls);
         assert_eq!(added, git.add);
-        let removed = select_line_style(Some("run_terminal_cmd"), "-removed line", &git, &ls);
+        let removed = select_line_style(Some("run_pty_cmd"), "-removed line", &git, &ls);
         assert_eq!(removed, git.remove);
-        let header = select_line_style(
-            Some("run_terminal_cmd"),
-            "diff --git a/file b/file",
-            &git,
-            &ls,
-        );
+        let header = select_line_style(Some("run_pty_cmd"), "diff --git a/file b/file", &git, &ls);
         assert_eq!(header, git.header);
     }
 
@@ -196,9 +191,9 @@ mod tests {
         classes.insert("di".to_string(), dir_style);
         classes.insert("ex".to_string(), exec_style);
         let ls = LsStyles::from_components(classes, Vec::new());
-        let directory = select_line_style(Some("run_terminal_cmd"), "folder/", &git, &ls);
+        let directory = select_line_style(Some("run_pty_cmd"), "folder/", &git, &ls);
         assert_eq!(directory, Some(dir_style));
-        let executable = select_line_style(Some("run_terminal_cmd"), "script*", &git, &ls);
+        let executable = select_line_style(Some("run_pty_cmd"), "script*", &git, &ls);
         assert_eq!(executable, Some(exec_style));
     }
 
@@ -217,7 +212,7 @@ mod tests {
         let mut suffixes = Vec::new();
         suffixes.push((".rs".to_string(), bold_color(AnsiColor::Red)));
         let ls = LsStyles::from_components(HashMap::new(), suffixes);
-        let styled = select_line_style(Some("run_terminal_cmd"), "main.rs", &git, &ls);
+        let styled = select_line_style(Some("run_pty_cmd"), "main.rs", &git, &ls);
         assert!(styled.is_some());
     }
 
@@ -229,10 +224,10 @@ mod tests {
         suffixes.push((".rs".to_string(), bold_color(AnsiColor::Green)));
         let ls = LsStyles::from_components(HashMap::new(), suffixes);
 
-        let without_extension = select_line_style(Some("run_terminal_cmd"), "helpers", &git, &ls);
+        let without_extension = select_line_style(Some("run_pty_cmd"), "helpers", &git, &ls);
         assert!(without_extension.is_none());
 
-        let with_extension = select_line_style(Some("run_terminal_cmd"), "helpers.rs", &git, &ls);
+        let with_extension = select_line_style(Some("run_pty_cmd"), "helpers.rs", &git, &ls);
         assert!(with_extension.is_some());
     }
 }

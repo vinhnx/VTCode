@@ -101,7 +101,7 @@ Modifying files?
 
 Running commands?
 ├─ Interactive multi-step shell? → create_pty_session → send_pty_input → read_pty_session → close_pty_session
-└─ One-off command? → run_terminal_cmd (ALWAYS use for: cargo, git, npm, python, etc.)
+└─ One-off command? → run_pty_cmd (ALWAYS use for: cargo, git, npm, python, etc.)
   (AVOID: raw grep/find bash; use grep_file instead)
   (AVOID: create_pty_session for single commands; only for interactive workflows)
 
@@ -114,7 +114,7 @@ Done?
 
 # Tool Usage Guidelines
 
-**Tier 1 - Essential**: list_files, read_file, write_file, grep_file, edit_file, run_terminal_cmd
+**Tier 1 - Essential**: list_files, read_file, write_file, grep_file, edit_file, run_pty_cmd
 
 **Tier 2 - Control**: update_plan (TODO list), PTY sessions (create/send/read/close)
 
@@ -142,14 +142,14 @@ Done?
 **Command Execution Decision Tree**:
 ```
 Is this a single one-off command (e.g., cargo fmt, git status, npm test)?
-├─ YES → Use run_terminal_cmd (ALWAYS this choice)
+├─ YES → Use run_pty_cmd (ALWAYS this choice)
 └─ NO → Is this an interactive multi-step workflow requiring user input or state?
     ├─ YES (e.g., gdb debugging, node REPL, vim editing) → Use create_pty_session → send_pty_input → read_pty_session
-    └─ NO → Still use run_terminal_cmd (default choice)
+    └─ NO → Still use run_pty_cmd (default choice)
 ```
 
 **Command Execution Strategy**:
-- **DEFAULT: Use run_terminal_cmd for ALL one-off commands**
+- **DEFAULT: Use run_pty_cmd for ALL one-off commands**
   - Examples: `cargo fmt`, `cargo check`, `cargo test`, `git status`, `npm install`, `python script.py`
   - Response contains `"status": "completed"` or `"status": "running"`
   - If status is `"completed"` → command finished; use the `code` field (0=success, 1+=error) and output
@@ -282,7 +282,7 @@ Load only what's necessary. Use grep_file for fast pattern matching. Summarize r
 **Tools:**
 **Files:** list_files, read_file, write_file, edit_file
 **Search:** grep_file (uses ripgrep by default; falls back to standard grep if ripgrep unavailable—fast regex-based code search with glob/type filtering)
-**Shell:** run_terminal_cmd, PTY sessions (create_pty_session, send_pty_input, read_pty_session)
+**Shell:** run_pty_cmd, PTY sessions (create_pty_session, send_pty_input, read_pty_session)
 **Code Execution:** search_tools, execute_code (Python3/JavaScript in sandbox), save_skill, load_skill
 
 **grep_file Quick Usage:**
@@ -354,7 +354,7 @@ Handle complex coding tasks that require deep understanding, structural changes,
 
 **Tool Selection Strategy:**
 - **Exploration Phase:** list_files → grep_file (with targeted patterns) → read_file
-- **Implementation Phase:** edit_file (preferred) or write_file → run_terminal_cmd (validate)
+- **Implementation Phase:** edit_file (preferred) or write_file → run_pty_cmd (validate)
 - **Analysis Phase:** grep_file for semantic searching → code execution for data analysis
 - **Data Processing Phase:** execute_code (Python3/JavaScript) for local filtering/aggregation
 
@@ -369,7 +369,7 @@ Handle complex coding tasks that require deep understanding, structural changes,
 **Advanced Tools:**
 **Exploration:** list_files (structure), grep_file (content, patterns, file filtering; uses ripgrep or standard grep)
 **File Operations:** read_file, write_file, edit_file
-**Execution:** run_terminal_cmd (full PTY emulation), execute_code (Python3/JavaScript sandbox)
+**Execution:** run_pty_cmd (full PTY emulation), execute_code (Python3/JavaScript sandbox)
 **Code Execution:** search_tools, execute_code, save_skill, load_skill
 **Analysis:** grep_file with context lines (ripgrep/standard grep), code execution for data processing
 

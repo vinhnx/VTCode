@@ -3693,50 +3693,17 @@ impl Session {
 
         let padding_needed = max_width.saturating_sub(line_width);
 
-        // Extract background color from any span that has it
-        let bg_color = line.spans.iter().find_map(|span| span.style.bg);
-
         if padding_needed == 0 {
-            // Even if no padding needed, ensure all spans have the background color
-            if bg_color.is_none() {
-                return line.clone();
-            }
-
-            let new_spans: Vec<_> = line
-                .spans
-                .iter()
-                .map(|span| {
-                    if span.style.bg.is_none() {
-                        let mut new_style = span.style;
-                        new_style.bg = bg_color;
-                        Span::styled(span.content.clone(), new_style)
-                    } else {
-                        span.clone()
-                    }
-                })
-                .collect();
-            return Line::from(new_spans);
+            return line.clone();
         }
 
-        // Apply background color to all content spans and append padding span
-        let padding_style = if let Some(color) = bg_color {
-            Style::new().bg(color)
-        } else {
-            Style::default()
-        };
+        // Apply padding without background color
+        let padding_style = Style::default();
 
         let new_spans: Vec<_> = line
             .spans
             .iter()
-            .map(|span| {
-                if span.style.bg.is_none() && bg_color.is_some() {
-                    let mut new_style = span.style;
-                    new_style.bg = bg_color;
-                    Span::styled(span.content.clone(), new_style)
-                } else {
-                    span.clone()
-                }
-            })
+            .cloned()
             .chain(std::iter::once(Span::styled(
                 " ".repeat(padding_needed),
                 padding_style,

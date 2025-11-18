@@ -246,6 +246,21 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
         },
 
         FunctionDeclaration {
+            name: tools::BASH.to_string(),
+            description: "Execute shell commands (git, cargo, shell scripts, etc). For interactive work, use PTY tools (create_pty_session → send_pty_input → read_pty_session). Respects command policies for safety.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "cmd": {"type": "string", "description": "Shell command to execute (e.g., 'git diff', 'cargo test', 'ls -la')"},
+                    "cwd": {"type": "string", "description": "Working directory for the command (relative or absolute)"},
+                    "timeout_secs": {"type": "integer", "description": "Timeout in seconds. Default 180 for commands, longer for cargo/build commands", "default": 180},
+                    "confirm": {"type": "boolean", "description": "Require confirmation before executing destructive commands (rm, git reset, etc)", "default": false}
+                },
+                "required": ["cmd"]
+            }),
+        },
+
+        FunctionDeclaration {
             name: tools::SEARCH_TOOLS.to_string(),
             description: "Search available MCP tools by keyword with progressive disclosure. Saves context by returning only tool names, descriptions, or full schemas as needed.".to_string(),
             parameters: json!({

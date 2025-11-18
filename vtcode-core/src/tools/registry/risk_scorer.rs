@@ -221,9 +221,6 @@ impl ToolRiskScorer {
             // Potentially risky write operations (base: 25)
             "apply_patch" | "delete_file" => 25,
 
-            // Command execution (base: 30)
-            "run_terminal_cmd" => 30,
-
             // PTY/interactive commands (base: 35)
             "create_pty_session" | "run_pty_cmd" | "send_pty_input" => 35,
 
@@ -275,7 +272,7 @@ mod tests {
     #[test]
     fn test_approval_history_reduces_risk() {
         let mut ctx = ToolRiskContext::new(
-            "run_terminal_cmd".to_string(),
+            "run_pty_cmd".to_string(),
             ToolSource::Internal,
             WorkspaceTrust::Untrusted,
         );

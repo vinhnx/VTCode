@@ -282,8 +282,7 @@ impl ToolRegistry {
                 }) {
                     suggestions.push("Command execution errors: Verify command availability with 'list_files' or check PATH environment".to_string());
                     suggestions.push(
-                        "Use 'run_terminal_cmd' to test commands manually before automation"
-                            .to_string(),
+                        "Use 'run_pty_cmd' to test commands manually before automation".to_string(),
                     );
                 }
 
@@ -295,7 +294,7 @@ impl ToolRegistry {
                         "Git errors: Check repository status and Git configuration".to_string(),
                     );
                     suggestions.push(
-                        "Run 'run_terminal_cmd' with 'git status' to diagnose repository issues"
+                        "Run 'run_pty_cmd' with 'git status' to diagnose repository issues"
                             .to_string(),
                     );
                 }
@@ -695,6 +694,10 @@ impl ToolRegistry {
     pub(super) fn list_files_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
         let tool = self.inventory.file_ops_tool().clone();
         Box::pin(async move { tool.execute(args).await })
+    }
+
+    pub(super) fn bash_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
+        Box::pin(async move { self.execute_bash_command(args).await })
     }
 
     pub(super) fn run_command_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
@@ -1460,6 +1463,33 @@ impl ToolRegistry {
     }
 
     /// Unified command execution that combines terminal and PTY modes
+    async fn execute_bash_command(&mut self, mut args: Value) -> Result<Value> {
+        // Convert bash tool args to run_command format
+        let obj = value_as_object(&mut args, "bash expects an object payload")?;
+        
+        // Extract the command
+        let cmd = obj
+            .get("cmd")
+            .ok_or_else(|| anyhow!("bash requires a 'cmd' parameter"))?
+            .as_str()
+            .ok_or_else(|| anyhow!("'cmd' must be a string"))?;
+
+        // Build run_command args
+        let mut run_cmd_args = json!({
+            "command": cmd,
+            "timeout_secs": obj.get("timeout_secs").cloned().unwrap_or(json!(DEFAULT_TERMINAL_TIMEOUT_SECS)),
+            "cwd": obj.get("cwd").cloned(),
+            "confirm": obj.get("confirm").cloned(),
+        });
+
+        // Remove null values
+        if let Some(obj) = run_cmd_args.as_object_mut() {
+            obj.retain(|_, v| !v.is_null());
+        }
+
+        self.execute_run_command(run_cmd_args).await
+    }
+
     async fn execute_run_command(&mut self, mut args: Value) -> Result<Value> {
         normalize_run_command_payload(&mut args)?;
 
@@ -1870,24 +1900,53 @@ impl ToolRegistry {
             "creating PTY session"
         );
 
-        self.start_pty_session()?;
+        // Start PTY session and store guard to keep session alive for the duration
+        let _guard = self.start_pty_session()?;
         let result = match self.pty_manager().create_session(
             session_id.clone(),
             command_parts.clone(),
-            working_dir,
+            working_dir.clone(),
             size,
         ) {
             Ok(meta) => meta,
             Err(error) => {
-                self.end_pty_session();
-                return Err(error);
+                // Guard will be dropped here, automatically decrementing session count
+                // Attempt to cleanup the failed session if it was created
+                let _ = self.pty_manager().close_session(&session_id);
+                return Err(error).context(format!(
+                    "Failed to create PTY session '{}' with command {:?} in {}",
+                    session_id,
+                    command_parts,
+                    working_dir.display()
+                ));
             }
         };
 
         // Check if the session is still running (should be, since we just created it)
         let is_completed = match self.pty_manager().is_session_completed(&session_id) {
             Ok(Some(exit_code)) => {
-                // Process has exited with code
+                // Process has exited immediately - likely command not found or permission denied
+                // This is often caused by:
+                // - Command not found in PATH
+                // - Permission denied (executable not marked as +x)
+                // - Shell not found
+                // Try to capture any output to help diagnose
+                let output = self
+                    .pty_manager()
+                    .read_session_output(&session_id, false)
+                    .unwrap_or(None)
+                    .unwrap_or_default();
+
+                if exit_code != 0 {
+                    debug!(
+                        target: "vtcode::pty",
+                        session_id = %session_id,
+                        exit_code = exit_code,
+                        output = %output,
+                        "PTY session exited immediately after creation"
+                    );
+                }
+
                 Some(exit_code)
             }
             Ok(None) => {
@@ -1940,24 +1999,33 @@ impl ToolRegistry {
         let session_id =
             parse_session_id(payload, "close_pty_session requires a 'session_id' string")?;
 
+        // Check if the session is still running BEFORE closing
+        // (after close, the session will no longer be accessible)
+        let exit_code = match self.pty_manager().is_session_completed(session_id.as_str()) {
+            Ok(Some(code)) => Some(code),
+            Ok(None) => None,   // Process was still running when we checked
+            Err(_) => Some(-1), // Error state
+        };
+
         let metadata = self
             .pty_manager()
             .close_session(session_id.as_str())
             .with_context(|| format!("failed to close PTY session '{session_id}'"))?;
         self.end_pty_session();
 
-        // For a closed session, we can report completion status if it was still running
-        let exit_code = match self.pty_manager().is_session_completed(session_id.as_str()) {
-            Ok(Some(code)) => Some(code),
-            Ok(None) => Some(0), // If not completed, we force closed it with code 0
-            Err(_) => Some(-1),  // Error state
-        };
-
         let mut response = snapshot_to_map(metadata, PtySnapshotViewOptions::default());
         response.insert("success".to_string(), Value::Bool(true));
-        if let Some(code) = exit_code {
-            response.insert("is_exited".to_string(), Value::Bool(true));
-            response.insert("exit_code".to_string(), Value::Number(code.into()));
+
+        // Report the exit code we captured before closing
+        match exit_code {
+            Some(code) => {
+                response.insert("is_exited".to_string(), Value::Bool(true));
+                response.insert("exit_code".to_string(), Value::Number(code.into()));
+            }
+            None => {
+                response.insert("is_exited".to_string(), Value::Bool(false));
+                response.insert("exit_code".to_string(), Value::Null);
+            }
         }
 
         Ok(Value::Object(response))
@@ -1967,6 +2035,32 @@ impl ToolRegistry {
         let payload = value_as_object(&args, "send_pty_input expects an object payload")?;
         let input = PtyInputPayload::from_map(payload)?;
 
+        // Check if session exists and is still running before attempting to send input
+        let session_exists = self
+            .pty_manager()
+            .snapshot_session(input.session_id.as_str())
+            .is_ok();
+        if !session_exists {
+            return Err(anyhow!(
+                "PTY session '{}' does not exist. Create it first with create_pty_session.",
+                input.session_id
+            ));
+        }
+
+        // Check if session has already exited
+        let is_completed = self
+            .pty_manager()
+            .is_session_completed(input.session_id.as_str())
+            .unwrap_or(Some(-1));
+
+        if let Some(exit_code) = is_completed {
+            return Err(anyhow!(
+                "PTY session '{}' has already exited with code {}. Cannot send input to completed session.",
+                input.session_id,
+                exit_code
+            ));
+        }
+
         let written = self
             .pty_manager()
             .send_input_to_session(
@@ -1974,7 +2068,10 @@ impl ToolRegistry {
                 &input.buffer,
                 input.append_newline,
             )
-            .with_context(|| format!("failed to write to PTY session '{}'", input.session_id))?;
+            .with_context(|| format!(
+                "failed to write to PTY session '{}'. Session may have been closed or may not be writable.",
+                input.session_id
+            ))?;
 
         if input.wait_ms > 0 {
             sleep(Duration::from_millis(input.wait_ms)).await;
@@ -2201,8 +2298,8 @@ fn normalize_terminal_payload(args: &mut Value) -> Result<()> {
     {
         let map = normalize_payload(
             args,
-            "run_terminal_cmd expects an object payload",
-            "bash_command is no longer supported. Use run_terminal_cmd or run_pty_cmd instead.",
+            "run_pty_cmd expects an object payload",
+            "bash_command is no longer supported. Use run_pty_cmd instead.",
         )?;
         if !map.contains_key("mode") {
             match map.get("tty").and_then(|value| value.as_bool()) {
@@ -2409,7 +2506,7 @@ fn determine_terminal_run_mode(args: &Value) -> Result<RunMode> {
         args.get("mode").and_then(|value| value.as_str()),
         Some("streaming")
     ) {
-        return Err(anyhow!("run_terminal_cmd does not support streaming mode"));
+        return Err(anyhow!("run_pty_cmd does not support streaming mode"));
     }
 
     Ok(resolve_run_mode(args))
@@ -2520,11 +2617,11 @@ impl TerminalCommandPayload {
         let raw_command = convert_command_string_to_array(
             args,
             shell_hint.as_deref(),
-            "run_terminal_cmd expects an object payload",
+            "run_pty_cmd expects an object payload",
         )?;
         let command_vec = collect_command_vector(
             args,
-            "run_terminal_cmd requires a 'command' array",
+            "run_pty_cmd requires a 'command' array",
             "command array must contain only strings",
         )?;
         if command_vec.is_empty() {

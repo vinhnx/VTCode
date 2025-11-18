@@ -32,6 +32,12 @@ pub(super) fn builtin_tool_registrations() -> Vec<ToolRegistration> {
             ToolRegistry::list_files_executor,
         ),
         ToolRegistration::new(
+            tools::BASH,
+            CapabilityLevel::Bash,
+            false,
+            ToolRegistry::bash_executor,
+        ),
+        ToolRegistration::new(
             tools::UPDATE_PLAN,
             CapabilityLevel::Basic,
             false,
@@ -92,16 +98,16 @@ pub(super) fn builtin_tool_registrations() -> Vec<ToolRegistration> {
             ToolRegistry::create_file_executor,
         ),
         ToolRegistration::new(
-        tools::DELETE_FILE,
-        CapabilityLevel::Editing,
-        false,
-        ToolRegistry::delete_file_executor,
+            tools::DELETE_FILE,
+            CapabilityLevel::Editing,
+            false,
+            ToolRegistry::delete_file_executor,
         ),
         ToolRegistration::new(
-        tools::WRITE_FILE,
-        CapabilityLevel::Editing,
-        false,
-        ToolRegistry::write_file_executor,
+            tools::WRITE_FILE,
+            CapabilityLevel::Editing,
+            false,
+            ToolRegistry::write_file_executor,
         ),
         ToolRegistration::new(
             tools::EDIT_FILE,

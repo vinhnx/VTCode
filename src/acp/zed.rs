@@ -598,7 +598,7 @@ impl ZedAgent {
                 "pty" => return Ok(RunTerminalMode::Pty),
                 "terminal" | "" => return Ok(RunTerminalMode::Terminal),
                 "streaming" => {
-                    return Err("run_terminal_cmd does not support streaming mode".to_string());
+                    return Err("run_pty_cmd does not support streaming mode".to_string());
                 }
                 _ => {}
             }
@@ -681,7 +681,10 @@ impl ZedAgent {
             }
         }
 
-        Err("run_terminal_cmd requires a 'command' field (string/array or indexed command.N entries)".to_string())
+        Err(
+            "run_pty_cmd requires a 'command' field (string/array or indexed command.N entries)"
+                .to_string(),
+        )
     }
 
     fn resolve_terminal_working_dir(&self, args: &Value) -> Result<Option<PathBuf>, String> {
@@ -2222,7 +2225,7 @@ mod tests {
         assert!(result.is_err());
         assert_eq!(
             result.unwrap_err(),
-            "run_terminal_cmd requires a 'command' field (string/array or indexed command.N entries)"
+            "run_pty_cmd requires a 'command' field (string/array or indexed command.N entries)"
         );
     }
 

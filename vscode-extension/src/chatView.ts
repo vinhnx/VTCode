@@ -297,7 +297,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     private isTerminalTool(toolName: string): boolean {
         const normalized = toolName.toLowerCase();
         return (
-            normalized === "run_terminal_cmd" ||
+            normalized === "run_pty_cmd" ||
             normalized === "run_shell_command" ||
             normalized === "shell" ||
             normalized === "terminal"

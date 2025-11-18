@@ -18,7 +18,7 @@ describe('ToolApprovalDialog', () => {
         dialog = new ToolApprovalDialog();
         mockToolCall = {
             id: 'test-tool-123',
-            name: 'run_terminal_cmd',
+            name: 'run_pty_cmd',
             args: {
                 command: 'echo "Hello World"',
                 cwd: '/test/path',
@@ -73,7 +73,7 @@ describe('ToolApprovalDialog', () => {
             await dialog.requestApproval(mockToolCall);
 
             expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-                'VTCode wants to run: run_terminal_cmd',
+                'VTCode wants to run: run_pty_cmd',
                 expect.objectContaining({
                     modal: true,
                     detail: expect.stringContaining('Command: echo "Hello World"'),
@@ -220,7 +220,7 @@ describe('ToolApprovalDialog', () => {
         it('should generate preview for shell commands', async () => {
             const shellTool: VtcodeToolCall = {
                 id: 'test-123',
-                name: 'run_terminal_cmd',
+                name: 'run_pty_cmd',
                 args: {
                     command: 'npm test',
                     cwd: '/project',

@@ -15,12 +15,12 @@ This example shows how to use VTCode for code analysis and tool execution.
 ## Available Tools:
 - grep_file: Ripgrep-backed code search
 - bash: Bash-like commands with PTY support
-- run_terminal_cmd: Terminal command execution
+- run_pty_cmd: Terminal command execution
 
 ## Example Workflow:
 1. Use grep_file for code search
 2. Use bash for system operations
-3. Use run_terminal_cmd for complex terminal tasks
+3. Use run_pty_cmd for complex terminal tasks
 "#
     }
 

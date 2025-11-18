@@ -1603,7 +1603,7 @@ impl OpenAIProvider {
             "repo_browser.list_files" | "list_files" => "list_files".to_string(),
             "repo_browser.read_file" | "read_file" => "read_file".to_string(),
             "repo_browser.write_file" | "write_file" => "write_file".to_string(),
-            "container.exec" | "exec" => "run_terminal_cmd".to_string(),
+            "container.exec" | "exec" => "run_pty_cmd".to_string(),
             "bash" => "bash".to_string(),
             "grep" => "grep_file".to_string(),
             _ => {
@@ -1934,7 +1934,7 @@ mod tests {
         );
         assert_eq!(
             OpenAIProvider::parse_harmony_tool_name("container.exec"),
-            "run_terminal_cmd"
+            "run_pty_cmd"
         );
         assert_eq!(OpenAIProvider::parse_harmony_tool_name("bash"), "bash");
         assert_eq!(
@@ -1963,7 +1963,7 @@ mod tests {
         assert!(result.is_some());
 
         let (tool_name, args) = result.unwrap();
-        assert_eq!(tool_name, "run_terminal_cmd");
+        assert_eq!(tool_name, "run_pty_cmd");
         assert_eq!(args["cmd"], serde_json::json!(["ls", "-la"]));
     }
 

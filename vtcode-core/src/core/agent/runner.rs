@@ -909,7 +909,7 @@ impl AgentRunner {
                     if let Some(args_value) = resp
                         .content
                         .as_ref()
-                        .and_then(|text| detect_textual_run_terminal_cmd(text))
+                        .and_then(|text| detect_textual_run_pty_cmd(text))
                     {
                         let call_id = format!(
                             "textual_call_{}_{}",
@@ -2216,8 +2216,8 @@ fn convert_python_args_to_json(args_str: &str) -> Option<String> {
     Some(format!("{{{}}}", json_parts.join(", ")))
 }
 
-fn detect_textual_run_terminal_cmd(text: &str) -> Option<Value> {
-    const FENCE_PREFIXES: [&str; 2] = ["```tool:run_terminal_cmd", "```run_terminal_cmd"];
+fn detect_textual_run_pty_cmd(text: &str) -> Option<Value> {
+    const FENCE_PREFIXES: [&str; 2] = ["```tool:run_pty_cmd", "```run_pty_cmd"];
 
     let (start_idx, prefix) = FENCE_PREFIXES
         .iter()
