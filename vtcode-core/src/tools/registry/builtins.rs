@@ -34,7 +34,7 @@ pub(super) fn builtin_tool_registrations() -> Vec<ToolRegistration> {
         ToolRegistration::new(
             tools::SHELL,
             CapabilityLevel::Bash,
-            false,
+            true,
             ToolRegistry::shell_executor,
         ),
         ToolRegistration::new(
