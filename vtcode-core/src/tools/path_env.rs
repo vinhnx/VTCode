@@ -126,6 +126,40 @@ pub(crate) fn merge_path_env(current: Option<&OsStr>, extra_paths: &[PathBuf]) -
         .map(|value| std::env::split_paths(value).collect())
         .unwrap_or_default();
 
+    // Ensure common development tool paths are included for fallback
+    // These paths are often added by shell initialization files but we include them
+    // to ensure development tools work even if shell initialization is incomplete
+    let fallback_paths = [
+        "~/.cargo/bin",               // Rust toolchain (cargo, rustc)
+        "~/.local/bin",               // User-installed binaries
+        "~/.nvm/versions/node/*/bin", // Node Version Manager
+        "~/.bun/bin",                 // Bun package manager
+        "/opt/homebrew/bin",          // Homebrew on Apple Silicon
+        "/usr/local/bin",             // Local binaries
+        "/opt/local/bin",             // MacPorts
+    ];
+
+    for fallback_path_pattern in &fallback_paths {
+        // Expand tilde to home directory
+        if let Some(home) = dirs::home_dir() {
+            let expanded = fallback_path_pattern.replace("~", &home.display().to_string());
+
+            // For glob patterns like nvm, just add the base directory if home/nvm exists
+            if expanded.contains('*') {
+                let base_pattern = expanded.split('*').next().unwrap_or("");
+                let base_path = PathBuf::from(base_pattern.trim_end_matches('/'));
+                if base_path.exists() && !combined.iter().any(|existing| existing == &base_path) {
+                    combined.push(base_path);
+                }
+            } else {
+                let path = PathBuf::from(expanded);
+                if path.exists() && !combined.iter().any(|existing| existing == &path) {
+                    combined.push(path);
+                }
+            }
+        }
+    }
+
     for path in extra_paths.iter().rev() {
         if !combined.iter().any(|existing| existing == path) {
             combined.insert(0, path.clone());
