@@ -5,7 +5,7 @@ use vtcode_core::core::agent::snapshots::{SnapshotConfig, SnapshotManager};
 use vtcode_core::utils::colors::style;
 
 pub async fn handle_snapshots_command(config: &CoreAgentConfig) -> Result<()> {
-    println!("{}", style("Available Snapshots").blue().bold());
+    println!("{}\n", style("[SNAPSHOTS]").blue().bold());
     let mut snapshot_cfg = SnapshotConfig::new(config.workspace.clone());
     snapshot_cfg.enabled = true;
     snapshot_cfg.storage_dir = config.checkpointing_storage_dir.clone();
@@ -18,19 +18,22 @@ pub async fn handle_snapshots_command(config: &CoreAgentConfig) -> Result<()> {
     if snaps.is_empty() {
         println!("(none)");
     } else {
-        for s in snaps {
+        for (i, s) in snaps.iter().enumerate() {
             let created = DateTime::<Utc>::from_timestamp(s.created_at as i64, 0)
                 .map(|dt| dt.with_timezone(&Local))
                 .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
                 .unwrap_or_else(|| s.created_at.to_string());
             println!(
-                "- turn {turn}  messages={messages}  files={files}  created={created}  note={note}",
-                turn = s.turn_number,
-                messages = s.message_count,
-                files = s.file_count,
-                created = created,
-                note = s.description,
+                "  {:>2}. turn {:>3}  messages={:<4} files={:<3} created={}",
+                i + 1,
+                s.turn_number,
+                s.message_count,
+                s.file_count,
+                created
             );
+            if !s.description.is_empty() {
+                println!("         note: {}", s.description);
+            }
         }
     }
     Ok(())
@@ -40,7 +43,7 @@ pub async fn handle_cleanup_snapshots_command(
     config: &CoreAgentConfig,
     max: Option<usize>,
 ) -> Result<()> {
-    println!("{}", style("Cleanup Snapshots").blue().bold());
+    println!("{}\n", style("[CLEANUP]").blue().bold());
     let mut cfg = SnapshotConfig::new(config.workspace.clone());
     cfg.enabled = true;
     cfg.storage_dir = config.checkpointing_storage_dir.clone();

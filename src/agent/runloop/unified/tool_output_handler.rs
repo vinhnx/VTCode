@@ -55,7 +55,7 @@ pub(crate) async fn handle_pipeline_output(
                 render_tool_call_summary_with_status(
                     ctx.renderer,
                     name,
-                    &args_val,
+                    args_val,
                     status_icon,
                     exit_code,
                 )?;
@@ -186,7 +186,7 @@ pub(crate) async fn handle_pipeline_output_renderer(
                 render_tool_call_summary_with_status(
                     renderer,
                     name,
-                    &args_val,
+                    args_val,
                     status_icon,
                     exit_code,
                 )?;
@@ -418,16 +418,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_handle_pipeline_output_invalidates_cache_and_records_stats() {
-        use crate::agent::runloop::unified::run_loop_context::RunLoopContext;
-        use crate::agent::runloop::unified::tool_pipeline::{
-            ToolExecutionStatus, ToolPipelineOutcome,
-        };
-        use tempfile::TempDir;
-        use vtcode_core::acp::ToolPermissionCache;
-        use vtcode_core::core::trajectory::TrajectoryLogger;
-        use vtcode_core::tools::registry::ToolRegistry;
-        use vtcode_core::tools::result_cache::CacheKey;
-
         let tmp = TempDir::new().unwrap();
         let workspace = tmp.path().to_path_buf();
 
@@ -513,15 +503,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_handle_pipeline_output_mcp_events() {
-        use crate::agent::runloop::unified::run_loop_context::RunLoopContext;
-        use crate::agent::runloop::unified::tool_pipeline::{
-            ToolExecutionStatus, ToolPipelineOutcome,
-        };
-        use tempfile::TempDir;
-        use vtcode_core::acp::ToolPermissionCache;
-        use vtcode_core::core::trajectory::TrajectoryLogger;
-        use vtcode_core::tools::registry::ToolRegistry;
-
         let tmp = TempDir::new().unwrap();
         let workspace = tmp.path().to_path_buf();
 

@@ -66,10 +66,9 @@ pub async fn handle_ask_command(
 
     let wants_json = options.wants_json();
     if !wants_json {
-        println!("{}", style("Single Prompt Mode").blue().bold());
-        println!("Provider: {}", &config.provider);
-        println!("Model: {}", &config.model);
-        println!();
+        println!("{}", style("[ASK]").blue().bold());
+        println!("  {:16} {}", "provider", &config.provider);
+        println!("  {:16} {}\n", "model", &config.model);
     }
 
     let provider = match create_provider_for_model(

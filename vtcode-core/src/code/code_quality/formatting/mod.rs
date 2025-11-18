@@ -21,6 +21,12 @@ pub struct FormattingOrchestrator {
     configs: Vec<FormatConfig>,
 }
 
+impl Default for FormattingOrchestrator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FormattingOrchestrator {
     pub fn new() -> Self {
         let mut orchestrator = Self {

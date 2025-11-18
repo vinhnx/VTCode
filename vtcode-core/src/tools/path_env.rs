@@ -90,26 +90,9 @@ pub(crate) fn resolve_program_path_from_paths(
     None
 }
 
-/// Resolve a program to a concrete executable path using the extra search paths and PATH.
-pub(crate) fn resolve_program_path(program: &str, extra_paths: &[PathBuf]) -> Option<String> {
-    if program.contains(std::path::MAIN_SEPARATOR) || program.contains('/') {
-        let candidate = Path::new(program);
-        if candidate.exists() {
-            return Some(candidate.to_string_lossy().to_string());
-        }
-        return None;
-    }
-
-    if let Some(resolved) = resolve_program_path_from_paths(program, extra_paths.iter().cloned()) {
-        return Some(resolved);
-    }
-
-    if let Some(path_env) = std::env::var_os("PATH") {
-        return resolve_program_path_from_paths(program, std::env::split_paths(&path_env));
-    }
-
-    None
-}
+// NOTE: Static resolution of program paths is intentionally deprecated in favor of
+// always executing commands through the user's login shell (via `resolve_fallback_shell`).
+// The `resolve_program_path_from_paths` helper remains for explicit path iteration tests.
 
 /// Merge additional search paths into an existing PATH environment value.
 pub(crate) fn merge_path_env(current: Option<&OsStr>, extra_paths: &[PathBuf]) -> Option<OsString> {
@@ -182,7 +165,8 @@ mod tests {
             std::fs::set_permissions(&fake, perms).expect("set perms");
         }
 
-        let resolved = resolve_program_path("fake-tool", &[bin_dir.to_path_buf()]);
+        let resolved =
+            resolve_program_path_from_paths("fake-tool", [bin_dir.to_path_buf()].into_iter());
         assert_eq!(resolved, Some(fake.to_string_lossy().to_string()))
     }
 }

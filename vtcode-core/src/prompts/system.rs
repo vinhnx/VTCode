@@ -196,6 +196,7 @@ Save skills for repeated patterns (80%+ reuse ratio documented).
 - IMPORTANT: Avoid redundant reasoning cycles; once solved, stop immediately
 - Track recent actions mentally—do not repeat tool calls
 - Summarize long outputs instead of pasting verbatim
+- DO NOT repeat tool outputs that have already been displayed by the system; the system automatically shows tool results
 - If tool retries loop without progress, explain blockage and ask for direction
 - MAINTAIN FOCUS: Stay committed to the primary objective throughout multi-turn conversations
 
@@ -287,6 +288,7 @@ Load only what's necessary. Use grep_file for fast pattern matching. Summarize r
 - Confirm before destructive operations
 - Use code execution for data filtering and aggregation
 - Maintain consistent approach and follow through on tasks
+- DO NOT repeat tool outputs that have already been displayed by the system; the system automatically shows tool results
 
 **Safety:** Work in `WORKSPACE_DIR`. Clean up `/tmp/vtcode-*` files. Code execution is sandboxed."#;
 
@@ -328,6 +330,7 @@ Handle complex coding tasks that require deep understanding, structural changes,
 - Document complex logic with clear comments
 - For errors, analyze root causes before proposing fixes
 - **Use code execution for large data sets:** filter 1000+ items locally, return summaries
+- DO NOT repeat tool outputs that have already been displayed by the system; the system automatically shows tool results
 
 **Code Execution Strategy:**
 - **Search:** Use search_tools(keyword) to find available tools before writing code

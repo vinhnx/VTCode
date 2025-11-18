@@ -94,11 +94,11 @@ pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
     }
 
     // Add approval suggestion if available
-    if let Some(recorder) = approval_recorder {
-        if let Some(suggestion) = recorder.get_auto_approval_suggestion(tool_name).await {
-            description_lines.push(String::new());
-            description_lines.push(format!("Suggestion: {}", suggestion));
-        }
+    if let Some(recorder) = approval_recorder
+        && let Some(suggestion) = recorder.get_auto_approval_suggestion(tool_name).await
+    {
+        description_lines.push(String::new());
+        description_lines.push(format!("Suggestion: {}", suggestion));
     }
 
     description_lines.push(String::new());
@@ -347,17 +347,16 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
     }
 
     // Check approval patterns for auto-approval before prompting
-    if !hook_requires_prompt {
-        if let Some(recorder) = approval_recorder {
-            if recorder.should_auto_approve(tool_name).await {
-                tool_registry.mark_tool_preapproved(tool_name);
-                tracing::debug!(
-                    "Auto-approved tool '{}' based on approval pattern history",
-                    tool_name
-                );
-                return Ok(ToolPermissionFlow::Approved);
-            }
-        }
+    if !hook_requires_prompt
+        && let Some(recorder) = approval_recorder
+        && recorder.should_auto_approve(tool_name).await
+    {
+        tool_registry.mark_tool_preapproved(tool_name);
+        tracing::debug!(
+            "Auto-approved tool '{}' based on approval pattern history",
+            tool_name
+        );
+        return Ok(ToolPermissionFlow::Approved);
     }
 
     if !hook_requires_prompt && tool_name == tool_names::RUN_COMMAND {

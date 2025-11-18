@@ -1,10 +1,11 @@
 //! Diff utilities for generating structured and formatted diffs.
 
-use anstyle::{AnsiColor, Color, Reset, Style};
-use anstyle_git;
+use anstyle::Reset;
 use serde::Serialize;
 use std::cmp::min;
 use std::collections::HashMap;
+
+use crate::ui::theme;
 
 /// Represents a chunk of text in a diff (Equal, Delete, or Insert).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -470,31 +471,27 @@ fn next_token_char(counter: &mut u32) -> Option<char> {
     None
 }
 
-/// Format diff hunks with simple ANSI colors for terminal display.
+/// Format diff hunks with theme colors for terminal display.
 ///
 /// This function generates a unified diff format with built-in ANSI color codes
-/// instead of relying on external syntax highlighting. This ensures consistent
-/// and correct diff coloring in the terminal:
-/// - Cyan for file headers and hunk headers
-/// - Green for additions (+)
-/// - Red for deletions (-)
-/// - White for context lines
+/// instead of relying on external syntax highlighting. Colors are derived from the
+/// active theme:
+/// - Primary accent for file headers and hunk headers
+/// - Secondary accent for additions (+)
+/// - Alert color for deletions (-)
+/// - Output color for context lines
 fn format_colored_diff(hunks: &[DiffHunk], options: &DiffOptions<'_>) -> String {
     if hunks.is_empty() {
         return String::new();
     }
 
-    // Use git-standard colors from anstyle-git to match Git's default color scheme
-    let header_style = anstyle_git::parse("section")
-        .unwrap_or_else(|_| Style::new().fg_color(Some(Color::Ansi(AnsiColor::Cyan))));
-    let hunk_header_style = anstyle_git::parse("meta")
-        .unwrap_or_else(|_| Style::new().fg_color(Some(Color::Ansi(AnsiColor::Cyan))));
-    let addition_style = anstyle_git::parse("new")
-        .unwrap_or_else(|_| Style::new().fg_color(Some(Color::Ansi(AnsiColor::Green))));
-    let deletion_style = anstyle_git::parse("old")
-        .unwrap_or_else(|_| Style::new().fg_color(Some(Color::Ansi(AnsiColor::Red))));
-    let context_style = anstyle_git::parse("context")
-        .unwrap_or_else(|_| Style::new().fg_color(Some(Color::Ansi(AnsiColor::White))));
+    // Use colors from the active theme for consistency
+    let active_styles = theme::active_styles();
+    let header_style = active_styles.status;
+    let hunk_header_style = active_styles.status;
+    let addition_style = active_styles.secondary;
+    let deletion_style = active_styles.error;
+    let context_style = active_styles.output;
 
     let mut output = String::new();
 

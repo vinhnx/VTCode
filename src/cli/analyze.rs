@@ -6,8 +6,8 @@ use walkdir::WalkDir;
 
 /// Handle the analyze command
 pub async fn handle_analyze_command(config: &CoreAgentConfig) -> Result<()> {
-    println!("{}", style("Analyze workspace mode selected").blue().bold());
-    println!("Workspace: {}", config.workspace.display());
+    println!("{}", style("[ANALYZE]").blue().bold());
+    println!("  {:16} {}\n", "workspace", config.workspace.display());
 
     // Workspace analysis implementation
     analyze_workspace(&config.workspace).await?;
@@ -17,7 +17,7 @@ pub async fn handle_analyze_command(config: &CoreAgentConfig) -> Result<()> {
 
 /// Analyze the workspace and provide insights
 async fn analyze_workspace(workspace_path: &Path) -> Result<()> {
-    println!("Analyzing workspace structure...");
+    println!("{}", style("Structure").bold());
 
     // Count files and directories
     let mut total_files = 0;
@@ -41,18 +41,19 @@ async fn analyze_workspace(workspace_path: &Path) -> Result<()> {
         }
     }
 
-    println!("  Total directories: {}", total_dirs);
-    println!("  Total files: {}", total_files);
+    println!("  {:16} {}", "directories", total_dirs);
+    println!("  {:16} {}\n", "files", total_files);
 
     // Show language distribution
-    println!("  Language distribution:");
-    for (lang, count) in language_files.iter().take(10) {
-        println!("    {}: {} files", lang, count);
+    if !language_files.is_empty() {
+        println!("{}", style("Languages").bold());
+        let mut langs: Vec<_> = language_files.iter().collect();
+        langs.sort_by_key(|(_, count)| std::cmp::Reverse(**count));
+        for (i, (lang, count)) in langs.iter().take(10).enumerate() {
+            println!("  {:>2}. {:<12} {} files", i + 1, lang, count);
+        }
+        println!();
     }
-
-    // Placeholder for deeper analysis (tree-sitter integration lives in core)
-
-    println!("Workspace analysis complete!");
 
     Ok(())
 }

@@ -3692,22 +3692,57 @@ impl Session {
             .sum();
 
         let padding_needed = max_width.saturating_sub(line_width);
+
+        // Extract background color from any span that has it
+        let bg_color = line.spans.iter().find_map(|span| span.style.bg);
+
         if padding_needed == 0 {
-            return line.clone();
+            // Even if no padding needed, ensure all spans have the background color
+            if bg_color.is_none() {
+                return line.clone();
+            }
+
+            let new_spans: Vec<_> = line
+                .spans
+                .iter()
+                .map(|span| {
+                    if span.style.bg.is_none() {
+                        let mut new_style = span.style;
+                        new_style.bg = bg_color;
+                        Span::styled(span.content.clone(), new_style)
+                    } else {
+                        span.clone()
+                    }
+                })
+                .collect();
+            return Line::from(new_spans);
         }
 
-        // Find the background style from the span that has background color
-        // This preserves the exact coloring from the diff renderer
-        let bg_style = line
+        // Apply background color to all content spans and append padding span
+        let padding_style = if let Some(color) = bg_color {
+            Style::new().bg(color)
+        } else {
+            Style::default()
+        };
+
+        let new_spans: Vec<_> = line
             .spans
             .iter()
-            .find(|span| span.style.bg.is_some())
-            .map(|span| span.style)
-            .unwrap_or(Style::default());
+            .map(|span| {
+                if span.style.bg.is_none() && bg_color.is_some() {
+                    let mut new_style = span.style;
+                    new_style.bg = bg_color;
+                    Span::styled(span.content.clone(), new_style)
+                } else {
+                    span.clone()
+                }
+            })
+            .chain(std::iter::once(Span::styled(
+                " ".repeat(padding_needed),
+                padding_style,
+            )))
+            .collect();
 
-        // Clone and extend spans with padding
-        let mut new_spans = line.spans.clone();
-        new_spans.push(Span::styled(" ".repeat(padding_needed), bg_style));
         Line::from(new_spans)
     }
 

@@ -12,6 +12,12 @@ pub struct LearningSystem {
     feedback_processor: FeedbackProcessor,
 }
 
+impl Default for LearningSystem {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LearningSystem {
     pub fn new() -> Self {
         Self {

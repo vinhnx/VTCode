@@ -34,6 +34,12 @@ pub struct LintingOrchestrator {
     configs: Vec<LintConfig>,
 }
 
+impl Default for LintingOrchestrator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LintingOrchestrator {
     pub fn new() -> Self {
         let mut orchestrator = Self {
@@ -58,10 +64,10 @@ impl LintingOrchestrator {
         let mut results = Vec::new();
 
         for config in &self.configs {
-            if config.enabled {
-                if let Some(result) = self.run_linter(config, path).await {
-                    results.push(result);
-                }
+            if config.enabled
+                && let Some(result) = self.run_linter(config, path).await
+            {
+                results.push(result);
             }
         }
 
@@ -131,50 +137,50 @@ impl LintingOrchestrator {
     fn parse_clippy_output(&self, output: &str, base_path: &Path) -> Vec<LintFinding> {
         let mut findings = Vec::new();
         for line in output.lines() {
-            if let Ok(json) = serde_json::from_str::<Value>(line) {
-                if json.get("reason").and_then(Value::as_str) == Some("compiler-message") {
-                    if let Some(message) = json.get("message") {
-                        if let Some(spans) = message.get("spans").and_then(Value::as_array) {
-                            for span in spans {
-                                if span.get("is_primary").and_then(Value::as_bool) == Some(true) {
-                                    let file =
-                                        span.get("file_name").and_then(Value::as_str).unwrap_or("");
-                                    let line_num =
-                                        span.get("line_start").and_then(Value::as_u64).unwrap_or(0);
-                                    let column = span
-                                        .get("column_start")
-                                        .and_then(Value::as_u64)
-                                        .unwrap_or(0);
-                                    let rule = message
-                                        .get("code")
-                                        .and_then(|c| c.get("code"))
-                                        .and_then(Value::as_str)
-                                        .unwrap_or("")
-                                        .to_string();
-                                    let severity = match message
-                                        .get("level")
-                                        .and_then(Value::as_str)
-                                        .unwrap_or("")
-                                    {
-                                        "error" => LintSeverity::Error,
-                                        "warning" => LintSeverity::Warning,
-                                        _ => LintSeverity::Info,
-                                    };
-                                    let msg = message
-                                        .get("message")
-                                        .and_then(Value::as_str)
-                                        .unwrap_or("")
-                                        .to_string();
-                                    findings.push(LintFinding {
-                                        file_path: base_path.join(file),
-                                        line: line_num as usize,
-                                        column: column as usize,
-                                        severity,
-                                        rule,
-                                        message: msg,
-                                        suggestion: None,
-                                    });
-                                }
+            if let Ok(json) = serde_json::from_str::<Value>(line)
+                && json.get("reason").and_then(Value::as_str) == Some("compiler-message")
+            {
+                if let Some(message) = json.get("message") {
+                    if let Some(spans) = message.get("spans").and_then(Value::as_array) {
+                        for span in spans {
+                            if span.get("is_primary").and_then(Value::as_bool) == Some(true) {
+                                let file =
+                                    span.get("file_name").and_then(Value::as_str).unwrap_or("");
+                                let line_num =
+                                    span.get("line_start").and_then(Value::as_u64).unwrap_or(0);
+                                let column = span
+                                    .get("column_start")
+                                    .and_then(Value::as_u64)
+                                    .unwrap_or(0);
+                                let rule = message
+                                    .get("code")
+                                    .and_then(|c| c.get("code"))
+                                    .and_then(Value::as_str)
+                                    .unwrap_or("")
+                                    .to_string();
+                                let severity = match message
+                                    .get("level")
+                                    .and_then(Value::as_str)
+                                    .unwrap_or("")
+                                {
+                                    "error" => LintSeverity::Error,
+                                    "warning" => LintSeverity::Warning,
+                                    _ => LintSeverity::Info,
+                                };
+                                let msg = message
+                                    .get("message")
+                                    .and_then(Value::as_str)
+                                    .unwrap_or("")
+                                    .to_string();
+                                findings.push(LintFinding {
+                                    file_path: base_path.join(file),
+                                    line: line_num as usize,
+                                    column: column as usize,
+                                    severity,
+                                    rule,
+                                    message: msg,
+                                    suggestion: None,
+                                });
                             }
                         }
                     }

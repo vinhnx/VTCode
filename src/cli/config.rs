@@ -7,7 +7,7 @@ use vtcode_core::utils::colors::style;
 
 /// Handle the config command
 pub async fn handle_config_command(output: Option<&Path>, use_home_dir: bool) -> Result<()> {
-    println!("{}", style("Generate configuration").blue().bold());
+    println!("{}\n", style("[CONFIG]").blue().bold());
 
     if use_home_dir {
         // Create config in user's home directory

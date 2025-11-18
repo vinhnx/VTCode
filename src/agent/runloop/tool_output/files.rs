@@ -8,6 +8,7 @@ use super::styles::{GitStyles, LsStyles, select_line_style};
 /// Constants for line and content limits
 const MAX_DIFF_LINES: usize = 500;
 const MAX_DIFF_LINE_LENGTH: usize = 200;
+const MAX_DISPLAYED_FILES: usize = 100; // Limit displayed files to reduce clutter
 
 /// Safely truncate text to a maximum character length, respecting UTF-8 boundaries
 pub(super) fn truncate_text_safe(text: &str, max_chars: usize) -> &str {
@@ -41,35 +42,33 @@ pub(crate) fn render_write_file_preview(
     git_styles: &GitStyles,
     ls_styles: &LsStyles,
 ) -> Result<()> {
-    if let Some(encoding) = get_string(payload, "encoding") {
-        renderer.line(MessageStyle::Info, &format!("  encoding: {}", encoding))?;
-    }
-
+    // Show basic metadata
     if get_bool(payload, "created") {
         renderer.line(MessageStyle::Response, "  File created")?;
     }
 
+    if let Some(encoding) = get_string(payload, "encoding") {
+        renderer.line(
+            MessageStyle::Info,
+            &format!("  {:16} {}", "encoding", encoding),
+        )?;
+    }
+
+    // Handle diff preview
     let diff_value = match payload.get("diff_preview") {
         Some(value) => value,
         None => return Ok(()),
     };
 
     if get_bool(diff_value, "skipped") {
-        let reason = get_string(diff_value, "reason").unwrap_or("diff preview skipped");
-        renderer.line(
-            MessageStyle::Info,
-            &format!("  diff preview skipped: {reason}"),
-        )?;
-
+        let reason = get_string(diff_value, "reason").unwrap_or("skipped");
         if let Some(detail) = get_string(diff_value, "detail") {
-            renderer.line(MessageStyle::Info, &format!("  detail: {detail}"))?;
-        }
-
-        if let Some(max_bytes) = get_u64(diff_value, "max_bytes") {
             renderer.line(
                 MessageStyle::Info,
-                &format!("  preview limit: {max_bytes} bytes"),
+                &format!("  diff: {} ({})", reason, detail),
             )?;
+        } else {
+            renderer.line(MessageStyle::Info, &format!("  diff: {}", reason))?;
         }
         return Ok(());
     }
@@ -77,13 +76,12 @@ pub(crate) fn render_write_file_preview(
     let diff_content = get_string(diff_value, "content").unwrap_or("");
 
     if diff_content.is_empty() && get_bool(diff_value, "is_empty") {
-        renderer.line(MessageStyle::Info, "  No diff changes to display.")?;
+        renderer.line(MessageStyle::Info, "  (no changes)")?;
+        return Ok(());
     }
 
     if !diff_content.is_empty() {
         renderer.line(MessageStyle::Info, "[diff]")?;
-        // Use higher limit for diffs since they're already filtered by token limit in render_stream_section
-        // Diffs are usually sparse (many unchanged lines) so line-based preview is reasonable here
         render_diff_content(renderer, diff_content, git_styles, ls_styles)?;
     }
 
@@ -91,7 +89,7 @@ pub(crate) fn render_write_file_preview(
         if let Some(omitted) = get_u64(diff_value, "omitted_line_count") {
             renderer.line(
                 MessageStyle::Info,
-                &format!("  ... diff truncated ({omitted} lines omitted)"),
+                &format!("  + {} more lines (use read_file for full view)", omitted),
             )?;
         } else {
             renderer.line(MessageStyle::Info, "  ... diff truncated")?;
@@ -106,97 +104,198 @@ pub(crate) fn render_list_dir_output(
     val: &Value,
     _ls_styles: &LsStyles,
 ) -> Result<()> {
-    if let Some(path) = get_string(val, "path") {
-        renderer.line(MessageStyle::Info, &format!("  {}", path))?;
-    }
-
-    // Show pagination summary
+    // Get pagination info first
     let count = get_u64(val, "count").unwrap_or(0);
     let total = get_u64(val, "total").unwrap_or(0);
     let page = get_u64(val, "page").unwrap_or(1);
     let has_more = get_bool(val, "has_more");
+    let per_page = get_u64(val, "per_page").unwrap_or(20);
 
+    // Show path - always display root directory for clarity
+    if let Some(path) = get_string(val, "path") {
+        let display_path = if path.is_empty() { "/" } else { path };
+        renderer.line(
+            MessageStyle::Info,
+            &format!(
+                "  {}{}",
+                display_path,
+                if !path.is_empty() { "/" } else { "" }
+            ),
+        )?;
+    }
+
+    // Show summary - compact format
     if count > 0 || total > 0 {
-        let summary = if total > count {
+        let start_idx = (page - 1) * per_page + 1;
+        let end_idx = start_idx + count - 1;
+
+        let summary = if total > per_page {
             // Multi-page results
             if has_more {
                 format!(
-                    "  Page {} of ~{} ({} items per page, {} total)",
+                    "  Items {}-{} of {} (page {} of ~{})",
+                    start_idx,
+                    end_idx,
+                    total,
                     page,
-                    (total + count - 1) / count, // Estimate total pages
-                    count,
-                    total
+                    total.div_ceil(per_page),
                 )
             } else {
-                format!("  Page {} ({} items, {} total)", page, count, total)
+                format!(
+                    "  Items {}-{} of {} (page {})",
+                    start_idx, end_idx, total, page
+                )
             }
         } else {
             // Single page with all results
-            format!("  {} items", count)
+            format!("  {} items total", count)
         };
         renderer.line(MessageStyle::Info, &summary)?;
     }
 
-    // Render items
+    // Render items grouped by type
     if let Some(items) = val.get("items").and_then(|v| v.as_array()) {
         if items.is_empty() {
-            renderer.line(MessageStyle::Info, "  (empty directory)")?;
+            renderer.line(MessageStyle::Info, "  (empty)")?;
         } else {
-            for item in items {
+            let mut directories = Vec::new();
+            let mut files = Vec::new();
+
+            // Group items by type
+            for item in items.iter().take(MAX_DISPLAYED_FILES) {
                 if let Some(name) = get_string(item, "name") {
                     let item_type = get_string(item, "type").unwrap_or("file");
                     let size = get_u64(item, "size");
 
-                    let display_name = if item_type == "directory" {
-                        format!("{}/", name)
+                    if item_type == "directory" {
+                        directories.push((name.to_string(), size));
                     } else {
-                        name.to_string()
-                    };
+                        files.push((name.to_string(), size));
+                    }
+                }
+            }
 
-                    let display = if let Some(size_bytes) = size {
-                        format!("  {} ({})", display_name, format_size(size_bytes))
-                    } else {
-                        format!("  {}", display_name)
-                    };
+            // Get sort order from the JSON value, defaulting to alphabetical by name
+            let sort_order = get_string(val, "sort").unwrap_or("name");
 
+            // Sort each group based on the specified sort order
+            match sort_order {
+                "size" => {
+                    // Sort by size (largest first), with None sizes treated as 0
+                    directories.sort_by(|a, b| b.1.unwrap_or(0).cmp(&a.1.unwrap_or(0)));
+                    files.sort_by(|a, b| b.1.unwrap_or(0).cmp(&a.1.unwrap_or(0)));
+                }
+                "name" => {
+                    // Sort alphabetically (case-insensitive for natural sorting)
+                    directories.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
+                    files.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
+                }
+                "type" => {
+                    // Sort by type/extension (files with extensions first, then by extension)
+                    directories.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
+                    files.sort_by(|a, b| {
+                        let ext_a = std::path::Path::new(&a.0)
+                            .extension()
+                            .map(|e| e.to_string_lossy().to_lowercase())
+                            .unwrap_or_default();
+                        let ext_b = std::path::Path::new(&b.0)
+                            .extension()
+                            .map(|e| e.to_string_lossy().to_lowercase())
+                            .unwrap_or_default();
+
+                        ext_a
+                            .cmp(&ext_b)
+                            .then(a.0.to_lowercase().cmp(&b.0.to_lowercase()))
+                    });
+                }
+                _ => {
+                    // Default to alphabetical sorting
+                    directories.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
+                    files.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
+                }
+            }
+
+            // Calculate max name width for directories (with trailing /) and files
+            let max_name_width = if !directories.is_empty() || !files.is_empty() {
+                let dir_max_width = directories
+                    .iter()
+                    .map(|(name, _)| name.len() + 1) // +1 for trailing /
+                    .max()
+                    .unwrap_or(10)
+                    .min(40);
+
+                let file_max_width = files
+                    .iter()
+                    .map(|(name, _)| name.len())
+                    .max()
+                    .unwrap_or(10)
+                    .min(40);
+
+                dir_max_width.max(file_max_width)
+            } else {
+                10 // Default width if no items
+            };
+
+            // Render directories first with section header
+            if !directories.is_empty() {
+                renderer.line(MessageStyle::Info, "  [Directories]")?;
+                for (name, _size) in &directories {
+                    let name_with_slash = format!("{}/", name);
+                    let display = format!("  {:<width$}", name_with_slash, width = max_name_width,);
                     renderer.line(MessageStyle::Response, &display)?;
                 }
+
+                // Add visual separation between directories and files
+                if !files.is_empty() {
+                    renderer.line(MessageStyle::Info, "  ")?; // Add blank line
+                }
+            }
+
+            // Render files with section header
+            if !files.is_empty() {
+                renderer.line(MessageStyle::Info, "  [Files]")?;
+                for (name, _size) in &files {
+                    // Simple file name display without size or emoji
+                    let display = format!("  {:<width$}", name, width = max_name_width,);
+                    renderer.line(MessageStyle::Response, &display)?;
+                }
+            }
+
+            let omitted = items.len().saturating_sub(MAX_DISPLAYED_FILES);
+            if omitted > 0 {
+                renderer.line(
+                    MessageStyle::Info,
+                    &format!("  + {} more (use page={{N}} to see more)", omitted),
+                )?;
             }
         }
     }
 
-    // Show pagination instructions if more results available
+    // Show navigation help if paginated
     if has_more {
-        renderer.line(
-            MessageStyle::Info,
-            "  Use page=N to view other pages (e.g., page=2, page=3)",
-        )?;
-    }
-
-    // Show any additional guidance message from the tool
-    if let Some(message) = get_string(val, "message").filter(|s| !s.is_empty()) {
-        renderer.line(MessageStyle::Info, &format!("  {}", message))?;
+        renderer.line(MessageStyle::Info, "  Use page=2, page=3, ... to navigate")?;
     }
 
     Ok(())
 }
 
 pub(crate) fn render_read_file_output(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
+    // Show file metadata with aligned formatting (no size information)
     if let Some(encoding) = get_string(val, "encoding") {
-        renderer.line(MessageStyle::Info, &format!("  encoding: {}", encoding))?;
-    }
-
-    if let Some(size) = get_u64(val, "size") {
         renderer.line(
             MessageStyle::Info,
-            &format!("  size: {}", format_size(size)),
+            &format!("  {:16} {}", "encoding", encoding),
         )?;
     }
 
+    // Removed size display to comply with request of no file size information
     if let Some(start) = get_u64(val, "start_line")
         && let Some(end) = get_u64(val, "end_line")
     {
-        renderer.line(MessageStyle::Info, &format!("  lines: {}-{}", start, end))?;
+        renderer.line(
+            MessageStyle::Info,
+            &format!("  {:16} {}-{}", "lines", start, end),
+        )?;
     }
 
     Ok(())
@@ -209,10 +308,9 @@ fn render_diff_content(
     git_styles: &GitStyles,
     ls_styles: &LsStyles,
 ) -> Result<()> {
-    let mut line_count = 0;
     let total_lines = diff_content.lines().count();
 
-    for line in diff_content.lines() {
+    for (line_count, line) in diff_content.lines().enumerate() {
         if line_count >= MAX_DIFF_LINES {
             renderer.line(
                 MessageStyle::Info,
@@ -234,7 +332,6 @@ fn render_diff_content(
         } else {
             renderer.line(MessageStyle::Response, &display)?;
         }
-        line_count += 1;
     }
 
     Ok(())
@@ -254,4 +351,10 @@ fn format_size(bytes: u64) -> String {
     } else {
         format!("{} B", bytes)
     }
+}
+
+/// Enhance file names with type indicators (no emojis)
+fn enhance_file_indicator(name: &str) -> String {
+    // Return just the name without any emoji indicators
+    name.to_string()
 }

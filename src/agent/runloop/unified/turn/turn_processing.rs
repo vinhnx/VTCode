@@ -241,47 +241,37 @@ pub(crate) fn process_llm_response(
         }
     }
 
-    if tool_calls.is_empty() {
-        if let Some(text) = final_text.clone() {
-            if !text.trim().is_empty() {
-                if let Some((name, args)) =
-                    crate::agent::runloop::text_tools::detect_textual_tool_call(&text)
-                {
-                    let args_json =
-                        serde_json::to_string(&args).unwrap_or_else(|_| "{}".to_string());
-                    let code_blocks =
-                        crate::agent::runloop::text_tools::extract_code_fence_blocks(&text);
-                    if !code_blocks.is_empty() {
-                        crate::agent::runloop::tool_output::render_code_fence_blocks(
-                            renderer,
-                            &code_blocks,
-                        )?;
-                        renderer.line(MessageStyle::Output, "")?;
-                    }
-                    let (headline, _) =
-                        crate::agent::runloop::unified::tool_summary::describe_tool_action(
-                            &name, &args,
-                        );
-                    let notice = if headline.is_empty() {
-                        format!(
-                            "Detected {} request",
-                            crate::agent::runloop::unified::tool_summary::humanize_tool_name(&name)
-                        )
-                    } else {
-                        format!("Detected {headline}")
-                    };
-                    renderer.line(MessageStyle::Info, &notice)?;
-                    let call_id = format!("call_textual_{}", conversation_len);
-                    tool_calls.push(uni::ToolCall::function(
-                        call_id.clone(),
-                        name.clone(),
-                        args_json.clone(),
-                    ));
-                    interpreted_textual_call = true;
-                    final_text = None;
-                }
-            }
+    if tool_calls.is_empty()
+        && let Some(text) = final_text.clone()
+        && !text.trim().is_empty()
+        && let Some((name, args)) =
+            crate::agent::runloop::text_tools::detect_textual_tool_call(&text)
+    {
+        let args_json = serde_json::to_string(&args).unwrap_or_else(|_| "{}".to_string());
+        let code_blocks = crate::agent::runloop::text_tools::extract_code_fence_blocks(&text);
+        if !code_blocks.is_empty() {
+            crate::agent::runloop::tool_output::render_code_fence_blocks(renderer, &code_blocks)?;
+            renderer.line(MessageStyle::Output, "")?;
         }
+        let (headline, _) =
+            crate::agent::runloop::unified::tool_summary::describe_tool_action(&name, &args);
+        let notice = if headline.is_empty() {
+            format!(
+                "Detected {} request",
+                crate::agent::runloop::unified::tool_summary::humanize_tool_name(&name)
+            )
+        } else {
+            format!("Detected {headline}")
+        };
+        renderer.line(MessageStyle::Info, &notice)?;
+        let call_id = format!("call_textual_{}", conversation_len);
+        tool_calls.push(uni::ToolCall::function(
+            call_id.clone(),
+            name.clone(),
+            args_json.clone(),
+        ));
+        interpreted_textual_call = true;
+        final_text = None;
     }
 
     // Build result
@@ -298,13 +288,13 @@ pub(crate) fn process_llm_response(
         });
     }
 
-    if let Some(text) = final_text {
-        if !text.trim().is_empty() {
-            return Ok(TurnProcessingResult::TextResponse {
-                text,
-                reasoning: response.reasoning.clone(),
-            });
-        }
+    if let Some(text) = final_text
+        && !text.trim().is_empty()
+    {
+        return Ok(TurnProcessingResult::TextResponse {
+            text,
+            reasoning: response.reasoning.clone(),
+        });
     }
 
     Ok(TurnProcessingResult::Empty)

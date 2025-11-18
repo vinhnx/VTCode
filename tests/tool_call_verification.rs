@@ -288,7 +288,7 @@ fn test_all_providers_tool_validation() {
         parallel_tool_config: None,
         reasoning_effort: None,
         output_format: None,
-        verbosity: VerbosityLevel::default(),
+        verbosity: Some(VerbosityLevel::default()),
     };
 
     assert!(
@@ -341,7 +341,7 @@ fn test_openrouter_tool_call_format() {
         parallel_tool_config: None,
         reasoning_effort: None,
         output_format: None,
-        verbosity: VerbosityLevel::default(),
+        verbosity: Some(VerbosityLevel::default()),
     };
 
     assert!(provider.validate_request(&request).is_ok());

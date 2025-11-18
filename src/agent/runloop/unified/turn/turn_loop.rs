@@ -134,19 +134,19 @@ pub async fn apply_turn_outcome(
                     ),
                 }
             }
-            if let Some(last) = outcome.working_history.last() {
-                if last.role == uni::MessageRole::Assistant {
-                    let text = last.content.as_text();
-                    let claims_write = text.contains("I've updated")
-                        || text.contains("I have updated")
-                        || text.contains("updated the `");
-                    if claims_write && !outcome.any_write_effect {
-                        renderer.line_if_not_empty(MessageStyle::Output)?;
-                        renderer.line(
-                            MessageStyle::Info,
-                            "Note: The assistant mentioned edits but no write tool ran.",
-                        )?;
-                    }
+            if let Some(last) = outcome.working_history.last()
+                && last.role == uni::MessageRole::Assistant
+            {
+                let text = last.content.as_text();
+                let claims_write = text.contains("I've updated")
+                    || text.contains("I have updated")
+                    || text.contains("updated the `");
+                if claims_write && !outcome.any_write_effect {
+                    renderer.line_if_not_empty(MessageStyle::Output)?;
+                    renderer.line(
+                        MessageStyle::Info,
+                        "Note: The assistant mentioned edits but no write tool ran.",
+                    )?;
                 }
             }
             Ok(())

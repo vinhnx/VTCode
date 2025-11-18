@@ -153,9 +153,11 @@ pub async fn handle_exec_command(
     }
 
     if !options.json {
+        println!();
+
         if !result.summary.trim().is_empty() {
             println!(
-                "{} {}",
+                "{} {}\n",
                 style("[SUMMARY]").green().bold(),
                 result.summary.trim()
             );
@@ -169,35 +171,37 @@ pub async fn handle_exec_command(
             .max_turn_duration_ms
             .map(|value| value.to_string())
             .unwrap_or_else(|| "-".to_string());
-        println!(
-            "{} outcome={} turns={} duration_ms={} avg_turn_ms={} max_turn_ms={} warnings={}",
-            style("[OUTCOME]").magenta().bold(),
-            result.outcome,
-            result.turns_executed,
-            result.total_duration_ms,
-            avg_display,
-            max_display,
-            result.warnings.len()
-        );
+
+        println!("{}", style("[OUTCOME]").magenta().bold());
+        println!("  {:16} {}", "outcome", result.outcome);
+        println!("  {:16} {}", "turns", result.turns_executed);
+        println!("  {:16} {}", "duration_ms", result.total_duration_ms);
+        println!("  {:16} {}", "avg_turn_ms", avg_display);
+        println!("  {:16} {}", "max_turn_ms", max_display);
+        println!("  {:16} {}\n", "warnings", result.warnings.len());
 
         if !result.modified_files.is_empty() {
-            println!(
-                "{} {}",
-                style("[FILES]").cyan().bold(),
-                result.modified_files.join(", ")
-            );
-        }
-        if !result.executed_commands.is_empty() {
-            println!(
-                "{} {}",
-                style("[COMMANDS]").cyan().bold(),
-                result.executed_commands.join(", ")
-            );
-        }
-        if !result.warnings.is_empty() {
-            for warning in &result.warnings {
-                println!("{} {}", style("[WARNING]").yellow().bold(), warning);
+            println!("{}", style("[FILES]").cyan().bold());
+            for (idx, file) in result.modified_files.iter().enumerate() {
+                println!("  {:>2}. {}", idx + 1, file);
             }
+            println!();
+        }
+
+        if !result.executed_commands.is_empty() {
+            println!("{}", style("[COMMANDS]").cyan().bold());
+            for (idx, cmd) in result.executed_commands.iter().enumerate() {
+                println!("  {:>2}. {}", idx + 1, cmd);
+            }
+            println!();
+        }
+
+        if !result.warnings.is_empty() {
+            println!("{}", style("[WARNINGS]").yellow().bold());
+            for (idx, warning) in result.warnings.iter().enumerate() {
+                println!("  {:>2}. {}", idx + 1, warning);
+            }
+            println!();
         }
     }
 
