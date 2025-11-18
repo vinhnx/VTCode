@@ -76,13 +76,13 @@
 
 ## Tool Usage Guidelines
 
--   **Tier 1 - Essential**: list_files, read_file, write_file, grep_file, edit_file
+-   **Tier 1 - Essential**: list_files, read_file, write_file, grep_file, edit_file, shell
 -   **Tier 2 - Control**: update_plan (TODO list), PTY sessions (create/send/read/close)
 -   **Tier 3 - Advanced**: apply_patch, search_tools
 -   **Tier 4 - Data Processing**: execute_code, save_skill, load_skill
 -   **Command Execution Strategy**:
     -   Interactive work → PTY sessions (create_pty_session → send_pty_input → read_pty_session → close_pty_session)
-    -   One-off commands → Bash tool
+    -   One-off commands → shell tool
     -   AVOID: raw grep/find bash (use Grep instead)
 -   **File Editing Strategy**:
     -   Exact replacements → edit_file (preferred for speed + precision)
