@@ -1,10 +1,7 @@
 use anyhow::{Context, Result, anyhow};
 use serde_json::{Value, json};
-use shell_words::split;
 
 use crate::config::constants::tools;
-use crate::config::loader::ConfigManager;
-use crate::tools::command_policy::CommandPolicyEvaluator;
 use crate::tools::grep_file::GrepSearchResult;
 use crate::tools::types::EditInput;
 
@@ -130,67 +127,5 @@ impl ToolRegistry {
 
     pub async fn list_files(&mut self, args: Value) -> Result<Value> {
         self.execute_tool(tools::LIST_FILES, args).await
-    }
-
-    pub async fn run_terminal_cmd(&mut self, args: Value) -> Result<Value> {
-        // Check for validation errors from parameter conversion
-        if let Some(err_msg) = args.get("_validation_error").and_then(|v| v.as_str()) {
-            return Err(anyhow!("{}", err_msg));
-        }
-
-        let cfg = ConfigManager::load()
-            .or_else(|_| ConfigManager::load_from_workspace("."))
-            .or_else(|_| ConfigManager::load_from_file("vtcode.toml"))
-            .map(|cm| cm.config().clone())
-            .unwrap_or_default();
-
-        let mut args = args;
-        if let Some(cmd_str) = args.get("command").and_then(|v| v.as_str()) {
-            let parts = split(cmd_str).context("failed to parse command string")?;
-            if parts.is_empty() {
-                return Err(anyhow!("command cannot be empty"));
-            }
-            if let Some(map) = args.as_object_mut() {
-                map.insert("command".to_string(), json!(parts));
-            }
-        }
-
-        let cmd_text = if let Some(cmd_val) = args.get("command") {
-            if cmd_val.is_array() {
-                cmd_val
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .filter_map(|v| v.as_str())
-                    .collect::<Vec<_>>()
-                    .join(" ")
-            } else {
-                cmd_val.as_str().unwrap_or("").to_string()
-            }
-        } else {
-            String::new()
-        };
-
-        let policy = CommandPolicyEvaluator::from_config(&cfg.commands);
-        if !policy.allows_text(&cmd_text) {
-            return Err(anyhow!("Command not allowed by policy"));
-        }
-
-        if args.get("cwd").is_none() {
-            if let Some(m) = args.as_object_mut() {
-                m.insert(
-                    "cwd".to_string(),
-                    json!(self.workspace_root().display().to_string()),
-                );
-            }
-        }
-
-        if args.get("mode").is_none() {
-            if let Some(m) = args.as_object_mut() {
-                m.insert("mode".to_string(), json!("pty"));
-            }
-        }
-
-        self.execute_tool(tools::RUN_COMMAND, args).await
     }
 }

@@ -139,7 +139,7 @@ pub(crate) fn select_line_style(
         Some(name)
             if matches!(
                 name,
-                tools::RUN_COMMAND | tools::WRITE_FILE | tools::EDIT_FILE | tools::APPLY_PATCH
+                tools::RUN_PTY_CMD | tools::WRITE_FILE | tools::EDIT_FILE | tools::APPLY_PATCH
             ) =>
         {
             let trimmed = line.trim_start();

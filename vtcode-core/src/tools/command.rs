@@ -1,22 +1,13 @@
 //! Command execution tool
 
-use super::traits::{ModeTool, Tool};
 use super::types::*;
-use crate::audit::permission_log::{PermissionAuditLog, PermissionDecision};
 use crate::config::CommandsConfig;
-use crate::config::constants::tools;
-use crate::exec::async_command::{AsyncProcessRunner, ProcessOptions, StreamCaptureConfig};
-use crate::exec::cancellation;
 use crate::execpolicy::{sanitize_working_dir, validate_command};
 use crate::tools::command_policy::CommandPolicyEvaluator;
 use crate::tools::path_env;
 use crate::tools::shell::resolve_fallback_shell;
-use anyhow::{Context, Result, anyhow};
-use async_trait::async_trait;
-use serde_json::{Value, json};
-use std::collections::HashMap;
-use std::ffi::OsString;
-use std::{path::PathBuf, time::Duration};
+use anyhow::{Result, anyhow};
+use std::path::PathBuf;
 
 /// Command execution tool for non-PTY process handling with policy enforcement
 #[derive(Clone)]
@@ -52,133 +43,6 @@ impl CommandTool {
             &commands_config.extra_path_entries,
             &self.workspace_root,
         );
-    }
-
-    async fn execute_terminal_command(
-        &self,
-        input: &EnhancedTerminalInput,
-        invocation: CommandInvocation,
-    ) -> Result<Value> {
-        let work_dir =
-            sanitize_working_dir(&self.workspace_root, input.working_dir.as_deref()).await?;
-
-        // Build environment: inherit parent process variables (required for PATH, HOME, etc.)
-        // then override specific variables for consistent terminal behavior.
-        // This matches the PTY environment setup in pty.rs:set_command_environment()
-        let mut env: HashMap<OsString, OsString> = std::env::vars_os().collect();
-
-        // Ensure HOME is set - this is crucial for proper path expansion in cargo and other tools
-        let home_key = OsString::from("HOME");
-        if !env.contains_key(&home_key) {
-            if let Some(home_dir) = dirs::home_dir() {
-                env.insert(home_key.clone(), OsString::from(home_dir.as_os_str()));
-            }
-        }
-
-        if !self.extra_path_entries.is_empty() {
-            let path_key = OsString::from("PATH");
-            let current_path = env.get(&path_key).map(|value| value.as_os_str());
-            if let Some(merged) = path_env::merge_path_env(current_path, &self.extra_path_entries) {
-                env.insert(path_key, merged);
-            }
-        }
-        env.insert(OsString::from("PAGER"), OsString::from("cat"));
-        env.insert(OsString::from("GIT_PAGER"), OsString::from("cat"));
-        env.insert(OsString::from("LESS"), OsString::from("R"));
-
-        let timeout = Duration::from_secs(input.timeout_secs.unwrap_or(30));
-
-        let cancellation_token = cancellation::current_tool_cancellation();
-
-        let options = ProcessOptions {
-            program: invocation.program.clone(),
-            args: invocation.args.clone(),
-            env,
-            current_dir: Some(work_dir),
-            timeout: Some(timeout),
-            cancellation_token,
-            stdout: StreamCaptureConfig::default(),
-            stderr: StreamCaptureConfig::default(),
-        };
-
-        let result = AsyncProcessRunner::run(options)
-            .await
-            .with_context(|| format!("failed to run command: {}", invocation.display))?;
-
-        let stdout = String::from_utf8_lossy(&result.stdout).to_string();
-        let stderr = String::from_utf8_lossy(&result.stderr).to_string();
-        let exit_code = result.exit_status.code().unwrap_or_default();
-        let mut success = result.exit_status.success();
-        if result.timed_out || result.cancelled {
-            success = false;
-        }
-
-        // Apply max_tokens truncation if specified
-        let mut output_stdout = stdout;
-        let mut output_stderr = stderr;
-        let applied_max_tokens = input.max_tokens;
-
-        if let Some(max_tokens) = input.max_tokens {
-            if max_tokens > 0 {
-                use crate::core::agent::runloop::token_trunc::truncate_content_by_tokens;
-                use crate::core::token_budget::TokenBudgetManager;
-
-                let token_budget = TokenBudgetManager::default();
-
-                // Truncate stdout based on tokens using the same head+tail strategy as file_ops
-                let stdout_tokens = token_budget
-                    .count_tokens(&output_stdout)
-                    .await
-                    .unwrap_or_else(|_| {
-                        (output_stdout.len() as f64
-                            / crate::core::token_constants::TOKENS_PER_CHARACTER)
-                            as usize
-                    });
-
-                if stdout_tokens > max_tokens {
-                    let (truncated_stdout, _) =
-                        truncate_content_by_tokens(&output_stdout, max_tokens, &token_budget).await;
-                    output_stdout = format!(
-                        "{}\n[... truncated by max_tokens: {} ...]",
-                        truncated_stdout, max_tokens
-                    );
-                }
-
-                // Truncate stderr based on tokens using the same head+tail strategy as file_ops
-                let stderr_tokens = token_budget
-                    .count_tokens(&output_stderr)
-                    .await
-                    .unwrap_or_else(|_| {
-                        (output_stderr.len() as f64
-                            / crate::core::token_constants::TOKENS_PER_CHARACTER)
-                            as usize
-                    });
-
-                if stderr_tokens > max_tokens {
-                    let (truncated_stderr, _) =
-                        truncate_content_by_tokens(&output_stderr, max_tokens, &token_budget).await;
-                    output_stderr = format!(
-                        "{}\n[... truncated by max_tokens: {} ...]",
-                        truncated_stderr, max_tokens
-                    );
-                }
-            }
-        }
-
-        Ok(json!({
-            "success": success,
-            "exit_code": exit_code,
-            "is_exited": true,
-            "stdout": output_stdout,
-            "stderr": output_stderr,
-            "mode": "terminal",
-            "pty_enabled": false,
-            "command": invocation.display,
-            "timed_out": result.timed_out,
-            "cancelled": result.cancelled,
-            "duration_ms": result.duration.as_millis(),
-            "applied_max_tokens": applied_max_tokens,
-        }))
     }
 
     pub(crate) async fn prepare_invocation(
@@ -268,50 +132,9 @@ impl CommandTool {
     }
 }
 
-#[async_trait]
-impl Tool for CommandTool {
-    async fn execute(&self, args: Value) -> Result<Value> {
-        let input: EnhancedTerminalInput = serde_json::from_value(args)?;
-        let invocation = self.prepare_invocation(&input).await?;
-        self.execute_terminal_command(&input, invocation).await
-    }
-
-    fn name(&self) -> &'static str {
-        tools::RUN_COMMAND
-    }
-
-    fn description(&self) -> &'static str {
-        "Execute terminal commands"
-    }
-
-    fn validate_args(&self, args: &Value) -> Result<()> {
-        let input: EnhancedTerminalInput = serde_json::from_value(args.clone())?;
-        if input.command.is_empty() {
-            return Err(anyhow!("Command cannot be empty"));
-        }
-        // Validate that the executable is non-empty after trimming
-        if input.command[0].trim().is_empty() {
-            return Err(anyhow!("Command executable cannot be empty"));
-        }
-        Ok(())
-    }
-}
-
-#[async_trait]
-impl ModeTool for CommandTool {
-    fn supported_modes(&self) -> Vec<&'static str> {
-        vec!["terminal"]
-    }
-
-    async fn execute_mode(&self, mode: &str, args: Value) -> Result<Value> {
-        let input: EnhancedTerminalInput = serde_json::from_value(args)?;
-        let invocation = self.prepare_invocation(&input).await?;
-        match mode {
-            "terminal" => self.execute_terminal_command(&input, invocation).await,
-            _ => Err(anyhow!("Unsupported command execution mode: {}", mode)),
-        }
-    }
-}
+// NOTE: Tool and ModeTool trait implementations removed since CommandTool
+// is no longer registered as a public tool (RUN_COMMAND was deprecated).
+// CommandTool is kept for internal command preparation in the PTY system.
 
 #[derive(Debug, Clone)]
 pub(crate) struct CommandInvocation {
@@ -320,6 +143,7 @@ pub(crate) struct CommandInvocation {
     pub(crate) display: String,
 }
 
+#[allow(dead_code)]
 fn format_command(command: &[String]) -> String {
     command
         .iter()
@@ -328,6 +152,7 @@ fn format_command(command: &[String]) -> String {
         .join(" ")
 }
 
+#[allow(dead_code)]
 fn is_risky_command(command: &[String]) -> bool {
     if command.is_empty() {
         return false;
@@ -368,19 +193,12 @@ fn is_risky_command(command: &[String]) -> bool {
     }
 }
 
-fn log_audit_for_command(command: &str, reason: &str) {
-    // Try to create an audit log at ~/.vtcode/audit and ignore errors
-    if let Some(home) = std::env::var_os("HOME") {
-        let mut audit_dir = std::path::PathBuf::from(home);
-        audit_dir.push(".vtcode");
-        audit_dir.push("audit");
-        if let Ok(mut audit_log) = PermissionAuditLog::new(audit_dir) {
-            let _ =
-                audit_log.log_command_decision(command, PermissionDecision::Allowed, reason, None);
-        }
-    }
+#[allow(dead_code)]
+fn log_audit_for_command(_command: &str, _reason: &str) {
+    // Audit logging removed - kept as no-op for backwards compatibility
 }
 
+#[allow(dead_code)]
 fn quote_argument_posix(arg: &str) -> String {
     if arg.is_empty() {
         return "''".to_string();

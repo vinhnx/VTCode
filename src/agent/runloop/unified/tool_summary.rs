@@ -133,7 +133,7 @@ pub(crate) fn describe_tool_action(tool_name: &str, args: &Value) -> (String, Ha
     };
 
     match actual_tool_name {
-        actual_name if actual_name == tool_names::RUN_COMMAND => describe_shell_command(args)
+        actual_name if actual_name == tool_names::RUN_PTY_CMD => describe_shell_command(args)
             .map(|(desc, used)| {
                 (
                     format!("{}{}", if is_mcp_tool { "MCP " } else { "" }, desc),

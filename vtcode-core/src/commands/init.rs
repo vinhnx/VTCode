@@ -411,7 +411,7 @@ async fn analyze_git_history(
         // Try to get recent commit messages to analyze patterns
         let git_log_result = registry
             .execute_tool(
-                tools::RUN_COMMAND,
+                tools::RUN_PTY_CMD,
                 json!({
                     "command": "git log --oneline -20 --pretty=format:'%s'",
                     "timeout": 5000

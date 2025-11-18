@@ -13,7 +13,7 @@ async fn run_command_uses_pty_backend() -> Result<()> {
 
     let response = registry
         .execute_tool(
-            tools::RUN_COMMAND,
+            tools::RUN_PTY_CMD,
             json!({
                 "command": "ls",
                 "working_dir": "."
@@ -41,7 +41,7 @@ async fn run_command_accepts_indexed_arguments_zero_based() -> Result<()> {
 
     let response = registry
         .execute_tool(
-            tools::RUN_COMMAND,
+            tools::RUN_PTY_CMD,
             json!({
                 "command.0": "ls",
                 "command.1": "-a",
@@ -66,7 +66,7 @@ async fn run_command_accepts_indexed_arguments_one_based() -> Result<()> {
 
     let response = registry
         .execute_tool(
-            tools::RUN_COMMAND,
+            tools::RUN_PTY_CMD,
             json!({
                 "command.1": "ls",
                 "command.2": "-a",

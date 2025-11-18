@@ -31,7 +31,6 @@ vtcode-exec-events = { path = "../vtcode-exec-events", version = "0.45.4", optio
 workspace = true
 
 [dev-dependencies]
-tempfile = "3.10"
 assert_fs = "1.1"
 
 [[example]]
