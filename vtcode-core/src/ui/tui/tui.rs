@@ -49,6 +49,7 @@ type TerminalEvent = CrosstermEvent;
 struct InputListener {
     receiver: UnboundedReceiver<TerminalEvent>,
     shutdown: Option<mpsc::Sender<()>>,
+    control: Option<mpsc::Sender<InputControl>>,
 }
 
 #[derive(Default)]
@@ -83,16 +84,47 @@ impl ViewportTracker {
     }
 }
 
+enum InputControl {
+    Pause,
+    Resume,
+}
+
 impl InputListener {
     fn spawn() -> Self {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         let (shutdown_tx, shutdown_rx) = mpsc::channel();
+        let (control_tx, control_rx) = mpsc::channel();
 
         std::thread::spawn(move || {
             let mut viewport = ViewportTracker::new();
+            let mut paused = false;
+
             loop {
                 if shutdown_rx.try_recv().is_ok() {
                     break;
+                }
+
+                // Check for control messages (non-blocking)
+                while let Ok(control) = control_rx.try_recv() {
+                    match control {
+                        InputControl::Pause => paused = true,
+                        InputControl::Resume => paused = false,
+                    }
+                }
+
+                if paused {
+                    // If paused, block until we receive a Resume message
+                    // This avoids busy-waiting and relinquishes CPU entirely
+                    if let Ok(control) = control_rx.recv() {
+                        match control {
+                            InputControl::Resume => paused = false,
+                            InputControl::Pause => paused = true,
+                        }
+                    } else {
+                        // Channel closed, exit
+                        break;
+                    }
+                    continue;
                 }
 
                 match event::poll(Duration::from_millis(INPUT_POLL_INTERVAL_MS)) {
@@ -134,11 +166,24 @@ impl InputListener {
         Self {
             receiver: rx,
             shutdown: Some(shutdown_tx),
+            control: Some(control_tx),
         }
     }
 
     async fn recv(&mut self) -> Option<TerminalEvent> {
         self.receiver.recv().await
+    }
+
+    fn pause(&self) {
+        if let Some(tx) = &self.control {
+            let _ = tx.send(InputControl::Pause);
+        }
+    }
+
+    fn resume(&self) {
+        if let Some(tx) = &self.control {
+            let _ = tx.send(InputControl::Resume);
+        }
     }
 }
 
@@ -335,7 +380,21 @@ async fn drive_terminal<B: Backend>(
         loop {
             match commands.try_recv() {
                 Ok(command) => {
-                    session.handle_command(command);
+                    match command {
+                        InlineCommand::SuspendEventLoop => {
+                            inputs.pause();
+                        }
+                        InlineCommand::ResumeEventLoop => {
+                            inputs.resume();
+                        }
+                        InlineCommand::ForceRedraw => {
+                            terminal.clear().context("failed to clear terminal for redraw")?;
+                            session.handle_command(command);
+                        }
+                        _ => {
+                            session.handle_command(command);
+                        }
+                    }
                 }
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => {
@@ -359,7 +418,21 @@ async fn drive_terminal<B: Backend>(
             command = commands.recv() => {
                 match command {
                     Some(command) => {
-                        session.handle_command(command);
+                        match command {
+                            InlineCommand::SuspendEventLoop => {
+                                inputs.pause();
+                            }
+                            InlineCommand::ResumeEventLoop => {
+                                inputs.resume();
+                            }
+                            InlineCommand::ForceRedraw => {
+                                terminal.clear().context("failed to clear terminal for redraw")?;
+                                session.handle_command(command);
+                            }
+                            _ => {
+                                session.handle_command(command);
+                            }
+                        }
                         continue 'main;
                     }
                     None => {

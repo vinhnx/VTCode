@@ -57,6 +57,9 @@ pub enum SlashCommandOutcome {
         command: WorkspaceDirectoryCommand,
     },
     ShowPruningReport,
+    LaunchEditor {
+        file: Option<String>,
+    },
     SubmitPrompt {
         prompt: String,
     },
@@ -504,6 +507,14 @@ pub async fn handle_slash_command(
                 return Ok(SlashCommandOutcome::Handled);
             }
             Ok(SlashCommandOutcome::AnalyzeAgent)
+        }
+        "edit" => {
+            let file = if args.trim().is_empty() {
+                None
+            } else {
+                Some(args.trim().to_string())
+            };
+            Ok(SlashCommandOutcome::LaunchEditor { file })
         }
         "exit" => Ok(SlashCommandOutcome::Exit),
         _ => {

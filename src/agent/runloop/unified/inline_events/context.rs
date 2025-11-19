@@ -74,6 +74,11 @@ impl<'a> InlineEventContext<'a> {
             InlineEvent::Cancel => self.control_processor().cancel()?,
             InlineEvent::Exit => self.control_processor().exit()?,
             InlineEvent::Interrupt => self.handle_interrupt(),
+            InlineEvent::LaunchEditor => {
+                // Ctrl+E pressed: submit /edit command
+                self.input_processor().submit("/edit".to_string())
+            }
+
             InlineEvent::ScrollLineUp
             | InlineEvent::ScrollLineDown
             | InlineEvent::ScrollPageUp

@@ -361,11 +361,14 @@ impl Session {
             InlineCommand::ClearScreen => {
                 self.clear_screen();
             }
+            InlineCommand::SuspendEventLoop | InlineCommand::ResumeEventLoop => {
+                // Handled by drive_terminal
+            }
             InlineCommand::Shutdown => {
                 self.request_exit();
             }
         }
-        self.mark_dirty();
+        self.needs_redraw = true;
     }
 
     pub fn handle_event(
@@ -2157,6 +2160,12 @@ impl Session {
                 self.mark_dirty();
                 Some(InlineEvent::Exit)
             }
+            KeyCode::Char('e') | KeyCode::Char('E') if has_control => {
+                // Ctrl+E: Launch editor with current input
+                self.mark_dirty();
+                Some(InlineEvent::LaunchEditor)
+            }
+
             KeyCode::Esc => {
                 if self.modal.is_some() {
                     self.close_modal();

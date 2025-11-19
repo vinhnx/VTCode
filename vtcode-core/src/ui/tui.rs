@@ -3,6 +3,7 @@ use tokio::sync::mpsc;
 
 use crate::config::types::UiSurfacePreference;
 
+pub mod alternate_screen;
 mod session;
 mod style;
 mod theme_parser;

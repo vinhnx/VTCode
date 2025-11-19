@@ -295,6 +295,8 @@ pub enum InlineCommand {
         workspace: std::path::PathBuf,
     },
     ClearScreen,
+    SuspendEventLoop,
+    ResumeEventLoop,
     Shutdown,
 }
 
@@ -312,6 +314,7 @@ pub enum InlineEvent {
     ScrollPageUp,
     ScrollPageDown,
     FileSelected(String),
+    LaunchEditor,
 }
 
 pub type InlineEventCallback = Arc<dyn Fn(&InlineEvent) + Send + Sync + 'static>;
@@ -346,6 +349,14 @@ impl InlineHandle {
         let _ = self
             .sender
             .send(InlineCommand::ReplaceLast { count, kind, lines });
+    }
+
+    pub fn suspend_event_loop(&self) {
+        let _ = self.sender.send(InlineCommand::SuspendEventLoop);
+    }
+
+    pub fn resume_event_loop(&self) {
+        let _ = self.sender.send(InlineCommand::ResumeEventLoop);
     }
 
     pub fn set_prompt(&self, prefix: String, style: InlineTextStyle) {
