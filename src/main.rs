@@ -16,6 +16,7 @@ mod cli; // local CLI handlers in src/cli // agent runloops (single-agent only)
 mod hooks;
 mod ide_context;
 mod process_hardening;
+mod tui; // Terminal UI event handler
 mod workspace_trust;
 
 #[tokio::main]

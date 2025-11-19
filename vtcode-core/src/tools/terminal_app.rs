@@ -3,9 +3,10 @@ use std::fs;
 use std::io;
 use std::path::PathBuf;
 use std::process::Command;
+use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow};
-use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
+use crossterm::terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType, LeaveAlternateScreen, EnterAlternateScreen};
 use crossterm::ExecutableCommand;
 use tempfile::NamedTempFile;
 use tracing::debug;
@@ -39,12 +40,6 @@ impl TerminalAppLauncher {
     /// This follows the Ratatui pattern for spawning external editors:
     /// https://ratatui.rs/recipes/apps/spawn-vim/
     ///
-    /// 1. Leave alternate screen
-    /// 2. Disable raw mode
-    /// 3. Spawn editor and wait
-    /// 4. Re-enter alternate screen
-    /// 5. Re-enable raw mode
-    ///
     /// # Errors
     ///
     /// Returns an error if the editor fails to launch or if file operations fail.
@@ -65,54 +60,23 @@ impl TerminalAppLauncher {
             (path, true)
         };
 
-        // Following Ratatui recipe: https://ratatui.rs/recipes/apps/spawn-vim/
-        // 1. Leave alternate screen
-        io::stdout()
-            .execute(crossterm::terminal::LeaveAlternateScreen)
-            .context("failed to leave alternate screen")?;
+        // Use unified terminal suspension logic
+        self.suspend_terminal_for_command(|| {
+            let status = Command::new(&editor)
+                .arg(&file_path)
+                .current_dir(&self.workspace_root)
+                .status()
+                .with_context(|| format!("failed to spawn editor '{}'", editor))?;
 
-        // CRITICAL: Drain any pending crossterm events BEFORE disabling raw mode.
-        // This prevents the external editor (vim) from receiving garbage input (like terminal
-        // capability responses or buffered keystrokes) that might have been sent to the TUI.
-        // We use crossterm::event::read() to safely consume these events.
-        while crossterm::event::poll(std::time::Duration::from_millis(0)).unwrap_or(false) {
-            let _ = crossterm::event::read();
-        }
-
-        // 2. Disable raw mode
-        disable_raw_mode().context("failed to disable raw mode")?;
-
-        // 3. Spawn editor and wait for it to complete
-        let status = Command::new(&editor)
-            .arg(&file_path)
-            .current_dir(&self.workspace_root)
-            .status()
-            .with_context(|| format!("failed to spawn editor '{}'", editor))?;
-
-        // 4. Re-enter alternate screen
-        io::stdout()
-            .execute(crossterm::terminal::EnterAlternateScreen)
-            .context("failed to re-enter alternate screen")?;
-
-        // 5. Re-enable raw mode
-        enable_raw_mode().context("failed to re-enable raw mode")?;
-
-        // 6. Clear terminal to remove any artifacts (IMPORTANT!)
-        // This prevents ANSI escape codes from vim's background color requests
-        // from appearing in the TUI. See: https://ratatui.rs/recipes/apps/spawn-vim/
-        io::stdout()
-            .execute(crossterm::terminal::Clear(crossterm::terminal::ClearType::All))
-            .context("failed to clear terminal")?;
-
-        if !status.success() {
-            if is_temp {
-                let _ = fs::remove_file(&file_path);
+            if !status.success() {
+                return Err(anyhow!(
+                    "editor exited with non-zero status: {}",
+                    status.code().unwrap_or(-1)
+                ));
             }
-            return Err(anyhow!(
-                "editor exited with non-zero status: {}",
-                status.code().unwrap_or(-1)
-            ));
-        }
+
+            Ok(())
+        })?;
 
         // Read temp file contents if it was a temp file
         let content = if is_temp {
@@ -128,6 +92,66 @@ impl TerminalAppLauncher {
         Ok(content)
     }
 
+    /// Suspend terminal UI state and run external command
+    ///
+    /// This is the unified method for launching external applications while
+    /// properly managing terminal state. It follows the Ratatui recipe:
+    /// https://ratatui.rs/recipes/apps/spawn-vim/
+    ///
+    /// The sequence ensures:
+    /// 1. Event handler is stopped (if applicable)
+    /// 2. Alternate screen is left
+    /// 3. Pending events are drained (CRITICAL!)
+    /// 4. Raw mode is disabled
+    /// 5. External command runs freely
+    /// 6. Raw mode is re-enabled
+    /// 7. Alternate screen is re-entered
+    /// 8. Terminal is cleared (removes artifacts)
+    /// 9. Event handler is restarted (if applicable)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if terminal state management fails or command fails.
+    fn suspend_terminal_for_command<F>(&self, f: F) -> Result<()>
+    where
+        F: FnOnce() -> Result<()>,
+    {
+        // Leave alternate screen
+        io::stdout()
+            .execute(LeaveAlternateScreen)
+            .context("failed to leave alternate screen")?;
+
+        // CRITICAL: Drain any pending crossterm events BEFORE disabling raw mode.
+        // This prevents the external app from receiving garbage input (like terminal
+        // capability responses or buffered keystrokes) that might have been sent to the TUI.
+        while crossterm::event::poll(Duration::from_millis(0)).unwrap_or(false) {
+            let _ = crossterm::event::read();
+        }
+
+        // Disable raw mode
+        disable_raw_mode().context("failed to disable raw mode")?;
+
+        // Run the command
+        let result = f();
+
+        // Re-enable raw mode
+        enable_raw_mode().context("failed to re-enable raw mode")?;
+
+        // Re-enter alternate screen
+        io::stdout()
+            .execute(EnterAlternateScreen)
+            .context("failed to re-enter alternate screen")?;
+
+        // Clear terminal to remove artifacts
+        // This prevents ANSI escape codes from external apps' background color requests
+        // from appearing in the TUI.
+        io::stdout()
+            .execute(Clear(ClearType::All))
+            .context("failed to clear terminal")?;
+
+        result
+    }
+
     /// Launch git interface (Lazygit or interactive git)
     ///
     /// This will attempt to launch Lazygit if available, otherwise falls back
@@ -136,7 +160,30 @@ impl TerminalAppLauncher {
     /// # Errors
     ///
     /// Returns an error if the git interface fails to launch.
+    pub fn launch_git_interface(&self) -> Result<()> {
+        self.suspend_terminal_for_command(|| {
+            let git_cmd = if which::which("lazygit").is_ok() {
+                "lazygit"
+            } else {
+                "git"
+            };
 
+            let status = Command::new(git_cmd)
+                .current_dir(&self.workspace_root)
+                .status()
+                .with_context(|| format!("failed to spawn {}", git_cmd))?;
+
+            if !status.success() {
+                return Err(anyhow!(
+                    "{} exited with non-zero status: {}",
+                    git_cmd,
+                    status.code().unwrap_or(-1)
+                ));
+            }
+
+            Ok(())
+        })
+    }
 
     /// Detect user's preferred editor
     ///

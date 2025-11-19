@@ -37,6 +37,13 @@ We have successfully stabilized the Terminal App Integration feature (`/edit`), 
 *   Explicitly called `terminal.clear()` (Ratatui method) to invalidate cache.
 *   **Status:** ✅ Fixed.
 
+## 5. Error Recovery Refinement 🛡️
+**Issue:** If the editor failed to launch (e.g., binary not found), the terminal would be left in a broken state (Main Screen, Raw Mode disabled).
+**Cause:** The restoration code was skipped if `Command::status()` returned an error.
+**Fix:**
+*   Refactored `launch_editor` to ensure `EnterAlternateScreen` and `enable_raw_mode` are ALWAYS called, even if the editor fails to spawn.
+*   **Status:** ✅ Fixed.
+
 ## Architecture Update
 
 The `TerminalAppLauncher` execution flow is now robust:

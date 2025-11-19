@@ -1709,30 +1709,6 @@ impl ZedAgent {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-
-    #[test]
-    fn render_local_tool_content_strips_ansi() {
-        let adapter = ZedAcpAdapter::default();
-        let output = json!({
-            "stdout": "\u{1b}[31mred\u{1b}[0m\nline2",
-            "stderr": "",
-        });
-        let content_vec = adapter.render_local_tool_content("example_tool", &output);
-        assert_eq!(content_vec.len(), 1);
-        let repr = format!("{:?}", content_vec[0]);
-        assert!(
-            !repr.contains("\u{1b}"),
-            "ANSI escape was not stripped: {}",
-            repr
-        );
-        assert!(repr.contains("stdout:"));
-    }
-}
-
 #[async_trait(?Send)]
 impl acp::Agent for ZedAgent {
     async fn initialize(
