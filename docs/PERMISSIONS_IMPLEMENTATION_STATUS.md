@@ -48,7 +48,7 @@ The enhanced permission system with command resolution, audit logging, and intel
 - Records all permission decisions (allow/deny/prompt/cached) to JSON logs
 - Daily log files: `~/.vtcode/audit/permissions-YYYY-MM-DD.log`
 - Structured logging with timestamps, decision rationale, and resolved paths
-- Event types: CommandExecution, ToolUsage, FileAccess, NetworkAccess, SandboxOperation, HookExecution
+- Event types: CommandExecution, ToolUsage, FileAccess, NetworkAccess, HookExecution
 - Session-based event counting
 - Human-readable summary formatter
 

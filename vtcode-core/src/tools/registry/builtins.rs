@@ -32,10 +32,10 @@ pub(super) fn builtin_tool_registrations() -> Vec<ToolRegistration> {
             ToolRegistry::list_files_executor,
         ),
         ToolRegistration::new(
-            tools::SHELL,
+            tools::RUN_PTY_CMD,
             CapabilityLevel::Bash,
             true,
-            ToolRegistry::shell_executor,
+            ToolRegistry::run_pty_cmd_executor,
         ),
         ToolRegistration::new(
             tools::UPDATE_PLAN,

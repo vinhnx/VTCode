@@ -12,11 +12,6 @@ pub struct SlashCommandInfo {
 /// Collection of slash command definitions in the order they should be displayed.
 pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
     vec![
-        // Support
-        SlashCommandInfo {
-            name: "donate",
-            description: "Support the project by buying the author a coffee",
-        },
         // Workspace setup
         SlashCommandInfo {
             name: "init",
@@ -42,10 +37,6 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
         SlashCommandInfo {
             name: "theme",
             description: "Switch UI theme (usage: /theme <theme-id>)",
-        },
-        SlashCommandInfo {
-            name: "sandbox",
-            description: "Toggle and configure bash sandboxing (usage: /sandbox [status|enable|disable|allow-domain <domain>])",
         },
         // Tools and utilities
         SlashCommandInfo {
@@ -110,6 +101,11 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
         SlashCommandInfo {
             name: "exit",
             description: "Exit the session",
+        },
+        // Support
+        SlashCommandInfo {
+            name: "donate",
+            description: "Support the project by buying the author a coffee",
         },
     ]
 });

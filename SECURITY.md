@@ -57,10 +57,9 @@ When reporting a security vulnerability, please provide us with the following in
 
 VT Code includes several built-in security features:
 
-- **Sandboxed Execution**: Integration with Anthropic's sandbox runtime for secure command execution
 - **Path Validation**: Prevents file system access outside the designated workspace
 - **Tool Policies**: Configurable allow/deny/prompt policies for different operations
-- **Network Restrictions**: Configurable network access controls
+- **PII Protection**: Automatic tokenization of sensitive data in code execution
 - **Token Management**: Secure handling of API keys and authentication tokens
 
 ## Security Architecture
@@ -68,7 +67,6 @@ VT Code includes several built-in security features:
 For information about VT Code's security architecture, please see our documentation on:
 
 - [Security Posture](README.md#security-posture)
-- [Sandbox Runtime Integration](README.md#anthropic-sandbox-runtime-integration)
 - [Tool Permission Policies](docs/config/TOOLS_CONFIG.md)
 
 ## Additional Resources

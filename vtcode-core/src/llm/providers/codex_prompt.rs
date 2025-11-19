@@ -13,8 +13,8 @@ Editing Constraints
 Planning
 - Use the planning tool only for substantial work; never produce single-step plans and update the plan after completing a step.
 
-Sandboxing & Approvals
-- Follow Codex CLI sandbox and approval rules; request escalation only when a command truly requires it.
+Approvals
+- Follow approval rules; request escalation only when a command truly requires it.
 
 Tools
 - Use the shell tool and apply_patch; keep tool descriptions concise and remove unnecessary details.

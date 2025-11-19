@@ -17,7 +17,6 @@ use vt100::Parser;
 
 use crate::audit::PermissionAuditLog;
 use crate::config::{CommandsConfig, PtyConfig};
-use crate::sandbox::SandboxProfile;
 use crate::tools::path_env;
 use crate::tools::shell::resolve_fallback_shell;
 use crate::tools::types::VTCodePtySession;
@@ -27,7 +26,6 @@ pub struct PtyManager {
     workspace_root: PathBuf,
     config: PtyConfig,
     inner: Arc<PtyState>,
-    sandbox_profile: Arc<Mutex<Option<SandboxProfile>>>,
     audit_log: Option<Arc<TokioMutex<PermissionAuditLog>>>,
     extra_paths: Arc<Mutex<Vec<PathBuf>>>,
 }
@@ -460,7 +458,6 @@ impl PtyManager {
             workspace_root: resolved_root,
             config,
             inner: Arc::new(PtyState::default()),
-            sandbox_profile: Arc::new(Mutex::new(None)),
             audit_log: None,
             extra_paths: Arc::new(Mutex::new(default_paths)),
         }
@@ -475,25 +472,12 @@ impl PtyManager {
         &self.config
     }
 
-    pub fn set_sandbox_profile(&self, profile: Option<SandboxProfile>) {
-        let mut slot = self.sandbox_profile.lock();
-        *slot = profile;
-    }
-
-    pub fn sandbox_profile(&self) -> Option<SandboxProfile> {
-        self.current_sandbox_profile()
-    }
-
     pub fn apply_commands_config(&self, commands_config: &CommandsConfig) {
         let mut extra = self.extra_paths.lock();
         *extra = path_env::compute_extra_search_paths(
             &commands_config.extra_path_entries,
             &self.workspace_root,
         );
-    }
-
-    fn current_sandbox_profile(&self) -> Option<SandboxProfile> {
-        self.sandbox_profile.lock().clone()
     }
 
     pub fn describe_working_dir(&self, path: &Path) -> String {
@@ -517,39 +501,19 @@ impl PtyManager {
         let extra_paths = self.extra_paths.lock().clone();
         let max_tokens = request.max_tokens; // Get max_tokens from request
 
-        let sandbox_profile = self.current_sandbox_profile();
         let result = tokio::task::spawn_blocking(move || -> Result<PtyCommandResult> {
             let timeout_duration = Duration::from_millis(timeout);
 
             // Always use login shell for command execution to ensure user's PATH and environment
             // is properly initialized from their shell configuration files (~/.bashrc, ~/.zshrc, etc)
-            let (exec_program, exec_args, display_program, env_profile, _use_shell_wrapper) =
-                if let Some(profile) = sandbox_profile.clone() {
-                    let command_string =
-                        join(std::iter::once(program.clone()).chain(args.iter().cloned()));
-                    (
-                        profile.binary().display().to_string(),
-                        vec![
-                            "--settings".to_string(),
-                            profile.settings().display().to_string(),
-                            command_string,
-                        ],
-                        program.clone(),
-                        Some(profile),
-                        false,
-                    )
-                } else {
-                    let shell = resolve_fallback_shell();
-                    let full_command =
-                        join(std::iter::once(program.clone()).chain(args.iter().cloned()));
-                    (
-                        shell.clone(),
-                        vec!["-lc".to_string(), full_command.clone()],
-                        program.clone(),
-                        None,
-                        true,
-                    )
-                };
+            let shell = resolve_fallback_shell();
+            let full_command = join(std::iter::once(program.clone()).chain(args.iter().cloned()));
+            let (exec_program, exec_args, display_program, _use_shell_wrapper) = (
+                shell.clone(),
+                vec!["-lc".to_string(), full_command.clone()],
+                program.clone(),
+                true,
+            );
             let mut builder = CommandBuilder::new(exec_program.clone());
             for arg in &exec_args {
                 builder.arg(arg);
@@ -560,7 +524,6 @@ impl PtyManager {
                 &display_program,
                 size,
                 &workspace_root,
-                env_profile.as_ref(),
                 &extra_paths,
             );
 
@@ -771,48 +734,30 @@ impl PtyManager {
         let mut command_parts = command.clone();
         let program = command_parts.remove(0);
         let args = command_parts;
-        let sandbox_profile = self.current_sandbox_profile();
         let extra_paths = self.extra_paths.lock().clone();
 
-        let (exec_program, exec_args, display_program, env_profile) = if let Some(profile) =
-            sandbox_profile.clone()
-        {
-            let command_string = join(std::iter::once(program.clone()).chain(args.iter().cloned()));
-            (
-                profile.binary().display().to_string(),
-                vec![
-                    "--settings".to_string(),
-                    profile.settings().display().to_string(),
-                    command_string,
-                ],
-                program.clone(),
-                Some(profile),
-            )
-        } else {
-            // Always use login shell for command execution to ensure user's PATH and environment
-            // is properly initialized from their shell configuration files (~/.bashrc, ~/.zshrc, etc)
-            // The '-l' flag forces login shell mode which sources all initialization files
-            // The '-c' flag executes the command
-            // This combination ensures development tools like cargo, npm, etc. are in PATH
-            let shell = resolve_fallback_shell();
-            let full_command = join(std::iter::once(program.clone()).chain(args.iter().cloned()));
+        // Always use login shell for command execution to ensure user's PATH and environment
+        // is properly initialized from their shell configuration files (~/.bashrc, ~/.zshrc, etc)
+        // The '-l' flag forces login shell mode which sources all initialization files
+        // The '-c' flag executes the command
+        // This combination ensures development tools like cargo, npm, etc. are in PATH
+        let shell = resolve_fallback_shell();
+        let full_command = join(std::iter::once(program.clone()).chain(args.iter().cloned()));
 
-            // Verify we have a valid command string
-            if full_command.is_empty() {
-                return Err(anyhow!(
-                    "Failed to construct command string from program '{}' and args {:?}",
-                    program,
-                    args
-                ));
-            }
+        // Verify we have a valid command string
+        if full_command.is_empty() {
+            return Err(anyhow!(
+                "Failed to construct command string from program '{}' and args {:?}",
+                program,
+                args
+            ));
+        }
 
-            (
-                shell.clone(),
-                vec!["-lc".to_string(), full_command.clone()],
-                program.clone(),
-                None,
-            )
-        };
+        let (exec_program, exec_args, display_program) = (
+            shell.clone(),
+            vec!["-lc".to_string(), full_command.clone()],
+            program.clone(),
+        );
 
         let pty_system = native_pty_system();
         let pair = pty_system
@@ -830,7 +775,6 @@ impl PtyManager {
             &display_program,
             size,
             &self.workspace_root,
-            env_profile.as_ref(),
             &extra_paths,
         );
 
@@ -1128,7 +1072,6 @@ fn set_command_environment(
     program: &str,
     size: PtySize,
     workspace_root: &Path,
-    sandbox_profile: Option<&SandboxProfile>,
     extra_paths: &[PathBuf],
 ) {
     // Inherit environment from parent process to preserve PATH and other important variables
@@ -1166,23 +1109,6 @@ fn set_command_environment(
     builder.env("CLICOLOR_FORCE", "0");
     builder.env("LS_COLORS", "");
     builder.env("NO_COLOR", "1");
-
-    if let Some(profile) = sandbox_profile {
-        builder.env("VT_SANDBOX_RUNTIME", profile.runtime_kind().as_str());
-        builder.env("VT_SANDBOX_SETTINGS", profile.settings().as_os_str());
-        builder.env(
-            "VT_SANDBOX_PERSISTENT_DIR",
-            profile.persistent_storage().as_os_str(),
-        );
-        if profile.allowed_paths().is_empty() {
-            builder.env("VT_SANDBOX_ALLOWED_PATHS", "");
-        } else {
-            match std::env::join_paths(profile.allowed_paths()) {
-                Ok(joined) => builder.env("VT_SANDBOX_ALLOWED_PATHS", joined),
-                Err(_) => builder.env("VT_SANDBOX_ALLOWED_PATHS", ""),
-            };
-        }
-    }
 
     if is_shell_program(program) {
         builder.env("SHELL", program);

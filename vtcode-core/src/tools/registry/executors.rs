@@ -696,7 +696,7 @@ impl ToolRegistry {
         Box::pin(async move { tool.execute(args).await })
     }
 
-    pub(super) fn shell_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
+    pub(super) fn run_pty_cmd_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move { self.execute_run_pty_command(args).await })
     }
 
@@ -899,28 +899,9 @@ impl ToolRegistry {
                         config.timeout_secs = timeout_secs;
                     }
 
-                    // Create a safe sandbox profile with workspace isolation
-                    // The sandbox enforces these restrictions:
-                    // - Shell: Auto-detected (pwsh/bash on supported systems, cmd.exe on Windows)
-                    // - Working directory: .vtcode/sandbox in workspace
-                    // - Allowed paths: workspace root + /tmp (temporary files)
-                    // - Runtime: AnthropicSrt for code execution monitoring
-                    let sandbox_profile = crate::sandbox::SandboxProfile::new(
-                        resolve_shell_candidate(),
-                        workspace_root.join(".vtcode/sandbox/settings.json"),
-                        workspace_root.join(".vtcode/sandbox"),
-                        vec![workspace_root.clone(), std::path::PathBuf::from("/tmp")],
-                        crate::sandbox::SandboxRuntimeKind::AnthropicSrt,
-                    );
-
                     // Create and configure code executor
-                    let executor = CodeExecutor::new(
-                        language,
-                        sandbox_profile,
-                        mcp_client,
-                        workspace_root.clone(),
-                    )
-                    .with_config(config);
+                    let executor = CodeExecutor::new(language, mcp_client, workspace_root.clone())
+                        .with_config(config);
 
                     // Execute the code
                     executor
@@ -935,8 +916,7 @@ impl ToolRegistry {
                     let code = parsed.code.clone();
                     let language = language;
 
-                    // Create a direct executor (non-sandboxed fallback)
-                    // In a real implementation, this would need proper sandboxing
+                    // Create a direct code executor using process execution
                     use std::io::Write;
                     use std::process::Command;
                     use tempfile::NamedTempFile;
@@ -1516,7 +1496,7 @@ impl ToolRegistry {
         let login_shell = payload
             .get("login")
             .and_then(|value| value.as_bool())
-            .unwrap_or(false);
+            .unwrap_or(true);
 
         {
             let normalized_shell = normalized_shell_name(&shell_program);
@@ -1824,25 +1804,6 @@ impl ToolRegistry {
             && !command_parts.iter().skip(1).any(|arg| arg == "-l")
         {
             command_parts.push("-l".to_string());
-        }
-
-        // Check if this is a development toolchain command in sandbox mode
-        if !command_parts.is_empty() {
-            let program = &command_parts[0];
-            if crate::tools::pty::is_development_toolchain_command(program) {
-                if let Some(_profile) = self.pty_manager().sandbox_profile() {
-                    return Err(anyhow!(
-                        "{} could not be executed in the sandbox. This may be due to missing {} toolchain support in the current environment.\n\n\
-                        Next steps:\n\
-                        - Verify that the {} toolchain is installed and accessible.\n\
-                        - Disable sandbox with `/sandbox disable` to run development tools with local toolchain access.\n\
-                        - Alternatively, run the command directly in your terminal outside VT Code.",
-                        program,
-                        program,
-                        program
-                    ));
-                }
-            }
         }
 
         let working_dir = self
@@ -2764,7 +2725,10 @@ fn parse_command_parts(
     empty_error: &str,
 ) -> Result<Vec<String>> {
     let mut parts = match payload.get("command") {
-        Some(Value::String(command)) => vec![command.to_string()],
+        Some(Value::String(command)) => {
+            // Use the same tokenization logic as terminal commands to handle "cargo fmt" correctly
+            tokenize_command_string(command, None)?
+        }
         Some(Value::Array(values)) => values
             .iter()
             .map(|value| {
@@ -3349,24 +3313,68 @@ fn build_ephemeral_pty_response(
     let status = if completed { "completed" } else { "running" };
 
     // Build a clear message for the agent based on status
-    let message = if completed {
+    let (message, output_override) = if completed {
         if let Some(exit_code) = code {
             if exit_code == 0 {
-                "Command completed successfully".to_string()
+                ("Command completed successfully".to_string(), None)
+            } else if exit_code == 127 {
+                // Command not found - provide immediate, actionable guidance
+                // IMPORTANT: We used to replace the output, but that hides the actual shell error (e.g. "zsh: command not found: cargo")
+                // Now we preserve the output but provide the helpful message in the "message" field and "critical_note"
+
+                // Try to extract the actual command that failed if it was wrapped in a shell
+                let mut cmd_name = setup
+                    .command
+                    .first()
+                    .map(|s| s.as_str())
+                    .unwrap_or("command");
+
+                if setup.command.len() >= 3 {
+                    let shell = std::path::Path::new(&setup.command[0]);
+                    let shell_name = shell.file_name().and_then(|n| n.to_str()).unwrap_or("");
+
+                    if shell_name.contains("sh")
+                        || shell_name.contains("cmd")
+                        || shell_name.contains("powershell")
+                        || shell_name.contains("pwsh")
+                    {
+                        // Scan arguments for the execution flag
+                        for (i, arg) in setup.command.iter().enumerate().skip(1) {
+                            if arg == "-c" || arg == "/C" || arg == "-Command" || arg == "-lc" {
+                                // The next argument should be the command string
+                                if let Some(cmd_str) = setup.command.get(i + 1) {
+                                    cmd_name =
+                                        cmd_str.split_whitespace().next().unwrap_or("command");
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                let helpful_msg = generate_command_not_found_message(cmd_name);
+                (helpful_msg.clone(), None)
             } else {
-                format!("Command failed with exit code {}", exit_code)
+                (format!("Command failed with exit code {}", exit_code), None)
             }
         } else {
-            "Command completed".to_string()
+            ("Command completed".to_string(), None)
         }
     } else {
-        "Command is still running. Backend continues polling automatically. Do NOT call read_pty_session.".to_string()
+        (
+            "Command is still running. Backend continues polling automatically. Do NOT call read_pty_session."
+                .to_string(),
+            None,
+        )
     };
 
-    json!({
+    // Use the override output if available (for exit code 127), otherwise use actual output
+    let final_output = output_override.as_ref().unwrap_or(&output);
+
+    let mut response = json!({
         "success": true,
         "command": setup.command.clone(),
-        "output": strip_ansi(&output),
+        "output": strip_ansi(final_output),
         "code": code,
         "exit_code": code,
         "status": status,
@@ -3385,7 +3393,89 @@ fn build_ephemeral_pty_response(
         "working_dir": setup.working_dir_display.clone(),
         "timeout_secs": setup.timeout_secs,
         "duration_ms": if completed { duration.as_millis() } else { 0 },
-    })
+    });
+
+    // Add CRITICAL signals for exit code 127 to ABSOLUTELY PREVENT retry loops
+    if completed && code == Some(127) {
+        if let Value::Object(ref mut obj) = response {
+            // Add multiple explicit "STOP" signals to prevent agent from trying workarounds
+            obj.insert("fatal_error".to_string(), Value::Bool(true));
+            obj.insert("do_not_attempt_workarounds".to_string(), Value::Bool(true));
+            obj.insert("do_not_retry".to_string(), Value::Bool(true));
+            obj.insert("final".to_string(), Value::Bool(true));
+
+            // CRITICAL: Direct instruction to agent not to retry
+            obj.insert(
+                "agent_instruction".to_string(),
+                Value::String(
+                    "AGENT: Do NOT run any more commands related to this tool. Do NOT try different shells. \
+                     Do NOT try bash -lc, sh -lc, or workarounds. The tool is not installed. \
+                     STOP all command attempts. Follow the solution in the output field. \
+                     If you are tempted to retry or try a workaround, STOP. You already have the answer."
+                        .to_string(),
+                ),
+            );
+
+            // Comprehensive explanation of why retrying won't work
+            obj.insert(
+                "critical_note".to_string(),
+                Value::String(
+                    "EXIT CODE 127 IS FINAL. The operating system shell searched the entire PATH \
+                     and could not find this executable. This is NOT a shell compatibility issue. \
+                     Retrying with bash, sh, zsh, or different escaping WILL FAIL. \
+                     The ONLY solutions are: (1) Install the tool, (2) Add its directory to PATH, \
+                     (3) Use a different tool. Read the 'output' field for specific instructions."
+                        .to_string(),
+                ),
+            );
+            obj.insert(
+                "suggestion".to_string(),
+                Value::String(
+                    "DO NOT RETRY with: different shells, diagnostic commands (which/--version), \
+                     shell wrappers (bash -lc, sh -lc), or any command variations. \
+                     This will cause an infinite loop of exit code 127 errors."
+                        .to_string(),
+                ),
+            );
+            obj.insert(
+                "error_explanation".to_string(),
+                Value::String(
+                    "Exit code 127: Command not found. The OS searched PATH. The tool is not installed \
+                     or not in a directory that's in PATH. No shell workaround will fix this."
+                        .to_string(),
+                ),
+            );
+        }
+    }
+
+    response
+}
+
+/// Generate helpful error message for exit code 127 (command not found)
+fn generate_command_not_found_message(cmd: &str) -> String {
+    match cmd {
+        "cargo" | "rustfmt" | "clippy" | "cargo-clippy" => {
+            "Command not found: This is a Rust tool. Try: source $HOME/.cargo/env && <command>. \
+             If Rust is not installed: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
+                .to_string()
+        }
+        "git" => {
+            "Command not found: git is not installed or not in PATH. Install git for your system.".to_string()
+        }
+        "npm" | "node" => {
+            "Command not found: Node.js/npm is not installed or not in PATH. Install Node.js from https://nodejs.org".to_string()
+        }
+        "python" | "python3" => {
+            "Command not found: Python is not installed or not in PATH. Install Python 3 for your system.".to_string()
+        }
+        _ => {
+            format!(
+                "Command not found: '{}' is not in PATH or not installed. \
+                 Verify installation or add its directory to PATH. Do NOT retry with diagnostic commands.",
+                cmd
+            )
+        }
+    }
 }
 
 fn build_shell_command_string(
@@ -3457,29 +3547,10 @@ fn quote_windows_argument(arg: &str) -> String {
 }
 
 fn sanitize_command_string(command: &str) -> Cow<'_, str> {
-    let trimmed = command.trim_end_matches(char::is_whitespace);
-
-    for &quote in &['\'', '"'] {
-        let quote_count = trimmed.matches(quote).count();
-        if quote_count % 2 != 0 && trimmed.ends_with(quote) {
-            let mut adjusted = trimmed.to_string();
-            adjusted.pop();
-            return Cow::Owned(adjusted);
-        }
-    }
-
-    if trimmed.len() != command.len() {
-        Cow::Owned(trimmed.to_string())
-    } else {
-        Cow::Borrowed(command)
-    }
+    Cow::Borrowed(command.trim())
 }
 
-fn tokenize_command_string(command: &str, shell_hint: Option<&str>) -> Result<Vec<String>> {
-    if should_use_windows_command_tokenizer(shell_hint) {
-        return tokenize_windows_command(command);
-    }
-
+fn tokenize_command_string(command: &str, _shell_hint: Option<&str>) -> Result<Vec<String>> {
     split(command).map_err(|err| anyhow!(err))
 }
 
@@ -3491,54 +3562,6 @@ fn should_use_windows_command_tokenizer(shell_hint: Option<&str>) -> bool {
     }
 
     cfg!(windows)
-}
-
-fn tokenize_windows_command(command: &str) -> Result<Vec<String>> {
-    let mut tokens = Vec::new();
-    let mut current = String::new();
-    let mut in_quotes = false;
-    let mut token_started = false;
-    let mut chars = command.chars().peekable();
-
-    while let Some(ch) = chars.next() {
-        match ch {
-            '"' => {
-                if in_quotes {
-                    if matches!(chars.peek(), Some('"')) {
-                        current.push('"');
-                        token_started = true;
-                        chars.next();
-                    } else {
-                        in_quotes = false;
-                    }
-                } else {
-                    in_quotes = true;
-                    token_started = true;
-                }
-            }
-            c if c.is_whitespace() && !in_quotes => {
-                if token_started {
-                    tokens.push(current);
-                    current = String::new();
-                    token_started = false;
-                }
-            }
-            _ => {
-                current.push(ch);
-                token_started = true;
-            }
-        }
-    }
-
-    if in_quotes {
-        return Err(anyhow!("unterminated quote in command string"));
-    }
-
-    if token_started {
-        tokens.push(current);
-    }
-
-    Ok(tokens)
 }
 
 fn resolve_shell_preference(explicit: Option<&str>, config: &PtyConfig) -> String {
@@ -3560,7 +3583,7 @@ fn resolve_shell_preference(explicit: Option<&str>, config: &PtyConfig) -> Strin
 }
 
 fn resolve_shell_candidate() -> PathBuf {
-    // Resolve the preferred shell for sandbox execution
+    // Resolve the preferred shell for command execution
     // Detects available shells based on platform
     if cfg!(windows) {
         // Windows: prefer PowerShell if available, fall back to cmd.exe
@@ -3583,8 +3606,10 @@ fn sanitize_shell_candidate(shell: &str) -> Option<String> {
     let trimmed = shell.trim();
     if trimmed.is_empty() {
         None
-    } else {
+    } else if Path::new(trimmed).exists() {
         Some(trimmed.to_string())
+    } else {
+        None
     }
 }
 
@@ -3594,10 +3619,10 @@ fn detect_posix_shell_candidate() -> Option<String> {
     }
 
     const CANDIDATES: [&str; 6] = [
-        "/bin/zsh",
-        "/usr/bin/zsh",
         "/bin/bash",
         "/usr/bin/bash",
+        "/bin/zsh",
+        "/usr/bin/zsh",
         "/bin/sh",
         "/usr/bin/sh",
     ];

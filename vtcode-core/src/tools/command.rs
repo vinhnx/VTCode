@@ -397,7 +397,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn prepare_invocation_uses_shell_for_sandbox_runtime() {
+    async fn prepare_invocation_uses_shell_for_command_execution() {
         let tool = make_tool();
         let input = make_input(vec!["srt", "run"]);
         let invocation = tool.prepare_invocation(&input).await.expect("invocation");

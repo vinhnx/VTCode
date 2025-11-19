@@ -246,8 +246,8 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
         },
 
         FunctionDeclaration {
-            name: tools::SHELL.to_string(),
-            description: "Execute shell commands (git, cargo, npm, shell scripts, etc). Unified interface for command execution in both one-off and interactive modes. Respects command policies for safety.".to_string(),
+            name: tools::RUN_PTY_CMD.to_string(),
+            description: "Execute shell commands (git, cargo, npm, shell scripts, etc). Full terminal emulation with PTY support for both one-off and interactive modes. Respects command policies for safety.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -280,7 +280,7 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
 
         FunctionDeclaration {
             name: tools::EXECUTE_CODE.to_string(),
-            description: "Execute Python or JavaScript code in a sandboxed environment with access to MCP tools as library functions. Supports loops, conditionals, data filtering, and aggregation. Results are returned as JSON via `result = {...}` assignment.".to_string(),
+            description: "Execute Python or JavaScript code with access to MCP tools as library functions. Supports loops, conditionals, data filtering, and aggregation. Results are returned as JSON via `result = {...}` assignment.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {

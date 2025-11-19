@@ -33,10 +33,6 @@ pub struct PermissionsConfig {
     #[serde(default = "default_log_permission_prompts")]
     pub log_permission_prompts: bool,
 
-    /// Log sandbox events
-    #[serde(default = "default_log_sandbox_events")]
-    pub log_sandbox_events: bool,
-
     /// Enable permission decision caching to avoid redundant evaluations
     #[serde(default = "default_cache_enabled")]
     pub cache_enabled: bool,
@@ -75,10 +71,6 @@ fn default_log_permission_prompts() -> bool {
     true
 }
 
-fn default_log_sandbox_events() -> bool {
-    true
-}
-
 fn default_cache_enabled() -> bool {
     true
 }
@@ -97,7 +89,6 @@ impl Default for PermissionsConfig {
             log_allowed_commands: default_log_allowed_commands(),
             log_denied_commands: default_log_denied_commands(),
             log_permission_prompts: default_log_permission_prompts(),
-            log_sandbox_events: default_log_sandbox_events(),
             cache_enabled: default_cache_enabled(),
             cache_ttl_seconds: default_cache_ttl_seconds(),
         }

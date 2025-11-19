@@ -1,6 +1,6 @@
 # execute_code Tool - Usage Guide
 
-The `execute_code` tool allows agents to write and execute Python3 or JavaScript code in a sandboxed environment with full access to MCP tools as library functions.
+The `execute_code` tool allows agents to write and execute Python3 or JavaScript code with full access to MCP tools as library functions.
 
 ## Basic Syntax
 

@@ -1,7 +1,7 @@
-//! Inter-process communication for calling MCP tools from sandboxed code.
+//! Inter-process communication for calling MCP tools from executing code.
 //!
 //! This module provides a file-based IPC mechanism that allows code running in
-//! a sandbox to call MCP tools. The code writes tool requests to a file, and
+//! a separate process to call MCP tools. The code writes tool requests to a file, and
 //! the executor reads and processes them, writing back results.
 //!
 //! Optionally supports PII (Personally Identifiable Information) protection by
@@ -53,7 +53,7 @@ use tokio::fs;
 use tokio::time::sleep;
 use uuid::Uuid;
 
-/// IPC request from sandboxed code to executor.
+/// IPC request from executing code to executor.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ToolRequest {
     pub id: String,
@@ -61,7 +61,7 @@ pub struct ToolRequest {
     pub args: Value,
 }
 
-/// IPC response from executor to sandboxed code.
+/// IPC response from executor to executing code.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ToolResponse {
     pub id: String,

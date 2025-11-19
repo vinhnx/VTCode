@@ -6,7 +6,7 @@
 //!
 //! - Control flow: loops, conditionals, error handling without repeated model calls
 //! - Data filtering: process results before returning to model
-//! - Latency: code runs locally in sandbox environment
+//! - Latency: code runs locally with direct process execution
 //! - Context: intermediate results stay local unless explicitly logged
 //!
 //! # Example
@@ -14,7 +14,6 @@
 //! ```ignore
 //! let executor = CodeExecutor::new(
 //!     Language::Python3,
-//!     sandbox_profile,
 //!     Arc::new(mcp_client),
 //!     PathBuf::from("/workspace"),
 //! );
@@ -32,7 +31,6 @@
 use crate::exec::async_command::{AsyncProcessRunner, ProcessOptions, StreamCaptureConfig};
 use crate::exec::sdk_ipc::{ToolIpcHandler, ToolResponse};
 use crate::mcp::McpToolExecutor;
-use crate::sandbox::SandboxProfile;
 use anyhow::{Context, Result};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -66,10 +64,10 @@ impl Language {
     }
 }
 
-/// Result of code execution in the sandbox.
+/// Result of code execution.
 #[derive(Debug, Clone)]
 pub struct ExecutionResult {
-    /// Exit code from the execution environment
+    /// Exit code from the process
     pub exit_code: i32,
     /// Standard output from the code
     pub stdout: String,
@@ -84,32 +82,24 @@ pub struct ExecutionResult {
 /// Configuration for code execution.
 #[derive(Debug, Clone)]
 pub struct ExecutionConfig {
-    /// Maximum execution time in seconds
+    /// Maximum execution time in seconds (soft limit, code can exceed)
     pub timeout_secs: u64,
-    /// Maximum memory in MB
-    pub memory_limit_mb: u64,
-    /// Maximum output size in bytes
+    /// Maximum output size in bytes before truncation
     pub max_output_bytes: usize,
-    /// Enable network access in sandbox
-    pub allow_network: bool,
 }
 
 impl Default for ExecutionConfig {
     fn default() -> Self {
         Self {
             timeout_secs: 30,
-            memory_limit_mb: 256,
             max_output_bytes: 10 * 1024 * 1024, // 10 MB
-            allow_network: false,
         }
     }
 }
 
-/// Code executor for running agent code in sandboxed environment.
+/// Code executor for running agent code.
 pub struct CodeExecutor {
     language: Language,
-    #[allow(dead_code)]
-    sandbox_profile: SandboxProfile,
     mcp_client: Arc<dyn McpToolExecutor>,
     config: ExecutionConfig,
     workspace_root: PathBuf,
@@ -120,13 +110,11 @@ impl CodeExecutor {
     /// Create a new code executor.
     pub fn new(
         language: Language,
-        sandbox_profile: SandboxProfile,
         mcp_client: Arc<dyn McpToolExecutor>,
         workspace_root: PathBuf,
     ) -> Self {
         Self {
             language,
-            sandbox_profile,
             mcp_client,
             config: ExecutionConfig::default(),
             workspace_root,
@@ -143,7 +131,7 @@ impl CodeExecutor {
     /// Enable PII (Personally Identifiable Information) protection.
     ///
     /// When enabled, the executor will automatically tokenize sensitive data
-    /// in MCP tool calls to prevent data leakage.
+    /// in MCP tool calls to prevent accidental exposure.
     pub fn with_pii_protection(mut self, enabled: bool) -> Self {
         self.enable_pii_protection = enabled;
         self

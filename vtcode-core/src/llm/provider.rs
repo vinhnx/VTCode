@@ -937,19 +937,6 @@ impl ToolDefinition {
         }
     }
 
-    /// Create a new shell tool definition (GPT-5.1 specific)
-    /// The shell tool allows controlled command-line interface interactions
-    pub fn shell(config: Option<ShellToolDefinition>) -> Self {
-        let shell_config = config.unwrap_or_default();
-        Self {
-            tool_type: "shell".to_string(),
-            function: None,
-            shell: Some(shell_config),
-            grammar: None,
-            strict: None,
-        }
-    }
-
     /// Create a new custom tool definition for freeform function calling (GPT-5 specific)
     /// Allows raw text payloads without JSON wrapping
     pub fn custom(name: String, description: String) -> Self {
