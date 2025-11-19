@@ -1,7 +1,41 @@
 id = "vtcode"
 name = "VTCode"
-version = "0.3.0"
+version = "0.45.5"
 schema_version = 1
 authors = ["Vinh Nguyen <vinh@example.com>"]
 description = "AI coding assistant for Zed editor - A Rust-based terminal coding agent with semantic code intelligence and multi-provider AI support"
 repository = "https://github.com/vinhnx/vtcode"
+
+[agent_servers.vtcode]
+name = "VT Code"
+icon = "icons/vtcode.svg"
+
+[agent_servers.vtcode.env]
+VT_ACP_ENABLED = "1"
+VT_ACP_ZED_ENABLED = "1"
+
+# Note: For development builds, ensure binaries exist at the URLs below or update appropriately
+[agent_servers.vtcode.targets.darwin-aarch64]
+archive = "https://github.com/vinhnx/vtcode/releases/download/v0.45.5/vtcode-v0.45.5-aarch64-apple-darwin.tar.gz"
+cmd = "./vtcode"
+args = ["acp"]
+sha256 = "d8d6e0f25addb977f42de2a035912472547c7b7a485a7721281e55a5f89ca428"
+
+[agent_servers.vtcode.targets.darwin-x86_64]
+archive = "https://github.com/vinhnx/vtcode/releases/download/v0.45.5/vtcode-v0.45.5-x86_64-apple-darwin.tar.gz"
+cmd = "./vtcode"
+args = ["acp"]
+sha256 = "29bb1666e100e0351fd9ffa92bf55dd2e6e1693825b28ac7c52e530d4543c061"
+
+# Linux and Windows binaries need to be published to enable these targets
+# [agent_servers.vtcode.targets.linux-x86_64]
+# archive = "https://github.com/vinhnx/vtcode/releases/download/v0.45.5/vtcode-v0.45.5-x86_64-unknown-linux-musl.tar.gz"
+# cmd = "./vtcode"
+# args = ["acp"]
+# sha256 = "replace-with-real-sha256"
+
+# [agent_servers.vtcode.targets.windows-x86_64]
+# archive = "https://github.com/vinhnx/vtcode/releases/download/v0.45.5/vtcode-v0.45.5-x86_64-pc-windows-msvc.zip"
+# cmd = "./vtcode.exe"
+# args = ["acp"]
+# sha256 = "replace-with-real-sha256"
