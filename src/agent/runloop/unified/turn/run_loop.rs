@@ -932,7 +932,8 @@ pub(crate) async fn run_single_agent_loop_unified(
         let workspace_for_indexer = config.workspace.clone();
         let workspace_for_palette = config.workspace.clone();
         let handle_for_indexer = handle.clone();
-        tokio::spawn(async move {
+        // Spawn background task for file palette loading. See: https://ratatui.rs/faq/
+        let _file_palette_task = tokio::spawn(async move {
             match load_workspace_files(workspace_for_indexer).await {
                 Ok(files) => {
                     if !files.is_empty() {
@@ -1121,7 +1122,9 @@ pub(crate) async fn run_single_agent_loop_unified(
         {
             let state = ctrl_c_state.clone();
             let notify = ctrl_c_notify.clone();
-            tokio::spawn(async move {
+            // Spawn Ctrl+C signal handler (background task)
+            // See: https://ratatui.rs/faq/#when-should-i-use-tokio-and-async--await-
+            let _signal_handler = tokio::spawn(async move {
                 loop {
                     if tokio::signal::ctrl_c().await.is_err() {
                         break;
