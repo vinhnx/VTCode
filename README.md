@@ -153,9 +153,11 @@ See [Security Model](./docs/SECURITY_MODEL.md) for details.
      -   [Event Handling](./docs/guides/tui-event-handling.md) - Terminal event architecture and patterns
      -   [Async Architecture](./docs/guides/async-architecture.md) - Tokio async/await design and best practices
      -   [Rendering Best Practices](./docs/guides/terminal-rendering-best-practices.md) - Widget rendering and display optimization
--   [**Async Improvements**](./docs/ASYNC_IMPROVEMENTS.md) - Ratatui FAQ best practices applied to async/tokio code
+-   [**Ratatui Integration**](./docs/RATATUI_IMPROVEMENTS_SUMMARY.md) - Complete integration of Ratatui FAQ best practices
+     -   [Summary](./docs/RATATUI_IMPROVEMENTS_SUMMARY.md) - Overview of all improvements
+     -   [FAQ Integration](./docs/RATATUI_FAQ_INTEGRATION.md) - Mapping of FAQ topics to code
+     -   [Async Improvements](./docs/ASYNC_IMPROVEMENTS.md) - Tokio best practices applied
 -   [**Architecture**](./docs/ARCHITECTURE.md)
-     -   [Ratatui FAQ Integration](./docs/RATATUI_FAQ_INTEGRATION.md) - Application of best practices from Ratatui terminal UI library
 -   [**Security**](./docs/SECURITY_MODEL.md)
     -   [Security Model](./docs/SECURITY_MODEL.md)
     -   [Security Audit](./docs/SECURITY_AUDIT.md)
