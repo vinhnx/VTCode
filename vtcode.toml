@@ -5,13 +5,13 @@
 # Core agent behavior; see docs/config/CONFIGURATION_PRECEDENCE.md.
 [agent]
 # Primary LLM provider to use (e.g., "openai", "gemini", "anthropic", "openrouter")
-provider = "ollama"
+provider = "openai"
 
 # Environment variable containing the API key for the provider
-api_key_env = "OLLAMA_API_KEY"
+api_key_env = "OPENAI_API_KEY"
 
 # Default model to use when no specific model is specified
-default_model = "gpt-oss:20b-cloud"
+default_model = "gpt-5-nano"
 
 # Visual theme for the terminal interface
 theme = "ciapre-dark"
@@ -27,7 +27,7 @@ ui_surface = "auto"
 max_conversation_turns = 50
 
 # Reasoning effort level ("low", "medium", "high") - affects model usage and response speed
-reasoning_effort = "low"
+reasoning_effort = "medium"
 
 # Temperature for main LLM responses (0.0-1.0)
 # Lower values = more deterministic, higher values = more creative
@@ -117,6 +117,12 @@ skip_cache = false
 
 # Installation timeout in seconds (prevents hung installations)
 timeout_seconds = 300
+
+# Ripgrep should respect .vtcodegitignore patterns for efficient searching
+# This uses the same ignore patterns as git operations but for agent tools
+use_gitignore = true
+respect_gitignore = true
+respect_vcsignore = true
 
 # Onboarding configuration - Customize the startup experience
 [agent.onboarding]
@@ -278,6 +284,11 @@ allow_list = []
 # Add custom PATH entries for non-standard tool locations (optional)
 # Note: Built-in entries already include ~/.cargo/bin, ~/.local/bin, /opt/homebrew/bin
 extra_path_entries = []
+deny_list = []
+allow_glob = []
+deny_glob = []
+allow_regex = []
+deny_regex = []
 
 # Optional: Custom environment variables for command execution
 # To set custom variables, uncomment and edit:
@@ -497,15 +508,15 @@ llm_router_model = ""
 # Model mapping for different task types
 [router.models]
 # Model for simple queries
-simple = "gpt-oss:20b-cloud"
+simple = "gpt-5-nano"
 # Model for standard tasks
-standard = "gpt-oss:20b-cloud"
+standard = "gpt-5-nano"
 # Model for complex tasks
-complex = "gpt-oss:20b-cloud"
+complex = "gpt-5-nano"
 # Model for code generation heavy tasks
-codegen_heavy = "gpt-oss:20b-cloud"
+codegen_heavy = "gpt-5-nano"
 # Model for information retrieval heavy tasks
-retrieval_heavy = "gpt-oss:20b-cloud"
+retrieval_heavy = "gpt-5-nano"
 
 # Router budget settings (if applicable)
 [router.budgets]
@@ -574,7 +585,14 @@ cache_themes = true
 max_file_size_mb = 10
 
 # Programming languages to enable syntax highlighting for
-enabled_languages = ["rust", "python", "javascript", "typescript", "go", "java"]
+enabled_languages = [
+    "rust",
+    "python",
+    "javascript",
+    "typescript",
+    "go",
+    "java",
+]
 
 # Timeout for syntax highlighting operations (milliseconds)
 highlight_timeout_ms = 1000

@@ -630,6 +630,16 @@ stdout_tail_lines = 20
 # Total lines to keep in PTY scrollback buffer
 scrollback_lines = 400
 
+# Maximum bytes of output to retain per PTY session (default: 50MB)
+# Prevents memory explosion on commands with extremely large output (e.g., git diff on large repos)
+# When this limit is exceeded, further output is dropped and a warning is displayed
+max_scrollback_bytes = 50000000
+
+# Threshold for large output detection (in kilobytes, default: 5MB = 5000KB)
+# Outputs larger than this may be auto-spooled to disk in future versions
+# Used to detect commands that produce excessive output and need special handling  
+large_output_threshold_kb = 5000
+
 # Preferred shell program for PTY sessions
 # Priority order for shell selection:
 # 1. Explicitly specified shell (per-command parameter)

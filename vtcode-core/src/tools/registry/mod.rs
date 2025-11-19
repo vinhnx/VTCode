@@ -125,6 +125,33 @@ impl ToolExecutionHistory {
         let mut records = self.records.write().unwrap();
         records.clear();
     }
+
+    /// Detect if the agent is stuck in a loop (calling the same tool repeatedly with identical params)
+    ///
+    /// Returns (is_loop, repeat_count, tool_name) if a loop is detected
+    pub fn detect_loop(&self, tool_name: &str, args: &Value) -> (bool, usize, String) {
+        let records = self.records.read().unwrap();
+        
+        // Look at the last 5 calls
+        let recent: Vec<&ToolExecutionRecord> = records.iter().rev().take(5).collect();
+        
+        if recent.is_empty() {
+            return (false, 0, String::new());
+        }
+
+        // Count how many of the recent calls match this exact tool + args combo
+        let mut identical_count = 0;
+        for record in &recent {
+            if record.tool_name == tool_name && record.args == *args {
+                identical_count += 1;
+            }
+        }
+
+        // If we've called this exact combination 2+ times in the last 5 calls, it's a loop
+        let is_loop = identical_count >= 2;
+        
+        (is_loop, identical_count, tool_name.to_string())
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -629,6 +656,17 @@ impl ToolRegistry {
 
         // Clone args early to use in error recording
         let args_for_recording = args.clone();
+
+        // LOOP DETECTION: Check if we're calling the same tool repeatedly with identical params
+        let (is_loop, repeat_count, _) = self.execution_history.detect_loop(tool_name, &args);
+        if is_loop {
+            warn!(
+                tool = %tool_name,
+                repeats = repeat_count,
+                "Loop detected: agent calling same tool with identical parameters {} times",
+                repeat_count
+            );
+        }
 
         if self.policy_gateway.has_full_auto_allowlist()
             && !self.policy_gateway.is_allowed_in_full_auto(tool_name)

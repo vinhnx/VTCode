@@ -117,6 +117,14 @@ pub struct PtyConfig {
     #[serde(default = "default_scrollback_lines")]
     pub scrollback_lines: usize,
 
+    /// Maximum bytes of output to retain per PTY session (prevents memory explosion)
+    #[serde(default = "default_max_scrollback_bytes")]
+    pub max_scrollback_bytes: usize,
+
+    /// Threshold (KB) at which to auto-spool large outputs to disk
+    #[serde(default = "default_large_output_threshold_kb")]
+    pub large_output_threshold_kb: usize,
+
     /// Preferred shell program for PTY sessions (falls back to environment when unset)
     #[serde(default)]
     pub preferred_shell: Option<String>,
@@ -132,6 +140,8 @@ impl Default for PtyConfig {
             command_timeout_seconds: default_pty_timeout(),
             stdout_tail_lines: default_stdout_tail_lines(),
             scrollback_lines: default_scrollback_lines(),
+            max_scrollback_bytes: default_max_scrollback_bytes(),
+            large_output_threshold_kb: default_large_output_threshold_kb(),
             preferred_shell: None,
         }
     }
@@ -163,6 +173,14 @@ fn default_stdout_tail_lines() -> usize {
 
 fn default_scrollback_lines() -> usize {
     crate::constants::defaults::DEFAULT_PTY_SCROLLBACK_LINES
+}
+
+fn default_max_scrollback_bytes() -> usize {
+    50_000_000 // 50MB max to prevent memory explosion
+}
+
+fn default_large_output_threshold_kb() -> usize {
+    5_000 // 5MB threshold for auto-spooling
 }
 
 fn default_tool_output_mode() -> ToolOutputMode {
