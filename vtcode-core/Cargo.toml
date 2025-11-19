@@ -138,6 +138,7 @@ jsonschema = "0.29"
 uuid = { version = "1.8.0", features = ["v4", "fast-rng"] }
 which = "8.0.0"
 textwrap = "0.16"
+editor-command = "1.0"
 
 [build-dependencies]
 vtcode-config = { path = "../vtcode-config", version = "0.45.5" }

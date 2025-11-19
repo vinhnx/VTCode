@@ -45,7 +45,11 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
         },
         SlashCommandInfo {
             name: "edit",
-            description: "Edit in external editor (usage: /edit [file])",
+            description: "Open file in preferred editor from EDITOR/VISUAL env vars (usage: /edit [file])",
+        },
+        SlashCommandInfo {
+            name: "git",
+            description: "Launch git interface (lazygit or interactive git)",
         },
         SlashCommandInfo {
             name: "debug",

@@ -273,7 +273,7 @@ impl LLMProvider for GeminiProvider {
             let mut processor = StreamingProcessor::with_config(config);
             let event_sender = completion_sender.clone();
             let mut aggregated_text = String::new();
-            let mut reasoning_buffer = crate::llm::providers::ReasoningBuffer::default();
+            let mut _reasoning_buffer = crate::llm::providers::ReasoningBuffer::default();
 
             let mut on_chunk = |chunk: &str| -> Result<(), StreamingError> {
                 if chunk.is_empty() {

@@ -4,7 +4,7 @@ use serde_json::Value;
 use shell_words::split as shell_split;
 use std::time::Duration;
 use vtcode_core::prompts::{CustomPrompt, CustomPromptRegistry, PromptInvocation};
-
+use vtcode_core::ui::slash::SLASH_COMMANDS;
 use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::session_archive;
@@ -60,6 +60,7 @@ pub enum SlashCommandOutcome {
     LaunchEditor {
         file: Option<String>,
     },
+    LaunchGit,
     SubmitPrompt {
         prompt: String,
     },
@@ -191,7 +192,15 @@ pub async fn handle_slash_command(
                     }
                 }
             }
-            Ok(SlashCommandOutcome::GenerateAgentFile { overwrite })
+
+            // Create a custom prompt for generating the agent file
+            let prompt_text = if overwrite {
+                "Generate a comprehensive AGENTS.md file for this workspace that documents the project structure, available tools, and recommended usage patterns. The file should overwrite any existing AGENTS.md file. Include detailed information about the project's architecture, main components, and how to work with the codebase effectively."
+            } else {
+                "Generate a comprehensive AGENTS.md file for this workspace that documents the project structure, available tools, and recommended usage patterns. If an AGENTS.md file already exists, consider updating it rather than overwriting, unless specifically needed. Include detailed information about the project's architecture, main components, and how to work with the codebase effectively."
+            };
+
+            Ok(SlashCommandOutcome::SubmitPrompt { prompt: prompt_text.to_string() })
         }
         "config" => Ok(SlashCommandOutcome::ShowConfig),
         "clear" => {
@@ -516,7 +525,17 @@ pub async fn handle_slash_command(
             };
             Ok(SlashCommandOutcome::LaunchEditor { file })
         }
+        "git" => Ok(SlashCommandOutcome::LaunchGit),
         "exit" => Ok(SlashCommandOutcome::Exit),
+        "help" => {
+            let specific_cmd = if args.trim().is_empty() {
+                None
+            } else {
+                Some(args.trim())
+            };
+            render_help(renderer, specific_cmd)?;
+            Ok(SlashCommandOutcome::Handled)
+        },
         _ => {
             renderer.line(
                 MessageStyle::Error,
@@ -786,5 +805,28 @@ fn render_theme_list(renderer: &mut AnsiRenderer) -> Result<()> {
         MessageStyle::Info,
         &format!("Current theme: {}", theme::active_theme_label()),
     )?;
+    Ok(())
+}
+
+fn render_help(renderer: &mut AnsiRenderer, specific_command: Option<&str>) -> Result<()> {
+    if let Some(cmd_name) = specific_command {
+        // Look for a specific command
+        if let Some(cmd) = SLASH_COMMANDS.iter().find(|cmd| cmd.name == cmd_name) {
+            renderer.line(MessageStyle::Info, &format!("Help for /{}:", cmd.name))?;
+            renderer.line(MessageStyle::Info, &format!("  Description: {}", cmd.description))?;
+            // Additional usage examples could be added here in the future
+        } else {
+            renderer.line(MessageStyle::Error, &format!("Unknown command '{}'. Use /help without arguments to see all commands.", cmd_name))?;
+        }
+    } else {
+        // Show all commands
+        renderer.line(MessageStyle::Info, "Available slash commands:")?;
+        for cmd in SLASH_COMMANDS.iter() {
+            renderer.line(
+                MessageStyle::Info,
+                &format!("  /{} – {}", cmd.name, cmd.description),
+            )?;
+        }
+    }
     Ok(())
 }

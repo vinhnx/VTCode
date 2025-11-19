@@ -194,6 +194,24 @@ max_snapshots = 50
 # Maximum age of checkpoints to keep (in days)
 max_age_days = 30
 
+# External editor configuration
+# Uses the editor-command crate to detect and launch the user's preferred editor
+# https://docs.rs/editor-command/latest/editor_command/
+[tools.editor]
+# Enable external editor support for /edit command
+enabled = true
+
+# Editor detection order (editor-command checks in this priority):
+# 1. VISUAL environment variable
+# 2. EDITOR environment variable
+# 3. Platform-specific defaults (vim/nano on Unix, notepad++ on Windows)
+# Leave empty to use automatic detection based on environment variables
+# Examples: "vim", "nvim", "emacs", "nano", "code", "gedit"
+# preferred_editor = ""
+
+# Suspend TUI event loop while editor is running to prevent input conflicts
+# Recommended: true (prevents terminal artifacts and input issues)
+suspend_tui = true
 
 # Tool security configuration
 [tools]
