@@ -3,6 +3,59 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Version 0.43.0] - 2025-11-09
+# [Version 0.45.5] - 2025-11-19
+
+
+### Features
+    - feat: VT Code System Prompt v3 - Context Optimized Implementation
+    - feat: add Bash tool and remove non-existent run_terminal_cmd references
+    - feat: implement interactive tree UI for file structure visualization
+    - feat: enhance diff display with full-width backgrounds and improve terminal command visibility
+
+
+### Bug Fixes
+    - fix: expose shell tool to LLM by setting expose_in_llm to true
+    - fix: ensure development tools are always in PATH with fallback paths
+    - fix: remove overly complex sandbox cache clearing on PTY retry
+    - fix: improve loop detection for repeated tool calls
+    - fix: sync embedded asset for generate-agent-file.md
+    - fix: remove duplicate user message from conversation history
+    - fix: remove duplicate user message in turn loop
+    - fix: suppress dead_code warnings for intentionally disabled features
+
+
+### Refactors
+    - refactor: Remove sandbox functionality and streamline shell command
+    - refactor: eliminate wrapper layer in execute_shell_command
+    - refactor: use pattern matching in execute_shell_command for clarity
+    - refactor: simplify execute_shell_command further
+    - refactor: dramatically simplify execute_shell_command
+    - refactor: simplify execute_shell_command to skip conversion layer
+    - refactor: rename bash to shell and mark run_pty_cmd as deprecated
+    - refactor: streamline command execution error suggestions and implement unified run command executor
+    - refactor: streamline loop detection logic and improve non-interactive handling
+    - refactor: replace dissimilar with optimized Myers diff algorithm
+
+
+### Documentation
+    - docs: Add implementation completion summary for System Prompt v3
+    - docs: fix misleading comment for RUN_PTY_CMD constant
+    - docs: add comprehensive PTY fix outcome report with complete analysis
+    - docs: add comprehensive PTY shell initialization fix guide
+    - docs: add PTY fix outcome report with validation and impact assessment
+    - docs: add comprehensive PTY fix summary with problem analysis and solution validation
+    - docs: update PTY command execution improvements documentation
+    - docs: add embedded assets management guide and pre-commit hook
+    - docs: update changelog for v0.45.4 [skip ci]
+    - docs: update AGENTS.md with comprehensive agent guide and tool usage guidelines
+
+
+### Chores
+    - chore: standardize default shell in workflow files and set job timeouts
+    - chore: update VSCode extension package.json to v0.45.4 and commit changes [skip ci]
+    - chore: update npm package.json to v0.45.4 [skip ci]
+    - chore: release v0.45.4
+    - chore: update npm package.json to v0.45.3 [skip ci]
 # [Version 0.45.4] - 2025-11-17
 
 
