@@ -576,20 +576,26 @@ impl OpenAIProvider {
     }
 
     fn responses_api_state(&self, model: &str) -> ResponsesApiState {
-        let mut modes = self
-            .responses_api_modes
-            .lock()
-            .expect("OpenAI responses_api_modes mutex poisoned");
+        let mut modes = match self.responses_api_modes.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => {
+                tracing::warn!("OpenAI responses_api_modes mutex poisoned, recovering");
+                poisoned.into_inner()
+            }
+        };
         *modes
             .entry(model.to_string())
             .or_insert_with(|| Self::default_responses_state(model))
     }
 
     fn set_responses_api_state(&self, model: &str, state: ResponsesApiState) {
-        let mut modes = self
-            .responses_api_modes
-            .lock()
-            .expect("OpenAI responses_api_modes mutex poisoned");
+        let mut modes = match self.responses_api_modes.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => {
+                tracing::warn!("OpenAI responses_api_modes mutex poisoned, recovering");
+                poisoned.into_inner()
+            }
+        };
         modes.insert(model.to_string(), state);
     }
 

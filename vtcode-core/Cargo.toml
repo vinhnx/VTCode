@@ -139,6 +139,7 @@ uuid = { version = "1.8.0", features = ["v4", "fast-rng"] }
 which = "8.0.0"
 textwrap = "0.16"
 editor-command = "1.0"
+signal-hook = "0.3"
 
 [build-dependencies]
 vtcode-config = { path = "../vtcode-config", version = "0.45.5" }

@@ -52,7 +52,7 @@ pub enum Event {
 /// - Mouse and bracketed paste support
 /// - Graceful shutdown via cancellation tokens
 #[allow(dead_code)]
-pub struct Tui {
+pub struct FullTui {
     pub terminal: ratatui::Terminal<Backend<std::io::Stderr>>,
     pub task: JoinHandle<()>,
     pub cancellation_token: CancellationToken,
@@ -65,11 +65,36 @@ pub struct Tui {
 }
 
 #[allow(dead_code)]
-impl Tui {
+impl FullTui {
     /// Create a new TUI instance with default settings
     pub fn new() -> Result<Self> {
         let tick_rate = 4.0;
         let frame_rate = 60.0;
+        let terminal = ratatui::Terminal::new(Backend::new(std::io::stderr()))?;
+        let (event_tx, event_rx) = mpsc::unbounded_channel();
+        let cancellation_token = CancellationToken::new();
+        let task = tokio::spawn(async {});
+        let mouse = false;
+        let paste = false;
+
+        Ok(Self {
+            terminal,
+            task,
+            cancellation_token,
+            event_rx,
+            event_tx,
+            frame_rate,
+            tick_rate,
+            mouse,
+            paste,
+        })
+    }
+
+    /// Create a new TUI instance with settings from CLI arguments
+    pub fn from_cli_args(cli_args: &super::super::cli::args::Cli) -> Result<Self> {
+        // Convert CLI values to f64 for internal use
+        let tick_rate = 1000.0 / cli_args.tick_rate as f64; // Convert ms to Hz
+        let frame_rate = cli_args.frame_rate as f64;
         let terminal = ratatui::Terminal::new(Backend::new(std::io::stderr()))?;
         let (event_tx, event_rx) = mpsc::unbounded_channel();
         let cancellation_token = CancellationToken::new();
@@ -150,10 +175,6 @@ impl Tui {
                             Ok(Ok(evt)) => {
                                 match evt {
                                     CrosstermEvent::Key(key) => {
-                                        // Filter to Press events only for cross-platform compatibility.
-                                        // Windows emits both KeyEventKind::Press and KeyEventKind::Release for each
-                                        // keypress, while macOS and Linux emit only Press. This prevents duplicate key
-                                        // events on Windows. See https://ratatui.rs/faq/#why-am-i-getting-duplicate-key-events-on-windows
                                         if key.kind == KeyEventKind::Press {
                                             let _ = _event_tx.send(Event::Key(key));
                                         }
@@ -259,13 +280,13 @@ impl Tui {
     }
 }
 
-impl Default for Tui {
+impl Default for FullTui {
     fn default() -> Self {
         Self::new().expect("Failed to create default Tui instance")
     }
 }
 
-impl Deref for Tui {
+impl Deref for FullTui {
     type Target = ratatui::Terminal<Backend<std::io::Stderr>>;
 
     fn deref(&self) -> &Self::Target {
@@ -273,13 +294,13 @@ impl Deref for Tui {
     }
 }
 
-impl DerefMut for Tui {
+impl DerefMut for FullTui {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.terminal
     }
 }
 
-impl Drop for Tui {
+impl Drop for FullTui {
     fn drop(&mut self) {
         let _ = self.exit();
     }
@@ -304,14 +325,20 @@ pub trait ExternalAppLauncher {
     /// 7. Re-enter alternate screen
     /// 8. Clear terminal (removes artifacts)
     /// 9. Restart event handler
-    fn with_suspended_tui<F, T>(&mut self, f: F) -> impl std::future::Future<Output = Result<T>> + Send
+    fn with_suspended_tui<F, T>(
+        &mut self,
+        f: F,
+    ) -> impl std::future::Future<Output = Result<T>> + Send
     where
         F: FnOnce() -> Result<T> + Send + 'static,
         T: Send + 'static;
 }
 
-impl ExternalAppLauncher for Tui {
-    fn with_suspended_tui<F, T>(&mut self, f: F) -> impl std::future::Future<Output = Result<T>> + Send
+impl ExternalAppLauncher for FullTui {
+    fn with_suspended_tui<F, T>(
+        &mut self,
+        f: F,
+    ) -> impl std::future::Future<Output = Result<T>> + Send
     where
         F: FnOnce() -> Result<T> + Send + 'static,
         T: Send + 'static,

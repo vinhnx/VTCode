@@ -1,5 +1,4 @@
 use std::io::{self, IsTerminal};
-use std::sync::mpsc;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
@@ -19,8 +18,10 @@ use ratatui::{
     Terminal,
     backend::{Backend, CrosstermBackend},
 };
-use terminal_size::{Height, Width, terminal_size};
+use terminal_size::{terminal_size, Width, Height};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, error::TryRecvError};
+use tokio::time::interval;
+use tokio_util::sync::CancellationToken;
 
 use crate::config::{constants::ui, types::UiSurfacePreference};
 
@@ -46,151 +47,89 @@ struct TerminalModeState {
 
 type TerminalEvent = CrosstermEvent;
 
-struct InputListener {
-    receiver: UnboundedReceiver<TerminalEvent>,
-    shutdown: Option<mpsc::Sender<()>>,
-    control: Option<mpsc::Sender<InputControl>>,
+#[derive(Clone)]
+struct EventChannels {
+    tx: UnboundedSender<TerminalEvent>,
+    rx_paused: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
-#[derive(Default)]
-struct ViewportTracker {
-    last: Option<(u16, u16)>,
-}
-
-impl ViewportTracker {
-    fn new() -> Self {
-        let initial = measure_terminal_dimensions();
-        Self { last: initial }
-    }
-
-    fn update_from_resize(&mut self, columns: u16, rows: u16) {
-        if rows > 0 {
-            self.last = Some((columns, rows));
-        }
-    }
-
-    fn poll_changes(&mut self) -> Option<(u16, u16)> {
-        let measurement = measure_terminal_dimensions();
-        let Some((columns, rows)) = measurement else {
-            return None;
-        };
-
-        if self.last == Some((columns, rows)) {
-            return None;
-        }
-
-        self.last = Some((columns, rows));
-        Some((columns, rows))
-    }
-}
-
-enum InputControl {
-    Pause,
-    Resume,
-}
-
-impl InputListener {
-    fn spawn() -> Self {
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-        let (shutdown_tx, shutdown_rx) = mpsc::channel();
-        let (control_tx, control_rx) = mpsc::channel();
-
-        std::thread::spawn(move || {
-            let mut viewport = ViewportTracker::new();
-            let mut paused = false;
-
-            loop {
-                if shutdown_rx.try_recv().is_ok() {
-                    break;
-                }
-
-                // Check for control messages (non-blocking)
-                while let Ok(control) = control_rx.try_recv() {
-                    match control {
-                        InputControl::Pause => paused = true,
-                        InputControl::Resume => paused = false,
-                    }
-                }
-
-                if paused {
-                    // If paused, block until we receive a Resume message
-                    // This avoids busy-waiting and relinquishes CPU entirely
-                    if let Ok(control) = control_rx.recv() {
-                        match control {
-                            InputControl::Resume => paused = false,
-                            InputControl::Pause => paused = true,
-                        }
-                    } else {
-                        // Channel closed, exit
-                        break;
-                    }
-                    continue;
-                }
-
-                match event::poll(Duration::from_millis(INPUT_POLL_INTERVAL_MS)) {
-                    Ok(true) => match event::read() {
-                        Ok(event) => {
-                            if let CrosstermEvent::Resize(columns, rows) = event {
-                                viewport.update_from_resize(columns, rows);
-                            }
-                            if tx.send(event).is_err() {
-                                break;
-                            }
-                        }
-                        Err(error) => {
-                            tracing::debug!(%error, "failed to read crossterm event");
-                            break;
-                        }
-                    },
-                    Ok(false) => {
-                        if let Some((columns, rows)) = viewport.poll_changes() {
-                            let resize = CrosstermEvent::Resize(columns, rows);
-                            if tx.send(resize).is_err() {
-                                break;
-                            }
-                            continue;
-                        }
-
-                        if tx.is_closed() {
-                            break;
-                        }
-                    }
-                    Err(error) => {
-                        tracing::debug!(%error, "failed to poll crossterm event");
-                        break;
-                    }
-                }
-            }
-        });
-
+impl EventChannels {
+    fn new(tx: UnboundedSender<TerminalEvent>) -> Self {
         Self {
-            receiver: rx,
-            shutdown: Some(shutdown_tx),
-            control: Some(control_tx),
+            tx,
+            rx_paused: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
+    }
+
+    fn pause(&self) {
+        self.rx_paused.store(true, std::sync::atomic::Ordering::Release);
+    }
+
+    fn resume(&self) {
+        self.rx_paused.store(false, std::sync::atomic::Ordering::Release);
+    }
+
+    fn is_paused(&self) -> bool {
+        self.rx_paused.load(std::sync::atomic::Ordering::Acquire)
+    }
+}
+
+struct EventListener {
+    receiver: UnboundedReceiver<TerminalEvent>,
+    channels: EventChannels,
+}
+
+impl EventListener {
+    fn new() -> (Self, EventChannels) {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let channels = EventChannels::new(tx);
+        (
+            Self {
+                receiver: rx,
+                channels: channels.clone(),
+            },
+            channels,
+        )
     }
 
     async fn recv(&mut self) -> Option<TerminalEvent> {
         self.receiver.recv().await
     }
-
-    fn pause(&self) {
-        if let Some(tx) = &self.control {
-            let _ = tx.send(InputControl::Pause);
-        }
-    }
-
-    fn resume(&self) {
-        if let Some(tx) = &self.control {
-            let _ = tx.send(InputControl::Resume);
-        }
-    }
 }
 
-impl Drop for InputListener {
-    fn drop(&mut self) {
-        if let Some(shutdown) = self.shutdown.take() {
-            let _ = shutdown.send(());
+// Spawn the async event loop with proper cancellation token support
+// Uses blocking reads via tokio::task::block_in_place for crossterm compatibility
+async fn spawn_event_loop(
+    event_tx: UnboundedSender<TerminalEvent>,
+    cancellation_token: CancellationToken,
+) {
+    let mut tick_interval = interval(Duration::from_secs_f64(1.0 / 4.0)); // 4 ticks per second
+    let poll_timeout = Duration::from_millis(16);
+
+    loop {
+        tokio::select! {
+            _ = cancellation_token.cancelled() => {
+                break;
+            }
+            _ = tick_interval.tick() => {
+                // Tick for app logic updates - continue loop for next event
+            }
+            _ = async {
+                // Use block_in_place to allow crossterm's blocking poll
+                tokio::task::block_in_place(|| {
+                    if event::poll(poll_timeout).unwrap_or(false) {
+                        if let Ok(event) = event::read() {
+                            let _ = event_tx.send(event);
+                        }
+                    }
+                })
+            } => {
+                // Event has been sent
+            }
+        }
+
+        if event_tx.is_closed() {
+            break;
         }
     }
 }
@@ -258,7 +197,17 @@ pub async fn run_tui(
 ) -> Result<()> {
     let surface = TerminalSurface::detect(surface_preference, inline_rows)?;
     let mut session = Session::new(theme, placeholder, surface.rows(), show_timeline_pane);
-    let mut inputs = InputListener::spawn();
+
+    // Create event listener and channels using the new async pattern
+    let (mut input_listener, event_channels) = EventListener::new();
+    let cancellation_token = CancellationToken::new();
+    let event_loop_token = cancellation_token.clone();
+    let event_channels_for_loop = event_channels.clone();
+    
+    // Spawn the async event loop
+    let event_loop_handle = tokio::spawn(async move {
+        spawn_event_loop(event_channels_for_loop.tx.clone(), event_loop_token).await;
+    });
 
     let mut stdout = io::stdout();
     let mode_state = enable_terminal_modes(&mut stdout)?;
@@ -275,10 +224,16 @@ pub async fn run_tui(
         &mut session,
         &mut commands,
         &events,
-        &mut inputs,
+        &mut input_listener,
+        event_channels,
         event_callback,
     )
     .await;
+
+    // Gracefully shutdown the event loop
+    cancellation_token.cancel();
+    let _ = tokio::time::timeout(Duration::from_millis(100), event_loop_handle).await;
+
     let finalize_result = finalize_terminal(&mut terminal);
     let leave_alternate_result = if surface.use_alternate() {
         Some(execute!(terminal.backend_mut(), LeaveAlternateScreen))
@@ -373,18 +328,20 @@ async fn drive_terminal<B: Backend>(
     session: &mut Session,
     commands: &mut UnboundedReceiver<InlineCommand>,
     events: &UnboundedSender<InlineEvent>,
-    inputs: &mut InputListener,
+    inputs: &mut EventListener,
+    event_channels: EventChannels,
     event_callback: Option<InlineEventCallback>,
 ) -> Result<()> {
     'main: loop {
+        // Process all pending commands without blocking
         loop {
             match commands.try_recv() {
                 Ok(command) => match command {
                     InlineCommand::SuspendEventLoop => {
-                        inputs.pause();
+                        event_channels.pause();
                     }
                     InlineCommand::ResumeEventLoop => {
-                        inputs.resume();
+                        event_channels.resume();
                     }
                     InlineCommand::ForceRedraw => {
                         terminal
@@ -420,10 +377,10 @@ async fn drive_terminal<B: Backend>(
                     Some(command) => {
                         match command {
                             InlineCommand::SuspendEventLoop => {
-                                inputs.pause();
+                                event_channels.pause();
                             }
                             InlineCommand::ResumeEventLoop => {
-                                inputs.resume();
+                                event_channels.resume();
                             }
                             InlineCommand::ForceRedraw => {
                                 terminal.clear().context("failed to clear terminal for redraw")?;
