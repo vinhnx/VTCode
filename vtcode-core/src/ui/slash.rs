@@ -44,6 +44,10 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
             description: "Run a terminal command (usage: /command <program> [args...])",
         },
         SlashCommandInfo {
+            name: "edit",
+            description: "Edit in external editor (usage: /edit [file])",
+        },
+        SlashCommandInfo {
             name: "debug",
             description: "Analyze and debug code issues in the workspace (usage: /debug [file|directory|problem])",
         },

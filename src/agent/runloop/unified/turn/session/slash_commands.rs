@@ -821,6 +821,69 @@ pub async fn handle_outcome(
             ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
             Ok(SlashCommandControl::Continue)
         }
+        SlashCommandOutcome::LaunchEditor { file } => {
+            use std::path::PathBuf;
+            use vtcode_core::tools::terminal_app::TerminalAppLauncher;
+
+            let launcher = TerminalAppLauncher::new(ctx.config.workspace.clone());
+            
+            ctx.renderer.line(
+                MessageStyle::Info,
+                if file.is_some() {
+                    "Launching editor..."
+                } else {
+                    "Launching editor with current input..."
+                },
+            )?;
+
+            let file_path = file.as_ref().map(|f| {
+                let path = PathBuf::from(f);
+                if path.is_absolute() {
+                    path
+                } else {
+                    ctx.config.workspace.join(path)
+                }
+            });
+
+            // Suspend TUI event loop to prevent input stealing
+            ctx.handle.suspend_event_loop();
+            // Give a small moment for the suspend command to propagate to the TUI thread
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+            match launcher.launch_editor(file_path) {
+                Ok(Some(edited_content)) => {
+                    // User edited temp file, replace input with edited content
+                    ctx.handle.set_input(edited_content);
+                    ctx.handle.force_redraw(); // Force redraw to clear any artifacts
+                    ctx.renderer.line(
+                        MessageStyle::Info,
+                        "Editor closed. Input updated with edited content.",
+                    )?;
+                }
+                Ok(None) => {
+                    // User edited existing file
+                    ctx.handle.force_redraw(); // Force redraw to clear any artifacts
+                    ctx.renderer.line(
+                        MessageStyle::Info,
+                        "Editor closed.",
+                    )?;
+                }
+                Err(err) => {
+                    ctx.handle.force_redraw(); // Force redraw even on error
+                    ctx.renderer.line(
+                        MessageStyle::Error,
+                        &format!("Failed to launch editor: {}", err),
+                    )?;
+                }
+            }
+            
+            // Resume TUI event loop
+            ctx.handle.resume_event_loop();
+            
+            ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
+            Ok(SlashCommandControl::Continue)
+        }
+
         SlashCommandOutcome::Exit => {
             ctx.renderer.line(MessageStyle::Info, "Goodbye!")?;
             Ok(SlashCommandControl::BreakWithReason(SessionEndReason::Exit))

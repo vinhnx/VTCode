@@ -1,22 +1,26 @@
 {
   "version": 1,
   "available_tools": [
+    "analyze_agent",
     "apply_patch",
     "close_pty_session",
     "create_file",
     "create_pty_session",
+    "debug_agent",
     "delete_file",
     "edit_file",
     "execute_code",
+    "get_errors",
     "grep_file",
     "list_files",
     "list_pty_sessions",
     "list_skills",
     "load_skill",
+    "mcp::time::get_current_time",
     "read_file",
     "read_pty_session",
     "resize_pty_session",
-    "run_terminal_cmd",
+    "run_pty_cmd",
     "save_skill",
     "search_skills",
     "search_tools",
@@ -48,7 +52,10 @@
     "save_skill": "prompt",
     "search_skills": "prompt",
     "search_tools": "prompt",
-    "run_terminal_cmd": "allow"
+    "analyze_agent": "prompt",
+    "debug_agent": "prompt",
+    "get_errors": "prompt",
+    "run_pty_cmd": "allow"
   },
   "constraints": {
     "curl": {
