@@ -5379,6 +5379,7 @@ dependencies = [
  "serde",
  "serde_json",
  "shell-words",
+ "signal-hook",
  "smallvec",
  "tempfile",
  "tokio",

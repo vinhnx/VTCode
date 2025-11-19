@@ -165,6 +165,7 @@ pub mod acp;
 pub mod ide_context;
 pub mod interactive_list;
 pub mod tools;
+pub mod tui; // Terminal UI event handler with refined Ratatui pattern
 mod workspace_trust;
 
 pub mod startup;
