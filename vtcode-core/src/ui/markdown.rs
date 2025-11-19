@@ -734,20 +734,36 @@ fn append_text(
             }
             lines.push(std::mem::take(current_line));
             start = idx + ch.len_utf8();
+
+            // Skip consecutive newlines to prevent multiple blank lines
+            // Each sequence of consecutive newlines should result in only one blank line
+            while let Some(&(_, next_ch)) = chars.peek() {
+                if next_ch != '\n' {
+                    break;
+                }
+                chars.next(); // consume the additional newline
+                start += next_ch.len_utf8(); // increment start by character length
+            }
+
+            // After skipping consecutive newlines, if there are more consecutive newlines,
+            // we need to ensure we don't add multiple blank lines.
+            // The first \n already added a line (above), so we only need one blank line per sequence
         }
     }
 
     if start < text.len() {
         let remaining = &text[start..];
-        ensure_prefix(
-            current_line,
-            blockquote_depth,
-            list_stack,
-            pending_list_prefix,
-            theme_styles,
-            base_style,
-        );
-        current_line.push_segment(style, remaining);
+        if !remaining.is_empty() {
+            ensure_prefix(
+                current_line,
+                blockquote_depth,
+                list_stack,
+                pending_list_prefix,
+                theme_styles,
+                base_style,
+            );
+            current_line.push_segment(style, remaining);
+        }
     }
 }
 

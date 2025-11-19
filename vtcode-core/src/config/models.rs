@@ -106,7 +106,7 @@ impl Provider {
         use crate::config::constants::models;
 
         match self {
-            Provider::Gemini => model == models::google::GEMINI_2_5_PRO,
+            Provider::Gemini => models::google::REASONING_MODELS.contains(&model),
             Provider::OpenAI => models::openai::REASONING_MODELS.contains(&model),
             Provider::Anthropic => models::anthropic::REASONING_MODELS.contains(&model),
             Provider::DeepSeek => model == models::deepseek::DEEPSEEK_REASONER,
@@ -180,6 +180,8 @@ pub enum ModelId {
     Gemini25FlashLite,
     /// Gemini 2.5 Pro - Latest most capable Gemini model
     Gemini25Pro,
+    /// Gemini 3 Pro Preview - Preview of next-generation Gemini model
+    Gemini3ProPreview,
 
     // OpenAI models
     /// GPT-5 - Latest most capable OpenAI model (2025-08-07)
@@ -443,6 +445,7 @@ impl ModelId {
             ModelId::Gemini25Flash => models::GEMINI_2_5_FLASH,
             ModelId::Gemini25FlashLite => models::GEMINI_2_5_FLASH_LITE,
             ModelId::Gemini25Pro => models::GEMINI_2_5_PRO,
+            ModelId::Gemini3ProPreview => models::GEMINI_3_PRO_PREVIEW,
             // OpenAI models
             ModelId::GPT5 => models::GPT_5,
             ModelId::GPT5Codex => models::GPT_5_CODEX,
@@ -569,7 +572,8 @@ impl ModelId {
             ModelId::Gemini25FlashPreview
             | ModelId::Gemini25Flash
             | ModelId::Gemini25FlashLite
-            | ModelId::Gemini25Pro => Provider::Gemini,
+            | ModelId::Gemini25Pro
+            | ModelId::Gemini3ProPreview => Provider::Gemini,
             ModelId::GPT5
             | ModelId::GPT5Codex
             | ModelId::GPT5Mini
@@ -724,6 +728,7 @@ impl ModelId {
 
         let direct = match self {
             ModelId::Gemini25Pro => Some(ModelId::Gemini25Flash),
+            ModelId::Gemini3ProPreview => Some(ModelId::Gemini25Flash),
             ModelId::GPT5 => Some(ModelId::GPT5Mini),
             ModelId::GPT5Codex => Some(ModelId::CodexMiniLatest),
             ModelId::GPT51 => Some(ModelId::GPT51Mini),
@@ -755,6 +760,7 @@ impl ModelId {
             ModelId::Gemini25Flash => "Gemini 2.5 Flash",
             ModelId::Gemini25FlashLite => "Gemini 2.5 Flash Lite",
             ModelId::Gemini25Pro => "Gemini 2.5 Pro",
+            ModelId::Gemini3ProPreview => "Gemini 3 Pro Preview",
             // OpenAI models
             ModelId::GPT5 => "GPT-5",
             ModelId::GPT5Codex => "GPT-5 Codex",
@@ -837,6 +843,9 @@ impl ModelId {
                 "Legacy alias for Gemini 2.5 Flash Preview optimized for efficiency"
             }
             ModelId::Gemini25Pro => "Latest most capable Gemini model with reasoning",
+            ModelId::Gemini3ProPreview => {
+                "Preview of next-generation Gemini 3 Pro model with advanced reasoning and capabilities"
+            }
             // OpenAI models
             ModelId::GPT5 => "Latest most capable OpenAI model with advanced reasoning",
             ModelId::GPT5Codex => {
@@ -1040,6 +1049,7 @@ impl ModelId {
             ModelId::Gemini25Flash,
             ModelId::Gemini25FlashLite,
             ModelId::Gemini25Pro,
+            ModelId::Gemini3ProPreview,
             // OpenAI models
             ModelId::GPT5,
             ModelId::GPT5Codex,
@@ -1306,6 +1316,7 @@ impl ModelId {
             | ModelId::Gemini25Flash
             | ModelId::Gemini25FlashLite
             | ModelId::Gemini25Pro => "2.5",
+            ModelId::Gemini3ProPreview => "3",
             // OpenAI generations
             ModelId::GPT5
             | ModelId::GPT5Codex

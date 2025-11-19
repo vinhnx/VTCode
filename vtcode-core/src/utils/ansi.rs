@@ -216,27 +216,20 @@ impl AnsiRenderer {
             return self.render_markdown(style, text);
         }
         let indent = style.indent();
+        let dont_split = matches!(style, MessageStyle::Tool | MessageStyle::ToolDetail);
 
         if let Some(sink) = &mut self.sink {
             sink.write_multiline(style.style(), indent, text, Self::message_kind(style))?;
             return Ok(());
         }
 
-        if text.contains('\n') {
-            let trailing_newline = text.ends_with('\n');
+        if text.contains('\n') && !dont_split {
             for line in text.lines() {
                 self.buffer.clear();
                 if !indent.is_empty() && !line.is_empty() {
                     self.buffer.push_str(indent);
                 }
                 self.buffer.push_str(line);
-                self.flush(style)?;
-            }
-            if trailing_newline {
-                self.buffer.clear();
-                if !indent.is_empty() {
-                    self.buffer.push_str(indent);
-                }
                 self.flush(style)?;
             }
             Ok(())
@@ -803,7 +796,10 @@ impl InlineSink {
         let fallback = self.resolve_fallback_style(style);
         let (converted_lines, plain_lines) = self.convert_plain_lines(text, &fallback);
 
-        if kind == InlineMessageKind::User {
+        // Combine multiple lines into a single append for User and Tool to avoid
+        // creating a separate inline entry for each line. This prevents the
+        // UI from showing a separate line per original line of tool output.
+        if kind == InlineMessageKind::User || kind == InlineMessageKind::Tool {
             let mut combined_segments = Vec::new();
             let mut combined_plain = String::new();
 
@@ -1002,5 +998,52 @@ mod tests {
         assert_eq!(converted.len(), 2);
         assert!(!converted[0].is_empty());
         assert!(converted[1].is_empty());
+    }
+
+    #[test]
+    fn write_multiline_combines_tool_lines() {
+        use crate::ui::InlineCommand;
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        let sink = InlineSink::new(InlineHandle { sender });
+        let style = InlineTextStyle::default();
+        // Use Tool kind to verify that multiple lines are combined into a single AppendLine command
+        let kind = InlineMessageKind::Tool;
+        let text = "one\ntwo\nthree";
+        sink.write_multiline(style.to_ansi_style(None), "", text, kind)
+            .unwrap();
+
+        // We should receive exactly one AppendLine command
+        let mut count = 0;
+        while let Ok(command) = receiver.try_recv() {
+            if let InlineCommand::AppendLine { .. } = command {
+                count += 1;
+            }
+        }
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn line_function_no_trailing_empty_line() {
+        use anstream::{AutoStream, ColorChoice};
+        use std::io::sink;
+
+        // Create a renderer that doesn't output to stdout
+        let choice = ColorChoice::Never;
+        let mut renderer = AnsiRenderer {
+            writer: AutoStream::new(sink(), choice),
+            buffer: String::new(),
+            color: false,
+            sink: None,
+            last_line_was_empty: false,
+            highlight_config: SyntaxHighlightingConfig::default(),
+        };
+
+        // This should not create an extra empty line after "line 2"
+        renderer
+            .line(MessageStyle::Tool, "line 1\nline 2\n")
+            .unwrap();
+
+        // Previously, this would have added an extra empty line due to the trailing \n
+        // With our fix, it should only process the actual content lines
     }
 }

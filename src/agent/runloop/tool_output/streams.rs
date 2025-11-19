@@ -232,7 +232,8 @@ pub(crate) async fn render_stream_section(
             };
 
             if display_line.is_empty() {
-                msg_buffer.clear();
+                // Skip empty lines to avoid extra line breaks in TUI rendering
+                continue;
             } else {
                 msg_buffer.clear();
                 msg_buffer.push_str(prefix);
@@ -321,7 +322,8 @@ pub(crate) async fn render_stream_section(
 
     for line in &lines_vec {
         if line.is_empty() {
-            display_buffer.clear();
+            // Skip empty lines to avoid extra line breaks in TUI rendering
+            continue;
         } else {
             display_buffer.clear();
             display_buffer.push_str(prefix);

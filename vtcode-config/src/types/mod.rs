@@ -9,14 +9,22 @@ use std::fmt;
 use std::path::PathBuf;
 
 /// Supported reasoning effort levels configured via vtcode.toml
+/// These map to different provider-specific parameters:
+/// - For Gemini 3 Pro: Maps to thinking_level (low, high) - medium coming soon
+/// - For other models: Maps to provider-specific reasoning parameters
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ReasoningEffortLevel {
+    /// No reasoning configuration - for models that don't support configurable reasoning
     None,
+    /// Minimal reasoning effort - maps to low thinking level for Gemini 3 Pro
     Minimal,
+    /// Low reasoning effort - maps to low thinking level for Gemini 3 Pro
     Low,
+    /// Medium reasoning effort - Note: Not fully available for Gemini 3 Pro yet, defaults to high
     Medium,
+    /// High reasoning effort - maps to high thinking level for Gemini 3 Pro
     High,
 }
 

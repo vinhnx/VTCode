@@ -37,16 +37,18 @@ pub mod models {
             "gemini-2.5-flash",
             "gemini-2.5-flash-lite",
             "gemini-2.5-flash-preview-05-20",
+            "gemini-3-pro-preview",
         ];
 
         /// Models that support thinking/reasoning capability
         /// Based on: https://ai.google.dev/gemini-api/docs/models
-        /// All Gemini 2.5 models support the Thinking capability
+        /// All Gemini 2.5 and 3 models support the Thinking capability
         pub const REASONING_MODELS: &[&str] = &[
             "gemini-2.5-pro",
             "gemini-2.5-flash",
             "gemini-2.5-flash-lite",
             "gemini-2.5-flash-preview-05-20",
+            "gemini-3-pro-preview",
         ];
 
         /// Models that support context caching
@@ -56,6 +58,7 @@ pub mod models {
             "gemini-2.5-flash",
             "gemini-2.5-flash-lite",
             "gemini-2.5-flash-preview-05-20",
+            "gemini-3-pro-preview",
         ];
 
         /// Models that support code execution
@@ -65,6 +68,7 @@ pub mod models {
             "gemini-2.5-flash",
             "gemini-2.5-flash-lite",
             "gemini-2.5-flash-preview-05-20",
+            "gemini-3-pro-preview",
         ];
 
         // Convenience constants for commonly used models
@@ -72,6 +76,7 @@ pub mod models {
         pub const GEMINI_2_5_FLASH: &str = "gemini-2.5-flash";
         pub const GEMINI_2_5_FLASH_LITE: &str = "gemini-2.5-flash-lite";
         pub const GEMINI_2_5_FLASH_PREVIEW: &str = "gemini-2.5-flash-preview-05-20";
+        pub const GEMINI_3_PRO_PREVIEW: &str = "gemini-3-pro-preview";
     }
 
     // OpenAI models (from docs/models.json)
@@ -335,6 +340,7 @@ pub mod models {
     pub const GEMINI_2_5_FLASH: &str = google::GEMINI_2_5_FLASH;
     pub const GEMINI_2_5_PRO: &str = google::GEMINI_2_5_PRO;
     pub const GEMINI_2_5_FLASH_LITE: &str = google::GEMINI_2_5_FLASH_LITE;
+    pub const GEMINI_3_PRO_PREVIEW: &str = google::GEMINI_3_PRO_PREVIEW;
     pub const GPT_5: &str = openai::GPT_5;
     pub const GPT_5_CODEX: &str = openai::GPT_5_CODEX;
     pub const GPT_5_MINI: &str = openai::GPT_5_MINI;
@@ -541,7 +547,7 @@ pub mod ui {
     pub const INLINE_PREVIEW_MAX_CHARS: usize = 56;
     pub const INLINE_PREVIEW_ELLIPSIS: &str = "…";
     pub const HEADER_HIGHLIGHT_PREVIEW_MAX_CHARS: usize = 48;
-    pub const INLINE_AGENT_MESSAGE_LEFT_PADDING: &str = "  ";
+    pub const INLINE_AGENT_MESSAGE_LEFT_PADDING: &str = "";
     pub const INLINE_AGENT_QUOTE_PREFIX: &str = "";
     pub const INLINE_USER_MESSAGE_DIVIDER_SYMBOL: &str = "─";
     pub const INLINE_BLOCK_TOP_LEFT: &str = "╭";
@@ -678,7 +684,7 @@ pub mod reasoning {
     pub const LABEL_MEDIUM: &str = "Medium";
     pub const LABEL_HIGH: &str = "High";
     pub const DESCRIPTION_LOW: &str = "Fast responses with lightweight reasoning.";
-    pub const DESCRIPTION_MEDIUM: &str = "Balanced depth and speed for general tasks.";
+    pub const DESCRIPTION_MEDIUM: &str = "Balanced depth and speed for general tasks. (Note: May not be fully available for all models including Gemini 3 Pro)";
     pub const DESCRIPTION_HIGH: &str = "Maximum reasoning depth for complex problems.";
 }
 

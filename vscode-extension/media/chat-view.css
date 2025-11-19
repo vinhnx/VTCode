@@ -170,6 +170,11 @@ body {
 	align-items: flex-start;
 }
 
+.chat-message-wrapper.assistant .chat-message {
+	font-style: italic;
+	opacity: 0.9;
+}
+
 .chat-message {
 	padding: 0;
 	font-size: 12px;

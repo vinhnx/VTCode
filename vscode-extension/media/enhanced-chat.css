@@ -172,6 +172,8 @@ body {
 .message-assistant {
 	background: var(--assistant-bg);
 	border-left: 3px solid #4caf50;
+	font-style: italic;
+	opacity: 0.9;
 }
 
 .message-system {

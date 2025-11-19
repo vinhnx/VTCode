@@ -204,7 +204,9 @@ impl PtyScrollback {
     }
 
     fn push_text(&mut self, text: &str) {
-        let text_bytes = text.len();
+        // Strip ANSI codes from the text to prevent ANSI styling in output
+        let cleaned_text = crate::utils::ansi_parser::strip_ansi(text);
+        let text_bytes = cleaned_text.len();
 
         // Early warning at 80% threshold
         if !self.warning_shown && self.current_bytes + text_bytes > (self.max_bytes * 80 / 100) {
@@ -237,12 +239,12 @@ impl PtyScrollback {
 
             // Track metrics for dropped data
             self.bytes_dropped += text_bytes;
-            self.lines_dropped += text.lines().count();
+            self.lines_dropped += cleaned_text.lines().count();
 
             return; // DROP further output to prevent hang
         }
 
-        for part in text.split_inclusive('\n') {
+        for part in cleaned_text.split_inclusive('\n') {
             self.partial.push_str(part);
             self.pending_partial.push_str(part);
             if part.ends_with('\n') {
