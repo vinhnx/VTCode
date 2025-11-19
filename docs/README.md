@@ -70,6 +70,7 @@ New to VT Code? Start with installation and basic usage:
 -   **[Configuration Guide](./CONFIGURATION.md)** - Comprehensive configuration options
 -   **[Status Line Configuration](./guides/status-line.md)** - Customize the inline prompt footer
 -   **[Responses API & Reasoning Models](./guides/responses-api-reasoning.md)** - Align reasoning-centric prompts with the OpenAI Responses API
+-   **[External Editor Configuration](./tools/EDITOR_CONFIG.md)** - Setup and usage of the `/edit` command with your preferred editor
 
 ### For Developers
 
