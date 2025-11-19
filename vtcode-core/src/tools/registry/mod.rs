@@ -131,10 +131,10 @@ impl ToolExecutionHistory {
     /// Returns (is_loop, repeat_count, tool_name) if a loop is detected
     pub fn detect_loop(&self, tool_name: &str, args: &Value) -> (bool, usize, String) {
         let records = self.records.read().unwrap();
-        
+
         // Look at the last 5 calls
         let recent: Vec<&ToolExecutionRecord> = records.iter().rev().take(5).collect();
-        
+
         if recent.is_empty() {
             return (false, 0, String::new());
         }
@@ -149,7 +149,7 @@ impl ToolExecutionHistory {
 
         // If we've called this exact combination 2+ times in the last 5 calls, it's a loop
         let is_loop = identical_count >= 2;
-        
+
         (is_loop, identical_count, tool_name.to_string())
     }
 }

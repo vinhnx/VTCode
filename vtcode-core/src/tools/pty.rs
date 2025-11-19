@@ -181,9 +181,9 @@ struct PtyScrollback {
     max_bytes: usize,
     current_bytes: usize,
     overflow_detected: bool,
-    warning_shown: bool,               // NEW: Track if 80% warning shown
-    bytes_dropped: usize,              // NEW: Track dropped bytes for metrics
-    lines_dropped: usize,              // NEW: Track dropped lines for metrics
+    warning_shown: bool,  // NEW: Track if 80% warning shown
+    bytes_dropped: usize, // NEW: Track dropped bytes for metrics
+    lines_dropped: usize, // NEW: Track dropped lines for metrics
 }
 
 impl PtyScrollback {
@@ -205,7 +205,7 @@ impl PtyScrollback {
 
     fn push_text(&mut self, text: &str) {
         let text_bytes = text.len();
-        
+
         // Early warning at 80% threshold
         if !self.warning_shown && self.current_bytes + text_bytes > (self.max_bytes * 80 / 100) {
             self.warning_shown = true;
@@ -219,7 +219,7 @@ impl PtyScrollback {
             self.lines.push_back(warning.clone());
             self.pending_lines.push_back(warning);
         }
-        
+
         // Check byte limit BEFORE processing to prevent memory explosion
         if self.current_bytes + text_bytes > self.max_bytes {
             if !self.overflow_detected {
@@ -234,11 +234,11 @@ impl PtyScrollback {
                 self.lines.push_back(warning.clone());
                 self.pending_lines.push_back(warning);
             }
-            
+
             // Track metrics for dropped data
             self.bytes_dropped += text_bytes;
             self.lines_dropped += text.lines().count();
-            
+
             return; // DROP further output to prevent hang
         }
 
@@ -248,11 +248,11 @@ impl PtyScrollback {
             if part.ends_with('\n') {
                 let complete = std::mem::take(&mut self.partial);
                 let _ = std::mem::take(&mut self.pending_partial);
-                
+
                 self.current_bytes += complete.len();
                 self.lines.push_back(complete.clone());
                 self.pending_lines.push_back(complete);
-                
+
                 // Circular buffer: drop oldest lines when line capacity exceeded
                 while self.lines.len() > self.capacity_lines {
                     if let Some(oldest) = self.lines.pop_front() {
@@ -1376,7 +1376,10 @@ mod tests {
 
         // Should have warning
         let snapshot = scrollback.snapshot();
-        assert!(snapshot.contains("approaching size limit"), "Should show 80% warning");
+        assert!(
+            snapshot.contains("approaching size limit"),
+            "Should show 80% warning"
+        );
         assert!(scrollback.warning_shown, "Warning flag should be set");
     }
 
@@ -1405,8 +1408,10 @@ mod tests {
         }
 
         let metrics = scrollback.metrics();
-        assert!(metrics.usage_percent > 50.0 && metrics.usage_percent < 60.0, 
-            "Usage should be around 50-55%");
+        assert!(
+            metrics.usage_percent > 50.0 && metrics.usage_percent < 60.0,
+            "Usage should be around 50-55%"
+        );
     }
 
     #[test]
