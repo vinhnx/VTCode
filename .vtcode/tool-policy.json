@@ -16,17 +16,15 @@
     "list_pty_sessions",
     "list_skills",
     "load_skill",
-    "mcp::fetch::fetch",
-    "mcp::time::convert_time",
     "mcp::time::get_current_time",
     "read_file",
     "read_pty_session",
     "resize_pty_session",
+    "run_pty_cmd",
     "save_skill",
     "search_skills",
     "search_tools",
     "send_pty_input",
-    "shell",
     "update_plan",
     "web_fetch",
     "write_file"
@@ -57,7 +55,7 @@
     "analyze_agent": "prompt",
     "debug_agent": "prompt",
     "get_errors": "prompt",
-    "shell": "prompt"
+    "run_pty_cmd": "allow"
   },
   "constraints": {
     "curl": {
@@ -222,13 +220,7 @@
     "providers": {
       "time": {
         "tools": {
-          "get_current_time": "allow",
-          "convert_time": "prompt"
-        }
-      },
-      "fetch": {
-        "tools": {
-          "fetch": "prompt"
+          "get_current_time": "allow"
         }
       }
     }

@@ -1,5 +1,4 @@
 use crate::agent::runloop::mcp_events;
-use crate::agent::runloop::sandbox::SandboxCoordinator;
 use crate::agent::runloop::telemetry::build_trajectory_logger;
 use crate::agent::runloop::welcome::{SessionBootstrap, prepare_session_bootstrap};
 use anyhow::{Context, Result};
@@ -68,7 +67,6 @@ pub(crate) struct SessionState {
     pub search_metrics: Arc<RwLock<SearchMetrics>>,
 
     pub custom_prompts: CustomPromptRegistry,
-    pub sandbox: SandboxCoordinator,
 }
 
 #[allow(dead_code)]
@@ -181,9 +179,6 @@ pub(crate) async fn initialize_session(
             tool_definitions.push(uni::ToolDefinition::apply_patch(
                 "Apply structured diffs to modify files. Use this tool to create, update, or delete file content using unified diff format. The tool enables iterative, multi-step code editing workflows by applying patches and reporting results back.".to_string()
             ));
-
-            // Add shell tool for GPT-5.1's controlled command-line interface
-            tool_definitions.push(uni::ToolDefinition::shell(None));
         }
     }
 
@@ -347,7 +342,6 @@ pub(crate) async fn initialize_session(
         CustomPromptRegistry::default()
     });
 
-    let sandbox = SandboxCoordinator::new(config.workspace.clone());
     let token_counter = Arc::new(RwLock::new(TokenCounter::new()));
     let tool_result_cache = Arc::new(RwLock::new(ToolResultCache::new(128))); // 128-entry cache
     let tool_permission_cache = Arc::new(RwLock::new(ToolPermissionCache::new())); // Session-scoped
@@ -374,7 +368,6 @@ pub(crate) async fn initialize_session(
         tool_permission_cache,
         search_metrics,
         custom_prompts,
-        sandbox,
     })
 }
 

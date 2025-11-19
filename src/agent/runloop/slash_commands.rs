@@ -56,9 +56,6 @@ pub enum SlashCommandOutcome {
     ManageWorkspaceDirectories {
         command: WorkspaceDirectoryCommand,
     },
-    ManageSandbox {
-        action: SandboxAction,
-    },
     ShowPruningReport,
     SubmitPrompt {
         prompt: String,
@@ -84,20 +81,6 @@ pub enum WorkspaceDirectoryCommand {
     Add(Vec<String>),
     List,
     Remove(Vec<String>),
-}
-
-#[derive(Clone, Debug)]
-pub enum SandboxAction {
-    Toggle,
-    Enable,
-    Disable,
-    Status,
-    AllowDomain(String),
-    RemoveDomain(String),
-    AllowPath(String),
-    RemovePath(String),
-    ListPaths,
-    Help,
 }
 
 pub async fn handle_slash_command(
@@ -137,13 +120,7 @@ pub async fn handle_slash_command(
             render_custom_prompt_list(renderer, custom_prompts)?;
             Ok(SlashCommandOutcome::Handled)
         }
-        "sandbox" => match parse_sandbox_action(args) {
-            Ok(action) => Ok(SlashCommandOutcome::ManageSandbox { action }),
-            Err(message) => {
-                renderer.line(MessageStyle::Error, &message)?;
-                Ok(SlashCommandOutcome::Handled)
-            }
-        },
+
         "theme" => {
             let mut tokens = args.split_whitespace();
             if let Some(next_theme) = tokens.next() {
@@ -672,57 +649,6 @@ fn render_prompt_summary(renderer: &mut AnsiRenderer, prompt: &CustomPrompt) -> 
     }
 
     Ok(())
-}
-
-fn parse_sandbox_action(args: &str) -> std::result::Result<SandboxAction, String> {
-    let trimmed = args.trim();
-    if trimmed.is_empty() {
-        return Ok(SandboxAction::Toggle);
-    }
-
-    let mut parts = trimmed.split_whitespace();
-    let keyword = parts.next().unwrap_or_default();
-    let remainder = trimmed[keyword.len()..].trim();
-
-    match keyword {
-        "status" | "--status" => Ok(SandboxAction::Status),
-        "enable" | "on" => Ok(SandboxAction::Enable),
-        "disable" | "off" => Ok(SandboxAction::Disable),
-        "help" | "--help" => Ok(SandboxAction::Help),
-        "allow-domain" | "allow" => {
-            if remainder.is_empty() {
-                Err("Usage: /sandbox allow-domain <domain>".to_string())
-            } else {
-                Ok(SandboxAction::AllowDomain(remainder.to_string()))
-            }
-        }
-        "remove-domain" | "deny-domain" | "revoke-domain" => {
-            if remainder.is_empty() {
-                Err("Usage: /sandbox remove-domain <domain>".to_string())
-            } else {
-                Ok(SandboxAction::RemoveDomain(remainder.to_string()))
-            }
-        }
-        "allow-path" | "allow-dir" | "allow-paths" => {
-            if remainder.is_empty() {
-                Err("Usage: /sandbox allow-path <path>".to_string())
-            } else {
-                Ok(SandboxAction::AllowPath(remainder.to_string()))
-            }
-        }
-        "remove-path" | "deny-path" | "revoke-path" => {
-            if remainder.is_empty() {
-                Err("Usage: /sandbox remove-path <path>".to_string())
-            } else {
-                Ok(SandboxAction::RemovePath(remainder.to_string()))
-            }
-        }
-        "list-paths" | "paths" => Ok(SandboxAction::ListPaths),
-        _ => Err(format!(
-            "Unknown sandbox subcommand '{}'. Type /sandbox help for usage.",
-            keyword
-        )),
-    }
 }
 
 fn split_command_and_args(input: &str) -> (&str, &str) {

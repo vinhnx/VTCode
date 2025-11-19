@@ -126,7 +126,6 @@ pub(crate) async fn run_single_agent_loop_unified(
             tool_permission_cache,
             search_metrics: _,
             custom_prompts,
-            mut sandbox,
         } = initialize_session(&config, vt_cfg.as_ref(), full_auto, resume_ref).await?;
 
         let mut session_end_reason = SessionEndReason::Completed;
@@ -724,7 +723,6 @@ pub(crate) async fn run_single_agent_loop_unified(
                                 session_bootstrap: &session_bootstrap,
                                 model_picker_state: &mut model_picker_state,
                                 palette_state: &mut palette_state,
-                                sandbox: &mut sandbox,
                                 tool_registry: &mut tool_registry,
                                 conversation_history: &mut conversation_history,
                                 decision_ledger: &decision_ledger,

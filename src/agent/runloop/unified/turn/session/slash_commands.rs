@@ -20,7 +20,6 @@ use super::super::workspace::{bootstrap_config_files, build_workspace_index};
 use crate::agent::runloop::context::ContextTrimConfig;
 use crate::agent::runloop::mcp_events;
 use crate::agent::runloop::model_picker::{ModelPickerStart, ModelPickerState};
-use crate::agent::runloop::sandbox::SandboxCoordinator;
 use crate::agent::runloop::slash_commands::McpCommandAction;
 pub use crate::agent::runloop::slash_commands::SlashCommandOutcome;
 use crate::agent::runloop::unified::async_mcp_manager::AsyncMcpManager;
@@ -66,7 +65,6 @@ pub struct SlashCommandContext<'a> {
     pub session_bootstrap: &'a SessionBootstrap,
     pub model_picker_state: &'a mut Option<ModelPickerState>,
     pub palette_state: &'a mut Option<ActivePalette>,
-    pub sandbox: &'a mut SandboxCoordinator,
     pub tool_registry: &'a mut ToolRegistry,
     pub conversation_history: &'a mut Vec<uni::Message>,
     pub decision_ledger: &'a Arc<RwLock<DecisionTracker>>,
@@ -392,16 +390,7 @@ pub async fn handle_outcome(
             )?;
             Ok(SlashCommandControl::Continue)
         }
-        SlashCommandOutcome::ManageSandbox { action } => {
-            if let Err(err) = ctx
-                .sandbox
-                .handle_action(action, ctx.renderer, ctx.tool_registry)
-            {
-                ctx.renderer
-                    .line(MessageStyle::Error, &format!("Sandbox error: {}", err))?;
-            }
-            Ok(SlashCommandControl::Continue)
-        }
+
         SlashCommandOutcome::StartModelSelection => {
             if ctx.model_picker_state.is_some() {
                 ctx.renderer.line(

@@ -148,6 +148,38 @@ pub(crate) async fn render_terminal_command_panel(
         }
     }
 
+    // Special handling for exit code 127 (command not found) - show critical message prominently
+    if is_completed && exit_code == Some(127) {
+        let critical_note = unwrapped_payload
+            .get("critical_note")
+            .and_then(Value::as_str);
+        let output_msg = unwrapped_payload.get("output").and_then(Value::as_str);
+
+        if let Some(note) = critical_note {
+            renderer.line(
+                MessageStyle::Error,
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+            )?;
+            renderer.line(MessageStyle::Error, "❌ COMMAND NOT FOUND (EXIT CODE 127)")?;
+            renderer.line(
+                MessageStyle::Error,
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+            )?;
+            renderer.line(MessageStyle::Error, note)?;
+            renderer.line(MessageStyle::Error, "")?;
+        }
+
+        if let Some(msg) = output_msg {
+            renderer.line(MessageStyle::Info, "Solution:")?;
+            renderer.line(MessageStyle::Info, msg)?;
+            renderer.line(MessageStyle::Info, "")?;
+        }
+
+        // For exit code 127, skip showing the raw PTY output that would confuse the agent
+        // Instead, just show the solutions above
+        return Ok(());
+    }
+
     if stdout.trim().is_empty() && stderr.trim().is_empty() {
         if !is_pty_session || is_completed {
             renderer.line(MessageStyle::Info, "(no output)")?;
@@ -158,7 +190,7 @@ pub(crate) async fn render_terminal_command_panel(
         return Ok(());
     }
 
-    // Render stdout/PTY output
+    // Render stdout/PTY output (skipped for exit code 127 above)
     if !stdout.trim().is_empty() {
         let label = if is_pty_session { "" } else { "stdout" }; // Don't label PTY output as stdout
         render_stream_section(

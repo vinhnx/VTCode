@@ -98,7 +98,7 @@ For full configuration options, see [Configuration](./docs/config/CONFIGURATION_
 
 ### Key Features
 
--   **Security First**: Multi-layered security model with execution policy, sandbox integration, and argument injection protection
+-   **Security First**: Multi-layered security model with execution policy, tool policies, and argument injection protection
 -   **Multi-Provider AI**: OpenAI, Anthropic, xAI, DeepSeek, Gemini, Z.AI, Moonshot AI, OpenRouter, MiniMax, Ollama (local)
 -   **Code Intelligence**: Tree-sitter parsers for Rust, Python, JavaScript/TypeScript, Go, Java, Swift
 -   **Smart Tools**: Built-in code analysis, file operations, terminal commands, and refactoring
@@ -113,7 +113,7 @@ VT Code implements a **defense-in-depth security model** to protect against prom
 
 -   **Execution Policy**: Command allowlist with per-command argument validation
 -   **Workspace Isolation**: All operations confined to workspace boundaries
--   **Sandbox Integration**: Optional Anthropic sandbox runtime for network commands
+-   **Tool Policies**: Configurable allow/deny/prompt policies for MCP tools
 -   **Human-in-the-Loop**: Configurable approval system for sensitive operations
 -   **Audit Trail**: Comprehensive logging of all command executions
 

@@ -146,3 +146,41 @@ async fn test_pty_output_has_no_ansi_codes() {
         "Output should contain actual filenames, not just escape codes"
     );
 }
+
+#[tokio::test]
+async fn test_pty_command_not_found_handling() {
+    let mut registry = ToolRegistry::new(PathBuf::from(".")).await;
+    registry.allow_all_tools().await.ok();
+
+    // Run a command that definitely doesn't exist
+    let result = registry
+        .execute_tool(
+            "run_pty_cmd",
+            json!({
+                "mode": "pty",
+                "command": "this_command_definitely_does_not_exist_12345",
+                // Force login shell to test robust extraction logic (shell -l -c ...)
+                "login": true
+            }),
+        )
+        .await;
+
+    assert!(result.is_ok());
+    let response = result.unwrap();
+
+    assert_eq!(response["success"], true);
+    assert_eq!(response["exit_code"].as_i64(), Some(127));
+
+    // Check that we have the helpful message
+    let message = response["message"].as_str().unwrap_or_default();
+    assert!(message.contains("Command not found"));
+    assert!(message.contains("this_command_definitely_does_not_exist_12345"));
+
+    // Check that the output is NOT replaced (it should be the shell error)
+    let output = response["output"].as_str().unwrap_or_default();
+    assert!(!output.contains("EXIT CODE 127 IS FINAL"));
+
+    // Check critical note is present
+    let critical_note = response["critical_note"].as_str().unwrap_or_default();
+    assert!(critical_note.contains("EXIT CODE 127 IS FINAL"));
+}

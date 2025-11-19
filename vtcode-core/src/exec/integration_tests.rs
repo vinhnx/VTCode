@@ -25,19 +25,17 @@ mod tests {
         // In real usage: agents discover tools, then use them in written code
 
         // Note: This test demonstrates the concept but requires proper setup with
-        // actual MCP client and sandbox profile. See integration tests documentation
+        // actual MCP client. See integration tests documentation
         // for full example with mocked dependencies.
 
         // Step 1: Create execution config
         let config = ExecutionConfig {
             timeout_secs: 5,
-            memory_limit_mb: 256,
             ..Default::default()
         };
 
         // Verify config is created properly
         assert_eq!(config.timeout_secs, 5);
-        assert_eq!(config.memory_limit_mb, 256);
 
         // Step 2: Agent writes code that filters data locally
         let _code = r#"
@@ -80,12 +78,11 @@ result = {"count": len(filtered), "items": filtered}
         // Step 1: Execution config for testing
         let config = ExecutionConfig {
             timeout_secs: 5,
-            memory_limit_mb: 256,
             ..Default::default()
         };
 
         // Verify config is valid
-        assert_eq!(config.memory_limit_mb, 256);
+        assert_eq!(config.timeout_secs, 5);
 
         let code = r#"
 def double_value(x):
@@ -167,12 +164,11 @@ result = {"test": double_value(21)}
 
         let config = ExecutionConfig {
             timeout_secs: 5,
-            memory_limit_mb: 256,
             ..Default::default()
         };
 
         // In real usage with actual executor setup:
-        // let executor = CodeExecutor::new(language, sandbox, client, workspace);
+        // let executor = CodeExecutor::new(language, client, workspace);
 
         // Example code pattern for large dataset filtering
         let code_pattern = r#"
@@ -219,7 +215,7 @@ result = stats
         };
 
         // In real usage:
-        // let executor = CodeExecutor::new(language, sandbox, client, workspace);
+        // let executor = CodeExecutor::new(language, client, workspace);
 
         // Example code pattern with error handling
         let code_pattern = r#"
@@ -297,7 +293,7 @@ try:
         };
 
         // In real usage:
-        // let executor = CodeExecutor::new(language, sandbox, client, workspace);
+        // let executor = CodeExecutor::new(language, client, workspace);
 
         let code_pattern = r#"
 # Transform data locally before returning
@@ -323,7 +319,7 @@ result = {"original_count": len(data), "transformed": transformed}
         };
 
         // In real usage:
-        // let executor = CodeExecutor::new(Language::JavaScript, sandbox, client, workspace);
+        // let executor = CodeExecutor::new(Language::JavaScript, client, workspace);
 
         let code_pattern = r#"
 const items = [1, 2, 3, 4, 5];

@@ -157,10 +157,8 @@ result = {"count": len(test_files), "sample": test_files[:10]}
 # Code Execution Safety & Security
 
 -   **DO NOT** print API keys or debug/logging output. THIS IS IMPORTANT!
--   Sandbox isolation: Cannot escape beyond WORKSPACE_DIR
 -   PII protection: Sensitive data auto-tokenized before return
--   Timeout enforcement: 30-second max execution
--   Resource limits: Memory and CPU bounded
+-   Execution runs as child process with full access to system
 
 Always use code execution for 100+ item filtering (massive token savings).
 Save skills for repeated patterns (80%+ reuse ratio documented).
@@ -190,7 +188,7 @@ Examples of effective steering:
 -   Work strictly inside `WORKSPACE_DIR`; confirm before touching anything else
 -   Use `/tmp/vtcode-*` for temporary artifacts and clean them up
 -   Never surface secrets, API keys, or other sensitive data
--   Code execution is sandboxed; no external network access unless explicitly enabled
+-   Code execution runs as child process with full system access
 
 # Destructive Commands and Dry-Run
 

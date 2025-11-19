@@ -135,12 +135,6 @@ impl ToolInventory {
         self.tools.keys().cloned().collect()
     }
 
-    /// Add an alias for a tool
-    pub fn add_alias(&mut self, alias: &str, tool_name: &str) {
-        self.aliases
-            .insert(alias.to_string(), tool_name.to_string());
-    }
-
     /// Check if a tool is commonly used
     fn is_common_tool(&self, name: &str) -> bool {
         matches!(name, "file_ops" | "command" | "grep" | "plan")

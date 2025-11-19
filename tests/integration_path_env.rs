@@ -222,7 +222,7 @@ mod path_documentation_tests {
         println!("✓ Security features still work:");
         println!("  - Dangerous commands (rm, rm -rf, sudo) are still blocked");
         println!("  - Command validation still enforces allow/deny lists");
-        println!("  - Sandbox profiles still apply restrictions");
+        println!("  - Tool policies still apply restrictions");
         println!("  - Only system environment is inherited - no new exposure");
     }
 }

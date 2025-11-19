@@ -42,7 +42,6 @@ pub enum PermissionEventType {
     ToolUsage,
     FileAccess { read: bool, write: bool },
     NetworkAccess { domain: String },
-    SandboxOperation,
     HookExecution,
 }
 

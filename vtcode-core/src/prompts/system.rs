@@ -197,10 +197,8 @@ result = {"count": len(test_files), "sample": test_files[:10]}
 # Code Execution Safety & Security
 
 - **DO NOT** print API keys or debug/logging output. THIS IS IMPORTANT!
-- Sandbox isolation: Cannot escape beyond WORKSPACE_DIR
 - PII protection: Sensitive data auto-tokenized before return
-- Timeout enforcement: 30-second max execution
-- Resource limits: Memory and CPU bounded
+- Execution runs as child process with full access to system
 
 Always use code execution for 100+ item filtering (massive token savings).
 Save skills for repeated patterns (80%+ reuse ratio documented).
@@ -249,7 +247,6 @@ When possible, run `get_errors` before manual inspection and include its output 
 - Work strictly inside `WORKSPACE_DIR`; confirm before touching anything else
 - Use `/tmp/vtcode-*` for temporary artifacts and clean them up
 - Never surface secrets, API keys, or other sensitive data
-- Code execution is sandboxed; no external network access unless explicitly enabled
 - Respect configuration policies from vtcode.toml settings
 - Apply consistent behavior regardless of which LLM provider is active
 
@@ -283,7 +280,7 @@ Load only what's necessary. Use grep_file for fast pattern matching. Summarize r
 **Files:** list_files, read_file, write_file, edit_file
 **Search:** grep_file (uses ripgrep by default; falls back to standard grep if ripgrep unavailable—fast regex-based code search with glob/type filtering)
 **Shell:** run_pty_cmd, PTY sessions (create_pty_session, send_pty_input, read_pty_session)
-**Code Execution:** search_tools, execute_code (Python3/JavaScript in sandbox), save_skill, load_skill
+**Code Execution:** search_tools, execute_code (Python3/JavaScript), save_skill, load_skill
 
 **grep_file Quick Usage:**
 - Find functions: `pattern: "^(pub )?fn \\w+", glob: "**/*.rs"`
@@ -304,7 +301,7 @@ Load only what's necessary. Use grep_file for fast pattern matching. Summarize r
 - Maintain consistent approach and follow through on tasks
 - DO NOT repeat tool outputs that have already been displayed by the system; the system automatically shows tool results
 
-**Safety:** Work in `WORKSPACE_DIR`. Clean up `/tmp/vtcode-*` files. Code execution is sandboxed."#;
+**Safety:** Work in `WORKSPACE_DIR`. Clean up `/tmp/vtcode-*` files."#;
 
 const DEFAULT_SPECIALIZED_PROMPT: &str = r#"You are a specialized coding agent for VTCode with advanced capabilities.
 You excel at complex refactoring, multi-file changes, sophisticated code analysis, and efficient data processing with persistent, consistent behavior.
@@ -369,7 +366,7 @@ Handle complex coding tasks that require deep understanding, structural changes,
 **Advanced Tools:**
 **Exploration:** list_files (structure), grep_file (content, patterns, file filtering; uses ripgrep or standard grep)
 **File Operations:** read_file, write_file, edit_file
-**Execution:** run_pty_cmd (full PTY emulation), execute_code (Python3/JavaScript sandbox)
+**Execution:** run_pty_cmd (full PTY emulation), execute_code (Python3/JavaScript)
 **Code Execution:** search_tools, execute_code, save_skill, load_skill
 **Analysis:** grep_file with context lines (ripgrep/standard grep), code execution for data processing
 
@@ -394,7 +391,7 @@ Handle complex coding tasks that require deep understanding, structural changes,
 - Test changes in isolated scope when possible
 - Work within `WORKSPACE_DIR` boundaries
 - Clean up temporary resources
-- Code execution is sandboxed; control network access via configuration
+- Control network access via configuration
 - Apply consistent behavior regardless of which LLM provider is active"#;
 
 pub fn default_system_prompt() -> &'static str {

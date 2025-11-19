@@ -6,7 +6,7 @@ VT Code is designed with security as a first-class concern. This guide explains 
 
 ## Security Architecture
 
-VT Code implements a **defense-in-depth security model** with five layers of protection:
+VT Code implements a **defense-in-depth security model** with multiple layers of protection:
 
 ### Layer 1: Command Allowlist
 
@@ -26,7 +26,7 @@ Only explicitly approved commands can execute. The allowlist includes:
 - Destructive commands: `rm`, `dd`, `shred`
 - Privilege escalation: `sudo`, `su`, `doas`
 - System modification: `chmod`, `chown`, `systemctl`
-- Network commands (without sandbox): `curl`, `wget`, `ssh`
+- Network commands: `curl`, `wget`, `ssh`
 - Container tools: `docker`, `kubectl`
 
 ### Layer 2: Argument Validation
@@ -67,16 +67,7 @@ cat /etc/passwd
 cat ./src/main.rs
 ```
 
-### Layer 4: Sandbox Integration
-
-Network commands require the Anthropic sandbox runtime:
-
-- **Filesystem isolation** - Limited to workspace directory
-- **Network allowlist** - Only approved domains accessible
-- **System protection** - No access to system directories
-- **Resource limits** - CPU, memory, and time constraints
-
-### Layer 5: Human-in-the-Loop
+### Layer 4: Human-in-the-Loop
 
 Three-tier approval system for tool execution:
 
@@ -140,24 +131,6 @@ delete_file = "prompt"
 bash = "deny"
 ```
 
-### Sandbox Configuration
-
-Enable sandbox mode in `vtcode.toml`:
-
-```toml
-[sandbox]
-enabled = true
-binary = "/path/to/srt"  # Anthropic sandbox runtime
-settings = "/path/to/sandbox-settings.json"
-
-# Network allowlist
-allowed_domains = [
-    "api.openai.com",
-    "api.anthropic.com",
-    "github.com"
-]
-```
-
 ### Execution Policy
 
 The execution policy is enforced at the code level and cannot be disabled. However, you can configure workspace boundaries:
@@ -180,29 +153,19 @@ root = "/path/to/project"
    - Use "Approve Once" for unfamiliar operations
    - Only use "Always Allow" for trusted tools
 
-2. **Use Sandbox Mode**
-   - Enable sandbox for network commands
-   - Configure domain allowlist restrictively
-   - Monitor sandbox logs
-
-3. **Be Cautious with Untrusted Content**
+2. **Be Cautious with Untrusted Content**
    - Don't process code from unknown sources
    - Review prompts in repository files
    - Be wary of code comments with instructions
 
-4. **Monitor Command Execution**
-   - Review logs in `.vtcode/logs/`
-   - Watch for suspicious patterns
-   - Report unusual behavior
+3. **Monitor Command Execution**
+    - Review logs in `.vtcode/logs/`
+    - Watch for suspicious patterns
+    - Report unusual behavior
 
 ### For Organizations
 
-1. **Enforce Sandbox Mode**
-   - Require sandbox for all deployments
-   - Maintain strict domain allowlist
-   - Regular security audits
-
-2. **Centralized Policy Management**
+1. **Centralized Policy Management**
    - Deploy standard tool policies
    - Use deny-by-default approach
    - Regular policy reviews

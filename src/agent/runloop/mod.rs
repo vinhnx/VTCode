@@ -4,7 +4,6 @@ mod mcp_elicitation;
 mod mcp_events;
 mod model_picker;
 mod prompt;
-mod sandbox;
 mod slash_commands;
 mod telemetry;
 mod text_tools;

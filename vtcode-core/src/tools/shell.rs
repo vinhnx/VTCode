@@ -13,10 +13,10 @@ pub(crate) fn resolve_fallback_shell() -> String {
 
     // Detect available shells on the system
     const SHELL_CANDIDATES: &[&str] = &[
-        "/bin/zsh",
-        "/usr/bin/zsh",
         "/bin/bash",
         "/usr/bin/bash",
+        "/bin/zsh",
+        "/usr/bin/zsh",
         "/bin/sh",
         "/usr/bin/sh",
     ];

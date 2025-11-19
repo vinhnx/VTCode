@@ -315,7 +315,6 @@ audit_directory = "~/.vtcode/audit"
 log_allowed_commands = true
 log_denied_commands = true
 log_permission_prompts = true
-log_sandbox_events = true
 
 # Permission decision caching settings
 # Avoids redundant policy evaluations for repeated commands
