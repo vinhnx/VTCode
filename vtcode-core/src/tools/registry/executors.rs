@@ -1554,20 +1554,20 @@ impl ToolRegistry {
     }
 
     async fn run_ephemeral_pty_command(&mut self, setup: PtyCommandSetup) -> Result<Value> {
-    // Execute the PTY command exactly once.
-    // We do NOT retry on exit code (application error) because:
-    // 1. It causes "multi retry" behavior where a single failed command runs 3 times.
-    // 2. Retrying permanent errors (like 127 Command Not Found) is futile.
-    // 3. The agent should decide whether to retry based on the error message.
-    
-    // We pass 0 as retry_count since we are not retrying.
-    let result = self.execute_single_pty_attempt(&setup, 0).await?;
+        // Execute the PTY command exactly once.
+        // We do NOT retry on exit code (application error) because:
+        // 1. It causes "multi retry" behavior where a single failed command runs 3 times.
+        // 2. Retrying permanent errors (like 127 Command Not Found) is futile.
+        // 3. The agent should decide whether to retry based on the error message.
 
-    let capture = result.1;
-    let snapshot = result.2;
+        // We pass 0 as retry_count since we are not retrying.
+        let result = self.execute_single_pty_attempt(&setup, 0).await?;
 
-    let response = build_ephemeral_pty_response(&setup, capture, snapshot);
-    Ok(response)
+        let capture = result.1;
+        let snapshot = result.2;
+
+        let response = build_ephemeral_pty_response(&setup, capture, snapshot);
+        Ok(response)
     }
 
     async fn execute_single_pty_attempt(
