@@ -15,6 +15,7 @@ use tokio_util::sync::CancellationToken;
 
 /// Events that can be emitted by the terminal event handler
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 pub enum Event {
     /// Initial event, sent when the TUI starts
     Init,
@@ -50,6 +51,7 @@ pub enum Event {
 /// - Configurable tick and frame rates
 /// - Mouse and bracketed paste support
 /// - Graceful shutdown via cancellation tokens
+#[allow(dead_code)]
 pub struct Tui {
     pub terminal: ratatui::Terminal<Backend<std::io::Stderr>>,
     pub task: JoinHandle<()>,
@@ -62,6 +64,7 @@ pub struct Tui {
     pub paste: bool,
 }
 
+#[allow(dead_code)]
 impl Tui {
     /// Create a new TUI instance with default settings
     pub fn new() -> Result<Self> {
@@ -279,6 +282,7 @@ impl Drop for Tui {
 }
 
 /// Helper trait for suspending TUI to launch external applications
+#[allow(dead_code)]
 pub trait ExternalAppLauncher {
     /// Temporarily suspend TUI, run a closure with terminal released, then resume
     ///

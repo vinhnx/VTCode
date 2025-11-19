@@ -29,9 +29,12 @@ use tokio::fs;
 use tokio::time::sleep;
 use tracing::{debug, trace, warn};
 
+#[allow(dead_code)]
 const DEFAULT_TERMINAL_TIMEOUT_SECS: u64 = 180;
+#[allow(dead_code)]
 const DEFAULT_PTY_TIMEOUT_SECS: u64 = 300;
 const RUN_PTY_POLL_TIMEOUT_SECS: u64 = 5;
+#[allow(dead_code)]
 const LONG_RUNNING_COMMAND_TIMEOUT_SECS: u64 = 600;
 // For known long-running commands, wait longer before returning partial output
 const RUN_PTY_POLL_TIMEOUT_LONG_RUNNING: u64 = 30;
@@ -39,6 +42,7 @@ const RUN_PTY_POLL_TIMEOUT_LONG_RUNNING: u64 = 30;
 const LONG_RUNNING_COMMANDS: &[&str] = &[
     "cargo", "npm", "yarn", "pnpm", "pip", "python", "make", "docker",
 ];
+#[allow(dead_code)]
 const INTERACTIVE_COMMANDS: &[&str] = &[
     "python",
     "python3",
@@ -697,6 +701,7 @@ impl ToolRegistry {
         Box::pin(async move { self.execute_run_pty_command(args).await })
     }
 
+    #[allow(dead_code)]
     pub(super) fn run_command_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move { self.execute_run_command(args).await })
     }
@@ -1439,6 +1444,7 @@ impl ToolRegistry {
         }))
     }
 
+    #[allow(dead_code)]
     async fn execute_run_command(&mut self, mut args: Value) -> Result<Value> {
         normalize_run_command_payload(&mut args)?;
 
@@ -1456,6 +1462,7 @@ impl ToolRegistry {
         }
     }
 
+    #[allow(dead_code)]
     async fn execute_run_terminal_internal(&mut self, mut args: Value) -> Result<Value> {
         match prepare_terminal_execution(&mut args)? {
             TerminalExecution::Pty { args } => self.execute_run_pty_command(args).await,
@@ -1689,6 +1696,7 @@ impl ToolRegistry {
         }
     }
 
+    #[allow(dead_code)]
     async fn build_terminal_command_plan(
         &mut self,
         execution: TerminalExecutionInput,
@@ -2156,6 +2164,7 @@ impl ToolRegistry {
     }
 }
 
+#[allow(dead_code)]
 fn copy_value_if_absent(map: &mut Map<String, Value>, source_key: &str, target_key: &str) {
     if map.contains_key(target_key) {
         return;
@@ -2166,6 +2175,7 @@ fn copy_value_if_absent(map: &mut Map<String, Value>, source_key: &str, target_k
     }
 }
 
+#[allow(dead_code)]
 fn normalize_payload<'a>(
     args: &'a mut Value,
     context: &str,
@@ -2179,6 +2189,7 @@ fn normalize_payload<'a>(
     Ok(map)
 }
 
+#[allow(dead_code)]
 fn normalize_run_command_payload(args: &mut Value) -> Result<()> {
     normalize_payload(
         args,
@@ -2211,6 +2222,7 @@ fn normalize_terminal_payload(args: &mut Value) -> Result<()> {
     Ok(())
 }
 
+#[allow(dead_code)]
 fn ensure_default_timeout(args: &mut Value, context: &str, default: u64) -> Result<()> {
     let map = value_as_object_mut(args, context)?;
     if !map.contains_key("timeout_secs") {
@@ -2228,6 +2240,7 @@ fn ensure_default_timeout(args: &mut Value, context: &str, default: u64) -> Resu
     Ok(())
 }
 
+#[allow(dead_code)]
 fn collect_command_array(map: &Map<String, Value>) -> Result<Option<Vec<String>>> {
     if let Some(cmd) = map.get("command") {
         if let Some(cmd_str) = cmd.as_str() {
@@ -2262,6 +2275,7 @@ fn validated_timeout_secs(raw: Option<u64>, fallback: u64) -> Result<u64> {
     Ok(timeout_secs)
 }
 
+#[allow(dead_code)]
 fn assemble_command_segments(program: &str, args: &[String]) -> Vec<String> {
     let mut command = Vec::with_capacity(1 + args.len());
     command.push(program.to_string());
@@ -2269,6 +2283,7 @@ fn assemble_command_segments(program: &str, args: &[String]) -> Vec<String> {
     command
 }
 
+#[allow(dead_code)]
 fn default_pty_size(default_rows: u16, default_cols: u16) -> PtySize {
     PtySize {
         rows: default_rows,
@@ -2278,6 +2293,7 @@ fn default_pty_size(default_rows: u16, default_cols: u16) -> PtySize {
     }
 }
 
+#[allow(dead_code)]
 fn run_mode_label(args: &Value) -> String {
     args.get("mode")
         .and_then(|value| value.as_str())
@@ -2285,6 +2301,7 @@ fn run_mode_label(args: &Value) -> String {
         .to_string()
 }
 
+#[allow(dead_code)]
 fn build_terminal_command_response(
     result: &PtyCommandResult,
     mode_label: &str,
@@ -2315,6 +2332,7 @@ fn build_terminal_command_response(
     })
 }
 
+#[allow(dead_code)]
 fn convert_command_string_to_array(
     args: &mut Value,
     shell_hint: Option<&str>,
@@ -2341,6 +2359,7 @@ fn convert_command_string_to_array(
     Ok(Some(command_str))
 }
 
+#[allow(dead_code)]
 fn collect_command_vector(
     args: &Value,
     missing_error: &str,
@@ -2395,6 +2414,7 @@ fn collect_command_vector(
         .collect()
 }
 
+#[allow(dead_code)]
 fn determine_terminal_run_mode(args: &Value) -> Result<RunMode> {
     if matches!(
         args.get("mode").and_then(|value| value.as_str()),
@@ -2406,6 +2426,7 @@ fn determine_terminal_run_mode(args: &Value) -> Result<RunMode> {
     Ok(resolve_run_mode(args))
 }
 
+#[allow(dead_code)]
 fn build_terminal_command_payload(
     args: &Value,
     command_vec: &[String],
@@ -2441,6 +2462,7 @@ fn build_terminal_command_payload(
     sanitized
 }
 
+#[allow(dead_code)]
 fn build_pty_args_from_terminal(args: &Value, command_vec: &[String]) -> Map<String, Value> {
     let mut pty_args = serde_json::Map::new();
     if let Some(program) = command_vec.first() {
@@ -2482,16 +2504,19 @@ fn build_pty_args_from_terminal(args: &Value, command_vec: &[String]) -> Map<Str
     pty_args
 }
 
+#[allow(dead_code)]
 struct TerminalExecutionInput {
     input: EnhancedTerminalInput,
     mode_label: String,
 }
 
+#[allow(dead_code)]
 enum TerminalExecution {
     Terminal(TerminalExecutionInput),
     Pty { args: Value },
 }
 
+#[allow(dead_code)]
 struct TerminalCommandPayload {
     sanitized: Map<String, Value>,
     run_mode: RunMode,
@@ -2565,6 +2590,7 @@ impl TerminalCommandPayload {
     }
 }
 
+#[allow(dead_code)]
 struct TerminalCommandPlan {
     request: PtyCommandRequest,
     command_display: String,
@@ -2594,6 +2620,7 @@ impl TerminalCommandPlan {
     }
 }
 
+#[allow(dead_code)]
 fn prepare_terminal_execution(args: &mut Value) -> Result<TerminalExecution> {
     let payload = TerminalCommandPayload::parse(args)?;
     payload.into_execution()
@@ -2603,6 +2630,7 @@ fn value_as_object<'a>(value: &'a Value, context: &str) -> Result<&'a Map<String
     value.as_object().ok_or_else(|| anyhow!("{}", context))
 }
 
+#[allow(dead_code)]
 fn value_as_object_mut<'a>(
     value: &'a mut Value,
     context: &str,
@@ -2611,6 +2639,7 @@ fn value_as_object_mut<'a>(
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[allow(dead_code)]
 enum RunMode {
     Terminal,
     Pty,
@@ -3507,6 +3536,7 @@ fn quote_windows_argument(arg: &str) -> String {
     result
 }
 
+#[allow(dead_code)]
 fn sanitize_command_string(command: &str) -> Cow<'_, str> {
     Cow::Borrowed(command.trim())
 }
