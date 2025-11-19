@@ -59,6 +59,7 @@ impl ToolInventory {
         &self.file_ops_tool
     }
 
+    #[allow(dead_code)]
     pub fn command_tool(&self) -> &CommandTool {
         &self.command_tool
     }
