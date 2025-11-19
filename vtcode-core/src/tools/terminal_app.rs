@@ -1,4 +1,3 @@
-use std::env;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
@@ -6,8 +5,11 @@ use std::process::Command;
 use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow};
-use crossterm::terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType, LeaveAlternateScreen, EnterAlternateScreen};
 use crossterm::ExecutableCommand;
+use crossterm::terminal::{
+    Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
+};
+use editor_command::EditorBuilder;
 use tempfile::NamedTempFile;
 use tracing::debug;
 
@@ -37,36 +39,46 @@ impl TerminalAppLauncher {
     /// If no file is provided, a temporary file will be created and its
     /// contents returned after editing.
     ///
-    /// This follows the Ratatui pattern for spawning external editors:
-    /// https://ratatui.rs/recipes/apps/spawn-vim/
+    /// Uses the `editor-command` crate to detect and launch the user's preferred editor
+    /// from environment variables (VISUAL, EDITOR) or common editor defaults.
     ///
     /// # Errors
     ///
     /// Returns an error if the editor fails to launch or if file operations fail.
     pub fn launch_editor(&self, file: Option<PathBuf>) -> Result<Option<String>> {
-        let editor = Self::detect_editor();
-        debug!("detected editor: {}", editor);
-
         let (file_path, is_temp) = if let Some(path) = file {
             (path, false)
         } else {
             // Create temp file for editing
-            let temp = NamedTempFile::new()
-                .context("failed to create temporary file for editing")?;
+            let temp =
+                NamedTempFile::new().context("failed to create temporary file for editing")?;
             // Keep temp file alive by persisting it
-            let (_, path) = temp
-                .keep()
-                .context("failed to persist temporary file")?;
+            let (_, path) = temp.keep().context("failed to persist temporary file")?;
             (path, true)
         };
 
         // Use unified terminal suspension logic
         self.suspend_terminal_for_command(|| {
-            let status = Command::new(&editor)
-                .arg(&file_path)
+            debug!("launching editor with file: {:?}", file_path);
+
+            let mut cmd = EditorBuilder::new()
+                .environment()
+                .path(&file_path)
+                .build()
+                .or_else(|_| {
+                    // If editor-command fails, try common editors as fallback
+                    debug!("editor-command detection failed, trying manual detection");
+                    Self::try_common_editors(&file_path)
+                })
+                .context(
+                    "failed to detect editor: set EDITOR or VISUAL environment variable, \
+                     or install vim, nano, or your preferred editor",
+                )?;
+
+            let status = cmd
                 .current_dir(&self.workspace_root)
                 .status()
-                .with_context(|| format!("failed to spawn editor '{}'", editor))?;
+                .context("failed to spawn editor")?;
 
             if !status.success() {
                 return Err(anyhow!(
@@ -82,14 +94,35 @@ impl TerminalAppLauncher {
         let content = if is_temp {
             let content = fs::read_to_string(&file_path)
                 .context("failed to read edited content from temporary file")?;
-            fs::remove_file(&file_path)
-                .context("failed to remove temporary file")?;
+            fs::remove_file(&file_path).context("failed to remove temporary file")?;
             Some(content)
         } else {
             None
         };
 
         Ok(content)
+    }
+
+    /// Try common editors in priority order as fallback when editor-command fails
+    fn try_common_editors(file_path: &PathBuf) -> Result<std::process::Command> {
+        let editors = if cfg!(target_os = "windows") {
+            vec!["code", "notepad++", "notepad"]
+        } else {
+            vec!["nvim", "vim", "vi", "nano", "emacs"]
+        };
+
+        for editor in editors {
+            if which::which(editor).is_ok() {
+                let mut cmd = std::process::Command::new(editor);
+                cmd.arg(file_path.to_string_lossy().to_string());
+                debug!("found fallback editor: {}", editor);
+                return Ok(cmd);
+            }
+        }
+
+        Err(anyhow!(
+            "no editor found in PATH. Install vim, nano, or set EDITOR environment variable"
+        ))
     }
 
     /// Suspend terminal UI state and run external command
@@ -184,41 +217,6 @@ impl TerminalAppLauncher {
             Ok(())
         })
     }
-
-    /// Detect user's preferred editor
-    ///
-    /// Checks in order: $EDITOR, $VISUAL, nvim, vim, vi, nano
-    fn detect_editor() -> String {
-        // Check EDITOR environment variable
-        if let Ok(editor) = env::var("EDITOR") {
-            if !editor.is_empty() {
-                return editor;
-            }
-        }
-
-        // Check VISUAL environment variable
-        if let Ok(visual) = env::var("VISUAL") {
-            if !visual.is_empty() {
-                return visual;
-            }
-        }
-
-        // Try common editors in order of preference
-        let editors = ["nvim", "vim", "vi", "nano"];
-        for editor in &editors {
-            if Self::command_exists(editor) {
-                return editor.to_string();
-            }
-        }
-
-        // Ultimate fallback
-        "vi".to_string()
-    }
-
-    /// Check if a command exists in PATH
-    fn command_exists(command: &str) -> bool {
-        which::which(command).is_ok()
-    }
 }
 
 #[cfg(test)]
@@ -226,14 +224,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_detect_editor() {
-        let editor = TerminalAppLauncher::detect_editor();
-        assert!(!editor.is_empty());
-    }
-
-    #[test]
-    fn test_command_exists() {
-        // Test with a command that should exist on all systems
-        assert!(TerminalAppLauncher::command_exists("sh"));
+    fn test_launcher_creation() {
+        let launcher = TerminalAppLauncher::new(PathBuf::from("/tmp"));
+        // Just verify it can be created without panicking
+        assert_eq!(launcher.workspace_root, PathBuf::from("/tmp"));
     }
 }
