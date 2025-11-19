@@ -154,6 +154,7 @@ See [Security Model](./docs/SECURITY_MODEL.md) for details.
      -   [Async Architecture](./docs/guides/async-architecture.md) - Tokio async/await design and best practices
      -   [Rendering Best Practices](./docs/guides/terminal-rendering-best-practices.md) - Widget rendering and display optimization
 -   [**Architecture**](./docs/ARCHITECTURE.md)
+     -   [Ratatui FAQ Integration](./docs/RATATUI_FAQ_INTEGRATION.md) - Application of best practices from Ratatui terminal UI library
 -   [**Security**](./docs/SECURITY_MODEL.md)
     -   [Security Model](./docs/SECURITY_MODEL.md)
     -   [Security Audit](./docs/SECURITY_AUDIT.md)
