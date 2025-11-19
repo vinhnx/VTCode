@@ -5,7 +5,7 @@ use crate::config::types::AgentConfig;
 use crate::gemini::models::SystemInstruction;
 use crate::gemini::{Content, GenerateContentRequest};
 use crate::llm::make_client;
-use crate::prompts::{generate_lightweight_instruction, read_system_prompt_from_md};
+use crate::prompts::{generate_lightweight_instruction, generate_system_instruction};
 use anyhow::Result;
 
 /// Handle the ask command - single prompt without tools
@@ -29,18 +29,20 @@ pub async fn handle_ask_command(config: AgentConfig, prompt: Vec<String>) -> Res
         if let Some(text) = part.as_text() {
             SystemInstruction::new(text)
         } else {
-            SystemInstruction::new(
-                read_system_prompt_from_md()
-                    .await
-                    .unwrap_or_else(|_| "You are a helpful coding assistant.".to_string()),
-            )
+            let content = generate_system_instruction(&Default::default()).await;
+            if let Some(text) = content.parts.first().and_then(|p| p.as_text()) {
+                SystemInstruction::new(text)
+            } else {
+                SystemInstruction::new(crate::prompts::system::default_lightweight_prompt())
+            }
         }
     } else {
-        SystemInstruction::new(
-            read_system_prompt_from_md()
-                .await
-                .unwrap_or_else(|_| "You are a helpful coding assistant.".to_string()),
-        )
+        let content = generate_system_instruction(&Default::default()).await;
+        if let Some(text) = content.parts.first().and_then(|p| p.as_text()) {
+            SystemInstruction::new(text)
+        } else {
+            SystemInstruction::new(crate::prompts::system::default_lightweight_prompt())
+        }
     };
 
     let request = GenerateContentRequest {

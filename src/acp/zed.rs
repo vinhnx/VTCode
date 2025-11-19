@@ -43,7 +43,7 @@ use vtcode_core::llm::provider::{
     FinishReason, LLMRequest, LLMStreamEvent, Message, ToolCall as ProviderToolCall, ToolChoice,
     ToolDefinition,
 };
-use vtcode_core::prompts::read_system_prompt_from_md;
+use vtcode_core::prompts::generate_system_instruction;
 use vtcode_core::tools::file_ops::FileOpsTool;
 use vtcode_core::tools::grep_file::GrepSearchManager;
 use vtcode_core::tools::registry::{
@@ -51,6 +51,7 @@ use vtcode_core::tools::registry::{
     build_function_declarations_for_level,
 };
 use vtcode_core::tools::traits::Tool;
+use vtcode_core::utils::ansi_parser::strip_ansi;
 
 use crate::workspace_trust::WorkspaceTrustSyncOutcome;
 
@@ -301,9 +302,12 @@ pub async fn run_zed_agent(config: &CoreAgentConfig, vt_cfg: &VTCodeConfig) -> R
 
     let outgoing = tokio::io::stdout().compat_write();
     let incoming = tokio::io::stdin().compat();
-    let system_prompt = read_system_prompt_from_md()
-        .await
-        .unwrap_or_else(|_| String::new());
+    let content = generate_system_instruction(&Default::default()).await;
+    let system_prompt = if let Some(text) = content.parts.first().and_then(|p| p.as_text()) {
+        text.to_string()
+    } else {
+        String::new()
+    };
     let tools_config = vt_cfg.tools.clone();
     let commands_config = vt_cfg.commands.clone();
 
@@ -1227,7 +1231,9 @@ impl ZedAgent {
             .and_then(Value::as_str)
             .filter(|value| !value.is_empty())
         {
-            let (rendered, truncated) = self.truncate_text(stdout);
+            // Strip any ANSI escape sequences from tool output before truncation
+            let plain = strip_ansi(stdout);
+            let (rendered, truncated) = self.truncate_text(&plain);
             sections.push(format!("stdout:\n{rendered}"));
             if truncated {
                 sections.push("[stdout truncated]".to_string());
@@ -1239,7 +1245,8 @@ impl ZedAgent {
             .and_then(Value::as_str)
             .filter(|value| !value.is_empty())
         {
-            let (rendered, truncated) = self.truncate_text(stderr);
+            let plain = strip_ansi(stderr);
+            let (rendered, truncated) = self.truncate_text(&plain);
             sections.push(format!("stderr:\n{rendered}"));
             if truncated {
                 sections.push("[stderr truncated]".to_string());
@@ -1252,7 +1259,8 @@ impl ZedAgent {
                 .and_then(Value::as_str)
                 .filter(|value| !value.is_empty())
             {
-                let (rendered, truncated) = self.truncate_text(message);
+                let plain = strip_ansi(message);
+                let (rendered, truncated) = self.truncate_text(&plain);
                 sections.push(rendered);
                 if truncated {
                     sections.push("[message truncated]".to_string());
@@ -1260,7 +1268,8 @@ impl ZedAgent {
             } else {
                 let summary =
                     serde_json::to_string_pretty(output).unwrap_or_else(|_| output.to_string());
-                let (rendered, truncated) = self.truncate_text(&summary);
+                let plain = strip_ansi(&summary);
+                let (rendered, truncated) = self.truncate_text(&plain);
                 sections.push(rendered);
                 if truncated {
                     sections.push("[response truncated]".to_string());
@@ -1272,7 +1281,8 @@ impl ZedAgent {
             sections.push(format!("{tool_name} completed without output"));
         }
 
-        vec![acp::ToolCallContent::from(sections.join("\n\n"))]
+        // Avoid inserting extra blank lines between sections; use single newline separator
+        vec![acp::ToolCallContent::from(sections.join("\n"))]
     }
 
     async fn run_read_file(
@@ -1298,7 +1308,8 @@ impl ZedAgent {
             format!("Unable to read file: {error}")
         })?;
 
-        let (truncated_content, truncated) = self.truncate_text(&response.content);
+        let plain_response = strip_ansi(&response.content);
+        let (truncated_content, truncated) = self.truncate_text(&plain_response);
         let mut tool_content = truncated_content.clone();
         if truncated {
             tool_content.push_str("\n\n[truncated]");
@@ -1695,6 +1706,30 @@ impl ZedAgent {
 
         self.send_update(session_id, acp::SessionUpdate::Plan(plan.to_plan()))
             .await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn render_local_tool_content_strips_ansi() {
+        let adapter = ZedAcpAdapter::default();
+        let output = json!({
+            "stdout": "\u{1b}[31mred\u{1b}[0m\nline2",
+            "stderr": "",
+        });
+        let content_vec = adapter.render_local_tool_content("example_tool", &output);
+        assert_eq!(content_vec.len(), 1);
+        let repr = format!("{:?}", content_vec[0]);
+        assert!(
+            !repr.contains("\u{1b}"),
+            "ANSI escape was not stripped: {}",
+            repr
+        );
+        assert!(repr.contains("stdout:"));
     }
 }
 

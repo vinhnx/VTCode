@@ -184,6 +184,16 @@ pub fn enqueue_message_with_kind(
     append(message);
 }
 
+/// Display an error message in the transcript instead of the input field
+pub fn display_error(message: &str) {
+    enqueue_message(message, MessageStyle::Error);
+}
+
+/// Display an info message in the transcript instead of the input field
+pub fn display_info(message: &str) {
+    enqueue_message(message, MessageStyle::Info);
+}
+
 /// Display a message immediately without queuing (low-level function)
 fn display_message_now(text: &str, kind: InlineMessageKind, style: &InlineTextStyle) {
     if let Some(handle) = INLINE_HANDLE.read().as_ref() {

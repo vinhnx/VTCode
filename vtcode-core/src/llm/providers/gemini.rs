@@ -25,6 +25,8 @@ use reqwest::Client as HttpClient;
 use serde_json::{Map, Value, json};
 use std::collections::HashMap;
 use tokio::sync::mpsc;
+use tracing;
+use vtcode_config::types::ReasoningEffortLevel;
 
 use super::common::{extract_prompt_cache_settings, override_base_url, resolve_model};
 
@@ -269,8 +271,10 @@ impl LLMProvider for GeminiProvider {
         tokio::spawn(async move {
             let config = StreamingConfig::with_total_timeout(streaming_timeout);
             let mut processor = StreamingProcessor::with_config(config);
-            let token_sender = completion_sender.clone();
+            let event_sender = completion_sender.clone();
             let mut aggregated_text = String::new();
+            let mut reasoning_buffer = crate::llm::providers::ReasoningBuffer::default();
+
             let mut on_chunk = |chunk: &str| -> Result<(), StreamingError> {
                 if chunk.is_empty() {
                     return Ok(());
@@ -278,12 +282,33 @@ impl LLMProvider for GeminiProvider {
 
                 if let Some(delta) = Self::apply_stream_delta(&mut aggregated_text, chunk) {
                     if !delta.is_empty() {
-                        token_sender
-                            .send(Ok(LLMStreamEvent::Token { delta }))
-                            .map_err(|_| StreamingError::StreamingError {
-                                message: "Streaming consumer dropped".to_string(),
-                                partial_content: Some(chunk.to_string()),
-                            })?;
+                        // Split any reasoning content from the delta
+                        let (reasoning_segments, cleaned_delta) =
+                            crate::llm::providers::split_reasoning_from_text(&delta);
+
+                        // Send any extracted reasoning content
+                        for segment in reasoning_segments {
+                            if !segment.is_empty() {
+                                event_sender
+                                    .send(Ok(LLMStreamEvent::Reasoning { delta: segment }))
+                                    .map_err(|_| StreamingError::StreamingError {
+                                        message: "Streaming consumer dropped".to_string(),
+                                        partial_content: Some(chunk.to_string()),
+                                    })?;
+                            }
+                        }
+
+                        // Send the cleaned content if any remains
+                        if let Some(cleaned) = cleaned_delta {
+                            if !cleaned.is_empty() {
+                                event_sender
+                                    .send(Ok(LLMStreamEvent::Token { delta: cleaned }))
+                                    .map_err(|_| StreamingError::StreamingError {
+                                        message: "Streaming consumer dropped".to_string(),
+                                        partial_content: Some(chunk.to_string()),
+                                    })?;
+                            }
+                        }
                     }
                 }
                 Ok(())
@@ -359,8 +384,8 @@ impl LLMProvider for GeminiProvider {
         // Validate token limits based on model capabilities
         if let Some(max_tokens) = request.max_tokens {
             let model = request.model.as_str();
-            let max_output_tokens = if model.contains("2.5") {
-                65536 // Gemini 2.5 models support 65K output tokens
+            let max_output_tokens = if model.contains("2.5") || model.contains("3") {
+                65536 // Gemini 2.5 and 3 models support 65K output tokens
             } else if model.contains("2.0") {
                 8192 // Gemini 2.0 models support 8K output tokens
             } else {
@@ -396,8 +421,8 @@ impl GeminiProvider {
 
     /// Get maximum input token limit for a model
     pub fn max_input_tokens(model: &str) -> usize {
-        if model.contains("2.5") || model.contains("2.0") {
-            1_048_576 // 1M tokens for Gemini 2.x models
+        if model.contains("2.5") || model.contains("3") || model.contains("2.0") {
+            1_048_576 // 1M tokens for Gemini 2.x and 3.x models
         } else {
             // Conservative default for unknown models
             32_768
@@ -406,8 +431,8 @@ impl GeminiProvider {
 
     /// Get maximum output token limit for a model
     pub fn max_output_tokens(model: &str) -> usize {
-        if model.contains("2.5") {
-            65_536 // 65K tokens for Gemini 2.5 models
+        if model.contains("2.5") || model.contains("3") {
+            65_536 // 65K tokens for Gemini 2.5 and 3 models
         } else if model.contains("2.0") {
             8_192 // 8K tokens for Gemini 2.0 models
         } else {
@@ -505,12 +530,12 @@ impl GeminiProvider {
                         .get(tool_call_id)
                         .cloned()
                         .unwrap_or_else(|| tool_call_id.clone());
-                    let response_text = serde_json::from_str::<Value>(&content_text)
+                    let response_text = serde_json::from_str::<Value>(&message.content.as_text())
                         .map(|value| {
                             serde_json::to_string_pretty(&value)
-                                .unwrap_or_else(|_| content_text.clone())
+                                .unwrap_or_else(|_| message.content.as_text())
                         })
-                        .unwrap_or_else(|_| content_text.clone());
+                        .unwrap_or_else(|_| message.content.as_text());
 
                     let response_payload = json!({
                         "name": func_name.clone(),
@@ -527,7 +552,7 @@ impl GeminiProvider {
                     });
                 } else if !message.content.is_empty() {
                     parts.push(Part::Text {
-                        text: content_text.clone(),
+                        text: message.content.as_text(),
                     });
                 }
             }
@@ -560,6 +585,14 @@ impl GeminiProvider {
             generation_config.insert("maxOutputTokens".to_string(), json!(max_tokens));
         }
         if let Some(temp) = request.temperature {
+            // For Gemini 3 Pro, Google recommends keeping temperature at 1.0 default
+            // to avoid potential looping or degraded performance on complex tasks
+            if request.model.contains("gemini-3") && temp < 1.0 {
+                // Use a more formal log rather than eprintln to avoid mix-up with error messages
+                tracing::warn!(
+                    "When using Gemini 3 Pro with temperature values below 1.0, be aware that this may cause looping or degraded performance on complex tasks. Consider using 1.0 or higher for optimal results."
+                );
+            }
             generation_config.insert("temperature".to_string(), json!(temp));
         }
         let has_tools = request
@@ -590,6 +623,64 @@ impl GeminiProvider {
             None
         };
 
+        let reasoning_config = if let Some(effort) = request.reasoning_effort {
+            if self.supports_reasoning_effort(&request.model) {
+                // Map our internal reasoning effort levels to Gemini's thinking_level
+                // Note: For Gemini 3 Pro, Google recommends specific thinking levels
+                // Note: "None" reasoning level is only for OpenAI GPT-5.1 models, not for Gemini
+                let thinking_level = match effort {
+                    // For Gemini models, treat None as Low for basic reasoning
+                    ReasoningEffortLevel::None => {
+                        if request.model.contains("gemini-3") {
+                            Some("low") // For Gemini 3 Pro, use "low" instead of None
+                        } else {
+                            Some("low") // For other Gemini models, use "low"
+                        }
+                    }
+                    // For Gemini 3 Pro, use the new thinking_level parameter
+                    // According to Google's documentation: low=fast responses, high=maximum reasoning
+                    ReasoningEffortLevel::Minimal | ReasoningEffortLevel::Low => {
+                        if request.model.contains("gemini-3") {
+                            // For Gemini 3 Pro, use "low" for minimal/fast thinking
+                            Some("low")
+                        } else {
+                            // For older models, continue using "low"
+                            Some("low")
+                        }
+                    }
+                    ReasoningEffortLevel::Medium => {
+                        // Note: According to Google's docs, medium is coming soon for Gemini 3,
+                        // so we'll map to high for now to maintain functionality
+                        if request.model.contains("gemini-3") {
+                            Some("high") // Default to high for Gemini 3 Pro since medium not fully available
+                        } else {
+                            Some("high") // Maintain compatibility for older models
+                        }
+                    }
+                    ReasoningEffortLevel::High => {
+                        if request.model.contains("gemini-3") {
+                            // For Gemini 3 Pro, use "high" for maximum reasoning depth
+                            Some("high")
+                        } else {
+                            Some("high") // Maintain compatibility for older models
+                        }
+                    }
+                };
+
+                if let Some(level) = thinking_level {
+                    Some(json!({
+                        "thinkingLevel": level
+                    }))
+                } else {
+                    None // Don't include reasoning_config if no level
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
         Ok(GenerateContentRequest {
             contents,
             tools,
@@ -603,7 +694,7 @@ impl GeminiProvider {
             } else {
                 Some(Value::Object(generation_config))
             },
-            reasoning_config: None,
+            reasoning_config,
         })
     }
 
@@ -673,12 +764,35 @@ impl GeminiProvider {
             None => FinishReason::Stop,
         };
 
-        Ok(LLMResponse {
-            content: if text_content.is_empty() {
+        // Extract reasoning content if present in the text based on markup tags
+        let (cleaned_content, extracted_reasoning) = if !text_content.is_empty() {
+            let (reasoning_segments, cleaned) =
+                crate::llm::providers::split_reasoning_from_text(&text_content);
+            let final_reasoning = if reasoning_segments.is_empty() {
                 None
             } else {
-                Some(text_content)
-            },
+                let combined_reasoning = reasoning_segments.join("\n");
+                if combined_reasoning.trim().is_empty() {
+                    None
+                } else {
+                    Some(combined_reasoning)
+                }
+            };
+            let final_content = cleaned.unwrap_or_else(|| text_content.clone());
+            (
+                if final_content.trim().is_empty() {
+                    None
+                } else {
+                    Some(final_content)
+                },
+                final_reasoning,
+            )
+        } else {
+            (None, None)
+        };
+
+        Ok(LLMResponse {
+            content: cleaned_content,
             tool_calls: if tool_calls.is_empty() {
                 None
             } else {
@@ -686,7 +800,7 @@ impl GeminiProvider {
             },
             usage: None,
             finish_reason,
-            reasoning: None,
+            reasoning: extracted_reasoning,
             reasoning_details: None,
         })
     }
@@ -1086,6 +1200,7 @@ mod tests {
             max_tokens: Some(256),
             temperature: Some(0.4),
             stream: false,
+            output_format: None,
             tool_choice: Some(ToolChoice::Specific(SpecificToolChoice {
                 tool_type: "function".to_string(),
                 function: SpecificFunctionChoice {
@@ -1162,8 +1277,15 @@ mod tests {
             .tool_calls
             .expect("tool call should be present");
         assert_eq!(calls.len(), 1);
-        assert_eq!(calls[0].function.name, "list_files");
-        assert!(calls[0].function.arguments.contains("path"));
+        assert_eq!(calls[0].function.as_ref().unwrap().name, "list_files");
+        assert!(
+            calls[0]
+                .function
+                .as_ref()
+                .unwrap()
+                .arguments
+                .contains("path")
+        );
         assert_eq!(llm_response.finish_reason, FinishReason::ToolCalls);
     }
 
@@ -1284,5 +1406,119 @@ mod tests {
         );
         assert_eq!(GeminiProvider::apply_stream_delta(&mut acc, "Hello"), None);
         assert_eq!(acc, "Hello");
+    }
+
+    #[test]
+    fn convert_to_gemini_request_includes_reasoning_config() {
+        use crate::config::constants::models;
+        use crate::config::types::ReasoningEffortLevel;
+
+        let provider = GeminiProvider::new("test-key".to_string());
+
+        // Test High effort level for Gemini 3 Pro
+        let request = LLMRequest {
+            messages: vec![Message::user("test".to_string())],
+            system_prompt: None,
+            tools: None,
+            model: models::google::GEMINI_3_PRO_PREVIEW.to_string(),
+            max_tokens: None,
+            temperature: None,
+            stream: false,
+            output_format: None,
+            tool_choice: None,
+            parallel_tool_calls: None,
+            parallel_tool_config: None,
+            reasoning_effort: Some(ReasoningEffortLevel::High),
+            verbosity: None,
+        };
+
+        let gemini_request = provider
+            .convert_to_gemini_request(&request)
+            .expect("conversion should succeed");
+
+        // Check that reasoning_config is present and has the correct value for High effort
+        let reasoning_config = gemini_request
+            .reasoning_config
+            .expect("reasoning_config should be present");
+        let thinking_level = reasoning_config
+            .get("thinkingLevel")
+            .expect("thinkingLevel should be present");
+        assert_eq!(thinking_level.as_str().unwrap(), "high");
+
+        // Test Low effort level for Gemini 3 Pro
+        let request_low = LLMRequest {
+            messages: vec![Message::user("test".to_string())],
+            system_prompt: None,
+            tools: None,
+            model: models::google::GEMINI_3_PRO_PREVIEW.to_string(),
+            max_tokens: None,
+            temperature: None,
+            stream: false,
+            output_format: None,
+            tool_choice: None,
+            parallel_tool_calls: None,
+            parallel_tool_config: None,
+            reasoning_effort: Some(ReasoningEffortLevel::Low),
+            verbosity: None,
+        };
+
+        let gemini_request_low = provider
+            .convert_to_gemini_request(&request_low)
+            .expect("conversion should succeed");
+
+        // Check that reasoning_config is present and has "low" value for Low effort
+        let reasoning_config_low = gemini_request_low
+            .reasoning_config
+            .expect("reasoning_config should be present for low effort");
+        let thinking_level_low = reasoning_config_low
+            .get("thinkingLevel")
+            .expect("thinkingLevel should be present");
+        assert_eq!(thinking_level_low.as_str().unwrap(), "low");
+
+        // Test that None effort results in low reasoning_config for Gemini (none is treated as low)
+        let request_none = LLMRequest {
+            messages: vec![Message::user("test".to_string())],
+            system_prompt: None,
+            tools: None,
+            model: models::google::GEMINI_3_PRO_PREVIEW.to_string(),
+            max_tokens: None,
+            temperature: None,
+            stream: false,
+            output_format: None,
+            tool_choice: None,
+            parallel_tool_calls: None,
+            parallel_tool_config: None,
+            reasoning_effort: Some(ReasoningEffortLevel::None),
+            verbosity: None,
+        };
+
+        let gemini_request_none = provider
+            .convert_to_gemini_request(&request_none)
+            .expect("conversion should succeed");
+
+        // Check that reasoning_config is present with low level when effort is None (for Gemini)
+        let reasoning_config_none = gemini_request_none
+            .reasoning_config
+            .expect("reasoning_config should be present for None effort in Gemini");
+        let thinking_level_none = reasoning_config_none
+            .get("thinkingLevel")
+            .expect("thinkingLevel should be present");
+        assert_eq!(thinking_level_none.as_str().unwrap(), "low");
+    }
+
+    #[test]
+    fn gemini_provider_supports_reasoning_effort_for_gemini3() {
+        use crate::config::constants::models;
+        use crate::config::models::ModelId;
+        use crate::config::models::Provider;
+
+        // Test that the provider correctly identifies Gemini 3 Pro as supporting reasoning effort
+        assert!(Provider::Gemini.supports_reasoning_effort(models::google::GEMINI_3_PRO_PREVIEW));
+        assert!(Provider::Gemini.supports_reasoning_effort(models::google::GEMINI_2_5_PRO));
+        assert!(Provider::Gemini.supports_reasoning_effort(models::google::GEMINI_2_5_FLASH));
+
+        // Test model IDs as well
+        assert!(ModelId::Gemini3ProPreview.supports_reasoning_effort());
+        assert!(ModelId::Gemini25Pro.supports_reasoning_effort());
     }
 }

@@ -885,6 +885,12 @@ mod tests {
     }
 
     #[test]
+    fn model_picker_lists_new_gemini_models() {
+        let options = MODEL_OPTIONS.as_slice();
+        assert!(has_model(options, ModelId::Gemini3ProPreview));
+    }
+
+    #[test]
     fn read_workspace_env_returns_value_when_present() -> Result<()> {
         let dir = tempdir()?;
         let env_path = dir.path().join(".env");

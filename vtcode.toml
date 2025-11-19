@@ -26,7 +26,8 @@ ui_surface = "auto"
 # Lower values reduce memory footprint but may lose context; higher values preserve context but use more memory
 max_conversation_turns = 50
 
-# Reasoning effort level ("low", "medium", "high") - affects model usage and response speed
+# Reasoning effort level ("none", "minimal", "low", "medium", "high") - affects model usage and response speed
+# For Gemini 3 Pro: Use "low" for fast responses, "high" for maximum reasoning depth, "medium" defaults to high (not yet generally available)
 reasoning_effort = "low"
 
 # Temperature for main LLM responses (0.0-1.0)

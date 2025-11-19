@@ -1,6 +1,5 @@
 use std::{cmp::min, mem, sync::Arc};
 
-use ansi_to_tui::IntoText;
 use anstyle::{AnsiColor, Color as AnsiColorEnum, Effects, RgbColor};
 use crossterm::event::{
     Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent,
@@ -140,6 +139,36 @@ impl Session {
     fn next_revision(&mut self) -> u64 {
         self.line_revision_counter = self.line_revision_counter.wrapping_add(1);
         self.line_revision_counter
+    }
+
+    /// Check if the content appears to be an error message that should go to transcript instead of input field
+    fn is_error_content(content: &str) -> bool {
+        // Check if message contains common error indicators
+        let lower_content = content.to_lowercase();
+        let error_indicators = [
+            "error:",
+            "error ",
+            "error\n",
+            "failed",
+            "failure",
+            "exception",
+            "invalid",
+            "not found",
+            "couldn't",
+            "can't",
+            "cannot",
+            "denied",
+            "forbidden",
+            "unauthorized",
+            "timeout",
+            "connection refused",
+            "no such",
+            "does not exist",
+        ];
+
+        error_indicators
+            .iter()
+            .any(|indicator| lower_content.contains(indicator))
     }
 
     pub fn new(
@@ -287,9 +316,16 @@ impl Session {
                 self.update_slash_suggestions();
             }
             InlineCommand::SetInput(content) => {
-                self.input_manager.set_content(content);
-                self.scroll_manager.set_offset(0);
-                self.update_slash_suggestions();
+                // Check if the content appears to be an error message
+                // If it looks like an error, redirect to transcript instead
+                if Self::is_error_content(&content) {
+                    // Add error to transcript instead of input field
+                    crate::utils::transcript::display_error(&content);
+                } else {
+                    self.input_manager.set_content(content);
+                    self.scroll_manager.set_offset(0);
+                    self.update_slash_suggestions();
+                }
             }
             InlineCommand::ClearInput => {
                 self.clear_input();
@@ -1087,7 +1123,7 @@ impl Session {
                     ratatui_style_from_inline(&label_style, self.theme.foreground),
                 ));
                 spans.push(Span::raw(" "));
-                let body_style = InlineTextStyle::default()
+                let _body_style = InlineTextStyle::default()
                     .with_color(self.theme.foreground)
                     .bold();
                 // Parse ANSI escape sequences in PTY output for color support
@@ -1104,39 +1140,19 @@ impl Session {
                     header_text.clone()
                 };
 
-                if let Ok(parsed) = output_text.as_bytes().into_text() {
-                    let base_style = parsed.style;
-                    for line in &parsed.lines {
-                        let line_style = base_style.patch(line.style);
-                        for span in &line.spans {
-                            let content = span.content.clone().into_owned();
-                            if content.is_empty() {
-                                continue;
-                            }
-                            let span_style = line_style.patch(span.style);
-                            spans.push(Span::styled(content, span_style));
-                        }
-                        // Add newline between lines
-                        spans.push(Span::raw("\n"));
-                    }
-                    // Remove trailing newline
-                    if spans.last().map(|s| s.content.as_ref()) == Some("\n") {
-                        spans.pop();
-                    }
-                } else {
-                    // Fallback to plain text if ANSI parsing fails
-                    spans.push(Span::styled(
-                        output_text,
-                        ratatui_style_from_inline(&body_style, self.theme.foreground),
-                    ));
-                }
+                // Skip ANSI parsing and return plain text without styles or Unicode formatting
+                spans.push(Span::raw(output_text));
                 return spans;
             }
         }
 
         let fallback = self.text_fallback(line.kind).or(self.theme.foreground);
         for segment in &line.segments {
-            let style = ratatui_style_from_inline(&segment.style, fallback);
+            let mut style = ratatui_style_from_inline(&segment.style, fallback);
+            if line.kind == InlineMessageKind::Agent {
+                // Apply italic effect for agent messages
+                style = style.add_modifier(ratatui::style::Modifier::ITALIC);
+            }
             spans.push(Span::styled(segment.text.clone(), style));
         }
 
@@ -1169,10 +1185,117 @@ impl Session {
         spans
     }
 
+    /// Strips ANSI escape codes from text to ensure plain text output
+    fn strip_ansi_codes(&self, text: &str) -> String {
+        // Comprehensive ANSI code stripping by looking for various escape sequences
+        let mut result = String::new();
+        let mut chars = text.chars().peekable();
+
+        while let Some(ch) = chars.next() {
+            if ch == '\x1b' {
+                // Found escape character, check what follows
+                match chars.peek() {
+                    Some('[') => {
+                        // CSI (Control Sequence Introducer): ESC[...m
+                        chars.next(); // consume the '['
+                        // Skip the parameters and final character
+                        let mut param_length = 0;
+                        while let Some(&next_ch) = chars.peek() {
+                            chars.next(); // consume the character
+                            param_length += 1;
+                            if next_ch.is_ascii_digit() || next_ch == ';' || next_ch == ':' {
+                                // These are parameter characters, continue
+                                continue;
+                            } else if ('@'..='~').contains(&next_ch) {
+                                // This is the final command character, stop here
+                                break;
+                            } else if param_length > 20 {
+                                // prevent infinite loops
+                                break;
+                            } else {
+                                // Some other character, continue
+                                continue;
+                            }
+                        }
+                    }
+                    Some(']') => {
+                        // OSC (Operating System Command): ESC]...ST (where ST is \x1b\\ or BEL)
+                        chars.next(); // consume the ']'
+                        // Skip until we find the string terminator
+                        loop {
+                            match chars.peek() {
+                                Some(&'\x07') => {
+                                    // BEL character (0x07) terminates the sequence
+                                    chars.next(); // consume the BEL
+                                    break;
+                                }
+                                Some(&'\x1b') => {
+                                    // Check if next char after ESC is backslash to form ST
+                                    let mut peekable_copy = chars.clone();
+                                    peekable_copy.next(); // consume the second ESC
+                                    if peekable_copy.peek() == Some(&'\\') {
+                                        chars.next(); // consume the second ESC
+                                        chars.next(); // consume the '\\'
+                                        break; // ESC\\ terminates the sequence
+                                    } else {
+                                        // This is just part of the OSC data, continue
+                                        chars.next();
+                                        continue;
+                                    }
+                                }
+                                Some(_) => {
+                                    // Continue consuming characters in the sequence
+                                    chars.next();
+                                }
+                                None => {
+                                    // End of string
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    Some('(') | Some(')') | Some('*') | Some('+') | Some('-') | Some('.') => {
+                        // G0, G1, G2, G3 character set selection: ESC(...)
+                        chars.next(); // consume the special character
+                        // consume one more parameter character if available
+                        if chars.peek().is_some() {
+                            chars.next();
+                        }
+                    }
+                    Some(_) => {
+                        // Other ESC sequences with specific characters
+                        let next_ch = chars.peek().unwrap();
+                        match next_ch {
+                            '7' | '8' | '=' | '>' | 'D' | 'E' | 'H' | 'M' | 'O' | 'P' | 'V'
+                            | 'W' | 'X' | 'Z' | '[' | '\\' | ']' | '^' | '_' => {
+                                // These are single-character ESC sequences, consume the character
+                                chars.next();
+                            }
+                            _ => {
+                                // Not a known ESC sequence, treat as regular character
+                                result.push(ch);
+                            }
+                        }
+                    }
+                    None => {
+                        // End of string, just add the escape character
+                        result.push(ch);
+                    }
+                }
+            } else {
+                result.push(ch);
+            }
+        }
+
+        result
+    }
+
     fn render_tool_segments(&self, line: &MessageLine) -> Vec<Span<'static>> {
         let mut combined = String::new();
         for segment in &line.segments {
-            combined.push_str(segment.text.as_str());
+            // Strip ANSI codes from each segment to ensure plain text output
+            let stripped_text = self.strip_ansi_codes(&segment.text);
+            combined.push_str(&stripped_text);
         }
 
         if combined.is_empty() {
@@ -2647,40 +2770,48 @@ impl Session {
 
     fn append_inline(&mut self, kind: InlineMessageKind, segment: InlineSegment) {
         let previous_max_offset = self.current_max_scroll_offset();
-        let mut remaining = segment.text.as_str();
-        let style = segment.style.clone();
 
-        while !remaining.is_empty() {
-            if let Some((index, control)) = remaining
-                .char_indices()
-                .find(|(_, ch)| matches!(ch, '\n' | '\r'))
-            {
-                let (text, _) = remaining.split_at(index);
-                if !text.is_empty() {
-                    self.append_text(kind, text, &style);
-                }
+        // For Tool messages, process the entire text as one unit to avoid excessive line breaks
+        // Newlines in tool output will be preserved as actual newline characters rather than
+        // triggering new message lines
+        if kind == InlineMessageKind::Tool {
+            self.append_text(kind, &segment.text, &segment.style);
+        } else {
+            let mut remaining = segment.text.as_str();
+            let style = segment.style.clone();
 
-                let control_char = control;
-                let next_index = index + control_char.len_utf8();
-                remaining = &remaining[next_index..];
-
-                match control_char {
-                    '\n' => self.start_line(kind),
-                    '\r' => {
-                        if remaining.starts_with('\n') {
-                            remaining = &remaining[1..];
-                            self.start_line(kind);
-                        } else {
-                            self.reset_line(kind);
-                        }
+            while !remaining.is_empty() {
+                if let Some((index, control)) = remaining
+                    .char_indices()
+                    .find(|(_, ch)| matches!(ch, '\n' | '\r'))
+                {
+                    let (text, _) = remaining.split_at(index);
+                    if !text.is_empty() {
+                        self.append_text(kind, text, &style);
                     }
-                    _ => {}
+
+                    let control_char = control;
+                    let next_index = index + control_char.len_utf8();
+                    remaining = &remaining[next_index..];
+
+                    match control_char {
+                        '\n' => self.start_line(kind),
+                        '\r' => {
+                            if remaining.starts_with('\n') {
+                                remaining = &remaining[1..];
+                                self.start_line(kind);
+                            } else {
+                                self.reset_line(kind);
+                            }
+                        }
+                        _ => {}
+                    }
+                } else {
+                    if !remaining.is_empty() {
+                        self.append_text(kind, remaining, &style);
+                    }
+                    break;
                 }
-            } else {
-                if !remaining.is_empty() {
-                    self.append_text(kind, remaining, &style);
-                }
-                break;
             }
         }
 
@@ -3072,6 +3203,15 @@ impl Session {
             wrapped.push(Line::default());
         }
 
+        // Add a line break after Error, Info, and Policy messages
+        // User messages already have dividers, Tool/PTY have special formatting, and Agent messages don't need line breaks
+        match message.kind {
+            InlineMessageKind::Error | InlineMessageKind::Info | InlineMessageKind::Policy => {
+                wrapped.push(Line::default());
+            }
+            _ => {} // Don't add line breaks for User (has dividers), Agent, Tool, or PTY messages
+        }
+
         wrapped
     }
 
@@ -3165,9 +3305,59 @@ impl Session {
             ));
         } else {
             // For simple tool output, render without borders
-            let content = self.render_tool_segments(line);
-            for segment in content {
-                lines.push(Line::from(vec![segment]));
+            // Combine all segments into single text to preserve newlines and avoid excessive line breaks
+            let mut combined_text = String::new();
+            for segment in &line.segments {
+                // Strip ANSI codes from each segment to ensure plain text output
+                let stripped_text = self.strip_ansi_codes(&segment.text);
+                combined_text.push_str(&stripped_text);
+            }
+
+            // Process the combined text with newlines preserved
+            // To reduce excessive blank lines, collapse multiple consecutive newlines
+            let processed_text = if combined_text.contains("\n\n\n") {
+                // Replace 3 or more consecutive newlines with just 2 newlines
+                let mut result = String::new();
+                let mut chars = combined_text.chars().peekable();
+                let mut newline_count = 0;
+
+                while let Some(ch) = chars.next() {
+                    if ch == '\n' {
+                        newline_count += 1;
+                        // Skip over additional newlines, but make sure we preserve at least one
+                        while let Some(&next_ch) = chars.peek() {
+                            if next_ch == '\n' {
+                                chars.next(); // consume the additional newline
+                                newline_count += 1;
+                            } else {
+                                break;
+                            }
+                        }
+
+                        // Add at most 2 newlines (instead of all the consecutive ones)
+                        let newlines_to_add = std::cmp::min(newline_count, 2);
+                        for _ in 0..newlines_to_add {
+                            result.push('\n');
+                        }
+                        newline_count = 0;
+                    } else {
+                        result.push(ch);
+                        if ch != '\n' {
+                            newline_count = 0; // reset counter when non-newline is encountered
+                        }
+                    }
+                }
+
+                result
+            } else {
+                combined_text
+            };
+
+            let base_line = Line::from(vec![Span::raw(processed_text)]);
+            if max_width > 0 {
+                lines.extend(self.wrap_line(base_line, max_width));
+            } else {
+                lines.push(base_line);
             }
         }
 

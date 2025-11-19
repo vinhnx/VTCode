@@ -2,7 +2,7 @@
 
 use crate::config::constants::tools;
 use crate::config::types::AgentConfig;
-use crate::prompts::read_system_prompt_from_md;
+use crate::prompts::generate_system_instruction;
 use crate::tools::ToolRegistry;
 use crate::utils::colors::style;
 use anyhow::Result;
@@ -79,18 +79,20 @@ async fn check_api_connectivity(config: &AgentConfig) -> Result<()> {
         if let Some(text) = part.as_text() {
             SystemInstruction::new(text)
         } else {
-            SystemInstruction::new(
-                read_system_prompt_from_md()
-                    .await
-                    .unwrap_or_else(|_| "You are a helpful coding assistant.".to_string()),
-            )
+            let content = generate_system_instruction(&Default::default()).await;
+            if let Some(text) = content.parts.first().and_then(|p| p.as_text()) {
+                SystemInstruction::new(text)
+            } else {
+                SystemInstruction::new(crate::prompts::system::default_lightweight_prompt())
+            }
         }
     } else {
-        SystemInstruction::new(
-            read_system_prompt_from_md()
-                .await
-                .unwrap_or_else(|_| "You are a helpful coding assistant.".to_string()),
-        )
+        let content = generate_system_instruction(&Default::default()).await;
+        if let Some(text) = content.parts.first().and_then(|p| p.as_text()) {
+            SystemInstruction::new(text)
+        } else {
+            SystemInstruction::new(crate::prompts::system::default_lightweight_prompt())
+        }
     };
 
     let request = GenerateContentRequest {
