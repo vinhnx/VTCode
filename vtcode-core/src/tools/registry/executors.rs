@@ -35,10 +35,7 @@ const RUN_PTY_POLL_TIMEOUT_SECS: u64 = 5;
 const LONG_RUNNING_COMMAND_TIMEOUT_SECS: u64 = 600;
 // For known long-running commands, wait longer before returning partial output
 const RUN_PTY_POLL_TIMEOUT_LONG_RUNNING: u64 = 30;
-// PTY retry configuration
-const PTY_COMMAND_MAX_RETRIES: u32 = 2;
-const PTY_RETRY_INITIAL_DELAY_MS: u64 = 300;
-const PTY_RETRY_MAX_DELAY_MS: u64 = 2000;
+
 const LONG_RUNNING_COMMANDS: &[&str] = &[
     "cargo", "npm", "yarn", "pnpm", "pip", "python", "make", "docker",
 ];
@@ -1557,56 +1554,20 @@ impl ToolRegistry {
     }
 
     async fn run_ephemeral_pty_command(&mut self, setup: PtyCommandSetup) -> Result<Value> {
-        let mut retry_count = 0;
-        let max_retries = PTY_COMMAND_MAX_RETRIES;
+    // Execute the PTY command exactly once.
+    // We do NOT retry on exit code (application error) because:
+    // 1. It causes "multi retry" behavior where a single failed command runs 3 times.
+    // 2. Retrying permanent errors (like 127 Command Not Found) is futile.
+    // 3. The agent should decide whether to retry based on the error message.
+    
+    // We pass 0 as retry_count since we are not retrying.
+    let result = self.execute_single_pty_attempt(&setup, 0).await?;
 
-        loop {
-            let result = self.execute_single_pty_attempt(&setup, retry_count).await?;
+    let capture = result.1;
+    let snapshot = result.2;
 
-            // Check if command succeeded or if we've exhausted retries
-            let exit_code = result.0;
-            let capture = result.1;
-            let snapshot = result.2;
-
-            let should_retry =
-                exit_code.map_or(false, |code| code != 0) && retry_count < max_retries;
-
-            if !should_retry {
-                // Either succeeded (exit_code == 0) or failed with no more retries
-                let mut response = build_ephemeral_pty_response(&setup, capture, snapshot);
-                if retry_count > 0 {
-                    if let Value::Object(ref mut obj) = response {
-                        obj.insert(
-                            "retries_attempted".to_string(),
-                            Value::Number(retry_count.into()),
-                        );
-                    }
-                }
-                return Ok(response);
-            }
-
-            // Clean up failed session before retrying
-            if let Err(e) = self.pty_manager().close_session(&setup.session_id) {
-                warn!(
-                    "failed to clean up PTY session '{}' before retry: {}",
-                    setup.session_id, e
-                );
-            }
-
-            // Command failed and we have retries left - exponential backoff
-            retry_count += 1;
-            let backoff_ms = std::cmp::min(
-                PTY_RETRY_INITIAL_DELAY_MS * (2_u64.pow(retry_count - 1)),
-                PTY_RETRY_MAX_DELAY_MS,
-            );
-
-            debug!(
-                "PTY command failed with exit code {:?}, retrying (attempt {}/{}) after {}ms",
-                exit_code, retry_count, max_retries, backoff_ms
-            );
-
-            sleep(Duration::from_millis(backoff_ms)).await;
-        }
+    let response = build_ephemeral_pty_response(&setup, capture, snapshot);
+    Ok(response)
     }
 
     async fn execute_single_pty_attempt(

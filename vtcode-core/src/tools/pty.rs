@@ -177,33 +177,89 @@ struct PtyScrollback {
     pending_lines: VecDeque<String>,
     partial: String,
     pending_partial: String,
-    capacity: usize,
+    capacity_lines: usize,
+    max_bytes: usize,
+    current_bytes: usize,
+    overflow_detected: bool,
+    warning_shown: bool,               // NEW: Track if 80% warning shown
+    bytes_dropped: usize,              // NEW: Track dropped bytes for metrics
+    lines_dropped: usize,              // NEW: Track dropped lines for metrics
 }
 
 impl PtyScrollback {
-    fn new(capacity: usize) -> Self {
+    fn new(capacity_lines: usize, max_bytes: usize) -> Self {
         Self {
             lines: VecDeque::new(),
             pending_lines: VecDeque::new(),
             partial: String::new(),
             pending_partial: String::new(),
-            capacity: capacity.max(1),
+            capacity_lines: capacity_lines.max(1),
+            max_bytes,
+            current_bytes: 0,
+            overflow_detected: false,
+            warning_shown: false,
+            bytes_dropped: 0,
+            lines_dropped: 0,
         }
     }
 
     fn push_text(&mut self, text: &str) {
+        let text_bytes = text.len();
+        
+        // Early warning at 80% threshold
+        if !self.warning_shown && self.current_bytes + text_bytes > (self.max_bytes * 80 / 100) {
+            self.warning_shown = true;
+            let warning = format!(
+                "\n[⚠️  Output approaching size limit ({:.1} MB of {} MB). Output may be truncated soon.]\n",
+                self.current_bytes as f64 / 1_000_000.0,
+                self.max_bytes / 1_000_000
+            );
+            // Add warning to both buffers
+            self.current_bytes += warning.len();
+            self.lines.push_back(warning.clone());
+            self.pending_lines.push_back(warning);
+        }
+        
+        // Check byte limit BEFORE processing to prevent memory explosion
+        if self.current_bytes + text_bytes > self.max_bytes {
+            if !self.overflow_detected {
+                self.overflow_detected = true;
+                let warning = format!(
+                    "\n[⚠️  Output size limit exceeded ({} MB). Further output truncated.]\n\
+                     [💡 Tip: Full output can be retrieved with output spooling enabled]\n",
+                    self.max_bytes / 1_000_000
+                );
+                // Add warning to both buffers
+                self.current_bytes += warning.len();
+                self.lines.push_back(warning.clone());
+                self.pending_lines.push_back(warning);
+            }
+            
+            // Track metrics for dropped data
+            self.bytes_dropped += text_bytes;
+            self.lines_dropped += text.lines().count();
+            
+            return; // DROP further output to prevent hang
+        }
+
         for part in text.split_inclusive('\n') {
             self.partial.push_str(part);
             self.pending_partial.push_str(part);
             if part.ends_with('\n') {
                 let complete = std::mem::take(&mut self.partial);
                 let _ = std::mem::take(&mut self.pending_partial);
+                
+                self.current_bytes += complete.len();
                 self.lines.push_back(complete.clone());
                 self.pending_lines.push_back(complete);
-                while self.lines.len() > self.capacity {
-                    self.lines.pop_front();
+                
+                // Circular buffer: drop oldest lines when line capacity exceeded
+                while self.lines.len() > self.capacity_lines {
+                    if let Some(oldest) = self.lines.pop_front() {
+                        self.current_bytes = self.current_bytes.saturating_sub(oldest.len());
+                    }
                 }
-                while self.pending_lines.len() > self.capacity {
+                while self.pending_lines.len() > self.capacity_lines {
                     self.pending_lines.pop_front();
                 }
             }
@@ -278,6 +334,43 @@ impl PtyScrollback {
         }
         output
     }
+
+    fn has_overflow(&self) -> bool {
+        self.overflow_detected
+    }
+
+    fn current_size_bytes(&self) -> usize {
+        self.current_bytes
+    }
+
+    fn usage_percent(&self) -> f64 {
+        (self.current_bytes as f64 / self.max_bytes as f64) * 100.0
+    }
+
+    fn metrics(&self) -> ScrollbackMetrics {
+        ScrollbackMetrics {
+            current_bytes: self.current_bytes,
+            max_bytes: self.max_bytes,
+            usage_percent: self.usage_percent(),
+            overflow_detected: self.overflow_detected,
+            bytes_dropped: self.bytes_dropped,
+            lines_dropped: self.lines_dropped,
+            current_lines: self.lines.len(),
+            capacity_lines: self.capacity_lines,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct ScrollbackMetrics {
+    current_bytes: usize,
+    max_bytes: usize,
+    usage_percent: f64,
+    overflow_detected: bool,
+    bytes_dropped: usize,
+    lines_dropped: usize,
+    current_lines: usize,
+    capacity_lines: usize,
 }
 
 /// PTY session handle with exclusive access to all PTY resources.
@@ -794,7 +887,10 @@ impl PtyManager {
             size.cols,
             self.config.scrollback_lines,
         )));
-        let scrollback = Arc::new(Mutex::new(PtyScrollback::new(self.config.scrollback_lines)));
+        let scrollback = Arc::new(Mutex::new(PtyScrollback::new(
+            self.config.scrollback_lines,
+            self.config.max_scrollback_bytes,
+        )));
         let parser_clone = Arc::clone(&parser);
         let scrollback_clone = Arc::clone(&scrollback);
         let session_name = session_id.clone();
@@ -1166,4 +1262,165 @@ pub fn is_development_toolchain_command(program: &str) -> bool {
             | "clang++"
             | "which"
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn scrollback_enforces_byte_limit() {
+        let mut scrollback = PtyScrollback::new(10_000, 1024); // 1KB limit
+
+        // Fill with 2KB of data (100 lines x 22 bytes each = 2.2KB)
+        for i in 0..100 {
+            scrollback.push_text(&format!("line-{:04}-data-here\n", i)); // ~22 bytes per line
+        }
+
+        // Should have stopped accepting data after hitting limit
+        assert!(scrollback.has_overflow());
+        assert!(scrollback.current_size_bytes() <= 1024);
+
+        // Snapshot should contain overflow warning
+        let snapshot = scrollback.snapshot();
+        assert!(snapshot.contains("Output size limit exceeded"));
+    }
+
+    #[test]
+    fn scrollback_circular_buffer_drops_oldest() {
+        let mut scrollback = PtyScrollback::new(3, 10_000); // 3 lines, 10KB max
+
+        scrollback.push_text("line1\n");
+        scrollback.push_text("line2\n");
+        scrollback.push_text("line3\n");
+        scrollback.push_text("line4\n"); // Should drop line1
+
+        let snapshot = scrollback.snapshot();
+        assert!(!snapshot.contains("line1"), "line1 should be dropped");
+        assert!(snapshot.contains("line4"), "line4 should be present");
+        assert_eq!(scrollback.lines.len(), 3);
+    }
+
+    #[test]
+    fn scrollback_tracks_bytes_correctly() {
+        let mut scrollback = PtyScrollback::new(100, 10_000);
+
+        scrollback.push_text("hello\n"); // 6 bytes
+        assert_eq!(scrollback.current_size_bytes(), 6);
+
+        scrollback.push_text("world\n"); // 6 bytes
+        assert_eq!(scrollback.current_size_bytes(), 12);
+    }
+
+    #[test]
+    fn scrollback_drops_oldest_when_line_limit_exceeded() {
+        let mut scrollback = PtyScrollback::new(2, 10_000); // Only 2 lines allowed
+
+        scrollback.push_text("first\n"); // 6 bytes
+        scrollback.push_text("second\n"); // 7 bytes
+        scrollback.push_text("third\n"); // 6 bytes - should drop "first"
+
+        assert_eq!(scrollback.lines.len(), 2);
+        // Should only have second + third = 13 bytes
+        assert_eq!(scrollback.current_size_bytes(), 13);
+
+        let snapshot = scrollback.snapshot();
+        assert!(!snapshot.contains("first"));
+        assert!(snapshot.contains("second"));
+        assert!(snapshot.contains("third"));
+    }
+
+    #[test]
+    fn scrollback_no_overflow_under_limit() {
+        let mut scrollback = PtyScrollback::new(1000, 10_000); // 10KB limit
+
+        // Push 5KB of data
+        for i in 0..100 {
+            scrollback.push_text(&format!("line-{:04}-xxxxxxxxxx\n", i)); // ~50 bytes each
+        }
+
+        assert!(!scrollback.has_overflow());
+        assert!(scrollback.current_size_bytes() < 10_000);
+    }
+
+    #[test]
+    fn scrollback_pending_operations() {
+        let mut scrollback = PtyScrollback::new(100, 10_000);
+
+        scrollback.push_text("line1\n");
+        scrollback.push_text("line2\n");
+
+        // Pending should show both lines
+        let pending = scrollback.pending();
+        assert!(pending.contains("line1"));
+        assert!(pending.contains("line2"));
+
+        // Take pending should return and clear
+        let taken = scrollback.take_pending();
+        assert!(taken.contains("line1"));
+        assert!(taken.contains("line2"));
+
+        // After taking, pending should be empty
+        let empty = scrollback.pending();
+        assert!(empty.is_empty());
+    }
+
+    #[test]
+    fn scrollback_early_warning_at_80_percent() {
+        let mut scrollback = PtyScrollback::new(1000, 1000); // 1KB limit
+
+        // Push data up to 80% (800 bytes)
+        for _ in 0..40 {
+            scrollback.push_text("12345678901234567890\n"); // 21 bytes x 40 = 840 bytes
+        }
+
+        // Should have warning
+        let snapshot = scrollback.snapshot();
+        assert!(snapshot.contains("approaching size limit"), "Should show 80% warning");
+        assert!(scrollback.warning_shown, "Warning flag should be set");
+    }
+
+    #[test]
+    fn scrollback_tracks_dropped_metrics() {
+        let mut scrollback = PtyScrollback::new(1000, 500); // 500 byte limit
+
+        // Push 1KB of data (should drop half)
+        for i in 0..50 {
+            scrollback.push_text(&format!("line-{:04}-data\n", i)); // ~16 bytes each
+        }
+
+        let metrics = scrollback.metrics();
+        assert!(metrics.bytes_dropped > 0, "Should track dropped bytes");
+        assert!(metrics.lines_dropped > 0, "Should track dropped lines");
+        assert!(metrics.overflow_detected, "Should detect overflow");
+    }
+
+    #[test]
+    fn scrollback_usage_percent_calculation() {
+        let mut scrollback = PtyScrollback::new(1000, 1000);
+
+        // Push 500 bytes
+        for _ in 0..25 {
+            scrollback.push_text("12345678901234567890\n"); // 21 bytes x 25 = 525 bytes
+        }
+
+        let metrics = scrollback.metrics();
+        assert!(metrics.usage_percent > 50.0 && metrics.usage_percent < 60.0, 
+            "Usage should be around 50-55%");
+    }
+
+    #[test]
+    fn scrollback_metrics_structure() {
+        let mut scrollback = PtyScrollback::new(100, 10_000);
+
+        scrollback.push_text("test line\n");
+
+        let metrics = scrollback.metrics();
+        assert_eq!(metrics.max_bytes, 10_000);
+        assert_eq!(metrics.capacity_lines, 100);
+        assert_eq!(metrics.current_lines, 1);
+        assert!(!metrics.overflow_detected);
+        assert_eq!(metrics.bytes_dropped, 0);
+        assert_eq!(metrics.lines_dropped, 0);
+    }
 }

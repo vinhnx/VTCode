@@ -1,3 +1,7 @@
+---
+trigger: always_on
+---
+
 # VT Code Agent Guidelines
 
 **VT Code**: Rust terminal coding agent with modular architecture, multi-LLM support (OpenAI, Anthropic, Gemini), tree-sitter parsing for 6+ languages.
@@ -5,31 +9,38 @@
 ## Build & Test Commands
 
 ```bash
-cargo check                 # Preferred over cargo build
-cargo nextest run           # Run tests (preferred over cargo test)
+cargo check                    # Preferred: quick check (no build)
+cargo nextest run              # Run tests (preferred over cargo test)
 cargo nextest run --package vtcode-core  # Single package
-cargo clippy                # Lint (strict Clippy rules)
-cargo fmt                   # Format code
+cargo clippy                   # Linting (strict Clippy rules enforced)
+cargo fmt                      # Format code
 ```
 
 ## Architecture & Key Modules
 
-- **Workspace**: `vtcode-core/` (library) + `src/main.rs` (binary) + 9 workspace crates
-- **Core**: `llm/` (multi-provider), `tools/` (trait-based), `config/` (TOML-based)
-- **Integrations**: Tree-sitter, PTY execution, ACP/MCP protocol, Gemini/OpenAI/Anthropic APIs
+- **Workspace**: `vtcode-core/` (library), `src/main.rs` (binary), + 9 subproject crates
+- **Core Systems**: `llm/` (multi-provider abstraction), `tools/` (trait-based composition), `config/` (TOML-based)
+- **Integration**: Tree-sitter parsing, PTY command execution, ACP/MCP protocol support, Gemini/OpenAI/Anthropic APIs
 
 ## Code Style & Conventions
 
-- **Naming**: snake_case functions/vars, PascalCase types (standard Rust)
-- **Error Handling**: `anyhow::Result<T>` + `anyhow::Context`; NO `unwrap()`
-- **Constants**: Use `vtcode-core/src/config/constants.rs` (never hardcode, especially model IDs)
-- **Config**: Read from `vtcode.toml` at runtime
-- **Docs**: Markdown ONLY in `./docs/`; use `docs/models.json` for latest LLM models
-- **Formatting**: 4-space indentation, early returns, simple variable names
+- **Rust**: snake_case vars/functions, PascalCase types; follow standard Rust API guidelines
+- **Error Handling**: `anyhow::Result<T>` + `anyhow::Context` for descriptive errors; NO `unwrap()`
+- **Config**: Always use `vtcode-core/src/config/constants.rs` for constants; read runtime settings from `vtcode.toml`
+- **Documentation**: Markdown files ONLY in `./docs/` folder; rustdoc comments for public APIs
+- **Imports**: No hardcoded model IDs; check `docs/models.json` for latest; reference `constants.rs`
+- **Formatting**: 4-space indentation, early returns, no nested conditionals
 
-## See Also
+## Important Rules (from .github/copilot-instructions.md)
 
-For comprehensive guidelines, see `.github/copilot-instructions.md` (detailed patterns, testing strategy, security, additional context).
+- Use `cargo check` instead of `cargo build` when possible
+- Use `cargo nextest` instead of `cargo test`
+- Put all md docs in `./docs/` folder only (THIS IS IMPORTANT)
+- Check `docs/models.json` for latest LLM models; never guess model IDs
+- Use `vtcode-core/src/config/constants.rs` for all constants; no hardcoding
+- Use `anyhow::Context` to add error context (THIS IS IMPORTANT)
+- Run `cargo clippy` and fix warnings before committing
+- For testing headless (no input): `cargo run -- ask "{QUERY}"`
 
 ## Core System Prompt
 

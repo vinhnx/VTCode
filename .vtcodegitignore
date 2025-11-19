@@ -1,41 +1,220 @@
-# .vtcodegitignore - Example configuration for vtcode
+# .vtcodegitignore - Optimized configuration for vtcode agent
 # This file works like .gitignore but only affects the agent's file operations
 # It does NOT affect your project's actual .gitignore file
 
-# Exclude log files
-*.log
-logs/
+# Core system files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
 
-# Exclude build artifacts
+# IDE and Editor Files - Hidden directories
+.vscode/
+.idea/
+.ccls-cache/
+.clangd/
+.projectile
+.emacs.desktop
+.emacs.desktop.lock
+
+# Vim/Emacs temporary files
+*.swp
+*.swo
+*~
+\#*\#
+*.elc
+auto-save-list
+tramp
+
+# Git and version control metadata
+.git/
+.gitignore
+.gitattributes
+.gitmodules
+.gitkeep
+
+# Build artifacts and compilation outputs
 target/
 build/
 dist/
+out/
+_bin/
+obj/
+*.o
+*.a
+*.lib
+*.so
+*.dll
+*.dylib
+*.exe
+*.obj
+*.exe
+*.out
+*.app
+*.dmg
+*.pkg
+*.msi
 
-# Exclude temporary files
+# Dependency directories
+node_modules/
+vendor/
+Cargo.lock
+package-lock.json
+yarn.lock
+Pipfile.lock
+Gemfile.lock
+composer.lock
+
+# Cache directories
+.cache/
+.cargo/
+.cargo/registry/
+.cargo/git/
+.npm/
+.node-gyp/
+.pip/
+.pytest_cache/
+.nyc_output/
+.coverage/
+.tox/
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Log files and temporary data
+*.log
+*.log.*
+logs/
 *.tmp
 *.temp
-.cache/
-
-# Exclude sensitive files
-.env
-.env.local
-secrets/
-
-# Exclude large binary files
-*.exe
-*.dll
-*.so
-*.dylib
-
-# Exclude IDE files
-.vscode/
-.idea/
+.tmp/
+.temp/
+*.bak
+*.backup
 *.swp
 *.swo
+*~
+\#*\#
 
-# Exclude node_modules (if present)
-node_modules/
+# Platform-specific files
+*.dSYM/
+*.pdb
+*.idb
+*.iobj
+*.ipdb
+*.VC.db
+*.VC.VC.opendb
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+*.fdb
+*.accdb
+
+# Binary and archive files
+*.zip
+*.tar.gz
+*.tar
+*.gz
+*.rar
+*.7z
+*.jar
+*.war
+*.par
+*.nar
+*.exe
+*.bin
+*.iso
+*.img
+
+# Lock files
+*.lock
+*.lock.json
+*.lockb
+*.lock.yaml
+*.lock.yml
+
+# Documentation and generated files
+docs/_build/
+docs/api/
+_build/
+*.pdf
+*.doc
+*.docx
+*.xls
+*.xlsx
+*.ppt
+*.pptx
+
+# Test and coverage reports
+coverage/
+*.profraw
+*.profdata
+test_results/
+*.test
+criterion/
+tarpaulin-report.html
+cobertura.xml
+lcov.info
+
+# Debug and profiling
+debug/
+flamegraph.svg
+*.svg
+*.dmp
+
+# Editor-specific configuration
+.vs/
+.vscode/settings.json
+.vscode/tasks.json
+.vscode/launch.json
+.idea/*
+!.idea/compiler.xml
+!.idea/encodings.xml
+!.idea/jsLibraryMappings.xml
+!.idea/runConfigurations.xml
+*.iws
+*.iml
+*.ipr
+
+# Local configuration files
+config.local.*
+settings.local.*
+*.local
+*.local.json
+*.local.yml
+*.local.yaml
+*.local.toml
+
+# Secrets and sensitive data
+secrets/
+*.secret
+*.p12
+*.pfx
+*.key
+*.pem
+*.crt
+*.cer
+*.jks
+*.keystore
+
+# OS specific
+*.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+.Trash-*
+.fuse_hidden*
 
 # Allow specific files that would otherwise be excluded
 !important.log
+!README.md
 !CHANGELOG.md
+!TODO.md
