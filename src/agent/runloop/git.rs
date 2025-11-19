@@ -63,18 +63,30 @@ pub(crate) async fn confirm_changes_with_git_diff(
         return Ok(true);
     }
 
-    if !is_git_repo() {
+    // Run blocking git repo check in a spawned blocking task
+    let is_repo = tokio::task::spawn_blocking(is_git_repo)
+        .await
+        .context("Failed to spawn blocking git check")?;
+    
+    if !is_repo {
         println!("Not in a git repository; skipping diff confirmation.");
         return Ok(true);
     }
 
     for file in modified_files {
-        let output = std::process::Command::new("git")
-            .args(["diff", file])
-            // Disable pager and force no-color to avoid encoding issues with external pagers
-            .env("GIT_PAGER", "cat")
-            .output()
-            .with_context(|| format!("Failed to run git diff for {}", file))?;
+        // Wrap blocking git diff command in spawn_blocking to avoid blocking the async runtime
+        // See: https://tokio.rs/tokio/tutorial/select#the-select-macro
+        let file_clone = file.clone();
+        let output = tokio::task::spawn_blocking(move || {
+            std::process::Command::new("git")
+                .args(["diff", &file_clone])
+                // Disable pager and force no-color to avoid encoding issues with external pagers
+                .env("GIT_PAGER", "cat")
+                .output()
+        })
+        .await
+        .context("Failed to spawn blocking git diff")?
+        .with_context(|| format!("Failed to run git diff for {}", file))?;
 
         let diff = String::from_utf8_lossy(&output.stdout);
         if !diff.is_empty() {
@@ -84,10 +96,15 @@ pub(crate) async fn confirm_changes_with_git_diff(
             let mut input = String::new();
             io::stdin().read_line(&mut input)?;
             if !input.trim().eq_ignore_ascii_case("y") {
-                std::process::Command::new("git")
-                    .args(["checkout", "--", file])
-                    .status()
-                    .with_context(|| format!("Failed to revert {}", file))?;
+                let file_clone = file.clone();
+                tokio::task::spawn_blocking(move || {
+                    std::process::Command::new("git")
+                        .args(["checkout", "--", &file_clone])
+                        .status()
+                })
+                .await
+                .context("Failed to spawn blocking git checkout")?
+                .with_context(|| format!("Failed to revert {}", file))?;
                 return Ok(false);
             }
         }
