@@ -63,6 +63,7 @@ impl TerminalAppLauncher {
 
             let mut cmd = EditorBuilder::new()
                 .environment()
+                .source(Self::default_editor())  // Fallback to sensible default
                 .path(&file_path)
                 .build()
                 .or_else(|_| {
@@ -101,6 +102,16 @@ impl TerminalAppLauncher {
         };
 
         Ok(content)
+    }
+
+    /// Get the default editor based on platform
+    fn default_editor() -> Option<&'static str> {
+        if cfg!(target_os = "windows") {
+            Some("notepad")
+        } else {
+            // On Unix-like systems, vi is universally available as a fallback
+            Some("vi")
+        }
     }
 
     /// Try common editors in priority order as fallback when editor-command fails
