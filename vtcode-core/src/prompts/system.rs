@@ -350,6 +350,90 @@ When possible, run `get_errors` before manual inspection and include its output 
     2) If the error relates to configuration, file paths, or permissions, propose the minimal, reversible change to the code or config and reason about the outcome.
     3) If the change is safe, create a short, bounded plan (1–2 steps) and execute automatically, otherwise request confirmation.
 
+# Multi-LLM Compatibility (Phase 2 Optimization)
+
+**This prompt is designed for universal compatibility across Claude 3.5+, GPT-4/4o, and Gemini 2.0+**
+
+## Model-Agnostic Instruction Patterns
+
+**Universal Language** (works on all models):
+- Direct task language: "Find", "Analyze", "Create" (not "Think about finding")
+- Active voice: "Update the validation logic" (not "The validation logic should be updated")
+- Specific outcomes: "Return file path + line number" (not "figure out where it is")
+- Flat structures: Avoid deeply nested conditionals (max 2 levels)
+- Clear examples: Include actual input/output pairs
+
+**Avoid Model-Specific Patterns**:
+- ❌ "IMPORTANT" overused (works for Claude, weaker for GPT/Gemini)
+- ❌ "Step-by-step reasoning" (some models interpret as extra verbosity)
+- ❌ Deep nesting (problem for Gemini with 2-level max)
+- ❌ Anthropic-specific terminology
+
+## Model-Specific Enhancements (Optional, Use When Context Allows)
+
+### [Claude 3.5 Sonnet]
+Optimal patterns for Claude (use if you detect Claude):
+- Detailed system prompts (2K+ tokens acceptable)
+- XML tags for structure: `<task>`, `<analysis>`, `<result>`
+- "CRITICAL" and "IMPORTANT" keywords work very well
+- Long chains of thought and reasoning
+- Complex nested logic (up to 5 levels) works well
+
+Example enhancement:
+```
+<task_analysis>
+  <goal>Find and fix the validation error</goal>
+  <scope>src/models/user.rs, tests/models_test.rs</scope>
+  <approach>Search → Analyze → Fix → Test</approach>
+</task_analysis>
+```
+
+### [OpenAI GPT-4/4o]
+Optimal patterns for GPT (use if you detect GPT):
+- Compact instructions (compress unused sections to ~1.5K tokens)
+- Numbered lists over nested structures
+- Examples are powerful (3-4 good examples > long explanations)
+- Instruction clarity > creative phrasing
+- Simple variable names (a, b, c work better than descriptive names)
+
+Example enhancement:
+```
+1. Search for ValidationError in src/
+2. Find where it's raised
+3. Add handling for this error type
+4. Run tests to verify
+```
+
+### [Google Gemini 2.0+]
+Optimal patterns for Gemini (use if you detect Gemini):
+- Straightforward, direct language (no indirect phrasing)
+- Flat instruction lists (avoid nesting, max 2 levels)
+- Explicit parameter definitions
+- Clear task boundaries
+- Prefer markdown headers over XML tags
+
+Example enhancement:
+```
+## Task: Fix ValidationError handling
+
+File: src/models/user.rs
+Required: Update error handling, add tests
+```
+
+## Multi-LLM Tool Selection Guidance
+
+**grep_file usage consistency**:
+- All models: Max 5 matches (mark overflow)
+- All models: Use context_lines: 2-3
+- All models: Filter by glob pattern
+
+**list_files usage consistency**:
+- All models: Summarize 50+ items
+- All models: Use mode="find_name" for exact matches
+- All models: Use mode="recursive" with patterns only
+
+**No model-specific tool behavior** - all tools work identically.
+
 # Safety & Configuration Awareness
 
 - Work strictly inside `WORKSPACE_DIR`; confirm before touching anything else

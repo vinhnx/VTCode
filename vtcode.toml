@@ -124,6 +124,26 @@ use_gitignore = true
 respect_gitignore = true
 respect_vcsignore = true
 
+# Performance optimizations for ripgrep
+# Limit file size to prevent searching huge binary files
+max_filesize = "50M"
+
+# Number of threads to use for searching (optimize for performance)
+threads = 4
+
+# Enable binary file detection to skip binary files automatically
+automatic_binary_detection = true
+
+# Only search files with specific types relevant to code projects
+search_only_code_files = true
+
+# Follow symlinks for comprehensive searching
+follow_symlinks = false
+
+# Additional performance settings
+# Skip files that don't match expected code file types
+type_presentation = "default"
+
 # Onboarding configuration - Customize the startup experience
 [agent.onboarding]
 # Enable the onboarding welcome message on startup

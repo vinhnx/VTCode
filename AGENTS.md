@@ -83,9 +83,32 @@ When context window fills:
 - **90% full**: Create `.progress.md` with state, reset context
 - **Continue**: Resume from `.progress.md` with fresh window
 
+## Multi-LLM Compatibility (NEW - Phase 2 Optimization)
+
+VT Code supports Claude 3.5+, OpenAI GPT-4/4o, and Google Gemini 2.0+ with **95% compatibility**.
+
+### Universal Patterns (Work on All Models)
+- Direct task language: "Find X", "Update Y", "Fix Z"
+- Active voice: "Update the validation logic"
+- Specific outcomes: "Return file path + line number"
+- Flat structures: Max 2 levels of nesting
+- Clear examples: Input/output pairs
+
+### Model-Specific Optimizations
+**Claude 3.5 Sonnet**: XML tags (`<task>`, `<analysis>`), "CRITICAL" keywords, detailed reasoning
+**GPT-4/4o**: Numbered lists, 3-4 examples, compact instructions (~1.5K tokens)
+**Gemini 2.0+**: Flat lists, markdown headers, direct language, explicit parameters
+
+### Tool Consistency Across Models
+All models use identical tool interfaces:
+- grep_file: Max 5 matches, mark overflow
+- list_files: Summarize 50+ items
+- read_file: Use read_range for large files
+- All other tools: Identical behavior
+
 ## See Also
 
-For comprehensive guidelines, see `.github/copilot-instructions.md` (detailed patterns, testing strategy, security, additional context). See also: `docs/PROMPT_OPTIMIZATION_ANALYSIS.md`, `docs/OPTIMIZED_SYSTEM_PROMPT.md` for Phase 2-5 patterns.
+For comprehensive guidelines, see `.github/copilot-instructions.md` (detailed patterns, testing strategy, security, additional context). See also: `docs/PROMPT_OPTIMIZATION_ANALYSIS.md`, `docs/OPTIMIZED_SYSTEM_PROMPT.md`, `docs/MULTI_LLM_COMPATIBILITY_GUIDE.md` for Phase 2-5 patterns.
 
 ## Core System Prompt
 
