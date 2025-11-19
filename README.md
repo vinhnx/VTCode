@@ -146,8 +146,13 @@ See [Security Model](./docs/SECURITY_MODEL.md) for details.
 -   [**Custom Prompts**](./docs/user-guide/custom-prompts.md)
 -   [**Exec Mode**](./docs/user-guide/exec-mode.md)
 -   [**Development**](./docs/development/README.md)
-    -   [Testing](./docs/development/testing.md)
-    -   [CI/CD](./docs/development/ci-cd.md)
+     -   [Testing](./docs/development/testing.md)
+     -   [CI/CD](./docs/development/ci-cd.md)
+-   [**FAQ**](./docs/FAQ.md) - Frequently asked questions about VT Code
+-   [**TUI & Async Guides**](./docs/guides/)
+     -   [Event Handling](./docs/guides/tui-event-handling.md) - Terminal event architecture and patterns
+     -   [Async Architecture](./docs/guides/async-architecture.md) - Tokio async/await design and best practices
+     -   [Rendering Best Practices](./docs/guides/terminal-rendering-best-practices.md) - Widget rendering and display optimization
 -   [**Architecture**](./docs/ARCHITECTURE.md)
 -   [**Security**](./docs/SECURITY_MODEL.md)
     -   [Security Model](./docs/SECURITY_MODEL.md)

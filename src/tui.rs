@@ -150,6 +150,10 @@ impl Tui {
                             Ok(Ok(evt)) => {
                                 match evt {
                                     CrosstermEvent::Key(key) => {
+                                        // Filter to Press events only for cross-platform compatibility.
+                                        // Windows emits both KeyEventKind::Press and KeyEventKind::Release for each
+                                        // keypress, while macOS and Linux emit only Press. This prevents duplicate key
+                                        // events on Windows. See https://ratatui.rs/faq/#why-am-i-getting-duplicate-key-events-on-windows
                                         if key.kind == KeyEventKind::Press {
                                             let _ = _event_tx.send(Event::Key(key));
                                         }
