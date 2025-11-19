@@ -5522,6 +5522,7 @@ dependencies = [
  "serde_yaml",
  "sha2",
  "shell-words",
+ "signal-hook",
  "syntect",
  "tempfile",
  "terminal_size",

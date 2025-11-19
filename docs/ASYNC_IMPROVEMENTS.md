@@ -11,7 +11,7 @@ VT Code uses async/tokio for three key reasons:
 
 These improvements ensure VT Code follows Tokio best practices and doesn't inadvertently block the async runtime.
 
-## Fixes Applied
+## Fixes Applied (Total: 8 improvements)
 
 ### 1. Fix: Async-Safe Mutex in Cache System
 
@@ -90,6 +90,38 @@ let output = tokio::task::spawn_blocking(move || {
 - No `.await` boundaries are involved
 
 **Improvement:** Added clarifying comment explaining this is intentional and noting that callers should wrap in `tokio::task::spawn_blocking()` if invoked from async context.
+
+### 4. Fix: Track Fire-and-Forget tokio::spawn Tasks
+
+**Files:** 
+- `src/agent/runloop/unified/session_setup.rs:467`
+- `src/agent/runloop/unified/async_mcp_manager.rs:189`
+- `src/agent/runloop/unified/turn/session_loop.rs:206, 395`
+- `src/agent/runloop/unified/turn/run_loop.rs:935, 1125`
+
+**Issue:** Several background tasks were spawned with `tokio::spawn()` but the JoinHandle was immediately discarded. This is a common pattern for background tasks, but the compiler warns about unused results.
+
+**Solution:**
+Assign the JoinHandle to a named variable (prefixed with `_`) to explicitly mark the task as intentional background execution:
+
+```rust
+// Before (implicit, may trigger warnings)
+tokio::spawn(async move {
+    // background task
+});
+
+// After (explicit, clear intent)
+let _background_task = tokio::spawn(async move {
+    // background task
+});
+```
+
+**Pattern Applied To:**
+- File palette loading in session setup (3 locations)
+- MCP client initialization
+- Ctrl+C signal handlers (2 locations)
+
+**Impact:** Makes intent clear to developers and prevents compiler warnings about unused results.
 
 ## Async/Tokio Best Practices Enforced
 

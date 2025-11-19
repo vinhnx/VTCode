@@ -288,6 +288,22 @@ pub struct Cli {
     )]
     pub continue_latest: bool,
 
+    /// TUI tick rate (ms) - Controls how frequently the UI updates
+    ///
+    /// Lower values: More responsive UI but higher CPU usage
+    /// Higher values: Less CPU usage but potentially less responsive
+    /// Default: 250ms
+    #[arg(long, global = true, default_value_t = 250)]
+    pub tick_rate: u64,
+
+    /// TUI frame rate (FPS) - Controls rendering frequency
+    ///
+    /// Lower values: Less CPU usage but potentially choppier animations
+    /// Higher values: Smoother UI but higher CPU usage
+    /// Default: 60 FPS
+    #[arg(long, global = true, default_value_t = 60)]
+    pub frame_rate: u64,
+
     #[command(subcommand)]
     pub command: Option<Commands>,
 }
@@ -809,6 +825,8 @@ impl Default for Cli {
             resume_session: None,
             continue_latest: false,
             debug: false,
+            tick_rate: 250, // Default tick rate: 250ms
+            frame_rate: 60, // Default frame rate: 60 FPS
             command: Some(Commands::Chat),
         }
     }

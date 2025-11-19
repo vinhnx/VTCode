@@ -118,6 +118,11 @@ pub fn run_interactive_selection(
                         ])
                         .split(area);
 
+                    // Ensure layout has at least 3 sections
+                    if layout.len() < 3 {
+                        return;
+                    }
+
                     let instructions_widget = Paragraph::new(instructions)
                         .block(
                             Block::default()
@@ -165,7 +170,13 @@ pub fn run_interactive_selection(
 
                     frame.render_stateful_widget(list, layout[1], &mut list_state);
 
-                    let current = &entries[selected_index];
+                    let current = match entries.get(selected_index) {
+                        Some(entry) => entry,
+                        None => {
+                            tracing::warn!("Selected index {selected_index} out of bounds");
+                            return;
+                        }
+                    };
                     let mut summary_lines = vec![];
 
                     summary_lines.push(Line::from(Span::styled(

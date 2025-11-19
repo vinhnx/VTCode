@@ -67,7 +67,7 @@ pub(crate) async fn confirm_changes_with_git_diff(
     let is_repo = tokio::task::spawn_blocking(is_git_repo)
         .await
         .context("Failed to spawn blocking git check")?;
-    
+
     if !is_repo {
         println!("Not in a git repository; skipping diff confirmation.");
         return Ok(true);

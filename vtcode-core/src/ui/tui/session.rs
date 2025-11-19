@@ -3445,6 +3445,11 @@ impl Session {
             end += 1;
         }
 
+        if start > end || end >= self.lines.len() {
+            tracing::warn!("invalid range: start={}, end={}, len={}", start, end, self.lines.len());
+            return false;
+        }
+
         for line in &self.lines[start..=end] {
             if line
                 .segments
@@ -4431,7 +4436,13 @@ mod tests {
             "expected dividers around the user message"
         );
 
-        let top = line_text(&lines[0]);
+        let top = match lines.first() {
+            Some(line) => line_text(line),
+            None => {
+                tracing::error!("lines is empty despite assertion");
+                return;
+            }
+        };
         let bottom = line_text(
             lines
                 .last()
@@ -4516,7 +4527,11 @@ mod tests {
         let lines = session.header_lines();
         assert_eq!(lines.len(), 3);
 
-        let summary: String = lines[2]
+        let Some(line) = lines.get(2) else {
+            panic!("Expected at least 3 header lines");
+        };
+
+        let summary: String = line
             .spans
             .iter()
             .map(|span| span.content.clone().into_owned())
@@ -4584,7 +4599,11 @@ mod tests {
         let lines = session.header_lines();
         assert_eq!(lines.len(), 3);
 
-        let summary: String = lines[2]
+        let Some(line) = lines.get(2) else {
+            panic!("Expected at least 3 header lines");
+        };
+
+        let summary: String = line
             .spans
             .iter()
             .map(|span| span.content.clone().into_owned())
@@ -4737,8 +4756,14 @@ mod tests {
             .collect();
 
         assert_eq!(tool_lines.len(), 1);
-        assert_eq!(tool_lines[0].segments.len(), 1);
-        assert_eq!(tool_lines[0].segments[0].text.as_str(), "fn demo() {}");
+        let Some(first_line) = tool_lines.first() else {
+            panic!("Expected at least one tool line");
+        };
+        assert_eq!(first_line.segments.len(), 1);
+        let Some(first_segment) = first_line.segments.first() else {
+            panic!("Expected at least one segment");
+        };
+        assert_eq!(first_segment.text.as_str(), "fn demo() {}");
         assert!(!session.in_tool_code_fence);
     }
 

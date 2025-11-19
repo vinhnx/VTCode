@@ -902,7 +902,13 @@ fn modal_list_item(
     item_index: usize,
     styles: &ModalRenderStyles,
 ) -> ListItem<'static> {
-    let item = &list.items[item_index];
+    let item = match list.items.get(item_index) {
+        Some(i) => i,
+        None => {
+            tracing::warn!("modal list item index {item_index} out of bounds");
+            return ListItem::new("");
+        }
+    };
     if item.is_divider {
         let divider = if item.title.is_empty() {
             ui::INLINE_BLOCK_HORIZONTAL.repeat(8)
@@ -1022,10 +1028,18 @@ impl ModalListState {
 
         while index > 0 {
             index -= 1;
-            let item_index = self.visible_indices[index];
-            if self.items[item_index].selection.is_some() {
-                self.list_state.select(Some(index));
-                return;
+            let item_index = match self.visible_indices.get(index) {
+                Some(idx) => *idx,
+                None => {
+                    tracing::warn!("visible_indices index {index} out of bounds");
+                    continue;
+                }
+            };
+            if let Some(item) = self.items.get(item_index) {
+                if item.selection.is_some() {
+                    self.list_state.select(Some(index));
+                    return;
+                }
             }
         }
 

@@ -200,7 +200,9 @@ pub async fn handle_slash_command(
                 "Generate a comprehensive AGENTS.md file for this workspace that documents the project structure, available tools, and recommended usage patterns. If an AGENTS.md file already exists, consider updating it rather than overwriting, unless specifically needed. Include detailed information about the project's architecture, main components, and how to work with the codebase effectively."
             };
 
-            Ok(SlashCommandOutcome::SubmitPrompt { prompt: prompt_text.to_string() })
+            Ok(SlashCommandOutcome::SubmitPrompt {
+                prompt: prompt_text.to_string(),
+            })
         }
         "config" => Ok(SlashCommandOutcome::ShowConfig),
         "clear" => {
@@ -535,7 +537,7 @@ pub async fn handle_slash_command(
             };
             render_help(renderer, specific_cmd)?;
             Ok(SlashCommandOutcome::Handled)
-        },
+        }
         _ => {
             renderer.line(
                 MessageStyle::Error,
@@ -813,10 +815,19 @@ fn render_help(renderer: &mut AnsiRenderer, specific_command: Option<&str>) -> R
         // Look for a specific command
         if let Some(cmd) = SLASH_COMMANDS.iter().find(|cmd| cmd.name == cmd_name) {
             renderer.line(MessageStyle::Info, &format!("Help for /{}:", cmd.name))?;
-            renderer.line(MessageStyle::Info, &format!("  Description: {}", cmd.description))?;
+            renderer.line(
+                MessageStyle::Info,
+                &format!("  Description: {}", cmd.description),
+            )?;
             // Additional usage examples could be added here in the future
         } else {
-            renderer.line(MessageStyle::Error, &format!("Unknown command '{}'. Use /help without arguments to see all commands.", cmd_name))?;
+            renderer.line(
+                MessageStyle::Error,
+                &format!(
+                    "Unknown command '{}'. Use /help without arguments to see all commands.",
+                    cmd_name
+                ),
+            )?;
         }
     } else {
         // Show all commands
