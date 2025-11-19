@@ -460,11 +460,13 @@ pub(crate) async fn initialize_session_ui(
     let mut ide_context_bridge = IdeContextBridge::from_env();
     let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), highlight_config);
 
-    // Load workspace files asynchronously
+    // Load workspace files asynchronously in background.
+    // See: https://ratatui.rs/faq/#when-should-i-use-tokio-and-async--await-
+    // We spawn this task to avoid blocking the session setup on file loading.
     let workspace_for_indexer = config.workspace.clone();
     let workspace_for_palette = config.workspace.clone();
     let handle_for_indexer = handle.clone();
-    tokio::spawn(async move {
+    let _file_palette_task = tokio::spawn(async move {
         match load_workspace_files(workspace_for_indexer).await {
             Ok(files) => {
                 if !files.is_empty() {
@@ -478,6 +480,7 @@ pub(crate) async fn initialize_session_ui(
             }
         }
     });
+    // Note: Task is intentionally background-only; errors are logged but not propagated
 
     transcript::clear();
 

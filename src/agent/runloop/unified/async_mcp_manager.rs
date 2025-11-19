@@ -185,8 +185,9 @@ impl AsyncMcpManager {
         let mutex = Arc::clone(&self.initialization_mutex);
         let event_callback = Arc::clone(&self.event_callback);
 
-        // Spawn the initialization task
-        tokio::spawn(async move {
+        // Spawn the initialization task. We keep the JoinHandle to allow explicit waiting if needed,
+        // though initialization runs in the background. See: https://ratatui.rs/faq/
+        let _init_handle = tokio::spawn(async move {
             // Acquire the mutex to prevent concurrent initializations
             let _guard = mutex.lock().await;
 
