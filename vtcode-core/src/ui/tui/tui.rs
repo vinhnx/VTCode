@@ -379,23 +379,23 @@ async fn drive_terminal<B: Backend>(
     'main: loop {
         loop {
             match commands.try_recv() {
-                Ok(command) => {
-                    match command {
-                        InlineCommand::SuspendEventLoop => {
-                            inputs.pause();
-                        }
-                        InlineCommand::ResumeEventLoop => {
-                            inputs.resume();
-                        }
-                        InlineCommand::ForceRedraw => {
-                            terminal.clear().context("failed to clear terminal for redraw")?;
-                            session.handle_command(command);
-                        }
-                        _ => {
-                            session.handle_command(command);
-                        }
+                Ok(command) => match command {
+                    InlineCommand::SuspendEventLoop => {
+                        inputs.pause();
                     }
-                }
+                    InlineCommand::ResumeEventLoop => {
+                        inputs.resume();
+                    }
+                    InlineCommand::ForceRedraw => {
+                        terminal
+                            .clear()
+                            .context("failed to clear terminal for redraw")?;
+                        session.handle_command(command);
+                    }
+                    _ => {
+                        session.handle_command(command);
+                    }
+                },
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => {
                     session.request_exit();

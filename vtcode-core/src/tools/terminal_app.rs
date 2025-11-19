@@ -61,14 +61,14 @@ impl TerminalAppLauncher {
         self.suspend_terminal_for_command(|| {
             debug!("launching editor with file: {:?}", file_path);
 
+            // Try to build editor command from VISUAL/EDITOR environment variables first
             let mut cmd = EditorBuilder::new()
                 .environment()
-                .source(Self::default_editor())  // Fallback to sensible default
                 .path(&file_path)
                 .build()
                 .or_else(|_| {
-                    // If editor-command fails, try common editors as fallback
-                    debug!("editor-command detection failed, trying manual detection");
+                    // If EDITOR/VISUAL not set, search for available editors in PATH
+                    debug!("EDITOR/VISUAL not set, searching for available editors");
                     Self::try_common_editors(&file_path)
                 })
                 .context(
@@ -104,17 +104,7 @@ impl TerminalAppLauncher {
         Ok(content)
     }
 
-    /// Get the default editor based on platform
-    fn default_editor() -> Option<&'static str> {
-        if cfg!(target_os = "windows") {
-            Some("notepad")
-        } else {
-            // On Unix-like systems, vi is universally available as a fallback
-            Some("vi")
-        }
-    }
-
-    /// Try common editors in priority order as fallback when editor-command fails
+    /// Try common editors in priority order as fallback when EDITOR/VISUAL not set
     fn try_common_editors(file_path: &PathBuf) -> Result<std::process::Command> {
         let editors = if cfg!(target_os = "windows") {
             vec!["code", "notepad++", "notepad"]

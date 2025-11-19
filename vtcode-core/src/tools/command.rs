@@ -137,6 +137,7 @@ impl CommandTool {
 // CommandTool is kept for internal command preparation in the PTY system.
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub(crate) struct CommandInvocation {
     pub(crate) program: String,
     pub(crate) args: Vec<String>,

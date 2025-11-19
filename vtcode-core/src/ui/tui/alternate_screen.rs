@@ -8,8 +8,8 @@ use crossterm::{
     },
     execute,
     terminal::{
-        self, disable_raw_mode, enable_raw_mode, supports_keyboard_enhancement,
-        EnterAlternateScreen, LeaveAlternateScreen,
+        self, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
+        supports_keyboard_enhancement,
     },
 };
 
@@ -266,9 +266,7 @@ mod tests {
 
     #[test]
     fn test_run_with_error() {
-        let result: Result<()> = AlternateScreenSession::run(|| {
-            Err(anyhow::anyhow!("test error"))
-        });
+        let result: Result<()> = AlternateScreenSession::run(|| Err(anyhow::anyhow!("test error")));
 
         assert!(result.is_err());
     }

@@ -281,11 +281,11 @@ impl Drop for Tui {
 /// Helper trait for suspending TUI to launch external applications
 pub trait ExternalAppLauncher {
     /// Temporarily suspend TUI, run a closure with terminal released, then resume
-    /// 
+    ///
     /// This pattern is essential for launching external editors/git clients while maintaining
     /// proper terminal state. Follows the Ratatui recipe:
     /// https://ratatui.rs/recipes/apps/spawn-vim/
-    /// 
+    ///
     /// The sequence is:
     /// 1. Stop event handler
     /// 2. Leave alternate screen
@@ -296,57 +296,59 @@ pub trait ExternalAppLauncher {
     /// 7. Re-enter alternate screen
     /// 8. Clear terminal (removes artifacts)
     /// 9. Restart event handler
-    async fn with_suspended_tui<F, T>(&mut self, f: F) -> Result<T>
+    fn with_suspended_tui<F, T>(&mut self, f: F) -> impl std::future::Future<Output = Result<T>> + Send
     where
-        F: FnOnce() -> Result<T>;
+        F: FnOnce() -> Result<T> + Send + 'static,
+        T: Send + 'static;
 }
 
 impl ExternalAppLauncher for Tui {
-    async fn with_suspended_tui<F, T>(&mut self, f: F) -> Result<T>
+    fn with_suspended_tui<F, T>(&mut self, f: F) -> impl std::future::Future<Output = Result<T>> + Send
     where
-        F: FnOnce() -> Result<T>,
+        F: FnOnce() -> Result<T> + Send + 'static,
+        T: Send + 'static,
     {
-        // 1. Stop event handler (but keep state for resume)
-        self.stop()?;
+        Box::pin(async move {
+            // 1. Stop event handler (but keep state for resume)
+            self.stop()?;
 
-        // 2. Leave alternate screen
-        crossterm::execute!(std::io::stderr(), LeaveAlternateScreen)
-            .context("failed to leave alternate screen")?;
+            // 2. Leave alternate screen
+            crossterm::execute!(std::io::stderr(), LeaveAlternateScreen)
+                .context("failed to leave alternate screen")?;
 
-        // 3. Drain any pending crossterm events BEFORE disabling raw mode
-        // CRITICAL: This prevents the external app from receiving garbage input like
-        // terminal capability responses or buffered keystrokes sent to the TUI.
-        while crossterm::event::poll(Duration::from_millis(0)).unwrap_or(false) {
-            let _ = crossterm::event::read();
-        }
+            // 3. Drain any pending crossterm events BEFORE disabling raw mode
+            // CRITICAL: This prevents the external app from receiving garbage input like
+            // terminal capability responses or buffered keystrokes sent to the TUI.
+            while crossterm::event::poll(Duration::from_millis(0)).unwrap_or(false) {
+                let _ = crossterm::event::read();
+            }
 
-        // 4. Disable raw mode
-        crossterm::terminal::disable_raw_mode()
-            .context("failed to disable raw mode")?;
+            // 4. Disable raw mode
+            crossterm::terminal::disable_raw_mode().context("failed to disable raw mode")?;
 
-        // 5. Run the closure (external app can use terminal freely)
-        let result = f();
+            // 5. Run the closure (external app can use terminal freely)
+            let result = f();
 
-        // 6. Re-enable raw mode
-        crossterm::terminal::enable_raw_mode()
-            .context("failed to re-enable raw mode")?;
+            // 6. Re-enable raw mode
+            crossterm::terminal::enable_raw_mode().context("failed to re-enable raw mode")?;
 
-        // 7. Re-enter alternate screen
-        crossterm::execute!(std::io::stderr(), EnterAlternateScreen)
-            .context("failed to re-enter alternate screen")?;
+            // 7. Re-enter alternate screen
+            crossterm::execute!(std::io::stderr(), EnterAlternateScreen)
+                .context("failed to re-enter alternate screen")?;
 
-        // 8. Clear terminal to remove any artifacts
-        // This prevents ANSI escape codes from external apps' background color requests
-        // from appearing in the TUI.
-        crossterm::execute!(
-            std::io::stderr(),
-            crossterm::terminal::Clear(crossterm::terminal::ClearType::All)
-        )
-        .context("failed to clear terminal")?;
+            // 8. Clear terminal to remove any artifacts
+            // This prevents ANSI escape codes from external apps' background color requests
+            // from appearing in the TUI.
+            crossterm::execute!(
+                std::io::stderr(),
+                crossterm::terminal::Clear(crossterm::terminal::ClearType::All)
+            )
+            .context("failed to clear terminal")?;
 
-        // 9. Restart event handler
-        self.start();
+            // 9. Restart event handler
+            self.start();
 
-        result
+            result
+        })
     }
 }

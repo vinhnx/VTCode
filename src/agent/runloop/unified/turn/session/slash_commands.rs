@@ -826,7 +826,7 @@ pub async fn handle_outcome(
             use vtcode_core::tools::terminal_app::TerminalAppLauncher;
 
             let launcher = TerminalAppLauncher::new(ctx.config.workspace.clone());
-            
+
             ctx.renderer.line(
                 MessageStyle::Info,
                 if file.is_some() {
@@ -863,10 +863,7 @@ pub async fn handle_outcome(
                 Ok(None) => {
                     // User edited existing file
                     ctx.handle.force_redraw(); // Force redraw to clear any artifacts
-                    ctx.renderer.line(
-                        MessageStyle::Info,
-                        "Editor closed.",
-                    )?;
+                    ctx.renderer.line(MessageStyle::Info, "Editor closed.")?;
                 }
                 Err(err) => {
                     ctx.handle.force_redraw(); // Force redraw even on error
@@ -876,10 +873,45 @@ pub async fn handle_outcome(
                     )?;
                 }
             }
-            
+
             // Resume TUI event loop
             ctx.handle.resume_event_loop();
-            
+
+            ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
+            Ok(SlashCommandControl::Continue)
+        }
+
+        SlashCommandOutcome::LaunchGit => {
+            use vtcode_core::tools::terminal_app::TerminalAppLauncher;
+
+            let launcher = TerminalAppLauncher::new(ctx.config.workspace.clone());
+
+            ctx.renderer
+                .line(MessageStyle::Info, "Launching git interface (lazygit)...")?;
+
+            // Suspend TUI event loop to prevent input stealing
+            ctx.handle.suspend_event_loop();
+            // Give a small moment for the suspend command to propagate to the TUI thread
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+            match launcher.launch_git_interface() {
+                Ok(_) => {
+                    ctx.handle.force_redraw(); // Force redraw to clear any artifacts
+                    ctx.renderer
+                        .line(MessageStyle::Info, "Git interface closed.")?;
+                }
+                Err(err) => {
+                    ctx.handle.force_redraw(); // Force redraw even on error
+                    ctx.renderer.line(
+                        MessageStyle::Error,
+                        &format!("Failed to launch git interface: {}", err),
+                    )?;
+                }
+            }
+
+            // Resume TUI event loop
+            ctx.handle.resume_event_loop();
+
             ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
             Ok(SlashCommandControl::Continue)
         }
