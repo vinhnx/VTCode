@@ -429,7 +429,9 @@ pub(crate) fn spool_output_if_needed(
     let tool_name_owned = tool_name.to_string();
     let spool_dir_clone = spool_dir.clone();
 
-    // Use spawn_blocking to avoid blocking the async runtime
+    // Use std::thread::spawn for file I/O since this function is synchronous.
+    // This is called from tool output processing, not from the async event loop.
+    // If called from async context, caller should wrap in tokio::task::spawn_blocking.
     let result = std::thread::spawn(move || -> Result<PathBuf> {
         std::fs::create_dir_all(&spool_dir_clone).with_context(|| {
             format!(

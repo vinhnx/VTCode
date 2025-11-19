@@ -6,15 +6,19 @@ use quick_cache::sync::Cache;
 use serde_json::Value;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::Mutex;
 
 /// Global file cache instance
 pub static FILE_CACHE: Lazy<FileCache> = Lazy::new(|| FileCache::new(1000));
 
 /// Enhanced file cache with quick-cache for high-performance caching
+///
+/// Uses `tokio::sync::Mutex` for async-safe stats access across `.await` boundaries.
+/// See: https://ratatui.rs/faq/#when-should-i-use-tokio-and-async--await-
 pub struct FileCache {
     file_cache: Arc<Cache<String, EnhancedCacheEntry<Value>>>,
     directory_cache: Arc<Cache<String, EnhancedCacheEntry<Value>>>,
-    stats: Arc<std::sync::Mutex<EnhancedCacheStats>>,
+    stats: Arc<Mutex<EnhancedCacheStats>>,
     max_size_bytes: usize,
     ttl: Duration,
 }
@@ -24,7 +28,7 @@ impl FileCache {
         Self {
             file_cache: Arc::new(Cache::new(capacity)),
             directory_cache: Arc::new(Cache::new(capacity / 2)),
-            stats: Arc::new(std::sync::Mutex::new(EnhancedCacheStats::default())),
+            stats: Arc::new(Mutex::new(EnhancedCacheStats::default())),
             max_size_bytes: 50 * 1024 * 1024, // 50MB default
             ttl: Duration::from_secs(300),    // 5 minutes default
         }
@@ -32,7 +36,7 @@ impl FileCache {
 
     /// Get cached file content
     pub async fn get_file(&self, key: &str) -> Option<Value> {
-        let mut stats = self.stats.lock().unwrap();
+        let mut stats = self.stats.lock().await;
 
         if let Some(entry) = self.file_cache.get(key) {
             // Check if entry is still valid
@@ -56,7 +60,7 @@ impl FileCache {
         let size_bytes = serde_json::to_string(&value).unwrap_or_default().len();
         let entry = EnhancedCacheEntry::new(value, size_bytes);
 
-        let mut stats = self.stats.lock().unwrap();
+        let mut stats = self.stats.lock().await;
 
         // Check memory limits (quick-cache handles eviction automatically, but we track stats)
         if stats.total_size_bytes + size_bytes > self.max_size_bytes {
@@ -70,7 +74,7 @@ impl FileCache {
 
     /// Get cached directory listing
     pub async fn get_directory(&self, key: &str) -> Option<Value> {
-        let mut stats = self.stats.lock().unwrap();
+        let mut stats = self.stats.lock().await;
 
         if let Some(entry) = self.directory_cache.get(key) {
             if entry.timestamp.elapsed() < self.ttl {
@@ -91,7 +95,7 @@ impl FileCache {
         let size_bytes = serde_json::to_string(&value).unwrap_or_default().len();
         let entry = EnhancedCacheEntry::new(value, size_bytes);
 
-        let mut stats = self.stats.lock().unwrap();
+        let mut stats = self.stats.lock().await;
 
         self.directory_cache.insert(key, entry);
         stats.entries += self.directory_cache.len();
@@ -100,14 +104,14 @@ impl FileCache {
 
     /// Get cache statistics
     pub async fn stats(&self) -> EnhancedCacheStats {
-        self.stats.lock().unwrap().clone()
+        self.stats.lock().await.clone()
     }
 
     /// Clear all caches
     pub async fn clear(&self) {
         self.file_cache.clear();
         self.directory_cache.clear();
-        *self.stats.lock().unwrap() = EnhancedCacheStats::default();
+        *self.stats.lock().await = EnhancedCacheStats::default();
     }
 
     /// Get cache capacity information
