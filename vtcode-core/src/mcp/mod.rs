@@ -25,8 +25,8 @@ pub mod schema;
 
 pub use tool_discovery::{DetailLevel, ToolDiscovery, ToolDiscoveryResult};
 pub use errors::{
-    McpResult, tool_not_found, provider_not_found, provider_unavailable, schema_invalid,
-    tool_invocation_failed, initialization_timeout, configuration_error,
+    McpResult, ErrorCode, tool_not_found, provider_not_found, provider_unavailable,
+    schema_invalid, tool_invocation_failed, initialization_timeout, configuration_error,
 };
 pub use schema::{validate_against_schema, validate_tool_input};
 pub use rmcp_transport::{
