@@ -8,7 +8,6 @@
 /// - MCP_E011-E020: Provider-related errors
 /// - MCP_E021-E030: Schema-related errors
 /// - MCP_E031-E040: Configuration-related errors
-
 use anyhow::anyhow;
 use std::fmt;
 
@@ -60,7 +59,7 @@ impl fmt::Display for ErrorCode {
 }
 
 /// Helper to create a "tool not found" error
-/// 
+///
 /// Error Code: MCP_E001
 pub fn tool_not_found(name: &str) -> anyhow::Error {
     anyhow!(
@@ -157,7 +156,10 @@ mod tests {
     fn test_error_names() {
         assert_eq!(ErrorCode::ToolNotFound.name(), "ToolNotFound");
         assert_eq!(ErrorCode::ProviderNotFound.name(), "ProviderNotFound");
-        assert_eq!(ErrorCode::InitializationTimeout.name(), "InitializationTimeout");
+        assert_eq!(
+            ErrorCode::InitializationTimeout.name(),
+            "InitializationTimeout"
+        );
     }
 
     #[test]

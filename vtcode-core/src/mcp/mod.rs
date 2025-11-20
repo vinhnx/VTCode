@@ -18,21 +18,21 @@ use crate::config::mcp::{
 
 pub mod cli;
 pub mod enhanced_config;
-pub mod tool_discovery;
 pub mod errors;
 pub mod rmcp_transport;
 pub mod schema;
+pub mod tool_discovery;
 
-pub use tool_discovery::{DetailLevel, ToolDiscovery, ToolDiscoveryResult};
 pub use errors::{
-    McpResult, ErrorCode, tool_not_found, provider_not_found, provider_unavailable,
-    schema_invalid, tool_invocation_failed, initialization_timeout, configuration_error,
+    ErrorCode, McpResult, configuration_error, initialization_timeout, provider_not_found,
+    provider_unavailable, schema_invalid, tool_invocation_failed, tool_not_found,
+};
+pub use rmcp_transport::{
+    HttpTransport, create_http_transport, create_stdio_transport,
+    create_stdio_transport_with_stderr,
 };
 pub use schema::{validate_against_schema, validate_tool_input};
-pub use rmcp_transport::{
-    create_stdio_transport, create_stdio_transport_with_stderr,
-    create_http_transport, HttpTransport,
-};
+pub use tool_discovery::{DetailLevel, ToolDiscovery, ToolDiscoveryResult};
 
 use anyhow::{Context, Result, anyhow, bail};
 use async_trait::async_trait;
@@ -1542,12 +1542,8 @@ impl RmcpClient {
         let env = create_env_for_mcp_server(env);
 
         // Use rmcp_transport helper to create transport with stderr capture
-        let (transport, stderr) = create_stdio_transport_with_stderr(
-            &program,
-            &args,
-            working_dir.as_ref(),
-            &env,
-        )?;
+        let (transport, stderr) =
+            create_stdio_transport_with_stderr(&program, &args, working_dir.as_ref(), &env)?;
 
         // Spawn async task to log MCP server stderr
         if let Some(stderr) = stderr {
