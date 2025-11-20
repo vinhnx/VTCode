@@ -1,3 +1,9 @@
+//! File operation helpers and the edit_file tool
+//!
+//! This module provides convenience methods for common file operations and implements
+//! the `edit_file` tool, which is optimized for small, surgical edits (≤800 chars, ≤40 lines).
+//! For larger or multi-file changes, use `apply_patch` instead.
+
 use anyhow::{Context, Result, anyhow};
 use serde_json::{Value, json};
 
@@ -53,6 +59,9 @@ impl ToolRegistry {
         let current_content = read_result["content"]
             .as_str()
             .ok_or_else(|| anyhow!("Failed to read file content"))?;
+
+        // Track whether the original file had a trailing newline (Unix convention)
+        let had_trailing_newline = current_content.ends_with('\n');
 
         let mut replacement_occurred = false;
         let mut new_content = current_content.to_string();
@@ -132,6 +141,11 @@ impl ToolRegistry {
                 input.old_str,
                 content_preview
             ));
+        }
+
+        // Preserve trailing newline if original file had one (Unix convention)
+        if had_trailing_newline && !new_content.ends_with('\n') {
+            new_content.push('\n');
         }
 
         let write_args = json!({
