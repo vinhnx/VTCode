@@ -16,7 +16,7 @@ irm https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.ps1 | i
 
 ### Homebrew (macOS & Linux)
 ```bash
-brew install vtcode
+brew install vinhnx/tap/vtcode
 ```
 
 ### Cargo (Rust)
@@ -26,7 +26,7 @@ cargo install vtcode
 
 ### npm (Node.js)
 ```bash
-npm install -g @vinhnx/vtcode
+npm install -g @vinhnx/vtcode --registry=https://npm.pkg.github.com
 ```
 
 ## Installation Methods
@@ -34,9 +34,9 @@ npm install -g @vinhnx/vtcode
 | Method | Platforms | Command | Notes |
 |--------|-----------|---------|-------|
 | **Native Installer** | macOS, Linux, WSL | See Quick Install above | Recommended, auto-detects platform |
-| **Homebrew** | macOS, Linux | `brew install vtcode` | Package manager, easy updates |
+| **Homebrew** | macOS, Linux | `brew install vinhnx/tap/vtcode` | Package manager, easy updates |
 | **Cargo** | All | `cargo install vtcode` | Build from source, latest dev version |
-| **npm** | All | `npm install -g @vinhnx/vtcode` | JavaScript package manager |
+| **npm** | All | `npm install -g @vinhnx/vtcode --registry=https://npm.pkg.github.com` | JavaScript package manager |
 | **npx** | All | `npx @vinhnx/vtcode` | No installation, run directly |
 
 ## After Installation

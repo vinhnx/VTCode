@@ -54,11 +54,16 @@ curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.
 irm https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.ps1 | iex
 ```
 
-**Package Managers:**
+**Other Distribution Channels:**
 ```bash
-brew install vtcode          # Homebrew
-cargo install vtcode         # Cargo
-npm install -g @vinhnx/vtcode  # npm
+# Cargo
+cargo install vtcode
+
+# Homebrew
+brew install vinhnx/tap/vtcode
+
+# NPM (GitHub Registry)
+npm install -g @vinhnx/vtcode --registry=https://npm.pkg.github.com
 ```
 
 **See [Installation Guide](./docs/installation/) for more options and troubleshooting.**

@@ -22,7 +22,7 @@
     "read_file",
     "read_pty_session",
     "resize_pty_session",
-    "run_pty_cmd",
+    "run_terminal_cmd",
     "save_skill",
     "search_skills",
     "search_tools",
@@ -57,7 +57,7 @@
     "analyze_agent": "prompt",
     "debug_agent": "prompt",
     "get_errors": "prompt",
-    "run_pty_cmd": "allow"
+    "run_terminal_cmd": "allow"
   },
   "constraints": {
     "curl": {
