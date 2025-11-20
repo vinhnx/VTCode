@@ -68,7 +68,7 @@ Instead of attempting static path resolution, **always execute commands through 
 
 5. **Robust tool argument parsing**:
     - The agent now accepts `command` as a string or array, and also supports dotted `command.N` index arguments.
-    - This resolves cases where textual tool call parsers or external clients provided `command.N` style arguments, which previously produced a `run_terminal_cmd requires a 'command' array` error.
+    - This resolves cases where textual tool call parsers or external clients provided `command.N` style arguments, which previously produced a `run_pty_cmd requires a 'command' array` error.
 
 ### Code Changes
 

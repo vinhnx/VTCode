@@ -38,7 +38,7 @@ read_file = "allow"
 write_file = "allow"
 list_files = "allow"
 grep_file = "allow"
-run_terminal_cmd = "prompt"
+run_pty_cmd = "prompt"
 bash = "prompt"
 
 # Security settings

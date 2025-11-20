@@ -160,7 +160,7 @@ Our tools are designed with context efficiency in mind:
 
 #### Command Execution
 
--   **run_terminal_cmd**: Auto-truncation, timeout limits
+-   **run_pty_cmd**: Auto-truncation, timeout limits
 -   Streaming mode for long-running commands
 
 ## Configuration

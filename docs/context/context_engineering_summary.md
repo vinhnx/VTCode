@@ -295,7 +295,7 @@ pub struct ContextCurator {
 ```rust
 Phase::Exploration => "grep_file: Use this to find relevant code before reading files"
 Phase::Implementation => "edit_file: Make precise changes; preferred over write_file"
-Phase::Validation => "run_terminal_cmd: Validate changes with tests"
+Phase::Validation => "run_pty_cmd: Validate changes with tests"
 ```
 
 ### Phase 4: Enhanced Multi-Turn Coherence (Long-term)

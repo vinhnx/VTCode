@@ -151,7 +151,7 @@ Completed event with minimal response (fallback only)
 
 ### Issue 3: Tool Selection Heuristic (Not Fixed - Lower Priority)
 
-The agent sometimes uses PTY sessions for simple one-off terminal commands instead of `run_terminal_cmd`, which is less efficient. This is a UX/optimization issue, not a correctness issue.
+The agent sometimes uses PTY sessions for simple one-off terminal commands instead of `run_pty_cmd`, which is less efficient. This is a UX/optimization issue, not a correctness issue.
 
 **Status**: Documented in `docs/AGENT_ISSUES.md` for future work.
 
@@ -183,7 +183,7 @@ The agent sometimes uses PTY sessions for simple one-off terminal commands inste
 ## Future Work
 
 1. **Optimize tool selection** (Issue 3 from analysis)
-   - Improve heuristic for choosing PTY vs run_terminal_cmd
+   - Improve heuristic for choosing PTY vs run_pty_cmd
    - Document in: docs/AGENT_ISSUES.md
 
 2. **Monitor streaming performance**

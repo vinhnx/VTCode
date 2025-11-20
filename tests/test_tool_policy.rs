@@ -233,7 +233,7 @@ fn main() -> Result<()> {
         "read_file".to_string(),
         "write_file".to_string(),
         "list_files".to_string(),
-        "run_terminal_cmd".to_string(),
+        "run_pty_cmd".to_string(),
         "grep_file".to_string(),
     ];
     policy_manager.update_available_tools(updated_tools)?;

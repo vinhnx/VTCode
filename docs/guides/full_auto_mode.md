@@ -38,7 +38,7 @@ allowed_tools = [
     "read_file",
     "list_files",
     "grep_file",
-    "run_terminal_cmd", # optionally include write or shell tools
+    "run_pty_cmd", # optionally include write or shell tools
 ]
 ```
 

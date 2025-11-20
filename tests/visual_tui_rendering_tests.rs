@@ -150,7 +150,7 @@ async fn test_visual_tool_output() {
         sess.handle.append_line(
             InlineMessageKind::Tool,
             vec![InlineSegment {
-                text: "run_terminal_cmd([\"ls\", \"-la\"])".to_string(),
+                text: "run_pty_cmd([\"ls\", \"-la\"])".to_string(),
                 style: InlineTextStyle::default(),
             }],
         );
@@ -211,7 +211,7 @@ async fn test_visual_error_handling() {
         sess.handle.append_line(
             InlineMessageKind::Tool,
             vec![InlineSegment {
-                text: "run_terminal_cmd([\"nonexistent-command\", \"--help\"])".to_string(),
+                text: "run_pty_cmd([\"nonexistent-command\", \"--help\"])".to_string(),
                 style: InlineTextStyle::default(),
             }],
         );

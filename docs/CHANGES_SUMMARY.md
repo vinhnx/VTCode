@@ -1,8 +1,8 @@
-# Changes Summary: run_terminal_cmd Parameter Handling Fix
+# Changes Summary: run_pty_cmd Parameter Handling Fix
 
 ## What Was Fixed
 
-Fixed repeated `run_terminal_cmd requires a 'command' array` errors and infinite retry loops when LLM tools (Bash, container.exec) call `run_terminal_cmd`.
+Fixed repeated `run_pty_cmd requires a 'command' array` errors and infinite retry loops when LLM tools (Bash, container.exec) call `run_pty_cmd`.
 
 ## Changes Made
 
@@ -15,7 +15,7 @@ Fixed repeated `run_terminal_cmd requires a 'command' array` errors and infinite
 ✅ **Explicit missing command error** - Clear message if no command parameter exists
 
 ### 2. vtcode-core/src/tools/registry/legacy.rs
-**Function**: `run_terminal_cmd()`
+**Function**: `run_pty_cmd()`
 
 ✅ **Early validation error check** - Detect `_validation_error` field from parameter conversion
 ✅ **Immediate error return** - Prevents cascading failures and retries

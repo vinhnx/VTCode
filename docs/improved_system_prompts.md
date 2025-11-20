@@ -27,7 +27,7 @@ Work within `WORKSPACE_DIR`. Use targeted exploration (search, inspect) before m
 ## Available Tools
 **Exploration**: list_files, grep_file
 **File Ops**: read_file, write_file, edit_file
-**Execution**: run_terminal_cmd (with PTY support)
+**Execution**: run_pty_cmd (with PTY support)
 **Network**: curl (HTTPS only, no localhost/private IPs)
 
 ## Safety
@@ -80,7 +80,7 @@ Explore code efficiently, make targeted changes, validate outcomes, and maintain
 **Tools Available:**
 **Exploration:** list_files, grep_file
 **File Operations:** read_file, write_file, edit_file
-**Execution:** run_terminal_cmd (with PTY support)
+**Execution:** run_pty_cmd (with PTY support)
 **Network:** curl (HTTPS only, no localhost/private IPs)
 
 **Safety Boundaries:**
@@ -117,7 +117,7 @@ Load only what's necessary. Use search tools first. Summarize results.
 **Tools:**
 **Files:** list_files, read_file, write_file, edit_file
 **Search:** grep_file
-**Shell:** run_terminal_cmd
+**Shell:** run_pty_cmd
 **Network:** curl (HTTPS only)
 
 **Guidelines:**
@@ -170,13 +170,13 @@ Handle complex coding tasks that require deep understanding, structural changes,
 
 **Tool Selection Strategy:**
 - **Exploration Phase:** grep_file → list_files → grep_file → read_file
-- **Implementation Phase:** edit_file (preferred) or write_file → run_terminal_cmd (validate)
+- **Implementation Phase:** edit_file (preferred) or write_file → run_pty_cmd (validate)
 - **Analysis Phase:** grep_file (structural) → tree-sitter parsing → performance profiling
 
 **Advanced Tools:**
 **Exploration:** list_files, grep_file (tree-sitter-powered)
 **File Operations:** read_file, write_file, edit_file
-**Execution:** run_terminal_cmd (full PTY emulation)
+**Execution:** run_pty_cmd (full PTY emulation)
 **Network:** curl (HTTPS only, sandboxed)
 **Analysis:** Tree-sitter parsing, performance profiling, semantic search
 

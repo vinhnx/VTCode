@@ -49,7 +49,7 @@ default_policy = "prompt"             # Safety: "allow", "prompt", or "deny"
 [tools.policies]
 read_file = "allow"                   # Always allow file reading
 write_file = "prompt"                 # Prompt before modifications
-run_terminal_cmd = "prompt"           # Prompt before commands
+run_pty_cmd = "prompt"           # Prompt before commands
 ```
 
 ## Using Custom Ollama Models

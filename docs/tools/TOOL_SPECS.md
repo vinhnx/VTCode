@@ -43,7 +43,7 @@ This document summarizes the updated tool schemas and guidance following Anthrop
     -   Purpose: Replace specific text in a file.
     -   Key args: `path` (string), `old_str` (string), `new_str` (string).
 
--   run_terminal_cmd
+-   run_pty_cmd
 
     -   Purpose: Execute a program with arguments.
     -   Key args: `command` (string|string[]), `working_dir` (string), `timeout_secs` (int), `mode` (string: pty|terminal|streaming), `response_format`.
@@ -56,7 +56,7 @@ The workspace `.vtcode/tool-policy.json` may include constraints like:
 ```json
 {
     "constraints": {
-        "run_terminal_cmd": {
+        "run_pty_cmd": {
             "allowed_modes": ["pty", "terminal", "streaming"],
             "default_response_format": "concise"
         },

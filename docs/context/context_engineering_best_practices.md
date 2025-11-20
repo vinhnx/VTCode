@@ -213,7 +213,7 @@ drill down as needed. Maintain a mental model of your recent actions for coheren
 - For structural refactoring, use `grep_file` with transform mode
 
 **For execution:**
-- Use `run_terminal_cmd` for build/test/validation
+- Use `run_pty_cmd` for build/test/validation
 - Set reasonable timeouts (default: 60s, long-running: 300s)
 - Parse output for errors before proceeding
 
@@ -377,7 +377,7 @@ pub fn get_tool_description(tool_name: &str, context: &ContextState) -> String {
         },
         Phase::Validation => {
             // Emphasize test/build tools
-            if matches!(tool_name, "run_terminal_cmd") {
+            if matches!(tool_name, "run_pty_cmd") {
                 format!("{}\n\n**Current Phase**: Validate changes with tests or builds.", base_desc)
             } else {
                 base_desc.to_string()

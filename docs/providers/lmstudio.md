@@ -56,7 +56,7 @@ default_policy = "prompt"
 [tools.policies]
 read_file = "allow"
 write_file = "prompt"
-run_terminal_cmd = "prompt"
+run_pty_cmd = "prompt"
 ```
 
 You can also override the provider and model via CLI:

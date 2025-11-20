@@ -49,11 +49,11 @@ The script automatically prefers `cargo nextest` when available and prints the c
    ```text
    /command sh -c "printf 'hello from portable-pty' && sleep 1"
    ```
-   The agent routes the request through `run_terminal_cmd`, which now uses the shared `PtyManager` backend.
+   The agent routes the request through `run_pty_cmd`, which now uses the shared `PtyManager` backend.
 
 3. Watch the transcript pane: you should see the command summary, streamed PTY output (including ANSI sequences), and the final exit status. Resize the terminal window to confirm `portable-pty` propagates the new dimensions without breaking the screen buffer.
 
-4. To inspect the preserved output after the command completes, open the transcript detail view (`Tab` → select the latest `run_terminal_cmd` entry). The scrollback includes the multi-line PTY output exactly as captured by the parser.
+4. To inspect the preserved output after the command completes, open the transcript detail view (`Tab` → select the latest `run_pty_cmd` entry). The scrollback includes the multi-line PTY output exactly as captured by the parser.
 
 ## Troubleshooting
 

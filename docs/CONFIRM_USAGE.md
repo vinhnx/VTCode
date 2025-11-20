@@ -1,6 +1,6 @@
 # Confirm Usage for Destructive Commands
 
-When interacting with the agent using `run_terminal_cmd` or PTY-backed tools, certain commands that can change history or delete files require an explicit confirmation. This is to protect users and avoid accidental destructive actions.
+When interacting with the agent using `run_pty_cmd` or PTY-backed tools, certain commands that can change history or delete files require an explicit confirmation. This is to protect users and avoid accidental destructive actions.
 
 How to confirm a destructive operation:
 
