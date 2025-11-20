@@ -63,16 +63,40 @@ impl ToolRegistry {
         }
 
         if !replacement_occurred {
-            let normalized_content = utils::normalize_whitespace(current_content);
-            let normalized_old_str = utils::normalize_whitespace(&input.old_str);
+            let old_lines: Vec<&str> = input.old_str.lines().collect();
+            let content_lines: Vec<&str> = current_content.lines().collect();
 
-            if normalized_content.contains(&normalized_old_str) {
-                let old_lines: Vec<&str> = input.old_str.lines().collect();
-                let content_lines: Vec<&str> = current_content.lines().collect();
+            // Try multiple matching strategies with increasing leniency
+            // Strategy 1: Exact line-by-line match with trim()
+            'outer: for i in 0..=(content_lines.len().saturating_sub(old_lines.len())) {
+                let window = &content_lines[i..i + old_lines.len()];
+                if utils::lines_match(window, &old_lines) {
+                    let before = content_lines[..i].join("\n");
+                    let after = content_lines[i + old_lines.len()..].join("\n");
+                    let replacement_lines: Vec<&str> = input.new_str.lines().collect();
 
+                    new_content =
+                        format!("{}\n{}\n{}", before, replacement_lines.join("\n"), after);
+                    replacement_occurred = true;
+                    break 'outer;
+                }
+            }
+
+            // Strategy 2: If still not found, try matching with normalized whitespace
+            // (collapse multiple spaces, ignore leading/trailing whitespace)
+            if !replacement_occurred {
                 for i in 0..=(content_lines.len().saturating_sub(old_lines.len())) {
                     let window = &content_lines[i..i + old_lines.len()];
-                    if utils::lines_match(window, &old_lines) {
+                    let window_normalized: Vec<String> = window
+                        .iter()
+                        .map(|line| line.split_whitespace().collect::<Vec<_>>().join(" "))
+                        .collect();
+                    let old_normalized: Vec<String> = old_lines
+                        .iter()
+                        .map(|line| line.split_whitespace().collect::<Vec<_>>().join(" "))
+                        .collect();
+
+                    if window_normalized == old_normalized {
                         let before = content_lines[..i].join("\n");
                         let after = content_lines[i + old_lines.len()..].join("\n");
                         let replacement_lines: Vec<&str> = input.new_str.lines().collect();

@@ -23,15 +23,6 @@ pub(super) fn normalize_tool_output(mut val: Value) -> Value {
     val
 }
 
-pub(super) fn normalize_whitespace(s: &str) -> String {
-    s.lines()
-        .map(|line| {
-            let trimmed = line.trim_end();
-            trimmed.to_string()
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
-}
 
 pub(super) fn lines_match(content_lines: &[&str], expected_lines: &[&str]) -> bool {
     if content_lines.len() != expected_lines.len() {

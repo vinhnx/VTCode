@@ -24,8 +24,12 @@ pub mod rmcp_transport;
 pub mod schema;
 
 pub use tool_discovery::{DetailLevel, ToolDiscovery, ToolDiscoveryResult};
-pub use errors::{McpResult, tool_not_found, provider_not_found};
+pub use errors::{
+    McpResult, tool_not_found, provider_not_found, provider_unavailable, schema_invalid,
+    tool_invocation_failed, initialization_timeout, configuration_error,
+};
 pub use schema::{validate_against_schema, validate_tool_input};
+pub use rmcp_transport::{create_stdio_transport, create_transport_from_config};
 
 use anyhow::{Context, Result, anyhow, bail};
 use async_trait::async_trait;
