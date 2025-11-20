@@ -10,13 +10,13 @@ curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.
 irm https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.ps1 | iex
 
 # Homebrew
-brew install vtcode
+brew install vinhnx/tap/vtcode
 
 # Cargo
 cargo install vtcode
 
 # npm
-npm install -g @vinhnx/vtcode
+npm install -g @vinhnx/vtcode --registry=https://npm.pkg.github.com
 ```
 
 ## Quick Start
