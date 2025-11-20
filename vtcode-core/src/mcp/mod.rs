@@ -30,7 +30,8 @@ pub use errors::{
 };
 pub use schema::{validate_against_schema, validate_tool_input};
 pub use rmcp_transport::{
-    create_stdio_transport, create_stdio_transport_with_stderr, create_transport_from_config,
+    create_stdio_transport, create_stdio_transport_with_stderr,
+    create_http_transport, HttpTransport,
 };
 
 use anyhow::{Context, Result, anyhow, bail};
