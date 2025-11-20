@@ -9,6 +9,10 @@ server/client expectations, consult the upstream MCP reference index at
 `https://modelcontextprotocol.io/llms.txt`. That index links to the full architecture, transport,
 authorisation, logging, and resource specification documents maintained by the MCP community.
 
+> **Developer Note:** If you're implementing MCP module features or integrating with the core MCP
+> APIs, see the [MCP Module Documentation](../mcp/README.md) for API reference, code patterns, and
+> implementation status.
+
 ## MCP Specification Map
 
 The `llms.txt` index enumerates every normative reference you may need while configuring VT Code.
