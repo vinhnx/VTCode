@@ -10,7 +10,7 @@ We have successfully stabilized the Terminal App Integration feature (`/edit`), 
 **Fix:**
 *   Added `Clear(ClearType::All)` after re-entering alternate screen.
 *   Added `force_redraw()` to refresh the TUI state.
-*   **Status:** ✅ Fixed.
+*   **Status:** ✓  Fixed.
 
 ## 2. Vim Input Garbage Fix 🗑️
 **Issue:** Garbage text appearing *inside* Vim buffer.
@@ -18,7 +18,7 @@ We have successfully stabilized the Terminal App Integration feature (`/edit`), 
 **Fix:**
 *   Implemented `crossterm::event::read()` draining loop **before** disabling raw mode.
 *   Safely consumes all pending events before Vim starts.
-*   **Status:** ✅ Fixed.
+*   **Status:** ✓  Fixed.
 
 ## 3. TUI Input Stealing Fix 🔒
 **Issue:** Vim ignoring keys (e.g., `Esc`, `i`), unable to toggle modes.
@@ -27,7 +27,7 @@ We have successfully stabilized the Terminal App Integration feature (`/edit`), 
 *   Implemented **Pause/Resume** mechanism for `InputListener` thread.
 *   Added `SuspendEventLoop` and `ResumeEventLoop` commands.
 *   Updated `/edit` to suspend TUI polling during execution.
-*   **Status:** ✅ Fixed.
+*   **Status:** ✓  Fixed.
 
 ## 4. UI Disappearance Fix 🖼️
 **Issue:** Header and bottom bar missing after returning from Vim.
@@ -35,14 +35,14 @@ We have successfully stabilized the Terminal App Integration feature (`/edit`), 
 **Fix:**
 *   Intercepted `ForceRedraw` in `drive_terminal`.
 *   Explicitly called `terminal.clear()` (Ratatui method) to invalidate cache.
-*   **Status:** ✅ Fixed.
+*   **Status:** ✓  Fixed.
 
 ## 5. Error Recovery Refinement 🛡️
 **Issue:** If the editor failed to launch (e.g., binary not found), the terminal would be left in a broken state (Main Screen, Raw Mode disabled).
 **Cause:** The restoration code was skipped if `Command::status()` returned an error.
 **Fix:**
 *   Refactored `launch_editor` to ensure `EnterAlternateScreen` and `enable_raw_mode` are ALWAYS called, even if the editor fails to spawn.
-*   **Status:** ✅ Fixed.
+*   **Status:** ✓  Fixed.
 
 ## Architecture Update
 

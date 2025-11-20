@@ -2,7 +2,7 @@
 
 ## Current Implementation Analysis
 
-✅ **What's Good**:
+✓  **What's Good**:
 1. Double render eliminated (50% win)
 2. Full-screen clear flag removed 
 3. Visible lines cache implemented
@@ -20,7 +20,7 @@
 ```rust
 fn render_transcript(&mut self, frame: &mut Frame<'_>, area: Rect) {
     // ... setup ...
-    frame.render_widget(Clear, scroll_area);  // ❌ STILL CLEARING!
+    frame.render_widget(Clear, scroll_area);  // ⤫  STILL CLEARING!
     frame.render_widget(paragraph, scroll_area);
 }
 ```
@@ -72,10 +72,10 @@ visible_lines_cache: VecDeque<(usize, u16, Vec<Line<'static>>)>  // Keep 3 entri
 
 ```rust
 if *cached_offset == start_row && *cached_width == width {
-    return cached_lines.clone();  // ❌ Still cloning!
+    return cached_lines.clone();  // ⤫  Still cloning!
 }
 // ...
-self.visible_lines_cache = Some((start_row, width, visible_lines.clone()));  // ❌ Clone again!
+self.visible_lines_cache = Some((start_row, width, visible_lines.clone()));  // ⤫  Clone again!
 ```
 
 **Problem**:
@@ -92,11 +92,11 @@ visible_lines_cache: Option<(usize, u16, Arc<Vec<Line<'static>>>)>
 
 // Cache hit - Arc clone is cheap (just ref count increment)
 if let Some((cached_offset, cached_width, cached_arc)) = &self.visible_lines_cache {
-    return cached_arc.as_ref().clone();  // ❌ Still clones, but...
+    return cached_arc.as_ref().clone();  // ⤫  Still clones, but...
 }
 // OR use Arc directly:
 if let Some((..., cached_arc)) = &self.visible_lines_cache {
-    return cached_arc.clone();  // ✅ Cheap Arc clone
+    return cached_arc.clone();  // ✓  Cheap Arc clone
 }
 ```
 
@@ -185,7 +185,7 @@ result.extend(
     msg.lines.iter()
         .skip(skip_lines)
         .take(target_count)
-        .cloned()  // ❌ Still cloning every line
+        .cloned()  // ⤫  Still cloning every line
 );
 ```
 

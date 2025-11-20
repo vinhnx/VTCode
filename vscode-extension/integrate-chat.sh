@@ -8,7 +8,7 @@ echo "🚀 Integrating VTCode Chat Sidebar Extension..."
 
 # Check if we're in the right directory
 if [ ! -f "package.json" ]; then
-    echo "❌ Error: package.json not found. Please run this script from vscode-extension directory"
+    echo "⤫  Error: package.json not found. Please run this script from vscode-extension directory"
     exit 1
 fi
 
@@ -172,7 +172,7 @@ if (terminalManager) {
 EOF
 
 echo ""
-echo "✅ Integration steps provided!"
+echo "✓  Integration steps provided!"
 echo ""
 echo "📋 Next steps:"
 echo "1. Review and merge package.json changes"

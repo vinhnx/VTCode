@@ -34,23 +34,23 @@ All other commands are **blocked by default**.
 
 ## Blocked Patterns
 
-### ❌ Dangerous Commands
+### ⤫  Dangerous Commands
 ```bash
 rm, sudo, chmod, docker, curl (without sandbox)
 ```
 
-### ❌ Execution Flags
+### ⤫  Execution Flags
 ```bash
 --pre, --pre-glob, -exec, -e, --command
 ```
 
-### ❌ Path Traversal
+### ⤫  Path Traversal
 ```bash
 ../../../etc/passwd
 /etc/passwd (outside workspace)
 ```
 
-### ❌ Command Chaining
+### ⤫  Command Chaining
 ```bash
 ls; curl evil.com
 ls && rm -rf /
@@ -78,7 +78,7 @@ cat ./src/main.rs
 ls -la ./src
 ```
 
-### ❌ Blocked Operations
+### ⤫  Blocked Operations
 ```bash
 # Preprocessor execution
 rg --pre "bash" pattern .

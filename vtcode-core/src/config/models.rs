@@ -313,6 +313,8 @@ pub enum ModelId {
     OpenRouterGrokCodeFast1,
     /// Grok 4 Fast - Reasoning-focused Grok endpoint with transparent traces
     OpenRouterGrok4Fast,
+    /// Grok 4.1 Fast - Enhanced Grok 4.1 fast inference with improved reasoning
+    OpenRouterGrok41Fast,
     /// Grok 4 - Flagship Grok 4 endpoint exposed through OpenRouter
     OpenRouterGrok4,
     /// GLM 4.6 - Z.AI GLM 4.6 long-context reasoning model
@@ -511,6 +513,7 @@ impl ModelId {
             // OpenRouter models - fallback for any OpenRouter model without metadata
             ModelId::OpenRouterGrokCodeFast1
             | ModelId::OpenRouterGrok4Fast
+            | ModelId::OpenRouterGrok41Fast
             | ModelId::OpenRouterGrok4
             | ModelId::OpenRouterZaiGlm46
             | ModelId::OpenRouterMoonshotaiKimiK20905
@@ -629,6 +632,7 @@ impl ModelId {
             // OpenRouter models - fallback for any OpenRouter model without metadata
             ModelId::OpenRouterGrokCodeFast1
             | ModelId::OpenRouterGrok4Fast
+            | ModelId::OpenRouterGrok41Fast
             | ModelId::OpenRouterGrok4
             | ModelId::OpenRouterZaiGlm46
             | ModelId::OpenRouterMoonshotaiKimiK20905
@@ -984,6 +988,7 @@ impl ModelId {
             // OpenRouter models - fallback for any OpenRouter model without metadata
             ModelId::OpenRouterGrokCodeFast1
             | ModelId::OpenRouterGrok4Fast
+            | ModelId::OpenRouterGrok41Fast
             | ModelId::OpenRouterGrok4
             | ModelId::OpenRouterZaiGlm46
             | ModelId::OpenRouterMoonshotaiKimiK20905
@@ -1378,6 +1383,7 @@ impl ModelId {
             // OpenRouter models - fallback for any OpenRouter model without metadata
             ModelId::OpenRouterGrokCodeFast1
             | ModelId::OpenRouterGrok4Fast
+            | ModelId::OpenRouterGrok41Fast
             | ModelId::OpenRouterGrok4
             | ModelId::OpenRouterZaiGlm46
             | ModelId::OpenRouterMoonshotaiKimiK20905

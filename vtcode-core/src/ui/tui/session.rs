@@ -3446,7 +3446,12 @@ impl Session {
         }
 
         if start > end || end >= self.lines.len() {
-            tracing::warn!("invalid range: start={}, end={}, len={}", start, end, self.lines.len());
+            tracing::warn!(
+                "invalid range: start={}, end={}, len={}",
+                start,
+                end,
+                self.lines.len()
+            );
             return false;
         }
 

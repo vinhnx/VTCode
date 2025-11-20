@@ -126,7 +126,8 @@ tokenizers = { version = "0.22", features = ["http"] }
 schemars = { workspace = true, optional = true }
 
 # MCP (Model Context Protocol) support
-rmcp = { version = "0.8.3", features = [
+# Phase 1: Upgrade to 0.9.0+ for improved transport and lifecycle management
+rmcp = { version = "0.9", features = [
     "client",
     "transport-child-process",
     "transport-streamable-http-client-reqwest",

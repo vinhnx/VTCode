@@ -38,7 +38,7 @@ Based on Anthropic's Context Engineering guide, this document analyzes VTCode's 
 
 ## System Prompt Calibration: The "Just Right" Approach
 
-### ❌ Too Specific (Brittle)
+### ⤫  Too Specific (Brittle)
 
 Problems:
 
@@ -89,7 +89,7 @@ Keep context minimal—load only what's needed for the current step.
 -   Clear priorities (search first, read second)
 -   Flexibility for model reasoning
 
-### ❌ Too Vague
+### ⤫  Too Vague
 
 Problems:
 

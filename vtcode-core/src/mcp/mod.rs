@@ -19,8 +19,13 @@ use crate::config::mcp::{
 pub mod cli;
 pub mod enhanced_config;
 pub mod tool_discovery;
+pub mod errors;
+pub mod rmcp_transport;
+pub mod schema;
 
 pub use tool_discovery::{DetailLevel, ToolDiscovery, ToolDiscoveryResult};
+pub use errors::{McpResult, tool_not_found, provider_not_found};
+pub use schema::{validate_against_schema, validate_tool_input};
 
 use anyhow::{Context, Result, anyhow, bail};
 use async_trait::async_trait;

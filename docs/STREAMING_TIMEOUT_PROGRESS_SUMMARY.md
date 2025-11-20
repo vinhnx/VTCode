@@ -114,7 +114,7 @@ let processor = StreamingProcessor::new()
 
 ## Supported Providers
 
-✅ **Streaming + Progress:**
+✓  **Streaming + Progress:**
 - OpenAI (GPT-4, o1, etc.)
 - Anthropic (Claude)
 - Google Gemini
@@ -159,10 +159,10 @@ let processor = StreamingProcessor::new()
 
 ## Code Quality
 
-✅ **Compilation:** Passes `cargo check`
-✅ **Format:** Passes `cargo fmt`
-✅ **Warnings:** Clean (only pre-existing)
-✅ **Tests:** Included with coverage for:
+✓  **Compilation:** Passes `cargo check`
+✓  **Format:** Passes `cargo fmt`
+✓  **Warnings:** Clean (only pre-existing)
+✓  **Tests:** Included with coverage for:
 - Progress tracking
 - Callback execution
 - Warning threshold
@@ -172,10 +172,10 @@ let processor = StreamingProcessor::new()
 
 ## Backward Compatibility
 
-- ✅ All existing code continues to work
-- ✅ Progress callbacks are optional
-- ✅ No breaking API changes
-- ✅ Opt-in integration required
+- ✓  All existing code continues to work
+- ✓  Progress callbacks are optional
+- ✓  No breaking API changes
+- ✓  Opt-in integration required
 
 ## Next Steps
 
@@ -230,7 +230,7 @@ let processor = StreamingProcessor::new()
 
 ---
 
-**Status:** ✅ Complete and ready for integration
-**Test Coverage:** ✅ Included
-**Documentation:** ✅ Comprehensive
-**Examples:** ✅ 8 production patterns included
+**Status:** ✓  Complete and ready for integration
+**Test Coverage:** ✓  Included
+**Documentation:** ✓  Comprehensive
+**Examples:** ✓  8 production patterns included

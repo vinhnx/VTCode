@@ -50,10 +50,10 @@ All 4 tests in `vtcode-core/tests/pty_tests.rs` converted:
 
 ## Testing
 
-- ✅ All code compiles successfully with `cargo check`
-- ✅ No warnings (removed unused import)
-- ✅ All test signatures updated to async
-- ✅ Integration with existing async codebase verified
+- ✓  All code compiles successfully with `cargo check`
+- ✓  No warnings (removed unused import)
+- ✓  All test signatures updated to async
+- ✓  Integration with existing async codebase verified
 
 ## Impact
 
@@ -64,9 +64,9 @@ All 4 tests in `vtcode-core/tests/pty_tests.rs` converted:
 ## Phase 1 Completion
 
 With this conversion, **Phase 1 (High Priority) is now 100% complete**:
-- ✅ `core/agent/intelligence.rs` (3 operations)
-- ✅ `core/agent/snapshots.rs` (5 methods, 7 tests)
-- ✅ `tools/pty.rs` (1 method, 4 tests)
+- ✓  `core/agent/intelligence.rs` (3 operations)
+- ✓  `core/agent/snapshots.rs` (5 methods, 7 tests)
+- ✓  `tools/pty.rs` (1 method, 4 tests)
 
 ## Next Steps
 
@@ -81,5 +81,5 @@ Begin Phase 2 - Medium Priority files (7 files):
 
 ## Completion Status
 
-**Phase 1 (High Priority)**: ✅ 3 of 3 files complete (100%)
+**Phase 1 (High Priority)**: ✓  3 of 3 files complete (100%)
 **Overall Progress**: 8 of 15 files converted (53%)

@@ -85,9 +85,9 @@ Command executes successfully
 ## Testing Results
 
 ```bash
-✅ cargo check      # Compiles successfully
-✅ cargo test --lib # All 20/20 tests pass
-✅ cargo fmt        # Properly formatted
+✓  cargo check      # Compiles successfully
+✓  cargo test --lib # All 20/20 tests pass
+✓  cargo fmt        # Properly formatted
 ```
 
 ## Key Improvements
@@ -128,10 +128,10 @@ The solution assumes login shell initialization (`-lc` flag) properly sources us
 ## Validation
 
 The fix has been validated through:
-1. ✅ Full test suite passing
-2. ✅ No clippy warnings (new code)
-3. ✅ Code properly formatted
-4. ✅ Documentation complete
+1. ✓  Full test suite passing
+2. ✓  No clippy warnings (new code)
+3. ✓  Code properly formatted
+4. ✓  Documentation complete
 
 ## Conclusion
 

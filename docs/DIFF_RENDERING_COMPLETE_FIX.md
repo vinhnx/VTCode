@@ -116,23 +116,23 @@ Terminal emulators process ANSI codes sequentially:
 ## Testing & Verification
 
 ### Compilation
-- ✅ `cargo build -p vtcode-core --lib` - No errors
-- ✅ `cargo check -p vtcode-core --lib` - No errors
-- ✅ `cargo fmt -p vtcode-core` - Code formatted correctly
-- ✅ `cargo clippy -p vtcode-core --lib` - No critical warnings
+- ✓  `cargo build -p vtcode-core --lib` - No errors
+- ✓  `cargo check -p vtcode-core --lib` - No errors
+- ✓  `cargo fmt -p vtcode-core` - Code formatted correctly
+- ✓  `cargo clippy -p vtcode-core --lib` - No critical warnings
 
 ### Functionality
-- ✅ Diff rendering produces correct ANSI sequences
-- ✅ Colors don't bleed across lines during scrolling
-- ✅ Operation succeeds/fails with proper visual indicators
-- ✅ Line numbers properly aligned and styled
-- ✅ Works with and without color support
+- ✓  Diff rendering produces correct ANSI sequences
+- ✓  Colors don't bleed across lines during scrolling
+- ✓  Operation succeeds/fails with proper visual indicators
+- ✓  Line numbers properly aligned and styled
+- ✓  Works with and without color support
 
 ### Backward Compatibility
-- ✅ All existing APIs unchanged
-- ✅ Color configuration still respected
-- ✅ `use_colors` flag still functional
-- ✅ Git config integration still works
+- ✓  All existing APIs unchanged
+- ✓  Color configuration still respected
+- ✓  `use_colors` flag still functional
+- ✓  Git config integration still works
 
 ## Before & After Examples
 

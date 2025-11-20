@@ -8,7 +8,7 @@ Completed comprehensive optimization of TUI scroll performance, ANSI rendering, 
 
 ## Completed Optimizations
 
-### 1. Terminal Command Output Format ✅ IMPLEMENTED
+### 1. Terminal Command Output Format ✓  IMPLEMENTED
 
 **File**: `src/agent/runloop/tool_output/commands.rs`  
 **Status**: Complete, tested, builds without warnings
@@ -70,7 +70,7 @@ Completed comprehensive optimization of TUI scroll performance, ANSI rendering, 
 
 ---
 
-### 3. Documentation Updates ✅ COMPLETED
+### 3. Documentation Updates ✓  COMPLETED
 
 **Files Updated**:
 - `AGENTS.md` - Added references to all optimization guides
@@ -145,7 +145,7 @@ docs/
 | Cache hit rate | 0% | No caching yet |
 | Memory overhead | ~1 MB | Baseline |
 
-### After Phase 1 (Terminal Format) ✅ COMPLETE
+### After Phase 1 (Terminal Format) ✓  COMPLETE
 | Metric | Change | Impact |
 |---|---|---|
 | Terminal output lines | -43% | 7 → 4 lines |
@@ -220,22 +220,22 @@ docs/
 ### Optimization Points
 
 **Scroll Performance**:
-- ✅ Binary search already implemented (O(log n))
-- ✅ Row offset precomputation done
-- ✅ Viewport caching with Arc working
+- ✓  Binary search already implemented (O(log n))
+- ✓  Row offset precomputation done
+- ✓  Viewport caching with Arc working
 - 📋 Dirty message tracking ready to implement
 
 **ANSI Rendering**:
-- ✅ UTF-8 validation in place
-- ✅ Fallback to plain text working
+- ✓  UTF-8 validation in place
+- ✓  Fallback to plain text working
 - 📋 Parse result caching ready to add
 - 📋 Batch processing ready to implement
 
 **Output Format**:
-- ✅ Compact headers implemented
-- ✅ Status symbols in place
-- ✅ Command truncation working
-- ✅ Minimal footers complete
+- ✓  Compact headers implemented
+- ✓  Status symbols in place
+- ✓  Command truncation working
+- ✓  Minimal footers complete
 
 ---
 
@@ -282,7 +282,7 @@ cargo bench --bench terminal_output  # (new)
 
 ## Success Criteria
 
-### Phase 1: Terminal Output ✅ MET
+### Phase 1: Terminal Output ✓  MET
 - [x] 40-50% reduction in lines
 - [x] Compiles without warnings
 - [x] Existing tests pass
@@ -330,8 +330,8 @@ Status:          OPTIMIZATION_STATUS.md (this file)
 ## Next Steps
 
 **Immediate (Today)**:
-1. Review terminal output implementation ✅
-2. Review optimization guides ✅
+1. Review terminal output implementation ✓ 
+2. Review optimization guides ✓ 
 3. Plan Phase 2 timeline
 
 **This Sprint**:

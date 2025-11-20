@@ -227,7 +227,7 @@ tokio::spawn(async move {
 
 ### Anti-Pattern 1: Mixing Blocking I/O with Async
 
-❌ **Bad:**
+⤫  **Bad:**
 ```rust
 async fn handle_event(key: KeyEvent) {
     let result = std::fs::read("file.txt");  // Blocks the runtime!
@@ -235,7 +235,7 @@ async fn handle_event(key: KeyEvent) {
 }
 ```
 
-✅ **Good:**
+✓  **Good:**
 ```rust
 async fn handle_event(key: KeyEvent) {
     let result = tokio::fs::read("file.txt").await;  // Async read
@@ -245,7 +245,7 @@ async fn handle_event(key: KeyEvent) {
 
 ### Anti-Pattern 2: Spawning Tasks Without Tracking
 
-❌ **Bad:**
+⤫  **Bad:**
 ```rust
 tokio::spawn(async {
     expensive_operation().await;
@@ -253,7 +253,7 @@ tokio::spawn(async {
 });
 ```
 
-✅ **Good:**
+✓  **Good:**
 ```rust
 let handle = tokio::spawn(async {
     expensive_operation().await
@@ -265,7 +265,7 @@ let result = handle.await?;
 
 ### Anti-Pattern 3: std::sync Locks in Async Code
 
-❌ **Bad:**
+⤫  **Bad:**
 ```rust
 let state = Arc::new(Mutex::new(data));
 
@@ -275,7 +275,7 @@ tokio::spawn(async move {
 });
 ```
 
-✅ **Good:**
+✓  **Good:**
 ```rust
 let state = Arc::new(tokio::sync::Mutex::new(data));
 
@@ -287,7 +287,7 @@ tokio::spawn(async move {
 
 ### Anti-Pattern 4: Not Handling Cancellation
 
-❌ **Bad:**
+⤫  **Bad:**
 ```rust
 tokio::spawn(async {
     loop {
@@ -297,7 +297,7 @@ tokio::spawn(async {
 });
 ```
 
-✅ **Good:**
+✓  **Good:**
 ```rust
 let cancel_token = CancellationToken::new();
 let cancel_clone = cancel_token.clone();

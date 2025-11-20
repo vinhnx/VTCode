@@ -17,7 +17,7 @@ Agent run loop was hanging/becoming unresponsive with extremely large command ou
 
 ## Solution Implemented
 
-### Phase 1: PTY Scrollback Memory Limits ✅ (This PR)
+### Phase 1: PTY Scrollback Memory Limits ✓  (This PR)
 
 #### 1. Configuration Changes
 
@@ -84,7 +84,7 @@ Added 6 comprehensive unit tests in `pty.rs`:
 5. **`scrollback_no_overflow_under_limit`**: Confirms no false positives
 6. **`scrollback_pending_operations`**: Tests pending buffer operations
 
-All tests passing ✅
+All tests passing ✓ 
 
 ## Impact & Benefits
 
@@ -102,7 +102,7 @@ All tests passing ✅
 
 ## Backward Compatibility
 
-✅ **Fully backward compatible**
+✓  **Fully backward compatible**
 - New config fields have sensible defaults
 - Existing `scrollback_lines` behavior preserved
 - No breaking API changes
@@ -130,7 +130,7 @@ $ cargo check
    Finished `dev` profile [unoptimized] in 5.11s
 ```
 
-✅ All packages compile successfully
+✓  All packages compile successfully
 
 ### Test Scenarios
 
@@ -208,17 +208,17 @@ This fix addresses the immediate critical issue (hangs) by:
 3. **Early detection** of problematic outputs
 
 The implementation is:
-- ✅ Conservative and safe
-- ✅ Fully tested with unit tests
-- ✅ Backward compatible
-- ✅ Production-ready
+- ✓  Conservative and safe
+- ✓  Fully tested with unit tests
+- ✓  Backward compatible
+- ✓  Production-ready
 
 Future PRs will add progressive rendering and auto-spooling for better UX with large outputs.
 
 ---
 
 **Issue**: #1397  
-**Status**: ✅ **FIXED**  
+**Status**: ✓  **FIXED**  
 **Risk**: **LOW**  
 **Impact**: **HIGH** (eliminates hangs)  
 **Deployment**: Ready for immediate deployment

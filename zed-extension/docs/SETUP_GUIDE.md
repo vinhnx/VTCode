@@ -4,7 +4,7 @@ Complete guide for setting up the VTCode Zed extension in your environment.
 
 ## What's Included
 
-✅ **Complete Zed Extension** for VTCode AI coding assistant
+✓  **Complete Zed Extension** for VTCode AI coding assistant
 - Language support for `vtcode.toml` configuration files
 - Integration with VTCode CLI
 - WebAssembly binary (compiled and ready)

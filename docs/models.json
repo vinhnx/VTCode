@@ -562,6 +562,33 @@
                     "doc_comment": "Grok 4 Fast - Reasoning-focused Grok endpoint with transparent traces"
                 }
             },
+            "x-ai/grok-4.1-fast": {
+                "id": "x-ai/grok-4.1-fast",
+                "name": "xAI: Grok 4.1 Fast",
+                "reasoning": true,
+                "tool_call": true,
+                "modalities": {
+                    "input": ["text", "image"],
+                    "output": ["text"]
+                },
+                "context": 2000000,
+                "max_output_tokens": 30000,
+                "cost": {
+                    "input": 0.0,
+                    "output": 0.0
+                },
+                "vtcode": {
+                    "variant": "OpenRouterGrok41Fast",
+                    "constant": "X_AI_GROK_4_1_FAST",
+                    "vendor": "xai",
+                    "display": "Grok 4.1 Fast",
+                    "description": "Enhanced Grok 4.1 fast inference with improved reasoning",
+                    "efficient": false,
+                    "top_tier": true,
+                    "generation": "marketplace",
+                    "doc_comment": "Grok 4.1 Fast - Enhanced Grok 4.1 fast inference with improved reasoning"
+                }
+            },
             "x-ai/grok-4": {
                 "id": "x-ai/grok-4",
                 "name": "xAI: Grok 4",

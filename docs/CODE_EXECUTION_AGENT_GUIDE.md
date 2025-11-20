@@ -343,11 +343,11 @@ result = {
 - Use `timeout_secs` parameter (max 30s)
 
 ```python
-# ❌ Slow: processes 100k items in loop
+# ⤫  Slow: processes 100k items in loop
 for item in all_items:
     result = slow_tool(item)
 
-# ✅ Fast: batch or sample
+# ✓  Fast: batch or sample
 for item in all_items[::10]:  # Every 10th
     result = slow_tool(item)
 ```
@@ -371,10 +371,10 @@ for item in all_items[::10]:  # Every 10th
 - Don't return file handles or objects
 
 ```python
-# ❌ Wrong
+# ⤫  Wrong
 return {"data": some_file_handle}
 
-# ✅ Right  
+# ✓  Right  
 file_data = read_file(path="...")
 result = {"lines": len(file_data.split("\n"))}
 ```

@@ -84,16 +84,16 @@ When you're already inside an async function (marked with `async fn`), you're al
   ↓
 [async fn execute_read_pty_session running]
   ↓
-❌ rt.block_on() - WRONG: Tries to block a thread being used by runtime
-✅ await - CORRECT: Yields control to runtime
+⤫  rt.block_on() - WRONG: Tries to block a thread being used by runtime
+✓  await - CORRECT: Yields control to runtime
 ```
 
 ## Testing
 
-✅ Code compiles without errors
-✅ No runtime panics
-✅ "Full Auto Trust" feature now works correctly
-✅ PTY session reading with token truncation functions properly
+✓  Code compiles without errors
+✓  No runtime panics
+✓  "Full Auto Trust" feature now works correctly
+✓  PTY session reading with token truncation functions properly
 
 ## Related Concepts
 

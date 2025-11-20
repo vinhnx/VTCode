@@ -318,13 +318,13 @@ echo "All tests passed! ✓"
 
 ## Success Criteria
 
-✅ All 6 unit tests pass  
-✅ Large git diff completes without hang  
-✅ Memory usage remains bounded  
-✅ Warning message appears at 50MB  
-✅ Normal commands work unchanged  
-✅ Program remains responsive during large output  
-✅ Can interrupt with Ctrl+C
+✓  All 6 unit tests pass  
+✓  Large git diff completes without hang  
+✓  Memory usage remains bounded  
+✓  Warning message appears at 50MB  
+✓  Normal commands work unchanged  
+✓  Program remains responsive during large output  
+✓  Can interrupt with Ctrl+C
 
 ---
 

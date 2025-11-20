@@ -125,12 +125,12 @@ let processor = StreamingProcessor::new()
 
 ## Benefits
 
-✅ **Early Warning**: Know when operations are approaching timeout before failure  
-✅ **User Feedback**: Display real-time progress to users  
-✅ **Monitoring**: Track streaming performance in production  
-✅ **Debugging**: Log progress points for troubleshooting  
-✅ **Non-Blocking**: No impact on streaming performance  
-✅ **Configurable**: Adjust warning threshold per use case  
+✓  **Early Warning**: Know when operations are approaching timeout before failure  
+✓  **User Feedback**: Display real-time progress to users  
+✓  **Monitoring**: Track streaming performance in production  
+✓  **Debugging**: Log progress points for troubleshooting  
+✓  **Non-Blocking**: No impact on streaming performance  
+✓  **Configurable**: Adjust warning threshold per use case  
 
 ## Testing
 
@@ -160,7 +160,7 @@ async fn test_streaming_progress() {
 
 ## Backward Compatibility
 
-✅ **Fully backward compatible**
+✓  **Fully backward compatible**
 - Progress callback is optional
 - Existing code works unchanged
 - No breaking API changes

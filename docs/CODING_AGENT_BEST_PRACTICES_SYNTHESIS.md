@@ -302,12 +302,12 @@ Success: All tests pass, 0 unwrap() calls
 
 | Pattern | Claude | GPT | Gemini | Recommendation |
 |---------|--------|-----|--------|-----------------|
-| Direct language | ✅ | ✅ | ✅ | Always use |
-| Active voice | ✅ | ✅ | ✅ | Always use |
-| Specific outcomes | ✅ | ✅ | ✅ | Always use |
-| XML tags | ✅✅ | ✅ | ✅ | Optional |
-| Numbered lists | ✅ | ✅✅ | ✅ | Optional |
-| Flat structure | ✅ | ✅ | ✅✅ | Optional |
+| Direct language | ✓  | ✓  | ✓  | Always use |
+| Active voice | ✓  | ✓  | ✓  | Always use |
+| Specific outcomes | ✓  | ✓  | ✓  | Always use |
+| XML tags | ✓ ✓  | ✓  | ✓  | Optional |
+| Numbered lists | ✓  | ✓ ✓  | ✓  | Optional |
+| Flat structure | ✓  | ✓  | ✓ ✓  | Optional |
 
 **Implementation**: 
 - Write system prompt in "universal" style (no model-specific features in base)
@@ -342,9 +342,9 @@ Model: [Understands context, adjusts to solution A+B]
 
 EVALUATION:
 Model: "Added refresh logic. Now supports:
-  - Initial auth ✅
-  - Token refresh ✅
-  - Error handling ✅
+  - Initial auth ✓ 
+  - Token refresh ✓ 
+  - Error handling ✓ 
   - Edge case: concurrent requests ❓"
 
 ADJUSTMENT:
@@ -352,7 +352,7 @@ User: "Yes, add concurrent request handling"
 Model: [Knows prior work, adds mutex/atomic)
 
 CONVERGENCE:
-Result: Comprehensive solution ✅
+Result: Comprehensive solution ✓ 
 ```
 
 **Why Iterative > One-Shot**:

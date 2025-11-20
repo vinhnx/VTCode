@@ -4,13 +4,13 @@ HTTP-based Agent Communication Protocol (ACP) client library for inter-agent com
 
 ## Features
 
-✅ **REST-based Communication** - Standard HTTP protocol, no special SDKs required
-✅ **Agent Discovery** - Find agents by capability or ID
-✅ **Sync & Async** - Both synchronous and asynchronous request handling
-✅ **Health Monitoring** - Ping agents to check status
-✅ **Message Serialization** - Type-safe ACP message handling
-✅ **Registry Management** - In-memory agent registry with lifecycle management
-✅ **Error Handling** - Comprehensive error types for debugging
+✓  **REST-based Communication** - Standard HTTP protocol, no special SDKs required
+✓  **Agent Discovery** - Find agents by capability or ID
+✓  **Sync & Async** - Both synchronous and asynchronous request handling
+✓  **Health Monitoring** - Ping agents to check status
+✓  **Message Serialization** - Type-safe ACP message handling
+✓  **Registry Management** - In-memory agent registry with lifecycle management
+✓  **Error Handling** - Comprehensive error types for debugging
 
 ## Quick Start
 

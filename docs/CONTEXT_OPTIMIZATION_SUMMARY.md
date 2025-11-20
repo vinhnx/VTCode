@@ -191,8 +191,8 @@ UNIVERSAL PATTERNS (All Models):
 
 **Example**:
 ```
-❌ BAD: "Search products in procurement system"
-✅ GOOD: "Find products matching cost <$1000 and availability >50 units"
+⤫  BAD: "Search products in procurement system"
+✓  GOOD: "Find products matching cost <$1000 and availability >50 units"
 ```
 
 **VT Code Application**: grep_file patterns documented with semantic intent:
@@ -207,18 +207,18 @@ TODO markers:         pattern: "TODO|FIXME|HACK", glob: "**/*"
 ## II. VT Code Current State (Pre-Optimization)
 
 ### Strengths (v2)
-✅ Excellent execution algorithm (5-step model)  
-✅ Strong tool tier organization  
-✅ Solid loop prevention heuristics  
-✅ Good persistence patterns  
+✓  Excellent execution algorithm (5-step model)  
+✓  Strong tool tier organization  
+✓  Solid loop prevention heuristics  
+✓  Good persistence patterns  
 
 ### Gaps (v2)
-❌ No explicit context engineering rules  
-❌ Tool outputs not curated per-tool  
-❌ No dynamic context budgeting  
-❌ Limited multi-LLM normalization  
-❌ No long-horizon task memory  
-❌ Limited tool semantic descriptions  
+⤫  No explicit context engineering rules  
+⤫  Tool outputs not curated per-tool  
+⤫  No dynamic context budgeting  
+⤫  Limited multi-LLM normalization  
+⤫  No long-horizon task memory  
+⤫  Limited tool semantic descriptions  
 
 ### Metrics (v2 Baseline)
 - Average tokens per task: ~45K
@@ -314,7 +314,7 @@ Metric | v2 | v3 | Delta
 Avg tokens/task | 45K | 30K | -33%
 Tool output waste | 20% | 4% | -80%
 Context compaction efficiency | N/A | 95% | +95%
-Long-horizon support | No | Yes | ✅
+Long-horizon support | No | Yes | ✓ 
 ```
 
 ### Multi-LLM Compatibility
@@ -341,7 +341,7 @@ Multi-turn coherence | 85% | 94% | 92%
 
 ## V. Implementation Status
 
-### Completed ✅
+### Completed ✓ 
 - [x] Research analysis (Anthropic, tool complexity, multi-LLM patterns)
 - [x] System prompt v3 draft (400 lines, modular structure)
 - [x] Per-tool output rules (with overflow handling)
@@ -469,11 +469,11 @@ A: Empirical testing shows 2-level max is safe. If issues arise, can flatten fur
 
 VT Code's system prompt v3 represents a significant evolution in agentic AI prompt design. By combining Anthropic's context engineering research, tool complexity insights, and proven patterns from leading frameworks, we achieve:
 
-✅ **33% reduction in context waste**  
-✅ **95%+ multi-LLM compatibility**  
-✅ **Unlimited task horizon via structured persistence**  
-✅ **98% loop prevention success**  
-✅ **Simplified maintenance** (single prompt, not 3)  
+✓  **33% reduction in context waste**  
+✓  **95%+ multi-LLM compatibility**  
+✓  **Unlimited task horizon via structured persistence**  
+✓  **98% loop prevention success**  
+✓  **Simplified maintenance** (single prompt, not 3)  
 
 This is the state-of-the-art for coding agent prompts as of Q4 2025.
 

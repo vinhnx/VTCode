@@ -126,28 +126,28 @@ let output = tokio::task::spawn_blocking(move || {
 
 | Topic | File | Status |
 |-------|------|--------|
-| Windows key events | src/tui.rs | ✅ Already correct + documented |
-| Tokio/async usage | docs/guides/async-architecture.md | ✅ Documented + code fixed |
-| Single terminal.draw() | vtcode-core/src/ui/tui/session.rs | ✅ Already correct + documented |
-| stdout vs stderr | src/tui.rs | ✅ Already correct (stderr) + documented |
-| Terminal resize | src/tui.rs | ✅ Already correct + documented |
-| External app suspension | src/tui.rs | ✅ Already correct + documented |
-| Out-of-bounds protection | vtcode-core/src/ui/tui/ | ✅ Documented best practices |
-| Font size in terminal | docs/FAQ.md | ✅ Documented limitations |
-| Character rendering (fonts) | docs/FAQ.md | ✅ Nerd Font recommendation |
+| Windows key events | src/tui.rs | ✓  Already correct + documented |
+| Tokio/async usage | docs/guides/async-architecture.md | ✓  Documented + code fixed |
+| Single terminal.draw() | vtcode-core/src/ui/tui/session.rs | ✓  Already correct + documented |
+| stdout vs stderr | src/tui.rs | ✓  Already correct (stderr) + documented |
+| Terminal resize | src/tui.rs | ✓  Already correct + documented |
+| External app suspension | src/tui.rs | ✓  Already correct + documented |
+| Out-of-bounds protection | vtcode-core/src/ui/tui/ | ✓  Documented best practices |
+| Font size in terminal | docs/FAQ.md | ✓  Documented limitations |
+| Character rendering (fonts) | docs/FAQ.md | ✓  Nerd Font recommendation |
 
 ## Quality Assurance
 
 All changes have been tested:
 
 ```bash
-# Type checking - ✅ Passes
+# Type checking - ✓  Passes
 cargo check
 
-# Full compilation - ✅ Passes
+# Full compilation - ✓  Passes
 cargo build
 
-# Test compilation - ✅ Passes
+# Test compilation - ✓  Passes
 cargo test --lib --no-run
 ```
 

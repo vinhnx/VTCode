@@ -1,6 +1,6 @@
 # Code Review Recommendations & Future Optimizations
 
-## 1. ✅ Implemented Improvements
+## 1. ✓  Implemented Improvements
 
 ### Full-Width Diff Backgrounds
 - **Status**: COMPLETE
@@ -72,17 +72,17 @@ new_spans.push(Span::styled(" ".repeat(padding_needed), bg_style));
 ## 3. 📋 Code Quality Observations
 
 ### Strengths
-✅ Proper Unicode width handling (`unicode_width` crate)
-✅ Clear separation of concerns (detection vs. padding)
-✅ Early returns prevent unnecessary computation
-✅ Comments explain the why, not just the what
-✅ No breaking changes to existing APIs
+✓  Proper Unicode width handling (`unicode_width` crate)
+✓  Clear separation of concerns (detection vs. padding)
+✓  Early returns prevent unnecessary computation
+✓  Comments explain the why, not just the what
+✓  No breaking changes to existing APIs
 
 ### Edge Cases Handled
-✅ Empty lines (early return)
-✅ Lines wider than viewport (saturating_sub prevents overflow)
-✅ Lines without background color (uses default style)
-✅ Mixed span content (searches for bg color across all spans)
+✓  Empty lines (early return)
+✓  Lines wider than viewport (saturating_sub prevents overflow)
+✓  Lines without background color (uses default style)
+✓  Mixed span content (searches for bg color across all spans)
 
 ### Potential Improvements
 ⚠️ `is_diff_line()` could be renamed to `is_styled_line()` for reuse
@@ -126,10 +126,10 @@ fn pad_diff_line_preserves_all_colors() {
 
 | Item | Status | Priority | Effort | Recommendation |
 |------|--------|----------|--------|-----------------|
-| Full-width diff backgrounds | ✅ Done | - | - | Ship as-is |
-| Show all terminal commands | ✅ Done | - | - | Ship as-is |
-| Unicode width handling | ✅ Done | - | - | Validated |
-| Add unit tests | ❌ Todo | Medium | Low | Add before next release |
+| Full-width diff backgrounds | ✓  Done | - | - | Ship as-is |
+| Show all terminal commands | ✓  Done | - | - | Ship as-is |
+| Unicode width handling | ✓  Done | - | - | Validated |
+| Add unit tests | ⤫  Todo | Medium | Low | Add before next release |
 | Extend to code blocks | ⚠️ Consider | Low | Medium | Monitor adoption |
 | Performance profiling | ⚠️ Consider | Low | Medium | Only if complaints |
 | Refactor to generic padding | ⚠️ Consider | Low | Medium | Only if pattern repeats |

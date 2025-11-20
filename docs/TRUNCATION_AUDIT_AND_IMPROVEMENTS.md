@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-**Status: Production-Ready ✅**
+**Status: Production-Ready ✓ **
 
 vtcode's token-based truncation strategy is **more sophisticated than competing systems** (e.g., Codex v0.56). This audit confirms the implementation is sound and identifies minor enhancement opportunities.
 
@@ -96,7 +96,7 @@ let total_tokens = match token_budget.count_tokens(content).await {
 
 ## Audit Findings
 
-### ✅ Strengths
+### ✓  Strengths
 
 1. **Token-based limits are correct** (not line-based)
    - Aligns with actual LLM context window constraints
@@ -287,7 +287,7 @@ fn detect_code_content(content: &str) -> bool {
 **Risk**: Very low (only improves detection accuracy)
 
 #### 5. Removed Unused Constants
-**Status**: ✅ DONE
+**Status**: ✓  DONE
 
 **File**: `vtcode-config/src/constants.rs:1315-1325`
 **What**: Removed unused terminal output constants
@@ -296,7 +296,7 @@ fn detect_code_content(content: &str) -> bool {
 - `TERMINAL_OUTPUT_END_LINES: 1_000` (now using 25k tokens)
 
 **Reason**: Legacy line-based limits replaced by token-based strategy
-**Impact**: ✅ Completed, verified with `cargo check`
+**Impact**: ✓  Completed, verified with `cargo check`
 
 ---
 
@@ -346,20 +346,20 @@ cargo test -p vtcode-core token_budget -- --nocapture
 
 | Feature | vtcode | Codex v0.56 | Claude Code |
 |---------|--------|-------------|-------------|
-| Token limits | ✅ 25k tokens | ❌ 256 lines | ✅ Token-based |
-| Head+tail | ✅ Smart 40/60 | ✅ 50/50 | ✅ Smart split |
-| Tokenizer | ✅ HuggingFace + fallback | ❌ None mentioned | ✅ Integrated |
-| Approximation | ✅ 3-method median | N/A | ✅ Advanced |
-| Component tracking | ✅ Per-component | ❌ No | ❌ No |
-| Dynamic limits | ⚠️ Planned | ❌ No | ❌ No |
-| Documentation | ✅ Excellent | ❌ Minimal | ❌ Closed |
-| Tests | ✅ 8 tests | ❌ Unknown | ❌ Closed |
+| Token limits | ✓  25k tokens | ⤫  256 lines | ✓  Token-based |
+| Head+tail | ✓  Smart 40/60 | ✓  50/50 | ✓  Smart split |
+| Tokenizer | ✓  HuggingFace + fallback | ⤫  None mentioned | ✓  Integrated |
+| Approximation | ✓  3-method median | N/A | ✓  Advanced |
+| Component tracking | ✓  Per-component | ⤫  No | ⤫  No |
+| Dynamic limits | ⚠️ Planned | ⤫  No | ⤫  No |
+| Documentation | ✓  Excellent | ⤫  Minimal | ⤫  Closed |
+| Tests | ✓  8 tests | ⤫  Unknown | ⤫  Closed |
 
 ---
 
 ## Implementation Checklist
 
-### ✅ Completed
+### ✓  Completed
 - [x] Token-based truncation (25k tokens)
 - [x] Head+tail preservation with smart ratios
 - [x] Multi-method token approximation
@@ -433,11 +433,11 @@ conservative_threshold = 0.50  # Disable limit before 50% context
 The identified enhancement opportunities are low-risk additions that would further improve context efficiency and error handling. None require architectural changes or pose correctness risks.
 
 ### Key Takeaways
-1. ✅ Token-based limits are correct and necessary
-2. ✅ Head+tail strategy with smart ratios is sound
-3. ✅ Approximation algorithm is robust and well-tested
-4. ✅ Documentation is clear and comprehensive
-5. ✅ Unused constants have been removed
+1. ✓  Token-based limits are correct and necessary
+2. ✓  Head+tail strategy with smart ratios is sound
+3. ✓  Approximation algorithm is robust and well-tested
+4. ✓  Documentation is clear and comprehensive
+5. ✓  Unused constants have been removed
 6. 🎯 Ready for production use
 7. 📈 Clear path for future enhancements
 

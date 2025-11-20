@@ -42,9 +42,9 @@ else if response.status == "running":
 | Scenario | What to Do | What NOT to Do |
 |----------|-----------|-----------------|
 | `status: "completed"` | Use the output and check `code` | - |
-| `status: "running"` | Inform user and move on | ❌ Don't poll with read_pty_session |
-| See `session_id` in response | ✓ It's there for UI progress tracking | ❌ Don't use it for manual polling |
-| Command output continues in background | ✓ Let backend handle it | ❌ Don't make repeated calls |
+| `status: "running"` | Inform user and move on | ⤫  Don't poll with read_pty_session |
+| See `session_id` in response | ✓ It's there for UI progress tracking | ⤫  Don't use it for manual polling |
+| Command output continues in background | ✓ Let backend handle it | ⤫  Don't make repeated calls |
 
 ## Example: Cargo Check
 
@@ -68,9 +68,9 @@ After 2 minutes of background polling:
   Backend eventually completes, UI updates user
 
 Agent should NOT:
-  ❌ Keep calling read_pty_session
-  ❌ Get stuck in a polling loop
-  ❌ Ask "Is it done yet?"
+  ⤫  Keep calling read_pty_session
+  ⤫  Get stuck in a polling loop
+  ⤫  Ask "Is it done yet?"
 ```
 
 ## The Rule

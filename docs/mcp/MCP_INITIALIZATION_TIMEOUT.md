@@ -143,12 +143,12 @@ This is **separate** from other timeout systems in VTCode:
 
 ## Benefits
 
-✅ **Configurable**: Adjust timeout for different MCP server implementations
-✅ **Increased Default**: 60 seconds accommodates slower servers by default
-✅ **Better Error Messages**: Shows actual timeout when things fail
-✅ **Backward Compatible**: Falls back to 30 seconds if not configured
-✅ **Consistent Pattern**: Uses existing `startup_timeout_seconds` config field
-✅ **Flexible**: Can be adjusted per deployment without code changes
+✓  **Configurable**: Adjust timeout for different MCP server implementations
+✓  **Increased Default**: 60 seconds accommodates slower servers by default
+✓  **Better Error Messages**: Shows actual timeout when things fail
+✓  **Backward Compatible**: Falls back to 30 seconds if not configured
+✓  **Consistent Pattern**: Uses existing `startup_timeout_seconds` config field
+✓  **Flexible**: Can be adjusted per deployment without code changes
 
 ## Migration Guide
 
@@ -168,8 +168,8 @@ startup_timeout_seconds = <your_value_in_seconds>
 ## Testing
 
 The implementation:
-- ✅ Compiles without errors
-- ✅ Uses existing configuration structure
-- ✅ Maintains backward compatibility
-- ✅ Properly reports timeout values in error messages
-- ✅ Integrates with existing config validation
+- ✓  Compiles without errors
+- ✓  Uses existing configuration structure
+- ✓  Maintains backward compatibility
+- ✓  Properly reports timeout values in error messages
+- ✓  Integrates with existing config validation

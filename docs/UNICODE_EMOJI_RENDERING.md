@@ -2,7 +2,7 @@
 
 ## Issue
 
-Unicode characters (especially emoji like ✅) were appearing corrupted as "â" or other mojibake when displayed in git diff output or other TUI rendering.
+Unicode characters (especially emoji like ✓ ) were appearing corrupted as "â" or other mojibake when displayed in git diff output or other TUI rendering.
 
 ## Root Cause
 
@@ -53,5 +53,5 @@ The terminal must be configured with a UTF-8 locale. On most modern systems, thi
 You can verify your terminal's encoding with:
 ```bash
 locale
-echo "✅ UTF-8 works!"
+echo "✓  UTF-8 works!"
 ```

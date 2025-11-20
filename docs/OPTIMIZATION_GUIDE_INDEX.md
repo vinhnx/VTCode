@@ -36,7 +36,7 @@ Start here → **SCROLL_BENCHMARKS.md**
 
 ## 📚 Document Guide
 
-### 1. Terminal Output Optimization (IMPLEMENTED ✅)
+### 1. Terminal Output Optimization (IMPLEMENTED ✓ )
 
 #### **TERMINAL_OUTPUT_OPTIMIZATION.md** (8.8 KB)
 **What it covers**:
@@ -150,7 +150,7 @@ cargo bench --bench ansi_parsing
 **Best for**: Project oversight and timeline planning
 
 **Timeline**:
-- Phase 1: Terminal Output ✅ DONE (1 day)
+- Phase 1: Terminal Output ✓  DONE (1 day)
 - Phase 2: ANSI Caching 📋 TODO (1-2 hours)
 - Phase 3: Instrumentation 📋 TODO (30 min)
 - Phase 4: Testing 📋 TODO (1 hour)
@@ -236,14 +236,14 @@ OPTIMIZATION_STATUS.md ← START HERE
 
 | Document | Size | Category | Status |
 |---|---|---|---|
-| OPTIMIZATION_STATUS.md | 10 KB | Overview | ✅ Latest |
-| OPTIMIZATION_SUMMARY.md | 8.5 KB | Overview | ✅ Latest |
-| OPTIMIZATION_GUIDE_INDEX.md | 5 KB | Reference | ✅ This file |
-| TUI_SCROLL_ANSI_OPTIMIZATION.md | 9.0 KB | Architecture | ✅ Latest |
-| SCROLL_OPTIMIZATION_IMPL.md | 13 KB | Implementation | ✅ Latest |
-| SCROLL_BENCHMARKS.md | 9.4 KB | Testing | ✅ Latest |
-| TERMINAL_OUTPUT_OPTIMIZATION.md | 8.8 KB | Implementation | ✅ Latest |
-| TERMINAL_OUTPUT_BEFORE_AFTER.md | 9.4 KB | Comparison | ✅ Latest |
+| OPTIMIZATION_STATUS.md | 10 KB | Overview | ✓  Latest |
+| OPTIMIZATION_SUMMARY.md | 8.5 KB | Overview | ✓  Latest |
+| OPTIMIZATION_GUIDE_INDEX.md | 5 KB | Reference | ✓  This file |
+| TUI_SCROLL_ANSI_OPTIMIZATION.md | 9.0 KB | Architecture | ✓  Latest |
+| SCROLL_OPTIMIZATION_IMPL.md | 13 KB | Implementation | ✓  Latest |
+| SCROLL_BENCHMARKS.md | 9.4 KB | Testing | ✓  Latest |
+| TERMINAL_OUTPUT_OPTIMIZATION.md | 8.8 KB | Implementation | ✓  Latest |
+| TERMINAL_OUTPUT_BEFORE_AFTER.md | 9.4 KB | Comparison | ✓  Latest |
 
 **Total**: ~73 KB of optimized documentation
 
@@ -252,7 +252,7 @@ OPTIMIZATION_STATUS.md ← START HERE
 ## 🚀 Implementation Status
 
 ### Phase 1: Terminal Output Format
-- **Status**: ✅ IMPLEMENTED
+- **Status**: ✓  IMPLEMENTED
 - **Files**: `src/agent/runloop/tool_output/commands.rs`
 - **Changes**: -43% output lines, -60% characters
 - **Verification**: Compiles, no warnings

@@ -17,7 +17,7 @@ fn handle_scroll_down(
     callback: Option<&(dyn Fn(&InlineEvent) + Send + Sync + 'static)>,
 ) {
     self.scroll_line_down();
-    self.mark_dirty();  // ❌ CALLED UNCONDITIONALLY
+    self.mark_dirty();  // ⤫  CALLED UNCONDITIONALLY
     self.emit_inline_event(&InlineEvent::ScrollLineDown, events, callback);
 }
 
@@ -27,7 +27,7 @@ fn handle_scroll_up(
     callback: Option<&(dyn Fn(&InlineEvent) + Send + Sync + 'static)>,
 ) {
     self.scroll_line_up();
-    self.mark_dirty();  // ❌ CALLED UNCONDITIONALLY
+    self.mark_dirty();  // ⤫  CALLED UNCONDITIONALLY
     self.emit_inline_event(&InlineEvent::ScrollLineUp, events, callback);
 }
 ```
@@ -152,8 +152,8 @@ fn handle_scroll_page_up(
 Scroll at top:
 1. scroll_line_up() → offset doesn't change (already at 0)
 2. visible_lines_cache = None (correctly skipped - offset didn't change)
-3. mark_dirty() → needs_redraw = true ❌ STILL CALLED
-4. Main loop: Renders even though nothing visual changed ❌ WASTE
+3. mark_dirty() → needs_redraw = true ⤫  STILL CALLED
+4. Main loop: Renders even though nothing visual changed ⤫  WASTE
 5. Result: Unnecessary render cycle
 ```
 
@@ -163,8 +163,8 @@ Scroll at top:
 Scroll at top:
 1. scroll_line_up() → offset doesn't change (already at 0)
 2. visible_lines_cache = None (correctly skipped - offset didn't change)
-3. mark_dirty() → SKIPPED (offset didn't change) ✅
-4. Main loop: Doesn't render (needs_redraw stays false) ✅
+3. mark_dirty() → SKIPPED (offset didn't change) ✓ 
+4. Main loop: Doesn't render (needs_redraw stays false) ✓ 
 5. Result: Zero wasted render cycles
 ```
 
@@ -211,14 +211,14 @@ Scroll at top:
 ## Why This Wasn't Caught Initially
 
 The Phase 5 review focused on:
-- ✅ Cache hits (Arc optimization)
-- ✅ Clear operations (removal)
-- ✅ Cache invalidation (in scroll functions)
+- ✓  Cache hits (Arc optimization)
+- ✓  Clear operations (removal)
+- ✓  Cache invalidation (in scroll functions)
 
 But missed:
-- ❌ Event handler entry points (handle_scroll_*)
-- ❌ mark_dirty() call placement
-- ❌ No-op scroll event handling
+- ⤫  Event handler entry points (handle_scroll_*)
+- ⤫  mark_dirty() call placement
+- ⤫  No-op scroll event handling
 
 This is a **higher-level optimization** that affects event handling, not just rendering.
 

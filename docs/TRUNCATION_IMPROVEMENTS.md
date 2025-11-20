@@ -433,27 +433,27 @@ if context_usage > 80% {
 
 ### vtcode (Current)
 
--   ✅ Token-based limits (25k tokens)
--   ✅ Head+tail preservation
--   ✅ Model-aware tokenizers
--   ✅ Component tracking
--   ✅ Async token counting
--   ✅ Configurable thresholds
+-   ✓  Token-based limits (25k tokens)
+-   ✓  Head+tail preservation
+-   ✓  Model-aware tokenizers
+-   ✓  Component tracking
+-   ✓  Async token counting
+-   ✓  Configurable thresholds
 
 ### Codex (v0.56)
 
--   ❌ Line-based limits (256 lines)
--   ✅ Head+tail strategy
--   ❌ No tokenizer mentioned
--   ❌ No component tracking
--   ❌ Aggressive MCP truncation
+-   ⤫  Line-based limits (256 lines)
+-   ✓  Head+tail strategy
+-   ⤫  No tokenizer mentioned
+-   ⤫  No component tracking
+-   ⤫  Aggressive MCP truncation
 
 ### Claude Code
 
--   ✅ Token-based limits
--   ✅ Head+tail preservation
--   ✅ Integrated tokenizer
--   ❌ Details not public
+-   ✓  Token-based limits
+-   ✓  Head+tail preservation
+-   ✓  Integrated tokenizer
+-   ⤫  Details not public
 
 ## References
 

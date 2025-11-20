@@ -62,11 +62,11 @@ CommandBuilder::new("analyze")
 
 #### Benefits
 
-✅ More readable code (less string arrays)  
-✅ Type-safe argument construction  
-✅ Chainable API reduces cognitive load  
-✅ Easier to extend with new command types  
-✅ 25 comprehensive tests ensure correctness
+✓  More readable code (less string arrays)  
+✓  Type-safe argument construction  
+✓  Chainable API reduces cognitive load  
+✓  Easier to extend with new command types  
+✓  25 comprehensive tests ensure correctness
 
 #### Test Coverage
 
@@ -197,10 +197,10 @@ CommandBuilder::ask("what is this?")
 
 #### Benefits
 
-✅ Prevents UI freeze from hung processes  
-✅ Command-specific defaults (analyze takes longer)  
-✅ Customizable per invocation  
-✅ Graceful error handling on timeout
+✓  Prevents UI freeze from hung processes  
+✓  Command-specific defaults (analyze takes longer)  
+✓  Customizable per invocation  
+✓  Graceful error handling on timeout
 
 ### 4. Enhanced Manifest (extension.toml)
 
@@ -233,11 +233,11 @@ keywords = ["ai", "assistant", "coding", "agent", "llm"]
 
 #### Benefits
 
-✅ Better discovery in Zed extension registry  
-✅ Explicit capability declaration  
-✅ Version compatibility information  
-✅ Searchable keywords  
-✅ Documentation for users
+✓  Better discovery in Zed extension registry  
+✓  Explicit capability declaration  
+✓  Version compatibility information  
+✓  Searchable keywords  
+✓  Documentation for users
 
 ### 5. Commands Module Refactoring
 
@@ -293,7 +293,7 @@ pub fn ask_agent(query: &str) -> CommandResponse {
 | Metric | Before | After | Change |
 |--------|--------|-------|--------|
 | Total Tests | 107 | 132 | +25 (+23%) |
-| Passing | 107 | 132 | ✅ All pass |
+| Passing | 107 | 132 | ✓  All pass |
 | Failed | 0 | 0 | - |
 | Test Execution Time | <100ms | <100ms | - |
 
@@ -301,9 +301,9 @@ pub fn ask_agent(query: &str) -> CommandResponse {
 
 | Check | Result |
 |-------|--------|
-| `cargo check` | ✅ Pass |
-| `cargo clippy` | ✅ 0 warnings |
-| `cargo fmt` | ✅ Compliant |
+| `cargo check` | ✓  Pass |
+| `cargo clippy` | ✓  0 warnings |
+| `cargo fmt` | ✓  Compliant |
 | Module count | 13 modules |
 | Total lines | ~4,300+ LOC |
 
@@ -426,16 +426,16 @@ All improvements verified with:
 
 ```bash
 # Compilation check
-cargo check      # ✅ Pass (0 warnings)
+cargo check      # ✓  Pass (0 warnings)
 
 # Linting
-cargo clippy     # ✅ Pass (0 warnings)
+cargo clippy     # ✓  Pass (0 warnings)
 
 # Code formatting
-cargo fmt        # ✅ Compliant
+cargo fmt        # ✓  Compliant
 
 # Test execution
-cargo test --lib # ✅ 132 tests pass, <100ms
+cargo test --lib # ✓  132 tests pass, <100ms
 ```
 
 ---
@@ -494,10 +494,10 @@ pub fn ask_agent(query: &str) -> CommandResponse { ... }
 ## Next Steps
 
 ### Immediate (Ready for Production)
-- ✅ Command builder fully functional
-- ✅ Metrics collection enabled
-- ✅ Timeout safety in place
-- ✅ All tests passing
+- ✓  Command builder fully functional
+- ✓  Metrics collection enabled
+- ✓  Timeout safety in place
+- ✓  All tests passing
 
 ### Short-term (v0.4.0)
 - [ ] Async command execution
@@ -528,7 +528,7 @@ The extension is now production-ready for v0.3.0 release with enhanced observabi
 
 ---
 
-**Status**: ✅ Complete  
+**Status**: ✓  Complete  
 **Test Suite**: 132/132 passing  
 **Code Quality**: No warnings  
 **Backward Compatibility**: 100%

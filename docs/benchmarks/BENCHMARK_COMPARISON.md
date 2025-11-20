@@ -29,7 +29,7 @@
 - Edge case handling
 
 ### Characteristics
-✅ **Strengths:**
+✓  **Strengths:**
 - Industry standard benchmark
 - Well-established baseline scores
 - Fast to run (~2-3 minutes for 164 tasks)
@@ -57,14 +57,14 @@ def has_close_elements(numbers: List[float], threshold: float) -> bool:
 ```
 
 ### When to Use HumanEval
-✅ **Use for:**
+✓  **Use for:**
 - Quick model validation
 - Comparing with published benchmarks
 - Testing code generation capabilities
 - Industry-standard evaluation
 - Fast iteration during development
 
-❌ **Don't use for:**
+⤫  **Don't use for:**
 - Testing real-world bug fixing
 - Evaluating code understanding
 - Multi-file project scenarios
@@ -90,7 +90,7 @@ def has_close_elements(numbers: List[float], threshold: float) -> bool:
 - Data structure usage
 
 ### Characteristics
-✅ **Strengths:**
+✓  **Strengths:**
 - Larger dataset (974 tasks)
 - More diverse problems
 - Tests fundamental programming skills
@@ -112,14 +112,14 @@ assert similar_elements((3, 4, 5, 6),(5, 7, 4, 10)) == (4, 5)
 ```
 
 ### When to Use MBPP
-✅ **Use for:**
+✓  **Use for:**
 - Testing basic programming competency
 - Educational assessments
 - Larger sample size for statistical significance
 - Complementing HumanEval results
 - Testing fundamental Python skills
 
-❌ **Don't use for:**
+⤫  **Don't use for:**
 - Complex algorithm evaluation
 - Real-world code scenarios
 - Production readiness
@@ -145,7 +145,7 @@ assert similar_elements((3, 4, 5, 6),(5, 7, 4, 10)) == (4, 5)
 - Context comprehension
 
 ### Characteristics
-✅ **Strengths:**
+✓  **Strengths:**
 - Real-world problems from GitHub
 - Tests code understanding, not just generation
 - Large, realistic codebases
@@ -172,14 +172,14 @@ Task: Generate a unified diff to fix the bug
 ```
 
 ### When to Use SWE-bench
-✅ **Use for:**
+✓  **Use for:**
 - Testing real-world capabilities
 - Evaluating production readiness
 - Bug fixing assessment
 - Code understanding evaluation
 - Research and comprehensive analysis
 
-❌ **Don't use for:**
+⤫  **Don't use for:**
 - Quick validation (too slow)
 - Budget-constrained testing (expensive)
 - Simple code generation testing
@@ -305,21 +305,21 @@ SWE-bench Score ≈ HumanEval Score × 0.2-0.3
 ### For VT Code Users
 
 **Start with HumanEval:**
-1. ✅ Fast and free
-2. ✅ Industry standard
-3. ✅ Easy to interpret
-4. ✅ Good signal for code generation
+1. ✓  Fast and free
+2. ✓  Industry standard
+3. ✓  Easy to interpret
+4. ✓  Good signal for code generation
 
 **Add MBPP for confidence:**
-1. ✅ Larger sample size
-2. ✅ Tests fundamentals
-3. ✅ Still fast and free
+1. ✓  Larger sample size
+2. ✓  Tests fundamentals
+3. ✓  Still fast and free
 
 **Use SWE-bench for production:**
 1. ⚠️ Only if targeting production use
 2. ⚠️ More expensive with paid models
 3. ⚠️ Slower to run
-4. ✅ Most realistic evaluation
+4. ✓  Most realistic evaluation
 
 ### Recommended Workflow
 

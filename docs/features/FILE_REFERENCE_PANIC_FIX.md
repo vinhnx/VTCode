@@ -17,7 +17,7 @@ let mut new_node = FileTreeNode {
     path: if is_last {
         full_path.to_string()
     } else {
-        String::new() // ❌ Multiple directories get empty path = duplicate identifiers
+        String::new() // ⤫  Multiple directories get empty path = duplicate identifiers
     },
     is_dir: !is_last,
     children: Vec::new(),
@@ -43,7 +43,7 @@ let node_path = if is_last {
 
 let mut new_node = FileTreeNode {
     name: name.to_string(),
-    path: node_path, // ✅ Unique path for every node
+    path: node_path, // ✓  Unique path for every node
     is_dir: !is_last,
     children: Vec::new(),
 };
@@ -77,11 +77,11 @@ workspace/
 3. Updated recursive calls to pass workspace through
 
 ## Testing
-✅ All 13 tests passing:
+✓  All 13 tests passing:
 - 10 file_palette tests
 - 3 file_tree tests
 
-✅ Cargo check succeeds with no errors
+✓  Cargo check succeeds with no errors
 
 ## Impact
 - **Before:** Tree view would panic immediately on render

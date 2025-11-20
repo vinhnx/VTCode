@@ -172,7 +172,7 @@ DisableForSession,
 
 ## Backward Compatibility
 
-✅ **Fully Compatible**
+✓  **Fully Compatible**
 - Public API still works the same
 - Old code using the module won't break
 - Only removed truly unused functions
@@ -214,9 +214,9 @@ The refactored code makes these future enhancements easier:
 ## Summary
 
 The refactored implementation is:
-- ✅ **Cleaner** - Less code, better organized
-- ✅ **More Robust** - Better error handling, edge case support
-- ✅ **Better Tested** - 10 tests instead of 7
-- ✅ **More Flexible** - Supports non-interactive mode
-- ✅ **Production Ready** - No duplicate code, clear semantics
-- ✅ **Future-Proof** - Easier to extend and maintain
+- ✓  **Cleaner** - Less code, better organized
+- ✓  **More Robust** - Better error handling, edge case support
+- ✓  **Better Tested** - 10 tests instead of 7
+- ✓  **More Flexible** - Supports non-interactive mode
+- ✓  **Production Ready** - No duplicate code, clear semantics
+- ✓  **Future-Proof** - Easier to extend and maintain

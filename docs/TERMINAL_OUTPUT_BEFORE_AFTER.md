@@ -235,10 +235,10 @@ output...
 - Net: +15 lines (smaller, cleaner code)
 
 ### Compilation
-✅ Builds without warnings  
-✅ All existing tests pass  
-✅ No breaking changes to APIs  
-✅ Backward compatible
+✓  Builds without warnings  
+✓  All existing tests pass  
+✓  No breaking changes to APIs  
+✓  Backward compatible
 
 ---
 
@@ -265,16 +265,16 @@ output...
 ## Accessibility Considerations
 
 ### Color Blind Users
-✅ Status indicators work with or without color (emoji symbols)  
-✅ Text status (`RUN`, `OK`) supports color blindness
+✓  Status indicators work with or without color (emoji symbols)  
+✓  Text status (`RUN`, `OK`) supports color blindness
 
 ### Screen Readers
-✅ Simplified format has fewer repeated elements  
-✅ Clear text semantics (not abbreviations)
+✓  Simplified format has fewer repeated elements  
+✓  Clear text semantics (not abbreviations)
 
 ### High DPI/Small Fonts
-✅ Fewer lines to display  
-✅ Less visual clutter
+✓  Fewer lines to display  
+✓  Less visual clutter
 
 ---
 

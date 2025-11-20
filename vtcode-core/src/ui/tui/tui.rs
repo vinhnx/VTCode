@@ -18,7 +18,7 @@ use ratatui::{
     Terminal,
     backend::{Backend, CrosstermBackend},
 };
-use terminal_size::{terminal_size, Width, Height};
+use terminal_size::{Height, Width, terminal_size};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, error::TryRecvError};
 use tokio::time::interval;
 use tokio_util::sync::CancellationToken;
@@ -62,11 +62,13 @@ impl EventChannels {
     }
 
     fn pause(&self) {
-        self.rx_paused.store(true, std::sync::atomic::Ordering::Release);
+        self.rx_paused
+            .store(true, std::sync::atomic::Ordering::Release);
     }
 
     fn resume(&self) {
-        self.rx_paused.store(false, std::sync::atomic::Ordering::Release);
+        self.rx_paused
+            .store(false, std::sync::atomic::Ordering::Release);
     }
 
     fn is_paused(&self) -> bool {
@@ -203,7 +205,7 @@ pub async fn run_tui(
     let cancellation_token = CancellationToken::new();
     let event_loop_token = cancellation_token.clone();
     let event_channels_for_loop = event_channels.clone();
-    
+
     // Spawn the async event loop
     let event_loop_handle = tokio::spawn(async move {
         spawn_event_loop(event_channels_for_loop.tx.clone(), event_loop_token).await;

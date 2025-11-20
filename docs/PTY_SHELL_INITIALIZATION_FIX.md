@@ -108,10 +108,10 @@ This multi-layer approach ensures commands are found even if one layer fails.
 ## Testing Results
 
 ```
-✅ cargo check      # Compiles successfully
-✅ cargo test --lib # All 20/20 tests pass
-✅ cargo fmt        # Properly formatted
-✅ No clippy warnings
+✓  cargo check      # Compiles successfully
+✓  cargo test --lib # All 20/20 tests pass
+✓  cargo fmt        # Properly formatted
+✓  No clippy warnings
 ```
 
 ## Why This Is Better

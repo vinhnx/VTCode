@@ -58,10 +58,10 @@ The user message is ALREADY included in `working_history` when passed to `run_tu
 - `src/agent/runloop/unified/turn/turn_loop.rs` - Removed duplicate user message push
 
 ## Verification
-- ✅ Code compiles without errors (`cargo check`)
-- ✅ All tests pass (`cargo test --lib`)
-- ✅ No breaking changes to public API
-- ✅ Only affects session_loop path that calls `run_turn_loop()`
+- ✓  Code compiles without errors (`cargo check`)
+- ✓  All tests pass (`cargo test --lib`)
+- ✓  No breaking changes to public API
+- ✓  Only affects session_loop path that calls `run_turn_loop()`
 
 ## Testing Strategy
 To verify the fix works:

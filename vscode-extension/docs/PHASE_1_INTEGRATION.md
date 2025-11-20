@@ -185,7 +185,7 @@ window.addEventListener("message", (event) => {
         if (statusEl) {
             statusEl.textContent = message.text;
             // Apply status class for styling
-            const statusMatch = message.text.match(/^([❌📤⚙️🔵⚪])/);
+            const statusMatch = message.text.match(/^([⤫ 📤⚙️🔵⚪])/);
             if (statusMatch) {
                 statusEl.className = "chat-status";
                 if (message.text.includes("Ready")) {

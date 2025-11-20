@@ -157,10 +157,10 @@ Task tracking?
 ## How to Write Effective Instructions (For Future Interactions)
 
 ### Use This Language
-- Direct: "Fix the type error in fetch_user" ✅
-- Specific: "Change X from A to B because C" ✅
-- Not: "There's a problem, fix it" ❌
-- Not: "Do what makes sense" ❌
+- Direct: "Fix the type error in fetch_user" ✓ 
+- Specific: "Change X from A to B because C" ✓ 
+- Not: "There's a problem, fix it" ⤫ 
+- Not: "Do what makes sense" ⤫ 
 
 ### Common Patterns
 

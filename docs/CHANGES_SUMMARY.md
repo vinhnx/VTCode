@@ -9,22 +9,22 @@ Fixed repeated `run_pty_cmd requires a 'command' array` errors and infinite retr
 ### 1. src/agent/runloop/text_tools.rs
 **Function**: `convert_harmony_args_to_tool_format()`
 
-✅ **Preserve other parameters** - Copy cwd, timeout, mode, etc. from original to converted args
-✅ **Handle multiple parameter sources** - Try cmd (array/string) → fallback to command (array/string)  
-✅ **Clean error handling** - Return only error message, not malformed data
-✅ **Explicit missing command error** - Clear message if no command parameter exists
+✓  **Preserve other parameters** - Copy cwd, timeout, mode, etc. from original to converted args
+✓  **Handle multiple parameter sources** - Try cmd (array/string) → fallback to command (array/string)  
+✓  **Clean error handling** - Return only error message, not malformed data
+✓  **Explicit missing command error** - Clear message if no command parameter exists
 
 ### 2. vtcode-core/src/tools/registry/legacy.rs
 **Function**: `run_pty_cmd()`
 
-✅ **Early validation error check** - Detect `_validation_error` field from parameter conversion
-✅ **Immediate error return** - Prevents cascading failures and retries
+✓  **Early validation error check** - Detect `_validation_error` field from parameter conversion
+✓  **Immediate error return** - Prevents cascading failures and retries
 
 ### 3. vtcode-core/src/tools/registry/executors.rs
 **Function**: `TerminalCommandPayload::parse()`
 
-✅ **Early validation error check** - Same as legacy.rs for consistency
-✅ **Clear error propagation** - Validation errors surface immediately
+✓  **Early validation error check** - Same as legacy.rs for consistency
+✓  **Clear error propagation** - Validation errors surface immediately
 
 ## Why This Fixes Infinite Loops
 
@@ -43,6 +43,6 @@ Fixed repeated `run_pty_cmd requires a 'command' array` errors and infinite retr
 - If retry needed, parameters are correctly formatted
 
 ## Testing Status
-- ✅ cargo check - No errors
-- ✅ cargo fmt - Formatting valid
-- ✅ Compilation - Success
+- ✓  cargo check - No errors
+- ✓  cargo fmt - Formatting valid
+- ✓  Compilation - Success

@@ -153,7 +153,7 @@ Add `context_lines: 2-3` for surrounding code.
 
 ---
 
-## ✅ Behavioral Checklist
+## ✓  Behavioral Checklist
 
 - [ ] Search before reading files
 - [ ] No comments unless asked

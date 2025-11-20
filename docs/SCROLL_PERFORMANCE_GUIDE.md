@@ -37,11 +37,11 @@ Mouse Scroll Event
 ```
 
 **Problems**:
-- ❌ Double render = 2x work
-- ❌ Full clear on every scroll
-- ❌ Metrics recalculated unnecessarily
-- ❌ All visible lines cloned every render
-- ❌ Cache not used at same scroll position
+- ⤫  Double render = 2x work
+- ⤫  Full clear on every scroll
+- ⤫  Metrics recalculated unnecessarily
+- ⤫  All visible lines cloned every render
+- ⤫  Cache not used at same scroll position
 
 ### After Optimization
 
@@ -67,11 +67,11 @@ Mouse Scroll Event
 ```
 
 **Improvements**:
-- ✅ Single render per event
-- ✅ No full clear on scroll-only changes
-- ✅ Metrics reused from cache
-- ✅ Visible lines reused if scroll position unchanged
-- ✅ Smart invalidation on content changes
+- ✓  Single render per event
+- ✓  No full clear on scroll-only changes
+- ✓  Metrics reused from cache
+- ✓  Visible lines reused if scroll position unchanged
+- ✓  Smart invalidation on content changes
 
 ## Optimization Layers
 
@@ -82,7 +82,7 @@ Mouse Scroll Event
 Remove immediate render after mouse scroll. The main event loop will render naturally on the next `Event::Render` tick.
 
 ```rust
-// ❌ BEFORE: Causes 2x render per scroll
+// ⤫  BEFORE: Causes 2x render per scroll
 Event::Mouse(mouse_event) => {
     match mouse_event.kind {
         MouseEventKind::ScrollDown => session.scroll_line_down(),
@@ -94,7 +94,7 @@ Event::Mouse(mouse_event) => {
     })?;  // ← EXTRA RENDER
 }
 
-// ✅ AFTER: Single render per event
+// ✓  AFTER: Single render per event
 Event::Mouse(mouse_event) => {
     match mouse_event.kind {
         MouseEventKind::ScrollDown => session.scroll_line_down(),
@@ -116,7 +116,7 @@ Event::Mouse(mouse_event) => {
 Don't set `needs_full_clear = true` for scroll-only operations. Only scroll the viewport.
 
 ```rust
-// ❌ BEFORE: Every scroll clears entire terminal
+// ⤫  BEFORE: Every scroll clears entire terminal
 fn scroll_line_down(&mut self) {
     let previous = self.scroll_manager.offset();
     self.scroll_manager.scroll_down(1);
@@ -125,7 +125,7 @@ fn scroll_line_down(&mut self) {
     }
 }
 
-// ✅ AFTER: Just update viewport
+// ✓  AFTER: Just update viewport
 fn scroll_line_down(&mut self) {
     self.scroll_manager.scroll_down(1);
     // mark_dirty() called by handle_scroll_down()
@@ -155,7 +155,7 @@ fn collect_transcript_window_cached(
     // Check cache first
     if let Some((cached_offset, cached_width, cached_lines)) = &self.visible_lines_cache {
         if *cached_offset == start_row && *cached_width == width {
-            return cached_lines.clone();  // ✅ Fast path: reuse cached
+            return cached_lines.clone();  // ✓  Fast path: reuse cached
         }
     }
     
@@ -187,7 +187,7 @@ fn collect_transcript_window_cached(
 Use efficient iterator chain instead of loop with enumerate/skip.
 
 ```rust
-// ❌ BEFORE: Loop with enumerate
+// ⤫  BEFORE: Loop with enumerate
 for (_line_idx, line) in msg.lines.iter().enumerate().skip(skip_lines) {
     if result.len() >= remaining_rows {
         break;
@@ -195,7 +195,7 @@ for (_line_idx, line) in msg.lines.iter().enumerate().skip(skip_lines) {
     result.push(line.clone());
 }
 
-// ✅ AFTER: Direct iterator chain
+// ✓  AFTER: Direct iterator chain
 let target_count = remaining_rows - result.len();
 result.extend(
     msg.lines.iter()
@@ -206,10 +206,10 @@ result.extend(
 ```
 
 **Advantages**:
-- ✅ Better branch prediction
-- ✅ Single allocate/extend operation
-- ✅ No unnecessary index tracking
-- ✅ SIMD-friendly for some architectures
+- ✓  Better branch prediction
+- ✓  Single allocate/extend operation
+- ✓  No unnecessary index tracking
+- ✓  SIMD-friendly for some architectures
 
 **Gain**: 15% faster iteration
 
@@ -223,7 +223,7 @@ result.extend(
 |-----------|-----------|--------|-------|
 | Scroll event | O(1) | N/A | Just update offset |
 | Full render (cold cache) | O(v*l) | - | v=viewport height, l=avg line size |
-| Full render (hot cache) | O(1) | ✅ | Reuse visible lines |
+| Full render (hot cache) | O(1) | ✓  | Reuse visible lines |
 | Metrics calculation | O(n) | Cached | n=message count |
 | Line collection | O(v) | Cached | v=visible lines |
 
@@ -250,21 +250,21 @@ Where:
 
 ```bash
 $ cargo check
-✅ No compilation errors
+✓  No compilation errors
 ```
 
 ### Testing
 
 ```bash
 $ cargo test --lib
-✅ All 17 tests pass
+✓  All 17 tests pass
 ```
 
 ### Type Checking
 
 ```bash
 $ cargo clippy
-✅ No new warnings
+✓  No new warnings
 ```
 
 ---
@@ -273,21 +273,21 @@ $ cargo clippy
 
 ### Responsiveness
 
-- ✅ Scroll appears instantly (no perceptible delay)
-- ✅ No frame drops during rapid scrolling
-- ✅ Smooth motion on trackpad scrolling
+- ✓  Scroll appears instantly (no perceptible delay)
+- ✓  No frame drops during rapid scrolling
+- ✓  Smooth motion on trackpad scrolling
 
 ### CPU Usage
 
-- ✅ Lower CPU usage during scrolling
-- ✅ Reduced thermal output (cooler device)
-- ✅ Better battery life on mobile terminals
+- ✓  Lower CPU usage during scrolling
+- ✓  Reduced thermal output (cooler device)
+- ✓  Better battery life on mobile terminals
 
 ### Memory
 
-- ✅ Fewer allocations per scroll
-- ✅ More efficient cache reuse
-- ✅ Lower peak memory during intensive scrolling
+- ✓  Fewer allocations per scroll
+- ✓  More efficient cache reuse
+- ✓  Lower peak memory during intensive scrolling
 
 ---
 
@@ -389,23 +389,23 @@ for (start, end) in self.dirty_regions {
 
 ## Compatibility
 
-### ✅ Backward Compatible
+### ✓  Backward Compatible
 - No API changes
 - No breaking changes
 - Drop-in improvement
 
-### ✅ Platform Support
-- macOS ✅
-- Linux ✅
-- Windows ✅
-- Remote SSH ✅
+### ✓  Platform Support
+- macOS ✓ 
+- Linux ✓ 
+- Windows ✓ 
+- Remote SSH ✓ 
 
-### ✅ Terminal Support
-- xterm-compatible ✅
-- kitty ✅
-- iTerm2 ✅
-- Alacritty ✅
-- WezTerm ✅
+### ✓  Terminal Support
+- xterm-compatible ✓ 
+- kitty ✓ 
+- iTerm2 ✓ 
+- Alacritty ✓ 
+- WezTerm ✓ 
 
 ---
 

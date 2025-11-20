@@ -161,7 +161,7 @@ Potential future improvements:
 
 ## Status
 
-✅ Complete and tested
+✓  Complete and tested
 - All 11 loop detection tests passing
 - Code formatted and linted
 - Ready for production

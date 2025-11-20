@@ -16,7 +16,7 @@ const { execSync } = require('child_process');
 
 function checkEnvironment() {
   if (!process.env.GITHUB_TOKEN) {
-    console.error('❌ Error: GITHUB_TOKEN environment variable is not set');
+    console.error('⤫  Error: GITHUB_TOKEN environment variable is not set');
     console.error('Please set it before running this script:');
     console.error('export GITHUB_TOKEN=your_github_personal_access_token_here');
     console.error('');
@@ -33,7 +33,7 @@ function checkEnvironment() {
 function checkNpmrc() {
   const npmrcPath = path.join(__dirname, '../.npmrc');
   if (!fs.existsSync(npmrcPath)) {
-    console.error('❌ Error: .npmrc file not found in npm directory');
+    console.error('⤫  Error: .npmrc file not found in npm directory');
     console.error('Please create one with the proper GitHub Packages configuration');
     console.error('See .npmrc.example for reference');
     process.exit(1);
@@ -43,7 +43,7 @@ function checkNpmrc() {
   // Check for valid GitHub Packages registry configuration
   const githubRegistryPattern = /^\/\/npm\.pkg\.github\.com\/?:_authToken=/m;
   let githubRegistryFound = false;
-  
+
   for (const line of npmrcContent.split(/\r?\n/)) {
     const trimmed = line.trim();
     if (
@@ -55,7 +55,7 @@ function checkNpmrc() {
       break;
     }
   }
-  
+
   if (!githubRegistryFound) {
     console.warn('⚠️  Warning: .npmrc file does not contain a valid GitHub Packages registry configuration');
     console.warn('Please check that your .npmrc includes: //npm.pkg.github.com/:_authToken=YOUR_TOKEN');
@@ -67,7 +67,7 @@ function checkNpmrc() {
 function checkPackageJson() {
   const packageJsonPath = path.join(__dirname, '../package.json');
   if (!fs.existsSync(packageJsonPath)) {
-    console.error('❌ Error: package.json not found in npm directory');
+    console.error('⤫  Error: package.json not found in npm directory');
     process.exit(1);
   }
 
@@ -99,7 +99,7 @@ function runPublish() {
     console.log('\n🎉 Package published successfully to GitHub Packages!');
     console.log(`🔗 View at: https://github.com/vinhnx/vtcode/pkgs/npm/vtcode`);
   } catch (error) {
-    console.error('❌ Error during publish:');
+    console.error('⤫  Error during publish:');
     console.error(error.message);
     if (error.stdout) console.error('STDOUT:', error.stdout);
     if (error.stderr) console.error('STDERR:', error.stderr);

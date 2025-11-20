@@ -2,7 +2,7 @@
 
 ## Current Implementation Status
 
-### ✅ Completed Features
+### ✓  Completed Features
 
 1. **@ Symbol Trigger**
 
@@ -34,7 +34,7 @@
 
     - Shows: `@vtcode.toml`
     - Internal: `/full/absolute/path/vtcode.toml`
-    - ✅ Already working correctly
+    - ✓  Already working correctly
 
 6. **Loading State UI**
 
@@ -58,7 +58,7 @@
 
 **What's Done**:
 
--   ✅ Added `ignore = "0.4"` to vtcode-indexer/Cargo.toml
+-   ✓  Added `ignore = "0.4"` to vtcode-indexer/Cargo.toml
 
 **What's Needed**:
 
@@ -94,7 +94,7 @@ impl SimpleIndexer {
 
 **What's Done**:
 
--   ✅ Added `tui-tree-widget = "0.22"` to vtcode-core/Cargo.toml
+-   ✓  Added `tui-tree-widget = "0.22"` to vtcode-core/Cargo.toml
 
 **What's Needed**:
 
@@ -191,10 +191,10 @@ impl SimpleIndexer {
 
 ### Metrics
 
--   **Compilation**: ✅ Success (0 errors)
--   **Tests**: ✅ 10/10 passing (100%)
--   **Performance**: ✅ Excellent
--   **Documentation**: ✅ Comprehensive
+-   **Compilation**: ✓  Success (0 errors)
+-   **Tests**: ✓  10/10 passing (100%)
+-   **Performance**: ✓  Excellent
+-   **Documentation**: ✓  Comprehensive
 
 ### Technical Debt
 
@@ -223,24 +223,24 @@ impl SimpleIndexer {
 
 Users can:
 
--   ✅ Type `@` to open file browser
--   ✅ Type `/files` to open file browser
--   ✅ Filter files by typing
--   ✅ Navigate with arrow keys
--   ✅ Select files with Enter/Tab
--   ✅ See relative paths (clean)
--   ✅ Experience fast performance
--   ✅ Use cached filters (instant)
+-   ✓  Type `@` to open file browser
+-   ✓  Type `/files` to open file browser
+-   ✓  Filter files by typing
+-   ✓  Navigate with arrow keys
+-   ✓  Select files with Enter/Tab
+-   ✓  See relative paths (clean)
+-   ✓  Experience fast performance
+-   ✓  Use cached filters (instant)
 
 ## What Doesn't Work Yet
 
 Users cannot:
 
--   ❌ See files excluded by .gitignore (shows everything)
--   ❌ Browse files in tree structure (flat list only)
--   ❌ Distinguish files from folders visually
--   ❌ Expand/collapse folders
--   ❌ See file type icons
+-   ⤫  See files excluded by .gitignore (shows everything)
+-   ⤫  Browse files in tree structure (flat list only)
+-   ⤫  Distinguish files from folders visually
+-   ⤫  Expand/collapse folders
+-   ⤫  See file type icons
 
 ## Critical Issue: Ignore Files
 

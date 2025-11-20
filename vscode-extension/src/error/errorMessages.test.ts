@@ -64,7 +64,7 @@ describe("errorMessages", () => {
 	describe("formatErrorMessage", () => {
 		it("should format error message with title and description", () => {
 			const formatted = formatErrorMessage("NETWORK_TIMEOUT");
-			expect(formatted).toContain("❌");
+			expect(formatted).toContain("⤫ ");
 			expect(formatted).toContain("Network request timed out");
 			expect(formatted).toContain("timed out");
 		});
@@ -91,7 +91,7 @@ describe("errorMessages", () => {
 		it("should have proper formatting", () => {
 			const formatted = formatErrorMessage("NETWORK_ERROR");
 			expect(formatted).toContain("\n");
-			expect(formatted).startsWith("❌");
+			expect(formatted).startsWith("⤫ ");
 		});
 	});
 

@@ -244,8 +244,8 @@ fn test_prompt_with_context() {
 
 The current implementation is **solid but conservative**. These improvements would make it:
 
-✅ More user-friendly (better context)  
-✅ More accurate (selective reset, time decay)  
-✅ More debuggable (statistics, hash resilience)  
+✓  More user-friendly (better context)  
+✓  More accurate (selective reset, time decay)  
+✓  More debuggable (statistics, hash resilience)  
 
 Start with **Tier 1** for maximum impact with minimal effort. Tier 2-3 are nice additions for future iterations.

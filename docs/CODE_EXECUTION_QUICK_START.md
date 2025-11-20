@@ -2,7 +2,7 @@
 
 Fast reference for implementing Anthropic's code execution with MCP in vtcode.
 
-**Status**: ✅ Steps 1-6 Complete | Steps 7-9 Designed
+**Status**: ✓  Steps 1-6 Complete | Steps 7-9 Designed
 
 ## 60-Second Overview
 
@@ -155,7 +155,7 @@ tools = search_tools(keyword="list_files", detail_level="full")
 ### Result is empty
 ```python
 # Always assign result = {...} at end
-result = {"data": processed_value}  # ✅ Required
+result = {"data": processed_value}  # ✓  Required
 ```
 
 ## Documentation by Role
@@ -187,7 +187,7 @@ result = {"data": processed_value}  # ✅ Required
 
 ## Implementation Steps
 
-### ✅ Step 1: Progressive Tool Discovery
+### ✓  Step 1: Progressive Tool Discovery
 - `search_tools()` function
 - Keyword matching + relevance scoring
 - Detail levels: name-only, description, full
@@ -195,7 +195,7 @@ result = {"data": processed_value}  # ✅ Required
 
 **Status**: Complete and tested
 
-### ✅ Step 2: Code Executor
+### ✓  Step 2: Code Executor
 - Python 3 + JavaScript support
 - SDK auto-generation
 - IPC handler for tool calls
@@ -203,28 +203,28 @@ result = {"data": processed_value}  # ✅ Required
 
 **Status**: Complete and tested
 
-### ✅ Step 3: Skill Persistence
+### ✓  Step 3: Skill Persistence
 - Save/load/list/search skills
 - Auto-generated documentation
 - Tool dependency tracking
 
 **Status**: Complete and tested
 
-### ✅ Step 4: Data Filtering
+### ✓  Step 4: Data Filtering
 - Process large results in code
 - Aggregation and transformation
 - 95%+ context savings
 
 **Status**: Complete and tested
 
-### ✅ Step 5: PII Protection
+### ✓  Step 5: PII Protection
 - Pattern detection (email, SSN, etc.)
 - Tokenization/detokenization
 - Audit trail
 
 **Status**: Complete and tested
 
-### ✅ Step 6: Integration Testing
+### ✓  Step 6: Integration Testing
 - 8 integration tests
 - Performance validation
 - Comprehensive documentation
@@ -358,6 +358,6 @@ result = execute_code(skill.code + "\nresult = count_by_ext('/src')")
 **Quick Links**:
 - 📖 [Full Agent Guide](./CODE_EXECUTION_AGENT_GUIDE.md)
 - 📊 [Performance Data](./MCP_PERFORMANCE_BENCHMARKS.md)
-- ✅ [Validation Status](./STEP_6_VALIDATION_CHECKLIST.md)
+- ✓  [Validation Status](./STEP_6_VALIDATION_CHECKLIST.md)
 - 🏗️ [Architecture](./mcp_code_execution.md)
 - 🧪 [Test Guide](./MCP_INTEGRATION_TESTING.md)
