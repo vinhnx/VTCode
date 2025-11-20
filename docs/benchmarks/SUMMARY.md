@@ -35,7 +35,7 @@
 
 **Performance:**
 
--   ✅ 101/164 tests passed (61.6%)
+-   ✓  101/164 tests passed (61.6%)
 -   ⚡ 0.97s median latency
 -   💰 $0.00 cost (free tier)
 

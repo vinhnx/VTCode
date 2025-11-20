@@ -4,12 +4,12 @@ This guide shows how to integrate the complete permission system (resolver + aud
 
 ## Current State
 
-✅ **All 3 modules are implemented and compiled**:
+✓  **All 3 modules are implemented and compiled**:
 - `CommandResolver` - Resolves commands to paths
 - `PermissionCache` - Caches decisions with TTL
 - `PermissionAuditLog` - Records all decisions to JSON
 
-✅ **CommandPolicyEvaluator enhanced** with:
+✓  **CommandPolicyEvaluator enhanced** with:
 - Integrated resolver and cache
 - New async method: `evaluate_with_resolution()`
 
@@ -499,7 +499,7 @@ Async writing with `BufWriter`:
 
 ## Next Steps
 
-1. ✅ Review this guide
+1. ✓  Review this guide
 2. ⏳ Pick integration location (command.rs, pty.rs, or sandbox.rs)
 3. ⏳ Add `audit_log` field to the executor struct
 4. ⏳ Initialize in session creation
@@ -514,9 +514,9 @@ Async writing with `BufWriter`:
 ## Summary
 
 The permission system is **ready to integrate**. All three modules are:
-- ✅ Fully implemented
-- ✅ Well-tested
-- ✅ Production-quality code
-- ✅ Properly exported
+- ✓  Fully implemented
+- ✓  Well-tested
+- ✓  Production-quality code
+- ✓  Properly exported
 
 Simply follow the examples above to wire the audit logging into your command execution paths.

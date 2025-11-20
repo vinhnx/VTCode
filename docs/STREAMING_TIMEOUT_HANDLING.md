@@ -86,11 +86,11 @@ Comprehensive guide covering:
 ## Testing
 
 All configuration changes have been tested:
-- ✅ Configuration parsing works correctly
-- ✅ Default values are safe and reasonable
-- ✅ Validation enforces minimum timeout (15 seconds if enabled)
-- ✅ Error messages format correctly
-- ✅ All existing tests pass
+- ✓  Configuration parsing works correctly
+- ✓  Default values are safe and reasonable
+- ✓  Validation enforces minimum timeout (15 seconds if enabled)
+- ✓  Error messages format correctly
+- ✓  All existing tests pass
 
 ## User-Facing Impact
 

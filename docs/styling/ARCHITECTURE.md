@@ -172,25 +172,25 @@ External Crates (Cargo.toml):
 
 | Effect | Supported | Remark |
 |--------|-----------|--------|
-| **Bold** | ✅ Yes | Explicit `bold: bool` field |
-| **Italic** | ✅ Yes | Explicit `italic: bool` field |
-| **Dim** | ❌ No | Not modeled |
-| **Underline** | ❌ No | Not modeled |
-| **Strikethrough** | ❌ No | Not modeled |
-| **Reverse** | ❌ No | Not modeled |
-| **Background Color** | ❌ No | InlineTextStyle has no `bg_color` |
+| **Bold** | ✓  Yes | Explicit `bold: bool` field |
+| **Italic** | ✓  Yes | Explicit `italic: bool` field |
+| **Dim** | ⤫  No | Not modeled |
+| **Underline** | ⤫  No | Not modeled |
+| **Strikethrough** | ⤫  No | Not modeled |
+| **Reverse** | ⤫  No | Not modeled |
+| **Background Color** | ⤫  No | InlineTextStyle has no `bg_color` |
 
 ### After Integration (Phase 1)
 
 | Effect | Supported | Remark |
 |--------|-----------|--------|
-| **Bold** | ✅ Yes | From `Effects::BOLD` bitmask |
-| **Italic** | ✅ Yes | From `Effects::ITALIC` bitmask |
-| **Dim** | ✅ Yes | From `Effects::DIMMED` bitmask |
-| **Underline** | ✅ Yes | From `Effects::UNDERLINE` bitmask |
-| **Strikethrough** | ✅ Yes | From `Effects::STRIKETHROUGH` bitmask |
-| **Reverse** | ✅ Yes | From `Effects::REVERSE` bitmask |
-| **Background Color** | ✅ Yes | New `bg_color: Option<AnsiColorEnum>` field |
+| **Bold** | ✓  Yes | From `Effects::BOLD` bitmask |
+| **Italic** | ✓  Yes | From `Effects::ITALIC` bitmask |
+| **Dim** | ✓  Yes | From `Effects::DIMMED` bitmask |
+| **Underline** | ✓  Yes | From `Effects::UNDERLINE` bitmask |
+| **Strikethrough** | ✓  Yes | From `Effects::STRIKETHROUGH` bitmask |
+| **Reverse** | ✓  Yes | From `Effects::REVERSE` bitmask |
+| **Background Color** | ✓  Yes | New `bg_color: Option<AnsiColorEnum>` field |
 
 ---
 

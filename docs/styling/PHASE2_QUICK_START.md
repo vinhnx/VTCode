@@ -2,7 +2,7 @@
 
 ## Current State
 
-✅ **Phase 1 Complete**:
+✓  **Phase 1 Complete**:
 - `anstyle-git`, `anstyle-ls`, `anstyle-query` dependencies already added
 - `InlineTextStyle` modernized with full Effects and background color support
 - `ThemeConfigParser` module already created with Git/LS parsing functions

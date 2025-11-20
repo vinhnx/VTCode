@@ -17,7 +17,7 @@ Automated release script for the VTCode VSCode extension that handles version bu
 
 ## What It Does
 
-1. ✅ Checks all required dependencies (node, npm, git, jq, vsce, ovsx)
+1. ✓  Checks all required dependencies (node, npm, git, jq, vsce, ovsx)
 2. 📦 Bumps version in package.json
 3. 📝 Updates CHANGELOG.md with new version and date
 4. 🔨 Builds the extension (npm run bundle)

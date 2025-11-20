@@ -342,16 +342,16 @@ export NODE_OPTIONS="--max-old-space-size=4096"
 ## Environment Inheritance Changelog
 
 ### v0.43.3+ (Latest)
-- ✅ PATH environment variable properly inherited
-- ✅ All parent environment variables preserved
-- ✅ User-installed tools (~/.cargo/bin, etc.) now accessible
-- ✅ Custom environment variables preserved
-- ✅ Security model maintained with strategic overrides
+- ✓  PATH environment variable properly inherited
+- ✓  All parent environment variables preserved
+- ✓  User-installed tools (~/.cargo/bin, etc.) now accessible
+- ✓  Custom environment variables preserved
+- ✓  Security model maintained with strategic overrides
 
 ### Earlier Versions
-- ❌ PATH not inherited - tools in custom locations not found
-- ❌ Environment was mostly empty - only key variables set
-- ❌ User-installed tools inaccessible
+- ⤫  PATH not inherited - tools in custom locations not found
+- ⤫  Environment was mostly empty - only key variables set
+- ⤫  User-installed tools inaccessible
 
 ## Contributing Improvements
 

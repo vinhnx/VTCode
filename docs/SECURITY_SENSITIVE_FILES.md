@@ -65,11 +65,11 @@ pub fn load_files(&mut self, files: Vec<String>) {
 
 ## Security Guarantees
 
-✅ **`.env` files NEVER appear in file browser**
-✅ **`.env` files NEVER indexed**
-✅ **`.git` directory NEVER exposed**  
-✅ **All hidden files EXCLUDED by default**
-✅ **Protection cannot be disabled** (hardcoded)
+✓  **`.env` files NEVER appear in file browser**
+✓  **`.env` files NEVER indexed**
+✓  **`.git` directory NEVER exposed**  
+✓  **All hidden files EXCLUDED by default**
+✓  **Protection cannot be disabled** (hardcoded)
 
 ## Testing
 
@@ -89,14 +89,14 @@ cargo test test_should_exclude_file
 #[test]
 fn test_security_filters_sensitive_files() {
     let files = vec![
-        "/workspace/src/main.rs",           // ✅ Shown
-        "/workspace/.env",                  // ❌ HIDDEN
-        "/workspace/.env.local",            // ❌ HIDDEN
-        "/workspace/.git/config",           // ❌ HIDDEN
-        "/workspace/.gitignore",            // ❌ HIDDEN
-        "/workspace/.DS_Store",             // ❌ HIDDEN
-        "/workspace/.hidden_file",          // ❌ HIDDEN
-        "/workspace/tests/test.rs",         // ✅ Shown
+        "/workspace/src/main.rs",           // ✓  Shown
+        "/workspace/.env",                  // ⤫  HIDDEN
+        "/workspace/.env.local",            // ⤫  HIDDEN
+        "/workspace/.git/config",           // ⤫  HIDDEN
+        "/workspace/.gitignore",            // ⤫  HIDDEN
+        "/workspace/.DS_Store",             // ⤫  HIDDEN
+        "/workspace/.hidden_file",          // ⤫  HIDDEN
+        "/workspace/tests/test.rs",         // ✓  Shown
     ];
     
     palette.load_files(files);

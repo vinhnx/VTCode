@@ -286,14 +286,14 @@ response = execute_code({
 
 ## When to Use execute_code
 
-✅ **Good Use Cases**:
+✓  **Good Use Cases**:
 - Filtering large result sets
 - Aggregating data from multiple tool calls
 - Complex control flow (loops, conditionals)
 - Data transformation and cleaning
 - Error handling and retries
 
-❌ **Not Ideal**:
+⤫  **Not Ideal**:
 - Simple single tool calls (use tools directly)
 - Simple conditionals (use tool parameters instead)
 - Small data sets (direct tool response is fine)

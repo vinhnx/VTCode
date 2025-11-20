@@ -173,7 +173,7 @@ it('should execute', async () => {
 | Nov 15 (Fri) | Week 3 review |
 | Nov 22 (Fri) | Week 4 review |
 | Nov 29 (Fri) | Week 5 review |
-| Dec 6 (Fri) | Phase 2 complete ✅ |
+| Dec 6 (Fri) | Phase 2 complete ✓  |
 | Dec 9 (Mon) | Phase 3 starts |
 
 ---
@@ -249,28 +249,28 @@ VtcodeBackend (agent)
 
 ## Common Mistakes to Avoid
 
-❌ Hardcoding VS Code APIs in commands  
-✅ Inject via constructor
+⤫  Hardcoding VS Code APIs in commands  
+✓  Inject via constructor
 
-❌ Making participants do too much  
-✅ Focus on one context type
+⤫  Making participants do too much  
+✓  Focus on one context type
 
-❌ Skipping error handling  
-✅ Use try-catch + logging
+⤫  Skipping error handling  
+✓  Use try-catch + logging
 
-❌ Tests after code  
-✅ Write tests alongside code
+⤫  Tests after code  
+✓  Write tests alongside code
 
 ---
 
 ## Definition of Done (Per Task)
 
-✅ Code written  
-✅ Tests passing  
-✅ Linter passing  
-✅ Documented  
-✅ Code reviewed  
-✅ Merged to main  
+✓  Code written  
+✓  Tests passing  
+✓  Linter passing  
+✓  Documented  
+✓  Code reviewed  
+✓  Merged to main  
 
 ---
 

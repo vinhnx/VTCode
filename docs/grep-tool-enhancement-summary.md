@@ -164,7 +164,7 @@ Need to find code?
 All changes compile successfully with no new warnings related to grep_file or system prompts.
 
 ```bash
-cargo check  # ✅ Passes
+cargo check  # ✓  Passes
 cargo test   # Run full test suite
 cargo clippy # Lint check
 ```
@@ -209,11 +209,11 @@ Potential enhancements to grep_file:
 
 ## Files Changed
 
-1. ✅ `vtcode-core/src/prompts/system.rs` - Enhanced with grep_file guidance
-2. ✅ `vtcode-core/src/tools/registry/declarations.rs` - Improved parameter docs
-3. ✅ `vtcode-core/src/tools/mod.rs` - Updated tool category description
-4. ✅ `docs/grep-tool-guide.md` - New comprehensive guide
-5. ✅ `docs/grep-tool-enhancement-summary.md` - This summary
+1. ✓  `vtcode-core/src/prompts/system.rs` - Enhanced with grep_file guidance
+2. ✓  `vtcode-core/src/tools/registry/declarations.rs` - Improved parameter docs
+3. ✓  `vtcode-core/src/tools/mod.rs` - Updated tool category description
+4. ✓  `docs/grep-tool-guide.md` - New comprehensive guide
+5. ✓  `docs/grep-tool-enhancement-summary.md` - This summary
 
 ## Verification Checklist
 

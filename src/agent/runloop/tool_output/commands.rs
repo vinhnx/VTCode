@@ -160,7 +160,7 @@ pub(crate) async fn render_terminal_command_panel(
                 MessageStyle::Error,
                 "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
             )?;
-            renderer.line(MessageStyle::Error, "❌ COMMAND NOT FOUND (EXIT CODE 127)")?;
+            renderer.line(MessageStyle::Error, "⤫  COMMAND NOT FOUND (EXIT CODE 127)")?;
             renderer.line(
                 MessageStyle::Error,
                 "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",

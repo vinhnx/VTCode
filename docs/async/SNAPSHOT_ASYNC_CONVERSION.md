@@ -76,10 +76,10 @@ Updated all callers to use `.await`:
 
 ## Testing
 
-- ✅ All code compiles successfully with `cargo check`
-- ✅ No new warnings introduced
-- ✅ All test signatures updated to async
-- ✅ Integration with existing async codebase verified
+- ✓  All code compiles successfully with `cargo check`
+- ✓  No new warnings introduced
+- ✓  All test signatures updated to async
+- ✓  Integration with existing async codebase verified
 
 ## Impact
 
@@ -104,8 +104,8 @@ Medium priority files (7 files):
 ## Completion Status
 
 **Phase 1 (High Priority)**: 2 of 3 files complete (67%)
-- ✅ `core/agent/intelligence.rs`
-- ✅ `core/agent/snapshots.rs`
+- ✓  `core/agent/intelligence.rs`
+- ✓  `core/agent/snapshots.rs`
 - ⏳ `tools/pty.rs`
 
 **Overall Progress**: 7 of 15 files converted (47%)

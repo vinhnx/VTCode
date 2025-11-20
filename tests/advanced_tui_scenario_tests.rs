@@ -164,10 +164,7 @@ fn test_ui_message_combinations() {
                     InlineMessageKind::User,
                     "Show me files in current directory",
                 ),
-                (
-                    InlineMessageKind::Tool,
-                    "run_pty_cmd([\"ls\", \"-la\"])",
-                ),
+                (InlineMessageKind::Tool, "run_pty_cmd([\"ls\", \"-la\"])"),
                 (InlineMessageKind::Pty, "file1.txt  file2.rs  src/"),
                 (
                     InlineMessageKind::Agent,

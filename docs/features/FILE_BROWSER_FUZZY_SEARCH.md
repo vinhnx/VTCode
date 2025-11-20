@@ -12,11 +12,11 @@ Fuzzy matching allows you to find files by typing characters that appear in the 
 
 | Query | Matches | Example |
 |-------|---------|---------|
-| `smr` | **s**rc/**m**ain.**r**s | ✅ |
-| `smu` | **s**rc/**m**odels/**u**ser.rs | ✅ |
-| `fmp` | **f**oo/**m**y_**p**roject.rs | ✅ |
-| `tit` | **t**ests/**i**ntegration_**t**est.rs | ✅ |
-| `main` | main.rs, src/main.rs, tests/main_test.rs | ✅ All match! |
+| `smr` | **s**rc/**m**ain.**r**s | ✓  |
+| `smu` | **s**rc/**m**odels/**u**ser.rs | ✓  |
+| `fmp` | **f**oo/**m**y_**p**roject.rs | ✓  |
+| `tit` | **t**ests/**i**ntegration_**t**est.rs | ✓  |
+| `main` | main.rs, src/main.rs, tests/main_test.rs | ✓  All match! |
 
 ### Smart Scoring Algorithm
 
@@ -196,7 +196,7 @@ fn test_fuzzy_filtering() {
 }
 ```
 
-**Test Results:** ✅ 14/14 file_palette tests passing
+**Test Results:** ✓  14/14 file_palette tests passing
 
 ## Performance
 
@@ -217,11 +217,11 @@ fn test_fuzzy_filtering() {
 
 ## User Benefits
 
-✅ **Faster file finding** - Type fewer characters  
-✅ **More intuitive** - Works like VSCode, Sublime, IntelliJ
-✅ **Smart ranking** - Exact matches always on top
-✅ **Muscle memory** - Enter key works naturally
-✅ **Dual input methods** - Tab or Enter, user's choice
+✓  **Faster file finding** - Type fewer characters  
+✓  **More intuitive** - Works like VSCode, Sublime, IntelliJ
+✓  **Smart ranking** - Exact matches always on top
+✓  **Muscle memory** - Enter key works naturally
+✓  **Dual input methods** - Tab or Enter, user's choice
 
 ## Files Modified
 

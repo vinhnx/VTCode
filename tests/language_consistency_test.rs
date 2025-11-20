@@ -365,7 +365,7 @@ This is in English.
         // Emojis should be allowed in string values
         let json = json!({
             "status": "success 🎉",
-            "message": "Operation completed ✅",
+            "message": "Operation completed ✓ ",
             "data": {
                 "celebration": "🚀🎊"
             }

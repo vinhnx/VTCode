@@ -36,18 +36,18 @@ export class AskCommand implements ICommand {
 
 ## Phase 2 Deliverables
 
-### ✅ 3 Major Systems
+### ✓  3 Major Systems
 1. **Command System** - Modular, testable commands
 2. **Participant System** - Context-aware @ mentions
 3. **State Management** - Better conversation tracking
 
-### ✅ 4 Built-in Participants
+### ✓  4 Built-in Participants
 - `@workspace` - Full workspace context
 - `@code` - Selected code context
 - `@terminal` - Terminal output context
 - `@git` - Git branch/changes context
 
-### ✅ 7 Modular Commands
+### ✓  7 Modular Commands
 - Ask agent
 - Ask about selection
 - Analyze workspace
@@ -56,7 +56,7 @@ export class AskCommand implements ICommand {
 - Trust workspace
 - Refresh CLI availability
 
-### ✅ Comprehensive Testing
+### ✓  Comprehensive Testing
 - 30+ new unit tests
 - 10+ integration tests
 - >90% code coverage
@@ -402,17 +402,17 @@ describe('Command Flow', () => {
 
 ## Common Pitfalls to Avoid
 
-❌ **Don't**: Hardcode VS Code APIs inside commands
-✅ **Do**: Inject dependencies through constructor
+⤫  **Don't**: Hardcode VS Code APIs inside commands
+✓  **Do**: Inject dependencies through constructor
 
-❌ **Don't**: Make participants do too much
-✅ **Do**: Keep participants focused on one context type
+⤫  **Don't**: Make participants do too much
+✓  **Do**: Keep participants focused on one context type
 
-❌ **Don't**: Skip error handling
-✅ **Do**: Use try-catch with proper error messages
+⤫  **Don't**: Skip error handling
+✓  **Do**: Use try-catch with proper error messages
 
-❌ **Don't**: Forget to update extension.ts
-✅ **Do**: Remove old code immediately after refactoring
+⤫  **Don't**: Forget to update extension.ts
+✓  **Do**: Remove old code immediately after refactoring
 
 ---
 
@@ -420,7 +420,7 @@ describe('Command Flow', () => {
 
 **Every Friday**:
 ```
-- ✅ Completed: [Task name]
+- ✓  Completed: [Task name]
 - 🚧 In progress: [Task name]
 - 🔴 Blocked: [Issue/Person needed]
 - 📊 Progress: X/Y tasks complete (X%)
@@ -431,25 +431,25 @@ describe('Command Flow', () => {
 
 ## Success Indicators
 
-### End of Week 3 ✅
+### End of Week 3 ✓ 
 - All commands extracted into modular files
 - CommandRegistry working
 - extension.ts significantly smaller
 - All command tests passing
 
-### End of Week 4 ✅
+### End of Week 4 ✓ 
 - ParticipantRegistry working
 - 4 participants implemented
 - ChatView shows @ mentions
 - Participant tests passing
 
-### End of Week 5 ✅
+### End of Week 5 ✓ 
 - MessageStore working
 - ConversationManager implemented
 - State transitions working
 - State management tests passing
 
-### End of Week 6 ✅
+### End of Week 6 ✓ 
 - All unit tests passing (>90% coverage)
 - All integration tests passing
 - Documentation updated

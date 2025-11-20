@@ -16,7 +16,7 @@ const { execSync } = require('child_process');
 
 function checkEnvironment() {
   if (!process.env.NPM_TOKEN) {
-    console.error('❌ Error: NPM_TOKEN environment variable is not set');
+    console.error('⤫  Error: NPM_TOKEN environment variable is not set');
     console.error('Please set it before running this script:');
     console.error('export NPM_TOKEN=your_npm_access_token_here');
     console.error('');
@@ -30,7 +30,7 @@ function checkEnvironment() {
 function checkNpmrc() {
   const npmrcPath = path.join(__dirname, '../.npmrc');
   if (!fs.existsSync(npmrcPath)) {
-    console.error('❌ Error: .npmrc file not found in npm directory');
+    console.error('⤫  Error: .npmrc file not found in npm directory');
     console.error('Please create one with the proper npmjs.com configuration');
     console.error('See .npmrc.example for reference');
     process.exit(1);
@@ -40,7 +40,7 @@ function checkNpmrc() {
   // Check for valid npmjs.com registry configuration
   const npmjsRegistryPattern = /^\/\/registry\.npmjs\.org\/?:_authToken=/m;
   let npmjsRegistryFound = false;
-  
+
   for (const line of npmrcContent.split(/\r?\n/)) {
     const trimmed = line.trim();
     if (
@@ -52,7 +52,7 @@ function checkNpmrc() {
       break;
     }
   }
-  
+
   if (!npmjsRegistryFound) {
     console.warn('⚠️  Warning: .npmrc file does not contain a valid npmjs.com registry configuration');
     console.warn('Please check that your .npmrc includes: //registry.npmjs.org/:_authToken=YOUR_TOKEN');
@@ -69,7 +69,7 @@ function runPublish() {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vtcode-npm-'));
   const sourceDir = path.join(__dirname, '..');
   const files = fs.readdirSync(sourceDir);
-  
+
   for (const file of files) {
     if (file !== 'node_modules') { // Don't copy node_modules
       const src = path.join(sourceDir, file);
@@ -87,16 +87,16 @@ function runPublish() {
     // Read the current package.json and modify the name
     const packageJsonPath = path.join(tempDir, 'package.json');
     let packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
-    
+
     // Change the package name for npmjs.com (since 'vtcode' is taken)
     packageJson.name = 'vtcode-bin';
-    
+
     // Remove the scoped registry config for npmjs.com publish
     delete packageJson.publishConfig;
-    
+
     // Write the modified package.json
     fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2));
-    
+
     console.log(` Package: ${packageJson.name} (v${packageJson.version})`);
 
     // Verify npm configuration
@@ -117,7 +117,7 @@ function runPublish() {
     console.log('\n🎉 Package published successfully to npmjs.com!');
     console.log(`🔗 View at: https://www.npmjs.com/package/vtcode-bin`);
   } catch (error) {
-    console.error('❌ Error during publish:');
+    console.error('⤫  Error during publish:');
     console.error(error.message);
     if (error.stdout) console.error('STDOUT:', error.stdout);
     if (error.stderr) console.error('STDERR:', error.stderr);

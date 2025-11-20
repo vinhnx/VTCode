@@ -1,10 +1,10 @@
 # Claude Code Improvements - Implementation Checklist
 
-✅ **All improvements from https://minusx.ai/blog/decoding-claude-code/ have been successfully implemented.**
+✓  **All improvements from https://minusx.ai/blog/decoding-claude-code/ have been successfully implemented.**
 
 ## Completed Tasks
 
-### 1. Small Model Tier Configuration ✅
+### 1. Small Model Tier Configuration ✓ 
 
 - [x] Added `AgentSmallModelConfig` struct to `vtcode-config/src/core/agent.rs`
   - [x] `enabled` field (default: true)
@@ -22,7 +22,7 @@
 - [x] Updated `vtcode.toml.example` with configuration template
 - [x] Created comprehensive documentation in `docs/SMALL_MODEL_GUIDE.md`
 
-### 2. Enhanced System Prompt ✅
+### 2. Enhanced System Prompt ✓ 
 
 - [x] Restructured `DEFAULT_SYSTEM_PROMPT` in `vtcode-core/src/prompts/system.rs`
 - [x] Added Markdown section headings for clarity
@@ -41,7 +41,7 @@
 - [x] Added "IMPORTANT" and "VERY IMPORTANT" steering directives
 - [x] Maintained backward compatibility
 
-### 3. Expanded AGENTS.md ✅
+### 3. Expanded AGENTS.md ✓ 
 
 - [x] Added Quick Start section
 - [x] Reorganized Build/Test Commands
@@ -66,7 +66,7 @@
   - [x] When to skip `update_plan`
   - [x] Examples of appropriate/inappropriate usage
 
-### 4. Documentation ✅
+### 4. Documentation ✓ 
 
 - [x] Created `docs/CLAUDE_CODE_IMPROVEMENTS.md`
   - [x] Overview and impact summary
@@ -87,7 +87,7 @@
   - [x] Troubleshooting guide
   - [x] Best practices
 
-### 5. Code Quality ✅
+### 5. Code Quality ✓ 
 
 - [x] All code compiles cleanly with `cargo check`
 - [x] All code formatted with `cargo fmt`
@@ -99,13 +99,13 @@
 
 | File | Change | Status |
 |------|--------|--------|
-| `vtcode-config/src/core/agent.rs` | Added `AgentSmallModelConfig` struct | ✅ |
-| `vtcode.toml` | Added `[agent.small_model]` section | ✅ |
-| `vtcode.toml.example` | Added `[agent.small_model]` section | ✅ |
-| `vtcode-core/src/prompts/system.rs` | Enhanced system prompt with XML tags and examples | ✅ |
-| `AGENTS.md` | Added execution algorithms and tone guidelines | ✅ |
-| `docs/CLAUDE_CODE_IMPROVEMENTS.md` | NEW - Summary documentation | ✅ |
-| `docs/SMALL_MODEL_GUIDE.md` | NEW - Implementation guide | ✅ |
+| `vtcode-config/src/core/agent.rs` | Added `AgentSmallModelConfig` struct | ✓  |
+| `vtcode.toml` | Added `[agent.small_model]` section | ✓  |
+| `vtcode.toml.example` | Added `[agent.small_model]` section | ✓  |
+| `vtcode-core/src/prompts/system.rs` | Enhanced system prompt with XML tags and examples | ✓  |
+| `AGENTS.md` | Added execution algorithms and tone guidelines | ✓  |
+| `docs/CLAUDE_CODE_IMPROVEMENTS.md` | NEW - Summary documentation | ✓  |
+| `docs/SMALL_MODEL_GUIDE.md` | NEW - Implementation guide | ✓  |
 
 ## Files Not Modified (No Changes Needed)
 
@@ -117,26 +117,26 @@
 ## Key Features
 
 ### Small Model Tier
-✅ Enabled by default  
-✅ Can be disabled per-operation type  
-✅ Auto-selects lightweight sibling of main model  
-✅ Configurable for 4 use cases  
-✅ 70-80% cost reduction expected  
-✅ ~50% of total LLM calls can use this tier  
+✓  Enabled by default  
+✓  Can be disabled per-operation type  
+✓  Auto-selects lightweight sibling of main model  
+✓  Configurable for 4 use cases  
+✓  70-80% cost reduction expected  
+✓  ~50% of total LLM calls can use this tier  
 
 ### Enhanced System Prompt
-✅ Clearer decision algorithms  
-✅ Better tool selection guidance  
-✅ Concrete good/bad examples  
-✅ Improved tone consistency  
-✅ Stronger steering directives  
+✓  Clearer decision algorithms  
+✓  Better tool selection guidance  
+✓  Concrete good/bad examples  
+✓  Improved tone consistency  
+✓  Stronger steering directives  
 
 ### Expanded AGENTS.md
-✅ Visual decision tree (flowchart)  
-✅ 4-phase execution algorithm  
-✅ Tone and steerability guidelines  
-✅ TODO list usage rules  
-✅ Better examples throughout  
+✓  Visual decision tree (flowchart)  
+✓  4-phase execution algorithm  
+✓  Tone and steerability guidelines  
+✓  TODO list usage rules  
+✓  Better examples throughout  
 
 ## Testing Recommendations
 
@@ -148,7 +148,7 @@
    cargo fmt
    cargo clippy
    ```
-   Status: ✅ Passed
+   Status: ✓  Passed
 
 2. **Runtime Test**
    ```bash
@@ -206,7 +206,7 @@
 
 ## Success Criteria
 
-✅ All criteria met:
+✓  All criteria met:
 
 - [x] Small model configuration implemented and tested
 - [x] System prompt enhanced with Claude Code patterns
@@ -227,4 +227,4 @@ The changes enable:
 - **Improved productivity** through tone guidelines and execution algorithms
 - **Easier maintenance** through comprehensive documentation
 
-**Status: READY FOR MERGE** ✅
+**Status: READY FOR MERGE** ✓ 

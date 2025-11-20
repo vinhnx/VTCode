@@ -1,6 +1,6 @@
 # ACP Implementation - Next Steps
 
-**Current Status**: ✅ Implementation complete and tested
+**Current Status**: ✓  Implementation complete and tested
 **Commits**: 
 - `e8171ae5` - ACP integration (19 files changed)
 - `1f0f0bfa` - Completion documentation
@@ -162,13 +162,13 @@ cargo build --release
 
 ## Success Criteria
 
-✅ All tests passing
-✅ Documentation complete and accurate
-✅ Examples run without errors
-✅ CI/CD integration verified
-✅ Performance acceptable (< 100ms latency for local agents)
-✅ No security warnings
-✅ Commit history clean
+✓  All tests passing
+✓  Documentation complete and accurate
+✓  Examples run without errors
+✓  CI/CD integration verified
+✓  Performance acceptable (< 100ms latency for local agents)
+✓  No security warnings
+✓  Commit history clean
 
 ---
 

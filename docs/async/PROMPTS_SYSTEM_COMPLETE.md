@@ -1,4 +1,4 @@
-# Prompts System Async Conversion - COMPLETE ✅
+# Prompts System Async Conversion - COMPLETE ✓ 
 
 ## Date: October 24, 2025
 
@@ -43,16 +43,16 @@ Successfully converted `vtcode-core/src/prompts/system.rs` from blocking filesys
 
 ## Benefits
 
-- ✅ System prompt loading is now non-blocking
-- ✅ Better responsiveness during initialization
-- ✅ Consistent async patterns
-- ✅ Library compiles successfully
+- ✓  System prompt loading is now non-blocking
+- ✓  Better responsiveness during initialization
+- ✓  Consistent async patterns
+- ✓  Library compiles successfully
 
 ## Testing
 
 ```bash
 cargo check --lib
-# Exit Code: 0 ✅
+# Exit Code: 0 ✓ 
 # Warnings: 3 (unrelated to async conversion)
 ```
 
@@ -66,11 +66,11 @@ cargo check --lib
 
 ## Status
 
-✅ **COMPLETE** - All system prompt operations are now fully async
+✓  **COMPLETE** - All system prompt operations are now fully async
 
 ---
 
 **Completed**: October 24, 2025  
-**Status**: ✅ Complete  
-**Compilation**: ✅ Success  
+**Status**: ✓  Complete  
+**Compilation**: ✓  Success  
 **Next**: `prompts/custom.rs`

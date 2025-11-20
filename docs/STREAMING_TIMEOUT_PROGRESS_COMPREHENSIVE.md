@@ -180,13 +180,13 @@ Warnings are logged automatically when:
 ## Providers Supported
 
 ### With Streaming Support
-- ✅ OpenAI (GPT-4, o1, etc.)
-- ✅ Anthropic (Claude)
-- ✅ Google Gemini
-- ✅ Ollama
-- ✅ OpenRouter
-- ✅ LM Studio (OpenAI wrapper)
-- ✅ Minimax (Anthropic wrapper)
+- ✓  OpenAI (GPT-4, o1, etc.)
+- ✓  Anthropic (Claude)
+- ✓  Google Gemini
+- ✓  Ollama
+- ✓  OpenRouter
+- ✓  LM Studio (OpenAI wrapper)
+- ✓  Minimax (Anthropic wrapper)
 
 ### Without Native Streaming (can add)
 - 🔄 DeepSeek
@@ -360,14 +360,14 @@ tracker.report_first_chunk();
 
 ## Best Practices
 
-✅ **DO:**
+✓  **DO:**
 - Create tracker at stream start
 - Report first chunk immediately
 - Report on each chunk received
 - Handle timeout gracefully
 - Test with actual providers
 
-❌ **DON'T:**
+⤫  **DON'T:**
 - Create tracker in streaming loop
 - Forget to report first chunk
 - Block on progress updates
@@ -400,7 +400,7 @@ tracker.report_first_chunk();
 
 ## Backward Compatibility
 
-✅ **Fully backward compatible**
+✓  **Fully backward compatible**
 - Progress callbacks are optional
 - Existing code works unchanged
 - No breaking API changes

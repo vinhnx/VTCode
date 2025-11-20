@@ -5,7 +5,7 @@ Fixed several UX issues with the file browser tree view and set it as the defaul
 
 ## Changes Made
 
-### 1. ✅ Fixed @ Symbol Detection (No False Positives)
+### 1. ✓  Fixed @ Symbol Detection (No False Positives)
 
 **Issue:** Concern that system might confuse "@" with "a" 
 
@@ -25,9 +25,9 @@ fn test_no_false_positive_with_a() {
 }
 ```
 
-**Result:** ✅ File browser only triggers with actual "@" symbol
+**Result:** ✓  File browser only triggers with actual "@" symbol
 
-### 2. ✅ Tree View is Now Default
+### 2. ✓  Tree View is Now Default
 
 **Before:** Default was List view
 **After:** Default is Tree view
@@ -40,7 +40,7 @@ display_mode: DisplayMode::Tree,  // Default to tree view
 
 **Rationale:** Tree view provides better visual hierarchy for project structure
 
-### 3. ✅ Removed Duplicate Arrow Icons
+### 3. ✓  Removed Duplicate Arrow Icons
 
 **Issue:** Folders showed duplicate arrows (e.g., "▶ ▶ src/")
 
@@ -50,14 +50,14 @@ display_mode: DisplayMode::Tree,  // Default to tree view
 ```rust
 // BEFORE
 let display_text = if self.is_dir {
-    format!("▶ {}/", self.name)  // ❌ Duplicate arrow!
+    format!("▶ {}/", self.name)  // ⤫  Duplicate arrow!
 } else {
     format!("  {}", self.name)
 };
 
 // AFTER  
 let display_text = if self.is_dir {
-    format!("{}/", self.name)  // ✅ Widget adds arrow
+    format!("{}/", self.name)  // ✓  Widget adds arrow
 } else {
     self.name.clone()
 };
@@ -87,7 +87,7 @@ let display_text = if self.is_dir {
   main.rs    ← No prefix = clearly a file
 ```
 
-### 5. ✅ Tree Expansion (Already Synchronous)
+### 5. ✓  Tree Expansion (Already Synchronous)
 
 **Issue:** Request for async tree expansion handling
 
@@ -146,9 +146,9 @@ fn test_pagination() {
 
 ## Testing
 
-✅ **All tests passing:** 29 file-related tests (17 file_palette + 3 file_tree + 9 others)
-✅ **Cargo check:** No errors
-✅ **New test:** `test_no_false_positive_with_a`
+✓  **All tests passing:** 29 file-related tests (17 file_palette + 3 file_tree + 9 others)
+✓  **Cargo check:** No errors
+✓  **New test:** `test_no_false_positive_with_a`
 
 ## Keyboard Navigation (Unchanged)
 
@@ -187,10 +187,10 @@ The current tui-tree-widget library doesn't support per-item text styling (bold,
 
 ## User Impact
 
-✅ **Cleaner UI** - No duplicate arrows
-✅ **Better default** - Tree view shows structure better
-✅ **No regressions** - @ detection still works perfectly
-✅ **Same performance** - Tree expansion remains fast
+✓  **Cleaner UI** - No duplicate arrows
+✓  **Better default** - Tree view shows structure better
+✓  **No regressions** - @ detection still works perfectly
+✓  **Same performance** - Tree expansion remains fast
 
 ## Future Enhancements
 

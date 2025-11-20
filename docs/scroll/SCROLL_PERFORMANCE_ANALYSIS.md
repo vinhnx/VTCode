@@ -10,7 +10,7 @@ fn scroll_line_up(&mut self) {
     let previous = self.scroll_manager.offset();
     self.scroll_manager.scroll_up(1);
     if self.scroll_manager.offset() != previous {
-        self.needs_full_clear = true;  // ❌ Sets flag for FULL screen redraw
+        self.needs_full_clear = true;  // ⤫  Sets flag for FULL screen redraw
     }
 }
 
@@ -18,7 +18,7 @@ fn scroll_line_down(&mut self) {
     let previous = self.scroll_manager.offset();
     self.scroll_manager.scroll_down(1);
     if self.scroll_manager.offset() != previous {
-        self.needs_full_clear = true;  // ❌ Sets flag for FULL screen redraw
+        self.needs_full_clear = true;  // ⤫  Sets flag for FULL screen redraw
     }
 }
 ```
@@ -42,7 +42,7 @@ Event::Mouse(mouse_event) => {
         }
         _ => {}
     }
-    // ❌ REDUNDANT: Immediate render after scroll
+    // ⤫  REDUNDANT: Immediate render after scroll
     tui.terminal.draw(|frame| {
         session.render(frame);
     })?;
@@ -65,12 +65,12 @@ fn render_transcript(&mut self, frame: &mut Frame<'_>, area: Rect) {
     self.apply_transcript_width(content_width);
     
     // Recalculates visible lines every frame
-    let total_rows = self.total_transcript_rows(content_width) + effective_padding; // ❌ Expensive
+    let total_rows = self.total_transcript_rows(content_width) + effective_padding; // ⤫  Expensive
     
     // Re-collects visible window every frame
-    let mut visible_lines = self.collect_transcript_window(content_width, visible_start, viewport_rows); // ❌ Heavy
+    let mut visible_lines = self.collect_transcript_window(content_width, visible_start, viewport_rows); // ⤫  Heavy
     
-    // ❌ Line cloning happens here (transcript.rs:112-155)
+    // ⤫  Line cloning happens here (transcript.rs:112-155)
     // get_visible_range() clones each line: result.push(line.clone())
 }
 ```
@@ -103,7 +103,7 @@ fn render_transcript(&mut self, frame: &mut Frame<'_>, area: Rect) {
 
 Remove redundant render after mouse scroll:
 ```rust
-// ❌ Before: modern_integration.rs:87-102
+// ⤫  Before: modern_integration.rs:87-102
 Event::Mouse(mouse_event) => {
     match mouse_event.kind {
         crossterm::event::MouseEventKind::ScrollDown => {
@@ -114,7 +114,7 @@ Event::Mouse(mouse_event) => {
         }
         _ => {}
     }
-    // ❌ REMOVE THIS - let main loop handle rendering
+    // ⤫  REMOVE THIS - let main loop handle rendering
     // tui.terminal.draw(|frame| {
     //     session.render(frame);
     // })?;
@@ -168,7 +168,7 @@ pub fn get_visible_range(&self, start_row: usize, max_rows: usize) -> Vec<Line<'
         if result.len() >= remaining_rows {
             break;
         }
-        result.push(line.clone());  // ❌ CLONE - expensive with styled text
+        result.push(line.clone());  // ⤫  CLONE - expensive with styled text
     }
 }
 ```

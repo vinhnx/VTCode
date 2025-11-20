@@ -21,7 +21,7 @@ indicator.setModel("gpt-4");
 "thinking"  → 🔵 Thinking...
 "streaming" → 📤 Streaming response...
 "executing" → ⚙️ Executing tools...
-"error"     → ❌ Error occurred
+"error"     → ⤫  Error occurred
 ```
 
 ### Methods
@@ -40,7 +40,7 @@ reset(): void
 🔵 Thinking...
 📤 Streaming response... | 1s | 250 tokens | gpt-4
 ⚙️ Executing tools (2/5) | 45s
-❌ Error occurred
+⤫  Error occurred
 ```
 
 ---
@@ -282,13 +282,13 @@ import { ErrorPresentationHandler, type ErrorPresentation } from "./error/errorP
 
 ## Performance Tips
 
-### ✅ Do
+### ✓  Do
 - Update status every 100-500ms
 - Batch updates when possible
 - Use debouncing for frequent updates
 - Sample metrics instead of every event
 
-### ❌ Avoid
+### ⤫  Avoid
 - Status updates > 10 per second
 - Large error messages in logs
 - Unbounded message history

@@ -290,11 +290,11 @@ The file browser is workspace-aware:
 The file reference feature provides a fast, keyboard-driven way to browse and insert file references into your chat messages. With support for tree and list views, smart filtering, and ignore files, it's designed to help you work efficiently in any project size.
 
 **Key Features**:
-- ✅ Instant file browser with `@`
-- ✅ Tree and list views
-- ✅ Smart filtering
-- ✅ Ignore files support
-- ✅ Keyboard-driven navigation
-- ✅ Fast and efficient
+- ✓  Instant file browser with `@`
+- ✓  Tree and list views
+- ✓  Smart filtering
+- ✓  Ignore files support
+- ✓  Keyboard-driven navigation
+- ✓  Fast and efficient
 
 Happy coding!

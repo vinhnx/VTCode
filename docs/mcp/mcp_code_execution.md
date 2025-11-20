@@ -4,7 +4,7 @@ Based on Anthropic's ["Code execution with MCP"](https://www.anthropic.com/engin
 
 ## Implementation Status
 
-### ✅ Step 1: Progressive Tool Discovery (COMPLETED)
+### ✓  Step 1: Progressive Tool Discovery (COMPLETED)
 
 **Problem**: Loading all MCP tool definitions into the model's context is expensive and inefficient.
 
@@ -68,7 +68,7 @@ Example response:
 }
 ```
 
-### ✅ Step 2: Code Executor with MCP SDK Generation (COMPLETED)
+### ✓  Step 2: Code Executor with MCP SDK Generation (COMPLETED)
 
 **Objective**: Allow agents to write code that calls MCP tools as library functions, rather than making individual tool calls.
 
@@ -97,9 +97,9 @@ filtered = [f for f in rs_files if 'test' in f]
 result = {"count": len(filtered), "files": filtered[:10]}
 ```
 
-**Status**: ✅ COMPLETED - Core execution working with full IPC handler integration
+**Status**: ✓  COMPLETED - Core execution working with full IPC handler integration
 
-### ✅ Step 3: Execute Code Tool Integration (COMPLETED)
+### ✓  Step 3: Execute Code Tool Integration (COMPLETED)
 
 **Objective**: Integrate CodeExecutor into ToolRegistry as a builtin `execute_code` tool.
 
@@ -144,9 +144,9 @@ result = {"count": len(filtered), "files": filtered[:10]}
    execute_code({"code": code, "language": "python3"})
    ```
 
-**Status**: ✅ COMPLETED and ready for use
+**Status**: ✓  COMPLETED and ready for use
 
-### ✅ Step 3: Skill/State Persistence (COMPLETED)
+### ✓  Step 3: Skill/State Persistence (COMPLETED)
 
 **Objective**: Allow agents to save reusable functions ("skills") to workspace.
 
@@ -207,9 +207,9 @@ result = {"count": len(filtered), "files": filtered[:10]}
    result = execute_code(skill.code + "\nresult = filter_test_files(...)")
    ```
 
-**Status**: ✅ COMPLETED and ready for use
+**Status**: ✓  COMPLETED and ready for use
 
-### ✅ Step 4: Data Filtering in Code (COMPLETED)
+### ✓  Step 4: Data Filtering in Code (COMPLETED)
 
 **Objective**: Filter large result sets before returning to model, reducing context usage.
 
@@ -279,9 +279,9 @@ The code execution environment supports full Python/JavaScript semantics, enabli
 - Deduplication and grouping
 - Statistical aggregation (count, sum, mean, etc.)
 
-**Status**: ✅ COMPLETED and actively used
+**Status**: ✓  COMPLETED and actively used
 
-### ✅ Step 5: PII Tokenization Layer (COMPLETED)
+### ✓  Step 5: PII Tokenization Layer (COMPLETED)
 
 **Objective**: Automatically tokenize sensitive data before MCP calls, preventing data leakage.
 
@@ -351,7 +351,7 @@ The code execution environment supports full Python/JavaScript semantics, enabli
    safe_results = tokenizer.detokenize_string(results)
    ```
 
-**Status**: ✅ COMPLETED and ready for integration
+**Status**: ✓  COMPLETED and ready for integration
 
 ## Architecture
 
@@ -470,11 +470,11 @@ All 5 steps from Anthropic's code execution recommendations are now implemented:
 
 | Step | Feature | Status | Module |
 |------|---------|--------|--------|
-| 1 | Progressive tool discovery | ✅ Complete | `mcp/tool_discovery.rs` |
-| 2 | Code executor with SDK | ✅ Complete | `exec/code_executor.rs` |
-| 3 | Skill persistence | ✅ Complete | `exec/skill_manager.rs` |
-| 4 | Data filtering | ✅ Complete | `exec/code_executor.rs` |
-| 5 | PII tokenization | ✅ Complete | `exec/pii_tokenizer.rs` |
+| 1 | Progressive tool discovery | ✓  Complete | `mcp/tool_discovery.rs` |
+| 2 | Code executor with SDK | ✓  Complete | `exec/code_executor.rs` |
+| 3 | Skill persistence | ✓  Complete | `exec/skill_manager.rs` |
+| 4 | Data filtering | ✓  Complete | `exec/code_executor.rs` |
+| 5 | PII tokenization | ✓  Complete | `exec/pii_tokenizer.rs` |
 
 ## Testing
 
@@ -531,7 +531,7 @@ skill = load_skill("filter_test_files")
 
 **Implementation Status**:
 
-### Unit Tests (All Passing ✅)
+### Unit Tests (All Passing ✓ )
 - `tool_discovery::tests` - Progressive tool discovery 
 - `code_executor::tests` - SDK generation and execution
 - `skill_manager::tests` - Skill persistence and management
@@ -544,34 +544,34 @@ Module: `vtcode-core/src/exec/integration_tests.rs`
 
 **Test Suite** (7 tests implemented):
 
-1. **Test 1: Discovery → Execution → Filtering** ✅
+1. **Test 1: Discovery → Execution → Filtering** ✓ 
    - Validates tool discovery feeds into code execution
    - Verifies filtering happens locally, not in model context
    
-2. **Test 2: Execution → Skill → Reuse** ✅
+2. **Test 2: Execution → Skill → Reuse** ✓ 
    - Tests code execution produces reusable skills
    - Validates skill persistence and loading
    
-3. **Test 3: PII Protection in Pipeline** ✅
+3. **Test 3: PII Protection in Pipeline** ✓ 
    - Tests PII detection, tokenization, detokenization
    - Verifies plaintext PII never in results
    
-4. **Test 4: Large Dataset Filtering** ✅
+4. **Test 4: Large Dataset Filtering** ✓ 
    - Tests processing 1000+ items in code
    - Verifies only aggregated summary returned to model
    
-5. **Test 5: Tool Error Handling** ✅
+5. **Test 5: Tool Error Handling** ✓ 
    - Tests error handling in code execution
    - Validates tool failures caught gracefully
    
-6. **Test 6: Agent Behavior Tracking** ✅
+6. **Test 6: Agent Behavior Tracking** ✓ 
    - Tests AgentBehaviorAnalyzer for pattern recognition
    - Validates tool recommendations and failure detection
    
-7. **Scenario: Simple Transformation** ✅
+7. **Scenario: Simple Transformation** ✓ 
    - Real-world example of data transformation in code
 
-8. **Scenario: JavaScript Execution** ✅
+8. **Scenario: JavaScript Execution** ✓ 
    - Tests JavaScript as alternative to Python
 
 **Run Integration Tests**:
@@ -586,7 +586,7 @@ cargo test -p vtcode-core exec::integration_tests::test_discovery_to_execution_f
 cargo test -p vtcode-core exec::integration_tests -- --nocapture
 ```
 
-**Status**: ✅ Integration test framework complete - 8+ tests implemented
+**Status**: ✓  Integration test framework complete - 8+ tests implemented
 
 ## References
 

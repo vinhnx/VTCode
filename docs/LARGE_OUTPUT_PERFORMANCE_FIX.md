@@ -375,7 +375,7 @@ cargo run -- exec "find / -name '*.rs' 2>/dev/null"
 
 ## Backward Compatibility
 
-✅ **Fully backward compatible**
+✓  **Fully backward compatible**
 - New config keys have sensible defaults
 - Existing `scrollback_lines` behavior preserved
 - No breaking API changes

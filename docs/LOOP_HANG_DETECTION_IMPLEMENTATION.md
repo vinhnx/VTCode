@@ -81,29 +81,29 @@ cargo test --bin vtcode loop_detection
 
 ## Key Features
 
-✅ **Detection Algorithm**
+✓  **Detection Algorithm**
 - HashMap-based signature tracking
 - Configurable threshold
 - Independent tracking per signature
 
-✅ **User Interaction**
+✓  **User Interaction**
 - Interactive TUI prompt using dialoguer
 - Clear option presentation
 - Session-level override support
 
-✅ **Control Flow**
+✓  **Control Flow**
 - Proper skip logic (KeepEnabled)
 - Proper continue logic (DisableForSession)
 - State reset after detection
 - Error handling with fallback
 
-✅ **Configuration**
+✓  **Configuration**
 - Read from vtcode.toml
 - Global enable/disable
 - Threshold customization
 - Interactive mode control
 
-✅ **Testing**
+✓  **Testing**
 - Unit tests for all core functionality
 - Edge cases covered
 - Response validation
@@ -177,4 +177,4 @@ Loop hang detection is more semantic and user-interactive, while these are hard 
 
 ## Status
 
-✅ **COMPLETE** - Fully functional with all tests passing
+✓  **COMPLETE** - Fully functional with all tests passing

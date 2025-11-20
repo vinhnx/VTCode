@@ -6,7 +6,7 @@ Based on the review of `docs/research/codex_issue_review.md` and analysis of cha
 
 ---
 
-## Issue #1: apply_patch Tool Reliability ✅ SUBSTANTIALLY IMPLEMENTED
+## Issue #1: apply_patch Tool Reliability ✓  SUBSTANTIALLY IMPLEMENTED
 
 ### Codex Issue
 
@@ -14,7 +14,7 @@ Based on the review of `docs/research/codex_issue_review.md` and analysis of cha
 -   Heightened failure rates in long editing sessions
 -   Potential repository corruption
 
-### ✅ Implemented
+### ✓  Implemented
 
 1. **Warning message exists** (`vtcode-core/src/tools/registry/executors.rs:368`)
 
@@ -66,7 +66,7 @@ if delete_ops > 0 && add_ops > 0 {
 }
 ```
 
-### ❌ Still Missing
+### ⤫  Still Missing
 
 1. **Confirmation prompts** - No gating mechanism for high-risk file rewrites
 2. **CLI documentation** - Warning not surfaced in help text or operator guidance
@@ -89,14 +89,14 @@ TelemetryEvent::ToolFallbackDetected {
 
 ---
 
-## Issue #2: Timeout Escalation ✅ FULLY IMPLEMENTED
+## Issue #2: Timeout Escalation ✓  FULLY IMPLEMENTED
 
 ### Codex Issue
 
 -   Persistence heuristics caused exponential timeout backoff
 -   Users perceived latency regressions
 
-### ✅ Implemented (100%)
+### ✓  Implemented (100%)
 
 #### 1. Adaptive Timeout Ceilings
 
@@ -154,14 +154,14 @@ pub fn ceiling_for(&self, category: ToolTimeoutCategory) -> Option<Duration> {
 
 ---
 
-## Issue #3: Constrained Sampling Regression ✅ SUBSTANTIALLY IMPLEMENTED
+## Issue #3: Constrained Sampling Regression ✓  SUBSTANTIALLY IMPLEMENTED
 
 ### Codex Issue
 
 -   Bug caused mixed-language segments (<0.25% of sessions)
 -   Out-of-distribution token sequences
 
-### ✅ Implemented (Test Infrastructure Complete)
+### ✓  Implemented (Test Infrastructure Complete)
 
 #### 1. Language Consistency Test Suite
 
@@ -206,7 +206,7 @@ pub fn validate_tool_response_language(tool_name: &str, response: &Value) -> Res
 
 ```bash
 cargo nextest run --test language_consistency_test
-Summary [1.783s] 17 tests run: 17 passed ✅
+Summary [1.783s] 17 tests run: 17 passed ✓ 
 ```
 
 ### ⚠️ Partial Implementation
@@ -242,14 +242,14 @@ async fn send_request(&self, messages: Vec<Message>) -> Result<Response> {
 
 ---
 
-## Issue #4: Responses API Encoding Difference ✅ FULLY IMPLEMENTED
+## Issue #4: Responses API Encoding Difference ✓  FULLY IMPLEMENTED
 
 ### Codex Issue
 
 -   Extra newlines altered request encoding
 -   Highlights sensitivity to serialization changes
 
-### ✅ Implemented (100%)
+### ✓  Implemented (100%)
 
 #### 1. Centralized Tool Descriptions
 
@@ -300,7 +300,7 @@ pub fn update_schema_snapshots() -> Result<()>  // Helper for intentional update
 
 ```bash
 cargo nextest run --test tool_serialization_stability_test
-Summary [1.772s] 14 tests run: 10 passed, 1 skipped, 4 integration ✅
+Summary [1.772s] 14 tests run: 10 passed, 1 skipped, 4 integration ✓ 
 ```
 
 ### ⚠️ Documentation Gap
@@ -345,15 +345,15 @@ When modifying tool descriptions or parameters:
 
 ## Implementation Quality Analysis
 
-### ✅ Project Convention Adherence
+### ✓  Project Convention Adherence
 
-1. **Uses `cargo nextest`** ✅ - All tests include nextest instructions
-2. **Async patterns** ✅ - Integration tests use `#[tokio::test]`
-3. **VTCode integration** ✅ - Tests use actual `ToolRegistry`
-4. **TempDir usage** ✅ - Follows project patterns
-5. **Error handling** ✅ - Proper `anyhow::Context`
-6. **Test organization** ✅ - Clear `unit_tests` and `integration_tests` modules
-7. **Tool policy** ✅ - Integration tests manage policies correctly
+1. **Uses `cargo nextest`** ✓  - All tests include nextest instructions
+2. **Async patterns** ✓  - Integration tests use `#[tokio::test]`
+3. **VTCode integration** ✓  - Tests use actual `ToolRegistry`
+4. **TempDir usage** ✓  - Follows project patterns
+5. **Error handling** ✓  - Proper `anyhow::Context`
+6. **Test organization** ✓  - Clear `unit_tests` and `integration_tests` modules
+7. **Tool policy** ✓  - Integration tests manage policies correctly
 
 ### Test Execution Summary
 
@@ -361,7 +361,7 @@ When modifying tool descriptions or parameters:
 # Total test coverage for Codex mitigations
 cargo nextest run --test language_consistency_test --test tool_serialization_stability_test
 
-Summary [1.772s] 31 tests run: 31 passed, 1 skipped ✅
+Summary [1.772s] 31 tests run: 31 passed, 1 skipped ✓ 
 
 Breakdown:
 - Language consistency: 17 tests (13 unit + 4 integration)
@@ -418,10 +418,10 @@ Breakdown:
 
 | Issue                          | Status  | Tests      | Integration  | Documentation |
 | ------------------------------ | ------- | ---------- | ------------ | ------------- |
-| **1. apply_patch Reliability** | ✅ 75%  | N/A        | ✅ Telemetry | ⚠️ Partial    |
-| **2. Timeout Escalation**      | ✅ 100% | ✅ Unit    | ✅ Complete  | ⚠️ Partial    |
-| **3. Constrained Sampling**    | ✅ 85%  | ✅ 17 test | ⚠️ Partial   | ✅ Complete   |
-| **4. Serialization Stability** | ✅ 95%  | ✅ 14 test | ✅ Complete  | ⚠️ Missing    |
+| **1. apply_patch Reliability** | ✓  75%  | N/A        | ✓  Telemetry | ⚠️ Partial    |
+| **2. Timeout Escalation**      | ✓  100% | ✓  Unit    | ✓  Complete  | ⚠️ Partial    |
+| **3. Constrained Sampling**    | ✓  85%  | ✓  17 test | ⚠️ Partial   | ✓  Complete   |
+| **4. Serialization Stability** | ✓  95%  | ✓  14 test | ✓  Complete  | ⚠️ Missing    |
 
 **Overall**: **89% Complete** (3.55 of 4 issues fully addressed)
 
@@ -480,12 +480,12 @@ git checkout -b docs/timeout-tuning-guide
 
 VTCode has made **substantial progress** on Codex issue mitigations:
 
-✅ **Fully Addressed** (50%):
+✓  **Fully Addressed** (50%):
 
 -   Timeout Escalation (100% complete)
 -   Serialization Stability (95% complete, docs pending)
 
-✅ **Substantially Addressed** (50%):
+✓  **Substantially Addressed** (50%):
 
 -   Constrained Sampling (85% complete, runtime integration pending)
 -   apply_patch Reliability (75% complete, telemetry implemented)

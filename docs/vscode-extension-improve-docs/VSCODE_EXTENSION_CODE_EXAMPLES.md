@@ -671,7 +671,7 @@ private showToolExecutionResult(
   toolName: string,
   result: VtcodeToolExecutionResult
 ): void {
-  const status = result.exitCode === 0 ? "✅" : "❌"
+  const status = result.exitCode === 0 ? "✓ " : "⤫ "
   this.addSystemMessage(
     `${status} Tool execution completed: **${toolName}**\n\n\`\`\`\n${result.text}\n\`\`\``
   )
@@ -679,7 +679,7 @@ private showToolExecutionResult(
 
 private showToolExecutionError(toolName: string, error: string): void {
   this.addSystemMessage(
-    `❌ Tool execution failed: **${toolName}**\n\n\`\`\`\n${error}\n\`\`\``
+    `⤫  Tool execution failed: **${toolName}**\n\n\`\`\`\n${error}\n\`\`\``
   )
 }
 ```

@@ -470,17 +470,17 @@ Success = converged solution after N turns (usually 2-3).
 ## Success Metrics
 
 ### Must-Have
-- ✅ ReAct thinking patterns in system.rs
-- ✅ .progress.md infrastructure working
-- ✅ Tool guidance rewritten (outcome-focused)
-- ✅ No Phase 1-2 regressions
-- ✅ Backward compatible
+- ✓  ReAct thinking patterns in system.rs
+- ✓  .progress.md infrastructure working
+- ✓  Tool guidance rewritten (outcome-focused)
+- ✓  No Phase 1-2 regressions
+- ✓  Backward compatible
 
 ### Should-Have
-- ✅ 40% context reduction (18K avg tokens)
-- ✅ 95%+ multi-turn coherence
-- ✅ 98%+ multi-LLM compatibility
-- ✅ Comprehensive documentation
+- ✓  40% context reduction (18K avg tokens)
+- ✓  95%+ multi-turn coherence
+- ✓  98%+ multi-LLM compatibility
+- ✓  Comprehensive documentation
 
 ### Nice-to-Have
 - Semantic clustering automation

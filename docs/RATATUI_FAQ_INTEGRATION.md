@@ -46,14 +46,14 @@ if key.kind == KeyEventKind::Press {
 - **Pattern:** All UI components render in a single `terminal.draw()` closure per frame
 - **Benefit:** Correct use of Ratatui's double buffering; only one screen update per frame
 
-❌ **Incorrect pattern (avoided in VT Code):**
+⤫  **Incorrect pattern (avoided in VT Code):**
 ```rust
 terminal.draw(|f| widget1.render(...))?;
 terminal.draw(|f| widget2.render(...))?;  // This overwrites the first!
 terminal.draw(|f| widget3.render(...))?;
 ```
 
-✅ **Correct pattern (used in VT Code):**
+✓  **Correct pattern (used in VT Code):**
 ```rust
 terminal.draw(|f| {
     widget1.render(...);

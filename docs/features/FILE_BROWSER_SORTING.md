@@ -169,25 +169,25 @@ fn test_filtering_maintains_directory_priority() {
 }
 ```
 
-**Test Results:** ✅ 16/16 file_palette tests passing
+**Test Results:** ✓  16/16 file_palette tests passing
 
 ## User Benefits
 
-✅ **Consistent organization** - Folders always on top
-✅ **Intuitive** - Matches file manager conventions (Finder, Explorer)
-✅ **Case-insensitive** - "README.md" and "readme.md" sort together
-✅ **Persistent** - Sorting maintained during search
-✅ **Predictable** - Easy to find directories vs files
+✓  **Consistent organization** - Folders always on top
+✓  **Intuitive** - Matches file manager conventions (Finder, Explorer)
+✓  **Case-insensitive** - "README.md" and "readme.md" sort together
+✓  **Persistent** - Sorting maintained during search
+✓  **Predictable** - Easy to find directories vs files
 
 ## Comparison to Other Tools
 
 | Tool | Folders First? | Case-Insensitive? | During Search? |
 |------|---------------|-------------------|----------------|
-| **VTCode** | ✅ Yes | ✅ Yes | ✅ Yes |
-| macOS Finder | ✅ Yes | ✅ Yes | ✅ Yes |
-| Windows Explorer | ✅ Yes | ✅ Yes | ✅ Yes |
-| VSCode | ✅ Yes | ✅ Yes | ❌ No |
-| Sublime Text | ❌ No | ✅ Yes | ❌ No |
+| **VTCode** | ✓  Yes | ✓  Yes | ✓  Yes |
+| macOS Finder | ✓  Yes | ✓  Yes | ✓  Yes |
+| Windows Explorer | ✓  Yes | ✓  Yes | ✓  Yes |
+| VSCode | ✓  Yes | ✓  Yes | ⤫  No |
+| Sublime Text | ⤫  No | ✓  Yes | ⤫  No |
 
 ## Files Modified
 
@@ -206,12 +206,12 @@ fn test_filtering_maintains_directory_priority() {
 - **Impact:** Negligible - sorting happens once per filter change
 
 ### Edge Cases Handled
-- ✅ Empty file lists
-- ✅ Only directories
-- ✅ Only files
-- ✅ Mixed case filenames
-- ✅ Unicode characters in filenames
-- ✅ Deeply nested directory structures
+- ✓  Empty file lists
+- ✓  Only directories
+- ✓  Only files
+- ✓  Mixed case filenames
+- ✓  Unicode characters in filenames
+- ✓  Deeply nested directory structures
 
 ## Future Enhancements
 

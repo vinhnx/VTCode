@@ -181,8 +181,8 @@ Both improvements enhance the user experience:
 2. **Terminal commands** are always visible, providing consistent UX and better auditability
 
 The implementation is:
-- ✅ Robust (handles edge cases)
-- ✅ Efficient (minimal overhead)
-- ✅ Backward compatible (no breaking changes)
-- ✅ Well tested (17/17 tests pass)
-- ✅ Well documented (detailed comments and docs)
+- ✓  Robust (handles edge cases)
+- ✓  Efficient (minimal overhead)
+- ✓  Backward compatible (no breaking changes)
+- ✓  Well tested (17/17 tests pass)
+- ✓  Well documented (detailed comments and docs)

@@ -72,7 +72,7 @@ CHECKSUM=$(shasum -a 256 "$ARCHIVE_NAME" | cut -d ' ' -f 1)
 echo "SHA-256 checksum: $CHECKSUM"
 
 echo ""
-echo "✅ Test archive created successfully!"
+echo "✓  Test archive created successfully!"
 echo "   Archive: $(pwd)/$(basename $ARCHIVE_NAME)"
 echo "   Checksum: $CHECKSUM"
 echo "   Platform: $PLATFORM_FULL"

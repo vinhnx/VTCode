@@ -56,7 +56,7 @@ Available Context → [Curation] → Selected Context → [Model] → Response �
 
 ### Spectrum of Prompt Quality
 
-#### ❌ Too Specific (Brittle)
+#### ⤫  Too Specific (Brittle)
 
 ```
 You MUST FOLLOW THESE STEPS:
@@ -102,7 +102,7 @@ Explore code, make precise changes, validate outcomes.
 -   Guidelines that help model decide
 -   Flexible enough to adapt
 
-#### ❌ Too Vague
+#### ⤫  Too Vague
 
 ```
 You are a coding assistant.

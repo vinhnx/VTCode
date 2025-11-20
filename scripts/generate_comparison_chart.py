@@ -219,7 +219,7 @@ def generate_matplotlib_comparison(reports, output_path):
     
     plt.tight_layout()
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
-    print(f"✅ Comparison chart saved to: {output_path}")
+    print(f"✓  Comparison chart saved to: {output_path}")
     return True
 
 def main():

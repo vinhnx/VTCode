@@ -379,12 +379,12 @@ deny_glob = [
 
 ### What This Protects Against
 
-✅ Accidental destructive commands  
-✅ Privilege escalation attempts  
-✅ Malicious shell exploits (forkbombs, eval injection)  
-✅ Sensitive data exposure (SSH keys, password files)  
-✅ System shutdown/corruption  
-✅ Filesystem manipulation  
+✓  Accidental destructive commands  
+✓  Privilege escalation attempts  
+✓  Malicious shell exploits (forkbombs, eval injection)  
+✓  Sensitive data exposure (SSH keys, password files)  
+✓  System shutdown/corruption  
+✓  Filesystem manipulation  
 
 ### What This Does NOT Protect Against
 

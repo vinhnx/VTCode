@@ -177,7 +177,7 @@ What do you want to find?
 
 ## Common Mistakes
 
-| ❌ Wrong | ✅ Right | Why |
+| ⤫  Wrong | ✓  Right | Why |
 |---------|---------|-----|
 | `pattern: "fn test"` | `pattern: "^fn test"` | Anchor patterns to line start |
 | `glob_pattern: "*.rs"` | `glob_pattern: "**/*.rs"` | Use `**` for recursive |

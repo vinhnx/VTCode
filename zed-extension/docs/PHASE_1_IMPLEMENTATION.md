@@ -4,7 +4,7 @@ This document details the Phase 1 implementation of core features for the VTCode
 
 ## What's New in v0.2.0
 
-### ✅ Completed Features
+### ✓  Completed Features
 
 #### 1. Process Execution Integration ✓
 - **Module**: `src/executor.rs`
@@ -435,11 +435,11 @@ cargo install vtcode
 ## Changelog
 
 ### v0.2.0 (Phase 1) - 2024-11-09
-- ✅ Process execution integration
-- ✅ Configuration management system
-- ✅ Extension initialization
-- ✅ Unit tests (9 tests, 100% pass)
-- ✅ Complete documentation
+- ✓  Process execution integration
+- ✓  Configuration management system
+- ✓  Extension initialization
+- ✓  Unit tests (9 tests, 100% pass)
+- ✓  Complete documentation
 
 ### v0.1.0 (Initial) - 2024-11-09
 - Basic extension scaffold

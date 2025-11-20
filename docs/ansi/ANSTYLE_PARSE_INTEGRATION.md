@@ -422,7 +422,7 @@ fn test_ansi_parser_with_real_tool_output() {
 ## Step 7: Documentation
 
 Update `docs/ANSTYLE_PARSE_REVIEW.md` with:
-- ✅ Dependency added
+- ✓  Dependency added
 - Implementation dates
 - Performance benchmarks
 - Lessons learned

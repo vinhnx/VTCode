@@ -2,7 +2,7 @@
 
 ## Critical Issues Identified
 
-### 1. **Simplistic Loop Detection Algorithm** ❌ MAJOR
+### 1. **Simplistic Loop Detection Algorithm** ⤫  MAJOR
 
 **Current Approach**: Counts identical signatures
 - ✗ Can't detect pattern loops (A → B → A → B)
@@ -17,7 +17,7 @@ Current: Won't detect (different signatures each time)
 Should: Detect pattern and warn
 ```
 
-### 2. **String-Based Signatures are Fragile** ❌ MEDIUM
+### 2. **String-Based Signatures are Fragile** ⤫  MEDIUM
 
 **Current Code**:
 ```rust
@@ -43,7 +43,7 @@ struct Signature {
 }
 ```
 
-### 3. **All-or-Nothing Reset Strategy** ❌ MEDIUM
+### 3. **All-or-Nothing Reset Strategy** ⤫  MEDIUM
 
 **Current Code**:
 ```rust
@@ -67,7 +67,7 @@ if loop_detected {
 }
 ```
 
-### 4. **No Historical Tracking** ❌ MEDIUM
+### 4. **No Historical Tracking** ⤫  MEDIUM
 
 **Current State**:
 - Single HashMap cleared on each detection
@@ -80,7 +80,7 @@ if loop_detected {
 - If user ignores warnings → assume they know what they're doing
 - Persistence across tool calls within a session
 
-### 5. **Binary Decision Model** ❌ MEDIUM
+### 5. **Binary Decision Model** ⤫  MEDIUM
 
 **Current**:
 ```rust
@@ -96,7 +96,7 @@ pub enum LoopDetectionResponse {
 - "Suggest alternative" (what should I do instead?)
 - "Show me more details" (what is the loop pattern?)
 
-### 6. **No Loop Context Information** ❌ MEDIUM
+### 6. **No Loop Context Information** ⤫  MEDIUM
 
 **Current Output**:
 ```
@@ -124,7 +124,7 @@ Signature: read_file::{...very long json...}
    4. Cancel operation
 ```
 
-### 7. **Tight Coupling to Session Rendering** ❌ MEDIUM
+### 7. **Tight Coupling to Session Rendering** ⤫  MEDIUM
 
 **Current**:
 - `prompt_for_loop_detection()` is tightly bound to session.rs
@@ -146,7 +146,7 @@ pub struct LoopDetectionEvent {
 pub fn handle_loop_detection(event: LoopDetectionEvent) -> Result<Response>
 ```
 
-### 8. **No Metrics or Observability** ❌ MINOR
+### 8. **No Metrics or Observability** ⤫  MINOR
 
 **Missing**:
 - How often is loop detection triggered?
@@ -163,7 +163,7 @@ pub struct LoopDetectionMetrics {
 }
 ```
 
-### 9. **Weak Non-Interactive Fallback** ❌ MINOR
+### 9. **Weak Non-Interactive Fallback** ⤫  MINOR
 
 **Current**:
 ```rust
@@ -190,7 +190,7 @@ if !interactive {
 }
 ```
 
-### 10. **Test Coverage Gaps** ❌ MINOR
+### 10. **Test Coverage Gaps** ⤫  MINOR
 
 **Missing Tests**:
 - ✗ Rapid calls to different signatures (pattern detection)

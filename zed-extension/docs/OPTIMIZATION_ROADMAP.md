@@ -695,10 +695,10 @@ let response = ext.ask_agent_command(&query)?;
 
 | Item | Impact | Effort | Priority | v0.4.0 |
 |------|--------|--------|----------|--------|
-| Async/Await | High | High | High | ✅ Yes |
-| RwLock | Medium | Medium | Medium | ✅ Yes |
-| Expand Tests | Medium | Low | Medium | ✅ Yes |
-| Persistent Cache | High | High | High | ✅ Yes |
+| Async/Await | High | High | High | ✓  Yes |
+| RwLock | Medium | Medium | Medium | ✓  Yes |
+| Expand Tests | Medium | Low | Medium | ✓  Yes |
+| Persistent Cache | High | High | High | ✓  Yes |
 | parking_lot | Low | Low | Low | Maybe |
 | File Watching | Medium | High | Medium | Maybe |
 | Property Testing | Medium | Medium | Low | No |

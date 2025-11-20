@@ -155,7 +155,7 @@ fn test_emoji_in_json_values() {
     // Emojis should be allowed in values
     let json = json!({
         "status": "success 🎉",
-        "message": "Operation completed ✅"
+        "message": "Operation completed ✓ "
     });
     assert!(validate_json_language_consistency(&json).is_ok());
 }
@@ -614,6 +614,6 @@ The current implementation is **production-ready and well-tested**. These improv
 9. Structured logging with correlation IDs
 
 **Estimated Effort**: 2-3 weeks for all improvements
-**Current Quality**: Production-ready ✅
+**Current Quality**: Production-ready ✓ 
 **Improved Quality**: Enterprise-grade 🚀
 ```

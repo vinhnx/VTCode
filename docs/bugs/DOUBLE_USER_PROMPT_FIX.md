@@ -54,10 +54,10 @@ working_history.push(uni::Message::user(input.to_string()));
 - **Net change:** +1 line, -1 line
 
 ## Testing
-✅ **Code compilation:** `cargo check` - PASS  
-✅ **Unit tests:** `cargo test --lib` - All 17 tests PASS  
-✅ **Linting:** `cargo clippy` - No new warnings  
-✅ **No breaking API changes**
+✓  **Code compilation:** `cargo check` - PASS  
+✓  **Unit tests:** `cargo test --lib` - All 17 tests PASS  
+✓  **Linting:** `cargo clippy` - No new warnings  
+✓  **No breaking API changes**
 
 ## Verification Steps
 To confirm the fix resolves the issue:

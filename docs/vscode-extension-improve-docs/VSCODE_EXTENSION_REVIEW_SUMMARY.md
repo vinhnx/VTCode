@@ -75,14 +75,14 @@ Navigation and quick reference
 ## 🎯 Key Findings
 
 ### Current State of VT Code VSCode Extension
-✅ **Strengths**:
+✓  **Strengths**:
 - Solid command-line integration via PTY
 - Good configuration management (TOML-based)
 - MCP server support
 - IDE context bridge for semantic awareness
 - Workspace trust implementation
 
-❌ **Weaknesses**:
+⤫  **Weaknesses**:
 - Monolithic `extension.ts` (~2500 lines)
 - Hardcoded context handling
 - Basic error messages
@@ -140,7 +140,7 @@ Navigation and quick reference
 8. 📋 **State Management** - Better separation of concerns
 
 ### High Impact (Weeks 7-12)
-9. ✅ **Tool Approval UI** - Professional approval workflow
+9. ✓  **Tool Approval UI** - Professional approval workflow
 10. 💾 **Conversation Persistence** - Save/load chat threads
 
 ---
@@ -297,11 +297,11 @@ Benefits:
 
 ## 🚫 What NOT to Do
 
-1. ❌ Rewrite extension.ts in one go
-2. ❌ Break existing commands or configuration
-3. ❌ Implement all features without user feedback
-4. ❌ Skip testing to save time
-5. ❌ Neglect documentation
+1. ⤫  Rewrite extension.ts in one go
+2. ⤫  Break existing commands or configuration
+3. ⤫  Implement all features without user feedback
+4. ⤫  Skip testing to save time
+5. ⤫  Neglect documentation
 
 ---
 
@@ -435,14 +435,14 @@ vscode-extension/
 
 | Aspect | VS Copilot | VT Code | After Improvements |
 |--------|-----------|---------|-------------------|
-| Architecture | Modular participants | Monolithic | ✅ Modular |
-| Commands | Registered system | Inline in extension.ts | ✅ Registered |
-| UI | Professional, rich | Basic HTML | ✅ Professional |
-| Tool Approval | User-friendly modal | Scattered logic | ✅ Centralized UI |
-| Context Management | Multi-source | Single source | ✅ Multi-source |
-| Error Handling | Auto-recovery | Basic messages | ✅ Recoverable |
-| MCP Integration | Advanced | Basic | ✅ Enhanced |
-| State Management | Structured | Simple array | ✅ Structured |
+| Architecture | Modular participants | Monolithic | ✓  Modular |
+| Commands | Registered system | Inline in extension.ts | ✓  Registered |
+| UI | Professional, rich | Basic HTML | ✓  Professional |
+| Tool Approval | User-friendly modal | Scattered logic | ✓  Centralized UI |
+| Context Management | Multi-source | Single source | ✓  Multi-source |
+| Error Handling | Auto-recovery | Basic messages | ✓  Recoverable |
+| MCP Integration | Advanced | Basic | ✓  Enhanced |
+| State Management | Structured | Simple array | ✓  Structured |
 
 ---
 

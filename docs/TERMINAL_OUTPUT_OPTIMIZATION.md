@@ -20,12 +20,12 @@ Done.
 ```
 
 **Issues**:
-- ❌ Multiple status indicators: `[END]`, `[COMPLETED]`, `(exit code: 0)` - redundant
-- ❌ 60-character separator lines - wasteful
-- ❌ Verbose session metadata: `Session: run-1763462657610`
-- ❌ Cluttered headers with mixed information
-- ❌ "Running" indicator adds extra line
-- ❌ Completion footer with `[Session ...]` wrapper
+- ⤫  Multiple status indicators: `[END]`, `[COMPLETED]`, `(exit code: 0)` - redundant
+- ⤫  60-character separator lines - wasteful
+- ⤫  Verbose session metadata: `Session: run-1763462657610`
+- ⤫  Cluttered headers with mixed information
+- ⤫  "Running" indicator adds extra line
+- ⤫  Completion footer with `[Session ...]` wrapper
 
 ---
 
@@ -39,12 +39,12 @@ $ /bin/zsh -c cargo fmt
 ```
 
 **Improvements**:
-- ✅ Single-line header with status · command · viewport
-- ✅ Clear indicators: `▶ RUN` (running), `✓ OK` (completed)
-- ✅ Minimal footer: `✓ exit 0` or `✓ done`
-- ✅ Command truncation to 40-50 chars with ellipsis
-- ✅ No redundant session IDs or separators
-- ✅ 50% fewer lines of output
+- ✓  Single-line header with status · command · viewport
+- ✓  Clear indicators: `▶ RUN` (running), `✓ OK` (completed)
+- ✓  Minimal footer: `✓ exit 0` or `✓ done`
+- ✓  Command truncation to 40-50 chars with ellipsis
+- ✓  No redundant session IDs or separators
+- ✓  50% fewer lines of output
 
 ---
 
@@ -295,10 +295,10 @@ Finished `release` profile in 45.32s
 
 ## Backwards Compatibility
 
-✅ **Internal change only** - no public API modifications
-✅ **No dependency changes** - uses existing `AnsiRenderer`
-✅ **Graceful fallback** - respects existing error handling
-✅ **No configuration needed** - automatic formatting
+✓  **Internal change only** - no public API modifications
+✓  **No dependency changes** - uses existing `AnsiRenderer`
+✓  **Graceful fallback** - respects existing error handling
+✓  **No configuration needed** - automatic formatting
 
 ---
 

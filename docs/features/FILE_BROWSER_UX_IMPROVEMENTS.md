@@ -116,8 +116,8 @@ fn test_pagination() {
 ```
 
 ### Test Results
-✅ All 12 file_palette tests passing
-✅ Cargo check succeeds
+✓  All 12 file_palette tests passing
+✓  Cargo check succeeds
 
 ## Files Modified
 

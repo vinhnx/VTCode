@@ -83,17 +83,17 @@ The timeout applied depends on the tool type:
 
 ## Benefits
 
-✅ **Configurable Timeouts**: Each tool type can have different limits
-✅ **Policy-Based**: Uses the tool registry's timeout policy
-✅ **Category-Aware**: Respects timeout categories (Default, PTY, MCP)
-✅ **Graceful Fallback**: Uses sensible defaults if no policy configured
-✅ **Better Warnings**: Warning messages now show actual timeout limits
-✅ **Backward Compatible**: Default 300s timeout maintained for tools without specific config
+✓  **Configurable Timeouts**: Each tool type can have different limits
+✓  **Policy-Based**: Uses the tool registry's timeout policy
+✓  **Category-Aware**: Respects timeout categories (Default, PTY, MCP)
+✓  **Graceful Fallback**: Uses sensible defaults if no policy configured
+✓  **Better Warnings**: Warning messages now show actual timeout limits
+✓  **Backward Compatible**: Default 300s timeout maintained for tools without specific config
 
 ## Testing
 
 The implementation:
-- ✅ Compiles without errors
-- ✅ Maintains existing test structure
-- ✅ Updates test comments to reflect dynamic timeout usage
-- ✅ Integrates with existing timeout policy validation
+- ✓  Compiles without errors
+- ✓  Maintains existing test structure
+- ✓  Updates test comments to reflect dynamic timeout usage
+- ✓  Integrates with existing timeout policy validation

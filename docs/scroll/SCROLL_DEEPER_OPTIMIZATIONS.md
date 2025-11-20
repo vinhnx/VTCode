@@ -20,7 +20,7 @@ fn collect_transcript_window_cached(
     if let Some((cached_offset, cached_width, cached_lines)) = &self.visible_lines_cache {
         if *cached_offset == start_row && *cached_width == width {
             // Reuse cached lines to avoid re-cloning
-            return cached_lines.clone();  // ❌ EXPENSIVE CLONE
+            return cached_lines.clone();  // ⤫  EXPENSIVE CLONE
         }
     }
 
@@ -28,7 +28,7 @@ fn collect_transcript_window_cached(
     let visible_lines = self.collect_transcript_window(width, start_row, max_rows);
 
     // Cache for next render if scroll position unchanged
-    self.visible_lines_cache = Some((start_row, width, visible_lines.clone()));  // ❌ ANOTHER CLONE
+    self.visible_lines_cache = Some((start_row, width, visible_lines.clone()));  // ⤫  ANOTHER CLONE
 
     visible_lines
 }
@@ -51,7 +51,7 @@ fn collect_transcript_window_cached(
 **Current Code (Line 582-637):**
 ```rust
 fn render_transcript(&mut self, frame: &mut Frame<'_>, area: Rect) {
-    frame.render_widget(Clear, area);  // ❌ ALWAYS CLEARS
+    frame.render_widget(Clear, area);  // ⤫  ALWAYS CLEARS
     if area.height == 0 || area.width == 0 {
         return;
     }
@@ -123,9 +123,9 @@ pub fn scroll_line_down(&mut self) {
 ## Recommendation
 
 **Proceed with Phase 5 implementation now:**
-1. ✅ Fix Arc<Vec<Line>> wrapping for cache
-2. ✅ Remove unconditional Clear at line 583
-3. ✅ Add offset comparison in scroll functions
+1. ✓  Fix Arc<Vec<Line>> wrapping for cache
+2. ✓  Remove unconditional Clear at line 583
+3. ✓  Add offset comparison in scroll functions
 
 This will push scroll latency from **5-15ms down to 4-7ms** (additional 30-40% improvement).
 

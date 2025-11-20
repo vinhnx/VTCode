@@ -266,7 +266,7 @@ interface ChatUIState {
 // Display in chat header or status bar:
 // "🔵 VTCode Agent | Executing tool (2/5) | 2.3s | gpt-4"
 // "⏳ VTCode Agent | Streaming response... | 150 tokens"
-// "✅ Done | 1.2s | 342 tokens | anthropic/claude-3-sonnet"
+// "✓  Done | 1.2s | 342 tokens | anthropic/claude-3-sonnet"
 ```
 
 ---
