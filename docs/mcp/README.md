@@ -1,142 +1,44 @@
-# MCP Module Documentation Index
+# MCP Module Documentation
 
-**Status:** Phase 1 Complete ✅ | Phase 2 Partial ✅ | Phase 3 Planned 🕐
-
-Quick links to all MCP-related documentation from the 2025-11-20 review and improvement session.
+**Status:** Phase 1 ✅ Complete | Phase 2 ✅ Partial (40%) | Phase 3 🕐 Planned
 
 ---
 
-## Quick Start for Developers
+## 👉 START HERE
 
-👉 **Start here:** [MCP_PHASE1_USAGE_GUIDE.md](MCP_PHASE1_USAGE_GUIDE.md)
-- Quick start patterns
-- Error handling examples
-- Schema validation examples
-- Common use cases
+**New to MCP?** → Read [MCP_MASTER_GUIDE.md](MCP_MASTER_GUIDE.md) (15 min)
 
----
+**Want to use it?** → Jump to [API Reference](MCP_MASTER_GUIDE.md#api-reference) in master guide
 
-## Documentation by Purpose
-
-### For Understanding What Was Done
-| Document | Purpose | Read Time |
-|----------|---------|-----------|
-| [SESSION_SUMMARY.md](SESSION_SUMMARY.md) | Complete overview of review and Phase 2 work | 5 min |
-| [MCP_REVIEW_OUTCOME.md](MCP_REVIEW_OUTCOME.md) | Detailed review findings and fixes | 8 min |
-
-### For Implementation Details
-| Document | Purpose | Read Time |
-|----------|---------|-----------|
-| [MCP_PHASE1_FINAL_REVIEW.md](MCP_PHASE1_FINAL_REVIEW.md) | Issue-by-issue breakdown with code | 10 min |
-| [MCP_PHASE2_COMPLETION.md](MCP_PHASE2_COMPLETION.md) | What's complete, what's deferred | 10 min |
-
-### For Planning Phase 3
-| Document | Purpose | Read Time |
-|----------|---------|-----------|
-| [MCP_PHASE2_ROADMAP.md](MCP_PHASE2_ROADMAP.md) | Phase 2 & 3 objectives with estimates | 12 min |
-
-### For Using the API
-| Document | Purpose | Read Time |
-|----------|---------|-----------|
-| [MCP_PHASE1_USAGE_GUIDE.md](MCP_PHASE1_USAGE_GUIDE.md) | How to use error handling & schema validation | 15 min |
+**Planning Phase 3?** → See [Phase 3 Roadmap](MCP_MASTER_GUIDE.md#phase-3-roadmap)
 
 ---
 
-## What's in Each Document
+## Documentation Structure
 
-### SESSION_SUMMARY.md (Entry point)
-- Executive overview of entire session
-- Issues found and fixed
-- Phase 1 and Phase 2 results
-- Recommendations for Phase 3
+### Essential Reading
+| Document | Purpose | Time |
+|----------|---------|------|
+| [MCP_MASTER_GUIDE.md](MCP_MASTER_GUIDE.md) | Complete overview + API reference | 15 min |
+| [MCP_PHASE1_USAGE_GUIDE.md](MCP_PHASE1_USAGE_GUIDE.md) | Code patterns and examples | 15 min |
 
-### MCP_PHASE1_FINAL_REVIEW.md (Technical details)
-- 3 issues with code examples
-- Impact analysis
-- Fixes applied
-- Completeness checklist
+### Planning & Status
+| Document | Purpose | Time |
+|----------|---------|------|
+| [MCP_PHASE2_ROADMAP.md](MCP_PHASE2_ROADMAP.md) | Phase 2/3 objectives & estimates | 12 min |
+| [MCP_PHASE2_COMPLETION.md](MCP_PHASE2_COMPLETION.md) | What's done, what's deferred | 10 min |
 
-### MCP_PHASE1_USAGE_GUIDE.md (Developer guide)
-- Quick start with code examples
-- Error handling patterns
-- Schema validation patterns
-- Testing patterns
-- Debugging tips
-- Workarounds for Phase 1 limitations
-
-### MCP_REVIEW_OUTCOME.md (Executive summary)
-- Metrics (issues found: 3, fixed: 3)
-- Verification steps
-- Quality assurance
-- Recommendations
-- Key takeaways
-
-### MCP_PHASE2_ROADMAP.md (Planning document)
-- 5 Phase 2 objectives with detailed descriptions
-- Implementation order and effort estimates
-- Test coverage checklist
-- Dependencies and questions
-- Success criteria
-
-### MCP_PHASE2_COMPLETION.md (Status report)
-- 2/5 Phase 2 objectives completed (40%)
-- Transport Integration (complete)
-- Full JSON Schema Validation (complete)
-- 3 objectives deferred to Phase 3
-- API summary for Phase 1 + 2
-- Recommendations and next steps
+### Detailed Reference (Optional)
+| Document | Purpose | Time |
+|----------|---------|------|
+| [phase1/FINAL_REVIEW.md](phase1/FINAL_REVIEW.md) | Issue breakdown with code | 10 min |
+| [phase1/VERIFICATION.md](phase1/VERIFICATION.md) | Test coverage details | 5 min |
 
 ---
 
-## Phase Status Overview
+## Quick Reference
 
-### Phase 1: ✅ COMPLETE
-**Status:** Production-ready  
-**What's Done:**
-- Error handling module with 7 helpers (all exported)
-- Basic schema validation with property type checking
-- Transport layer creation functions
-- Complete API surface
-
-**Issues Fixed:** 3  
-- Schema validation test mismatch
-- Incomplete module exports
-- Missing error helper exports
-
----
-
-### Phase 2: ✅ PARTIAL (2/5 objectives)
-**Status:** Partial completion, 40% done  
-
-**Completed:**
-1. Transport Integration
-   - DRY refactoring of RmcpClient
-   - New helper: `create_stdio_transport_with_stderr()`
-   
-2. Full JSON Schema Validation
-   - Upgraded from basic type checking to full JSON Schema 2020-12
-   - 10 comprehensive test cases
-   - Required properties, constraints, enums, nested objects
-
-**Deferred to Phase 3:**
-1. HTTP Transport Support (3-4 hours)
-2. Enhanced Error Context (2-3 hours)
-3. Tool Schema Registry (2 hours, optional)
-
----
-
-### Phase 3: 🕐 PLANNED
-**Status:** Not started  
-**Planned Objectives:**
-1. HTTP Transport Support
-2. Error Code System (MCP_E001 style)
-3. Tool Schema Registry (optional)
-
----
-
-## API Reference (Quick)
-
-### Error Handling
+### Error Handling API
 ```rust
 use vtcode_core::mcp::*;
 
@@ -149,16 +51,11 @@ initialization_timeout(30)
 configuration_error("reason")
 ```
 
-### Schema Validation (Phase 2 - Full support)
+### Schema Validation
 ```rust
 use vtcode_core::mcp::validate_tool_input;
 
-let schema = json!({
-    "type": "object",
-    "properties": { /* ... */ },
-    "required": ["field"]
-});
-
+let schema = json!({"type": "object", "required": ["name"]});
 validate_tool_input(Some(&schema), &input)?;
 ```
 
@@ -167,71 +64,67 @@ validate_tool_input(Some(&schema), &input)?;
 use vtcode_core::mcp::create_stdio_transport_with_stderr;
 
 let (transport, stderr) = create_stdio_transport_with_stderr(
-    &program, &args, working_dir, &env)?;
+    "program", &args, working_dir, &env)?;
 ```
 
 ---
 
-## Git Commits from Session
+## Phase Status
 
-```
-51c71319 - Add comprehensive session summary
-2e886fd0 - Add Phase 2 completion report
-a0d1aea3 - Phase 2: Full JSON Schema 2020-12 validation
-fc6fe89d - Phase 2.1: Transport integration - eliminate duplicate code
-8b7890ff - Add MCP review outcome report - Phase 1 complete
-497da038 - Add comprehensive MCP Phase 1 documentation
-e347d095 - Phase 1: Complete MCP module exports and fix schema validation
-```
+### Phase 1: ✅ COMPLETE
+- Error handling with 7 exported helpers
+- Basic schema validation with property type checking
+- Transport layer functions
+- Zero breaking changes
+
+### Phase 2: ✅ PARTIAL (2/5)
+- ✅ Transport Integration (DRY refactoring)
+- ✅ Full JSON Schema 2020-12 validation
+- 🕐 HTTP Transport Support (deferred)
+- 🕐 Enhanced Error Context (deferred)
+- 🕐 Tool Schema Registry (deferred)
+
+### Phase 3: 🕐 PLANNED
+- HTTP Transport Support
+- Error code system
+- Tool Schema Registry (optional)
+
+See [MCP_MASTER_GUIDE.md#phase-3-roadmap](MCP_MASTER_GUIDE.md#phase-3-roadmap) for details.
 
 ---
 
-## Files in This Directory
+## Archive
+
+Older/redundant documentation moved to preserve main docs:
 
 ```
-docs/mcp/
-├── README.md (this file)
-├── SESSION_SUMMARY.md ⭐ START HERE
-├── MCP_PHASE1_FINAL_REVIEW.md
-├── MCP_PHASE1_USAGE_GUIDE.md
+archive/
+├── SESSION_SUMMARY.md
 ├── MCP_REVIEW_OUTCOME.md
-├── MCP_PHASE2_ROADMAP.md
-└── MCP_PHASE2_COMPLETION.md
+├── MCP_COMPLETE_IMPLEMENTATION_STATUS.md
+├── MCP_DIAGNOSTIC_GUIDE.md
+├── MCP_INITIALIZATION_TIMEOUT.md
+├── MCP_INTEGRATION_TESTING.md
+├── MCP_PERFORMANCE_BENCHMARKS.md
+├── MCP_RUST_SDK_ALIGNMENT.md
+├── MCP_STATUS_REPORT.md
+└── MCP_TOOL_INTEGRATION_STATUS.md
 ```
 
----
-
-## Recommended Reading Order
-
-1. **First time?** → Start with SESSION_SUMMARY.md (5 min)
-2. **Want to use it?** → Read MCP_PHASE1_USAGE_GUIDE.md (15 min)
-3. **Need details?** → See MCP_PHASE1_FINAL_REVIEW.md (10 min)
-4. **Planning Phase 3?** → Review MCP_PHASE2_ROADMAP.md (12 min)
-5. **Executive summary?** → Read MCP_REVIEW_OUTCOME.md (8 min)
+These documents are preserved for historical reference but not recommended for daily use.
 
 ---
 
 ## Key Takeaways
 
-✅ Phase 1 is production-ready with complete API surface  
-✅ Phase 2 added full JSON Schema 2020-12 validation  
-✅ Code is DRY, maintainable, well-documented  
+✅ MCP module is production-ready (Phase 1 & 2)  
+✅ Full JSON Schema 2020-12 validation support  
+✅ Complete error handling API (7 helpers, all exported)  
+✅ DRY transport layer with helper functions  
 ✅ Zero breaking changes, 100% backward compatible  
-✅ 3 issues fixed, 5 documentation guides created  
-
-🕐 Phase 3 ready to start with HTTP transport support  
-
----
-
-## Questions?
-
-- **How do I use the error handling?** → See MCP_PHASE1_USAGE_GUIDE.md
-- **What issues were fixed?** → See MCP_PHASE1_FINAL_REVIEW.md
-- **What's the roadmap?** → See MCP_PHASE2_ROADMAP.md
-- **Is it production-ready?** → Yes, Phase 1 is complete ✅
+✅ Clear roadmap for Phase 3  
 
 ---
 
 **Last Updated:** 2025-11-20  
-**Status:** ✅ Phase 1 & 2 Complete  
-**Ready for:** Phase 3 Planning
+**Recommendation:** Start with MCP_MASTER_GUIDE.md
