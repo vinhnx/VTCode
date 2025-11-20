@@ -71,12 +71,15 @@ impl ToolRegistry {
             'outer: for i in 0..=(content_lines.len().saturating_sub(old_lines.len())) {
                 let window = &content_lines[i..i + old_lines.len()];
                 if utils::lines_match(window, &old_lines) {
-                    let before = content_lines[..i].join("\n");
-                    let after = content_lines[i + old_lines.len()..].join("\n");
                     let replacement_lines: Vec<&str> = input.new_str.lines().collect();
-
-                    new_content =
-                        format!("{}\n{}\n{}", before, replacement_lines.join("\n"), after);
+                    
+                    // Build new content by replacing the matched window
+                    let mut result_lines = Vec::new();
+                    result_lines.extend_from_slice(&content_lines[..i]);
+                    result_lines.extend(replacement_lines.iter().map(|s| *s));
+                    result_lines.extend_from_slice(&content_lines[i + old_lines.len()..]);
+                    
+                    new_content = result_lines.join("\n");
                     replacement_occurred = true;
                     break 'outer;
                 }
@@ -97,12 +100,15 @@ impl ToolRegistry {
                         .collect();
 
                     if window_normalized == old_normalized {
-                        let before = content_lines[..i].join("\n");
-                        let after = content_lines[i + old_lines.len()..].join("\n");
                         let replacement_lines: Vec<&str> = input.new_str.lines().collect();
-
-                        new_content =
-                            format!("{}\n{}\n{}", before, replacement_lines.join("\n"), after);
+                        
+                        // Build new content by replacing the matched window
+                        let mut result_lines = Vec::new();
+                        result_lines.extend_from_slice(&content_lines[..i]);
+                        result_lines.extend(replacement_lines.iter().map(|s| *s));
+                        result_lines.extend_from_slice(&content_lines[i + old_lines.len()..]);
+                        
+                        new_content = result_lines.join("\n");
                         replacement_occurred = true;
                         break;
                     }
