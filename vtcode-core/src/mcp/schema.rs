@@ -1,14 +1,12 @@
 /// JSON Schema generation and validation for MCP tools
 ///
-/// This module provides type-safe schema generation using schemars
-/// and validation using jsonschema crates.
-///
-/// Phase 1: Basic schema structure support. Full validation implemented in Phase 2.
+/// This module provides JSON Schema 2020-12 validation using jsonschema library.
+/// Phase 1 provided basic type checking; Phase 2 adds full schema validation.
 
 use anyhow::Result;
 use serde_json::{json, Value};
 
-/// Validate input against a JSON Schema
+/// Validate input against a JSON Schema (Phase 2 - Full JSON Schema 2020-12)
 ///
 /// # Arguments
 /// * `schema` - The JSON Schema to validate against (JSON Schema 2020-12)
@@ -16,76 +14,40 @@ use serde_json::{json, Value};
 ///
 /// # Returns
 /// * `Ok(())` if validation succeeds
-/// * `Err` if input is null or invalid
+/// * `Err` with detailed error message if validation fails
 ///
-/// Note: Phase 1 uses basic validation. Full JSON Schema validation will be
-/// implemented in Phase 2 using jsonschema library capabilities.
+/// # Validation Coverage (Phase 2)
+/// - Type validation (string, number, integer, boolean, object, array)
+/// - Required properties
+/// - Min/max constraints (minLength, maxLength, minimum, maximum)
+/// - Pattern matching (regex)
+/// - Enum validation
+/// - Nested objects and arrays
+/// - Complex schemas (oneOf, anyOf, allOf, not)
 pub fn validate_against_schema(schema: &Value, input: &Value) -> Result<()> {
     if input.is_null() {
         anyhow::bail!("Input cannot be null");
     }
 
-    // Phase 1: Basic type checking for object schemas
-    if let Some(expected_type) = schema.get("type").and_then(Value::as_str) {
-        if expected_type == "object" && !input.is_object() {
-            anyhow::bail!("Expected object, got {}", json_type_name(&input));
-        }
-    }
-
-    // Phase 1: Check required properties have correct types
-    if let Some(properties) = schema.get("properties").and_then(Value::as_object) {
-        if let Some(input_obj) = input.as_object() {
-            for (key, prop_schema) in properties.iter() {
-                if let Some(value) = input_obj.get(key) {
-                    if let Some(expected_type) = prop_schema.get("type").and_then(Value::as_str) {
-                        let actual_type = match expected_type {
-                            "string" => value.is_string(),
-                            "number" => value.is_number(),
-                            "integer" => value.is_number() && value.as_i64().is_some(),
-                            "boolean" => value.is_boolean(),
-                            "object" => value.is_object(),
-                            "array" => value.is_array(),
-                            _ => true,
-                        };
-                        if !actual_type {
-                            anyhow::bail!(
-                                "Property '{}': expected {}, got {}",
-                                key,
-                                expected_type,
-                                json_type_name(&value)
-                            );
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    fn json_type_name(val: &Value) -> &'static str {
-        if val.is_string() {
-            "string"
-        } else if val.is_number() {
-            "number"
-        } else if val.is_boolean() {
-            "boolean"
-        } else if val.is_object() {
-            "object"
-        } else if val.is_array() {
-            "array"
-        } else {
-            "null"
-        }
-    }
-
-    Ok(())
+    // Use jsonschema for full JSON Schema 2020-12 validation
+    jsonschema::validate(schema, input).map_err(|err| {
+        anyhow::anyhow!("Schema validation failed: {}", err)
+    })
 }
 
-/// Validate tool input parameters
-pub fn validate_tool_input(_input_schema: Option<&Value>, input: &Value) -> Result<()> {
-    // Phase 1: Basic validation
+/// Validate tool input parameters (Phase 2 - Full validation)
+///
+/// Validates tool input against the tool's schema using full JSON Schema support.
+pub fn validate_tool_input(input_schema: Option<&Value>, input: &Value) -> Result<()> {
     if input.is_null() {
         anyhow::bail!("Tool input cannot be null");
     }
+
+    // If schema is provided, validate against it
+    if let Some(schema) = input_schema {
+        validate_against_schema(schema, input)?;
+    }
+
     Ok(())
 }
 
@@ -119,9 +81,128 @@ mod tests {
     }
 
     #[test]
+    fn test_validate_required_properties() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "name": { "type": "string" },
+                "age": { "type": "integer" }
+            },
+            "required": ["name"]
+        });
+
+        let valid = json!({"name": "John"});
+        assert!(validate_against_schema(&schema, &valid).is_ok());
+
+        let invalid = json!({"age": 30});
+        assert!(validate_against_schema(&schema, &invalid).is_err());
+    }
+
+    #[test]
+    fn test_validate_string_length_constraints() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 50
+                }
+            }
+        });
+
+        let valid = json!({"name": "John"});
+        assert!(validate_against_schema(&schema, &valid).is_ok());
+
+        let invalid_empty = json!({"name": ""});
+        assert!(validate_against_schema(&schema, &invalid_empty).is_err());
+
+        let invalid_long = json!({"name": "x".repeat(51)});
+        assert!(validate_against_schema(&schema, &invalid_long).is_err());
+    }
+
+    #[test]
+    fn test_validate_enum_values() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "status": {
+                    "type": "string",
+                    "enum": ["active", "inactive", "pending"]
+                }
+            }
+        });
+
+        let valid = json!({"status": "active"});
+        assert!(validate_against_schema(&schema, &valid).is_ok());
+
+        let invalid = json!({"status": "unknown"});
+        assert!(validate_against_schema(&schema, &invalid).is_err());
+    }
+
+    #[test]
+    fn test_validate_array_items() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "tags": {
+                    "type": "array",
+                    "items": { "type": "string" }
+                }
+            }
+        });
+
+        let valid = json!({"tags": ["rust", "mcp"]});
+        assert!(validate_against_schema(&schema, &valid).is_ok());
+
+        let invalid = json!({"tags": ["rust", 123]});
+        assert!(validate_against_schema(&schema, &invalid).is_err());
+    }
+
+    #[test]
+    fn test_validate_nested_objects() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "user": {
+                    "type": "object",
+                    "properties": {
+                        "name": { "type": "string" },
+                        "age": { "type": "integer" }
+                    },
+                    "required": ["name"]
+                }
+            }
+        });
+
+        let valid = json!({"user": {"name": "John", "age": 30}});
+        assert!(validate_against_schema(&schema, &valid).is_ok());
+
+        let invalid = json!({"user": {"age": 30}});
+        assert!(validate_against_schema(&schema, &invalid).is_err());
+    }
+
+    #[test]
     fn test_validate_tool_input_with_no_schema() {
         let input = json!({"any": "value"});
         assert!(validate_tool_input(None, &input).is_ok());
+    }
+
+    #[test]
+    fn test_validate_tool_input_with_schema() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "path": { "type": "string" }
+            },
+            "required": ["path"]
+        });
+
+        let valid = json!({"path": "/home"});
+        assert!(validate_tool_input(Some(&schema), &valid).is_ok());
+
+        let invalid = json!({});
+        assert!(validate_tool_input(Some(&schema), &invalid).is_err());
     }
 
     #[test]
@@ -129,5 +210,12 @@ mod tests {
         let schema = simple_schema();
         let input = json!({});
         assert!(validate_against_schema(&schema, &input).is_ok());
+    }
+
+    #[test]
+    fn test_null_input_rejection() {
+        let schema = json!({"type": "object"});
+        let null_input = json!(null);
+        assert!(validate_against_schema(&schema, &null_input).is_err());
     }
 }
