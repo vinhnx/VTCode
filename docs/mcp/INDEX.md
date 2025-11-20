@@ -41,6 +41,7 @@ Covers: Error handling, Schema validation, Transport, Testing patterns
 | [MCP_MASTER_GUIDE.md](MCP_MASTER_GUIDE.md) | Main reference + APIs + roadmap | 15 min |
 | [INDEX.md](INDEX.md) | This file - navigation | 2 min |
 | [MIGRATION_SUMMARY.md](MIGRATION_SUMMARY.md) | Why structure changed | 5 min |
+| [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) | Team launch & adoption plan | 10 min |
 
 ### Phase 1 (`phase1/`)
 | File | Purpose | Details |
@@ -129,6 +130,17 @@ Covers: Error handling, Schema validation, Transport, Testing patterns
 - Backward compatibility notes
 
 **Use when:** Planning Phase 2 or Phase 3 implementation
+
+### DEPLOYMENT_GUIDE.md (Team Adoption)
+**What's in it:**
+- Pre-deployment checklist
+- Step-by-step deployment timeline
+- Communication templates
+- Maintenance schedule
+- Troubleshooting guide
+- Success metrics and tracking
+
+**Use when:** Launching docs to the team or managing adoption
 
 ### Phase 1 & 2 Completion Docs
 **What's in them:**
@@ -231,6 +243,6 @@ A: [archive/](archive/) - all preserved
 
 ---
 
-**Last Updated:** 2025-11-20  
-**Status:** ✅ Migration Complete  
-**Recommendation:** Start with [README.md](README.md)
+**Last Updated:** 2025-11-20 (Deployment guide integrated)
+**Status:** ✅ Migration Complete + Deployment Ready
+**Recommendation:** Start with [README.md](README.md), then [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) to launch
