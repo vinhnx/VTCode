@@ -95,7 +95,7 @@ pub use policies::{ToolPolicy, ToolPolicyManager};
 
 #[cfg(feature = "examples")]
 pub mod examples {
-    //! Legacy registry helpers used by the headless integration examples
+    //! File helper methods used by the headless integration examples
     //! under `vtcode-tools/examples`.
-    pub use vtcode_core::tools::registry::legacy::*;
+    pub use vtcode_core::tools::registry::file_helpers::*;
 }

@@ -27,7 +27,7 @@ After deep analysis, I discovered **three separate bugs** that compounded to cre
 
 ## Bug #1: Newline Handling Creates Malformed Output ⚠️ CRITICAL
 
-**Location**: `/vtcode-core/src/tools/registry/legacy.rs` lines 74-79, 100-105
+**Location**: `/vtcode-core/src/tools/registry/file_helpers.rs` lines 74-79, 100-105
 
 **The Problem**:
 ```rust
@@ -81,7 +81,7 @@ new_content = result_lines.join("\n");
 
 ## Bug #2: Overly Strict Matching Prevents Fuzzy Matching ⚠️ CRITICAL
 
-**Location**: `/vtcode-core/src/tools/registry/legacy.rs` lines 66-87 (original)
+**Location**: `/vtcode-core/src/tools/registry/file_helpers.rs` lines 66-87 (original)
 
 **The Problem**:
 ```rust
@@ -143,7 +143,7 @@ if !replacement_occurred {
 
 ## Bug #3: Trailing Newlines Not Preserved ⚠️ FILE CORRUPTION
 
-**Location**: `/vtcode-core/src/tools/registry/legacy.rs` (entire function)
+**Location**: `/vtcode-core/src/tools/registry/file_helpers.rs` (entire function)
 
 **The Problem**:
 - When using `.lines()`, it strips the trailing newline
@@ -208,7 +208,7 @@ This mirrors the approach used in `PatchContextMatcher` (see `vtcode-core/src/to
 
 ## Files Modified
 
-1. **`/vtcode-core/src/tools/registry/legacy.rs`**
+1. **`/vtcode-core/src/tools/registry/file_helpers.rs`**
    - Fixed newline handling bug (Bug #1)
    - Implemented multi-level fallback matching (Bug #2)
    - Added trailing newline preservation (Bug #3)
@@ -217,7 +217,7 @@ This mirrors the approach used in `PatchContextMatcher` (see `vtcode-core/src/to
 2. **`/vtcode-core/src/tools/registry/utils.rs`**
    - Removed unused `normalize_whitespace()` function
 
-3. **`/vtcode-core/src/tools/registry/legacy_tests.rs`**
+3. **`/vtcode-core/src/tools/registry/file_helpers_tests.rs`**
    - Comprehensive unit test suite (15+ test cases)
 
 4. **`/scripts/test_edit_file_fix.sh`**
@@ -332,7 +332,7 @@ Consider adding:
 4. **Metrics**: Track which strategy succeeds most often
 5. **Caching**: Cache normalized versions to avoid recomputation
 6. **CRLF handling**: Detect and preserve Windows line endings
-7. **Unit tests**: Implement the test suite in `legacy_tests.rs`
+7. **Unit tests**: Implement the test suite in `file_helpers_tests.rs`
 
 ---
 
