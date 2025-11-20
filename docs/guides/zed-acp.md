@@ -224,7 +224,7 @@ sha256 = "replace-with-real-sha256"
   invocation. Paths supplied by tools are normalised against the trusted workspace so relative
   segments stay inside the project before the request reaches the client.
 - **Tool policy compatibility** – VT Code still advertises its core tool suite (for example
-  `run_terminal_cmd`, `bash`, `grep_file`, `write_file`) through ACP when the model supports
+  `run_pty_cmd`, `bash`, `grep_file`, `write_file`) through ACP when the model supports
   function calling. The bridge evaluates each request against the workspace's tool-policy settings
   before executing commands locally, ensuring shell access and editing tools behave the same as in
   the native CLI. Policy defaults and overrides defined under `[tools]` in `vtcode.toml` apply to

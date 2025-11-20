@@ -75,7 +75,7 @@ let fallback_paths = [
 ### Execution Flow
 
 ```
-Agent: run_terminal_cmd("cargo fmt")
+Agent: run_pty_cmd("cargo fmt")
   ↓
 PtyManager.create_session()
   ↓

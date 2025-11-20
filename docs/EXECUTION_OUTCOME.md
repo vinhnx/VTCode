@@ -1,13 +1,13 @@
-# Execution Outcome: run_terminal_cmd Parameter Handling Fix
+# Execution Outcome: run_pty_cmd Parameter Handling Fix
 
 ## Objective
-Fix the "run_terminal_cmd requires a 'command' array" error and eliminate infinite tool call loops when LLM tools invoke `run_terminal_cmd`.
+Fix the "run_pty_cmd requires a 'command' array" error and eliminate infinite tool call loops when LLM tools invoke `run_pty_cmd`.
 
 ## Root Analysis
 
 ### Issue 1: Parameter Format Wrapping
 - Command strings were being wrapped as single-element arrays: `["cargo fmt"]` instead of `"cargo fmt"`
-- The `run_terminal_cmd` handler expects either a string (which it parses) or an array, not a wrapped string
+- The `run_pty_cmd` handler expects either a string (which it parses) or an array, not a wrapped string
 
 ### Issue 2: Incomplete Parameter Source Handling
 - Only handled `cmd` parameter, ignored `command` parameter
@@ -99,14 +99,14 @@ Running cargo fmt... No changes needed
 3. `vtcode-core/src/tools/registry/executors.rs` - 5 lines added
 
 ## Documentation Created
-1. `docs/RUN_TERMINAL_CMD_FIX_COMPREHENSIVE.md` - Full technical analysis
+1. `docs/RUN_PTY_CMD_FIX_COMPREHENSIVE.md` - Full technical analysis
 2. `docs/CHANGES_SUMMARY.md` - Quick reference
 3. `docs/EXECUTION_OUTCOME.md` - This document
 
 ## Recommendation for Validation
 
 To verify the fix in practice:
-1. Run a test with Bash tool calling `run_terminal_cmd` with string command
+1. Run a test with Bash tool calling `run_pty_cmd` with string command
 2. Monitor for immediate response (no retries)
 3. Verify secondary parameters (cwd, timeout) are honored
 4. Test error cases: empty command, missing command, etc.

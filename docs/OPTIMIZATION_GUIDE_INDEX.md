@@ -51,7 +51,7 @@ Start here → **SCROLL_BENCHMARKS.md**
 **Key info**:
 ```
 BEFORE: 7 lines, 280 characters
-✓ [run_terminal_cmd] cargo fmt · Command: cargo, fmt (exit: 0)
+✓ [run_pty_cmd] cargo fmt · Command: cargo, fmt (exit: 0)
 [END] [COMPLETED - 80x24] Session: run-1763462657610
 ────────────────────────────────────────────────────────────
 

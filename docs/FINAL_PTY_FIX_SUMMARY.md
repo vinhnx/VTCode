@@ -65,7 +65,7 @@ Created comprehensive documentation explaining:
 ```
 Agent issues: cargo fmt
   ↓
-ToolRegistry.run_terminal_cmd()
+ToolRegistry.run_pty_cmd()
   ↓
 PtyManager.create_session()
   ↓

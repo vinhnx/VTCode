@@ -301,11 +301,11 @@ allow_glob = [
 
 ### Requiring Confirmation for Destructive Operations
 
-When using `run_terminal_cmd`, set `confirm=true` for commands that need approval:
+When using `run_pty_cmd`, set `confirm=true` for commands that need approval:
 
 ```python
 # Example from agent
-run_terminal_cmd(
+run_pty_cmd(
   command=["git", "reset", "--hard"],
   confirm=True  # Requires user confirmation despite being in allow_glob
 )

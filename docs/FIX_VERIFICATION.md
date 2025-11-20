@@ -244,7 +244,7 @@ None. All identified issues have been addressed.
 ## Future Work
 
 1. **Tool Selection Optimization** (Issue #3)
-   - Improve heuristic for choosing PTY vs run_terminal_cmd
+   - Improve heuristic for choosing PTY vs run_pty_cmd
    - Document in: docs/AGENT_ISSUES.md
 
 2. **Performance Monitoring**

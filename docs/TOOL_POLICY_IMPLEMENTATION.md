@@ -66,14 +66,14 @@ The system stores configuration in `~/.vtcode/tool-policy.json`:
         "read_file",
         "write_file",
         "list_files",
-        "run_terminal_cmd",
+        "run_pty_cmd",
         "grep_file"
     ],
     "policies": {
         "read_file": "allow",
         "write_file": "prompt",
         "list_files": "allow",
-        "run_terminal_cmd": "deny",
+        "run_pty_cmd": "deny",
         "grep_file": "allow"
     }
 }
@@ -99,7 +99,7 @@ vtcode tool-policy status
 vtcode tool-policy allow read_file
 
 # Deny a dangerous tool
-vtcode tool-policy deny run_terminal_cmd
+vtcode tool-policy deny run_pty_cmd
 
 # Reset everything to prompt again
 vtcode tool-policy reset-all
@@ -247,7 +247,7 @@ VT Code implements automatic chunking strategies to handle large files and verbo
 -   **Context Preservation**: Maintains line numbers during edits
 -   **Diff Merging**: Handles overlaps and conflicts in chunked operations
 
-#### run_terminal_cmd Tool
+#### run_pty_cmd Tool
 
 -   **Output Truncation**: Verbose commands truncated to essential content
 -   **Efficiency**: Uses `head`/`tail` for large output processing

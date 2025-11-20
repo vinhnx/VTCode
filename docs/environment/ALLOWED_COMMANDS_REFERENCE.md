@@ -285,8 +285,7 @@ Control whether tools require confirmation:
 
 ```toml
 [tools.policies]
-run_terminal_cmd = "allow"      # Execute without confirmation
-run_pty_cmd = "allow"            # PTY commands allowed
+run_pty_cmd = "allow"      # Execute without confirmation
 apply_patch = "prompt"           # Ask before applying
 write_file = "allow"
 edit_file = "allow"

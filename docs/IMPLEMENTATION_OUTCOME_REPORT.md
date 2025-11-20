@@ -21,7 +21,7 @@ Both fixes are production-ready and have been successfully integrated into the c
 ## Issue #1: Infinite Repeated Tool Calls
 
 ### Problem Description
-The agent repeatedly called `run_terminal_cmd` (e.g., `git diff`) 13+ times without stopping, consuming resources and creating the appearance of an infinite loop.
+The agent repeatedly called `run_pty_cmd` (e.g., `git diff`) 13+ times without stopping, consuming resources and creating the appearance of an infinite loop.
 
 ### Root Cause Analysis
 The `repeated_tool_attempts` counter in `run_loop.rs` had three critical flaws:

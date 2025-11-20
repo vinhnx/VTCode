@@ -166,7 +166,7 @@ fn test_ui_message_combinations() {
                 ),
                 (
                     InlineMessageKind::Tool,
-                    "run_terminal_cmd([\"ls\", \"-la\"])",
+                    "run_pty_cmd([\"ls\", \"-la\"])",
                 ),
                 (InlineMessageKind::Pty, "file1.txt  file2.rs  src/"),
                 (

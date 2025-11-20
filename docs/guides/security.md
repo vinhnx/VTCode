@@ -123,7 +123,7 @@ list_directory = "allow"
 search_files = "allow"
 
 # Require approval for sensitive operations
-run_terminal_cmd = "prompt"
+run_pty_cmd = "prompt"
 write_file = "prompt"
 delete_file = "prompt"
 

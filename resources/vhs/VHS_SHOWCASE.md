@@ -50,7 +50,7 @@ This directory contains VHS (Video Hosting System) showcases for VT Code, demons
 ### Agentic Capabilities
 - **Autonomous Navigation**: Using tools to discover current directory and file structure
 - **File Operations**: Creating, reading, and modifying files autonomously
-- **Command Execution**: Running shell commands via `run_terminal_cmd`
+- **Command Execution**: Running shell commands via `run_pty_cmd`
 - **Code Analysis**: Tree-sitter powered code structure analysis
 - **Tool Integration**: Using built-in tools for various operations
 
@@ -121,7 +121,7 @@ For more information about VHS syntax, visit [github.com/charmbracelet/vhs](http
 - "Can you show me the README.md file?" - File reading operation
 
 ### Tool Usage Examples:
-- Running shell commands with `run_terminal_cmd`
+- Running shell commands with `run_pty_cmd`
 - Creating and reading files with content verification
 - Using tree-sitter for code analysis
 - Tool-based problem solving and verification

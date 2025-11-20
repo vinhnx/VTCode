@@ -6,7 +6,7 @@
 
 #### BEFORE (Verbose)
 ```
-✓ [run_terminal_cmd] cargo fmt · Command: cargo, fmt (exit: 0)
+✓ [run_pty_cmd] cargo fmt · Command: cargo, fmt (exit: 0)
 [END] [COMPLETED - 80x24] Session: run-1763462657610 | Working directory: . (exit code: 0)
 ────────────────────────────────────────────────────────────
 $ /bin/zsh -c cargo fmt

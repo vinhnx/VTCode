@@ -52,7 +52,7 @@ files until you've identified relevant matches."
 -   `list_files`: Focused on metadata-as-references pattern
 -   `read_file`: Highlighted auto-chunking for large files
 -   `write_file` / `edit_file`: Clarified distinct use cases
--   `run_terminal_cmd`: Noted auto-truncation behavior
+-   `run_pty_cmd`: Noted auto-truncation behavior
 -   `grep_file`: Positioned as syntax-aware alternative
 -   `curl`: Emphasized sandboxing and size limits
 

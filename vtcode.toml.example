@@ -533,7 +533,7 @@ allow_glob = [
 ]
 
 # When commands are potentially destructive, the agent will require an explicit confirmation flag
-# Example: set `confirm = true` in the `EnhancedTerminalInput` for `run_terminal_cmd` tool input
+# Example: set `confirm = true` in the `EnhancedTerminalInput` for `run_pty_cmd` tool input
 
 # Command patterns that are denied (supports glob patterns)
 # These patterns are always blocked to prevent dangerous operations

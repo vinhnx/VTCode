@@ -87,7 +87,7 @@ The following variables are **always overridden** for consistent behavior:
 
 ## Command Execution Paths
 
-### Non-PTY Command Execution (run_terminal_cmd)
+### Non-PTY Command Execution (run_pty_cmd)
 
 Used for simple, non-interactive commands:
 
@@ -205,8 +205,7 @@ deny_regex = [
 
 ```toml
 [tools.policies]
-run_terminal_cmd = "allow"      # Execute without confirmation
-run_pty_cmd = "allow"            # Allow PTY commands
+run_pty_cmd = "allow"      # Execute without confirmation
 apply_patch = "prompt"           # Ask before applying patches
 write_file = "allow"             # Allow file writes
 edit_file = "allow"              # Allow file edits

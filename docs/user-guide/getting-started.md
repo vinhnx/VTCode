@@ -173,7 +173,7 @@ During chat you can lead with `/` to trigger built-in actions without leaving th
 -   `/help` — list supported commands
 
 -   `/theme <id>` — switch the active theme
--   `/command <program> [args...]` — run a shell command via `run_terminal_cmd`
+-   `/command <program> [args...]` — run a shell command via `run_pty_cmd`
 
 Slash commands execute immediately and respect the same tool policies configured in `vtcode.toml`.
 
@@ -201,7 +201,7 @@ default_policy = "prompt"
 [tools.policies]
 read_file = "allow"
 write_file = "prompt"
-run_terminal_cmd = "prompt"
+run_pty_cmd = "prompt"
 ```
 
 ### Advanced Configuration

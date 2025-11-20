@@ -12,7 +12,7 @@ All notable changes to vtcode will be documented in this file.
     - feat: Add external editor integration with TUI suspension, alternate screen handling, and stability improvements.
     - feat: update tool policies, add setup script, and enhance README with configuration details
     - feat: VT Code System Prompt v3 - Context Optimized Implementation
-    - feat: add Bash tool and remove non-existent run_terminal_cmd references
+    - feat: add Bash tool and remove non-existent run_pty_cmd references
     - feat: implement interactive tree UI for file structure visualization
     - feat: enhance diff display with full-width backgrounds and improve terminal command visibility
 
@@ -73,7 +73,7 @@ All notable changes to vtcode will be documented in this file.
 
 ### Features
     - feat: VT Code System Prompt v3 - Context Optimized Implementation
-    - feat: add Bash tool and remove non-existent run_terminal_cmd references
+    - feat: add Bash tool and remove non-existent run_pty_cmd references
     - feat: implement interactive tree UI for file structure visualization
     - feat: enhance diff display with full-width backgrounds and improve terminal command visibility
 
@@ -142,7 +142,7 @@ All notable changes to vtcode will be documented in this file.
     - docs: update AGENTS.md with comprehensive agent guide and tool usage guidelines
     - docs: update changelog for v0.45.3 [skip ci]
     - docs: reorganize root-level docs into docs/ subdirectories per AGENTS.md
-    - docs: clarify run_terminal_cmd usage for git, cargo, and one-off shell commands
+    - docs: clarify run_pty_cmd usage for git, cargo, and one-off shell commands
 
 
 ### Style Changes
@@ -174,7 +174,7 @@ All notable changes to vtcode will be documented in this file.
 
 ### Documentation
     - docs: reorganize root-level docs into docs/ subdirectories per AGENTS.md
-    - docs: clarify run_terminal_cmd usage for git, cargo, and one-off shell commands
+    - docs: clarify run_pty_cmd usage for git, cargo, and one-off shell commands
     - docs: update changelog for v0.45.2 [skip ci]
     - docs: update changelog for v0.45.1 [skip ci]
 
@@ -2151,7 +2151,7 @@ All notable changes to vtcode will be documented in this file.
 
 '### Bug Fixes$'
 '    - fix: update tool name in test and improve conversation compression logic
-    - fix: correct tool name from run_command to run_terminal_cmd$'
+    - fix: correct tool name from run_command to run_pty_cmd$'
 
 '### Refactors$'
 '    - refactor(file_ops: Optimize file metadata retrieval and reduce unnecessary system calls
@@ -2163,7 +2163,7 @@ All notable changes to vtcode will be documented in this file.
     - refactor: enhance conversation compression logic and message truncation
     - refactor: clean up whitespace and improve code readability
     - refactor: update LLM provider and model configurations
-    - refactor: rename RUN_TERMINAL_CMD to RUN_COMMAND for consistency$'
+    - refactor: rename RUN_PTY_CMD to maintain consistency with run_pty_cmd tool$'
 
 '### Documentation$'
 '    - docs: update changelog for v0.37.1 [skip ci]$'
@@ -2183,12 +2183,12 @@ All notable changes to vtcode will be documented in this file.
     - feat: Implement task plan management in TUI session$'
 
 '### Bug Fixes$'
-'    - fix: correct tool name from run_command to run_terminal_cmd
+'    - fix: correct tool name from run_command to run_pty_cmd
     - fix: add Debug trait to InlineTextStyle for improved logging$'
 
 '### Refactors$'
 '    - refactor: update LLM provider and model configurations
-    - refactor: rename RUN_TERMINAL_CMD to RUN_COMMAND for consistency
+    - refactor: rename RUN_PTY_CMD to maintain consistency with run_pty_cmd tool
     - refactor: improve tool summary rendering and clean up unused code
     - refactor: update LLM provider and model configurations
     - refactor: update configuration for LLM provider and model settings
