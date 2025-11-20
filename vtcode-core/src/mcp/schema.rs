@@ -2,9 +2,8 @@
 ///
 /// This module provides JSON Schema 2020-12 validation using jsonschema library.
 /// Phase 1 provided basic type checking; Phase 2 adds full schema validation.
-
 use anyhow::Result;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// Validate input against a JSON Schema (Phase 2 - Full JSON Schema 2020-12)
 ///
@@ -30,9 +29,8 @@ pub fn validate_against_schema(schema: &Value, input: &Value) -> Result<()> {
     }
 
     // Use jsonschema for full JSON Schema 2020-12 validation
-    jsonschema::validate(schema, input).map_err(|err| {
-        anyhow::anyhow!("Schema validation failed: {}", err)
-    })
+    jsonschema::validate(schema, input)
+        .map_err(|err| anyhow::anyhow!("Schema validation failed: {}", err))
 }
 
 /// Validate tool input parameters (Phase 2 - Full validation)

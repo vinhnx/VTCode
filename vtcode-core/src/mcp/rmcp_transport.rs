@@ -2,14 +2,13 @@
 ///
 /// This module provides wrappers around rmcp's transport types to integrate
 /// with VTCode's configuration and error handling.
-
 use anyhow::{Context, Result};
-use rmcp::transport::TokioChildProcess;
+use reqwest::header::HeaderMap;
 use rmcp::transport::StreamableHttpClientTransport;
+use rmcp::transport::TokioChildProcess;
 use std::ffi::OsString;
 use std::path::PathBuf;
 use tokio::process::Command;
-use reqwest::header::HeaderMap;
 
 use vtcode_config::mcp::McpStdioServerConfig;
 
@@ -44,8 +43,7 @@ pub fn create_stdio_transport(
     }
 
     // Create the child process transport
-    TokioChildProcess::new(cmd)
-        .context("Failed to create child process for MCP server")
+    TokioChildProcess::new(cmd).context("Failed to create child process for MCP server")
 }
 
 /// Create a stdio transport from individual parameters (Phase 2 integration)
@@ -130,7 +128,7 @@ pub fn create_http_transport(
     // See RmcpClient::new_streamable_http_client() for reference implementation
     // This function provides the interface; actual HTTP transport is created via:
     // StreamableHttpClientTransport::with_client(http_client, config)
-    
+
     anyhow::bail!(
         "HTTP transport creation requires rmcp's StreamableHttpClientTransport. \
          Use RmcpClient::new_streamable_http_client() for full implementation."

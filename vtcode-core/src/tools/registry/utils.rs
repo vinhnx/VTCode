@@ -23,7 +23,6 @@ pub(super) fn normalize_tool_output(mut val: Value) -> Value {
     val
 }
 
-
 pub(super) fn lines_match(content_lines: &[&str], expected_lines: &[&str]) -> bool {
     if content_lines.len() != expected_lines.len() {
         return false;

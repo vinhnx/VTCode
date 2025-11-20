@@ -81,13 +81,13 @@ impl ToolRegistry {
                 let window = &content_lines[i..i + old_lines.len()];
                 if utils::lines_match(window, &old_lines) {
                     let replacement_lines: Vec<&str> = input.new_str.lines().collect();
-                    
+
                     // Build new content by replacing the matched window
                     let mut result_lines = Vec::new();
                     result_lines.extend_from_slice(&content_lines[..i]);
                     result_lines.extend(replacement_lines.iter().map(|s| *s));
                     result_lines.extend_from_slice(&content_lines[i + old_lines.len()..]);
-                    
+
                     new_content = result_lines.join("\n");
                     replacement_occurred = true;
                     break 'outer;
@@ -110,13 +110,13 @@ impl ToolRegistry {
 
                     if window_normalized == old_normalized {
                         let replacement_lines: Vec<&str> = input.new_str.lines().collect();
-                        
+
                         // Build new content by replacing the matched window
                         let mut result_lines = Vec::new();
                         result_lines.extend_from_slice(&content_lines[..i]);
                         result_lines.extend(replacement_lines.iter().map(|s| *s));
                         result_lines.extend_from_slice(&content_lines[i + old_lines.len()..]);
-                        
+
                         new_content = result_lines.join("\n");
                         replacement_occurred = true;
                         break;
