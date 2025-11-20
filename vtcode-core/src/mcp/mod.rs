@@ -29,7 +29,9 @@ pub use errors::{
     tool_invocation_failed, initialization_timeout, configuration_error,
 };
 pub use schema::{validate_against_schema, validate_tool_input};
-pub use rmcp_transport::{create_stdio_transport, create_transport_from_config};
+pub use rmcp_transport::{
+    create_stdio_transport, create_stdio_transport_with_stderr, create_transport_from_config,
+};
 
 use anyhow::{Context, Result, anyhow, bail};
 use async_trait::async_trait;
@@ -1537,24 +1539,17 @@ impl RmcpClient {
         env: Option<HashMap<String, String>>,
         elicitation_handler: Option<Arc<dyn McpElicitationHandler>>,
     ) -> Result<Self> {
-        let mut command = Command::new(&program);
-        command
-            .kill_on_drop(true)
-            .stdin(std::process::Stdio::piped())
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
-            .env_clear()
-            .envs(create_env_for_mcp_server(env));
+        let env = create_env_for_mcp_server(env);
 
-        if let Some(dir) = working_dir.as_ref() {
-            command.current_dir(dir);
-        }
+        // Use rmcp_transport helper to create transport with stderr capture
+        let (transport, stderr) = create_stdio_transport_with_stderr(
+            &program,
+            &args,
+            working_dir.as_ref(),
+            &env,
+        )?;
 
-        command.args(&args);
-
-        let builder = TokioChildProcess::builder(command);
-        let (transport, stderr) = builder.stderr(std::process::Stdio::piped()).spawn()?;
-
+        // Spawn async task to log MCP server stderr
         if let Some(stderr) = stderr {
             let program_name = program.to_string_lossy().into_owned();
             let provider_label = provider_name.clone();
