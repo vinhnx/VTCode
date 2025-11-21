@@ -3,6 +3,59 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Version 0.43.0] - 2025-11-09
+# [Version 0.46.0] - 2025-11-21
+
+
+### Features
+    - feat: Refactor install script, rename `run_pty_cmd` to `run_terminal_cmd`, and update installation instructions for Homebrew and NPM.
+    - feat: Add new tools to tool-policy and update permissions for fetch and time providers
+    - feat: Add default editor fallback (vi on Unix, notepad on Windows) when EDITOR/VISUAL not set
+    - feat: Add external editor integration with TUI suspension, alternate screen handling, and stability improvements.
+    - feat: update tool policies, add setup script, and enhance README with configuration details
+
+
+### Bug Fixes
+    - fix: Update public re-export and documentation to reference file_helpers instead of legacy
+    - fix: Improve `edit_file` tool's robustness
+    - fix: Track fire-and-forget tokio::spawn tasks with JoinHandles
+    - fix: Apply Ratatui FAQ best practices - fix async/tokio issues
+    - fix: Add environment() and path() to EditorBuilder to properly detect and launch editor
+    - fix: Remove duplicate test block with non-existent method in zed.rs
+
+
+### Refactors
+    - refactor: Rename `legacy` module to `file_helpers` and fix critical `edit_file` bugs related to newline handling, matching, and trailing newlines.
+    - refactor(mcp): Clean up unused imports
+    - refactor: Rename `run_terminal_cmd` to `run_pty_cmd` across documentation, examples, and tests.
+    - refactor: Remove static default editor, rely on try_common_editors for fallback
+
+
+### Documentation
+    - docs/mcp: integrate DEPLOYMENT_GUIDE and update INDEX navigation
+    - docs/mcp: Add lessons learned - project retrospective
+    - docs/mcp: Add team communication kit - ready-to-use materials
+    - docs/mcp: Add master index - 00_START_HERE.md
+    - docs/mcp: Add implementation guides for immediate team use
+    - docs/mcp: Add executive summary document
+    - docs/mcp: Add team announcement document
+    - docs: Link MCP module docs and add team guide
+    - docs/mcp: Add comprehensive INDEX.md for navigation
+    - docs/mcp: Complete documentation migration - consolidate and organize
+    - docs: Update and expand documentation across various topics, add a new MCP diagnostic guide, and adjust project configurations and dependencies.
+    - docs: update changelog for v0.45.6 [skip ci]
+    - docs: add comprehensive Ratatui improvements summary
+    - docs: Add async improvements documentation
+    - docs: add Ratatui FAQ integration summary document
+    - docs: add Ratatui FAQ-based TUI best practices guides
+    - docs: Add External Editor Configuration to docs index
+
+
+### Chores
+    - chore: update VSCode extension package.json to v0.45.6 [skip ci]
+    - chore: update npm package.json to v0.45.6 [skip ci]
+    - chore: release v0.45.6
+    - chore: update VSCode extension package.json to v0.45.5 [skip ci]
+    - chore: update npm package.json to v0.45.5 [skip ci]
 # [Version 0.45.6] - 2025-11-20
 
 
