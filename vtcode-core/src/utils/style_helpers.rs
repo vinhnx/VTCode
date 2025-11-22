@@ -57,7 +57,7 @@ pub fn render_styled(text: &str, color: Color, effects: Option<String>) -> Strin
     }
 
     // Use static reset code instead of render_reset to ensure proper termination
-    format!("{}{}\x1b[0m", style, text)
+    format!("{}{}{}", style, text, crate::utils::ansi_codes::RESET)
 }
 
 /// Build style from CSS/terminal color name
