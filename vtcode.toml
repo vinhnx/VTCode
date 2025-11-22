@@ -5,13 +5,13 @@
 # Core agent behavior; see docs/config/CONFIGURATION_PRECEDENCE.md.
 [agent]
 # Primary LLM provider to use (e.g., "openai", "gemini", "anthropic", "openrouter")
-provider = "openrouter"
+provider = "ollama"
 
 # Environment variable containing the API key for the provider
-api_key_env = "OPENROUTER_API_KEY"
+api_key_env = "OLLAMA_API_KEY"
 
 # Default model to use when no specific model is specified
-default_model = "x-ai/grok-4.1-fast"
+default_model = "gpt-oss:20b-cloud"
 
 # Visual theme for the terminal interface
 theme = "ciapre-dark"
@@ -28,7 +28,7 @@ max_conversation_turns = 50
 
 # Reasoning effort level ("none", "minimal", "low", "medium", "high") - affects model usage and response speed
 # For Gemini 3 Pro: Use "low" for fast responses, "high" for maximum reasoning depth, "medium" defaults to high (not yet generally available)
-reasoning_effort = "medium"
+reasoning_effort = "low"
 
 # Temperature for main LLM responses (0.0-1.0)
 # Lower values = more deterministic, higher values = more creative
@@ -527,15 +527,15 @@ llm_router_model = ""
 # Model mapping for different task types
 [router.models]
 # Model for simple queries
-simple = "x-ai/grok-4.1-fast"
+simple = "gpt-oss:20b-cloud"
 # Model for standard tasks
-standard = "x-ai/grok-4.1-fast"
+standard = "gpt-oss:20b-cloud"
 # Model for complex tasks
-complex = "x-ai/grok-4.1-fast"
+complex = "gpt-oss:20b-cloud"
 # Model for code generation heavy tasks
-codegen_heavy = "x-ai/grok-4.1-fast"
+codegen_heavy = "gpt-oss:20b-cloud"
 # Model for information retrieval heavy tasks
-retrieval_heavy = "x-ai/grok-4.1-fast"
+retrieval_heavy = "gpt-oss:20b-cloud"
 
 # Router budget settings (if applicable)
 [router.budgets]
@@ -740,11 +740,6 @@ args = ["mcp-server-time"]
 enabled = true
 max_concurrent_requests = 3
 
-# MCP renderer profiles for different services
-[mcp.ui.renderers]
-sequential-thinking = "sequential-thinking"
-context7 = "context7"
-
 [mcp.providers.env]
 
 [[mcp.providers]]
@@ -755,6 +750,11 @@ enabled = true
 max_concurrent_requests = 3
 
 [mcp.providers.env]
+
+# MCP renderer profiles for different services
+[mcp.ui.renderers]
+sequential-thinking = "sequential-thinking"
+context7 = "context7"
 
 
 # Agent Client Protocol (ACP) - IDE integration

@@ -35,12 +35,20 @@ pub struct PermissionEvent {
     pub requested_by: String,
 }
 
+/// Type of file access permission
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum FileAccessPermission {
+    Read,
+    Write,
+    ReadWrite,
+}
+
 /// Type of permission event
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum PermissionEventType {
     CommandExecution,
     ToolUsage,
-    FileAccess { read: bool, write: bool },
+    FileAccess(FileAccessPermission),
     NetworkAccess { domain: String },
     HookExecution,
 }

@@ -1,4 +1,9 @@
 use anyhow::Result;
+use crossterm::{
+    execute,
+    terminal::{LeaveAlternateScreen, disable_raw_mode},
+};
+use std::io::{self, Write};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use vtcode_core::core::pruning_decisions::PruningDecisionLedger;
@@ -14,6 +19,30 @@ use crate::agent::runloop::unified::workspace_links::{LinkedDirectory, remove_di
 use crate::hooks::lifecycle::{LifecycleHookEngine, SessionEndReason};
 
 use super::utils::render_hook_messages;
+
+/// Restore terminal to a clean state after session exit
+/// This ensures that raw mode is disabled and the terminal is left in a usable state
+/// even if the TUI didn't exit cleanly (e.g., due to Ctrl+C)
+fn restore_terminal_on_exit() -> io::Result<()> {
+    // Attempt to disable raw mode if it was enabled
+    // We ignore errors here since raw mode might not have been enabled
+    let _ = disable_raw_mode();
+
+    // Get stdout for executing terminal commands
+    let mut stdout = io::stdout();
+
+    // Try to show cursor
+    let _ = execute!(stdout, crossterm::cursor::Show);
+
+    // Try to leave alternate screen to return to normal terminal
+    // This might fail if we're not in alternate screen, which is fine
+    let _ = execute!(stdout, LeaveAlternateScreen);
+
+    // Additional flush to ensure all escape sequences are processed
+    stdout.flush()?;
+
+    Ok(())
+}
 
 /// Export pruning decisions to JSON file for analysis
 async fn export_pruning_decisions_to_json(
@@ -219,6 +248,9 @@ pub(super) async fn finalize_session(
     }
 
     handle.shutdown();
+
+    // Ensure terminal is properly restored in case TUI didn't exit cleanly
+    let _ = restore_terminal_on_exit();
 
     transcript::clear_inline_handle();
 

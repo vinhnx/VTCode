@@ -39,38 +39,74 @@ pub struct ContextItem {
     pub content: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TaskOutcome {
     Success,
     StoppedNoAction,
-    TurnLimitReached,
-    ToolLoopLimitReached,
+    TurnLimitReached {
+        max_turns: usize,
+        actual_turns: usize,
+    },
+    ToolLoopLimitReached {
+        max_tool_loops: usize,
+        actual_tool_loops: usize,
+    },
     Unknown,
 }
 
 impl TaskOutcome {
-    pub fn is_success(self) -> bool {
+    pub fn is_success(&self) -> bool {
         matches!(self, Self::Success | Self::StoppedNoAction)
     }
 
-    pub fn description(self) -> &'static str {
+    pub fn description(&self) -> String {
         match self {
-            Self::Success => "Task completed successfully",
-            Self::StoppedNoAction => "Stopped after agent signaled no further actions",
-            Self::TurnLimitReached => "Stopped after reaching turn limit",
-            Self::ToolLoopLimitReached => "Stopped after reaching tool loop limit",
-            Self::Unknown => "Task outcome could not be determined",
+            Self::Success => "Task completed successfully".to_string(),
+            Self::StoppedNoAction => "Stopped after agent signaled no further actions".to_string(),
+            Self::TurnLimitReached {
+                max_turns,
+                actual_turns,
+            } => format!(
+                "Stopped after reaching turn limit (max: {}, reached: {})",
+                max_turns, actual_turns
+            ),
+            Self::ToolLoopLimitReached {
+                max_tool_loops,
+                actual_tool_loops,
+            } => format!(
+                "Stopped after reaching tool loop limit (max: {}, reached: {})",
+                max_tool_loops, actual_tool_loops
+            ),
+            Self::Unknown => "Task outcome could not be determined".to_string(),
         }
     }
 
-    pub fn code(self) -> &'static str {
+    pub fn code(&self) -> &'static str {
         match self {
             Self::Success => "success",
             Self::StoppedNoAction => "stopped_no_action",
-            Self::TurnLimitReached => "turn_limit_reached",
-            Self::ToolLoopLimitReached => "tool_loop_limit_reached",
+            Self::TurnLimitReached { .. } => "turn_limit_reached",
+            Self::ToolLoopLimitReached { .. } => "tool_loop_limit_reached",
             Self::Unknown => "unknown",
+        }
+    }
+
+    pub fn success() -> Self {
+        Self::Success
+    }
+
+    pub fn turn_limit_reached(max_turns: usize, actual_turns: usize) -> Self {
+        Self::TurnLimitReached {
+            max_turns,
+            actual_turns,
+        }
+    }
+
+    pub fn tool_loop_limit_reached(max_tool_loops: usize, actual_tool_loops: usize) -> Self {
+        Self::ToolLoopLimitReached {
+            max_tool_loops,
+            actual_tool_loops,
         }
     }
 }

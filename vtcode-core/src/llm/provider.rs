@@ -1085,6 +1085,12 @@ pub struct ToolCall {
     /// Raw text payload (for custom freeform tools in GPT-5)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub text: Option<String>,
+
+    /// Gemini-specific thought signature for maintaining reasoning context
+    /// This encrypted string represents the model's internal reasoning state
+    /// and must be preserved and sent back exactly as received for proper context continuity
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thought_signature: Option<String>,
 }
 
 /// Function call within a tool call
@@ -1105,6 +1111,7 @@ impl ToolCall {
             call_type: "function".to_string(),
             function: Some(FunctionCall { name, arguments }),
             text: None,
+            thought_signature: None,
         }
     }
 
@@ -1118,6 +1125,7 @@ impl ToolCall {
                 arguments: text.clone(), // For custom tools, we treat the text as arguments
             }),
             text: Some(text),
+            thought_signature: None,
         }
     }
 

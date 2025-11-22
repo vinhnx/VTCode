@@ -20,8 +20,11 @@ pub async fn validate_command(
         return Err(anyhow!("command cannot be empty"));
     }
 
-    let program = command[0].as_str();
-    let args = &command[1..];
+    let (program, args) = command
+        .split_first()
+        .ok_or_else(|| anyhow!("command cannot be empty (unexpected)"))?;
+    let program = program.as_str();
+    let args = args;
 
     match program {
         "echo" => validate_echo(args),
@@ -150,7 +153,9 @@ async fn validate_cp(args: &[String], workspace_root: &Path, working_dir: &Path)
         return Err(anyhow!("cp requires a source and destination"));
     }
 
-    let dest_raw = positional.last().unwrap();
+    let dest_raw = positional
+        .last()
+        .ok_or_else(|| anyhow!("cp command missing destination path"))?;
     let sources = &positional[..positional.len() - 1];
 
     for source in sources {

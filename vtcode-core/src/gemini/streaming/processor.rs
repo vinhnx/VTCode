@@ -497,6 +497,7 @@ impl StreamingProcessor {
                 &mut last_candidate.content.parts,
                 vec![Part::Text {
                     text: text.to_string(),
+                    thought_signature: None,
                 }],
             );
             return;
@@ -509,6 +510,7 @@ impl StreamingProcessor {
                 role: "model".to_string(),
                 parts: vec![Part::Text {
                     text: text.to_string(),
+                    thought_signature: None,
                 }],
             },
             finish_reason: None,
@@ -530,7 +532,7 @@ impl StreamingProcessor {
         // Process each part of the content
         for part in &candidate.content.parts {
             match part {
-                Part::Text { text } => {
+                Part::Text { text, .. } => {
                     if !text.trim().is_empty() {
                         on_chunk(text)?;
                         _has_valid_content = true;
@@ -687,7 +689,7 @@ impl StreamingProcessor {
 
         for part in source_parts {
             match (target.last_mut(), &part) {
-                (Some(Part::Text { text: existing }), Part::Text { text: new_text }) => {
+                (Some(Part::Text { text: existing, .. }), Part::Text { text: new_text, .. }) => {
                     existing.push_str(new_text);
                 }
                 _ => target.push(part),
@@ -860,7 +862,7 @@ mod tests {
         assert_eq!(received_chunks, vec!["Hello", " world"]);
         assert_eq!(accumulated.candidates.len(), 1);
         let combined = match &accumulated.candidates[0].content.parts[0] {
-            Part::Text { text } => text.clone(),
+            Part::Text { text, .. } => text.clone(),
             _ => String::new(),
         };
         assert_eq!(combined, "Hello world");

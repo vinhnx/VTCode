@@ -63,7 +63,7 @@ pub async fn handle_ask_command(config: AgentConfig, prompt: Vec<String>) -> Res
                 .parts
                 .iter()
                 .map(|part| match part {
-                    crate::gemini::Part::Text { text } => text.clone(),
+                    crate::gemini::Part::Text { text, .. } => text.clone(),
                     _ => String::new(),
                 })
                 .collect::<Vec<_>>()

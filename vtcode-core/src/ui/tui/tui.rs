@@ -70,28 +70,17 @@ impl EventChannels {
         self.rx_paused
             .store(false, std::sync::atomic::Ordering::Release);
     }
-
-    fn is_paused(&self) -> bool {
-        self.rx_paused.load(std::sync::atomic::Ordering::Acquire)
-    }
 }
 
 struct EventListener {
     receiver: UnboundedReceiver<TerminalEvent>,
-    channels: EventChannels,
 }
 
 impl EventListener {
     fn new() -> (Self, EventChannels) {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
         let channels = EventChannels::new(tx);
-        (
-            Self {
-                receiver: rx,
-                channels: channels.clone(),
-            },
-            channels,
-        )
+        (Self { receiver: rx }, channels)
     }
 
     async fn recv(&mut self) -> Option<TerminalEvent> {

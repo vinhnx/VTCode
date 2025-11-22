@@ -142,9 +142,13 @@ impl TaskRunState {
             if self.has_completed {
                 self.completion_outcome = TaskOutcome::Success;
             } else if self.tool_loop_limit_hit {
-                self.completion_outcome = TaskOutcome::ToolLoopLimitReached;
+                self.completion_outcome = TaskOutcome::tool_loop_limit_reached(
+                    self.max_tool_loops,
+                    self.consecutive_tool_loops,
+                );
             } else if self.turns_executed >= max_turns {
-                self.completion_outcome = TaskOutcome::TurnLimitReached;
+                self.completion_outcome =
+                    TaskOutcome::turn_limit_reached(max_turns, self.turns_executed);
             }
         }
     }
@@ -163,7 +167,8 @@ impl TaskRunState {
 
     fn mark_tool_loop_limit_hit(&mut self) {
         self.tool_loop_limit_hit = true;
-        self.completion_outcome = TaskOutcome::ToolLoopLimitReached;
+        self.completion_outcome =
+            TaskOutcome::tool_loop_limit_reached(self.max_tool_loops, self.consecutive_tool_loops);
     }
 
     fn into_results(
@@ -244,7 +249,13 @@ mod tests {
 
         state.finalize_outcome(10);
 
-        assert_eq!(state.completion_outcome, TaskOutcome::ToolLoopLimitReached);
+        assert_eq!(
+            state.completion_outcome,
+            TaskOutcome::tool_loop_limit_reached(
+                state.max_tool_loops,
+                state.consecutive_tool_loops
+            )
+        );
     }
 
     #[test]
@@ -877,6 +888,7 @@ impl AgentRunner {
                             role: "model".to_string(),
                             parts: vec![Part::Text {
                                 text: response_text.clone(),
+                                thought_signature: None,
                             }],
                         });
                         task_state.conversation_messages.push(
@@ -979,7 +991,10 @@ impl AgentRunner {
                                         format_tool_result_for_display(&name, &result);
                                     task_state.conversation.push(Content {
                                         role: "user".to_string(),
-                                        parts: vec![Part::Text { text: display_text }],
+                                        parts: vec![Part::Text {
+                                            text: display_text,
+                                            thought_signature: None,
+                                        }],
                                     });
                                     // For LLM: use full result
                                     task_state
@@ -1031,6 +1046,7 @@ impl AgentRunner {
                                         role: "user".to_string(),
                                         parts: vec![Part::Text {
                                             text: format!("Tool {} failed: {}", name, e),
+                                            thought_signature: None,
                                         }],
                                     });
                                     let error_payload =
@@ -1061,6 +1077,7 @@ impl AgentRunner {
                             role: "model".to_string(),
                             parts: vec![Part::Text {
                                 text: response_text.clone(),
+                                thought_signature: None,
                             }],
                         });
                         task_state.conversation_messages.push(
@@ -1157,7 +1174,8 @@ impl AgentRunner {
                             )
                         );
                     } else if (turn + 1) >= self.max_turns {
-                        task_state.completion_outcome = TaskOutcome::TurnLimitReached;
+                        task_state.completion_outcome =
+                            TaskOutcome::turn_limit_reached(self.max_turns, turn + 1);
                         runner_println!(
                             self,
                             "{} {}",
@@ -1275,7 +1293,10 @@ impl AgentRunner {
                                                 format_tool_result_for_display(name, &result);
                                             task_state.conversation.push(Content {
                                                 role: "user".to_string(), // Gemini API only accepts "user" and "model"
-                                                parts: vec![Part::Text { text: display_text }],
+                                                parts: vec![Part::Text {
+                                                    text: display_text,
+                                                    thought_signature: None,
+                                                }],
                                             });
 
                                             // Track what the agent did
@@ -1325,6 +1346,7 @@ impl AgentRunner {
                                                 role: "user".to_string(), // Gemini API only accepts "user" and "model"
                                                 parts: vec![Part::Text {
                                                     text: format!("Tool {} failed: {}", name, e),
+                                                    thought_signature: None,
                                                 }],
                                             });
                                         }
@@ -1370,7 +1392,10 @@ impl AgentRunner {
                                         format_tool_result_for_display(name, &result);
                                     task_state.conversation.push(Content {
                                         role: "user".to_string(), // Gemini API only accepts "user" and "model"
-                                        parts: vec![Part::Text { text: display_text }],
+                                        parts: vec![Part::Text {
+                                            text: display_text,
+                                            thought_signature: None,
+                                        }],
                                     });
 
                                     // Track what the agent did
@@ -1417,6 +1442,7 @@ impl AgentRunner {
                                         role: "user".to_string(), // Gemini API only accepts "user" and "model"
                                         parts: vec![Part::Text {
                                             text: format!("Tool {} failed: {}", name, e),
+                                            thought_signature: None,
                                         }],
                                     });
                                 }
@@ -1474,7 +1500,10 @@ impl AgentRunner {
                                                 format_tool_result_for_display(&func_name, &result);
                                             task_state.conversation.push(Content {
                                                 role: "user".to_string(), // Gemini API only accepts "user" and "model"
-                                                parts: vec![Part::Text { text: display_text }],
+                                                parts: vec![Part::Text {
+                                                    text: display_text,
+                                                    thought_signature: None,
+                                                }],
                                             });
 
                                             // Track what the agent did
@@ -1529,6 +1558,7 @@ impl AgentRunner {
                                                         "Tool {} failed: {}",
                                                         func_name, e
                                                     ),
+                                                    thought_signature: None,
                                                 }],
                                             });
                                         }
@@ -1543,7 +1573,10 @@ impl AgentRunner {
                                     task_state.warnings.push(error_msg.clone());
                                     task_state.conversation.push(Content {
                                         role: "user".to_string(), // Gemini API only accepts "user" and "model"
-                                        parts: vec![Part::Text { text: error_msg }],
+                                        parts: vec![Part::Text {
+                                            text: error_msg,
+                                            thought_signature: None,
+                                        }],
                                     });
                                 }
                             }
@@ -1553,7 +1586,10 @@ impl AgentRunner {
                             task_state.warnings.push(error_msg.clone());
                             task_state.conversation.push(Content {
                                 role: "user".to_string(), // Gemini API only accepts "user" and "model"
-                                parts: vec![Part::Text { text: error_msg }],
+                                parts: vec![Part::Text {
+                                    text: error_msg,
+                                    thought_signature: None,
+                                }],
                             });
                         }
                     }
@@ -1594,7 +1630,10 @@ impl AgentRunner {
                                         format_tool_result_for_display(tool_name, &result);
                                     task_state.conversation.push(Content {
                                         role: "user".to_string(), // Gemini API only accepts "user" and "model"
-                                        parts: vec![Part::Text { text: display_text }],
+                                        parts: vec![Part::Text {
+                                            text: display_text,
+                                            thought_signature: None,
+                                        }],
                                     });
 
                                     // Track what the agent did
@@ -1642,6 +1681,7 @@ impl AgentRunner {
                                         role: "user".to_string(), // Gemini API only accepts "user" and "model"
                                         parts: vec![Part::Text {
                                             text: format!("Tool {} failed: {}", tool_name, e),
+                                            thought_signature: None,
                                         }],
                                     });
                                 }
@@ -1659,6 +1699,7 @@ impl AgentRunner {
                             role: "model".to_string(),
                             parts: vec![Part::Text {
                                 text: response.content.clone(),
+                                thought_signature: None,
                             }],
                         });
                     }
@@ -1674,6 +1715,7 @@ impl AgentRunner {
                         role: "model".to_string(),
                         parts: vec![Part::Text {
                             text: response.content.clone(),
+                            thought_signature: None,
                         }],
                     });
                 }
@@ -1776,7 +1818,8 @@ impl AgentRunner {
                             )
                         );
                     } else if (turn + 1) >= self.max_turns {
-                        task_state.completion_outcome = TaskOutcome::TurnLimitReached;
+                        task_state.completion_outcome =
+                            TaskOutcome::turn_limit_reached(self.max_turns, turn + 1);
                         runner_println!(
                             self,
                             "{} {}",
@@ -1821,7 +1864,8 @@ impl AgentRunner {
                     break;
                 } else if (turn + 1) >= self.max_turns {
                     task_state.record_turn(&turn_started_at, &mut turn_recorded);
-                    task_state.completion_outcome = TaskOutcome::TurnLimitReached;
+                    task_state.completion_outcome =
+                        TaskOutcome::turn_limit_reached(self.max_turns, turn + 1);
                     runner_println!(
                         self,
                         "{} {}",
@@ -1873,6 +1917,7 @@ impl AgentRunner {
 
         let max_turn_duration_ms = task_state.turn_durations_ms.iter().copied().max();
 
+        let outcome = task_state.completion_outcome.clone(); // Clone to avoid moving
         let summary = self.generate_task_summary(
             task,
             &task_state.modified_files,
@@ -1882,7 +1927,7 @@ impl AgentRunner {
             task_state.turns_executed,
             task_state.max_tool_loop_streak,
             max_tool_loops,
-            task_state.completion_outcome,
+            outcome,
             total_duration_ms,
             average_turn_duration_ms,
             max_turn_duration_ms,
@@ -1893,7 +1938,7 @@ impl AgentRunner {
         }
 
         if !task_state.completion_outcome.is_success() {
-            event_recorder.turn_failed(task_state.completion_outcome.description());
+            event_recorder.turn_failed(&task_state.completion_outcome.description());
         }
 
         event_recorder.turn_completed();

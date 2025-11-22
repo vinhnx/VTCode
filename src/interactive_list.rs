@@ -1,5 +1,5 @@
 use std::fmt;
-use std::io::{self, IsTerminal};
+use std::io::{self, IsTerminal, Write};
 
 use anyhow::{Context, Result, anyhow};
 use crossterm::cursor::Show;
@@ -356,6 +356,10 @@ impl TerminalModeGuard {
             self.cursor_hidden = false;
         }
 
+        // Flush output to ensure all terminal commands are processed
+        terminal.backend_mut().flush().ok();
+        io::stdout().flush().ok();
+
         Ok(())
     }
 }
@@ -376,7 +380,11 @@ impl Drop for TerminalModeGuard {
         if self.cursor_hidden {
             let mut stdout = io::stdout();
             let _ = execute!(stdout, Show);
+            let _ = stdout.flush();
             self.cursor_hidden = false;
         }
+
+        // Ensure stdout is flushed to prevent escape codes from appearing
+        let _ = io::stdout().flush();
     }
 }
