@@ -890,7 +890,7 @@ pub(crate) async fn run_single_agent_loop_unified(
 
             // Display thinking spinner message AFTER user message is displayed
             // This ensures proper ordering in the transcript
-            renderer.line(MessageStyle::Output, "⠋ Thinking...")?;
+            renderer.line(MessageStyle::Output, "⠋ I'm thinking...")?;
 
             // Create user message with processed content using the appropriate constructor
             let user_message = match refined_content {
