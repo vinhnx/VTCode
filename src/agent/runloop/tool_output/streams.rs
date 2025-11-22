@@ -564,6 +564,134 @@ pub(crate) fn strip_ansi_codes(input: &str) -> Cow<'_, str> {
     Cow::Owned(output)
 }
 
+#[cfg(test)]
+mod ansi_stripping_tests {
+    use super::*;
+
+    #[test]
+    fn test_no_ansi_codes() {
+        let input = "Plain text without codes";
+        let result = strip_ansi_codes(input);
+        assert_eq!(result, "Plain text without codes");
+        // Verify it returns borrowed (zero-copy)
+        assert!(matches!(result, Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn test_simple_color_code() {
+        let input = "warning: function \u{1b}[1;33mcheck_prompt_reference_trigger\u{1b}[0m is never used";
+        let result = strip_ansi_codes(input);
+        assert_eq!(result, "warning: function check_prompt_reference_trigger is never used");
+    }
+
+    #[test]
+    fn test_multiple_color_codes() {
+        let input = "\u{1b}[0m\u{1b}[1;32m✓\u{1b}[0m Test \u{1b}[1;31mFailed\u{1b}[0m";
+        let result = strip_ansi_codes(input);
+        assert_eq!(result, "✓ Test Failed");
+    }
+
+    #[test]
+    fn test_cargo_check_output() {
+        let input = "\u{1b}[0m\u{1b}[1;32m Finished\u{1b}[0m dev [unoptimized + debuginfo] target(s)";
+        let result = strip_ansi_codes(input);
+        assert_eq!(result, " Finished dev [unoptimized + debuginfo] target(s)");
+    }
+
+    #[test]
+    fn test_bold_text() {
+        let input = "\u{1b}[1mBold text\u{1b}[0m normal";
+        let result = strip_ansi_codes(input);
+        assert_eq!(result, "Bold text normal");
+    }
+
+    #[test]
+    fn test_rgb_color_codes() {
+        // 256-color mode: \x1b[38;5;196m (red)
+        let input = "Error: \u{1b}[38;5;196msomething failed\u{1b}[0m";
+        let result = strip_ansi_codes(input);
+        assert_eq!(result, "Error: something failed");
+    }
+
+    #[test]
+    fn test_true_color_codes() {
+        // True color (24-bit): \x1b[38;2;255;0;0m (red)
+        let input = "Alert: \u{1b}[38;2;255;0;0mCritical\u{1b}[0m";
+        let result = strip_ansi_codes(input);
+        assert_eq!(result, "Alert: Critical");
+    }
+
+    #[test]
+    fn test_cursor_movement() {
+        // Cursor up: \x1b[A, Cursor down: \x1b[B, etc.
+        let input = "Line1\u{1b}[ALine2";
+        let result = strip_ansi_codes(input);
+        assert_eq!(result, "Line1Line2");
+    }
+
+    #[test]
+    fn test_clear_screen() {
+        // Clear screen: \x1b[2J
+        let input = "Before\u{1b}[2JAfter";
+        let result = strip_ansi_codes(input);
+        assert_eq!(result, "BeforeAfter");
+    }
+
+    #[test]
+    fn test_osc_hyperlink() {
+        // OSC hyperlink: \x1b]8;;http://example.com\x07text\x1b]8;;\x07
+        let input = "Click \u{1b}]8;;http://example.com\u{1b}\\here\u{1b}]8;;\u{1b}\\ for more";
+        let result = strip_ansi_codes(input);
+        // Should preserve text but remove OSC sequences
+        assert!(result.contains("here"));
+        assert!(!result.contains("\u{1b}"));
+    }
+
+    #[test]
+    fn test_consecutive_codes() {
+        let input = "\u{1b}[1m\u{1b}[31m\u{1b}[4mText\u{1b}[0m";
+        let result = strip_ansi_codes(input);
+        assert_eq!(result, "Text");
+    }
+
+    #[test]
+    fn test_incomplete_code_at_end() {
+        // String ends with incomplete ANSI code (defensive)
+        let input = "Text\u{1b}[";
+        let result = strip_ansi_codes(input);
+        // Should safely handle incomplete sequences
+        assert!(result.starts_with("Text"));
+    }
+
+    #[test]
+    fn test_empty_string() {
+        let input = "";
+        let result = strip_ansi_codes(input);
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_only_ansi_codes() {
+        let input = "\u{1b}[31m\u{1b}[0m";
+        let result = strip_ansi_codes(input);
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_unicode_with_ansi() {
+        let input = "✓ \u{1b}[32mSuccess\u{1b}[0m ✗ \u{1b}[31mFailed\u{1b}[0m";
+        let result = strip_ansi_codes(input);
+        assert_eq!(result, "✓ Success ✗ Failed");
+    }
+
+    #[test]
+    fn test_newlines_preserved() {
+        let input = "Line1\n\u{1b}[31mLine2\u{1b}[0m\nLine3";
+        let result = strip_ansi_codes(input);
+        assert_eq!(result, "Line1\nLine2\nLine3");
+    }
+}
+
 /// Truncate content by tokens, keeping head + tail to preserve context
 ///
 /// This function implements token-aware truncation instead of naive line-based limits.

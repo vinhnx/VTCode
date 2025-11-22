@@ -8,6 +8,7 @@ pub(in crate::ui::tui::session) struct ThinkingSpinner {
     spinner_index: usize,
     last_update: Instant,
     pub(in crate::ui::tui::session) spinner_line_index: Option<usize>,
+    pub(in crate::ui::tui::session) label: String,
 }
 
 impl ThinkingSpinner {
@@ -18,6 +19,7 @@ impl ThinkingSpinner {
             spinner_index: 0,
             last_update: Instant::now(),
             spinner_line_index: None,
+            label: String::new(),
         }
     }
 

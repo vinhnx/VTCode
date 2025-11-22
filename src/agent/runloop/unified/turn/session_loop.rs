@@ -26,7 +26,6 @@ use vtcode_core::config::types::UiSurfacePreference;
 use vtcode_core::ui::theme;
 use vtcode_core::ui::tui::{InlineEvent, InlineEventCallback, spawn_session, theme_from_styles};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
-use vtcode_core::utils::ansi_codes::{ALT_BUFFER_DISABLE, CURSOR_SHOW, RESET};
 use vtcode_core::utils::at_pattern::parse_at_patterns;
 use vtcode_core::utils::session_archive::{SessionArchive, SessionArchiveMetadata};
 use vtcode_core::utils::transcript;
@@ -888,10 +887,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                 }
             }
 
-            // Display thinking spinner message AFTER user message is displayed
-            // This ensures proper ordering in the transcript
-            // The spinner message is cleared when the first agent response arrives
-            renderer.line(MessageStyle::Output, "I'm analyzing your request...")?;
+            // Spinner is displayed via the input status in the inline handle
+            // No need to show a separate message here
 
             // Create user message with processed content using the appropriate constructor
             let user_message = match refined_content {
@@ -1038,18 +1035,19 @@ impl TerminalCleanupGuard {
 
 impl Drop for TerminalCleanupGuard {
     fn drop(&mut self) {
-        // Attempt to restore terminal to clean state
-        // This is a best-effort cleanup that runs even if the main session
-        // didn't properly call restore_terminal_on_exit()
-        let mut stdout = std::io::stdout();
-
-        // Send raw terminal reset sequences as a fallback
-        // This ensures the terminal is restored even if other cleanup paths fail
-        let _ = write!(stdout, "{}", ALT_BUFFER_DISABLE); // Leave alternate screen
-        let _ = write!(stdout, "{}", CURSOR_SHOW); // Show cursor
-        let _ = write!(stdout, "{}", RESET); // Reset all attributes
-
+        // Minimal terminal cleanup as last resort
+        // The TUI's run_inline_tui should handle full cleanup, this is just a safety net
+        // We deliberately avoid sending escape sequences to prevent conflicts with TUI cleanup
+        
+        // Attempt to disable raw mode if still enabled
         let _ = disable_raw_mode();
+        
+        // Ensure stdout is flushed
+        let mut stdout = std::io::stdout();
         let _ = stdout.flush();
+        
+        // Wait for terminal to finish processing any pending operations
+        // This prevents incomplete writes from corrupting the terminal
+        std::thread::sleep(std::time::Duration::from_millis(50));
     }
 }

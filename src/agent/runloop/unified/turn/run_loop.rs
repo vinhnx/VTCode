@@ -44,6 +44,7 @@ use crate::agent::runloop::unified::mcp_tool_manager::McpToolManager;
 use crate::agent::runloop::unified::ui_interaction::{
     PlaceholderSpinner, stream_and_render_response,
 };
+use crate::agent::runloop::unified::extract_action_from_messages;
 
 use super::finalization::finalize_session;
 use super::harmony::strip_harmony_syntax;
@@ -1609,10 +1610,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                 }
             }
 
-            // Display thinking spinner message AFTER user message is displayed
-            // This ensures proper ordering in the transcript
-            // The spinner message is cleared when the first agent response arrives
-            renderer.line(MessageStyle::Output, "I'm analyzing your request...")?;
+            // Spinner is displayed via the input status in the inline handle
+            // No need to show a separate message here
 
             // Create user message with processed content using the appropriate constructor
             let user_message = match refined_content {
@@ -1878,11 +1877,12 @@ pub(crate) async fn run_single_agent_loop_unified(
                     verbosity: None,
                 };
 
+                let action_suggestion = extract_action_from_messages(&working_history);
                 let thinking_spinner = PlaceholderSpinner::new(
                     &handle,
                     input_status_state.left.clone(),
                     input_status_state.right.clone(),
-                    "Thinking...",
+                    action_suggestion,
                 );
                 task::yield_now().await;
                 #[cfg(debug_assertions)]

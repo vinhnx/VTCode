@@ -143,7 +143,7 @@ pub async fn handle_ask_command(
                             streamed_reasoning.push_str(&delta);
                         } else {
                             if !printed_reasoning {
-                                print!("I'm thinking: ");
+                                print!("");
                                 printed_reasoning = true;
                                 reasoning_line_finished = false;
                             }

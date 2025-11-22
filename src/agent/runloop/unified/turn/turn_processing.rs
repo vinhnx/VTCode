@@ -10,6 +10,7 @@ use crate::agent::runloop::unified::state::{CtrlCState, SessionStats};
 use crate::agent::runloop::unified::ui_interaction::{
     PlaceholderSpinner, stream_and_render_response,
 };
+use crate::agent::runloop::unified::extract_action_from_messages;
 #[cfg(debug_assertions)]
 use tracing::debug;
 use vtcode_core::config::loader::VTCodeConfig;
@@ -104,11 +105,12 @@ pub(crate) async fn execute_llm_request(
         verbosity: None,
     };
 
+    let action_suggestion = extract_action_from_messages(ctx.working_history);
     let thinking_spinner = PlaceholderSpinner::new(
         ctx.handle,
         ctx.input_status_state.left.clone(),
         ctx.input_status_state.right.clone(),
-        "Thinking...",
+        action_suggestion,
     );
     task::yield_now().await;
 

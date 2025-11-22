@@ -6,6 +6,7 @@ mod diagnostics;
 mod display;
 mod driver;
 mod inline_events;
+mod intent_extractor;
 mod loop_detection;
 
 mod mcp_support;
@@ -29,3 +30,4 @@ mod ui_interaction;
 mod workspace_links;
 
 pub(crate) use driver::UnifiedTurnDriver;
+pub(crate) use intent_extractor::extract_action_from_messages;

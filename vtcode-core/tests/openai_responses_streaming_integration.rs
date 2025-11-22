@@ -36,6 +36,7 @@ async fn mock_responses_api_streaming_includes_prompt_cache_retention() {
         max_tokens: None,
         temperature: None,
         stream: true,
+        output_format: None,
         tool_choice: None,
         parallel_tool_calls: None,
         parallel_tool_config: None,

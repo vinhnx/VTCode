@@ -297,29 +297,13 @@ impl Session {
         let mut border_style = ratatui_style_from_inline(&border_inline, self.theme.foreground);
         border_style = border_style.add_modifier(Modifier::DIM);
 
-        let header_inline = super::super::types::InlineTextStyle::default()
-            .with_color(self.theme.primary.or(self.theme.foreground))
-            .bold();
-        let header_style = ratatui_style_from_inline(&header_inline, self.theme.foreground);
-
-        let mut body_inline = super::super::types::InlineTextStyle::default();
-        body_inline.color = self.theme.foreground;
-        let mut body_style = ratatui_style_from_inline(&body_inline, self.theme.foreground);
-        body_style = body_style.add_modifier(Modifier::BOLD);
-
         let prev_is_pty = index
             .checked_sub(1)
             .and_then(|prev| self.lines.get(prev))
             .map(|prev| prev.kind == InlineMessageKind::Pty)
             .unwrap_or(false);
-        let next_is_pty = self
-            .lines
-            .get(index + 1)
-            .map(|next| next.kind == InlineMessageKind::Pty)
-            .unwrap_or(false);
 
         let is_start = !prev_is_pty;
-        let is_end = !next_is_pty;
 
         let mut lines = Vec::new();
 
@@ -327,15 +311,19 @@ impl Session {
         for segment in &line.segments {
             combined.push_str(segment.text.as_str());
         }
-        if is_start && is_end && combined.trim().is_empty() {
+        if is_start && combined.trim().is_empty() {
             return Vec::new();
         }
-        let header_text = combined
-            .lines()
-            .map(str::trim)
-            .find(|line| !line.is_empty())
-            .map(str::to_string)
-            .unwrap_or_else(|| ui::INLINE_PTY_PLACEHOLDER.to_string());
+
+        // Render body content
+        let fallback = self
+            .text_fallback(InlineMessageKind::Pty)
+            .or(self.theme.foreground);
+        let mut body_spans = Vec::new();
+        for segment in &line.segments {
+            let style = ratatui_style_from_inline(&segment.style, fallback);
+            body_spans.push(Span::styled(segment.text.clone(), style));
+        }
 
         if is_start {
             // Add top border
@@ -351,57 +339,16 @@ impl Session {
                     border_style.clone(),
                 )]));
             }
-
-            // Add header with status
-            let mut header_spans = Vec::new();
-            header_spans.push(Span::styled(
-                format!("[{}]", ui::INLINE_PTY_HEADER_LABEL),
-                header_style.clone(),
-            ));
-            header_spans.push(Span::raw(" "));
-            let running_style = super::super::types::InlineTextStyle::default()
-                .with_color(self.theme.secondary.or(self.theme.foreground))
-                .italic();
-            header_spans.push(Span::styled(
-                ui::INLINE_PTY_RUNNING_LABEL.to_string(),
-                ratatui_style_from_inline(&running_style, self.theme.foreground),
-            ));
-            if !header_text.is_empty() {
-                header_spans.push(Span::raw(" "));
-                header_spans.push(Span::styled(header_text.clone(), body_style.clone()));
-            }
-            let status_label = if is_end {
-                ui::INLINE_PTY_STATUS_DONE
-            } else {
-                ui::INLINE_PTY_STATUS_LIVE
-            };
-            header_spans.push(Span::raw(" "));
-            header_spans.push(Span::styled(
-                format!("[{}]", status_label),
-                self.styles
-                    .accent_style()
-                    .add_modifier(Modifier::REVERSED | Modifier::BOLD),
-            ));
-
             let first_prefix = format!("{} ", ui::INLINE_BLOCK_BODY_LEFT);
             let continuation_prefix = format!("{} ", ui::INLINE_BLOCK_BODY_LEFT);
             lines.extend(self.wrap_block_lines(
                 &first_prefix,
                 &continuation_prefix,
-                header_spans,
+                body_spans,
                 max_width,
                 border_style.clone(),
             ));
         } else {
-            // Body content
-            let fallback = self
-                .text_fallback(InlineMessageKind::Pty)
-                .or(self.theme.foreground);
-            let mut body_spans = Vec::new();
-            for segment in &line.segments {
-                let style = ratatui_style_from_inline(&segment.style, fallback);
-                body_spans.push(Span::styled(segment.text.clone(), style));
-            }
             let body_prefix = format!("{} ", ui::INLINE_BLOCK_BODY_LEFT);
             lines.extend(self.wrap_block_lines(
                 &body_prefix,

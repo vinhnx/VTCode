@@ -11,8 +11,6 @@ use crate::config::constants::ui;
 
 pub(super) fn render_message_spans(
     line: &MessageLine,
-    index: usize,
-    lines: &[MessageLine],
     theme: &InlineTheme,
     labels: &MessageLabels,
     prefix_text_fn: impl Fn(InlineMessageKind) -> Option<String>,
@@ -52,43 +50,13 @@ pub(super) fn render_message_spans(
     }
 
     if line.kind == InlineMessageKind::Pty {
-        let prev_is_pty = index
-            .checked_sub(1)
-            .and_then(|prev| lines.get(prev))
-            .map(|prev| prev.kind == InlineMessageKind::Pty)
-            .unwrap_or(false);
-        if !prev_is_pty {
-            let mut combined = String::new();
-            for segment in &line.segments {
-                combined.push_str(segment.text.as_str());
-            }
-            let header_text = if combined.trim().is_empty() {
-                ui::INLINE_PTY_PLACEHOLDER.to_string()
-            } else {
-                combined.trim().to_string()
-            };
-            let label_style = InlineTextStyle::default()
-                .with_color(theme.primary.or(theme.foreground))
-                .bold();
-            spans.push(Span::styled(
-                format!("[{}]", ui::INLINE_PTY_HEADER_LABEL),
-                ratatui_style_from_inline(&label_style, theme.foreground),
-            ));
-            spans.push(Span::raw(" "));
-
-            let output_text = if header_text.lines().count() > 30 {
-                let lines: Vec<&str> = header_text.lines().collect();
-                let start = lines.len().saturating_sub(30);
-                format!(
-                    "[... {} lines truncated ...]\n{}",
-                    lines.len() - 30,
-                    lines[start..].join("\n")
-                )
-            } else {
-                header_text.clone()
-            };
-
-            spans.push(Span::raw(output_text));
+        // Render PTY content directly without header decoration
+        let fallback = text_fallback_fn(line.kind).or(theme.foreground);
+        for segment in &line.segments {
+            let style = ratatui_style_from_inline(&segment.style, fallback);
+            spans.push(Span::styled(segment.text.clone(), style));
+        }
+        if !spans.is_empty() {
             return spans;
         }
     }
@@ -135,147 +103,15 @@ fn agent_prefix_spans(
 }
 
 fn render_tool_segments(line: &MessageLine, theme: &InlineTheme) -> Vec<Span<'static>> {
-    let mut combined = String::new();
-    for segment in &line.segments {
-        let stripped_text = ansi_utils::strip_ansi_codes(&segment.text);
-        combined.push_str(&stripped_text);
-    }
-
-    if combined.is_empty() {
-        return Vec::new();
-    }
-
-    render_tool_header_line(&combined, theme)
-}
-
-fn render_tool_header_line(text: &str, theme: &InlineTheme) -> Vec<Span<'static>> {
+    // Render tool output without header decorations - just display segments directly
     let mut spans = Vec::new();
-    let indent_len = text.chars().take_while(|ch| ch.is_whitespace()).count();
-    let indent: String = text.chars().take(indent_len).collect();
-    let mut remaining = if indent_len < text.len() {
-        &text[indent_len..]
-    } else {
-        ""
-    };
-
-    if !indent.is_empty() {
-        let mut indent_style = InlineTextStyle::default();
-        indent_style.color = theme.tool_body.or(theme.foreground);
-        spans.push(Span::styled(
-            indent,
-            ratatui_style_from_inline(&indent_style, theme.foreground),
-        ));
+    for segment in &line.segments {
+        let style = ratatui_style_from_inline(&segment.style, theme.foreground);
+        spans.push(Span::styled(segment.text.clone(), style));
     }
-
-    if remaining.is_empty() {
-        return spans;
-    }
-
-    remaining = strip_tool_status_prefix(remaining);
-    if remaining.is_empty() {
-        return spans;
-    }
-
-    let (name, tail) = if remaining.starts_with('[') {
-        if let Some(end) = remaining.find(']') {
-            let name = &remaining[1..end];
-            let tail = &remaining[end + 1..];
-            (name, tail)
-        } else {
-            (remaining, "")
-        }
-    } else {
-        let mut name_end = remaining.len();
-        for (index, character) in remaining.char_indices() {
-            if character.is_whitespace() {
-                name_end = index;
-                break;
-            }
-        }
-        remaining.split_at(name_end)
-    };
-
-    if !name.is_empty() {
-        let accent_style = accent_style(theme);
-        spans.push(Span::styled("[", accent_style.add_modifier(Modifier::BOLD)));
-
-        let tool_name_style = tool_inline_style(name, theme);
-        spans.push(Span::styled(
-            name.to_string(),
-            ratatui_style_from_inline(&tool_name_style, theme.foreground),
-        ));
-
-        spans.push(Span::styled(
-            "] ",
-            accent_style.add_modifier(Modifier::BOLD),
-        ));
-    }
-
-    let trimmed_tail = tail.trim_start();
-    if !trimmed_tail.is_empty() {
-        let parts: Vec<&str> = trimmed_tail.split(" · ").collect();
-        if parts.len() > 1 {
-            let action = parts[0];
-            let body_style =
-                InlineTextStyle::default().with_color(theme.tool_body.or(theme.foreground));
-
-            render_styled_action_text(&mut spans, action, &body_style, theme);
-
-            let max_parts = 3;
-            for (i, part) in parts[1..].iter().enumerate() {
-                if i >= max_parts {
-                    spans.push(Span::raw(" "));
-                    spans.push(Span::styled(
-                        "· ...",
-                        accent_style(theme).add_modifier(Modifier::DIM),
-                    ));
-                    break;
-                }
-                spans.push(Span::raw(" "));
-                spans.push(Span::styled(
-                    "·",
-                    accent_style(theme).add_modifier(Modifier::DIM),
-                ));
-                spans.push(Span::raw(" "));
-
-                let param_parts: Vec<&str> = part.split(": ").collect();
-                if param_parts.len() > 1 {
-                    spans.push(Span::styled(
-                        format!("{}: ", param_parts[0]),
-                        accent_style(theme).add_modifier(Modifier::BOLD),
-                    ));
-
-                    let value_style = InlineTextStyle::default()
-                        .with_color(Some(anstyle::AnsiColor::Green.into()))
-                        .bold();
-                    spans.push(Span::styled(
-                        param_parts[1].to_string(),
-                        ratatui_style_from_inline(&value_style, theme.foreground),
-                    ));
-                } else {
-                    spans.push(Span::styled(
-                        part.to_string(),
-                        ratatui_style_from_inline(&body_style, theme.foreground),
-                    ));
-                }
-            }
-        } else {
-            let body_style =
-                InlineTextStyle::default().with_color(theme.tool_body.or(theme.foreground));
-
-            let mut simplified_text = simplify_tool_display(trimmed_tail);
-            if simplified_text.len() > 100 {
-                simplified_text = simplified_text.chars().take(97).collect::<String>() + "...";
-            }
-            spans.push(Span::styled(
-                simplified_text,
-                ratatui_style_from_inline(&body_style, theme.foreground),
-            ));
-        }
-    }
-
     spans
 }
+
 
 fn render_styled_action_text(
     spans: &mut Vec<Span<'static>>,
