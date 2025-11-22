@@ -67,7 +67,7 @@ impl Session {
         let border_style = if is_full_auto_trust {
             Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
         } else {
-            self.accent_style()
+            self.styles.accent_style()
         };
 
         // Determine the trust mode title for the border
@@ -82,13 +82,13 @@ impl Session {
         let block = Block::default()
             .borders(Borders::TOP | Borders::BOTTOM)
             .border_type(BorderType::Rounded)
-            .style(self.default_style())
+            .style(self.styles.default_style())
             .border_style(border_style)
             .title(trust_title);
         let inner = block.inner(input_area);
         let input_render = self.build_input_render(inner.width, inner.height);
         let paragraph = Paragraph::new(input_render.text)
-            .style(self.default_style())
+            .style(self.styles.default_style())
             .wrap(Wrap { trim: false })
             .block(block);
         frame.render_widget(paragraph, input_area);
@@ -107,7 +107,7 @@ impl Session {
 
         if let (Some(status_rect), Some(line)) = (status_area, status_line) {
             let paragraph = Paragraph::new(line)
-                .style(self.default_style())
+                .style(self.styles.default_style())
                 .wrap(Wrap { trim: false });
             frame.render_widget(paragraph, status_rect);
         }
@@ -130,7 +130,7 @@ impl Session {
         let resolved = height.max(Self::input_block_height_for_lines(1));
         if self.input_height != resolved {
             self.input_height = resolved;
-            self.recalculate_transcript_rows();
+            crate::ui::tui::session::render::recalculate_transcript_rows(self);
         }
     }
 
@@ -266,7 +266,7 @@ impl Session {
         }
 
         let accent_style =
-            ratatui_style_from_inline(&self.accent_inline_style(), self.theme.foreground);
+            ratatui_style_from_inline(&self.styles.accent_inline_style(), self.theme.foreground);
         let layout = self.input_layout(width, prompt_display_width);
         let total_lines = layout.buffers.len();
         let visible_limit = max_visible_lines.max(1);
@@ -321,7 +321,7 @@ impl Session {
             return None;
         }
 
-        let style = self.default_style().add_modifier(Modifier::DIM);
+        let style = self.styles.default_style().add_modifier(Modifier::DIM);
         let mut spans = Vec::new();
 
         match (left, right) {
@@ -373,7 +373,7 @@ impl Session {
                     .fg(Color::Green)
                     .add_modifier(Modifier::BOLD)
             } else {
-                self.accent_style().add_modifier(Modifier::BOLD)
+                self.styles.accent_style().add_modifier(Modifier::BOLD)
             };
 
             spans.push(Span::styled(indicator_trim.to_string(), indicator_style));

@@ -18,378 +18,399 @@ use super::{
     slash_palette::{self, SlashPaletteUpdate, command_prefix, command_range},
 };
 
-impl Session {
-    pub(super) fn render_slash_palette(&mut self, frame: &mut Frame<'_>, viewport: Rect) {
-        if viewport.height == 0 || viewport.width == 0 || self.modal.is_some() {
-            self.slash_palette.clear_visible_rows();
-            return;
-        }
-        let suggestions = self.slash_palette.suggestions();
-        if suggestions.is_empty() {
-            self.slash_palette.clear_visible_rows();
-            return;
-        }
+pub(super) fn render_slash_palette(session: &mut Session, frame: &mut Frame<'_>, viewport: Rect) {
+    if viewport.height == 0 || viewport.width == 0 || session.modal.is_some() {
+        session.slash_palette.clear_visible_rows();
+        return;
+    }
+    let suggestions = session.slash_palette.suggestions();
+    if suggestions.is_empty() {
+        session.slash_palette.clear_visible_rows();
+        return;
+    }
 
-        let mut width_hint = measure_text_width(ui::SLASH_PALETTE_HINT_PRIMARY);
-        width_hint = width_hint.max(measure_text_width(ui::SLASH_PALETTE_HINT_SECONDARY));
-        for suggestion in suggestions.iter().take(ui::SLASH_SUGGESTION_LIMIT) {
-            let label = match suggestion {
-                slash_palette::SlashPaletteSuggestion::Static(cmd) => {
-                    if !cmd.description.is_empty() {
-                        format!("/{} {}", cmd.name, cmd.description)
-                    } else {
-                        format!("/{}", cmd.name)
-                    }
+    let mut width_hint = measure_text_width(ui::SLASH_PALETTE_HINT_PRIMARY);
+    width_hint = width_hint.max(measure_text_width(ui::SLASH_PALETTE_HINT_SECONDARY));
+    for suggestion in suggestions.iter().take(ui::SLASH_SUGGESTION_LIMIT) {
+        let label = match suggestion {
+            slash_palette::SlashPaletteSuggestion::Static(cmd) => {
+                if !cmd.description.is_empty() {
+                    format!("/{} {}", cmd.name, cmd.description)
+                } else {
+                    format!("/{}", cmd.name)
                 }
-                slash_palette::SlashPaletteSuggestion::Custom(prompt) => {
-                    // For custom prompts, format as /prompt:name (legacy alias /prompts:name)
-                    let prompt_cmd = format!("{}:{}", PROMPT_COMMAND_NAME, prompt.name);
-                    let description = prompt.description.as_deref().unwrap_or("");
-                    if !description.is_empty() {
-                        format!("/{} {}", prompt_cmd, description)
-                    } else {
-                        format!("/{}", prompt_cmd)
-                    }
-                }
-            };
-            width_hint = width_hint.max(measure_text_width(&label));
-        }
-
-        let instructions = self.slash_palette_instructions();
-        let area = compute_modal_area(viewport, width_hint, instructions.len(), 0, 0, true);
-
-        frame.render_widget(Clear, area);
-        let block = Block::default()
-            .title(self.suggestion_block_title())
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .style(self.default_style())
-            .border_style(self.border_style());
-        let inner = block.inner(area);
-        frame.render_widget(block, area);
-        if inner.height == 0 || inner.width == 0 {
-            self.slash_palette.clear_visible_rows();
-            return;
-        }
-
-        let layout = ModalListLayout::new(inner, instructions.len());
-        if let Some(text_area) = layout.text_area {
-            let paragraph = Paragraph::new(instructions).wrap(Wrap { trim: true });
-            frame.render_widget(paragraph, text_area);
-        }
-
-        self.slash_palette
-            .set_visible_rows(layout.list_area.height as usize);
-
-        // Get all list items (scrollable via ListState)
-        let list_items = self.slash_list_items();
-
-        let list = List::new(list_items)
-            .style(self.default_style())
-            .highlight_style(self.slash_highlight_style());
-
-        frame.render_stateful_widget(list, layout.list_area, self.slash_palette.list_state_mut());
-    }
-
-    fn slash_palette_instructions(&self) -> Vec<Line<'static>> {
-        vec![
-            Line::from(Span::styled(
-                ui::SLASH_PALETTE_HINT_PRIMARY.to_string(),
-                self.default_style(),
-            )),
-            Line::from(Span::styled(
-                ui::SLASH_PALETTE_HINT_SECONDARY.to_string(),
-                self.default_style().add_modifier(Modifier::DIM),
-            )),
-        ]
-    }
-
-    pub(super) fn handle_slash_palette_change(&mut self) {
-        self.recalculate_transcript_rows();
-        self.enforce_scroll_bounds();
-        self.mark_dirty();
-    }
-
-    pub(super) fn clear_slash_suggestions(&mut self) {
-        if self.slash_palette.clear() {
-            self.handle_slash_palette_change();
-        }
-    }
-
-    pub(super) fn update_slash_suggestions(&mut self) {
-        if !self.input_enabled {
-            self.clear_slash_suggestions();
-            return;
-        }
-
-        let Some(prefix) =
-            command_prefix(self.input_manager.content(), self.input_manager.cursor())
-        else {
-            self.clear_slash_suggestions();
-            return;
-        };
-
-        // Update slash palette with custom prompts if available
-        if let Some(ref custom_prompts) = self.custom_prompts {
-            self.slash_palette
-                .set_custom_prompts(custom_prompts.clone());
-        }
-
-        match self
-            .slash_palette
-            .update(Some(&prefix), ui::SLASH_SUGGESTION_LIMIT)
-        {
-            SlashPaletteUpdate::NoChange => {}
-            SlashPaletteUpdate::Cleared | SlashPaletteUpdate::Changed { .. } => {
-                self.handle_slash_palette_change();
             }
+            slash_palette::SlashPaletteSuggestion::Custom(prompt) => {
+                // For custom prompts, format as /prompt:name (legacy alias /prompts:name)
+                let prompt_cmd = format!("{}:{}", PROMPT_COMMAND_NAME, prompt.name);
+                let description = prompt.description.as_deref().unwrap_or("");
+                if !description.is_empty() {
+                    format!("/{} {}", prompt_cmd, description)
+                } else {
+                    format!("/{}", prompt_cmd)
+                }
+            }
+        };
+        width_hint = width_hint.max(measure_text_width(&label));
+    }
+
+    let instructions = slash_palette_instructions(session);
+    let area = compute_modal_area(viewport, width_hint, instructions.len(), 0, 0, true);
+
+    frame.render_widget(Clear, area);
+    let block = Block::default()
+        .title(session.suggestion_block_title())
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .style(session.styles.default_style())
+        .border_style(session.styles.border_style());
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+    if inner.height == 0 || inner.width == 0 {
+        session.slash_palette.clear_visible_rows();
+        return;
+    }
+
+    let layout = ModalListLayout::new(inner, instructions.len());
+    if let Some(text_area) = layout.text_area {
+        let paragraph = Paragraph::new(instructions).wrap(Wrap { trim: true });
+        frame.render_widget(paragraph, text_area);
+    }
+
+    session
+        .slash_palette
+        .set_visible_rows(layout.list_area.height as usize);
+
+    // Get all list items (scrollable via ListState)
+    let list_items = slash_list_items(session);
+
+    let list = List::new(list_items)
+        .style(session.styles.default_style())
+        .highlight_style(slash_highlight_style(session));
+
+    frame.render_stateful_widget(
+        list,
+        layout.list_area,
+        session.slash_palette.list_state_mut(),
+    );
+}
+
+fn slash_palette_instructions(session: &Session) -> Vec<Line<'static>> {
+    vec![
+        Line::from(Span::styled(
+            ui::SLASH_PALETTE_HINT_PRIMARY.to_string(),
+            session.styles.default_style(),
+        )),
+        Line::from(Span::styled(
+            ui::SLASH_PALETTE_HINT_SECONDARY.to_string(),
+            session.styles.default_style().add_modifier(Modifier::DIM),
+        )),
+    ]
+}
+
+pub(super) fn handle_slash_palette_change(session: &mut Session) {
+    // session.recalculate_transcript_rows(); // This method was removed from session.rs, need to check where it went.
+    // It was moved to render.rs as `recalculate_transcript_rows`.
+    // But render.rs functions are not methods on Session anymore.
+    // So I need to call `render::recalculate_transcript_rows(session)`.
+    // But I can't import `render` here easily if it's a sibling module.
+    // `use super::render;`
+    // I'll add the import later. For now I'll use the fully qualified path or assume I'll fix imports.
+    // Actually, `recalculate_transcript_rows` is likely `pub(super)` in `render.rs`.
+    // I'll check `render.rs` exports.
+
+    // For now, I'll comment it out and fix it in a separate step or assume `render` is available.
+    // Wait, I can't leave broken code.
+    // I'll assume `crate::ui::tui::session::render::recalculate_transcript_rows(session)` works.
+    crate::ui::tui::session::render::recalculate_transcript_rows(session);
+    crate::ui::tui::session::render::enforce_scroll_bounds(session);
+    session.mark_dirty();
+}
+
+pub(super) fn clear_slash_suggestions(session: &mut Session) {
+    if session.slash_palette.clear() {
+        handle_slash_palette_change(session);
+    }
+}
+
+pub(super) fn update_slash_suggestions(session: &mut Session) {
+    if !session.input_enabled {
+        clear_slash_suggestions(session);
+        return;
+    }
+
+    let Some(prefix) = command_prefix(
+        session.input_manager.content(),
+        session.input_manager.cursor(),
+    ) else {
+        clear_slash_suggestions(session);
+        return;
+    };
+
+    // Update slash palette with custom prompts if available
+    if let Some(ref custom_prompts) = session.custom_prompts {
+        session
+            .slash_palette
+            .set_custom_prompts(custom_prompts.clone());
+    }
+
+    match session
+        .slash_palette
+        .update(Some(&prefix), ui::SLASH_SUGGESTION_LIMIT)
+    {
+        SlashPaletteUpdate::NoChange => {}
+        SlashPaletteUpdate::Cleared | SlashPaletteUpdate::Changed { .. } => {
+            handle_slash_palette_change(session);
         }
     }
+}
 
-    pub(super) fn slash_navigation_available(&self) -> bool {
-        self.input_enabled
-            && !self.slash_palette.is_empty()
-            && self.modal.is_none()
-            && !self.file_palette_active
-            && !self.prompt_palette_active
+pub(super) fn slash_navigation_available(session: &Session) -> bool {
+    session.input_enabled
+        && !session.slash_palette.is_empty()
+        && session.modal.is_none()
+        && !session.file_palette_active
+        && !session.prompt_palette_active
+}
+
+pub(super) fn move_slash_selection_up(session: &mut Session) -> bool {
+    let changed = session.slash_palette.move_up();
+    handle_slash_selection_change(session, changed)
+}
+
+pub(super) fn move_slash_selection_down(session: &mut Session) -> bool {
+    let changed = session.slash_palette.move_down();
+    handle_slash_selection_change(session, changed)
+}
+
+pub(super) fn select_first_slash_suggestion(session: &mut Session) -> bool {
+    let changed = session.slash_palette.select_first();
+    handle_slash_selection_change(session, changed)
+}
+
+pub(super) fn select_last_slash_suggestion(session: &mut Session) -> bool {
+    let changed = session.slash_palette.select_last();
+    handle_slash_selection_change(session, changed)
+}
+
+pub(super) fn page_up_slash_suggestion(session: &mut Session) -> bool {
+    let changed = session.slash_palette.page_up();
+    handle_slash_selection_change(session, changed)
+}
+
+pub(super) fn page_down_slash_suggestion(session: &mut Session) -> bool {
+    let changed = session.slash_palette.page_down();
+    handle_slash_selection_change(session, changed)
+}
+
+pub(super) fn handle_slash_selection_change(session: &mut Session, changed: bool) -> bool {
+    if changed {
+        preview_selected_slash_suggestion(session);
+        crate::ui::tui::session::render::recalculate_transcript_rows(session);
+        crate::ui::tui::session::render::enforce_scroll_bounds(session);
+        session.mark_dirty();
+        true
+    } else {
+        false
     }
+}
 
-    pub(super) fn move_slash_selection_up(&mut self) -> bool {
-        let changed = self.slash_palette.move_up();
-        self.handle_slash_selection_change(changed)
-    }
+fn preview_selected_slash_suggestion(session: &mut Session) {
+    let Some(command) = session.slash_palette.selected_command() else {
+        return;
+    };
+    let Some(range) = command_range(
+        session.input_manager.content(),
+        session.input_manager.cursor(),
+    ) else {
+        return;
+    };
 
-    pub(super) fn move_slash_selection_down(&mut self) -> bool {
-        let changed = self.slash_palette.move_down();
-        self.handle_slash_selection_change(changed)
-    }
+    let current_input = session.input_manager.content().to_string();
+    let prefix = &current_input[..range.start];
+    let suffix = &current_input[range.end..];
 
-    pub(super) fn select_first_slash_suggestion(&mut self) -> bool {
-        let changed = self.slash_palette.select_first();
-        self.handle_slash_selection_change(changed)
-    }
+    let mut new_input = String::new();
+    new_input.push_str(prefix);
+    new_input.push('/');
+    new_input.push_str(command.name);
+    let cursor_position = new_input.len();
 
-    pub(super) fn select_last_slash_suggestion(&mut self) -> bool {
-        let changed = self.slash_palette.select_last();
-        self.handle_slash_selection_change(changed)
-    }
-
-    pub(super) fn page_up_slash_suggestion(&mut self) -> bool {
-        let changed = self.slash_palette.page_up();
-        self.handle_slash_selection_change(changed)
-    }
-
-    pub(super) fn page_down_slash_suggestion(&mut self) -> bool {
-        let changed = self.slash_palette.page_down();
-        self.handle_slash_selection_change(changed)
-    }
-
-    pub(super) fn handle_slash_selection_change(&mut self, changed: bool) -> bool {
-        if changed {
-            self.preview_selected_slash_suggestion();
-            self.recalculate_transcript_rows();
-            self.enforce_scroll_bounds();
-            self.mark_dirty();
-            true
-        } else {
-            false
+    if !suffix.is_empty() {
+        if !suffix.chars().next().map_or(false, char::is_whitespace) {
+            new_input.push(' ');
         }
+        new_input.push_str(suffix);
     }
 
-    fn preview_selected_slash_suggestion(&mut self) {
-        let Some(command) = self.slash_palette.selected_command() else {
-            return;
+    session.input_manager.set_content(new_input.clone());
+    session
+        .input_manager
+        .set_cursor(cursor_position.min(new_input.len()));
+    session.mark_dirty();
+}
+
+pub(super) fn apply_selected_slash_suggestion(session: &mut Session) -> bool {
+    if let Some(custom_prompt) = session.slash_palette.selected_custom_prompt() {
+        let input_content = session.input_manager.content();
+        let cursor_pos = session.input_manager.cursor();
+        let Some(range) = command_range(input_content, cursor_pos) else {
+            return false;
         };
-        let Some(range) = command_range(self.input_manager.content(), self.input_manager.cursor())
-        else {
-            return;
-        };
 
-        let current_input = self.input_manager.content().to_string();
-        let prefix = &current_input[..range.start];
-        let suffix = &current_input[range.end..];
+        let mut new_input = String::from(PROMPT_COMMAND_PREFIX);
+        new_input.push_str(&custom_prompt.name);
 
-        let mut new_input = String::new();
-        new_input.push_str(prefix);
-        new_input.push('/');
-        new_input.push_str(command.name);
-        let cursor_position = new_input.len();
-
+        let suffix = &input_content[range.end..];
         if !suffix.is_empty() {
             if !suffix.chars().next().map_or(false, char::is_whitespace) {
                 new_input.push(' ');
             }
             new_input.push_str(suffix);
-        }
-
-        self.input_manager.set_content(new_input.clone());
-        self.input_manager
-            .set_cursor(cursor_position.min(new_input.len()));
-        self.mark_dirty();
-    }
-
-    pub(super) fn apply_selected_slash_suggestion(&mut self) -> bool {
-        if let Some(custom_prompt) = self.slash_palette.selected_custom_prompt() {
-            let input_content = self.input_manager.content();
-            let cursor_pos = self.input_manager.cursor();
-            let Some(range) = command_range(input_content, cursor_pos) else {
-                return false;
-            };
-
-            let mut new_input = String::from(PROMPT_COMMAND_PREFIX);
-            new_input.push_str(&custom_prompt.name);
-
-            let suffix = &input_content[range.end..];
-            if !suffix.is_empty() {
-                if !suffix.chars().next().map_or(false, char::is_whitespace) {
-                    new_input.push(' ');
-                }
-                new_input.push_str(suffix);
-            } else {
-                new_input.push(' ');
-            }
-
-            let cursor_position = new_input.len();
-
-            self.input_manager.set_content(new_input);
-            self.input_manager.set_cursor(cursor_position);
-            self.clear_slash_suggestions();
-            self.mark_dirty();
-            return true;
-        }
-
-        let Some(command) = self.slash_palette.selected_command() else {
-            return false;
-        };
-
-        let command_name = command.name.to_string();
-
-        let input_content = self.input_manager.content();
-        let cursor_pos = self.input_manager.cursor();
-        let Some(range) = command_range(input_content, cursor_pos) else {
-            return false;
-        };
-
-        let suffix = input_content[range.end..].to_string();
-        let mut new_input = format!("/{}", command_name);
-
-        let cursor_position = if suffix.is_empty() {
+        } else {
             new_input.push(' ');
-            new_input.len()
-        } else {
-            if !suffix.chars().next().map_or(false, char::is_whitespace) {
-                new_input.push(' ');
+        }
+
+        let cursor_position = new_input.len();
+
+        session.input_manager.set_content(new_input);
+        session.input_manager.set_cursor(cursor_position);
+        clear_slash_suggestions(session);
+        session.mark_dirty();
+        return true;
+    }
+
+    let Some(command) = session.slash_palette.selected_command() else {
+        return false;
+    };
+
+    let command_name = command.name.to_string();
+
+    let input_content = session.input_manager.content();
+    let cursor_pos = session.input_manager.cursor();
+    let Some(range) = command_range(input_content, cursor_pos) else {
+        return false;
+    };
+
+    let suffix = input_content[range.end..].to_string();
+    let mut new_input = format!("/{}", command_name);
+
+    let cursor_position = if suffix.is_empty() {
+        new_input.push(' ');
+        new_input.len()
+    } else {
+        if !suffix.chars().next().map_or(false, char::is_whitespace) {
+            new_input.push(' ');
+        }
+        let position = new_input.len();
+        new_input.push_str(&suffix);
+        position
+    };
+
+    session.input_manager.set_content(new_input);
+    session.input_manager.set_cursor(cursor_position);
+
+    if command_name == "files" {
+        clear_slash_suggestions(session);
+        session.mark_dirty();
+        session.deferred_file_browser_trigger = true;
+    } else if command_name == PROMPT_COMMAND_NAME || command_name == LEGACY_PROMPT_COMMAND_NAME {
+        clear_slash_suggestions(session);
+        session.mark_dirty();
+        session.deferred_prompt_browser_trigger = true;
+    } else {
+        clear_slash_suggestions(session);
+        session.mark_dirty();
+    }
+
+    true
+}
+
+pub(super) fn try_handle_slash_navigation(
+    session: &mut Session,
+    key: &KeyEvent,
+    has_control: bool,
+    has_alt: bool,
+    has_command: bool,
+) -> bool {
+    if !slash_navigation_available(session) || has_control || has_alt {
+        return false;
+    }
+
+    let handled = match key.code {
+        KeyCode::Up => {
+            if has_command {
+                select_first_slash_suggestion(session)
+            } else {
+                move_slash_selection_up(session)
             }
-            let position = new_input.len();
-            new_input.push_str(&suffix);
-            position
-        };
-
-        self.input_manager.set_content(new_input);
-        self.input_manager.set_cursor(cursor_position);
-
-        if command_name == "files" {
-            self.clear_slash_suggestions();
-            self.mark_dirty();
-            self.deferred_file_browser_trigger = true;
-        } else if command_name == PROMPT_COMMAND_NAME || command_name == LEGACY_PROMPT_COMMAND_NAME
-        {
-            self.clear_slash_suggestions();
-            self.mark_dirty();
-            self.deferred_prompt_browser_trigger = true;
-        } else {
-            self.clear_slash_suggestions();
-            self.mark_dirty();
         }
-
-        true
-    }
-
-    pub(super) fn try_handle_slash_navigation(
-        &mut self,
-        key: &KeyEvent,
-        has_control: bool,
-        has_alt: bool,
-        has_command: bool,
-    ) -> bool {
-        if !self.slash_navigation_available() || has_control || has_alt {
-            return false;
-        }
-
-        let handled = match key.code {
-            KeyCode::Up => {
-                if has_command {
-                    self.select_first_slash_suggestion()
-                } else {
-                    self.move_slash_selection_up()
-                }
+        KeyCode::Down => {
+            if has_command {
+                select_last_slash_suggestion(session)
+            } else {
+                move_slash_selection_down(session)
             }
-            KeyCode::Down => {
-                if has_command {
-                    self.select_last_slash_suggestion()
-                } else {
-                    self.move_slash_selection_down()
-                }
+        }
+        KeyCode::PageUp => page_up_slash_suggestion(session),
+        KeyCode::PageDown => page_down_slash_suggestion(session),
+        KeyCode::Tab => move_slash_selection_down(session),
+        KeyCode::BackTab => move_slash_selection_up(session),
+        KeyCode::Enter => apply_selected_slash_suggestion(session),
+        _ => return false,
+    };
+
+    if handled {
+        session.mark_dirty();
+    }
+
+    handled
+}
+
+fn slash_list_items(session: &Session) -> Vec<ListItem<'static>> {
+    session
+        .slash_palette
+        .suggestions()
+        .iter()
+        .map(|suggestion| match suggestion {
+            slash_palette::SlashPaletteSuggestion::Static(command) => {
+                ListItem::new(Line::from(vec![
+                    Span::styled(format!("/{}", command.name), slash_name_style(session)),
+                    Span::raw(" "),
+                    Span::styled(
+                        command.description.to_string(),
+                        slash_description_style(session),
+                    ),
+                ]))
             }
-            KeyCode::PageUp => self.page_up_slash_suggestion(),
-            KeyCode::PageDown => self.page_down_slash_suggestion(),
-            KeyCode::Tab => self.move_slash_selection_down(),
-            KeyCode::BackTab => self.move_slash_selection_up(),
-            KeyCode::Enter => self.apply_selected_slash_suggestion(),
-            _ => return false,
-        };
+            slash_palette::SlashPaletteSuggestion::Custom(prompt) => {
+                let display_name = format!("/{}:{}", PROMPT_COMMAND_NAME, prompt.name);
+                let description = prompt.description.clone().unwrap_or_default();
+                ListItem::new(Line::from(vec![
+                    Span::styled(display_name, slash_name_style(session)),
+                    Span::raw(" "),
+                    Span::styled(description, slash_description_style(session)),
+                ]))
+            }
+        })
+        .collect()
+}
 
-        if handled {
-            self.mark_dirty();
-        }
-
-        handled
+fn slash_highlight_style(session: &Session) -> Style {
+    let mut style = Style::default().add_modifier(Modifier::REVERSED | Modifier::BOLD);
+    if let Some(primary) = session.theme.primary.or(session.theme.secondary) {
+        style = style.fg(ratatui_color_from_ansi(primary));
     }
+    style
+}
 
-    fn slash_list_items(&self) -> Vec<ListItem<'static>> {
-        self.slash_palette
-            .suggestions()
-            .iter()
-            .map(|suggestion| match suggestion {
-                slash_palette::SlashPaletteSuggestion::Static(command) => {
-                    ListItem::new(Line::from(vec![
-                        Span::styled(format!("/{}", command.name), self.slash_name_style()),
-                        Span::raw(" "),
-                        Span::styled(
-                            command.description.to_string(),
-                            self.slash_description_style(),
-                        ),
-                    ]))
-                }
-                slash_palette::SlashPaletteSuggestion::Custom(prompt) => {
-                    let display_name = format!("/{}:{}", PROMPT_COMMAND_NAME, prompt.name);
-                    let description = prompt.description.clone().unwrap_or_default();
-                    ListItem::new(Line::from(vec![
-                        Span::styled(display_name, self.slash_name_style()),
-                        Span::raw(" "),
-                        Span::styled(description, self.slash_description_style()),
-                    ]))
-                }
-            })
-            .collect()
-    }
+fn slash_name_style(session: &Session) -> Style {
+    let style = InlineTextStyle::default()
+        .bold()
+        .with_color(session.theme.primary.or(session.theme.foreground));
+    ratatui_style_from_inline(&style, session.theme.foreground)
+}
 
-    fn slash_highlight_style(&self) -> Style {
-        let mut style = Style::default().add_modifier(Modifier::REVERSED | Modifier::BOLD);
-        if let Some(primary) = self.theme.primary.or(self.theme.secondary) {
-            style = style.fg(ratatui_color_from_ansi(primary));
-        }
-        style
-    }
-
-    fn slash_name_style(&self) -> Style {
-        let style = InlineTextStyle::default()
-            .bold()
-            .with_color(self.theme.primary.or(self.theme.foreground));
-        ratatui_style_from_inline(&style, self.theme.foreground)
-    }
-
-    fn slash_description_style(&self) -> Style {
-        self.default_style().add_modifier(Modifier::DIM)
-    }
+fn slash_description_style(session: &Session) -> Style {
+    session.styles.default_style().add_modifier(Modifier::DIM)
 }

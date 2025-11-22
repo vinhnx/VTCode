@@ -88,10 +88,10 @@ impl Session {
             .title(self.header_block_title())
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
-            .style(self.default_style());
+            .style(self.styles.default_style());
 
         Paragraph::new(lines.to_vec())
-            .style(self.default_style())
+            .style(self.styles.default_style())
             .wrap(Wrap { trim: true })
             .block(block)
     }
@@ -495,7 +495,7 @@ impl Session {
     }
 
     pub(super) fn section_title_style(&self) -> Style {
-        let mut style = self.default_style().add_modifier(Modifier::BOLD);
+        let mut style = self.styles.default_style().add_modifier(Modifier::BOLD);
         if let Some(primary) = self.theme.primary.or(self.theme.foreground) {
             style = style.fg(ratatui_color_from_ansi(primary));
         }
@@ -503,7 +503,7 @@ impl Session {
     }
 
     fn header_primary_style(&self) -> Style {
-        let mut style = self.default_style();
+        let mut style = self.styles.default_style();
         if let Some(primary) = self.theme.primary.or(self.theme.foreground) {
             style = style.fg(ratatui_color_from_ansi(primary));
         }
@@ -511,7 +511,7 @@ impl Session {
     }
 
     pub(super) fn header_secondary_style(&self) -> Style {
-        let mut style = self.default_style();
+        let mut style = self.styles.default_style();
         if let Some(secondary) = self.theme.secondary.or(self.theme.foreground) {
             style = style.fg(ratatui_color_from_ansi(secondary));
         }

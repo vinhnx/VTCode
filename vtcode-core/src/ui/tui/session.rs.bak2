@@ -1,8 +1,6 @@
 use std::{sync::Arc, time::Instant};
 
-#[cfg(test)]
-use anstyle::Color as AnsiColorEnum;
-use anstyle::{AnsiColor, RgbColor};
+use anstyle::{AnsiColor, Color as AnsiColorEnum, RgbColor};
 use crossterm::event::{
     Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind, MouseEvent, MouseEventKind,
 };
@@ -12,7 +10,7 @@ use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, BorderType, Borders, Clear, ListState, Paragraph, Wrap},
+    widgets::{Block, BorderType, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
 };
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -60,7 +58,7 @@ mod tool_renderer;
 use self::file_palette::FilePalette;
 use self::input_manager::InputManager;
 use self::message::{MessageLabels, MessageLine};
-use self::modal::{ModalState, compute_modal_area};
+use self::modal::{ModalListLayout, ModalState, compute_modal_area};
 
 use self::prompt_palette::PromptPalette;
 use self::queue::QueueOverlay;
@@ -307,34 +305,35 @@ impl Session {
         session
     }
 
-    /// Clears the thinking spinner message when agent response arrives
-    fn clear_thinking_spinner_if_active(&mut self, kind: InlineMessageKind) {
-        if kind == InlineMessageKind::Agent && self.thinking_spinner.is_active {
-            if let Some(spinner_idx) = self.thinking_spinner.spinner_line_index {
-                if spinner_idx < self.lines.len() {
-                    self.lines.remove(spinner_idx);
-                    // Invalidate transcript cache to ensure fresh render
-                    self.transcript_cache = None;
-                }
-            }
-            self.thinking_spinner.stop();
-        }
-    }
-
     pub fn handle_command(&mut self, command: InlineCommand) {
         match command {
             InlineCommand::AppendLine { kind, segments } => {
-                self.clear_thinking_spinner_if_active(kind);
+                // Remove spinner message when agent response arrives
+                if kind == InlineMessageKind::Agent && self.thinking_spinner.is_active {
+                    if let Some(spinner_idx) = self.thinking_spinner.spinner_line_index {
+                        if spinner_idx < self.lines.len() {
+                            self.lines.remove(spinner_idx);
+                        }
+                    }
+                    self.thinking_spinner.stop();
+                }
                 self.push_line(kind, segments);
                 self.transcript_content_changed = true;
             }
             InlineCommand::Inline { kind, segment } => {
-                self.clear_thinking_spinner_if_active(kind);
+                // Remove spinner message when agent response arrives
+                if kind == InlineMessageKind::Agent && self.thinking_spinner.is_active {
+                    if let Some(spinner_idx) = self.thinking_spinner.spinner_line_index {
+                        if spinner_idx < self.lines.len() {
+                            self.lines.remove(spinner_idx);
+                        }
+                    }
+                    self.thinking_spinner.stop();
+                }
                 self.append_inline(kind, segment);
                 self.transcript_content_changed = true;
             }
             InlineCommand::ReplaceLast { count, kind, lines } => {
-                self.clear_thinking_spinner_if_active(kind);
                 self.replace_last(count, kind, lines);
                 self.transcript_content_changed = true;
             }
@@ -828,6 +827,85 @@ impl Session {
 
         palette_views::render_prompt_palette(frame, viewport, palette, &self.theme);
     }
+
+        let items = palette.current_page_items();
+        if items.is_empty() && palette.filter_query().is_empty() {
+            return;
+        }
+
+        let mut width_hint = 40u16;
+        for (_, entry, _) in &items {
+            width_hint = width_hint.max(measure_text_width(&entry.name) + 4);
+        }
+
+        let instructions = self.prompt_palette_instructions(palette);
+        let has_continuation = palette.has_more_items();
+        let modal_height = items.len()
+            + instructions.len()
+            + 2  // borders
+            + if has_continuation { 1 } else { 0 }; // continuation indicator
+        let area = compute_modal_area(viewport, width_hint, modal_height, 0, 0, true);
+
+        frame.render_widget(Clear, area);
+        let title = format!(
+            "Custom Prompts (Page {}/{})",
+            palette.current_page_number(),
+            palette.total_pages()
+        );
+        let block = Block::default()
+            .title(title)
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .style(self.default_style())
+            .border_style(self.border_style());
+        let inner = block.inner(area);
+        frame.render_widget(block, area);
+
+        if inner.height == 0 || inner.width == 0 {
+            return;
+        }
+
+        let layout = ModalListLayout::new(inner, instructions.len());
+        if let Some(text_area) = layout.text_area {
+            let paragraph = Paragraph::new(instructions).wrap(Wrap { trim: true });
+            frame.render_widget(paragraph, text_area);
+        }
+
+        let mut list_items: Vec<ListItem> = items
+            .iter()
+            .map(|(_, entry, is_selected)| {
+                let base_style = if *is_selected {
+                    self.modal_list_highlight_style()
+                } else {
+                    self.default_style()
+                };
+
+                // Format: "  · prompt-name"
+                let display_text = format!("  · {}", entry.name);
+
+                ListItem::new(Line::from(Span::styled(display_text, base_style)))
+            })
+            .collect();
+
+        // Add continuation indicator if there are more items
+        if palette.has_more_items() {
+            let continuation_text = format!(
+                "  ... ({} more items)",
+                palette.total_items() - (palette.current_page_number() * 20)
+            );
+            let continuation_style = self
+                .default_style()
+                .add_modifier(Modifier::DIM | Modifier::ITALIC);
+            list_items.push(ListItem::new(Line::from(Span::styled(
+                continuation_text,
+                continuation_style,
+            ))));
+        }
+
+        let list = List::new(list_items).style(self.default_style());
+        frame.render_widget(list, layout.list_area);
+    }
+
     fn render_prompt_palette_loading(&self, frame: &mut Frame<'_>, viewport: Rect) {
         let width_hint = 40u16;
         let modal_height = 3;

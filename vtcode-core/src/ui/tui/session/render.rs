@@ -1,0 +1,1962 @@
+use std::{cmp::min, sync::Arc};
+
+use anstyle::{AnsiColor, Color as AnsiColorEnum, Effects};
+use ratatui::{
+    Frame,
+    layout::{Constraint, Direction, Layout, Rect},
+    style::{Modifier, Style},
+    text::{Line, Span},
+    widgets::{Block, BorderType, Borders, Clear, List, ListItem, Paragraph, Wrap},
+};
+use unicode_width::UnicodeWidthStr;
+
+use super::super::style::{measure_text_width, ratatui_style_from_inline};
+use super::super::types::{InlineMessageKind, InlineTextStyle};
+use super::{
+    Session,
+    file_palette::FilePalette,
+    message::MessageLine,
+    modal::{
+        ModalBodyContext, ModalListLayout, ModalRenderStyles, compute_modal_area,
+        modal_content_width, render_modal_body,
+    },
+    prompt_palette::PromptPalette,
+    text_utils,
+    transcript::{CachedMessage, TranscriptReflowCache},
+};
+use crate::config::constants::ui;
+
+const USER_PREFIX: &str = "";
+
+pub fn render(session: &mut Session, frame: &mut Frame<'_>) {
+    let size = frame.area();
+    if size.width == 0 || size.height == 0 {
+        return;
+    }
+
+    // Update spinner animation frame and message
+    session.thinking_spinner.update();
+    if session.thinking_spinner.is_active {
+        // Request continuous redraws while thinking
+        session.needs_redraw = true;
+        // Update spinner message with current frame
+        if let Some(spinner_idx) = session.thinking_spinner.spinner_line_index {
+            if spinner_idx < session.lines.len() {
+                let frame = session.thinking_spinner.current_frame();
+                let revision = session.next_revision();
+                if let Some(line) = session.lines.get_mut(spinner_idx) {
+                    if !line.segments.is_empty() {
+                        line.segments[0].text = format!("{} Thinking...", frame);
+                        line.revision = revision;
+                    }
+                }
+            }
+        }
+    }
+
+    // Clear entire frame if modal was just closed to remove artifacts
+    if session.needs_full_clear {
+        frame.render_widget(Clear, size);
+        session.needs_full_clear = false;
+    }
+
+    // Handle deferred file browser trigger (after slash modal dismisses)
+    if session.deferred_file_browser_trigger {
+        session.deferred_file_browser_trigger = false;
+        // Insert @ to trigger file browser now that slash modal is gone
+        session.input_manager.insert_char('@');
+        session.check_file_reference_trigger();
+        session.mark_dirty(); // Ensure UI updates
+    }
+
+    // Handle deferred prompt browser trigger (after slash modal dismisses)
+    if session.deferred_prompt_browser_trigger {
+        session.deferred_prompt_browser_trigger = false;
+        // Insert # to trigger prompt browser now that slash modal is gone
+        session.input_manager.insert_char('#');
+        session.check_prompt_reference_trigger();
+        session.mark_dirty(); // Ensure UI updates
+    }
+
+    let header_lines = session.header_lines();
+    let header_height = session.header_height_from_lines(size.width, &header_lines);
+    if header_height != session.header_rows {
+        session.header_rows = header_height;
+        recalculate_transcript_rows(session);
+    }
+
+    let status_height = if size.width > 0 && has_input_status(session) {
+        1
+    } else {
+        0
+    };
+    let inner_width = size.width.saturating_sub(2);
+    let desired_lines = session.desired_input_lines(inner_width);
+    let block_height = Session::input_block_height_for_lines(desired_lines);
+    let input_height = block_height.saturating_add(status_height);
+    session.apply_input_height(input_height);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(
+            [
+                Constraint::Length(header_height),
+                Constraint::Min(1),
+                Constraint::Length(input_height),
+            ]
+            .as_ref(),
+        )
+        .split(size);
+
+    let (header_area, transcript_area, input_area) = (chunks[0], chunks[1], chunks[2]);
+
+    // Calculate available height for transcript
+    apply_view_rows(session, transcript_area.height);
+
+    // Render components
+    let header_lines = session.header_lines();
+    session.render_header(frame, header_area, &header_lines);
+    if session.show_timeline_pane {
+        let timeline_chunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(70), Constraint::Percentage(30)].as_ref())
+            .split(transcript_area);
+        render_transcript(session, frame, timeline_chunks[0]);
+        // Placeholder for timeline rendering
+        let timeline_block = Block::default()
+            .title("Timeline")
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .style(default_style(session))
+            .border_style(border_style(session));
+        frame.render_widget(timeline_block, timeline_chunks[1]);
+    } else {
+        render_transcript(session, frame, transcript_area);
+    }
+    session.render_input(frame, input_area);
+    render_modal(session, frame, size);
+    super::slash::render_slash_palette(session, frame, size);
+    render_file_palette(session, frame, size);
+    render_prompt_palette(session, frame, size);
+}
+
+fn modal_list_highlight_style(session: &Session) -> Style {
+    session.styles.modal_list_highlight_style()
+}
+
+pub(super) fn apply_view_rows(session: &mut Session, rows: u16) {
+    let resolved = rows.max(2);
+    if session.view_rows != resolved {
+        session.view_rows = resolved;
+        invalidate_scroll_metrics(session);
+    }
+    recalculate_transcript_rows(session);
+    enforce_scroll_bounds(session);
+}
+
+fn apply_transcript_rows(session: &mut Session, rows: u16) {
+    let resolved = rows.max(1);
+    if session.transcript_rows != resolved {
+        session.transcript_rows = resolved;
+        invalidate_scroll_metrics(session);
+    }
+}
+
+fn apply_transcript_width(session: &mut Session, width: u16) {
+    if session.transcript_width != width {
+        session.transcript_width = width;
+        invalidate_scroll_metrics(session);
+    }
+}
+
+fn render_transcript(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
+    if area.height == 0 || area.width == 0 {
+        return;
+    }
+    let block = Block::default()
+        .borders(Borders::NONE)
+        .border_type(BorderType::Rounded)
+        .style(default_style(session))
+        .border_style(border_style(session));
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+    if inner.height == 0 || inner.width == 0 {
+        return;
+    }
+
+    apply_transcript_rows(session, inner.height);
+
+    let content_width = inner.width;
+    if content_width == 0 {
+        return;
+    }
+    apply_transcript_width(session, content_width);
+
+    let viewport_rows = inner.height as usize;
+    let padding = usize::from(ui::INLINE_TRANSCRIPT_BOTTOM_PADDING);
+    let effective_padding = padding.min(viewport_rows.saturating_sub(1));
+    let total_rows = total_transcript_rows(session, content_width) + effective_padding;
+    let (top_offset, _clamped_total_rows) =
+        prepare_transcript_scroll(session, total_rows, viewport_rows);
+    let vertical_offset = top_offset.min(session.scroll_manager.max_offset());
+    session.transcript_view_top = vertical_offset;
+
+    let visible_start = vertical_offset;
+    let scroll_area = Rect::new(inner.x, inner.y, content_width, inner.height);
+
+    // Use cached visible lines to avoid re-cloning on viewport-only scrolls
+    let mut visible_lines =
+        collect_transcript_window_cached(session, content_width, visible_start, viewport_rows);
+
+    let fill_count = viewport_rows.saturating_sub(visible_lines.len());
+    if fill_count > 0 {
+        let target_len = visible_lines.len() + fill_count;
+        visible_lines.resize_with(target_len, Line::default);
+    }
+    session.overlay_queue_lines(&mut visible_lines, content_width);
+    let paragraph = Paragraph::new(visible_lines)
+        .style(default_style(session))
+        .wrap(Wrap { trim: true });
+
+    // Only clear if content actually changed, not on viewport-only scroll
+    // This is a significant optimization: avoids expensive Clear operation on most scrolls
+    if session.transcript_content_changed {
+        frame.render_widget(Clear, scroll_area);
+        session.transcript_content_changed = false;
+    }
+    frame.render_widget(paragraph, scroll_area);
+}
+
+fn header_reserved_rows(session: &Session) -> u16 {
+    session.header_rows.max(ui::INLINE_HEADER_HEIGHT)
+}
+
+fn input_reserved_rows(session: &Session) -> u16 {
+    header_reserved_rows(session) + session.input_height
+}
+
+pub(super) fn recalculate_transcript_rows(session: &mut Session) {
+    let reserved = input_reserved_rows(session).saturating_add(2); // account for transcript block borders
+    let available = session.view_rows.saturating_sub(reserved).max(1);
+    apply_transcript_rows(session, available);
+}
+
+fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, viewport: Rect) {
+    if !session.file_palette_active {
+        return;
+    }
+
+    let Some(palette) = session.file_palette.as_ref() else {
+        return;
+    };
+
+    if viewport.height == 0 || viewport.width == 0 || session.modal.is_some() {
+        return;
+    }
+
+    // Show loading state if no files loaded yet
+    if !palette.has_files() {
+        render_file_palette_loading(session, frame, viewport);
+        return;
+    }
+
+    let items = palette.current_page_items();
+    if items.is_empty() && palette.filter_query().is_empty() {
+        return;
+    }
+
+    let mut width_hint = 40u16;
+    for (_, entry, _) in &items {
+        width_hint = width_hint.max(measure_text_width(&entry.display_name) + 4);
+    }
+
+    let instructions = file_palette_instructions(session, palette);
+    let has_continuation = palette.has_more_items();
+    let modal_height = items.len()
+        + instructions.len()
+        + 2  // borders
+        + if has_continuation { 1 } else { 0 }; // continuation indicator
+    let area = compute_modal_area(viewport, width_hint, modal_height, 0, 0, true);
+
+    frame.render_widget(Clear, area);
+    let title = format!(
+        "File Browser (Page {}/{})",
+        palette.current_page_number(),
+        palette.total_pages()
+    );
+    let block = Block::default()
+        .title(title)
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .style(default_style(session))
+        .border_style(border_style(session));
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    if inner.height == 0 || inner.width == 0 {
+        return;
+    }
+
+    let layout = ModalListLayout::new(inner, instructions.len());
+    if let Some(text_area) = layout.text_area {
+        let paragraph = Paragraph::new(instructions).wrap(Wrap { trim: true });
+        frame.render_widget(paragraph, text_area);
+    }
+
+    let mut list_items: Vec<ListItem> = items
+        .iter()
+        .map(|(_, entry, is_selected)| {
+            let base_style = if *is_selected {
+                modal_list_highlight_style(session)
+            } else {
+                default_style(session)
+            };
+
+            // Get system file color from LS_COLORS if available
+            let mut style = if let Some(file_palette) = session.file_palette.as_ref() {
+                if let Some(file_style) = file_palette.style_for_entry(entry) {
+                    // Convert anstyle::Style to ratatui::Style using anstyle_utils
+                    let anstyle_converted =
+                        crate::utils::anstyle_utils::ansi_style_to_ratatui_style(file_style);
+
+                    let mut ratatui_style = base_style;
+                    if let Some(fg) = anstyle_converted.fg {
+                        ratatui_style = ratatui_style.fg(fg);
+                    }
+                    if let Some(bg) = anstyle_converted.bg {
+                        ratatui_style = ratatui_style.bg(bg);
+                    }
+                    ratatui_style = ratatui_style.add_modifier(anstyle_converted.add_modifier);
+
+                    ratatui_style
+                } else {
+                    base_style
+                }
+            } else {
+                base_style
+            };
+
+            // Add visual distinction for directories (this can enhance or override LS_COLORS)
+            if entry.is_dir {
+                style = style.add_modifier(Modifier::BOLD);
+            }
+
+            // Add icon prefix
+            let prefix = if entry.is_dir {
+                "↳  " // Folder indicator
+            } else {
+                "  · " // Indent files
+            };
+
+            let display_text = format!("{}{}", prefix, entry.display_name);
+
+            ListItem::new(Line::from(Span::styled(display_text, style)))
+        })
+        .collect();
+
+    // Add continuation indicator if there are more items
+    if palette.has_more_items() {
+        let continuation_text = format!(
+            "  ... ({} more items)",
+            palette.total_items() - (palette.current_page_number() * 20)
+        );
+        let continuation_style =
+            default_style(session).add_modifier(Modifier::DIM | Modifier::ITALIC);
+        list_items.push(ListItem::new(Line::from(Span::styled(
+            continuation_text,
+            continuation_style,
+        ))));
+    }
+
+    let list = List::new(list_items).style(default_style(session));
+    frame.render_widget(list, layout.list_area);
+}
+
+fn render_file_palette_loading(session: &Session, frame: &mut Frame<'_>, viewport: Rect) {
+    let width_hint = 40u16;
+    let modal_height = 3;
+    let area = compute_modal_area(viewport, width_hint, modal_height, 0, 0, true);
+
+    frame.render_widget(Clear, area);
+    let block = Block::default()
+        .title("File Browser")
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .style(default_style(session))
+        .border_style(border_style(session));
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    if inner.height > 0 && inner.width > 0 {
+        let loading_text = vec![Line::from(Span::styled(
+            "Loading workspace files...".to_string(),
+            default_style(session).add_modifier(Modifier::DIM),
+        ))];
+        let paragraph = Paragraph::new(loading_text).wrap(Wrap { trim: true });
+        frame.render_widget(paragraph, inner);
+    }
+}
+
+fn file_palette_instructions(session: &Session, palette: &FilePalette) -> Vec<Line<'static>> {
+    let mut lines = vec![];
+
+    if palette.is_empty() {
+        lines.push(Line::from(Span::styled(
+            "No files found matching filter".to_string(),
+            default_style(session).add_modifier(Modifier::DIM),
+        )));
+    } else {
+        let total = palette.total_items();
+        let count_text = if total == 1 {
+            "1 file".to_string()
+        } else {
+            format!("{} files", total)
+        };
+
+        let nav_text = "↑↓ Navigate · PgUp/PgDn Page · Tab/Enter Select";
+
+        lines.push(Line::from(vec![Span::styled(
+            format!("{} · Esc Close", nav_text),
+            default_style(session),
+        )]));
+
+        lines.push(Line::from(vec![
+            Span::styled(
+                format!("Showing {}", count_text),
+                default_style(session).add_modifier(Modifier::DIM),
+            ),
+            Span::styled(
+                if !palette.filter_query().is_empty() {
+                    format!(" matching '{}'", palette.filter_query())
+                } else {
+                    String::new()
+                },
+                accent_style(session),
+            ),
+        ]));
+    }
+
+    lines
+}
+
+fn render_prompt_palette(session: &mut Session, frame: &mut Frame<'_>, viewport: Rect) {
+    if !session.prompt_palette_active {
+        return;
+    }
+
+    let Some(palette) = session.prompt_palette.as_ref() else {
+        return;
+    };
+
+    if viewport.height == 0 || viewport.width == 0 || session.modal.is_some() {
+        return;
+    }
+
+    // Show loading state if no prompts loaded yet
+    if !palette.has_prompts() {
+        render_prompt_palette_loading(session, frame, viewport);
+        return;
+    }
+
+    let items = palette.current_page_items();
+    if items.is_empty() && palette.filter_query().is_empty() {
+        return;
+    }
+
+    let mut width_hint = 40u16;
+    for (_, entry, _) in &items {
+        width_hint = width_hint.max(measure_text_width(&entry.name) + 4);
+    }
+
+    let instructions = prompt_palette_instructions(session, palette);
+    let has_continuation = palette.has_more_items();
+    let modal_height = items.len()
+        + instructions.len()
+        + 2  // borders
+        + if has_continuation { 1 } else { 0 }; // continuation indicator
+    let area = compute_modal_area(viewport, width_hint, modal_height, 0, 0, true);
+
+    frame.render_widget(Clear, area);
+    let title = format!(
+        "Custom Prompts (Page {}/{})",
+        palette.current_page_number(),
+        palette.total_pages()
+    );
+    let block = Block::default()
+        .title(title)
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .style(default_style(session))
+        .border_style(border_style(session));
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    if inner.height == 0 || inner.width == 0 {
+        return;
+    }
+
+    let layout = ModalListLayout::new(inner, instructions.len());
+    if let Some(text_area) = layout.text_area {
+        let paragraph = Paragraph::new(instructions).wrap(Wrap { trim: true });
+        frame.render_widget(paragraph, text_area);
+    }
+
+    let mut list_items: Vec<ListItem> = items
+        .iter()
+        .map(|(_, entry, is_selected)| {
+            let base_style = if *is_selected {
+                modal_list_highlight_style(session)
+            } else {
+                default_style(session)
+            };
+
+            // Format: "  · prompt-name"
+            let display_text = format!("  · {}", entry.name);
+
+            ListItem::new(Line::from(Span::styled(display_text, base_style)))
+        })
+        .collect();
+
+    // Add continuation indicator if there are more items
+    if palette.has_more_items() {
+        let continuation_text = format!(
+            "  ... ({} more items)",
+            palette.total_items() - (palette.current_page_number() * 20)
+        );
+        let continuation_style =
+            default_style(session).add_modifier(Modifier::DIM | Modifier::ITALIC);
+        list_items.push(ListItem::new(Line::from(Span::styled(
+            continuation_text,
+            continuation_style,
+        ))));
+    }
+
+    let list = List::new(list_items).style(default_style(session));
+    frame.render_widget(list, layout.list_area);
+}
+
+fn render_prompt_palette_loading(session: &Session, frame: &mut Frame<'_>, viewport: Rect) {
+    let width_hint = 40u16;
+    let modal_height = 3;
+    let area = compute_modal_area(viewport, width_hint, modal_height, 0, 0, true);
+
+    frame.render_widget(Clear, area);
+    let block = Block::default()
+        .title("Custom Prompts")
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .style(default_style(session))
+        .border_style(border_style(session));
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    if inner.height > 0 && inner.width > 0 {
+        let loading_text = vec![Line::from(Span::styled(
+            "Loading custom prompts...".to_string(),
+            default_style(session).add_modifier(Modifier::DIM),
+        ))];
+        let paragraph = Paragraph::new(loading_text).wrap(Wrap { trim: true });
+        frame.render_widget(paragraph, inner);
+    }
+}
+
+fn prompt_palette_instructions(session: &Session, palette: &PromptPalette) -> Vec<Line<'static>> {
+    let mut lines = vec![];
+
+    if palette.is_empty() {
+        lines.push(Line::from(Span::styled(
+            "No prompts found matching filter".to_string(),
+            default_style(session).add_modifier(Modifier::DIM),
+        )));
+    } else {
+        let total = palette.total_items();
+        let count_text = if total == 1 {
+            "1 prompt".to_string()
+        } else {
+            format!("{} prompts", total)
+        };
+
+        lines.push(Line::from(vec![Span::styled(
+            "↑↓ Navigate · Enter/Tab Select · Esc Close",
+            default_style(session),
+        )]));
+
+        lines.push(Line::from(vec![
+            Span::styled(
+                format!("Showing {}", count_text),
+                default_style(session).add_modifier(Modifier::DIM),
+            ),
+            Span::styled(
+                if !palette.filter_query().is_empty() {
+                    format!(" matching '{}'", palette.filter_query())
+                } else {
+                    String::new()
+                },
+                accent_style(session),
+            ),
+        ]));
+    }
+
+    lines
+}
+
+fn has_input_status(session: &Session) -> bool {
+    let left_present = session
+        .input_status_left
+        .as_ref()
+        .is_some_and(|value| !value.trim().is_empty());
+    if left_present {
+        return true;
+    }
+    session
+        .input_status_right
+        .as_ref()
+        .is_some_and(|value| !value.trim().is_empty())
+}
+
+pub(super) fn render_message_spans(session: &Session, index: usize) -> Vec<Span<'static>> {
+    let Some(line) = session.lines.get(index) else {
+        return vec![Span::raw(String::new())];
+    };
+    let mut spans = Vec::new();
+    if line.kind == InlineMessageKind::Agent {
+        spans.extend(agent_prefix_spans(session, line));
+    } else if let Some(prefix) = prefix_text(session, line.kind) {
+        let style = prefix_style(session, line);
+        spans.push(Span::styled(
+            prefix,
+            ratatui_style_from_inline(&style, session.theme.foreground),
+        ));
+    }
+
+    if line.kind == InlineMessageKind::Agent {
+        spans.push(Span::raw(ui::INLINE_AGENT_MESSAGE_LEFT_PADDING));
+    }
+
+    if line.segments.is_empty() {
+        if spans.is_empty() {
+            spans.push(Span::raw(String::new()));
+        }
+        return spans;
+    }
+
+    if line.kind == InlineMessageKind::Tool {
+        let tool_spans = render_tool_segments(session, line);
+        if tool_spans.is_empty() {
+            spans.push(Span::raw(String::new()));
+        } else {
+            spans.extend(tool_spans);
+        }
+        return spans;
+    }
+
+    if line.kind == InlineMessageKind::Pty {
+        let prev_is_pty = index
+            .checked_sub(1)
+            .and_then(|prev| session.lines.get(prev))
+            .map(|prev| prev.kind == InlineMessageKind::Pty)
+            .unwrap_or(false);
+        if !prev_is_pty {
+            let mut combined = String::new();
+            for segment in &line.segments {
+                combined.push_str(segment.text.as_str());
+            }
+            let header_text = if combined.trim().is_empty() {
+                ui::INLINE_PTY_PLACEHOLDER.to_string()
+            } else {
+                combined.trim().to_string()
+            };
+            let label_style = InlineTextStyle::default()
+                .with_color(session.theme.primary.or(session.theme.foreground))
+                .bold();
+            spans.push(Span::styled(
+                format!("[{}]", ui::INLINE_PTY_HEADER_LABEL),
+                ratatui_style_from_inline(&label_style, session.theme.foreground),
+            ));
+            spans.push(Span::raw(" "));
+            let _body_style = InlineTextStyle::default()
+                .with_color(session.theme.foreground)
+                .bold();
+            // Parse ANSI escape sequences in PTY output for color support
+            // Limit to last 30 lines for performance and readability
+            let output_text = if header_text.lines().count() > 30 {
+                let lines: Vec<&str> = header_text.lines().collect();
+                let start = lines.len().saturating_sub(30);
+                format!(
+                    "[... {} lines truncated ...]\n{}",
+                    lines.len() - 30,
+                    lines[start..].join("\n")
+                )
+            } else {
+                header_text.clone()
+            };
+
+            // Skip ANSI parsing and return plain text without styles or Unicode formatting
+            spans.push(Span::raw(output_text));
+            return spans;
+        }
+    }
+
+    let fallback = text_fallback(session, line.kind).or(session.theme.foreground);
+    for segment in &line.segments {
+        let mut style = ratatui_style_from_inline(&segment.style, fallback);
+        if line.kind == InlineMessageKind::Agent {
+            // Apply italic effect for agent messages
+            style = style.add_modifier(ratatui::style::Modifier::ITALIC);
+        }
+        spans.push(Span::styled(segment.text.clone(), style));
+    }
+
+    if spans.is_empty() {
+        spans.push(Span::raw(String::new()));
+    }
+
+    spans
+}
+
+fn agent_prefix_spans(session: &Session, line: &MessageLine) -> Vec<Span<'static>> {
+    let mut spans = Vec::new();
+    let prefix_style_inline = prefix_style(session, line);
+    let prefix_style_ratatui =
+        ratatui_style_from_inline(&prefix_style_inline, session.theme.foreground);
+    if !ui::INLINE_AGENT_QUOTE_PREFIX.is_empty() {
+        spans.push(Span::styled(
+            ui::INLINE_AGENT_QUOTE_PREFIX.to_string(),
+            prefix_style_ratatui,
+        ));
+    }
+
+    if let Some(label) = session.labels.agent.clone() {
+        if !label.is_empty() {
+            let label_style =
+                ratatui_style_from_inline(&prefix_style_inline, session.theme.foreground);
+            spans.push(Span::styled(label, label_style));
+        }
+    }
+
+    spans
+}
+
+/// Strips ANSI escape codes from text to ensure plain text output
+pub(super) fn strip_ansi_codes(text: &str) -> String {
+    text_utils::strip_ansi_codes(text)
+}
+
+pub(super) fn render_tool_segments(session: &Session, line: &MessageLine) -> Vec<Span<'static>> {
+    let mut combined = String::new();
+    for segment in &line.segments {
+        // Strip ANSI codes from each segment to ensure plain text output
+        let stripped_text = strip_ansi_codes(&segment.text);
+        combined.push_str(&stripped_text);
+    }
+
+    if combined.is_empty() {
+        return Vec::new();
+    }
+
+    // Always render tool calls as a single combined line
+    render_tool_header_line(session, &combined)
+}
+
+fn render_tool_header_line(session: &Session, text: &str) -> Vec<Span<'static>> {
+    let mut spans = Vec::new();
+    let indent_len = text.chars().take_while(|ch| ch.is_whitespace()).count();
+    let indent: String = text.chars().take(indent_len).collect();
+    let mut remaining = if indent_len < text.len() {
+        &text[indent_len..]
+    } else {
+        ""
+    };
+
+    if !indent.is_empty() {
+        let mut indent_style = InlineTextStyle::default();
+        indent_style.color = session.theme.tool_body.or(session.theme.foreground);
+        spans.push(Span::styled(
+            indent,
+            ratatui_style_from_inline(&indent_style, session.theme.foreground),
+        ));
+    }
+
+    if remaining.is_empty() {
+        return spans;
+    }
+
+    remaining = strip_tool_status_prefix(remaining);
+    if remaining.is_empty() {
+        return spans;
+    }
+
+    let (name, tail) = if remaining.starts_with('[') {
+        if let Some(end) = remaining.find(']') {
+            let name = &remaining[1..end];
+            let tail = &remaining[end + 1..];
+            (name, tail)
+        } else {
+            (remaining, "")
+        }
+    } else {
+        let mut name_end = remaining.len();
+        for (index, character) in remaining.char_indices() {
+            if character.is_whitespace() {
+                name_end = index;
+                break;
+            }
+        }
+        remaining.split_at(name_end)
+    };
+    if !name.is_empty() {
+        // Add bracket wrapper with different styling
+        spans.push(Span::styled(
+            "[",
+            accent_style(session).add_modifier(Modifier::BOLD),
+        ));
+
+        // Get distinctive color based on the tool name for better differentiation
+        let tool_name_style = tool_inline_style(session, name);
+
+        spans.push(Span::styled(
+            name.to_string(),
+            ratatui_style_from_inline(&tool_name_style, session.theme.foreground),
+        ));
+
+        spans.push(Span::styled(
+            "] ",
+            accent_style(session).add_modifier(Modifier::BOLD),
+        ));
+    }
+
+    let trimmed_tail = tail.trim_start();
+    if !trimmed_tail.is_empty() {
+        // Parse the tail to extract tool action and parameters for better formatting
+        let parts: Vec<&str> = trimmed_tail.split(" · ").collect();
+        if parts.len() > 1 {
+            // Format as "action → description · parameter1 · parameter2"
+            let action = parts[0];
+            let body_style = InlineTextStyle::default()
+                .with_color(session.theme.tool_body.or(session.theme.foreground));
+
+            // Parse and style the action text with special highlighting
+            render_styled_action_text(session, &mut spans, action, &body_style);
+
+            // Format additional parameters (limit to avoid multi-line)
+            let max_parts = 3; // Limit parameters to keep on one line
+            for (i, part) in parts[1..].iter().enumerate() {
+                if i >= max_parts {
+                    spans.push(Span::raw(" "));
+                    spans.push(Span::styled(
+                        "· ...",
+                        accent_style(session).add_modifier(Modifier::DIM),
+                    ));
+                    break;
+                }
+                spans.push(Span::raw(" "));
+                spans.push(Span::styled(
+                    "·",
+                    accent_style(session).add_modifier(Modifier::DIM),
+                ));
+                spans.push(Span::raw(" "));
+
+                // Differentiate between parameter names and values
+                let param_parts: Vec<&str> = part.split(": ").collect();
+                if param_parts.len() > 1 {
+                    // Parameter name (before colon) - in accent color with bold
+                    spans.push(Span::styled(
+                        format!("{}: ", param_parts[0]),
+                        accent_style(session).add_modifier(Modifier::BOLD),
+                    ));
+
+                    // Parameter value (after colon) - highlighted with different color
+                    let value_style = InlineTextStyle::default()
+                        .with_color(Some(AnsiColor::Green.into())) // Green for argument values
+                        .bold();
+                    spans.push(Span::styled(
+                        param_parts[1].to_string(),
+                        ratatui_style_from_inline(&value_style, session.theme.foreground),
+                    ));
+                } else {
+                    spans.push(Span::styled(
+                        part.to_string(),
+                        ratatui_style_from_inline(&body_style, session.theme.foreground),
+                    ));
+                }
+            }
+        } else {
+            // Fallback for original formatting
+            let body_style = InlineTextStyle::default()
+                .with_color(session.theme.tool_body.or(session.theme.foreground));
+
+            // Simplify common tool call patterns for human readability
+            let mut simplified_text = simplify_tool_display(trimmed_tail);
+            // Truncate to fit in one line (approximately 100 characters for readability)
+            if simplified_text.len() > 100 {
+                simplified_text = simplified_text.chars().take(97).collect::<String>() + "...";
+            }
+            spans.push(Span::styled(
+                simplified_text,
+                ratatui_style_from_inline(&body_style, session.theme.foreground),
+            ));
+        }
+    }
+
+    spans
+}
+
+fn render_styled_action_text(
+    session: &Session,
+    spans: &mut Vec<Span<'static>>,
+    action: &str,
+    body_style: &InlineTextStyle,
+) {
+    let words: Vec<&str> = action.split_whitespace().collect();
+
+    for (i, word) in words.iter().enumerate() {
+        if i > 0 {
+            spans.push(Span::raw(" "));
+        }
+
+        if *word == "in" {
+            // Style "in" with italic and different color (cyan)
+            let in_style = InlineTextStyle::default()
+                .with_color(Some(AnsiColor::Cyan.into()))
+                .italic();
+            spans.push(Span::styled(
+                word.to_string(),
+                ratatui_style_from_inline(&in_style, session.theme.foreground),
+            ));
+        } else if i < 2
+            && (word.starts_with("List")
+                || word.starts_with("Read")
+                || word.starts_with("Write")
+                || word.starts_with("Find")
+                || word.starts_with("Search")
+                || word.starts_with("Run"))
+        {
+            // Highlight the main action verb (first 1-2 words) with bold and accent color
+            let action_style = InlineTextStyle::default()
+                .with_color(session.theme.tool_accent.or(Some(AnsiColor::Yellow.into())))
+                .bold();
+            spans.push(Span::styled(
+                word.to_string(),
+                ratatui_style_from_inline(&action_style, session.theme.foreground),
+            ));
+        } else {
+            // Normal styling for other words
+            spans.push(Span::styled(
+                word.to_string(),
+                ratatui_style_from_inline(body_style, session.theme.foreground),
+            ));
+        }
+    }
+}
+
+fn strip_tool_status_prefix<'a>(text: &'a str) -> &'a str {
+    let trimmed = text.trim_start();
+    const STATUS_ICONS: [&str; 4] = ["✓", "✗", "~", "✕"];
+    for icon in STATUS_ICONS {
+        if trimmed.starts_with(icon) {
+            return trimmed[icon.len()..].trim_start();
+        }
+    }
+    text
+}
+
+/// Simplify tool call display text for better human readability
+fn simplify_tool_display(text: &str) -> String {
+    text_utils::simplify_tool_display(text)
+}
+
+/// Normalize tool names to group similar tools together
+fn normalize_tool_name(session: &Session, tool_name: &str) -> String {
+    session.styles.normalize_tool_name(tool_name)
+}
+
+fn tool_inline_style(session: &Session, tool_name: &str) -> InlineTextStyle {
+    session.styles.tool_inline_style(tool_name)
+}
+
+fn tool_border_style(session: &Session) -> InlineTextStyle {
+    session.styles.tool_border_style()
+}
+
+fn default_style(session: &Session) -> Style {
+    session.styles.default_style()
+}
+
+fn accent_inline_style(session: &Session) -> InlineTextStyle {
+    session.styles.accent_inline_style()
+}
+
+fn accent_style(session: &Session) -> Style {
+    session.styles.accent_style()
+}
+
+fn border_inline_style(session: &Session) -> InlineTextStyle {
+    session.styles.border_inline_style()
+}
+
+fn border_style(session: &Session) -> Style {
+    session.styles.border_style()
+}
+
+fn prefix_text(session: &Session, kind: InlineMessageKind) -> Option<String> {
+    match kind {
+        InlineMessageKind::User => Some(
+            session
+                .labels
+                .user
+                .clone()
+                .unwrap_or_else(|| USER_PREFIX.to_string()),
+        ),
+        InlineMessageKind::Agent => None,
+        InlineMessageKind::Policy => session.labels.agent.clone(),
+        InlineMessageKind::Tool | InlineMessageKind::Pty | InlineMessageKind::Error => None,
+        InlineMessageKind::Info => None,
+    }
+}
+
+fn prefix_style(session: &Session, line: &MessageLine) -> InlineTextStyle {
+    session.styles.prefix_style(line)
+}
+
+fn text_fallback(session: &Session, kind: InlineMessageKind) -> Option<AnsiColorEnum> {
+    session.styles.text_fallback(kind)
+}
+
+fn viewport_height(session: &Session) -> usize {
+    session.transcript_rows.max(1) as usize
+}
+
+pub(super) fn current_max_scroll_offset(session: &mut Session) -> usize {
+    ensure_scroll_metrics(session);
+    session.scroll_manager.max_offset()
+}
+
+pub(super) fn enforce_scroll_bounds(session: &mut Session) {
+    let max_offset = current_max_scroll_offset(session);
+    if session.scroll_manager.offset() > max_offset {
+        session.scroll_manager.set_offset(max_offset);
+    }
+}
+
+pub(super) fn invalidate_scroll_metrics(session: &mut Session) {
+    session.scroll_manager.invalidate_metrics();
+    invalidate_transcript_cache(session);
+}
+
+fn invalidate_transcript_cache(session: &mut Session) {
+    session.transcript_cache = None;
+    // Also invalidate visible lines cache when content changes
+    session.visible_lines_cache = None;
+    // Mark that content changed so we clear transcript on next render
+    session.transcript_content_changed = true;
+}
+
+fn collect_transcript_window_cached(
+    session: &mut Session,
+    width: u16,
+    start_row: usize,
+    max_rows: usize,
+) -> Vec<Line<'static>> {
+    // Check if we have cached visible lines for this exact position and width
+    if let Some((cached_offset, cached_width, cached_lines)) = &session.visible_lines_cache {
+        if *cached_offset == start_row && *cached_width == width {
+            // Reuse cached lines from Arc (zero-copy, no allocation)
+            return (**cached_lines).clone();
+        }
+    }
+
+    // Not in cache, fetch from transcript
+    let visible_lines = collect_transcript_window(session, width, start_row, max_rows);
+
+    // Cache for next render if scroll position unchanged (wrapped in Arc for cheap sharing)
+    session.visible_lines_cache = Some((start_row, width, Arc::new(visible_lines.clone())));
+
+    visible_lines
+}
+
+fn ensure_scroll_metrics(session: &mut Session) {
+    if session.scroll_manager.metrics_valid() {
+        return;
+    }
+
+    let viewport_rows = viewport_height(session);
+    if session.transcript_width == 0 || viewport_rows == 0 {
+        let total_rows = session.lines.len().saturating_sub(viewport_rows.max(1));
+        session.scroll_manager.set_total_rows(total_rows);
+        return;
+    }
+
+    let padding = usize::from(ui::INLINE_TRANSCRIPT_BOTTOM_PADDING);
+    let effective_padding = padding.min(viewport_rows.saturating_sub(1));
+    let total_rows = total_transcript_rows(session, session.transcript_width) + effective_padding;
+    session.scroll_manager.set_total_rows(total_rows);
+}
+
+pub(super) fn ensure_reflow_cache(session: &mut Session, width: u16) -> &mut TranscriptReflowCache {
+    let mut cache = session
+        .transcript_cache
+        .take()
+        .unwrap_or_else(|| TranscriptReflowCache::new(width));
+
+    // Update width if needed and handle width changes
+    if cache.width != width {
+        cache.set_width(width);
+    }
+
+    // Resize message cache to match current line count
+    while cache.messages.len() > session.lines.len() {
+        cache.messages.pop();
+    }
+    while cache.messages.len() < session.lines.len() {
+        cache.messages.push(CachedMessage::default());
+    }
+
+    // Process any dirty messages (those that need reflow)
+    let mut first_dirty = session.lines.len(); // Start with all clean
+
+    // Find the first message that needs reflow
+    for (index, line) in session.lines.iter().enumerate() {
+        if cache.needs_reflow(index, line.revision) {
+            first_dirty = index;
+            break;
+        }
+    }
+
+    // If no messages need reflow, just return existing cache
+    if first_dirty == session.lines.len() {
+        // Still need to ensure row offsets are correct
+        cache.update_row_offsets();
+        session.transcript_cache = Some(cache);
+        return session.transcript_cache.as_mut().unwrap();
+    }
+
+    // Update all messages from the first dirty one onwards
+    for index in first_dirty..session.lines.len() {
+        if index < session.lines.len() {
+            let line = &session.lines[index];
+            if cache.needs_reflow(index, line.revision) {
+                let new_lines = reflow_message_lines(session, index, width);
+                cache.update_message(index, line.revision, new_lines);
+            }
+        }
+    }
+
+    // Update row offsets and total row count
+    cache.update_row_offsets();
+    session.transcript_cache = Some(cache);
+    session.transcript_cache.as_mut().unwrap()
+}
+
+pub(super) fn total_transcript_rows(session: &mut Session, width: u16) -> usize {
+    if session.lines.is_empty() {
+        return 0;
+    }
+    let cache = ensure_reflow_cache(session, width);
+    cache.total_rows()
+}
+
+fn collect_transcript_window(
+    session: &mut Session,
+    width: u16,
+    start_row: usize,
+    max_rows: usize,
+) -> Vec<Line<'static>> {
+    if max_rows == 0 {
+        return Vec::new();
+    }
+    let cache = ensure_reflow_cache(session, width);
+
+    // Use the optimized method from the new TranscriptReflowCache
+    cache.get_visible_range(start_row, max_rows)
+}
+
+fn reflow_message_lines(session: &Session, index: usize, width: u16) -> Vec<Line<'static>> {
+    let Some(message) = session.lines.get(index) else {
+        return vec![Line::default()];
+    };
+
+    if message.kind == InlineMessageKind::Tool {
+        return reflow_tool_lines(session, index, width);
+    }
+
+    if message.kind == InlineMessageKind::Pty {
+        return reflow_pty_lines(session, index, width);
+    }
+
+    let spans = render_message_spans(session, index);
+    let base_line = Line::from(spans);
+    if width == 0 {
+        return vec![base_line];
+    }
+
+    let mut wrapped = Vec::new();
+    let max_width = width as usize;
+
+    if message.kind == InlineMessageKind::User && max_width > 0 {
+        wrapped.push(message_divider_line(session, max_width, message.kind));
+    }
+
+    let mut lines = wrap_line(session, base_line, max_width);
+    if !lines.is_empty() {
+        lines = justify_wrapped_lines(session, lines, max_width, message.kind);
+    }
+    if lines.is_empty() {
+        lines.push(Line::default());
+    }
+    wrapped.extend(lines);
+
+    if message.kind == InlineMessageKind::User && max_width > 0 {
+        wrapped.push(message_divider_line(session, max_width, message.kind));
+    }
+
+    if wrapped.is_empty() {
+        wrapped.push(Line::default());
+    }
+
+    // Add a line break after Error, Info, and Policy messages
+    // User messages already have dividers, Tool/PTY have special formatting, and Agent messages don't need line breaks
+    match message.kind {
+        InlineMessageKind::Error | InlineMessageKind::Info | InlineMessageKind::Policy => {
+            wrapped.push(Line::default());
+        }
+        _ => {} // Don't add line breaks for User (has dividers), Agent, Tool, or PTY messages
+    }
+
+    wrapped
+}
+
+fn wrap_block_lines(
+    session: &Session,
+    first_prefix: &str,
+    _continuation_prefix: &str,
+    content: Vec<Span<'static>>,
+    max_width: usize,
+    border_style: Style,
+) -> Vec<Line<'static>> {
+    if max_width < 2 {
+        return vec![Line::from(vec![Span::styled(
+            format!("{}││", first_prefix),
+            border_style,
+        )])];
+    }
+
+    let right_border = ui::INLINE_BLOCK_BODY_RIGHT;
+    let prefix_width = first_prefix.chars().count();
+    let border_width = right_border.chars().count();
+    let consumed_width = prefix_width.saturating_add(border_width);
+    let content_width = max_width.saturating_sub(consumed_width);
+
+    if max_width == usize::MAX {
+        let mut spans = vec![Span::styled(first_prefix.to_string(), border_style)];
+        spans.extend(content);
+        spans.push(Span::styled(right_border.to_string(), border_style));
+        return vec![Line::from(spans)];
+    }
+
+    let mut wrapped = wrap_line(session, Line::from(content), content_width);
+    if wrapped.is_empty() {
+        wrapped.push(Line::default());
+    }
+
+    // Add borders to each wrapped line
+    for line in wrapped.iter_mut() {
+        let line_width = line.spans.iter().map(|s| s.width()).sum::<usize>();
+        let padding = content_width.saturating_sub(line_width);
+
+        let mut new_spans = vec![Span::styled(first_prefix.to_string(), border_style)];
+        new_spans.extend(line.spans.drain(..));
+        if padding > 0 {
+            new_spans.push(Span::styled(" ".repeat(padding), Style::default()));
+        }
+        new_spans.push(Span::styled(right_border.to_string(), border_style));
+        line.spans = new_spans;
+    }
+
+    wrapped
+}
+
+fn reflow_tool_lines(session: &Session, index: usize, width: u16) -> Vec<Line<'static>> {
+    let Some(line) = session.lines.get(index) else {
+        return vec![Line::default()];
+    };
+
+    let max_width = if width == 0 {
+        usize::MAX
+    } else {
+        width as usize
+    };
+
+    let mut border_style =
+        ratatui_style_from_inline(&tool_border_style(session), session.theme.foreground);
+    border_style = border_style.add_modifier(Modifier::DIM);
+
+    let is_detail = line
+        .segments
+        .iter()
+        .any(|segment| segment.style.effects.contains(Effects::ITALIC));
+    let next_is_tool = session
+        .lines
+        .get(index + 1)
+        .map(|next| next.kind == InlineMessageKind::Tool)
+        .unwrap_or(false);
+
+    let is_end = !next_is_tool;
+
+    let mut lines = Vec::new();
+    if is_detail {
+        let body_prefix = format!("{} ", ui::INLINE_BLOCK_BODY_LEFT);
+        let content = render_tool_segments(session, line);
+        lines.extend(wrap_block_lines(
+            session,
+            &body_prefix,
+            &body_prefix,
+            content,
+            max_width,
+            border_style.clone(),
+        ));
+    } else {
+        // For simple tool output, render without borders
+        // Combine all segments into single text to preserve newlines and avoid excessive line breaks
+        let mut combined_text = String::new();
+        for segment in &line.segments {
+            // Strip ANSI codes from each segment to ensure plain text output
+            let stripped_text = strip_ansi_codes(&segment.text);
+            combined_text.push_str(&stripped_text);
+        }
+
+        // Process the combined text with newlines preserved
+        // To reduce excessive blank lines, collapse multiple consecutive newlines
+        let processed_text = if combined_text.contains("\n\n\n") {
+            // Replace 3 or more consecutive newlines with just 2 newlines
+            let mut result = String::new();
+            let mut chars = combined_text.chars().peekable();
+            let mut newline_count = 0;
+
+            while let Some(ch) = chars.next() {
+                if ch == '\n' {
+                    newline_count += 1;
+                    // Skip over additional newlines, but make sure we preserve at least one
+                    while let Some(&next_ch) = chars.peek() {
+                        if next_ch == '\n' {
+                            chars.next(); // consume the additional newline
+                            newline_count += 1;
+                        } else {
+                            break;
+                        }
+                    }
+
+                    // Add at most 2 newlines (instead of all the consecutive ones)
+                    let newlines_to_add = std::cmp::min(newline_count, 2);
+                    for _ in 0..newlines_to_add {
+                        result.push('\n');
+                    }
+                    newline_count = 0;
+                } else {
+                    result.push(ch);
+                    if ch != '\n' {
+                        newline_count = 0; // reset counter when non-newline is encountered
+                    }
+                }
+            }
+
+            result
+        } else {
+            combined_text
+        };
+
+        let base_line = Line::from(vec![Span::raw(processed_text)]);
+        if max_width > 0 {
+            lines.extend(wrap_line(session, base_line, max_width));
+        } else {
+            lines.push(base_line);
+        }
+    }
+
+    if is_end {
+        // Don't add bottom border for simple tool output
+        // lines.push(block_footer_line(width, border_style));
+    }
+
+    if lines.is_empty() {
+        lines.push(Line::default());
+    }
+
+    lines
+}
+
+fn pty_block_has_content(session: &Session, index: usize) -> bool {
+    if session.lines.is_empty() {
+        return false;
+    }
+
+    let mut start = index;
+    while start > 0 {
+        let Some(previous) = session.lines.get(start - 1) else {
+            break;
+        };
+        if previous.kind != InlineMessageKind::Pty {
+            break;
+        }
+        start -= 1;
+    }
+
+    let mut end = index;
+    while end + 1 < session.lines.len() {
+        let Some(next) = session.lines.get(end + 1) else {
+            break;
+        };
+        if next.kind != InlineMessageKind::Pty {
+            break;
+        }
+        end += 1;
+    }
+
+    if start > end || end >= session.lines.len() {
+        tracing::warn!(
+            "invalid range: start={}, end={}, len={}",
+            start,
+            end,
+            session.lines.len()
+        );
+        return false;
+    }
+
+    for line in &session.lines[start..=end] {
+        if line
+            .segments
+            .iter()
+            .any(|segment| !segment.text.trim().is_empty())
+        {
+            return true;
+        }
+    }
+
+    false
+}
+
+fn reflow_pty_lines(session: &Session, index: usize, width: u16) -> Vec<Line<'static>> {
+    let Some(line) = session.lines.get(index) else {
+        return vec![Line::default()];
+    };
+
+    let max_width = if width == 0 {
+        usize::MAX
+    } else {
+        width as usize
+    };
+
+    if !pty_block_has_content(session, index) {
+        return Vec::new();
+    }
+
+    let mut border_inline = InlineTextStyle::default();
+    border_inline.color = session.theme.secondary.or(session.theme.foreground);
+    let mut border_style = ratatui_style_from_inline(&border_inline, session.theme.foreground);
+    border_style = border_style.add_modifier(Modifier::DIM);
+
+    let header_inline = InlineTextStyle::default()
+        .with_color(session.theme.primary.or(session.theme.foreground))
+        .bold();
+    let header_style = ratatui_style_from_inline(&header_inline, session.theme.foreground);
+
+    let mut body_inline = InlineTextStyle::default();
+    body_inline.color = session.theme.foreground;
+    let mut body_style = ratatui_style_from_inline(&body_inline, session.theme.foreground);
+    body_style = body_style.add_modifier(Modifier::BOLD);
+
+    let prev_is_pty = index
+        .checked_sub(1)
+        .and_then(|prev| session.lines.get(prev))
+        .map(|prev| prev.kind == InlineMessageKind::Pty)
+        .unwrap_or(false);
+    let next_is_pty = session
+        .lines
+        .get(index + 1)
+        .map(|next| next.kind == InlineMessageKind::Pty)
+        .unwrap_or(false);
+
+    let is_start = !prev_is_pty;
+    let is_end = !next_is_pty;
+
+    let mut lines = Vec::new();
+
+    let mut combined = String::new();
+    for segment in &line.segments {
+        combined.push_str(segment.text.as_str());
+    }
+    if is_start && is_end && combined.trim().is_empty() {
+        return Vec::new();
+    }
+    let header_text = combined
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(|| ui::INLINE_PTY_PLACEHOLDER.to_string());
+
+    if is_start {
+        // Add top border line
+        if max_width > 2 {
+            let top_border_content = format!(
+                "{}{}{}",
+                ui::INLINE_BLOCK_TOP_LEFT,
+                ui::INLINE_BLOCK_HORIZONTAL.repeat(max_width.saturating_sub(2)),
+                ui::INLINE_BLOCK_TOP_RIGHT
+            );
+            lines.push(Line::from(vec![Span::styled(
+                top_border_content,
+                border_style.clone(),
+            )]));
+        }
+
+        let mut header_spans = Vec::new();
+        header_spans.push(Span::styled(
+            format!("[{}]", ui::INLINE_PTY_HEADER_LABEL),
+            header_style.clone(),
+        ));
+        header_spans.push(Span::raw(" "));
+        let running_style = InlineTextStyle::default()
+            .with_color(session.theme.secondary.or(session.theme.foreground))
+            .italic();
+        header_spans.push(Span::styled(
+            ui::INLINE_PTY_RUNNING_LABEL.to_string(),
+            ratatui_style_from_inline(&running_style, session.theme.foreground),
+        ));
+        if !header_text.is_empty() {
+            header_spans.push(Span::raw(" "));
+            header_spans.push(Span::styled(header_text.clone(), body_style.clone()));
+        }
+        let status_label = if is_end {
+            ui::INLINE_PTY_STATUS_DONE
+        } else {
+            ui::INLINE_PTY_STATUS_LIVE
+        };
+        header_spans.push(Span::raw(" "));
+        header_spans.push(Span::styled(
+            format!("[{}]", status_label),
+            accent_style(session).add_modifier(Modifier::REVERSED | Modifier::BOLD),
+        ));
+
+        let first_prefix = format!("{} ", ui::INLINE_BLOCK_BODY_LEFT);
+        let continuation_prefix = format!("{} ", ui::INLINE_BLOCK_BODY_LEFT);
+        lines.extend(wrap_block_lines(
+            session,
+            &first_prefix,
+            &continuation_prefix,
+            header_spans,
+            max_width,
+            border_style.clone(),
+        ));
+    } else {
+        let fallback = text_fallback(session, InlineMessageKind::Pty).or(session.theme.foreground);
+        let mut body_spans = Vec::new();
+        for segment in &line.segments {
+            let style = ratatui_style_from_inline(&segment.style, fallback);
+            body_spans.push(Span::styled(segment.text.clone(), style));
+        }
+        let body_prefix = format!("{} ", ui::INLINE_BLOCK_BODY_LEFT);
+        lines.extend(wrap_block_lines(
+            session,
+            &body_prefix,
+            &body_prefix,
+            body_spans,
+            max_width,
+            border_style.clone(),
+        ));
+    }
+
+    if is_end {
+        // Don't add bottom border for PTY output either
+        // lines.push(block_footer_line(width, border_style));
+    }
+
+    if lines.is_empty() {
+        lines.push(Line::default());
+    }
+
+    lines
+}
+
+fn message_divider_line(session: &Session, width: usize, kind: InlineMessageKind) -> Line<'static> {
+    if width == 0 {
+        return Line::default();
+    }
+
+    let content = ui::INLINE_USER_MESSAGE_DIVIDER_SYMBOL.repeat(width);
+    let style = message_divider_style(session, kind);
+    Line::from(vec![Span::styled(content, style)])
+}
+
+fn message_divider_style(session: &Session, kind: InlineMessageKind) -> Style {
+    session.styles.message_divider_style(kind)
+}
+
+fn wrap_line(_session: &Session, line: Line<'static>, max_width: usize) -> Vec<Line<'static>> {
+    text_utils::wrap_line(line, max_width)
+}
+
+fn justify_wrapped_lines(
+    session: &Session,
+    lines: Vec<Line<'static>>,
+    max_width: usize,
+    kind: InlineMessageKind,
+) -> Vec<Line<'static>> {
+    if max_width == 0 {
+        return lines;
+    }
+
+    let total = lines.len();
+    let mut justified = Vec::with_capacity(total);
+    let mut in_fenced_block = false;
+    for (index, line) in lines.into_iter().enumerate() {
+        let is_last = index + 1 == total;
+        let mut next_in_fenced_block = in_fenced_block;
+        let is_fence_line = {
+            let line_text_storage: std::borrow::Cow<'_, str> = if line.spans.len() == 1 {
+                std::borrow::Cow::Borrowed(line.spans[0].content.as_ref())
+            } else {
+                std::borrow::Cow::Owned(
+                    line.spans
+                        .iter()
+                        .map(|span| span.content.as_ref())
+                        .collect::<String>(),
+                )
+            };
+            let line_text = line_text_storage.as_ref();
+            let trimmed_start = line_text.trim_start();
+            trimmed_start.starts_with("```") || trimmed_start.starts_with("~~~")
+        };
+        if is_fence_line {
+            next_in_fenced_block = !in_fenced_block;
+        }
+
+        // Extend diff line backgrounds to full width
+        let processed_line = if is_diff_line(session, &line) {
+            pad_diff_line(session, &line, max_width)
+        } else if kind == InlineMessageKind::Agent
+            && !in_fenced_block
+            && !is_fence_line
+            && should_justify_message_line(session, &line, max_width, is_last)
+        {
+            justify_message_line(session, &line, max_width)
+        } else {
+            line
+        };
+
+        justified.push(processed_line);
+        in_fenced_block = next_in_fenced_block;
+    }
+
+    justified
+}
+
+fn should_justify_message_line(
+    _session: &Session,
+    line: &Line<'static>,
+    max_width: usize,
+    is_last: bool,
+) -> bool {
+    if is_last || max_width == 0 {
+        return false;
+    }
+    if line.spans.len() != 1 {
+        return false;
+    }
+    let text = line.spans[0].content.as_ref();
+    if text.trim().is_empty() {
+        return false;
+    }
+    if text.starts_with(char::is_whitespace) {
+        return false;
+    }
+    let trimmed = text.trim();
+    if trimmed.starts_with(|ch: char| matches!(ch, '-' | '*' | '`' | '>' | '#')) {
+        return false;
+    }
+    if trimmed.contains("```") {
+        return false;
+    }
+    let width = UnicodeWidthStr::width(trimmed);
+    if width >= max_width || width < max_width / 2 {
+        return false;
+    }
+
+    justify_plain_text(text, max_width).is_some()
+}
+
+fn justify_message_line(
+    _session: &Session,
+    line: &Line<'static>,
+    max_width: usize,
+) -> Line<'static> {
+    let span = &line.spans[0];
+    if let Some(justified) = justify_plain_text(span.content.as_ref(), max_width) {
+        Line::from(vec![Span::styled(justified, span.style)])
+    } else {
+        line.clone()
+    }
+}
+
+fn is_diff_line(_session: &Session, line: &Line<'static>) -> bool {
+    // Detect actual diff lines: must start with +, -, or space (diff markers)
+    // AND have background color styling applied (from git diff coloring)
+    // This avoids false positives from regular text that happens to start with these chars
+    if line.spans.is_empty() {
+        return false;
+    }
+
+    // Check if any span has background color (diff lines from render have colored backgrounds)
+    let has_bg_color = line.spans.iter().any(|span| span.style.bg.is_some());
+    if !has_bg_color {
+        return false;
+    }
+
+    // Must start with a diff marker character in the first span
+    let first_span_char = line.spans[0].content.chars().next();
+    matches!(first_span_char, Some('+') | Some('-') | Some(' '))
+}
+
+fn pad_diff_line(_session: &Session, line: &Line<'static>, max_width: usize) -> Line<'static> {
+    if max_width == 0 || line.spans.is_empty() {
+        return line.clone();
+    }
+
+    // Calculate actual display width using Unicode width rules
+    let line_width: usize = line
+        .spans
+        .iter()
+        .map(|s| {
+            s.content
+                .chars()
+                .map(|ch| unicode_width::UnicodeWidthChar::width(ch).unwrap_or(1))
+                .sum::<usize>()
+        })
+        .sum();
+
+    let padding_needed = max_width.saturating_sub(line_width);
+
+    if padding_needed == 0 {
+        return line.clone();
+    }
+
+    // Apply padding without background color
+    let padding_style = Style::default();
+
+    let new_spans: Vec<_> = line
+        .spans
+        .iter()
+        .cloned()
+        .chain(std::iter::once(Span::styled(
+            " ".repeat(padding_needed),
+            padding_style,
+        )))
+        .collect();
+
+    Line::from(new_spans)
+}
+
+fn prepare_transcript_scroll(
+    session: &mut Session,
+    total_rows: usize,
+    viewport_rows: usize,
+) -> (usize, usize) {
+    let viewport = viewport_rows.max(1);
+    let clamped_total = total_rows.max(1);
+    session.scroll_manager.set_total_rows(clamped_total);
+    session.scroll_manager.set_viewport_rows(viewport as u16);
+    let max_offset = session.scroll_manager.max_offset();
+
+    if session.scroll_manager.offset() > max_offset {
+        session.scroll_manager.set_offset(max_offset);
+    }
+
+    let top_offset = max_offset.saturating_sub(session.scroll_manager.offset());
+    (top_offset, clamped_total)
+}
+
+// Delegate to text_utils module
+fn justify_plain_text(text: &str, max_width: usize) -> Option<String> {
+    text_utils::justify_plain_text(text, max_width)
+}
+
+pub(super) fn render_modal(session: &mut Session, frame: &mut Frame<'_>, viewport: Rect) {
+    if viewport.width == 0 || viewport.height == 0 {
+        return;
+    }
+
+    let styles = modal_render_styles(session);
+    let Some(modal) = session.modal.as_mut() else {
+        return;
+    };
+
+    let width_hint = modal_content_width(
+        &modal.lines,
+        modal.list.as_ref(),
+        modal.secure_prompt.as_ref(),
+        modal.search.as_ref(),
+    );
+    let prompt_lines = modal.secure_prompt.is_some().then_some(2).unwrap_or(0);
+    let search_lines = modal.search.as_ref().map(|_| 3).unwrap_or(0);
+    let area = compute_modal_area(
+        viewport,
+        width_hint,
+        modal.lines.len(),
+        prompt_lines,
+        search_lines,
+        modal.list.is_some(),
+    );
+
+    let block = Block::default()
+        .title(Line::styled(modal.title.clone(), styles.title))
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(styles.border);
+
+    frame.render_widget(Clear, area);
+    frame.render_widget(block, area);
+
+    if area.width <= 2 || area.height <= 2 {
+        return;
+    }
+
+    let inner = Rect {
+        x: area.x.saturating_add(1),
+        y: area.y.saturating_add(1),
+        width: area.width.saturating_sub(2),
+        height: area.height.saturating_sub(2),
+    };
+
+    if inner.width == 0 || inner.height == 0 {
+        return;
+    }
+
+    render_modal_body(
+        frame,
+        inner,
+        ModalBodyContext {
+            instructions: &modal.lines,
+            list: modal.list.as_mut(),
+            styles: &styles,
+            secure_prompt: modal.secure_prompt.as_ref(),
+            search: modal.search.as_ref(),
+            input: session.input_manager.content(),
+            cursor: session.input_manager.cursor(),
+        },
+    );
+}
+
+fn modal_render_styles(session: &Session) -> ModalRenderStyles {
+    ModalRenderStyles {
+        border: border_style(session),
+        highlight: modal_list_highlight_style(session),
+        badge: session.section_title_style().add_modifier(Modifier::DIM),
+        header: session.section_title_style(),
+        selectable: default_style(session).add_modifier(Modifier::BOLD),
+        detail: default_style(session).add_modifier(Modifier::DIM),
+        search_match: accent_style(session).add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
+        title: Style::default().add_modifier(Modifier::BOLD),
+        divider: default_style(session).add_modifier(Modifier::DIM | Modifier::ITALIC),
+        instruction_border: border_style(session),
+        instruction_title: session.section_title_style(),
+        instruction_bullet: accent_style(session).add_modifier(Modifier::BOLD),
+        instruction_body: default_style(session),
+        hint: default_style(session).add_modifier(Modifier::DIM | Modifier::ITALIC),
+    }
+}
+
+pub(super) fn adjust_scroll_after_change(session: &mut Session, previous_max_offset: usize) {
+    let new_max_offset = current_max_scroll_offset(session);
+    let current_offset = session.scroll_manager.offset();
+
+    if current_offset >= previous_max_offset && new_max_offset > previous_max_offset {
+        session.scroll_manager.set_offset(new_max_offset);
+    } else if current_offset > 0 && new_max_offset > previous_max_offset {
+        let delta = new_max_offset - previous_max_offset;
+        session
+            .scroll_manager
+            .set_offset(min(current_offset + delta, new_max_offset));
+    }
+    enforce_scroll_bounds(session);
+}
+
+pub(super) fn scroll_line_up(session: &mut Session) {
+    let previous_offset = session.scroll_manager.offset();
+    session.scroll_manager.scroll_up(1);
+    // Only invalidate cache if scroll actually changed (not at top)
+    if session.scroll_manager.offset() != previous_offset {
+        session.visible_lines_cache = None;
+    }
+}
+
+pub(super) fn scroll_line_down(session: &mut Session) {
+    let previous_offset = session.scroll_manager.offset();
+    session.scroll_manager.scroll_down(1);
+    // Only invalidate cache if scroll actually changed (not at bottom)
+    if session.scroll_manager.offset() != previous_offset {
+        session.visible_lines_cache = None;
+    }
+}
+
+pub(super) fn scroll_page_up(session: &mut Session) {
+    let previous_offset = session.scroll_manager.offset();
+    let page = viewport_height(session).max(1);
+    session.scroll_manager.scroll_up(page);
+    // Only invalidate cache if scroll actually changed
+    if session.scroll_manager.offset() != previous_offset {
+        session.visible_lines_cache = None;
+    }
+}
+
+pub(super) fn scroll_page_down(session: &mut Session) {
+    let page = viewport_height(session).max(1);
+    let previous_offset = session.scroll_manager.offset();
+    session.scroll_manager.scroll_down(page);
+    // Only invalidate cache if scroll actually changed
+    if session.scroll_manager.offset() != previous_offset {
+        session.visible_lines_cache = None;
+    }
+}
+
+pub(super) fn toggle_timeline_pane(session: &mut Session) {
+    session.show_timeline_pane = !session.show_timeline_pane;
+    // recalculate_transcript_rows is in render.rs.
+    // Since we are in render.rs, we can call it directly if it's a function.
+    recalculate_transcript_rows(session);
+    session.mark_dirty();
+}
+
+pub(super) fn handle_tool_code_fence_marker(session: &mut Session, text: &str) -> bool {
+    let trimmed = text.trim();
+    let stripped = trimmed
+        .strip_prefix("```")
+        .or_else(|| trimmed.strip_prefix("~~~"));
+
+    let Some(rest) = stripped else {
+        return false;
+    };
+
+    if rest.contains("```") || rest.contains("~~~") {
+        return false;
+    }
+
+    if session.in_tool_code_fence {
+        session.in_tool_code_fence = false;
+        remove_trailing_empty_tool_line(session);
+    } else {
+        session.in_tool_code_fence = true;
+    }
+
+    true
+}
+
+fn remove_trailing_empty_tool_line(session: &mut Session) {
+    let should_remove = session
+        .lines
+        .last()
+        .map(|line| line.kind == InlineMessageKind::Tool && line.segments.is_empty())
+        .unwrap_or(false);
+    if should_remove {
+        session.lines.pop();
+        invalidate_scroll_metrics(session);
+    }
+}
