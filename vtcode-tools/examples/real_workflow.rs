@@ -11,7 +11,9 @@ use std::sync::Arc;
 use std::time::Duration;
 use vtcode_tools::{
     cache::LruCache,
-    middleware::{LoggingMiddleware, MetricsMiddleware, MiddlewareChain, ToolRequest, ToolResponse},
+    middleware::{
+        LoggingMiddleware, MetricsMiddleware, MiddlewareChain, ToolRequest, ToolResponse,
+    },
     patterns::{PatternDetector, ToolEvent},
 };
 
@@ -152,11 +154,19 @@ async fn main() -> anyhow::Result<()> {
     println!("\n=== Metrics ===\n");
     let metrics_snapshot = executor.metrics.snapshot().await;
     println!("Total tool calls:     {}", metrics_snapshot.total_calls);
-    println!("Successful calls:     {}", metrics_snapshot.successful_calls);
+    println!(
+        "Successful calls:     {}",
+        metrics_snapshot.successful_calls
+    );
     println!("Cache hits:           {}", metrics_snapshot.cache_hits);
-    println!("Hit rate:             {:.1}%", 
-             (metrics_snapshot.cache_hits as f64 / metrics_snapshot.total_calls.max(1) as f64) * 100.0);
-    println!("Total duration:       {}ms", metrics_snapshot.total_duration_ms);
+    println!(
+        "Hit rate:             {:.1}%",
+        (metrics_snapshot.cache_hits as f64 / metrics_snapshot.total_calls.max(1) as f64) * 100.0
+    );
+    println!(
+        "Total duration:       {}ms",
+        metrics_snapshot.total_duration_ms
+    );
 
     // Print cache stats
     println!("\n=== Cache Statistics ===\n");

@@ -227,14 +227,15 @@ impl RipgrepStatus {
         // Check cache to avoid repeated failed attempts
         if !InstallationCache::is_stale()
             && let Ok(cache) = InstallationCache::load()
-                && cache.status == "failed" {
-                    let reason = cache.failure_reason.as_deref().unwrap_or("unknown reason");
-                    debug_log(&format!("Cache shows previous failure: {}", reason));
-                    return Err(anyhow!(
-                        "Previous installation attempt failed ({}). Not retrying for 24 hours.",
-                        reason
-                    ));
-                }
+            && cache.status == "failed"
+        {
+            let reason = cache.failure_reason.as_deref().unwrap_or("unknown reason");
+            debug_log(&format!("Cache shows previous failure: {}", reason));
+            return Err(anyhow!(
+                "Previous installation attempt failed ({}). Not retrying for 24 hours.",
+                reason
+            ));
+        }
 
         let result = Self::install_with_smart_detection();
 

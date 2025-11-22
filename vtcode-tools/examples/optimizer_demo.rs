@@ -8,8 +8,8 @@
 
 use serde_json::json;
 use vtcode_tools::{
-    middleware::{LoggingMiddleware, MetricsMiddleware},
     CachedToolExecutor, WorkflowOptimizer,
+    middleware::{LoggingMiddleware, MetricsMiddleware},
 };
 
 #[tokio::main]
@@ -28,13 +28,13 @@ async fn main() -> anyhow::Result<()> {
         ("list_files", json!({"path": "/src"})),
         ("find_files", json!({"pattern": "*.rs"})),
         ("grep_file", json!({"pattern": "fn main"})),
-        ("list_files", json!({"path": "/src"})),       // Repeat
-        ("find_files", json!({"pattern": "*.rs"})),    // Repeat
+        ("list_files", json!({"path": "/src"})),    // Repeat
+        ("find_files", json!({"pattern": "*.rs"})), // Repeat
         ("grep_file", json!({"pattern": "pub fn"})),
         ("list_files", json!({"path": "/tests"})),
         ("find_files", json!({"pattern": "*.rs"})),
         ("grep_file", json!({"pattern": "test"})),
-        ("list_files", json!({"path": "/src"})),       // Repeat
+        ("list_files", json!({"path": "/src"})), // Repeat
     ];
 
     for (tool, args) in workflows {
@@ -60,9 +60,14 @@ async fn main() -> anyhow::Result<()> {
     let optimizer = WorkflowOptimizer::from_detector(patterns.clone(), features.clone());
 
     let optimizations = optimizer.top_optimizations(5);
-    println!("  Found {} optimization opportunities:", optimizations.len());
-    println!("  Estimated total improvement: {:.1}%\n",
-             optimizer.estimated_total_improvement() * 100.0);
+    println!(
+        "  Found {} optimization opportunities:",
+        optimizations.len()
+    );
+    println!(
+        "  Estimated total improvement: {:.1}%\n",
+        optimizer.estimated_total_improvement() * 100.0
+    );
 
     // Step 4: Output recommendations
     println!("Step 4: Optimization Recommendations:\n");
@@ -70,8 +75,10 @@ async fn main() -> anyhow::Result<()> {
     for (i, opt) in optimizations.iter().enumerate() {
         println!("  {}. {:?}", i + 1, opt.optimization_type);
         println!("     Tools: {:?}", opt.tools);
-        println!("     Expected improvement: {:.1}%",
-                 opt.expected_improvement * 100.0);
+        println!(
+            "     Expected improvement: {:.1}%",
+            opt.expected_improvement * 100.0
+        );
         println!("     Confidence: {:.1}%", opt.confidence * 100.0);
         println!("     Reason: {}", opt.reason);
         println!();
@@ -109,38 +116,56 @@ async fn main() -> anyhow::Result<()> {
     } else {
         println!("  Based on detected patterns, we recommend:");
         for (i, opt) in optimizations.iter().enumerate() {
-            if i >= 3 { break; }
+            if i >= 3 {
+                break;
+            }
             match opt.optimization_type {
                 vtcode_tools::OptimizationType::Parallelize => {
                     println!("  {}. Parallelize: Run {:?} concurrently", i + 1, opt.tools);
-                    println!("     → Saves ~{:.0}% execution time",
-                             opt.expected_improvement * 100.0);
-                },
+                    println!(
+                        "     → Saves ~{:.0}% execution time",
+                        opt.expected_improvement * 100.0
+                    );
+                }
                 vtcode_tools::OptimizationType::CacheResult => {
                     println!("  {}. Cache: Store results of {:?}", i + 1, opt.tools);
-                    println!("     → Saves ~{:.0}% latency on repeated calls",
-                             opt.expected_improvement * 100.0);
-                },
+                    println!(
+                        "     → Saves ~{:.0}% latency on repeated calls",
+                        opt.expected_improvement * 100.0
+                    );
+                }
                 vtcode_tools::OptimizationType::SkipRedundant => {
-                    println!("  {}. Skip: Remove redundant calls to {:?}", i + 1, opt.tools);
-                    println!("     → Saves ~{:.0}% overhead",
-                             opt.expected_improvement * 100.0);
-                },
+                    println!(
+                        "  {}. Skip: Remove redundant calls to {:?}",
+                        i + 1,
+                        opt.tools
+                    );
+                    println!(
+                        "     → Saves ~{:.0}% overhead",
+                        opt.expected_improvement * 100.0
+                    );
+                }
                 vtcode_tools::OptimizationType::Reorder => {
                     println!("  {}. Reorder: Rearrange tool execution sequence", i + 1);
-                    println!("     → Saves ~{:.0}% total time",
-                             opt.expected_improvement * 100.0);
-                },
+                    println!(
+                        "     → Saves ~{:.0}% total time",
+                        opt.expected_improvement * 100.0
+                    );
+                }
                 vtcode_tools::OptimizationType::Batch => {
                     println!("  {}. Batch: Group similar operations", i + 1);
-                    println!("     → Saves ~{:.0}% execution time",
-                             opt.expected_improvement * 100.0);
-                },
+                    println!(
+                        "     → Saves ~{:.0}% execution time",
+                        opt.expected_improvement * 100.0
+                    );
+                }
             }
         }
 
-        println!("\n  Total potential improvement: {:.1}%",
-                 optimizer.estimated_total_improvement() * 100.0);
+        println!(
+            "\n  Total potential improvement: {:.1}%",
+            optimizer.estimated_total_improvement() * 100.0
+        );
     }
 
     println!("\n=== Demo Complete ===\n");

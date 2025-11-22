@@ -3,7 +3,7 @@
 //! Allows stacking of concerns: error handling, caching, logging, metrics,
 //! retries without modifying core tool execution logic.
 
-use crate::tools::improvements_errors::{ObservabilityContext, EventType};
+use crate::tools::improvements_errors::{EventType, ObservabilityContext};
 use std::fmt;
 use std::sync::Arc;
 
@@ -12,13 +12,13 @@ use std::sync::Arc;
 pub struct MiddlewareResult {
     /// Execution successful
     pub success: bool,
-    
+
     /// Result value (if successful)
     pub result: Option<String>,
-    
+
     /// Error (if failed)
     pub error: Option<MiddlewareError>,
-    
+
     /// Metadata about execution
     pub metadata: ExecutionMetadata,
 }
@@ -62,16 +62,16 @@ impl fmt::Display for MiddlewareError {
 pub struct ExecutionMetadata {
     /// Total execution time (ms)
     pub duration_ms: u64,
-    
+
     /// Whether result was cached
     pub from_cache: bool,
-    
+
     /// Number of retries performed
     pub retry_count: u32,
-    
+
     /// Middleware layers that executed
     pub layers_executed: Vec<String>,
-    
+
     /// Any warnings
     pub warnings: Vec<String>,
 }
@@ -106,13 +106,13 @@ pub trait Middleware: Send + Sync {
 pub struct ToolRequest {
     /// Tool name
     pub tool_name: String,
-    
+
     /// Tool arguments
     pub arguments: String,
-    
+
     /// Execution context
     pub context: String,
-    
+
     /// Request metadata
     pub metadata: RequestMetadata,
 }
@@ -122,16 +122,16 @@ pub struct ToolRequest {
 pub struct RequestMetadata {
     /// Request ID for tracing
     pub request_id: String,
-    
+
     /// Parent request ID (for correlation)
     pub parent_request_id: Option<String>,
-    
+
     /// Priority level (0-100)
     pub priority: u32,
-    
+
     /// Timeout in milliseconds
     pub timeout_ms: u64,
-    
+
     /// Custom tags for filtering
     pub tags: Vec<String>,
 }
@@ -139,12 +139,12 @@ pub struct RequestMetadata {
 impl Default for RequestMetadata {
     fn default() -> Self {
         use std::time::SystemTime;
-        
+
         let timestamp = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap_or_default()
             .as_nanos();
-        
+
         Self {
             request_id: format!("req-{}", timestamp),
             parent_request_id: None,
@@ -204,7 +204,10 @@ impl Middleware for LoggingMiddleware {
         }
 
         result.metadata.duration_ms = duration;
-        result.metadata.layers_executed.push(self.name().to_string());
+        result
+            .metadata
+            .layers_executed
+            .push(self.name().to_string());
         result
     }
 }
@@ -255,14 +258,17 @@ impl Middleware for CachingMiddleware {
                     metadata: ExecutionMetadata::default(),
                 };
                 result.metadata.from_cache = true;
-                result.metadata.layers_executed.push(self.name().to_string());
+                result
+                    .metadata
+                    .layers_executed
+                    .push(self.name().to_string());
                 return result;
             }
         }
 
         // Execute and cache result
         let mut result = next(request);
-        
+
         if result.success {
             if let Some(ref output) = result.result {
                 if let Ok(mut cache) = self.cache.write() {
@@ -271,7 +277,10 @@ impl Middleware for CachingMiddleware {
             }
         }
 
-        result.metadata.layers_executed.push(self.name().to_string());
+        result
+            .metadata
+            .layers_executed
+            .push(self.name().to_string());
         result
     }
 }
@@ -323,13 +332,16 @@ impl Middleware for RetryMiddleware {
             }
 
             result = next(request.clone());
-            
+
             if result.success {
                 break;
             }
         }
 
-        result.metadata.layers_executed.push(self.name().to_string());
+        result
+            .metadata
+            .layers_executed
+            .push(self.name().to_string());
         result
     }
 }
@@ -384,7 +396,10 @@ impl Middleware for ValidationMiddleware {
         }
 
         let mut result = next(request);
-        result.metadata.layers_executed.push(self.name().to_string());
+        result
+            .metadata
+            .layers_executed
+            .push(self.name().to_string());
         result
     }
 }
@@ -407,7 +422,7 @@ impl MiddlewareChain {
     }
 
     /// Execute request through the middleware chain with a synchronous executor
-    pub fn execute_sync<F>(&self, request: ToolRequest, executor: F) -> MiddlewareResult 
+    pub fn execute_sync<F>(&self, request: ToolRequest, executor: F) -> MiddlewareResult
     where
         F: Fn(ToolRequest) -> MiddlewareResult + Send + Sync + 'static,
     {
@@ -417,14 +432,14 @@ impl MiddlewareChain {
 
         // Apply middlewares in reverse order (first in list = outermost wrapper)
         let mut result = executor(request.clone());
-        
+
         for middleware in self.middlewares.iter().rev() {
             // Re-execute through this middleware
             let current_mw = middleware.clone();
             let executor_fn = Box::new(move |_req: ToolRequest| result.clone());
             result = current_mw.execute(request.clone(), executor_fn);
         }
-        
+
         result
     }
 }
@@ -458,7 +473,12 @@ mod tests {
 
         let result = middleware.execute(request, executor);
         assert!(result.success);
-        assert!(result.metadata.layers_executed.contains(&"logging".to_string()));
+        assert!(
+            result
+                .metadata
+                .layers_executed
+                .contains(&"logging".to_string())
+        );
     }
 
     #[test]
@@ -498,7 +518,7 @@ mod tests {
     fn test_validation_middleware() {
         let obs = Arc::new(ObservabilityContext::noop());
         let middleware = ValidationMiddleware::new(obs);
-        
+
         let invalid_request = ToolRequest {
             tool_name: "".to_string(),
             arguments: "arg".to_string(),

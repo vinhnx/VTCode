@@ -66,7 +66,6 @@ impl ReasoningEffortLevel {
     }
 }
 
-
 /// Verbosity level for model output (GPT-5.1 and compatible models)
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -108,7 +107,6 @@ impl VerbosityLevel {
         &["low", "medium", "high"]
     }
 }
-
 
 impl fmt::Display for VerbosityLevel {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -204,7 +202,6 @@ impl UiSurfacePreference {
     }
 }
 
-
 impl fmt::Display for UiSurfacePreference {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_str())
@@ -231,8 +228,7 @@ impl<'de> Deserialize<'de> for UiSurfacePreference {
 }
 
 /// Source describing how the active model was selected
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ModelSelectionSource {
     /// Model provided by workspace configuration
     #[default]
@@ -240,7 +236,6 @@ pub enum ModelSelectionSource {
     /// Model provided by CLI override
     CliOverride,
 }
-
 
 /// Configuration for the agent
 #[derive(Debug, Clone)]

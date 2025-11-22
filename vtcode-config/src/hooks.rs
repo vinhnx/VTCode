@@ -52,7 +52,6 @@ pub enum HookCommandKind {
     Command,
 }
 
-
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct HookCommandConfig {

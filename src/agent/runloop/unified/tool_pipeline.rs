@@ -241,21 +241,20 @@ pub(crate) async fn run_tool_call(
     .await;
 
     if let ToolExecutionStatus::Success {
-            output,
-            stdout: _stdout,
-            modified_files: _modified_files,
-            command_success,
-            has_more: _has_more,
-        } = &outcome {
+        output,
+        stdout: _stdout,
+        modified_files: _modified_files,
+        command_success,
+        has_more: _has_more,
+    } = &outcome
+    {
         tool_spinner.finish();
         // Cache successful read-only results
         if is_read_only_tool && *command_success {
             let mut cache = ctx.tool_result_cache.write().await;
-            let output_json =
-                serde_json::to_string(&output).unwrap_or_else(|_| "{}".to_string());
+            let output_json = serde_json::to_string(&output).unwrap_or_else(|_| "{}".to_string());
             let params_str = serde_json::to_string(&args_val).unwrap_or_default();
-            let cache_key =
-                vtcode_core::tools::result_cache::CacheKey::new(&name, &params_str, "");
+            let cache_key = vtcode_core::tools::result_cache::CacheKey::new(&name, &params_str, "");
             cache.insert(cache_key, output_json);
         }
     }

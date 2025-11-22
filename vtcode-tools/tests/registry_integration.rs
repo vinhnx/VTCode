@@ -6,10 +6,7 @@
 mod tests {
     use std::sync::Arc;
     use std::time::Duration;
-    use vtcode_tools::{
-        cache::LruCache, middleware::*,
-        patterns::PatternDetector,
-    };
+    use vtcode_tools::{cache::LruCache, middleware::*, patterns::PatternDetector};
 
     #[tokio::test]
     async fn test_cache_effectiveness_with_same_args() -> anyhow::Result<()> {
@@ -24,7 +21,9 @@ mod tests {
         assert_eq!(cache.get(&cache_key).await, None);
 
         // Cache result
-        cache.insert(cache_key.clone(), "file1.txt\nfile2.txt".into()).await;
+        cache
+            .insert(cache_key.clone(), "file1.txt\nfile2.txt".into())
+            .await;
 
         // Second call - hit
         assert_eq!(
@@ -92,13 +91,9 @@ mod tests {
         assert!(!patterns.is_empty());
 
         // Should detect (find, grep) pattern
-        let has_find_grep = patterns
-            .iter()
-            .any(|p| {
-                p.sequence.len() == 2
-                    && p.sequence[0] == "find_files"
-                    && p.sequence[1] == "grep_file"
-            });
+        let has_find_grep = patterns.iter().any(|p| {
+            p.sequence.len() == 2 && p.sequence[0] == "find_files" && p.sequence[1] == "grep_file"
+        });
 
         assert!(has_find_grep, "Should detect find->grep pattern");
 
@@ -135,7 +130,9 @@ mod tests {
 
             if !is_cached {
                 // Simulate execution and cache
-                cache.insert(cache_key, format!("result from {}", tool)).await;
+                cache
+                    .insert(cache_key, format!("result from {}", tool))
+                    .await;
             }
 
             // Record in pattern detector

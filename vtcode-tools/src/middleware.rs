@@ -76,11 +76,7 @@ impl MiddlewareChain {
     }
 
     /// Execute after hooks.
-    pub async fn after_execute(
-        &self,
-        req: &ToolRequest,
-        res: &ToolResponse,
-    ) -> anyhow::Result<()> {
+    pub async fn after_execute(&self, req: &ToolRequest, res: &ToolResponse) -> anyhow::Result<()> {
         // Run in reverse order.
         for mw in self.middlewares.iter().rev() {
             mw.after_execute(req, res).await?;
@@ -183,11 +179,7 @@ impl Middleware for MetricsMiddleware {
         Ok(())
     }
 
-    async fn after_execute(
-        &self,
-        _: &ToolRequest,
-        res: &ToolResponse,
-    ) -> anyhow::Result<()> {
+    async fn after_execute(&self, _: &ToolRequest, res: &ToolResponse) -> anyhow::Result<()> {
         let mut successful = self.successful_calls.write().await;
         *successful += 1;
 

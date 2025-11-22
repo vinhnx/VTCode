@@ -221,16 +221,17 @@ impl StartupContext {
                 .providers
                 .openai
                 .prompt_cache_retention
-                && !retention.trim().is_empty() {
-                    // Use constants list to identify which models use Responses API
-                    if let Some(msg) = check_prompt_cache_retention_compat(
-                        &config,
-                        &agent_config.model,
-                        &agent_config.provider,
-                    ) {
-                        tracing::warn!("{}", msg);
-                    }
-                }
+            && !retention.trim().is_empty()
+        {
+            // Use constants list to identify which models use Responses API
+            if let Some(msg) = check_prompt_cache_retention_compat(
+                &config,
+                &agent_config.model,
+                &agent_config.provider,
+            ) {
+                tracing::warn!("{}", msg);
+            }
+        }
 
         Ok(StartupContext {
             workspace,

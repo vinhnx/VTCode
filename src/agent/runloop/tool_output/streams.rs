@@ -579,9 +579,13 @@ mod ansi_stripping_tests {
 
     #[test]
     fn test_simple_color_code() {
-        let input = "warning: function \u{1b}[1;33mcheck_prompt_reference_trigger\u{1b}[0m is never used";
+        let input =
+            "warning: function \u{1b}[1;33mcheck_prompt_reference_trigger\u{1b}[0m is never used";
         let result = strip_ansi_codes(input);
-        assert_eq!(result, "warning: function check_prompt_reference_trigger is never used");
+        assert_eq!(
+            result,
+            "warning: function check_prompt_reference_trigger is never used"
+        );
     }
 
     #[test]
@@ -593,7 +597,8 @@ mod ansi_stripping_tests {
 
     #[test]
     fn test_cargo_check_output() {
-        let input = "\u{1b}[0m\u{1b}[1;32m Finished\u{1b}[0m dev [unoptimized + debuginfo] target(s)";
+        let input =
+            "\u{1b}[0m\u{1b}[1;32m Finished\u{1b}[0m dev [unoptimized + debuginfo] target(s)";
         let result = strip_ansi_codes(input);
         assert_eq!(result, " Finished dev [unoptimized + debuginfo] target(s)");
     }

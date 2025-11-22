@@ -1216,7 +1216,7 @@ fn set_command_environment(
     builder.env("CLICOLOR_FORCE", "0");
     builder.env("LS_COLORS", "");
     builder.env("NO_COLOR", "1");
-    
+
     // For Rust/Cargo, disable colors at the source
     builder.env("CARGO_TERM_COLOR", "never");
 
@@ -1454,8 +1454,14 @@ mod tests {
 
         let snapshot = scrollback.snapshot();
         // Verify no ANSI escape sequences remain
-        assert!(!snapshot.contains("\x1b["), "Snapshot contains ESC character (0x1b)");
-        assert!(!snapshot.contains("\u{001b}"), "Snapshot contains ESC Unicode");
+        assert!(
+            !snapshot.contains("\x1b["),
+            "Snapshot contains ESC character (0x1b)"
+        );
+        assert!(
+            !snapshot.contains("\u{001b}"),
+            "Snapshot contains ESC Unicode"
+        );
         // Verify content is preserved
         assert!(snapshot.contains("warning"));
         assert!(snapshot.contains("src/main.rs"));

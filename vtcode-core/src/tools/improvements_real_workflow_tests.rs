@@ -6,8 +6,8 @@
 #[cfg(test)]
 mod real_workflow_tests {
     use crate::tools::{
-        ToolRegistryImprovement, LruCache, PatternEngine, ExecutionEvent,
-        DetectedPattern, ObservabilityContext, EventType,
+        DetectedPattern, EventType, ExecutionEvent, LruCache, ObservabilityContext, PatternEngine,
+        ToolRegistryImprovement,
     };
     use std::sync::Arc;
     use std::time::Duration;
@@ -22,10 +22,22 @@ mod real_workflow_tests {
         ext.record_execution("ls_files".to_string(), "src/".to_string(), true, 0.4, 50);
 
         // User realizes grep is better
-        ext.record_execution("grep_file".to_string(), "pattern:error".to_string(), true, 0.7, 100);
+        ext.record_execution(
+            "grep_file".to_string(),
+            "pattern:error".to_string(),
+            true,
+            0.7,
+            100,
+        );
 
         // User refines the pattern (improving quality)
-        ext.record_execution("grep_file".to_string(), "pattern:ERROR".to_string(), true, 0.85, 95);
+        ext.record_execution(
+            "grep_file".to_string(),
+            "pattern:ERROR".to_string(),
+            true,
+            0.85,
+            95,
+        );
 
         // Check metrics
         let ranked = ext.rank_tools();
@@ -43,7 +55,13 @@ mod real_workflow_tests {
         let ext = ToolRegistryImprovement::new(obs);
 
         // First execution
-        ext.record_execution("expensive_tool".to_string(), "complex_search".to_string(), true, 0.9, 500);
+        ext.record_execution(
+            "expensive_tool".to_string(),
+            "complex_search".to_string(),
+            true,
+            0.9,
+            500,
+        );
         ext.cache_result("expensive_tool", "complex_search", "found 42 results");
 
         // Second execution should hit cache
@@ -91,8 +109,8 @@ mod real_workflow_tests {
         // User iteratively improves their search
         let patterns = vec![
             ("grep -r error", 0.3),   // First attempt: poor results
-            ("grep -r ERROR", 0.6),    // Better, switched case
-            ("grep -ri error", 0.85),  // Even better, case-insensitive
+            ("grep -r ERROR", 0.6),   // Better, switched case
+            ("grep -ri error", 0.85), // Even better, case-insensitive
         ];
 
         for (i, (pattern, quality)) in patterns.iter().enumerate() {
@@ -149,7 +167,9 @@ mod real_workflow_tests {
 
         // Put items
         for i in 0..5 {
-            cache.put(format!("key{}", i), format!("value{}", i)).unwrap();
+            cache
+                .put(format!("key{}", i), format!("value{}", i))
+                .unwrap();
         }
 
         // Should get them
@@ -247,7 +267,13 @@ mod real_workflow_tests {
         ext.cache_result("grep_file", "ERROR", "15 results");
 
         // 3. User refines further
-        ext.record_execution("grep_file".to_string(), "\\[ERROR\\]".to_string(), true, 0.9, 105);
+        ext.record_execution(
+            "grep_file".to_string(),
+            "\\[ERROR\\]".to_string(),
+            true,
+            0.9,
+            105,
+        );
         ext.cache_result("grep_file", "\\[ERROR\\]", "25 results");
 
         // Verify final state

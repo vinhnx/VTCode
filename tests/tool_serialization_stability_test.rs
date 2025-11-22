@@ -187,12 +187,13 @@ fn validate_encoding_invariants(schema: &Value) -> Result<()> {
     // Validate description fields don't have leading/trailing whitespace
     if let Some(desc) = schema.get("description")
         && let Some(desc_str) = desc.as_str()
-            && desc_str != desc_str.trim() {
-                anyhow::bail!(
-                    "Tool description has leading/trailing whitespace: '{}'",
-                    desc_str
-                );
-            }
+        && desc_str != desc_str.trim()
+    {
+        anyhow::bail!(
+            "Tool description has leading/trailing whitespace: '{}'",
+            desc_str
+        );
+    }
 
     Ok(())
 }

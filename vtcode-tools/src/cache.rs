@@ -102,11 +102,7 @@ impl<V: Clone + Send + Sync> LruCache<V> {
     }
 
     /// Create a cache with a custom observer.
-    pub fn with_observer(
-        capacity: usize,
-        ttl: Duration,
-        observer: Arc<dyn CacheObserver>,
-    ) -> Self {
+    pub fn with_observer(capacity: usize, ttl: Duration, observer: Arc<dyn CacheObserver>) -> Self {
         Self {
             capacity,
             ttl,
@@ -127,9 +123,7 @@ impl<V: Clone + Send + Sync> LruCache<V> {
                 entries.remove(key);
                 let mut stats = self.stats.write().await;
                 stats.expirations += 1;
-                self.observer
-                    .on_evict(key, EvictionReason::Expired)
-                    .await;
+                self.observer.on_evict(key, EvictionReason::Expired).await;
                 let mut order = self.access_order.write().await;
                 order.retain(|k| k != key);
                 let mut stats = self.stats.write().await;

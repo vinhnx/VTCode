@@ -9,9 +9,7 @@
 use serde_json::json;
 use std::sync::Arc;
 use std::time::Duration;
-use vtcode_tools::{
-    cache::LruCache, middleware::*, patterns::PatternDetector, ToolEvent,
-};
+use vtcode_tools::{ToolEvent, cache::LruCache, middleware::*, patterns::PatternDetector};
 
 /// Simulates a tool executor that uses cache and middleware.
 struct CachedToolExecutor {
@@ -25,9 +23,7 @@ impl CachedToolExecutor {
         let metrics = MetricsMiddleware::new();
         let logging = LoggingMiddleware::new("tool-executor");
 
-        let middleware = MiddlewareChain::new()
-            .add(logging)
-            .add(metrics);
+        let middleware = MiddlewareChain::new().add(logging).add(metrics);
 
         Self { cache, middleware }
     }
@@ -67,9 +63,7 @@ impl CachedToolExecutor {
         let result = simulate_tool_execution(tool_name, &req.args).await?;
 
         // Cache result
-        self.cache
-            .insert(cache_key, result.clone())
-            .await;
+        self.cache.insert(cache_key, result.clone()).await;
 
         let res = ToolResponse {
             result: result.clone(),
@@ -137,10 +131,18 @@ async fn main() -> anyhow::Result<()> {
     println!("\n2. Testing multiple tool calls:\n");
 
     // Simulate a workflow
-    executor.execute("find_files", json!({"pattern": "*.rs"})).await?;
-    executor.execute("find_files", json!({"pattern": "*.rs"})).await?; // Cache hit
-    executor.execute("grep_file", json!({"pattern": "fn main"})).await?;
-    executor.execute("grep_file", json!({"pattern": "fn main"})).await?; // Cache hit
+    executor
+        .execute("find_files", json!({"pattern": "*.rs"}))
+        .await?;
+    executor
+        .execute("find_files", json!({"pattern": "*.rs"}))
+        .await?; // Cache hit
+    executor
+        .execute("grep_file", json!({"pattern": "fn main"}))
+        .await?;
+    executor
+        .execute("grep_file", json!({"pattern": "fn main"}))
+        .await?; // Cache hit
 
     println!("\n3. Pattern detection:\n");
 
@@ -170,8 +172,11 @@ async fn main() -> anyhow::Result<()> {
     println!("  Detected {} patterns:", patterns.len());
     for pattern in patterns.iter().take(3) {
         println!("    - Sequence: {:?}", pattern.sequence);
-        println!("      Frequency: {}, Success Rate: {:.1}%", 
-                 pattern.frequency, pattern.success_rate * 100.0);
+        println!(
+            "      Frequency: {}, Success Rate: {:.1}%",
+            pattern.frequency,
+            pattern.success_rate * 100.0
+        );
     }
 
     println!("\n4. Feature vector (ML-ready):\n");

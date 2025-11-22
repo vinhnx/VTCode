@@ -16,10 +16,10 @@ mod tests {
     #[test]
     fn test_config_loading_and_validation() {
         let config = ImprovementsConfig::default();
-        
+
         // Should validate
         assert!(config.validate().is_ok());
-        
+
         // Check defaults
         assert!(config.similarity.min_similarity_threshold > 0.0);
         assert!(config.time_decay.decay_constant > 0.0);
@@ -31,14 +31,14 @@ mod tests {
     fn test_similarity_scoring() {
         // Exact match
         assert_eq!(jaro_winkler_similarity("grep_file", "grep_file"), 1.0);
-        
+
         // High similarity (prefix match gets boost)
         let sim1 = jaro_winkler_similarity("grep_pattern", "grep_file");
         let sim2 = jaro_winkler_similarity("pattern_grep", "file_grep");
-        
+
         // Prefix match should score higher
         assert!(sim1 > sim2);
-        
+
         // Related but different
         let sim = jaro_winkler_similarity("ls_files", "read_files");
         assert!(sim > 0.5 && sim < 1.0);
@@ -48,14 +48,14 @@ mod tests {
     #[test]
     fn test_pattern_detection_loop() {
         let detector = PatternDetector::new(10);
-        
+
         // Repeated identical execution (loop)
         let history = vec![
             ("grep_file".to_string(), "pattern:test".to_string(), 0.8),
             ("grep_file".to_string(), "pattern:test".to_string(), 0.8),
             ("grep_file".to_string(), "pattern:test".to_string(), 0.8),
         ];
-        
+
         assert_eq!(detector.detect(&history), PatternState::Loop);
     }
 
@@ -63,14 +63,14 @@ mod tests {
     #[test]
     fn test_pattern_detection_refinement() {
         let detector = PatternDetector::new(10);
-        
+
         // Improving quality over iterations
         let history = vec![
             ("grep_file".to_string(), "pat1".to_string(), 0.2),
             ("grep_file".to_string(), "pat2".to_string(), 0.5),
             ("grep_file".to_string(), "pat3".to_string(), 0.8),
         ];
-        
+
         assert_eq!(detector.detect(&history), PatternState::RefinementChain);
     }
 
@@ -78,14 +78,14 @@ mod tests {
     #[test]
     fn test_pattern_detection_degradation() {
         let detector = PatternDetector::new(10);
-        
+
         // Declining quality
         let history = vec![
             ("command".to_string(), "args1".to_string(), 0.9),
             ("command".to_string(), "args2".to_string(), 0.6),
             ("command".to_string(), "args3".to_string(), 0.3),
         ];
-        
+
         assert_eq!(detector.detect(&history), PatternState::Degradation);
     }
 
@@ -93,14 +93,14 @@ mod tests {
     #[test]
     fn test_pattern_detection_convergence() {
         let detector = PatternDetector::new(10);
-        
+
         // Different tools, same quality
         let history = vec![
             ("grep_file".to_string(), "args1".to_string(), 0.75),
             ("read_file".to_string(), "args2".to_string(), 0.76),
             ("find_file".to_string(), "args3".to_string(), 0.74),
         ];
-        
+
         assert_eq!(detector.detect(&history), PatternState::Convergence);
     }
 
@@ -124,7 +124,12 @@ mod tests {
 
         let result = middleware.execute(request, executor);
         assert!(result.success);
-        assert!(result.metadata.layers_executed.contains(&"logging".to_string()));
+        assert!(
+            result
+                .metadata
+                .layers_executed
+                .contains(&"logging".to_string())
+        );
     }
 
     /// Test 8: Middleware - Caching
@@ -243,22 +248,26 @@ mod tests {
     #[test]
     fn test_real_world_scenario_similar_tools() {
         // Scenario: User makes similar grep requests, system learns pattern
-        
+
         // First, detect similarity between tools
         let similarity1 = jaro_winkler_similarity("grep_file", "grep_directory");
         let similarity2 = jaro_winkler_similarity("grep_file", "ls_files");
-        
+
         // grep_file should be more similar to grep_directory than ls_files
         assert!(similarity1 > similarity2);
-        
+
         // Pattern detection would identify the refinement
         let detector = PatternDetector::new(10);
         let history = vec![
             ("grep_file".to_string(), "pattern:error".to_string(), 0.3),
             ("grep_file".to_string(), "pattern:ERROR".to_string(), 0.6),
-            ("grep_file".to_string(), "pattern:\\[ERROR\\]".to_string(), 0.9),
+            (
+                "grep_file".to_string(),
+                "pattern:\\[ERROR\\]".to_string(),
+                0.9,
+            ),
         ];
-        
+
         assert_eq!(detector.detect(&history), PatternState::RefinementChain);
     }
 
@@ -266,11 +275,11 @@ mod tests {
     #[test]
     fn test_config_serialization() {
         let config = ImprovementsConfig::default();
-        
+
         let serialized = toml::to_string_pretty(&config).expect("serialization failed");
-        let deserialized: ImprovementsConfig = 
+        let deserialized: ImprovementsConfig =
             toml::from_str(&serialized).expect("deserialization failed");
-        
+
         assert_eq!(
             config.similarity.min_similarity_threshold,
             deserialized.similarity.min_similarity_threshold
@@ -286,7 +295,7 @@ mod tests {
     fn test_edge_case_empty_history() {
         let detector = PatternDetector::new(10);
         let history = vec![];
-        
+
         assert_eq!(detector.detect(&history), PatternState::Single);
     }
 
@@ -295,7 +304,7 @@ mod tests {
     fn test_edge_case_single_entry() {
         let detector = PatternDetector::new(10);
         let history = vec![("tool".to_string(), "args".to_string(), 0.5)];
-        
+
         assert_eq!(detector.detect(&history), PatternState::Single);
     }
 
@@ -305,7 +314,7 @@ mod tests {
         let sim1 = jaro_winkler_similarity("", "");
         let sim2 = jaro_winkler_similarity("test", "");
         let sim3 = jaro_winkler_similarity("", "test");
-        
+
         assert_eq!(sim1, 1.0); // Both empty = exact match
         assert_eq!(sim2, 0.0); // One empty = no match
         assert_eq!(sim3, 0.0); // One empty = no match
@@ -315,7 +324,7 @@ mod tests {
     #[test]
     fn test_observability_context() {
         let ctx = ObservabilityContext::noop();
-        
+
         // Should not panic
         ctx.event(
             crate::tools::EventType::ToolSelected,
@@ -323,7 +332,7 @@ mod tests {
             "selected grep_file",
             Some(0.95),
         );
-        
+
         ctx.metric("similarity", "jaro_winkler", 0.87);
     }
 
@@ -331,23 +340,23 @@ mod tests {
     #[test]
     fn test_config_validation_errors() {
         let mut config = ImprovementsConfig::default();
-        
+
         // Invalid similarity threshold
         config.similarity.min_similarity_threshold = 1.5;
         assert!(config.validate().is_err());
-        
+
         config.similarity.min_similarity_threshold = 0.6;
-        
+
         // Invalid decay constant
         config.time_decay.decay_constant = -0.1;
         assert!(config.validate().is_err());
-        
+
         config.time_decay.decay_constant = 0.1;
-        
+
         // Invalid pattern sequence length
         config.patterns.min_sequence_length = 1;
         assert!(config.validate().is_err());
-        
+
         // Valid config
         config.patterns.min_sequence_length = 2;
         assert!(config.validate().is_ok());
@@ -357,7 +366,7 @@ mod tests {
     #[test]
     fn test_middleware_chain_validation_caching() {
         let obs = Arc::new(ObservabilityContext::noop());
-        
+
         let chain = MiddlewareChain::new()
             .add(Arc::new(ValidationMiddleware::new(obs)))
             .add(Arc::new(CachingMiddleware::new()));
@@ -383,14 +392,14 @@ mod tests {
     #[test]
     fn test_pattern_detection_near_loop() {
         let detector = PatternDetector::new(10);
-        
+
         // Similar but not identical arguments
         let history = vec![
             ("grep_file".to_string(), "pattern_test_1".to_string(), 0.7),
             ("grep_file".to_string(), "pattern_test_2".to_string(), 0.7),
             ("grep_file".to_string(), "pattern_test_3".to_string(), 0.7),
         ];
-        
+
         assert_eq!(detector.detect(&history), PatternState::NearLoop);
     }
 }

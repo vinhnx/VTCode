@@ -139,9 +139,7 @@ impl MessageToolCorrelation {
             / self.tool_executions.len() as f32;
 
         self.intent_fulfillment = match (contributing, avg_quality) {
-            (n, q) if n == self.tool_executions.len() && q > 0.75 => {
-                IntentFulfillment::Fulfilled
-            }
+            (n, q) if n == self.tool_executions.len() && q > 0.75 => IntentFulfillment::Fulfilled,
             (n, q) if n > self.tool_executions.len() / 2 && q > 0.6 => {
                 IntentFulfillment::PartiallyFulfilled
             }
@@ -354,11 +352,7 @@ impl MessageCorrelationTracker {
             .count();
 
         let avg_confidence = if total > 0 {
-            self.correlations
-                .iter()
-                .map(|c| c.confidence)
-                .sum::<f32>()
-                / total as f32
+            self.correlations.iter().map(|c| c.confidence).sum::<f32>() / total as f32
         } else {
             0.0
         };

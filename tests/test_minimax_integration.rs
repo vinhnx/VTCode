@@ -34,7 +34,10 @@ mod minimax_integration_tests {
     fn test_minimax_models_count() {
         // Verify MiniMax namespace has at least 1 model
         let supported = models::minimax::SUPPORTED_MODELS;
-        assert!(!supported.is_empty(), "MiniMax should have at least 1 model");
+        assert!(
+            !supported.is_empty(),
+            "MiniMax should have at least 1 model"
+        );
     }
 
     #[test]

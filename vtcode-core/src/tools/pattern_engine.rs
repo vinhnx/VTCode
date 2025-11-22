@@ -3,9 +3,9 @@
 //! Tracks execution sequences, detects behavioral patterns,
 //! predicts user intent based on action history.
 
+use crate::tools::improvement_algorithms::jaro_winkler_similarity;
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, RwLock};
-use crate::tools::improvement_algorithms::jaro_winkler_similarity;
 
 /// Single execution event
 #[derive(Clone, Debug)]
@@ -13,7 +13,7 @@ pub struct ExecutionEvent {
     pub tool_name: String,
     pub arguments: String,
     pub success: bool,
-    pub quality_score: f32,  // 0.0-1.0
+    pub quality_score: f32, // 0.0-1.0
     pub duration_ms: u64,
     pub timestamp: u64,
 }
@@ -61,14 +61,14 @@ impl PatternEngine {
     /// Record execution event
     pub fn record(&self, event: ExecutionEvent) {
         let mut events = self.events.write().unwrap();
-        
+
         // Maintain max history
         if events.len() >= self.max_history {
             events.pop_front();
         }
-        
+
         events.push_back(event);
-        
+
         // Invalidate cache
         self.pattern_cache.write().unwrap().clear();
     }
@@ -76,7 +76,7 @@ impl PatternEngine {
     /// Detect overall pattern in execution history
     pub fn detect_pattern(&self) -> DetectedPattern {
         let events = self.events.read().unwrap();
-        
+
         if events.is_empty() {
             return DetectedPattern::Single;
         }
@@ -86,11 +86,7 @@ impl PatternEngine {
         }
 
         // Get recent sequence
-        let recent: Vec<_> = events
-            .iter()
-            .rev()
-            .take(self.sequence_window)
-            .collect();
+        let recent: Vec<_> = events.iter().rev().take(self.sequence_window).collect();
 
         self._detect_in_sequence(recent)
     }
@@ -98,22 +94,18 @@ impl PatternEngine {
     /// Predict user's next likely action
     pub fn predict_next_tool(&self) -> Option<String> {
         let events = self.events.read().unwrap();
-        
+
         if events.len() < 2 {
             return None;
         }
 
-        let recent: Vec<_> = events
-            .iter()
-            .rev()
-            .take(self.sequence_window)
-            .collect();
+        let recent: Vec<_> = events.iter().rev().take(self.sequence_window).collect();
 
         // Find most common predecessor
         let last_tool = &recent[0].tool_name;
-        
+
         let mut predecessors: HashMap<String, usize> = HashMap::new();
-        
+
         for i in 0..recent.len() - 1 {
             if recent[i].tool_name == *last_tool {
                 let pred = &recent[i + 1].tool_name;
@@ -131,7 +123,7 @@ impl PatternEngine {
     /// Get execution summary
     pub fn summary(&self) -> ExecutionSummary {
         let events = self.events.read().unwrap();
-        
+
         if events.is_empty() {
             return ExecutionSummary::default();
         }
@@ -162,9 +154,9 @@ impl PatternEngine {
 
         // Check for exact repeats
         let first = &events[0];
-        let all_same_exact = events.iter().all(|e| {
-            e.tool_name == first.tool_name && e.arguments == first.arguments
-        });
+        let all_same_exact = events
+            .iter()
+            .all(|e| e.tool_name == first.tool_name && e.arguments == first.arguments);
 
         if all_same_exact {
             return match events.len() {
@@ -189,18 +181,14 @@ impl PatternEngine {
         // Check for refinement (improving quality)
         let qualities: Vec<f32> = events.iter().map(|e| e.quality_score).collect();
         if qualities.len() >= 3 {
-            let is_improving = qualities
-                .windows(2)
-                .all(|w| w[1] > w[0] + 0.05);
+            let is_improving = qualities.windows(2).all(|w| w[1] > w[0] + 0.05);
 
             if is_improving {
                 return DetectedPattern::Refinement;
             }
 
             // Check for degradation
-            let is_degrading = qualities
-                .windows(2)
-                .all(|w| w[1] < w[0] - 0.05);
+            let is_degrading = qualities.windows(2).all(|w| w[1] < w[0] - 0.05);
 
             if is_degrading {
                 return DetectedPattern::Degradation;
@@ -213,8 +201,11 @@ impl PatternEngine {
 
         if different_tools.len() > 1 && events.len() >= 3 {
             let avg_quality = qualities.iter().sum::<f32>() / qualities.len() as f32;
-            let quality_variance =
-                qualities.iter().map(|q| (q - avg_quality).abs()).sum::<f32>() / qualities.len() as f32;
+            let quality_variance = qualities
+                .iter()
+                .map(|q| (q - avg_quality).abs())
+                .sum::<f32>()
+                / qualities.len() as f32;
 
             if quality_variance < 0.15 {
                 return DetectedPattern::Convergence;
@@ -360,7 +351,7 @@ mod tests {
             engine.record(ExecutionEvent {
                 tool_name: "grep".to_string(),
                 arguments: "arg".to_string(),
-                success: i != 2,  // One failure
+                success: i != 2, // One failure
                 quality_score: 0.8,
                 duration_ms: 100,
                 timestamp: i as u64,

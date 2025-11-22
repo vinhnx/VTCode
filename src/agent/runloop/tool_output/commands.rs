@@ -32,17 +32,17 @@ pub(crate) async fn render_terminal_command_panel(
         && (inner_json.get("stdout").is_some()
             || inner_json.get("stderr").is_some()
             || inner_json.get("returncode").is_some())
-        {
-            unwrapped_payload = inner_json;
-            stdout_raw = unwrapped_payload
-                .get("stdout")
-                .and_then(Value::as_str)
-                .unwrap_or("");
-            stderr_raw = unwrapped_payload
-                .get("stderr")
-                .and_then(Value::as_str)
-                .unwrap_or("");
-        }
+    {
+        unwrapped_payload = inner_json;
+        stdout_raw = unwrapped_payload
+            .get("stdout")
+            .and_then(Value::as_str)
+            .unwrap_or("");
+        stderr_raw = unwrapped_payload
+            .get("stderr")
+            .and_then(Value::as_str)
+            .unwrap_or("");
+    }
 
     let output_raw = unwrapped_payload
         .get("output")
@@ -95,55 +95,55 @@ pub(crate) async fn render_terminal_command_panel(
     let tail_limit = resolve_stdout_tail_limit(vt_config);
 
     // Display session status header if this is a PTY session
-    if is_pty_session
-        && session_id.is_some() {
-            let status_symbol = if !is_completed { "▶" } else { "✓" };
-            let status_badge = if !is_completed {
-                format!("{} RUN", status_symbol)
-            } else {
-                format!("{} OK", status_symbol)
-            };
+    if is_pty_session && session_id.is_some() {
+        let status_symbol = if !is_completed { "▶" } else { "✓" };
+        let status_badge = if !is_completed {
+            format!("{} RUN", status_symbol)
+        } else {
+            format!("{} OK", status_symbol)
+        };
 
-            // Compact header: status · command · session info
-            let header = if working_dir.is_some() {
-                format!(
-                    "{} · {} · {}x{}",
-                    status_badge,
-                    if command.len() > 40 {
-                        format!("{}…", &command[..37])
-                    } else {
-                        command.clone()
-                    },
-                    cols,
-                    rows
-                )
-            } else {
-                format!(
-                    "{} · {}",
-                    status_badge,
-                    if command.len() > 50 {
-                        format!("{}…", &command[..47])
-                    } else {
-                        command.clone()
-                    }
-                )
-            };
+        // Compact header: status · command · session info
+        let header = if working_dir.is_some() {
+            format!(
+                "{} · {} · {}x{}",
+                status_badge,
+                if command.len() > 40 {
+                    format!("{}…", &command[..37])
+                } else {
+                    command.clone()
+                },
+                cols,
+                rows
+            )
+        } else {
+            format!(
+                "{} · {}",
+                status_badge,
+                if command.len() > 50 {
+                    format!("{}…", &command[..47])
+                } else {
+                    command.clone()
+                }
+            )
+        };
 
-            renderer.line(MessageStyle::Info, &header)?;
+        renderer.line(MessageStyle::Info, &header)?;
 
-            // Show full command only on separate line if truncated
-            if command.len() > 50 || working_dir.is_some() {
-                renderer.line(MessageStyle::Response, &format!("$ {}", command))?;
-            }
+        // Show full command only on separate line if truncated
+        if command.len() > 50 || working_dir.is_some() {
+            renderer.line(MessageStyle::Response, &format!("$ {}", command))?;
         }
+    }
 
     // Render stdin if available (user input to the terminal) - simulating command prompt
     if let Some(stdin) = unwrapped_payload.get("stdin").and_then(Value::as_str)
-        && !stdin.trim().is_empty() {
-            // Show the input as if it came from a command prompt
-            let prompt = format!("$ {}", stdin.trim());
-            renderer.line(MessageStyle::Response, &prompt)?;
-        }
+        && !stdin.trim().is_empty()
+    {
+        // Show the input as if it came from a command prompt
+        let prompt = format!("$ {}", stdin.trim());
+        renderer.line(MessageStyle::Response, &prompt)?;
+    }
 
     // Special handling for exit code 127 (command not found) - show critical message prominently
     if is_completed && exit_code == Some(127) {

@@ -241,9 +241,10 @@ pub(crate) fn build_model_status_with_context(
     }
 
     if let Some(util) = context_utilization
-        && util > 0.0 {
-            parts.push(format!("{:.0}% context", util.min(100.0)));
-        }
+        && util > 0.0
+    {
+        parts.push(format!("{:.0}% context", util.min(100.0)));
+    }
 
     if !reasoning.is_empty() {
         parts.push(format!("({})", reasoning));
