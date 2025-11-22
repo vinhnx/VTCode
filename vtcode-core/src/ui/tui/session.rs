@@ -1,4 +1,4 @@
-use std::{cmp::min, mem, sync::Arc};
+use std::{cmp::min, mem, sync::Arc, time::Instant};
 
 use anstyle::{AnsiColor, Color as AnsiColorEnum, Effects, RgbColor};
 use crossterm::event::{
@@ -73,6 +73,58 @@ const PROMPT_INVOKE_PREFIX: &str = "prompt:";
 const LEGACY_PROMPT_INVOKE_PREFIX: &str = "prompts:";
 const PROMPT_COMMAND_PREFIX: &str = "/prompt:";
 
+/// Spinner state for showing AI thinking indicator
+#[derive(Clone)]
+struct ThinkingSpinner {
+    is_active: bool,
+    started_at: Instant,
+    spinner_index: usize,
+    last_update: Instant,
+    spinner_line_index: Option<usize>, // Track which message line is the spinner
+}
+
+impl ThinkingSpinner {
+    fn new() -> Self {
+        Self {
+            is_active: false,
+            started_at: Instant::now(),
+            spinner_index: 0,
+            last_update: Instant::now(),
+            spinner_line_index: None,
+        }
+    }
+
+    fn start(&mut self, line_index: usize) {
+        self.is_active = true;
+        self.spinner_line_index = Some(line_index);
+        self.started_at = Instant::now();
+        self.last_update = Instant::now();
+        self.spinner_index = 0;
+    }
+
+    fn stop(&mut self) {
+        self.is_active = false;
+        self.spinner_line_index = None;
+    }
+
+    fn update(&mut self) {
+        if self.is_active && self.last_update.elapsed().as_millis() >= 80 {
+            self.spinner_index = (self.spinner_index + 1) % 4;
+            self.last_update = Instant::now();
+        }
+    }
+
+    fn current_frame(&self) -> &'static str {
+        match self.spinner_index {
+            0 => "⠋",
+            1 => "⠙",
+            2 => "⠹",
+            3 => "⠸",
+            _ => "⠋",
+        }
+    }
+}
+
 pub struct Session {
     // --- Managers (Phase 2) ---
     /// Manages user input, cursor, and command history
@@ -133,6 +185,9 @@ pub struct Session {
     prompt_palette: Option<PromptPalette>,
     prompt_palette_active: bool,
     deferred_prompt_browser_trigger: bool,
+
+    // --- Thinking Indicator ---
+    thinking_spinner: ThinkingSpinner,
 }
 
 impl Session {
@@ -237,6 +292,9 @@ impl Session {
             prompt_palette: None,
             prompt_palette_active: false,
             deferred_prompt_browser_trigger: false,
+
+            // --- Thinking Indicator ---
+            thinking_spinner: ThinkingSpinner::new(),
         };
         session.ensure_prompt_style_color();
         session
@@ -262,10 +320,28 @@ impl Session {
     pub fn handle_command(&mut self, command: InlineCommand) {
         match command {
             InlineCommand::AppendLine { kind, segments } => {
+                // Remove spinner message when agent response arrives
+                if kind == InlineMessageKind::Agent && self.thinking_spinner.is_active {
+                    if let Some(spinner_idx) = self.thinking_spinner.spinner_line_index {
+                        if spinner_idx < self.lines.len() {
+                            self.lines.remove(spinner_idx);
+                        }
+                    }
+                    self.thinking_spinner.stop();
+                }
                 self.push_line(kind, segments);
                 self.transcript_content_changed = true;
             }
             InlineCommand::Inline { kind, segment } => {
+                // Remove spinner message when agent response arrives
+                if kind == InlineMessageKind::Agent && self.thinking_spinner.is_active {
+                    if let Some(spinner_idx) = self.thinking_spinner.spinner_line_index {
+                        if spinner_idx < self.lines.len() {
+                            self.lines.remove(spinner_idx);
+                        }
+                    }
+                    self.thinking_spinner.stop();
+                }
                 self.append_inline(kind, segment);
                 self.transcript_content_changed = true;
             }
@@ -482,6 +558,26 @@ impl Session {
             return;
         }
 
+        // Update spinner animation frame and message
+        self.thinking_spinner.update();
+        if self.thinking_spinner.is_active {
+            // Request continuous redraws while thinking
+            self.needs_redraw = true;
+            // Update spinner message with current frame
+            if let Some(spinner_idx) = self.thinking_spinner.spinner_line_index {
+                if spinner_idx < self.lines.len() {
+                    let frame = self.thinking_spinner.current_frame();
+                    let revision = self.next_revision();
+                    if let Some(line) = self.lines.get_mut(spinner_idx) {
+                        if !line.segments.is_empty() {
+                            line.segments[0].text = format!("{} Thinking...", frame);
+                            line.revision = revision;
+                        }
+                    }
+                }
+            }
+        }
+
         // Clear entire frame if modal was just closed to remove artifacts
         if self.needs_full_clear {
             frame.render_widget(Clear, viewport);
@@ -656,9 +752,11 @@ impl Session {
 
         let visible_start = vertical_offset;
         let scroll_area = Rect::new(inner.x, inner.y, content_width, inner.height);
+
         // Use cached visible lines to avoid re-cloning on viewport-only scrolls
         let mut visible_lines =
             self.collect_transcript_window_cached(content_width, visible_start, viewport_rows);
+
         let fill_count = viewport_rows.saturating_sub(visible_lines.len());
         if fill_count > 0 {
             let target_len = visible_lines.len() + fill_count;
@@ -2247,6 +2345,20 @@ impl Session {
                 }
 
                 self.remember_submitted_input(&submitted);
+
+                // Add spinner as a message line that will be naturally displaced by agent response
+                let spinner_index = self.lines.len();
+                let spinner_style = InlineTextStyle::default()
+                    .with_color(Some(anstyle::Color::Ansi(anstyle::AnsiColor::Cyan)))
+                    .dim();
+                self.push_line(
+                    InlineMessageKind::Agent,
+                    vec![InlineSegment {
+                        text: "⠋ Thinking...".to_string(),
+                        style: spinner_style,
+                    }],
+                );
+                self.thinking_spinner.start(spinner_index);
                 self.mark_dirty();
 
                 if has_control || has_command {

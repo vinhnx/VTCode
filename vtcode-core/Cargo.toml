@@ -90,6 +90,7 @@ colorchoice-clap = "1.0"
 quick_cache = "0.6"
 roff = "0.2"
 syntect = "5.2"
+indicatif = { version = "0.18", default-features = false }
 unicode-segmentation = "1.11"
 unicode-width = { workspace = true }
 crossterm = { workspace = true }

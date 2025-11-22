@@ -10,6 +10,7 @@ use vtcode_core::core::pruning_decisions::PruningDecisionLedger;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::ui::tui::InlineHandle;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_core::utils::ansi_codes::{ALT_BUFFER_DISABLE, CURSOR_SHOW, RESET};
 use vtcode_core::utils::session_archive::{SessionArchive, SessionMessage};
 use vtcode_core::utils::transcript;
 
@@ -24,18 +25,19 @@ use super::utils::render_hook_messages;
 /// This ensures that raw mode is disabled and the terminal is left in a usable state
 /// even if the TUI didn't exit cleanly (e.g., due to Ctrl+C)
 fn restore_terminal_on_exit() -> io::Result<()> {
-    // Attempt to disable raw mode if it was enabled
-    // We ignore errors here since raw mode might not have been enabled
-    let _ = disable_raw_mode();
-
     // Get stdout for executing terminal commands
     let mut stdout = io::stdout();
 
-    // Try to show cursor
-    let _ = execute!(stdout, crossterm::cursor::Show);
+    // Send raw terminal reset sequences to forcefully restore terminal state
+    // This is critical for handling cases where disable_raw_mode() might not work
+    // (e.g., when TUI task is still running in background)
+    write!(stdout, "{}", ALT_BUFFER_DISABLE)?; // Leave alternate screen
+    write!(stdout, "{}", CURSOR_SHOW)?; // Show cursor
+    write!(stdout, "{}", RESET)?; // Reset all attributes
 
-    // Try to leave alternate screen to return to normal terminal
-    // This might fail if we're not in alternate screen, which is fine
+    // Also attempt crossterm cleanup as a fallback
+    let _ = disable_raw_mode();
+    let _ = execute!(stdout, crossterm::cursor::Show);
     let _ = execute!(stdout, LeaveAlternateScreen);
 
     // Additional flush to ensure all escape sequences are processed
@@ -249,7 +251,12 @@ pub(super) async fn finalize_session(
 
     handle.shutdown();
 
+    // Give the TUI a brief moment to shut down cleanly before we forcefully restore
+    // The TUI runs in a background task and may need a moment to clean up
+    tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+
     // Ensure terminal is properly restored in case TUI didn't exit cleanly
+    // This is critical because the TUI task may still be holding terminal state
     let _ = restore_terminal_on_exit();
 
     transcript::clear_inline_handle();

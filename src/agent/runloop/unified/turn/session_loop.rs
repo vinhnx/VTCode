@@ -3,7 +3,9 @@ use crate::agent::runloop::unified::turn::session::slash_commands::{
 };
 use anyhow::{Context, Result};
 use chrono::Local;
+use crossterm::terminal::disable_raw_mode;
 use std::collections::VecDeque;
+use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
@@ -24,6 +26,7 @@ use vtcode_core::config::types::UiSurfacePreference;
 use vtcode_core::ui::theme;
 use vtcode_core::ui::tui::{InlineEvent, InlineEventCallback, spawn_session, theme_from_styles};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_core::utils::ansi_codes::{ALT_BUFFER_DISABLE, CURSOR_SHOW, RESET};
 use vtcode_core::utils::at_pattern::parse_at_patterns;
 use vtcode_core::utils::session_archive::{SessionArchive, SessionArchiveMetadata};
 use vtcode_core::utils::transcript;
@@ -77,14 +80,23 @@ pub(crate) async fn run_single_agent_loop_unified(
     full_auto: bool,
     resume: Option<ResumeSession>,
 ) -> Result<()> {
-    // Set up panic handler to ensure MCP cleanup on panic
+    // Set up panic handler to ensure terminal cleanup on panic
+    // This is critical for handling abnormal termination (e.g., from panics)
+    // without leaving ANSI escape sequences in the terminal
     let original_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |panic_info| {
-        eprintln!("Application panic occurred: {:?}", panic_info);
-        // Note: We can't easily access the MCP client here due to move semantics
-        // The cleanup will happen in the Drop implementations
+        // Attempt to restore terminal to clean state
+        let _ = disable_raw_mode();
+        let mut stdout = std::io::stdout();
+        let _ = stdout.flush();
+
+        // Call the original panic hook to maintain normal panic behavior
         original_hook(panic_info);
     }));
+
+    // Create a guard that ensures terminal is restored even on early return
+    // This is important because the TUI task may not shutdown cleanly
+    let _terminal_cleanup_guard = TerminalCleanupGuard::new();
 
     // Note: The original hook will not be restored during this session
     // but Rust runtime should handle this appropriately
@@ -1006,4 +1018,33 @@ pub(crate) async fn run_single_agent_loop_unified(
     }
 
     Ok(())
+}
+
+/// Guard that ensures terminal is restored to a clean state when dropped
+/// This handles cases where the TUI doesn't shutdown cleanly or the session
+/// exits early (e.g., due to Ctrl+C or other signals)
+struct TerminalCleanupGuard;
+
+impl TerminalCleanupGuard {
+    fn new() -> Self {
+        Self
+    }
+}
+
+impl Drop for TerminalCleanupGuard {
+    fn drop(&mut self) {
+        // Attempt to restore terminal to clean state
+        // This is a best-effort cleanup that runs even if the main session
+        // didn't properly call restore_terminal_on_exit()
+        let mut stdout = std::io::stdout();
+
+        // Send raw terminal reset sequences as a fallback
+        // This ensures the terminal is restored even if other cleanup paths fail
+        let _ = write!(stdout, "{}", ALT_BUFFER_DISABLE); // Leave alternate screen
+        let _ = write!(stdout, "{}", CURSOR_SHOW); // Show cursor
+        let _ = write!(stdout, "{}", RESET); // Reset all attributes
+
+        let _ = disable_raw_mode();
+        let _ = stdout.flush();
+    }
 }
