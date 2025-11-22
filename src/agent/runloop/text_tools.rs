@@ -815,9 +815,10 @@ fn parse_function_call_block(block: &str) -> Option<(String, Value)> {
         }
     }
 
-    if !positional.is_empty() {
-        match canonical.as_deref() {
-            Some(tools::RUN_PTY_CMD) => {
+    // Validate required parameters based on tool type
+    match canonical.as_deref() {
+        Some(tools::RUN_PTY_CMD) => {
+            if !positional.is_empty() {
                 if !object.contains_key("command") {
                     let mut positional_parts = Vec::new();
                     let mut all_strings = true;
@@ -855,8 +856,37 @@ fn parse_function_call_block(block: &str) -> Option<(String, Value)> {
                     }
                 }
             }
-            _ => {
-                // We don't have a reliable mapping for positional arguments on other tools.
+            // Validate that command is present and not empty
+            if !object.contains_key("command") {
+                return None;
+            }
+        }
+        Some(tools::GREP_FILE) => {
+            // For grep_file, ensure pattern is present
+            if !positional.is_empty() && !object.contains_key("pattern") {
+                if let Value::String(pattern) = &positional[0] {
+                    object.insert("pattern".to_string(), Value::String(pattern.clone()));
+                }
+            }
+            // Validate that pattern is required
+            if !object.contains_key("pattern") {
+                return None;
+            }
+        }
+        Some(tools::READ_FILE | tools::WRITE_FILE | tools::EDIT_FILE) => {
+            // These tools require a 'path' parameter
+            if !positional.is_empty() && !object.contains_key("path") {
+                if let Value::String(path) = &positional[0] {
+                    object.insert("path".to_string(), Value::String(path.clone()));
+                }
+            }
+            if !object.contains_key("path") {
+                return None;
+            }
+        }
+        _ => {
+            // For other tools, only reject if there are positional args but no handler
+            if !positional.is_empty() {
                 return None;
             }
         }

@@ -278,12 +278,21 @@ pub async fn run_turn_loop(
             TurnProcessingResult::ToolCalls {
                 tool_calls,
                 assistant_text,
-                reasoning: _,
+                reasoning,
             } => {
                 // Note: reasoning already rendered during streaming; don't fabricate announcements
-                // Add assistant message if there's any text content
+                // Add assistant message if there's any text content, and attach reasoning if present
                 if !assistant_text.trim().is_empty() {
-                    working_history.push(uni::Message::assistant(assistant_text));
+                    let msg = uni::Message::assistant(assistant_text);
+                    let msg_with_reasoning = if let Some(reasoning_text) = reasoning {
+                        msg.with_reasoning(Some(reasoning_text))
+                    } else {
+                        msg
+                    };
+                    working_history.push(msg_with_reasoning);
+                } else if let Some(reasoning_text) = reasoning {
+                    // If no assistant text but reasoning exists, create assistant message with just reasoning
+                    working_history.push(uni::Message::assistant(String::new()).with_reasoning(Some(reasoning_text)));
                 }
 
                 // Handle tool calls if any exist
@@ -550,7 +559,7 @@ pub async fn run_turn_loop(
                     }
                 }
             }
-            TurnProcessingResult::TextResponse { text, reasoning: _ } => {
+            TurnProcessingResult::TextResponse { text, reasoning } => {
                 // Note: reasoning already rendered during streaming; don't fabricate announcements
                 // Check if the text response contains textual tool calls to execute
                 if let Some((tool_name, args)) =
@@ -798,7 +807,13 @@ pub async fn run_turn_loop(
                     }
                 } else {
                     // If no tool call was detected in the text, add it as a regular assistant response
-                    working_history.push(uni::Message::assistant(text));
+                    let msg = uni::Message::assistant(text);
+                    let msg_with_reasoning = if let Some(reasoning_text) = reasoning {
+                        msg.with_reasoning(Some(reasoning_text))
+                    } else {
+                        msg
+                    };
+                    working_history.push(msg_with_reasoning);
                     break; // If we get a text response that's not a tool call, the turn is done
                 }
             }
