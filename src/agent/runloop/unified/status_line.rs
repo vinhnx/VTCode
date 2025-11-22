@@ -240,11 +240,10 @@ pub(crate) fn build_model_status_with_context(
         parts.push(format!("{} tokens", formatted));
     }
 
-    if let Some(util) = context_utilization {
-        if util > 0.0 {
+    if let Some(util) = context_utilization
+        && util > 0.0 {
             parts.push(format!("{:.0}% context", util.min(100.0)));
         }
-    }
 
     if !reasoning.is_empty() {
         parts.push(format!("({})", reasoning));

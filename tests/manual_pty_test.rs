@@ -31,7 +31,7 @@ async fn main() -> Result<()> {
         }
         Err(e) => {
             println!("Error: {}", e);
-            return Err(e.into());
+            return Err(e);
         }
     }
 
@@ -61,7 +61,7 @@ async fn main() -> Result<()> {
         }
         Err(e) => {
             println!("Error: {}", e);
-            return Err(e.into());
+            return Err(e);
         }
     }
 
@@ -83,7 +83,7 @@ async fn main() -> Result<()> {
         }
         Err(e) => {
             println!("Error creating session: {}", e);
-            return Err(e.into());
+            return Err(e);
         }
     }
 
@@ -102,7 +102,7 @@ async fn main() -> Result<()> {
         }
         Err(e) => {
             println!("Error listing sessions: {}", e);
-            return Err(e.into());
+            return Err(e);
         }
     }
 
@@ -120,7 +120,7 @@ async fn main() -> Result<()> {
         }
         Err(e) => {
             println!("Error closing session: {}", e);
-            return Err(e.into());
+            return Err(e);
         }
     }
 

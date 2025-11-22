@@ -148,7 +148,7 @@ fn remove_messages_with_retention(
             || (!message.is_tool_response() && !message.has_tool_calls())
             || tool_retention_indices
                 .as_ref()
-                .map_or(false, |indices| indices.contains(&index));
+                .is_some_and(|indices| indices.contains(&index));
 
         if !keep {
             removed += 1;
@@ -549,7 +549,7 @@ fn symbol_weight(kind: &SymbolKind) -> u32 {
 #[allow(dead_code)]
 fn estimate_scope_depth(scope: Option<&str>) -> usize {
     scope.map_or(0, |raw| {
-        raw.split(|ch: char| matches!(ch, ':' | '.' | '#'))
+        raw.split([':', '.', '#'])
             .filter(|segment| !segment.is_empty())
             .count()
     })

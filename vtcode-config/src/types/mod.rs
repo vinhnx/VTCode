@@ -15,6 +15,7 @@ use std::path::PathBuf;
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum ReasoningEffortLevel {
     /// No reasoning configuration - for models that don't support configurable reasoning
     None,
@@ -23,6 +24,7 @@ pub enum ReasoningEffortLevel {
     /// Low reasoning effort - maps to low thinking level for Gemini 3 Pro
     Low,
     /// Medium reasoning effort - Note: Not fully available for Gemini 3 Pro yet, defaults to high
+    #[default]
     Medium,
     /// High reasoning effort - maps to high thinking level for Gemini 3 Pro
     High,
@@ -64,18 +66,15 @@ impl ReasoningEffortLevel {
     }
 }
 
-impl Default for ReasoningEffortLevel {
-    fn default() -> Self {
-        Self::Medium
-    }
-}
 
 /// Verbosity level for model output (GPT-5.1 and compatible models)
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum VerbosityLevel {
     Low,
+    #[default]
     Medium,
     High,
 }
@@ -110,11 +109,6 @@ impl VerbosityLevel {
     }
 }
 
-impl Default for VerbosityLevel {
-    fn default() -> Self {
-        Self::Medium
-    }
-}
 
 impl fmt::Display for VerbosityLevel {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -170,7 +164,9 @@ impl<'de> Deserialize<'de> for ReasoningEffortLevel {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum UiSurfacePreference {
+    #[default]
     Auto,
     Alternate,
     Inline,
@@ -208,11 +204,6 @@ impl UiSurfacePreference {
     }
 }
 
-impl Default for UiSurfacePreference {
-    fn default() -> Self {
-        Self::Auto
-    }
-}
 
 impl fmt::Display for UiSurfacePreference {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -241,18 +232,15 @@ impl<'de> Deserialize<'de> for UiSurfacePreference {
 
 /// Source describing how the active model was selected
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 pub enum ModelSelectionSource {
     /// Model provided by workspace configuration
+    #[default]
     WorkspaceConfig,
     /// Model provided by CLI override
     CliOverride,
 }
 
-impl Default for ModelSelectionSource {
-    fn default() -> Self {
-        Self::WorkspaceConfig
-    }
-}
 
 /// Configuration for the agent
 #[derive(Debug, Clone)]

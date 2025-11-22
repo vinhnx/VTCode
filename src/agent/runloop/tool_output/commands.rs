@@ -28,10 +28,10 @@ pub(crate) async fn render_terminal_command_panel(
     let mut unwrapped_payload = payload.clone();
 
     // If stdout looks like JSON with stdout/stderr/returncode, unwrap it
-    if let Ok(inner_json) = serde_json::from_str::<Value>(stdout_raw) {
-        if inner_json.get("stdout").is_some()
+    if let Ok(inner_json) = serde_json::from_str::<Value>(stdout_raw)
+        && (inner_json.get("stdout").is_some()
             || inner_json.get("stderr").is_some()
-            || inner_json.get("returncode").is_some()
+            || inner_json.get("returncode").is_some())
         {
             unwrapped_payload = inner_json;
             stdout_raw = unwrapped_payload
@@ -43,7 +43,6 @@ pub(crate) async fn render_terminal_command_panel(
                 .and_then(Value::as_str)
                 .unwrap_or("");
         }
-    }
 
     let output_raw = unwrapped_payload
         .get("output")
@@ -81,7 +80,7 @@ pub(crate) async fn render_terminal_command_panel(
 
     // If there's an 'output' field, this is likely a PTY session result
     let is_pty_session = unwrapped_payload.get("id").is_some()
-        && (output_raw.is_empty() == false || stdout_raw.is_empty() && stderr_raw.is_empty());
+        && (!output_raw.is_empty() || stdout_raw.is_empty() && stderr_raw.is_empty());
 
     let stdout = if is_pty_session {
         preprocess_terminal_stdout(command_tokens.as_deref(), output_raw)
@@ -96,8 +95,8 @@ pub(crate) async fn render_terminal_command_panel(
     let tail_limit = resolve_stdout_tail_limit(vt_config);
 
     // Display session status header if this is a PTY session
-    if is_pty_session {
-        if session_id.is_some() {
+    if is_pty_session
+        && session_id.is_some() {
             let status_symbol = if !is_completed { "▶" } else { "✓" };
             let status_badge = if !is_completed {
                 format!("{} RUN", status_symbol)
@@ -137,16 +136,14 @@ pub(crate) async fn render_terminal_command_panel(
                 renderer.line(MessageStyle::Response, &format!("$ {}", command))?;
             }
         }
-    }
 
     // Render stdin if available (user input to the terminal) - simulating command prompt
-    if let Some(stdin) = unwrapped_payload.get("stdin").and_then(Value::as_str) {
-        if !stdin.trim().is_empty() {
+    if let Some(stdin) = unwrapped_payload.get("stdin").and_then(Value::as_str)
+        && !stdin.trim().is_empty() {
             // Show the input as if it came from a command prompt
             let prompt = format!("$ {}", stdin.trim());
             renderer.line(MessageStyle::Response, &prompt)?;
         }
-    }
 
     // Special handling for exit code 127 (command not found) - show critical message prominently
     if is_completed && exit_code == Some(127) {

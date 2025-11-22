@@ -224,8 +224,8 @@ pub(super) async fn finalize_session(
         }
     }
 
-    if let Some(mcp_manager) = async_mcp_manager {
-        if let Err(e) = mcp_manager.shutdown().await {
+    if let Some(mcp_manager) = async_mcp_manager
+        && let Err(e) = mcp_manager.shutdown().await {
             let error_msg = e.to_string();
             if error_msg.contains("EPIPE")
                 || error_msg.contains("Broken pipe")
@@ -239,7 +239,6 @@ pub(super) async fn finalize_session(
                 eprintln!("Warning: Failed to shutdown MCP client cleanly: {}", e);
             }
         }
-    }
 
     handle.shutdown();
 

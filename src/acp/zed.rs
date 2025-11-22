@@ -651,14 +651,13 @@ impl ZedAgent {
         if let Value::Object(map) = args {
             let mut items: Vec<(usize, String)> = Vec::new();
             for (key, value) in map.iter() {
-                if let Some(index_str) = key.strip_prefix("command.") {
-                    if let Ok(index) = index_str.parse::<usize>() {
+                if let Some(index_str) = key.strip_prefix("command.")
+                    && let Ok(index) = index_str.parse::<usize>() {
                         let Some(segment) = value.as_str() else {
                             return Err("command array must contain only strings".to_string());
                         };
                         items.push((index, segment.to_string()));
                     }
-                }
             }
             if !items.is_empty() {
                 // Sort by index and normalize 1-based indexing to 0-based if needed
@@ -1192,8 +1191,11 @@ impl ZedAgent {
     }
 
     async fn execute_local_tool(&self, tool_name: &str, args: &Value) -> ToolExecutionReport {
-        let mut registry = self.local_tool_registry.borrow_mut();
-        match registry.execute_tool(tool_name, args.clone()).await {
+        let result = {
+            let mut registry = self.local_tool_registry.borrow_mut();
+            registry.execute_tool(tool_name, args.clone()).await
+        };
+        match result {
             Ok(output) => {
                 if let Some(error_value) = output.get("error") {
                     let message = error_value

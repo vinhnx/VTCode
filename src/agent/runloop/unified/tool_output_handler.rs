@@ -90,7 +90,7 @@ pub(crate) async fn handle_pipeline_output(
             render_tool_output(
                 ctx.renderer,
                 Some(name),
-                &output,
+                output,
                 vt_config,
                 Some(token_budget),
             )
@@ -218,7 +218,7 @@ pub(crate) async fn handle_pipeline_output_renderer(
                 }
             }
 
-            render_tool_output(renderer, Some(name), &output, vt_config, Some(token_budget))
+            render_tool_output(renderer, Some(name), output, vt_config, Some(token_budget))
                 .await?;
 
             last_tool_stdout = if *command_success {
@@ -288,7 +288,7 @@ pub(crate) async fn handle_pipeline_output_from_turn_ctx(
         pruning_ledger: ctx.pruning_ledger,
         session_stats: ctx.session_stats,
         mcp_panel_state: ctx.mcp_panel_state,
-        approval_recorder: &*ctx.approval_recorder,
+        approval_recorder: ctx.approval_recorder,
         session: ctx.session,
         traj,
     };
@@ -487,7 +487,7 @@ mod tests {
         .await
         .expect("handle should succeed");
 
-        assert!(any_write == false); // read_file not write
+        assert!(!any_write); // read_file not write
         assert_eq!(mod_files, vec![PathBuf::from("/tmp/foo.txt")]);
 
         // Ensure cache invalidated

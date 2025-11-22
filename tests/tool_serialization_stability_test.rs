@@ -185,16 +185,14 @@ fn validate_encoding_invariants(schema: &Value) -> Result<()> {
     }
 
     // Validate description fields don't have leading/trailing whitespace
-    if let Some(desc) = schema.get("description") {
-        if let Some(desc_str) = desc.as_str() {
-            if desc_str != desc_str.trim() {
+    if let Some(desc) = schema.get("description")
+        && let Some(desc_str) = desc.as_str()
+            && desc_str != desc_str.trim() {
                 anyhow::bail!(
                     "Tool description has leading/trailing whitespace: '{}'",
                     desc_str
                 );
             }
-        }
-    }
 
     Ok(())
 }
@@ -468,7 +466,7 @@ mod integration_tests {
             // Validate parameter schema structure
             let params = schema
                 .get("parameters")
-                .expect(&format!("Tool '{}' missing parameters", tool_name));
+                .unwrap_or_else(|| panic!("Tool '{}' missing parameters", tool_name));
 
             assert!(
                 params.get("type").is_some(),

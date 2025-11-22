@@ -173,14 +173,13 @@ pub(crate) async fn initialize_session(
         .collect();
 
     // Add GPT-5.1 specific tools if the model supports them
-    if let Ok(model_id) = ModelId::from_str(&config.model) {
-        if model_id.is_gpt51_variant() {
+    if let Ok(model_id) = ModelId::from_str(&config.model)
+        && model_id.is_gpt51_variant() {
             // Add apply_patch tool for GPT-5.1's structured diff editing
             tool_definitions.push(uni::ToolDefinition::apply_patch(
                 "Apply structured diffs to modify files. Use this tool to create, update, or delete file content using unified diff format. The tool enables iterative, multi-step code editing workflows by applying patches and reporting results back.".to_string()
             ));
         }
-    }
 
     // Add MCP tools if available (from async manager). Poll briefly for readiness
     // so a fast-starting MCP server will be exposed during session startup.
@@ -396,7 +395,7 @@ pub(crate) async fn initialize_session_ui(
 
     let context_manager = super::context_manager::ContextManager::new(
         session_state.base_system_prompt.clone(),
-        session_state.trim_config.clone(),
+        session_state.trim_config,
         session_state.token_budget.clone(),
         session_state.token_budget_enabled,
     );

@@ -183,7 +183,7 @@ impl ContextManager {
                             turn_number,
                             *idx,
                             (metrics.semantic_score
-                                / context_constants::SEMANTIC_SCORE_SCALING_FACTOR as u32)
+                                / context_constants::SEMANTIC_SCORE_SCALING_FACTOR)
                                 as u16,
                             metrics.token_count,
                             metrics.age_in_turns as usize,
@@ -302,7 +302,7 @@ impl ContextManager {
             0.0
         };
 
-        let avg_semantic = if history.len() > 0 {
+        let avg_semantic = if !history.is_empty() {
             total_semantic_value / history.len() as u32
         } else {
             0

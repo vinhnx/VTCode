@@ -7,9 +7,11 @@ use std::path::PathBuf;
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum TraceLevel {
     Error,
     Warn,
+    #[default]
     Info,
     Debug,
     Trace,
@@ -38,11 +40,6 @@ impl TraceLevel {
     }
 }
 
-impl Default for TraceLevel {
-    fn default() -> Self {
-        Self::Info
-    }
-}
 
 impl std::fmt::Display for TraceLevel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
