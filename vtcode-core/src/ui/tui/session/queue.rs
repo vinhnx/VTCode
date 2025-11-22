@@ -80,9 +80,9 @@ impl Session {
 
         let max_width = width as usize;
         let mut lines = Vec::new();
-        let mut header_style = self.accent_style();
+        let mut header_style = self.styles.accent_style();
         header_style = header_style.add_modifier(Modifier::BOLD);
-        let message_style = self.default_style();
+        let message_style = self.styles.default_style();
 
         let header_text = if self.queued_inputs.len() == 1 {
             "Queued message".to_string()

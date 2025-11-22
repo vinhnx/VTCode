@@ -25,8 +25,8 @@ impl Session {
             .title(self.navigation_block_title())
             .borders(Borders::LEFT)
             .border_type(BorderType::Plain)
-            .style(self.default_style())
-            .border_style(self.border_style());
+            .style(self.styles.default_style())
+            .border_style(self.styles.border_style());
         let inner = block.inner(area);
         if inner.height == 0 {
             frame.render_widget(block, area);
@@ -62,7 +62,7 @@ impl Session {
 
         let list = List::new(items)
             .block(block)
-            .style(self.default_style())
+            .style(self.styles.default_style())
             .highlight_style(self.navigation_highlight_style());
 
         frame.render_stateful_widget(list, area, &mut self.navigation_state);
@@ -256,26 +256,26 @@ impl Session {
     }
 
     fn navigation_preview_style(&self) -> Style {
-        self.default_style().add_modifier(Modifier::DIM)
+        self.styles.default_style().add_modifier(Modifier::DIM)
     }
 
     fn navigation_placeholder_style(&self) -> Style {
-        self.default_style().add_modifier(Modifier::DIM)
+        self.styles.default_style().add_modifier(Modifier::DIM)
     }
 
     fn plan_checkbox_style(&self, status: StepStatus) -> Style {
         match status {
             StepStatus::Completed => self.navigation_preview_style(),
-            StepStatus::InProgress => self.accent_style().add_modifier(Modifier::BOLD),
-            StepStatus::Pending => self.default_style(),
+            StepStatus::InProgress => self.styles.accent_style().add_modifier(Modifier::BOLD),
+            StepStatus::Pending => self.styles.default_style(),
         }
     }
 
     fn plan_step_style(&self, status: StepStatus) -> Style {
         match status {
             StepStatus::Completed => self.navigation_preview_style(),
-            StepStatus::InProgress => self.accent_style().add_modifier(Modifier::BOLD),
-            StepStatus::Pending => self.default_style(),
+            StepStatus::InProgress => self.styles.accent_style().add_modifier(Modifier::BOLD),
+            StepStatus::Pending => self.styles.default_style(),
         }
     }
 
