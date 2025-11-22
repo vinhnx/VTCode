@@ -1122,6 +1122,7 @@ pub(crate) async fn run_single_agent_loop_unified(
         {
             let state = ctrl_c_state.clone();
             let notify = ctrl_c_notify.clone();
+            let handle_for_signal = handle.clone();
             // Spawn Ctrl+C signal handler (background task)
             // See: https://ratatui.rs/faq/#when-should-i-use-tokio-and-async--await-
             let _signal_handler = tokio::spawn(async move {
@@ -1132,6 +1133,9 @@ pub(crate) async fn run_single_agent_loop_unified(
 
                     let signal = state.register_signal();
                     notify.notify_waiters();
+
+                    // Send shutdown command to session to ensure terminal cleanup
+                    handle_for_signal.shutdown();
 
                     // Shutdown MCP client on interrupt using async manager
                     if let Some(mcp_manager) = &async_mcp_manager_for_signal

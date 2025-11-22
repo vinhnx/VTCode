@@ -229,7 +229,7 @@ fn parse_responses_payload(
                 .and_then(|details| details.get("cached_tokens"))
                 .or_else(|| usage_value.get("prompt_cache_hit_tokens"))
                 .and_then(|value| value.as_u64())
-                .map(|value| value as u32)
+                .and_then(|value| u32::try_from(value).ok())
         } else {
             None
         };
@@ -239,16 +239,19 @@ fn parse_responses_payload(
                 .get("input_tokens")
                 .or_else(|| usage_value.get("prompt_tokens"))
                 .and_then(|pt| pt.as_u64())
-                .unwrap_or(0) as u32,
+                .and_then(|v| u32::try_from(v).ok())
+                .unwrap_or(0),
             completion_tokens: usage_value
                 .get("output_tokens")
                 .or_else(|| usage_value.get("completion_tokens"))
                 .and_then(|ct| ct.as_u64())
-                .unwrap_or(0) as u32,
+                .and_then(|v| u32::try_from(v).ok())
+                .unwrap_or(0),
             total_tokens: usage_value
                 .get("total_tokens")
                 .and_then(|tt| tt.as_u64())
-                .unwrap_or(0) as u32,
+                .and_then(|v| u32::try_from(v).ok())
+                .unwrap_or(0),
             cached_prompt_tokens,
             cache_creation_tokens: None,
             cache_read_tokens: None,
@@ -1246,15 +1249,18 @@ impl OpenAIProvider {
                     prompt_tokens: usage_value
                         .get("prompt_tokens")
                         .and_then(|pt| pt.as_u64())
-                        .unwrap_or(0) as u32,
+                        .and_then(|v| u32::try_from(v).ok())
+                        .unwrap_or(0),
                     completion_tokens: usage_value
                         .get("completion_tokens")
                         .and_then(|ct| ct.as_u64())
-                        .unwrap_or(0) as u32,
+                        .and_then(|v| u32::try_from(v).ok())
+                        .unwrap_or(0),
                     total_tokens: usage_value
                         .get("total_tokens")
                         .and_then(|tt| tt.as_u64())
-                        .unwrap_or(0) as u32,
+                        .and_then(|v| u32::try_from(v).ok())
+                        .unwrap_or(0),
                     cached_prompt_tokens,
                     cache_creation_tokens: None,
                     cache_read_tokens: None,
@@ -1428,9 +1434,11 @@ impl OpenAIProvider {
             content,
             tool_calls,
             usage: Some(crate::llm::provider::Usage {
-                prompt_tokens: prompt_tokens.len() as u32,
-                completion_tokens: completion_tokens.len() as u32,
-                total_tokens: (prompt_tokens.len() + completion_tokens.len()) as u32,
+                prompt_tokens: prompt_tokens.len().try_into().unwrap_or(u32::MAX),
+                completion_tokens: completion_tokens.len().try_into().unwrap_or(u32::MAX),
+                total_tokens: (prompt_tokens.len() + completion_tokens.len())
+                    .try_into()
+                    .unwrap_or(u32::MAX),
                 cached_prompt_tokens: None,
                 cache_creation_tokens: None,
                 cache_read_tokens: None,
@@ -1557,7 +1565,7 @@ impl OpenAIProvider {
                 // Direct tokens array
                 tokens_array
                     .iter()
-                    .filter_map(|v| v.as_u64().map(|u| u as u32))
+                    .filter_map(|v| v.as_u64().and_then(|u| u32::try_from(u).ok()))
                     .collect::<Vec<u32>>()
             } else if let Some(outputs) = response_json.get("outputs").and_then(|o| o.as_array()) {
                 // vLLM nested outputs format
@@ -1568,7 +1576,7 @@ impl OpenAIProvider {
                     .map(|token_ids| {
                         token_ids
                             .iter()
-                            .filter_map(|v| v.as_u64().map(|u| u as u32))
+                            .filter_map(|v| v.as_u64().and_then(|u| u32::try_from(u).ok()))
                             .collect::<Vec<u32>>()
                     })
                     .unwrap_or_default()
@@ -1581,7 +1589,7 @@ impl OpenAIProvider {
                             if arr.iter().all(|v| v.is_u64()) {
                                 found_tokens = arr
                                     .iter()
-                                    .filter_map(|v| v.as_u64().map(|u| u as u32))
+                                    .filter_map(|v| v.as_u64().and_then(|u| u32::try_from(u).ok()))
                                     .collect();
                                 break;
                             }
@@ -2894,12 +2902,14 @@ impl LLMClient for OpenAIProvider {
             content: response.content.unwrap_or_default(),
             model: request_model,
             usage: response.usage.map(|u| llm_types::Usage {
-                prompt_tokens: u.prompt_tokens as usize,
-                completion_tokens: u.completion_tokens as usize,
-                total_tokens: u.total_tokens as usize,
-                cached_prompt_tokens: u.cached_prompt_tokens.map(|v| v as usize),
-                cache_creation_tokens: u.cache_creation_tokens.map(|v| v as usize),
-                cache_read_tokens: u.cache_read_tokens.map(|v| v as usize),
+                prompt_tokens: u.prompt_tokens.try_into().unwrap_or(usize::MAX),
+                completion_tokens: u.completion_tokens.try_into().unwrap_or(usize::MAX),
+                total_tokens: u.total_tokens.try_into().unwrap_or(usize::MAX),
+                cached_prompt_tokens: u.cached_prompt_tokens.and_then(|v| usize::try_from(v).ok()),
+                cache_creation_tokens: u
+                    .cache_creation_tokens
+                    .and_then(|v| usize::try_from(v).ok()),
+                cache_read_tokens: u.cache_read_tokens.and_then(|v| usize::try_from(v).ok()),
             }),
             reasoning: response.reasoning,
         })

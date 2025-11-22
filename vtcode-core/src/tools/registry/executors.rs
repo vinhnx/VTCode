@@ -209,7 +209,11 @@ impl ToolRegistry {
 
             // Enhanced suggestions with self-fix capabilities
             let mut suggestions = Vec::new();
-            let total_errors = error_report["total_errors"].as_u64().unwrap_or(0) as usize;
+            let total_errors = error_report["total_errors"]
+                .as_u64()
+                .unwrap_or(0)
+                .try_into()
+                .unwrap_or(0_usize);
 
             if total_errors > 0 {
                 suggestions.push(

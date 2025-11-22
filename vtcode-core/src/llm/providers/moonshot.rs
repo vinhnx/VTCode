@@ -293,6 +293,7 @@ impl MoonshotProvider {
                                                         ),
                                                         call_type: "function".to_string(),
                                                         text: None,
+                                                        thought_signature: None,
                                                     })
                                             })
                                     })

@@ -14,7 +14,6 @@ use crate::utils::colors::style;
 use anyhow::Result;
 use indexmap::IndexMap;
 use serde_json::json;
-use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 /// Project analysis result
@@ -818,16 +817,107 @@ fn render_section(title: &str, lines: Vec<String>) -> Option<String> {
     Some(section)
 }
 fn unique_preserving_order(values: &[String]) -> Vec<String> {
-    let mut seen = HashSet::new();
-    let mut result = Vec::new();
+    // Using functional approach: fold to accumulate unique values
+    // This follows the functional paradigm by avoiding mutable state
+    // outside of the accumulator function
+    use std::collections::HashSet;
+    values
+        .iter()
+        .fold(
+            (HashSet::new(), Vec::new()),
+            |(mut seen, mut result), value| {
+                if seen.insert(value.clone()) {
+                    result.push(value.clone());
+                }
+                (seen, result)
+            },
+        )
+        .1 // Return only the result vector, not the intermediate hashset
+}
 
-    for value in values {
-        if seen.insert(value.clone()) {
-            result.push(value.clone());
+/// Process a collection immutably by applying transformations and filters using iterator chains.
+/// This demonstrates immutable principles by avoiding in-place mutations where possible.
+///
+/// Example of applying immutability principles from:
+/// https://corrode.dev/blog/immutability/
+#[allow(dead_code)] // Allow dead code since this is a demonstration function
+fn process_with_immutable_patterns<T, F, P>(items: Vec<T>, predicate: P, transform: F) -> Vec<T>
+where
+    F: Fn(T) -> T,
+    P: Fn(&T) -> bool,
+{
+    items.into_iter().filter(predicate).map(transform).collect()
+}
+
+/// Transform a collection using functional iterator chain instead of imperative loops
+///
+/// This demonstrates how to convert imperative code like:
+/// ```ignore
+/// let mut results = Vec::new();
+/// for item in items {
+///     if predicate(&item) {
+///         results.push(transform(item));
+///     }
+/// }
+/// ```
+///
+/// To functional style:
+/// ```ignore
+/// let results: Vec<_> = items
+///     .into_iter()
+///     .filter(predicate)
+///     .map(transform)
+///     .collect();
+/// ```
+///
+/// This follows the functional core with imperative shell approach mentioned in the article:
+/// https://corrode.dev/blog/paradigms/
+#[allow(dead_code)] // Allow dead code since this is a demonstration function
+fn functional_collection_transform<T, F, P>(items: Vec<T>, predicate: P, transform: F) -> Vec<T>
+where
+    F: Fn(T) -> T,
+    P: Fn(&T) -> bool,
+{
+    items.into_iter().filter(predicate).map(transform).collect()
+}
+
+/// Demonstrate object-oriented design principles for organizing application components
+///
+/// This follows the OOP approach mentioned in the article by:
+/// 1. Encapsulating related data and behavior in a struct
+/// 2. Providing a clean interface through methods
+/// 3. Separating what (interface) from how (implementation)
+///
+/// The `ProjectAnalyzer` struct bundles related functionality for project analysis,
+/// following Rust's preference for combining structs with implementations for OOP-style organization.
+/// See: https://corrode.dev/blog/paradigms/
+#[derive(Debug, Clone)]
+pub struct ProjectAnalyzer {
+    pub name: String,
+    pub path: String,
+    pub analysis_depth: String,
+}
+
+impl ProjectAnalyzer {
+    pub fn new(name: String, path: String) -> Self {
+        Self {
+            name,
+            path,
+            analysis_depth: "standard".to_string(),
         }
     }
 
-    result
+    pub fn with_depth(mut self, depth: String) -> Self {
+        self.analysis_depth = depth;
+        self
+    }
+
+    pub fn analyze(&self) -> String {
+        format!(
+            "Analyzing project '{}' at path '{}' with {} depth",
+            self.name, self.path, self.analysis_depth
+        )
+    }
 }
 
 #[cfg(test)]

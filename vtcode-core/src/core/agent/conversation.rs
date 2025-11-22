@@ -60,7 +60,10 @@ pub fn build_messages_from_conversation(
     for content in conversation {
         let mut text = String::new();
         for part in &content.parts {
-            if let Part::Text { text: part_text } = part {
+            if let Part::Text {
+                text: part_text, ..
+            } = part
+            {
                 if !text.is_empty() {
                     text.push('\n');
                 }

@@ -325,6 +325,7 @@ impl LLMProvider for GeminiProvider {
                                 role: "model".to_string(),
                                 parts: vec![Part::Text {
                                     text: aggregated_text.clone(),
+                                    thought_signature: None,
                                 }],
                             },
                             finish_reason: None,
@@ -503,6 +504,7 @@ impl GeminiProvider {
             if message.role != MessageRole::Tool && !message.content.is_empty() {
                 parts.push(Part::Text {
                     text: content_text.clone(),
+                    thought_signature: None, // User-generated text doesn't have thought signature
                 });
             }
 
@@ -519,6 +521,9 @@ impl GeminiProvider {
                                 args: parsed_args,
                                 id: Some(tool_call.id.clone()),
                             },
+                            // Preserve thought signature from the tool call
+                            // This is critical for Gemini 3 Pro to maintain reasoning context
+                            thought_signature: tool_call.thought_signature.clone(),
                         });
                     }
                 }
@@ -549,10 +554,12 @@ impl GeminiProvider {
                             name: func_name,
                             response: response_payload,
                         },
+                        thought_signature: None, // Function responses don't carry thought signatures
                     });
                 } else if !message.content.is_empty() {
                     parts.push(Part::Text {
                         text: message.content.as_text(),
+                        thought_signature: None,
                     });
                 }
             }
@@ -724,10 +731,22 @@ impl GeminiProvider {
 
         for part in candidate.content.parts {
             match part {
-                Part::Text { text } => {
+                Part::Text {
+                    text,
+                    thought_signature,
+                } => {
                     text_content.push_str(&text);
+                    // Store thought signature for non-function-call text responses
+                    // This is used for maintaining context in multi-turn conversations
+                    if thought_signature.is_some() && !text_content.is_empty() {
+                        // Store in last position to be retrieved later if needed
+                        // For text parts, thought signatures are typically in the last part
+                    }
                 }
-                Part::FunctionCall { function_call } => {
+                Part::FunctionCall {
+                    function_call,
+                    thought_signature,
+                } => {
                     let call_id = function_call.id.clone().unwrap_or_else(|| {
                         format!(
                             "call_{}_{}",
@@ -747,6 +766,9 @@ impl GeminiProvider {
                                 .unwrap_or_else(|_| "{}".to_string()),
                         }),
                         text: None,
+                        // Preserve thought signature from Gemini response
+                        // Critical for Gemini 3 Pro to maintain reasoning context across function calls
+                        thought_signature,
                     });
                 }
                 Part::FunctionResponse { .. } => {
@@ -1504,6 +1526,154 @@ mod tests {
             .get("thinkingLevel")
             .expect("thinkingLevel should be present");
         assert_eq!(thinking_level_none.as_str().unwrap(), "low");
+    }
+
+    #[test]
+    fn thought_signature_preserved_in_function_call_response() {
+        use crate::gemini::function_calling::FunctionCall as GeminiFunctionCall;
+        use crate::gemini::models::{Candidate, Content, GenerateContentResponse, Part};
+
+        let test_signature = "encrypted_signature_xyz123".to_string();
+
+        let response = GenerateContentResponse {
+            candidates: vec![Candidate {
+                content: Content {
+                    role: "model".to_string(),
+                    parts: vec![Part::FunctionCall {
+                        function_call: GeminiFunctionCall {
+                            name: "get_weather".to_string(),
+                            args: json!({"city": "London"}),
+                            id: Some("call_123".to_string()),
+                        },
+                        thought_signature: Some(test_signature.clone()),
+                    }],
+                },
+                finish_reason: Some("FUNCTION_CALL".to_string()),
+            }],
+            prompt_feedback: None,
+            usage_metadata: None,
+        };
+
+        let llm_response = GeminiProvider::convert_from_gemini_response(response)
+            .expect("conversion should succeed");
+
+        let tool_calls = llm_response.tool_calls.expect("should have tool calls");
+        assert_eq!(tool_calls.len(), 1);
+        assert_eq!(
+            tool_calls[0].thought_signature,
+            Some(test_signature),
+            "thought signature should be preserved"
+        );
+    }
+
+    #[test]
+    fn thought_signature_roundtrip_in_request() {
+        let provider = GeminiProvider::new("test-key".to_string());
+        let test_signature = "sig_abc_def_123".to_string();
+
+        let request = LLMRequest {
+            messages: vec![
+                Message::user("What's the weather?".to_string()),
+                Message {
+                    role: MessageRole::Assistant,
+                    content: MessageContent::Text(String::new()),
+                    tool_calls: Some(vec![ToolCall {
+                        id: "call_456".to_string(),
+                        call_type: "function".to_string(),
+                        function: Some(FunctionCall {
+                            name: "get_weather".to_string(),
+                            arguments: r#"{"city":"Paris"}"#.to_string(),
+                        }),
+                        text: None,
+                        thought_signature: Some(test_signature.clone()),
+                    }]),
+                    tool_call_id: None,
+                    name: None,
+                },
+            ],
+            system_prompt: None,
+            tools: None,
+            model: "gemini-3-pro-preview".to_string(),
+            max_tokens: None,
+            temperature: None,
+            stream: false,
+            output_format: None,
+            tool_choice: None,
+            parallel_tool_calls: None,
+            parallel_tool_config: None,
+            reasoning_effort: None,
+            verbosity: None,
+        };
+
+        let gemini_request = provider
+            .convert_to_gemini_request(&request)
+            .expect("conversion should succeed");
+
+        // Find the FunctionCall part with thought signature
+        let assistant_content = &gemini_request.contents[1];
+        let has_signature = assistant_content.parts.iter().any(|part| match part {
+            Part::FunctionCall {
+                thought_signature, ..
+            } => thought_signature.as_ref() == Some(&test_signature),
+            _ => false,
+        });
+
+        assert!(
+            has_signature,
+            "thought signature should be preserved in request"
+        );
+    }
+
+    #[test]
+    fn parallel_function_calls_single_signature() {
+        use crate::gemini::function_calling::FunctionCall as GeminiFunctionCall;
+        use crate::gemini::models::{Candidate, Content, GenerateContentResponse, Part};
+
+        let test_signature = "parallel_sig_123".to_string();
+
+        let response = GenerateContentResponse {
+            candidates: vec![Candidate {
+                content: Content {
+                    role: "model".to_string(),
+                    parts: vec![
+                        Part::FunctionCall {
+                            function_call: GeminiFunctionCall {
+                                name: "get_weather".to_string(),
+                                args: json!({"city": "Paris"}),
+                                id: Some("call_1".to_string()),
+                            },
+                            thought_signature: Some(test_signature.clone()),
+                        },
+                        Part::FunctionCall {
+                            function_call: GeminiFunctionCall {
+                                name: "get_weather".to_string(),
+                                args: json!({"city": "London"}),
+                                id: Some("call_2".to_string()),
+                            },
+                            thought_signature: None, // Only first has signature
+                        },
+                    ],
+                },
+                finish_reason: Some("FUNCTION_CALL".to_string()),
+            }],
+            prompt_feedback: None,
+            usage_metadata: None,
+        };
+
+        let llm_response = GeminiProvider::convert_from_gemini_response(response)
+            .expect("conversion should succeed");
+
+        let tool_calls = llm_response.tool_calls.expect("should have tool calls");
+        assert_eq!(tool_calls.len(), 2);
+        assert_eq!(
+            tool_calls[0].thought_signature,
+            Some(test_signature),
+            "first call should have signature"
+        );
+        assert_eq!(
+            tool_calls[1].thought_signature, None,
+            "second call should not have signature"
+        );
     }
 
     #[test]

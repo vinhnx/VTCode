@@ -493,6 +493,10 @@ impl StreamingReasoningState {
         final_reasoning: Option<&str>,
     ) -> Result<()> {
         if self.inline_enabled {
+            // Render any pending inline content that wasn't rendered yet
+            if !self.pending_inline.is_empty() {
+                self.render_inline(renderer)?;
+            }
             // Clear pending buffer
             self.pending_inline.clear();
 
@@ -514,20 +518,35 @@ impl StreamingReasoningState {
             }
             Ok(())
         } else {
-            // CLI mode: only finalize the newline, don't re-display reasoning
+            // CLI mode: finalize the newline
             self.finalize_cli(renderer)?;
 
-            // Only display final reasoning if it wasn't streamed at all
-            if let Some(reasoning) = final_reasoning.map(str::trim)
-                && !reasoning.is_empty()
-                && self.aggregated.trim().is_empty()
-            {
-                // No reasoning was streamed, display the final reasoning
-                renderer.line(
-                    MessageStyle::Reasoning,
-                    &format!("{REASONING_PREFIX}{reasoning}"),
-                )?;
-                self.aggregated = reasoning.to_string();
+            // Display final reasoning if available and either:
+            // 1. It wasn't streamed at all, OR
+            // 2. It was truncated during streaming (we have more content now)
+            if let Some(reasoning) = final_reasoning.map(str::trim) {
+                if !reasoning.is_empty() {
+                    let aggregated_trimmed = self.aggregated.trim();
+                    let is_truncated = aggregated_trimmed.ends_with("...");
+                    let was_not_streamed = aggregated_trimmed.is_empty();
+
+                    // Show the reasoning if it wasn't displayed yet OR if what was displayed was truncated
+                    if was_not_streamed
+                        || (is_truncated && reasoning.len() > aggregated_trimmed.len() - 3)
+                    {
+                        // Only show if it's genuinely new content or is different from what was shown
+                        if was_not_streamed
+                            || reasoning
+                                != &aggregated_trimmed[..aggregated_trimmed.len().saturating_sub(3)]
+                        {
+                            renderer.line(
+                                MessageStyle::Reasoning,
+                                &format!("{REASONING_PREFIX}{reasoning}"),
+                            )?;
+                            self.aggregated = reasoning.to_string();
+                        }
+                    }
+                }
             }
             Ok(())
         }
@@ -603,6 +622,18 @@ impl StreamingReasoningState {
         if self.cli_prefix_printed && !self.cli_pending_indent {
             renderer.inline_with_style(MessageStyle::Reasoning, "\n")?;
             self.cli_pending_indent = true;
+        }
+        Ok(())
+    }
+
+    /// Flush any pending reasoning display without full finalization
+    /// Used to ensure reasoning appears before response content
+    fn flush_pending(&mut self, renderer: &mut AnsiRenderer) -> Result<()> {
+        if self.inline_enabled {
+            if !self.pending_inline.is_empty() {
+                self.render_inline(renderer)?;
+                self.pending_inline.clear();
+            }
         }
         Ok(())
     }
@@ -701,6 +732,7 @@ pub(crate) async fn stream_and_render_response(
     let mut token_count = 0;
     let mut reasoning_token_count = 0;
     let mut last_progress_update = std::time::Instant::now();
+    let mut reasoning_emitted = false;
 
     loop {
         if ctrl_c_state.is_cancel_requested() || ctrl_c_state.is_exit_requested() {
@@ -737,6 +769,15 @@ pub(crate) async fn stream_and_render_response(
         match event_result {
             Ok(LLMStreamEvent::Token { delta }) => {
                 token_count += 1;
+
+                // Ensure any buffered reasoning is rendered before the first response token
+                if !reasoning_emitted && reasoning_token_count > 0 {
+                    reasoning_state
+                        .flush_pending(renderer)
+                        .map_err(|err| map_render_error(provider_name, err))?;
+                    reasoning_emitted = true;
+                }
+
                 if !spinner_message_updated {
                     spinner.update_message("Receiving response...");
                     spinner_message_updated = true;

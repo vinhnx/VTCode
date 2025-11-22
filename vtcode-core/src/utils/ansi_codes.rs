@@ -535,7 +535,7 @@ pub fn truncate_to_width(text: &str, max_width: usize, ellipsis: &str) -> String
     // Simple truncation - preserve ANSI codes at start
     let truncate_at = max_width.saturating_sub(ellipsis.len());
     let truncated_plain: String = stripped.chars().take(truncate_at).collect();
-    
+
     // Try to preserve leading ANSI codes
     if starts_with_ansi(text) {
         // Find where the actual text starts
