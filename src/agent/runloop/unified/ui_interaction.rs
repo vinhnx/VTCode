@@ -399,8 +399,8 @@ impl Drop for PlaceholderSpinner {
     }
 }
 
-const REASONING_HEADING: &str = "Thinking";
-const REASONING_PREFIX: &str = "Thinking: ";
+const REASONING_HEADING: &str = "I'm thinking";
+const REASONING_PREFIX: &str = "I'm thinking: ";
 const INLINE_REASONING_RENDER_CHUNK: usize = 120;
 /// Maximum reasoning to display; longer reasoning is truncated with ellipsis
 const MAX_REASONING_DISPLAY_CHARS: usize = 500;
