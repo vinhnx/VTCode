@@ -10,7 +10,6 @@ use crossterm::event::{
 use ratatui::{
     Frame,
     layout::{Constraint, Layout, Rect},
-    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, BorderType, Borders, Clear, ListState, Paragraph, Wrap},
 };
@@ -19,7 +18,7 @@ use tokio::sync::mpsc::UnboundedSender;
 use super::{
     style::{measure_text_width, ratatui_color_from_ansi, ratatui_style_from_inline},
     types::{
-        InlineCommand, InlineEvent, InlineHeaderContext, InlineMessageKind, InlineSegment,
+        InlineCommand, InlineEvent, InlineHeaderContext, InlineMessageKind,
         InlineTextStyle, InlineTheme,
     },
 };
@@ -60,7 +59,7 @@ mod tool_renderer;
 use self::file_palette::FilePalette;
 use self::input_manager::InputManager;
 use self::message::{MessageLabels, MessageLine};
-use self::modal::{ModalState, compute_modal_area};
+use self::modal::ModalState;
 
 use self::prompt_palette::PromptPalette;
 use self::queue::QueueOverlay;
@@ -706,6 +705,7 @@ impl Session {
         palette_views::render_prompt_palette(frame, viewport, palette, &self.theme);
     }
 
+    #[allow(dead_code)]
     fn render_message_spans(&self, index: usize) -> Vec<Span<'static>> {
         let Some(line) = self.lines.get(index) else {
             return vec![Span::raw(String::new())];

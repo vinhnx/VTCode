@@ -3,6 +3,7 @@ use crossterm::event::{KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind};
 
 use crate::ui::tui::session::modal::{ModalKeyModifiers, ModalListKeyResult};
 
+#[allow(dead_code)]
 pub(super) fn handle_event(
     session: &mut Session,
     event: CrosstermEvent,
@@ -361,6 +362,7 @@ pub(super) fn handle_scroll_up(
     emit_inline_event(&InlineEvent::ScrollLineUp, events, callback);
 }
 
+#[allow(dead_code)]
 pub(super) fn handle_file_palette_key(session: &mut Session, key: &KeyEvent) -> bool {
     if !session.file_palette_active {
         return false;
@@ -428,6 +430,7 @@ pub(super) fn handle_file_palette_key(session: &mut Session, key: &KeyEvent) -> 
     }
 }
 
+#[allow(dead_code)]
 pub(super) fn handle_prompt_palette_key(session: &mut Session, key: &KeyEvent) -> bool {
     if !session.prompt_palette_active {
         return false;

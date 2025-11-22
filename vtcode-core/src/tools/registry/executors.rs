@@ -1480,6 +1480,17 @@ impl ToolRegistry {
     async fn execute_run_pty_command(&mut self, args: Value) -> Result<Value> {
         let payload = value_as_object(&args, "run_pty_cmd expects an object payload")?;
         let setup = self.prepare_ephemeral_pty_command(payload).await?;
+        
+        // Guard: ensure command is not empty - this should not happen if parse_command_parts worked correctly
+        if setup.command.is_empty() {
+            let debug_info = format!("Available keys in payload: {:?}", payload.keys().collect::<Vec<_>>());
+            return Err(anyhow!(
+                "Internal error: prepared PTY command is empty after parsing. {}. \
+                 Please ensure 'command' parameter is a non-empty string or array in run_pty_cmd call.",
+                debug_info
+            ));
+        }
+        
         self.run_ephemeral_pty_command(setup).await
     }
 
@@ -1565,6 +1576,11 @@ impl ToolRegistry {
     }
 
     async fn run_ephemeral_pty_command(&mut self, setup: PtyCommandSetup) -> Result<Value> {
+        // Guard: ensure command is not empty before attempting execution
+        if setup.command.is_empty() {
+            return Err(anyhow!("PTY command cannot be empty"));
+        }
+        
         // Execute the PTY command exactly once.
         // We do NOT retry on exit code (application error) because:
         // 1. It causes "multi retry" behavior where a single failed command runs 3 times.
@@ -2394,6 +2410,15 @@ fn collect_command_vector(
             entries.sort_unstable_by_key(|(idx, _)| *idx);
             let min_index = entries.first().unwrap().0;
             let max_index = entries.last().unwrap().0;
+            
+            // Validate that command starts at index 0 or 1 (not after gaps)
+            if min_index > 1 {
+                return Err(anyhow!(
+                    "command array from dotted notation must start at command.0 or command.1, got command.{}",
+                    min_index
+                ));
+            }
+            
             let mut computed = vec![String::new(); max_index + 1 - min_index];
             for (idx, seg) in entries.into_iter() {
                 let position = if min_index == 1 { idx - 1 } else { idx };
@@ -2402,6 +2427,12 @@ fn collect_command_vector(
                 }
                 computed[position] = seg;
             }
+            
+            // Validate first element is not empty
+            if computed.is_empty() || computed[0].trim().is_empty() {
+                return Err(anyhow!("command executable (command.0 or command.1) cannot be empty"));
+            }
+            
             return Ok(computed);
         }
         return Err(anyhow!(missing_error.to_string()));
@@ -2548,7 +2579,17 @@ impl TerminalCommandPayload {
             "command array must contain only strings",
         )?;
         if command_vec.is_empty() {
-            return Err(anyhow!("command array cannot be empty"));
+            return Err(anyhow!(
+                "command array is empty. run_pty_cmd requires a non-empty 'command' parameter.\n\
+                 Supported formats: \"ls -la\" or [\"ls\", \"-la\"]"
+            ));
+        }
+        if command_vec[0].trim().is_empty() {
+            return Err(anyhow!(
+                "command executable (first element) cannot be empty or whitespace-only.\n\
+                 Got command array: {:?}",
+                command_vec
+            ));
         }
 
         let run_mode = determine_terminal_run_mode(args)?;
@@ -2755,6 +2796,15 @@ fn parse_command_parts(
             entries.sort_unstable_by_key(|(idx, _)| *idx);
             let min_index = entries.first().unwrap().0;
             let max_index = entries.last().unwrap().0;
+            
+            // Validate that command starts at index 0 or 1 (not after gaps)
+            if min_index > 1 {
+                return Err(anyhow!(
+                    "command array from dotted notation must start at command.0 or command.1, got command.{}",
+                    min_index
+                ));
+            }
+            
             let mut computed_parts = vec![String::new(); max_index + 1 - min_index];
             for (idx, seg) in entries.into_iter() {
                 let position = if min_index == 1 { idx - 1 } else { idx };
@@ -2786,7 +2836,23 @@ fn parse_command_parts(
     }
 
     if parts.is_empty() {
-        return Err(anyhow!("{}", empty_error));
+        return Err(anyhow!(
+            "{}\n\nSupported formats:\n\
+             - command: \"ls -la\"\n\
+             - command: [\"ls\", \"-la\"]\n\
+             - command.0: \"ls\", command.1: \"-la\"\n\
+             - command: \"cargo build\", args: [\"--release\"]",
+            empty_error
+        ));
+    }
+
+    if parts[0].trim().is_empty() {
+        return Err(anyhow!(
+            "{}\n\nThe first element of the command array cannot be empty or whitespace-only.\n\
+             Got: {:?}",
+            empty_error,
+            parts
+        ));
     }
 
     Ok(parts)

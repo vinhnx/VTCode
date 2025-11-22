@@ -129,6 +129,8 @@ pub mod command_policy;
 pub mod command_resolver;
 pub mod editing;
 pub mod error_context;
+pub mod execution_context;
+pub mod fallback_chains;
 pub mod file_ops;
 pub mod grep_file;
 pub mod names;
@@ -137,13 +139,32 @@ pub mod plan;
 pub mod pty;
 pub mod registry;
 pub mod result_cache;
+pub mod result_metadata;
 pub mod search_metrics;
 pub mod shell;
+pub mod smart_cache;
 pub mod terminal_app;
+pub mod tool_effectiveness;
 pub mod traits;
 pub mod tree_sitter;
 pub mod types;
 pub mod web_fetch;
+
+// Production-grade improvements modules
+pub mod improvement_algorithms;
+pub mod improvements_config;
+pub mod improvements_errors;
+pub mod middleware;
+pub mod improvements_cache;
+pub mod async_middleware;
+pub mod pattern_engine;
+pub mod improvements_registry_ext;
+
+#[cfg(test)]
+mod improvements_integration_tests;
+
+#[cfg(test)]
+mod improvements_real_workflow_tests;
 
 // Re-export main types and traits for backward compatibility
 pub use cache::FileCache;
@@ -151,6 +172,11 @@ pub use command_cache::PermissionCache;
 pub use command_resolver::CommandResolver;
 pub use editing::{Patch, PatchError, PatchHunk, PatchLine, PatchOperation};
 pub use error_context::ToolErrorContext;
+pub use execution_context::{ToolExecutionContext, ToolExecutionRecord, ToolPattern};
+pub use fallback_chains::{
+    AbortCondition, ChainStopReason, FallbackChain, FallbackChainExecutor, FallbackChainResult,
+    FallbackStep,
+};
 pub use grep_file::GrepSearchManager;
 pub use plan::{
     PlanCompletionState, PlanManager, PlanStep, PlanSummary, PlanUpdateResult, StepStatus,
@@ -163,10 +189,48 @@ pub use registry::{
     WorkspaceTrust,
 };
 pub use result_cache::{CacheKey, CacheStats, CachedResult, ToolResultCache};
+pub use result_metadata::{
+    EnhancedToolResult, ResultCompleteness, ResultMetadata, ResultScorer, ScorerRegistry,
+};
 pub use search_metrics::{SearchMetric, SearchMetrics, SearchMetricsStats};
+pub use smart_cache::{CachedResult as SmartCachedResult, SmartResultCache};
+pub use tool_effectiveness::{
+    AdaptiveToolSelector, ToolEffectiveness, ToolEffectivenessTracker, ToolFailureMode,
+    ToolSelector, ToolSelectionContext,
+};
 pub use traits::{Tool, ToolExecutor};
 pub use types::*;
 pub use web_fetch::WebFetchTool;
+
+// Production-grade improvements re-exports
+pub use improvement_algorithms::{
+    jaro_winkler_similarity, MLScoreComponents, PatternDetector, PatternState, TimeDecayedScore,
+};
+pub use improvements_config::{
+    CacheConfig, ContextConfig, FallbackConfig, ImprovementsConfig, PatternConfig, SimilarityConfig,
+    TimeDecayConfig,
+};
+pub use improvements_errors::{
+    ErrorKind, ErrorSeverity, ImprovementError, ImprovementEvent, ImprovementResult, EventType,
+    ObservabilityContext, ObservabilitySink,
+};
+pub use middleware::{
+    CachingMiddleware, ExecutionMetadata, LoggingMiddleware, Middleware, MiddlewareChain,
+    MiddlewareError, MiddlewareResult, RequestMetadata, RetryMiddleware, ToolRequest,
+    ValidationMiddleware,
+};
+pub use improvements_cache::LruCache;
+pub use improvements_cache::CacheStats as LruCacheStats;
+pub use async_middleware::{
+    AsyncMiddleware, AsyncMiddlewareChain, AsyncLoggingMiddleware, AsyncCachingMiddleware,
+    AsyncRetryMiddleware, ToolRequest as AsyncToolRequest, ToolResult,
+};
+pub use pattern_engine::{
+    PatternEngine, ExecutionEvent, DetectedPattern, ExecutionSummary,
+};
+pub use improvements_registry_ext::{
+    ToolRegistryImprovement, ToolMetrics,
+};
 
 // Re-export function declarations for external use
 pub use registry::build_function_declarations;

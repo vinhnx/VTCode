@@ -27,7 +27,9 @@ pub struct ModalState {
     pub secure_prompt: Option<SecurePromptConfig>,
     #[allow(dead_code)]
     pub popup_state: PopupState,
+    #[allow(dead_code)]
     pub restore_input: bool,
+    #[allow(dead_code)]
     pub restore_cursor: bool,
     pub search: Option<ModalSearchState>,
 }

@@ -46,6 +46,7 @@ impl Session {
     }
 
     /// Reflow a specific message line based on its type and width
+    #[allow(dead_code)]
     pub(super) fn reflow_message_lines(&self, index: usize, width: u16) -> Vec<Line<'static>> {
         let Some(message) = self.lines.get(index) else {
             return vec![Line::default()];
@@ -106,6 +107,7 @@ impl Session {
     }
 
     /// Wrap content with left and right borders
+    #[allow(dead_code)]
     pub(super) fn wrap_block_lines(
         &self,
         first_prefix: &str,
@@ -157,6 +159,7 @@ impl Session {
     }
 
     /// Reflow tool output lines with appropriate formatting
+    #[allow(dead_code)]
     pub(super) fn reflow_tool_lines(&self, index: usize, width: u16) -> Vec<Line<'static>> {
         let Some(line) = self.lines.get(index) else {
             return vec![Line::default()];
@@ -226,6 +229,7 @@ impl Session {
     }
 
     /// Check if a PTY block has actual content
+    #[allow(dead_code)]
     pub(super) fn pty_block_has_content(&self, index: usize) -> bool {
         if self.lines.is_empty() {
             return false;
@@ -277,6 +281,7 @@ impl Session {
     }
 
     /// Reflow PTY output lines with appropriate borders and formatting
+    #[allow(dead_code)]
     pub(super) fn reflow_pty_lines(&self, index: usize, width: u16) -> Vec<Line<'static>> {
         let Some(line) = self.lines.get(index) else {
             return vec![Line::default()];
@@ -367,6 +372,7 @@ impl Session {
     }
 
     /// Create a message divider line
+    #[allow(dead_code)]
     pub(super) fn message_divider_line(
         &self,
         width: usize,
@@ -382,11 +388,13 @@ impl Session {
     }
 
     /// Get the style for a message divider
+    #[allow(dead_code)]
     pub(super) fn message_divider_style(&self, kind: InlineMessageKind) -> Style {
         self.styles.message_divider_style(kind)
     }
 
     /// Justify wrapped lines for agent messages
+    #[allow(dead_code)]
     pub(super) fn justify_wrapped_lines(
         &self,
         lines: Vec<Line<'static>>,
@@ -443,6 +451,7 @@ impl Session {
     }
 
     /// Check if a message line should be justified
+    #[allow(dead_code)]
     pub(super) fn should_justify_message_line(
         &self,
         line: &Line<'static>,
@@ -478,6 +487,7 @@ impl Session {
     }
 
     /// Justify a message line by distributing spaces
+    #[allow(dead_code)]
     pub(super) fn justify_message_line(
         &self,
         line: &Line<'static>,
@@ -492,6 +502,7 @@ impl Session {
     }
 
     /// Check if a line is a diff line (has diff markers and background color)
+    #[allow(dead_code)]
     pub(super) fn is_diff_line(&self, line: &Line<'static>) -> bool {
         if line.spans.is_empty() {
             return false;
@@ -507,6 +518,7 @@ impl Session {
     }
 
     /// Pad a diff line to full width
+    #[allow(dead_code)]
     pub(super) fn pad_diff_line(&self, line: &Line<'static>, max_width: usize) -> Line<'static> {
         if max_width == 0 || line.spans.is_empty() {
             return line.clone();
@@ -546,6 +558,7 @@ impl Session {
 }
 
 /// Collapse multiple consecutive newlines (3 or more) into at most 2 newlines
+#[allow(dead_code)]
 fn collapse_excess_newlines(text: &str) -> String {
     let mut result = String::new();
     let mut chars = text.chars().peekable();

@@ -26,6 +26,24 @@ pub use adapters::{RegistryBuilder, RegistryEvent};
 pub mod acp_tool;
 pub use acp_tool::{AcpDiscoveryTool, AcpHealthTool, AcpTool};
 
+pub mod cache;
+pub use cache::{CacheObserver, CacheStats, EvictionReason, LruCache, NoopObserver};
+
+pub mod middleware;
+pub use middleware::{
+    LoggingMiddleware, MetricsMiddleware, MetricsSnapshot, Middleware, MiddlewareChain,
+    NoopMiddleware, ToolRequest, ToolResponse,
+};
+
+pub mod patterns;
+pub use patterns::{DetectedPattern, PatternDetector, ToolEvent};
+
+pub mod executor;
+pub use executor::{CachedToolExecutor, ExecutorStats};
+
+pub mod optimizer;
+pub use optimizer::{Optimization, OptimizationType, WorkflowOptimizer};
+
 pub use vtcode_core::tools::command;
 pub use vtcode_core::tools::names;
 

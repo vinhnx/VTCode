@@ -14,9 +14,12 @@ use super::{
 use crate::config::constants::prompts;
 use crate::prompts::CustomPromptRegistry;
 
+#[allow(dead_code)]
 const USER_PREFIX: &str = "";
+#[allow(dead_code)]
 const PROMPT_COMMAND_PREFIX: &str = "/prompt:";
 
+#[allow(dead_code)]
 pub fn handle_command(session: &mut Session, command: InlineCommand) {
     match command {
         InlineCommand::AppendLine { kind, segments } => {
@@ -149,6 +152,7 @@ pub fn handle_command(session: &mut Session, command: InlineCommand) {
 }
 
 /// Check if the content appears to be an error message that should go to transcript instead of input field
+#[allow(dead_code)]
 fn is_error_content(content: &str) -> bool {
     // Check if message contains common error indicators
     let lower_content = content.to_lowercase();
@@ -178,16 +182,19 @@ fn is_error_content(content: &str) -> bool {
         .any(|indicator| lower_content.contains(indicator))
 }
 
+#[allow(dead_code)]
 fn ensure_prompt_style_color(session: &mut Session) {
     if session.prompt_style.color.is_none() {
         session.prompt_style.color = session.theme.primary.or(session.theme.foreground);
     }
 }
 
+#[allow(dead_code)]
 pub fn mark_dirty(session: &mut Session) {
     session.needs_redraw = true;
 }
 
+#[allow(dead_code)]
 fn show_modal(
     session: &mut Session,
     title: String,
@@ -212,6 +219,7 @@ fn show_modal(
     mark_dirty(session);
 }
 
+#[allow(dead_code)]
 fn show_list_modal(
     session: &mut Session,
     title: String,
@@ -241,6 +249,7 @@ fn show_list_modal(
     mark_dirty(session);
 }
 
+#[allow(dead_code)]
 fn close_modal(session: &mut Session) {
     if let Some(state) = session.modal.take() {
         session.input_enabled = state.restore_input;
@@ -253,6 +262,7 @@ fn close_modal(session: &mut Session) {
     }
 }
 
+#[allow(dead_code)]
 pub fn set_custom_prompts(session: &mut Session, custom_prompts: CustomPromptRegistry) {
     // Initialize prompt palette when custom prompts are loaded
     if custom_prompts.enabled() && !custom_prompts.is_empty() {
@@ -268,6 +278,7 @@ pub fn set_custom_prompts(session: &mut Session, custom_prompts: CustomPromptReg
     }
 }
 
+#[allow(dead_code)]
 fn load_file_palette(session: &mut Session, files: Vec<String>, workspace: std::path::PathBuf) {
     let mut palette = FilePalette::new(workspace);
     palette.load_files(files);
@@ -276,6 +287,7 @@ fn load_file_palette(session: &mut Session, files: Vec<String>, workspace: std::
     check_file_reference_trigger(session);
 }
 
+#[allow(dead_code)]
 pub(super) fn check_file_reference_trigger(session: &mut Session) {
     if let Some(palette) = session.file_palette.as_mut() {
         if let Some((_, _, query)) = extract_file_reference(
@@ -292,6 +304,7 @@ pub(super) fn check_file_reference_trigger(session: &mut Session) {
     }
 }
 
+#[allow(dead_code)]
 pub fn close_file_palette(session: &mut Session) {
     session.file_palette_active = false;
 
@@ -301,6 +314,7 @@ pub fn close_file_palette(session: &mut Session) {
     }
 }
 
+#[allow(dead_code)]
 pub fn insert_file_reference(session: &mut Session, file_path: &str) {
     if let Some((start, end, _)) = extract_file_reference(
         session.input_manager.content(),
@@ -318,6 +332,7 @@ pub fn insert_file_reference(session: &mut Session, file_path: &str) {
     }
 }
 
+#[allow(dead_code)]
 pub(super) fn check_prompt_reference_trigger(session: &mut Session) {
     // Initialize prompt palette on-demand if it doesn't exist
     if session.prompt_palette.is_none() {
@@ -372,6 +387,7 @@ pub(super) fn check_prompt_reference_trigger(session: &mut Session) {
     }
 }
 
+#[allow(dead_code)]
 pub fn close_prompt_palette(session: &mut Session) {
     session.prompt_palette_active = false;
 
@@ -381,6 +397,7 @@ pub fn close_prompt_palette(session: &mut Session) {
     }
 }
 
+#[allow(dead_code)]
 pub fn insert_prompt_reference(session: &mut Session, prompt_name: &str) {
     let mut command = String::from(PROMPT_COMMAND_PREFIX);
     command.push_str(prompt_name);
@@ -391,6 +408,7 @@ pub fn insert_prompt_reference(session: &mut Session, prompt_name: &str) {
     super::slash::update_slash_suggestions(session);
 }
 
+#[allow(dead_code)]
 fn clear_screen(session: &mut Session) {
     session.lines.clear();
     session.scroll_manager.set_offset(0);
@@ -400,6 +418,7 @@ fn clear_screen(session: &mut Session) {
     mark_dirty(session);
 }
 
+#[allow(dead_code)]
 pub fn request_exit(session: &mut Session) {
     session.should_exit = true;
 }
@@ -411,6 +430,7 @@ pub(super) fn clear_input(session: &mut Session) {
     session.mark_dirty();
 }
 
+#[allow(dead_code)]
 pub(super) fn insert_char(session: &mut Session, ch: char) {
     if ch == '\u{7f}' {
         return;
@@ -422,6 +442,7 @@ pub(super) fn insert_char(session: &mut Session, ch: char) {
     super::slash::update_slash_suggestions(session);
 }
 
+#[allow(dead_code)]
 pub(super) fn insert_text(session: &mut Session, text: &str) {
     let mut remaining_newlines = remaining_newline_capacity(session);
     let sanitized: String = text
@@ -446,16 +467,19 @@ pub(super) fn insert_text(session: &mut Session, text: &str) {
     super::slash::update_slash_suggestions(session);
 }
 
+#[allow(dead_code)]
 pub(super) fn delete_char(session: &mut Session) {
     session.input_manager.backspace();
     super::slash::update_slash_suggestions(session);
 }
 
+#[allow(dead_code)]
 pub(super) fn delete_char_forward(session: &mut Session) {
     session.input_manager.delete();
     super::slash::update_slash_suggestions(session);
 }
 
+#[allow(dead_code)]
 pub(super) fn delete_word_backward(session: &mut Session) {
     if session.input_manager.cursor() == 0 {
         return;
@@ -511,6 +535,7 @@ pub(super) fn delete_word_backward(session: &mut Session) {
     }
 }
 
+#[allow(dead_code)]
 pub(super) fn delete_sentence_backward(session: &mut Session) {
     if session.input_manager.cursor() == 0 {
         return;
@@ -575,20 +600,24 @@ pub(super) fn delete_sentence_backward(session: &mut Session) {
     }
 }
 
+#[allow(dead_code)]
 pub(super) fn remember_submitted_input(session: &mut Session, submitted: &str) {
     session.input_manager.add_to_history(submitted.to_string());
 }
 
+#[allow(dead_code)]
 fn remaining_newline_capacity(session: &Session) -> usize {
     crate::config::constants::ui::INLINE_INPUT_MAX_LINES
         .saturating_sub(1)
         .saturating_sub(session.input_manager.content().matches('\n').count())
 }
 
+#[allow(dead_code)]
 fn can_insert_newline(session: &Session) -> bool {
     remaining_newline_capacity(session) > 0
 }
 
+#[allow(dead_code)]
 pub(super) fn push_line(
     session: &mut Session,
     kind: InlineMessageKind,
@@ -605,6 +634,7 @@ pub(super) fn push_line(
     super::render::adjust_scroll_after_change(session, previous_max_offset);
 }
 
+#[allow(dead_code)]
 pub(super) fn append_inline(
     session: &mut Session,
     kind: InlineMessageKind,
@@ -660,6 +690,7 @@ pub(super) fn append_inline(
     super::render::adjust_scroll_after_change(session, previous_max_offset);
 }
 
+#[allow(dead_code)]
 pub(super) fn replace_last(
     session: &mut Session,
     count: usize,
@@ -683,6 +714,7 @@ pub(super) fn replace_last(
     super::render::adjust_scroll_after_change(session, previous_max_offset);
 }
 
+#[allow(dead_code)]
 fn append_text(
     session: &mut Session,
     kind: InlineMessageKind,
@@ -769,10 +801,12 @@ fn append_text(
     super::render::invalidate_scroll_metrics(session);
 }
 
+#[allow(dead_code)]
 fn start_line(session: &mut Session, kind: InlineMessageKind) {
     push_line(session, kind, Vec::new());
 }
 
+#[allow(dead_code)]
 fn reset_line(session: &mut Session, kind: InlineMessageKind) {
     let mut cleared = false;
     {

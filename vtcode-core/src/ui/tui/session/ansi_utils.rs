@@ -1,4 +1,5 @@
 /// Strips ANSI escape codes from text to ensure plain text output
+#[allow(dead_code)]
 pub(super) fn strip_ansi_codes(text: &str) -> String {
     let mut result = String::new();
     let mut chars = text.chars().peekable();
