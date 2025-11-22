@@ -397,7 +397,7 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
                 risk_context.command_args = vec![args.to_string()];
             }
             let risk_level = ToolRiskScorer::calculate_risk(&risk_context);
-            JustificationExtractor::extract_from_decision(&latest, tool_name, &risk_level)
+            JustificationExtractor::extract_from_decision(latest, tool_name, &risk_level)
         } else {
             None
         }

@@ -1142,18 +1142,15 @@ pub struct PostToolHookOutcome {
 }
 
 #[derive(Debug, Clone, Copy)]
+#[derive(Default)]
 pub enum PreToolHookDecision {
+    #[default]
     Continue,
     Allow,
     Deny,
     Ask,
 }
 
-impl Default for PreToolHookDecision {
-    fn default() -> Self {
-        Self::Continue
-    }
-}
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]

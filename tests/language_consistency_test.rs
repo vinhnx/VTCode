@@ -114,12 +114,11 @@ fn validate_markdown_language_consistency(markdown: &str) -> Result<()> {
 
     for line in lines {
         // Section breaks reset the counter
-        if line.starts_with('#') {
-            if !current_section_chars.is_empty() {
+        if line.starts_with('#')
+            && !current_section_chars.is_empty() {
                 section_scripts.push(detect_predominant_script(&current_section_chars));
                 current_section_chars.clear();
             }
-        }
         current_section_chars.push_str(line);
     }
 

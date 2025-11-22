@@ -349,15 +349,11 @@ pub async fn run_turn_loop(
                                     };
 
                                     // If call supplied a per-call max_tokens, prefer that (but clamp to config max)
-                                    let applied_max_tokens = if let Some(call) = call_max_tokens {
-                                        Some(std::cmp::min(call, max_tokens))
-                                    } else {
-                                        None
-                                    };
+                                    let applied_max_tokens = call_max_tokens.map(|call| std::cmp::min(call, max_tokens));
 
                                     let content_for_model = crate::agent::runloop::token_trunc::aggregate_tool_output_for_model(
                                         tool_name,
-                                        &output,
+                                        output,
                                         applied_max_tokens.unwrap_or(max_tokens),
                                         byte_fuse,
                                         &local_token_budget,

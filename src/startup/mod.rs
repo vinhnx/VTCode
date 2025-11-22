@@ -215,14 +215,13 @@ impl StartupContext {
         let skip_confirmations = args.skip_confirmations || full_auto_requested;
 
         // CLI validation: warn if prompt_cache_retention is set but model does not use Responses API
-        if agent_config.provider.eq_ignore_ascii_case("openai") {
-            if let Some(ref retention) = agent_config
+        if agent_config.provider.eq_ignore_ascii_case("openai")
+            && let Some(ref retention) = agent_config
                 .prompt_cache
                 .providers
                 .openai
                 .prompt_cache_retention
-            {
-                if !retention.trim().is_empty() {
+                && !retention.trim().is_empty() {
                     // Use constants list to identify which models use Responses API
                     if let Some(msg) = check_prompt_cache_retention_compat(
                         &config,
@@ -232,8 +231,6 @@ impl StartupContext {
                         tracing::warn!("{}", msg);
                     }
                 }
-            }
-        }
 
         Ok(StartupContext {
             workspace,

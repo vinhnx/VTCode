@@ -452,28 +452,26 @@ pub(super) fn prompt_reasoning_plain(
                 ),
             )?;
         }
+    } else if is_gpt51 {
+        renderer.line(
+            MessageStyle::Info,
+            &format!(
+                "Step 2 – select reasoning effort for {} (none/easy/medium/hard). Type 'skip' to keep {}. For GPT-5.1, 'none' provides lowest latency. Current: {}.",
+                selection.model_display,
+                reasoning_level_label(current),
+                current
+            ),
+        )?;
     } else {
-        if is_gpt51 {
-            renderer.line(
-                MessageStyle::Info,
-                &format!(
-                    "Step 2 – select reasoning effort for {} (none/easy/medium/hard). Type 'skip' to keep {}. For GPT-5.1, 'none' provides lowest latency. Current: {}.",
-                    selection.model_display,
-                    reasoning_level_label(current),
-                    current
-                ),
-            )?;
-        } else {
-            renderer.line(
-                MessageStyle::Info,
-                &format!(
-                    "Step 2 – select reasoning effort for {} (easy/medium/hard). Type 'skip' to keep {}. Current: {}.",
-                    selection.model_display,
-                    reasoning_level_label(current),
-                    current
-                ),
-            )?;
-        }
+        renderer.line(
+            MessageStyle::Info,
+            &format!(
+                "Step 2 – select reasoning effort for {} (easy/medium/hard). Type 'skip' to keep {}. Current: {}.",
+                selection.model_display,
+                reasoning_level_label(current),
+                current
+            ),
+        )?;
     }
     Ok(())
 }

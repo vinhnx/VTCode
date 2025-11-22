@@ -16,7 +16,7 @@ mod path_environment_tests {
         // PATH should contain at least one directory
         let paths: Vec<&str> = path.split(':').collect();
         assert!(
-            paths.len() > 0,
+            !paths.is_empty(),
             "PATH should contain at least one directory"
         );
     }

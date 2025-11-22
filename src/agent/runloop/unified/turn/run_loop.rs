@@ -2024,10 +2024,10 @@ pub(crate) async fn run_single_agent_loop_unified(
                         }
                     }
 
-                    if tool_calls.is_empty() {
-                        if let Some(text) = final_text.clone() {
-                            if !text.trim().is_empty() {
-                                if let Some((name, args)) = detect_textual_tool_call(&text) {
+                    if tool_calls.is_empty()
+                        && let Some(text) = final_text.clone()
+                            && !text.trim().is_empty()
+                                && let Some((name, args)) = detect_textual_tool_call(&text) {
                                     let args_json = serde_json::to_string(&args)
                                         .unwrap_or_else(|_| "{}".to_string());
                                     let code_blocks = extract_code_fence_blocks(&text);
@@ -2051,9 +2051,6 @@ pub(crate) async fn run_single_agent_loop_unified(
                                     interpreted_textual_call = true;
                                     final_text = None;
                                 }
-                            }
-                        }
-                    }
 
                     Ok((final_text, tool_calls, interpreted_textual_call))
                 }
@@ -2365,7 +2362,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         // Convert the tool error into anyhow for the helper
                                         let any_err = anyhow::anyhow!(format!("{:?}", error));
                                         // Call the centralized failure handler
-                                        let _ = run_turn_handle_tool_failure(
+                                        run_turn_handle_tool_failure(
                                             name,
                                             any_err,
                                             &mut renderer,
@@ -2397,7 +2394,7 @@ pub(crate) async fn run_single_agent_loop_unified(
 
                                         // Convert and delegate to timeout handler
                                         let any_err = anyhow::anyhow!(format!("{:?}", error));
-                                        let _ = run_turn_handle_tool_timeout(
+                                        run_turn_handle_tool_timeout(
                                             name,
                                             any_err,
                                             &mut renderer,

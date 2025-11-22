@@ -524,8 +524,8 @@ impl StreamingReasoningState {
             // Display final reasoning if available and either:
             // 1. It wasn't streamed at all, OR
             // 2. It was truncated during streaming (we have more content now)
-            if let Some(reasoning) = final_reasoning.map(str::trim) {
-                if !reasoning.is_empty() {
+            if let Some(reasoning) = final_reasoning.map(str::trim)
+                && !reasoning.is_empty() {
                     let aggregated_trimmed = self.aggregated.trim();
                     let is_truncated = aggregated_trimmed.ends_with("...");
                     let was_not_streamed = aggregated_trimmed.is_empty();
@@ -547,7 +547,6 @@ impl StreamingReasoningState {
                         }
                     }
                 }
-            }
             Ok(())
         }
     }
@@ -629,12 +628,11 @@ impl StreamingReasoningState {
     /// Flush any pending reasoning display without full finalization
     /// Used to ensure reasoning appears before response content
     fn flush_pending(&mut self, renderer: &mut AnsiRenderer) -> Result<()> {
-        if self.inline_enabled {
-            if !self.pending_inline.is_empty() {
+        if self.inline_enabled
+            && !self.pending_inline.is_empty() {
                 self.render_inline(renderer)?;
                 self.pending_inline.clear();
             }
-        }
         Ok(())
     }
 

@@ -72,6 +72,7 @@ impl InstallationCache {
         }
         std::fs::OpenOptions::new()
             .create(true)
+            .truncate(true)
             .write(true)
             .open(&lock_path)
             .context("Failed to create install lock file")
@@ -224,9 +225,9 @@ impl RipgrepStatus {
         debug_log("Installation lock acquired");
 
         // Check cache to avoid repeated failed attempts
-        if !InstallationCache::is_stale() {
-            if let Ok(cache) = InstallationCache::load() {
-                if cache.status == "failed" {
+        if !InstallationCache::is_stale()
+            && let Ok(cache) = InstallationCache::load()
+                && cache.status == "failed" {
                     let reason = cache.failure_reason.as_deref().unwrap_or("unknown reason");
                     debug_log(&format!("Cache shows previous failure: {}", reason));
                     return Err(anyhow!(
@@ -234,8 +235,6 @@ impl RipgrepStatus {
                         reason
                     ));
                 }
-            }
-        }
 
         let result = Self::install_with_smart_detection();
 
@@ -284,9 +283,9 @@ impl RipgrepStatus {
                 return install_via_cargo();
             }
             debug_log("No supported installer found on macOS");
-            return Err(anyhow!(
+            Err(anyhow!(
                 "No supported installer found. Install Homebrew or Cargo, or install ripgrep manually."
-            ));
+            ))
         }
 
         #[cfg(target_os = "linux")]
@@ -428,7 +427,7 @@ fn install_via_apt() -> Result<()> {
 fn install_via_cargo() -> Result<()> {
     eprintln!("Installing ripgrep via cargo...");
     let output = Command::new("cargo")
-        .args(&["install", "ripgrep"])
+        .args(["install", "ripgrep"])
         .output()
         .context("Failed to execute cargo install ripgrep")?;
 

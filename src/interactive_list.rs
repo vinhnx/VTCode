@@ -180,7 +180,7 @@ pub fn run_interactive_selection(
                     let mut summary_lines = vec![];
 
                     summary_lines.push(Line::from(Span::styled(
-                        format!("{}", current.title),
+                        current.title.to_string(),
                         Style::default().add_modifier(Modifier::BOLD),
                     )));
 

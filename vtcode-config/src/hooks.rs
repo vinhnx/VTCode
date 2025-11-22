@@ -46,15 +46,12 @@ pub struct HookGroupConfig {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum HookCommandKind {
+    #[default]
     Command,
 }
 
-impl Default for HookCommandKind {
-    fn default() -> Self {
-        Self::Command
-    }
-}
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]

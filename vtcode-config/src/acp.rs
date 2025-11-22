@@ -177,16 +177,13 @@ impl AgentClientProtocolZedWorkspaceTrustMode {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum WorkspaceTrustLevel {
+    #[default]
     ToolsPolicy,
     FullAuto,
 }
 
-impl Default for WorkspaceTrustLevel {
-    fn default() -> Self {
-        Self::ToolsPolicy
-    }
-}
 
 impl std::fmt::Display for WorkspaceTrustLevel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

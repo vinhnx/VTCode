@@ -81,7 +81,7 @@ impl McpToolManager {
             }
             Err(err) => {
                 warn!("Failed to enumerate MCP tools after refresh: {err}");
-                return Err(err.into());
+                Err(err)
             }
         }
     }

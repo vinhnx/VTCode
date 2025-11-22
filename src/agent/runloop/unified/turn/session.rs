@@ -127,7 +127,7 @@ pub(crate) async fn handle_tool_failure(
     let _ = last_tool_stdout.take();
 
     crate::agent::runloop::unified::tool_ledger::record_outcome_for_decision(
-        &decision_ledger,
+        decision_ledger,
         dec_id,
         false,
         Some(error_message.clone()),
