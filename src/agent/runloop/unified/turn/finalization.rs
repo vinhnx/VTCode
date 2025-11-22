@@ -1,8 +1,5 @@
 use anyhow::Result;
-use crossterm::{
-    execute,
-    terminal::{LeaveAlternateScreen, disable_raw_mode},
-};
+use crossterm::terminal::disable_raw_mode;
 use std::io::{self, Write};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -10,7 +7,6 @@ use vtcode_core::core::pruning_decisions::PruningDecisionLedger;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::ui::tui::InlineHandle;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
-use vtcode_core::utils::ansi_codes::{ALT_BUFFER_DISABLE, CURSOR_SHOW, RESET};
 use vtcode_core::utils::session_archive::{SessionArchive, SessionMessage};
 use vtcode_core::utils::transcript;
 
@@ -25,23 +21,19 @@ use super::utils::render_hook_messages;
 /// This ensures that raw mode is disabled and the terminal is left in a usable state
 /// even if the TUI didn't exit cleanly (e.g., due to Ctrl+C)
 fn restore_terminal_on_exit() -> io::Result<()> {
-    // Get stdout for executing terminal commands
+    // The TUI should have already cleaned up via run_inline_tui, but this is a fallback
+    // We avoid aggressive cleanup here to prevent conflicts with TUI cleanup
     let mut stdout = io::stdout();
 
-    // Send raw terminal reset sequences to forcefully restore terminal state
-    // This is critical for handling cases where disable_raw_mode() might not work
-    // (e.g., when TUI task is still running in background)
-    write!(stdout, "{}", ALT_BUFFER_DISABLE)?; // Leave alternate screen
-    write!(stdout, "{}", CURSOR_SHOW)?; // Show cursor
-    write!(stdout, "{}", RESET)?; // Reset all attributes
-
-    // Also attempt crossterm cleanup as a fallback
+    // Only attempt minimal, safe cleanup
+    // Disable raw mode if still enabled
     let _ = disable_raw_mode();
-    let _ = execute!(stdout, crossterm::cursor::Show);
-    let _ = execute!(stdout, LeaveAlternateScreen);
 
-    // Additional flush to ensure all escape sequences are processed
+    // Ensure stdout is flushed
     stdout.flush()?;
+    
+    // Brief delay to allow any pending terminal operations to complete
+    std::thread::sleep(std::time::Duration::from_millis(50));
 
     Ok(())
 }

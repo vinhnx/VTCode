@@ -712,8 +712,6 @@ impl Session {
         };
         message_renderer::render_message_spans(
             line,
-            index,
-            &self.lines,
             &self.theme,
             &self.labels,
             |kind| self.prefix_text(kind),
@@ -1756,39 +1754,6 @@ mod tests {
             .map(|span| span.content.clone().into_owned())
             .collect();
         assert!(title.contains(ui::PLAN_BLOCK_TITLE));
-    }
-
-    #[test]
-    fn tool_header_applies_accent_and_italic_tail() {
-        let theme = themed_inline_colors();
-        let mut session = Session::new(theme, None, VIEW_ROWS, true);
-        session.push_line(
-            InlineMessageKind::Tool,
-            vec![InlineSegment {
-                text: "  [shell] executing".to_string(),
-                style: InlineTextStyle::default(),
-            }],
-        );
-
-        let index = session
-            .lines
-            .len()
-            .checked_sub(1)
-            .expect("tool header line should exist");
-        let spans = session.render_message_spans(index);
-
-        assert!(spans.len() >= 4);
-        assert_eq!(spans[0].content.clone().into_owned(), "  ");
-        let label = format!("[{}]", ui::INLINE_TOOL_HEADER_LABEL);
-        assert_eq!(spans[1].content.clone().into_owned(), label);
-        assert_eq!(spans[1].style.fg, Some(Color::Rgb(0xBF, 0x45, 0x45)));
-        assert_eq!(spans[2].content.clone().into_owned(), "[shell]");
-        assert_eq!(spans[2].style.fg, Some(Color::Rgb(0xBF, 0x45, 0x45)));
-        let italic_span = spans
-            .iter()
-            .find(|span| span.style.add_modifier.contains(Modifier::ITALIC))
-            .expect("tool header should include italic tail");
-        assert_eq!(italic_span.content.clone().into_owned().trim(), "executing");
     }
 
     #[test]

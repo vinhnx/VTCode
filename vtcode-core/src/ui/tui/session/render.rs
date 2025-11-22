@@ -651,48 +651,13 @@ pub(super) fn render_message_spans(session: &Session, index: usize) -> Vec<Span<
     }
 
     if line.kind == InlineMessageKind::Pty {
-        let prev_is_pty = index
-            .checked_sub(1)
-            .and_then(|prev| session.lines.get(prev))
-            .map(|prev| prev.kind == InlineMessageKind::Pty)
-            .unwrap_or(false);
-        if !prev_is_pty {
-            let mut combined = String::new();
-            for segment in &line.segments {
-                combined.push_str(segment.text.as_str());
-            }
-            let header_text = if combined.trim().is_empty() {
-                ui::INLINE_PTY_PLACEHOLDER.to_string()
-            } else {
-                combined.trim().to_string()
-            };
-            let label_style = InlineTextStyle::default()
-                .with_color(session.theme.primary.or(session.theme.foreground))
-                .bold();
-            spans.push(Span::styled(
-                format!("[{}]", ui::INLINE_PTY_HEADER_LABEL),
-                ratatui_style_from_inline(&label_style, session.theme.foreground),
-            ));
-            spans.push(Span::raw(" "));
-            let _body_style = InlineTextStyle::default()
-                .with_color(session.theme.foreground)
-                .bold();
-            // Parse ANSI escape sequences in PTY output for color support
-            // Limit to last 30 lines for performance and readability
-            let output_text = if header_text.lines().count() > 30 {
-                let lines: Vec<&str> = header_text.lines().collect();
-                let start = lines.len().saturating_sub(30);
-                format!(
-                    "[... {} lines truncated ...]\n{}",
-                    lines.len() - 30,
-                    lines[start..].join("\n")
-                )
-            } else {
-                header_text.clone()
-            };
-
-            // Skip ANSI parsing and return plain text without styles or Unicode formatting
-            spans.push(Span::raw(output_text));
+        // Render PTY content directly without header decoration
+        let fallback = text_fallback(session, line.kind).or(session.theme.foreground);
+        for segment in &line.segments {
+            let style = ratatui_style_from_inline(&segment.style, fallback);
+            spans.push(Span::styled(segment.text.clone(), style));
+        }
+        if !spans.is_empty() {
             return spans;
         }
     }
@@ -743,222 +708,16 @@ pub(super) fn strip_ansi_codes(text: &str) -> String {
 }
 
 pub(super) fn render_tool_segments(session: &Session, line: &MessageLine) -> Vec<Span<'static>> {
-    let mut combined = String::new();
-    for segment in &line.segments {
-        // Strip ANSI codes from each segment to ensure plain text output
-        let stripped_text = strip_ansi_codes(&segment.text);
-        combined.push_str(&stripped_text);
-    }
-
-    if combined.is_empty() {
-        return Vec::new();
-    }
-
-    // Always render tool calls as a single combined line
-    render_tool_header_line(session, &combined)
-}
-
-fn render_tool_header_line(session: &Session, text: &str) -> Vec<Span<'static>> {
+    // Render tool output without header decorations - just display segments directly
     let mut spans = Vec::new();
-    let indent_len = text.chars().take_while(|ch| ch.is_whitespace()).count();
-    let indent: String = text.chars().take(indent_len).collect();
-    let mut remaining = if indent_len < text.len() {
-        &text[indent_len..]
-    } else {
-        ""
-    };
-
-    if !indent.is_empty() {
-        let mut indent_style = InlineTextStyle::default();
-        indent_style.color = session.theme.tool_body.or(session.theme.foreground);
-        spans.push(Span::styled(
-            indent,
-            ratatui_style_from_inline(&indent_style, session.theme.foreground),
-        ));
+    for segment in &line.segments {
+        let style = ratatui_style_from_inline(&segment.style, session.theme.foreground);
+        spans.push(Span::styled(segment.text.clone(), style));
     }
-
-    if remaining.is_empty() {
-        return spans;
-    }
-
-    remaining = strip_tool_status_prefix(remaining);
-    if remaining.is_empty() {
-        return spans;
-    }
-
-    let (name, tail) = if remaining.starts_with('[') {
-        if let Some(end) = remaining.find(']') {
-            let name = &remaining[1..end];
-            let tail = &remaining[end + 1..];
-            (name, tail)
-        } else {
-            (remaining, "")
-        }
-    } else {
-        let mut name_end = remaining.len();
-        for (index, character) in remaining.char_indices() {
-            if character.is_whitespace() {
-                name_end = index;
-                break;
-            }
-        }
-        remaining.split_at(name_end)
-    };
-    if !name.is_empty() {
-        // Add bracket wrapper with different styling
-        spans.push(Span::styled(
-            "[",
-            accent_style(session).add_modifier(Modifier::BOLD),
-        ));
-
-        // Get distinctive color based on the tool name for better differentiation
-        let tool_name_style = tool_inline_style(session, name);
-
-        spans.push(Span::styled(
-            name.to_string(),
-            ratatui_style_from_inline(&tool_name_style, session.theme.foreground),
-        ));
-
-        spans.push(Span::styled(
-            "] ",
-            accent_style(session).add_modifier(Modifier::BOLD),
-        ));
-    }
-
-    let trimmed_tail = tail.trim_start();
-    if !trimmed_tail.is_empty() {
-        // Parse the tail to extract tool action and parameters for better formatting
-        let parts: Vec<&str> = trimmed_tail.split(" · ").collect();
-        if parts.len() > 1 {
-            // Format as "action → description · parameter1 · parameter2"
-            let action = parts[0];
-            let body_style = InlineTextStyle::default()
-                .with_color(session.theme.tool_body.or(session.theme.foreground));
-
-            // Parse and style the action text with special highlighting
-            render_styled_action_text(session, &mut spans, action, &body_style);
-
-            // Format additional parameters (limit to avoid multi-line)
-            let max_parts = 3; // Limit parameters to keep on one line
-            for (i, part) in parts[1..].iter().enumerate() {
-                if i >= max_parts {
-                    spans.push(Span::raw(" "));
-                    spans.push(Span::styled(
-                        "· ...",
-                        accent_style(session).add_modifier(Modifier::DIM),
-                    ));
-                    break;
-                }
-                spans.push(Span::raw(" "));
-                spans.push(Span::styled(
-                    "·",
-                    accent_style(session).add_modifier(Modifier::DIM),
-                ));
-                spans.push(Span::raw(" "));
-
-                // Differentiate between parameter names and values
-                let param_parts: Vec<&str> = part.split(": ").collect();
-                if param_parts.len() > 1 {
-                    // Parameter name (before colon) - in accent color with bold
-                    spans.push(Span::styled(
-                        format!("{}: ", param_parts[0]),
-                        accent_style(session).add_modifier(Modifier::BOLD),
-                    ));
-
-                    // Parameter value (after colon) - highlighted with different color
-                    let value_style = InlineTextStyle::default()
-                        .with_color(Some(AnsiColor::Green.into())) // Green for argument values
-                        .bold();
-                    spans.push(Span::styled(
-                        param_parts[1].to_string(),
-                        ratatui_style_from_inline(&value_style, session.theme.foreground),
-                    ));
-                } else {
-                    spans.push(Span::styled(
-                        part.to_string(),
-                        ratatui_style_from_inline(&body_style, session.theme.foreground),
-                    ));
-                }
-            }
-        } else {
-            // Fallback for original formatting
-            let body_style = InlineTextStyle::default()
-                .with_color(session.theme.tool_body.or(session.theme.foreground));
-
-            // Simplify common tool call patterns for human readability
-            let mut simplified_text = simplify_tool_display(trimmed_tail);
-            // Truncate to fit in one line (approximately 100 characters for readability)
-            if simplified_text.len() > 100 {
-                simplified_text = simplified_text.chars().take(97).collect::<String>() + "...";
-            }
-            spans.push(Span::styled(
-                simplified_text,
-                ratatui_style_from_inline(&body_style, session.theme.foreground),
-            ));
-        }
-    }
-
     spans
 }
 
-fn render_styled_action_text(
-    session: &Session,
-    spans: &mut Vec<Span<'static>>,
-    action: &str,
-    body_style: &InlineTextStyle,
-) {
-    let words: Vec<&str> = action.split_whitespace().collect();
 
-    for (i, word) in words.iter().enumerate() {
-        if i > 0 {
-            spans.push(Span::raw(" "));
-        }
-
-        if *word == "in" {
-            // Style "in" with italic and different color (cyan)
-            let in_style = InlineTextStyle::default()
-                .with_color(Some(AnsiColor::Cyan.into()))
-                .italic();
-            spans.push(Span::styled(
-                word.to_string(),
-                ratatui_style_from_inline(&in_style, session.theme.foreground),
-            ));
-        } else if i < 2
-            && (word.starts_with("List")
-                || word.starts_with("Read")
-                || word.starts_with("Write")
-                || word.starts_with("Find")
-                || word.starts_with("Search")
-                || word.starts_with("Run"))
-        {
-            // Highlight the main action verb (first 1-2 words) with bold and accent color
-            let action_style = InlineTextStyle::default()
-                .with_color(session.theme.tool_accent.or(Some(AnsiColor::Yellow.into())))
-                .bold();
-            spans.push(Span::styled(
-                word.to_string(),
-                ratatui_style_from_inline(&action_style, session.theme.foreground),
-            ));
-        } else {
-            // Normal styling for other words
-            spans.push(Span::styled(
-                word.to_string(),
-                ratatui_style_from_inline(body_style, session.theme.foreground),
-            ));
-        }
-    }
-}
-
-fn strip_tool_status_prefix<'a>(text: &'a str) -> &'a str {
-    let trimmed = text.trim_start();
-    const STATUS_ICONS: [&str; 4] = ["✓", "✗", "~", "✕"];
-    for icon in STATUS_ICONS {
-        if trimmed.starts_with(icon) {
-            return trimmed[icon.len()..].trim_start();
-        }
-    }
-    text
-}
 
 /// Simplify tool call display text for better human readability
 fn simplify_tool_display(text: &str) -> String {
@@ -1454,29 +1213,13 @@ fn reflow_pty_lines(session: &Session, index: usize, width: u16) -> Vec<Line<'st
     let mut border_style = ratatui_style_from_inline(&border_inline, session.theme.foreground);
     border_style = border_style.add_modifier(Modifier::DIM);
 
-    let header_inline = InlineTextStyle::default()
-        .with_color(session.theme.primary.or(session.theme.foreground))
-        .bold();
-    let header_style = ratatui_style_from_inline(&header_inline, session.theme.foreground);
-
-    let mut body_inline = InlineTextStyle::default();
-    body_inline.color = session.theme.foreground;
-    let mut body_style = ratatui_style_from_inline(&body_inline, session.theme.foreground);
-    body_style = body_style.add_modifier(Modifier::BOLD);
-
     let prev_is_pty = index
         .checked_sub(1)
         .and_then(|prev| session.lines.get(prev))
         .map(|prev| prev.kind == InlineMessageKind::Pty)
         .unwrap_or(false);
-    let next_is_pty = session
-        .lines
-        .get(index + 1)
-        .map(|next| next.kind == InlineMessageKind::Pty)
-        .unwrap_or(false);
 
     let is_start = !prev_is_pty;
-    let is_end = !next_is_pty;
 
     let mut lines = Vec::new();
 
@@ -1484,19 +1227,24 @@ fn reflow_pty_lines(session: &Session, index: usize, width: u16) -> Vec<Line<'st
     for segment in &line.segments {
         combined.push_str(segment.text.as_str());
     }
-    if is_start && is_end && combined.trim().is_empty() {
+    if is_start && combined.trim().is_empty() {
         return Vec::new();
     }
-    let header_text = combined
-        .lines()
-        .map(str::trim)
-        .find(|line| !line.is_empty())
-        .map(str::to_string)
-        .unwrap_or_else(|| ui::INLINE_PTY_PLACEHOLDER.to_string());
+
+    // Render body content
+    let fallback = text_fallback(session, InlineMessageKind::Pty).or(session.theme.foreground);
+    let mut body_spans = Vec::new();
+    for segment in &line.segments {
+        let style = ratatui_style_from_inline(&segment.style, fallback);
+        body_spans.push(Span::styled(segment.text.clone(), style));
+    }
+
+    // Check if this is a thinking spinner line (skip border rendering)
+    let is_thinking_spinner = combined.contains("Thinking...");
 
     if is_start {
-        // Add top border line
-        if max_width > 2 {
+        // Add top border line (skip for thinking spinner)
+        if !is_thinking_spinner && max_width > 2 {
             let top_border_content = format!(
                 "{}{}{}",
                 ui::INLINE_BLOCK_TOP_LEFT,
@@ -1508,52 +1256,29 @@ fn reflow_pty_lines(session: &Session, index: usize, width: u16) -> Vec<Line<'st
                 border_style.clone(),
             )]));
         }
-
-        let mut header_spans = Vec::new();
-        header_spans.push(Span::styled(
-            format!("[{}]", ui::INLINE_PTY_HEADER_LABEL),
-            header_style.clone(),
-        ));
-        header_spans.push(Span::raw(" "));
-        let running_style = InlineTextStyle::default()
-            .with_color(session.theme.secondary.or(session.theme.foreground))
-            .italic();
-        header_spans.push(Span::styled(
-            ui::INLINE_PTY_RUNNING_LABEL.to_string(),
-            ratatui_style_from_inline(&running_style, session.theme.foreground),
-        ));
-        if !header_text.is_empty() {
-            header_spans.push(Span::raw(" "));
-            header_spans.push(Span::styled(header_text.clone(), body_style.clone()));
-        }
-        let status_label = if is_end {
-            ui::INLINE_PTY_STATUS_DONE
+        if is_thinking_spinner {
+            // Render thinking spinner without borders
+            lines.extend(wrap_block_lines(
+                session,
+                "",
+                "",
+                body_spans,
+                max_width,
+                border_style.clone(),
+            ));
         } else {
-            ui::INLINE_PTY_STATUS_LIVE
-        };
-        header_spans.push(Span::raw(" "));
-        header_spans.push(Span::styled(
-            format!("[{}]", status_label),
-            accent_style(session).add_modifier(Modifier::REVERSED | Modifier::BOLD),
-        ));
-
-        let first_prefix = format!("{} ", ui::INLINE_BLOCK_BODY_LEFT);
-        let continuation_prefix = format!("{} ", ui::INLINE_BLOCK_BODY_LEFT);
-        lines.extend(wrap_block_lines(
-            session,
-            &first_prefix,
-            &continuation_prefix,
-            header_spans,
-            max_width,
-            border_style.clone(),
-        ));
-    } else {
-        let fallback = text_fallback(session, InlineMessageKind::Pty).or(session.theme.foreground);
-        let mut body_spans = Vec::new();
-        for segment in &line.segments {
-            let style = ratatui_style_from_inline(&segment.style, fallback);
-            body_spans.push(Span::styled(segment.text.clone(), style));
+            let first_prefix = format!("{} ", ui::INLINE_BLOCK_BODY_LEFT);
+            let continuation_prefix = format!("{} ", ui::INLINE_BLOCK_BODY_LEFT);
+            lines.extend(wrap_block_lines(
+                session,
+                &first_prefix,
+                &continuation_prefix,
+                body_spans,
+                max_width,
+                border_style.clone(),
+            ));
         }
+    } else {
         let body_prefix = format!("{} ", ui::INLINE_BLOCK_BODY_LEFT);
         lines.extend(wrap_block_lines(
             session,
@@ -1563,11 +1288,6 @@ fn reflow_pty_lines(session: &Session, index: usize, width: u16) -> Vec<Line<'st
             max_width,
             border_style.clone(),
         ));
-    }
-
-    if is_end {
-        // Don't add bottom border for PTY output either
-        // lines.push(block_footer_line(width, border_style));
     }
 
     if lines.is_empty() {
