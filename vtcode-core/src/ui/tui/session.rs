@@ -16,13 +16,11 @@ use ratatui::{
 };
 use tokio::sync::mpsc::UnboundedSender;
 
-use unicode_width::UnicodeWidthStr;
-
 use super::{
     style::{measure_text_width, ratatui_color_from_ansi, ratatui_style_from_inline},
     types::{
-        InlineCommand, InlineEvent, InlineHeaderContext, InlineMessageKind, InlineSegment,
-        InlineTextStyle, InlineTheme,
+        InlineCommand, InlineEvent, InlineHeaderContext, InlineMessageKind, InlineTextStyle,
+        InlineTheme,
     },
 };
 use crate::config::constants::ui;
@@ -50,6 +48,7 @@ mod ansi_utils;
 mod command;
 mod editing;
 mod events;
+mod message_renderer;
 mod messages;
 mod palette;
 mod palette_views;
@@ -622,11 +621,7 @@ impl Session {
     }
 
     fn modal_list_highlight_style(&self) -> Style {
-        let mut style = Style::default().add_modifier(Modifier::REVERSED | Modifier::BOLD);
-        if let Some(primary) = self.theme.primary.or(self.theme.foreground) {
-            style = style.fg(ratatui_color_from_ansi(primary));
-        }
-        style
+        self.styles.modal_list_highlight_style()
     }
 
     fn apply_view_rows(&mut self, rows: u16) {
@@ -1473,82 +1468,30 @@ impl Session {
     }
 
     fn tool_border_style(&self) -> InlineTextStyle {
-        self.border_inline_style()
+        self.styles.tool_border_style()
     }
 
     fn default_style(&self) -> Style {
-        let mut style = Style::default();
-        if let Some(foreground) = self.theme.foreground.map(ratatui_color_from_ansi) {
-            style = style.fg(foreground);
-        }
-        style
+        self.styles.default_style()
     }
 
     fn accent_inline_style(&self) -> InlineTextStyle {
-        InlineTextStyle {
-            color: self.theme.primary.or(self.theme.foreground),
-            ..InlineTextStyle::default()
-        }
+        self.styles.accent_inline_style()
     }
 
     fn accent_style(&self) -> Style {
-        ratatui_style_from_inline(&self.accent_inline_style(), self.theme.foreground)
+        self.styles.accent_style()
     }
 
     fn border_inline_style(&self) -> InlineTextStyle {
-        InlineTextStyle {
-            color: self.theme.secondary.or(self.theme.foreground),
-            ..InlineTextStyle::default()
-        }
+        self.styles.border_inline_style()
     }
 
     fn border_style(&self) -> Style {
-        ratatui_style_from_inline(&self.border_inline_style(), self.theme.foreground)
-            .add_modifier(Modifier::DIM)
+        self.styles.border_style()
     }
 
     // All palette, editing, message, reflow, and state methods moved to session/ modules
-}
-
-fn justify_plain_text(text: &str, max_width: usize) -> Option<String> {
-    let trimmed = text.trim();
-    let words: Vec<&str> = trimmed.split_whitespace().collect();
-    if words.len() <= 1 {
-        return None;
-    }
-
-    let total_word_width: usize = words.iter().map(|word| UnicodeWidthStr::width(*word)).sum();
-    if total_word_width >= max_width {
-        return None;
-    }
-
-    let gaps = words.len() - 1;
-    let spaces_needed = max_width.saturating_sub(total_word_width);
-    if spaces_needed <= gaps {
-        return None;
-    }
-
-    let base_space = spaces_needed / gaps;
-    if base_space == 0 {
-        return None;
-    }
-    let extra = spaces_needed % gaps;
-
-    let mut output = String::with_capacity(max_width + gaps);
-    for (index, word) in words.iter().enumerate() {
-        output.push_str(word);
-        if index < gaps {
-            let mut count = base_space;
-            if index < extra {
-                count += 1;
-            }
-            for _ in 0..count {
-                output.push(' ');
-            }
-        }
-    }
-
-    Some(output)
 }
 
 #[cfg(test)]

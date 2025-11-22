@@ -188,19 +188,9 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
 
             session.remember_submitted_input(&submitted);
 
-            let spinner_index = session.lines.len();
-            let spinner_style = InlineTextStyle::default()
-                .with_color(Some(anstyle::Color::Ansi(anstyle::AnsiColor::Cyan)))
-                .dim();
-            session.push_line(
-                InlineMessageKind::Agent,
-                vec![InlineSegment {
-                    text: "⠋ Thinking...".to_string(),
-                    style: spinner_style,
-                }],
-            );
-            session.thinking_spinner.start(spinner_index);
-            session.mark_dirty();
+            // Note: The thinking spinner message is no longer added here.
+            // Instead, it's added in session_loop.rs after the user message is displayed,
+            // ensuring proper message ordering in the transcript (user message first, then spinner).
 
             if has_control || has_command {
                 Some(InlineEvent::QueueSubmit(submitted))
