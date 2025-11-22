@@ -31,7 +31,7 @@ impl Session {
     /// Check if the current input should trigger the file palette
     pub(super) fn check_file_reference_trigger(&mut self) {
         if let Some(palette) = self.file_palette.as_mut() {
-            if let Some((start, end, query)) =
+            if let Some((_start, _end, query)) =
                 extract_file_reference(self.input_manager.content(), self.input_manager.cursor())
             {
                 let is_empty = query.is_empty();

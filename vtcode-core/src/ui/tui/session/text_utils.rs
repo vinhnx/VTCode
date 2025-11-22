@@ -115,6 +115,7 @@ pub fn strip_ansi_codes(text: &str) -> String {
 }
 
 /// Simplify tool call display text for better human readability
+#[allow(dead_code)]
 pub fn simplify_tool_display(text: &str) -> String {
     // Common patterns to simplify for human readability
     let simplified = if text.starts_with("file ") {
@@ -145,6 +146,7 @@ pub fn simplify_tool_display(text: &str) -> String {
 }
 
 /// Format tool parameters for better readability
+#[allow(dead_code)]
 pub fn format_tool_parameters(text: &str) -> String {
     // Convert common parameter patterns to more readable formats
     let mut formatted = text.to_string();

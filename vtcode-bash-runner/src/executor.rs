@@ -1,7 +1,6 @@
 use anyhow::{Context, Result};
 #[cfg(any(
-    feature = "std-process",
-    feature = "powershell-process",
+    not(feature = "powershell-process"),
     feature = "pure-rust"
 ))]
 use anyhow::{anyhow, bail};

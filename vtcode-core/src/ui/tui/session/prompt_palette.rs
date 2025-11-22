@@ -33,6 +33,7 @@ impl PromptPalette {
     }
 
     /// Reset selection and filter (call when opening prompt browser)
+    #[allow(dead_code)]
     pub fn reset(&mut self) {
         self.selected_index = 0;
         self.current_page = 0;

@@ -4,6 +4,7 @@ use super::super::style::ratatui_style_from_inline;
 use super::super::types::InlineTheme;
 use super::message::MessageLine;
 
+#[allow(dead_code)]
 pub(super) fn render_tool_segments(
     line: &MessageLine,
     theme: &InlineTheme,

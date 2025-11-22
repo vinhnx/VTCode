@@ -1,6 +1,6 @@
 use std::{cmp::min, sync::Arc};
 
-use anstyle::{AnsiColor, Color as AnsiColorEnum, Effects};
+use anstyle::{Color as AnsiColorEnum, Effects};
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
@@ -28,6 +28,7 @@ use crate::config::constants::ui;
 
 const USER_PREFIX: &str = "";
 
+#[allow(dead_code)]
 pub fn render(session: &mut Session, frame: &mut Frame<'_>) {
     let size = frame.area();
     if size.width == 0 || size.height == 0 {
@@ -720,15 +721,18 @@ pub(super) fn render_tool_segments(session: &Session, line: &MessageLine) -> Vec
 
 
 /// Simplify tool call display text for better human readability
+#[allow(dead_code)]
 fn simplify_tool_display(text: &str) -> String {
     text_utils::simplify_tool_display(text)
 }
 
 /// Normalize tool names to group similar tools together
+#[allow(dead_code)]
 fn normalize_tool_name(session: &Session, tool_name: &str) -> String {
     session.styles.normalize_tool_name(tool_name)
 }
 
+#[allow(dead_code)]
 fn tool_inline_style(session: &Session, tool_name: &str) -> InlineTextStyle {
     session.styles.tool_inline_style(tool_name)
 }
@@ -741,6 +745,7 @@ fn default_style(session: &Session) -> Style {
     session.styles.default_style()
 }
 
+#[allow(dead_code)]
 fn accent_inline_style(session: &Session) -> InlineTextStyle {
     session.styles.accent_inline_style()
 }
@@ -749,6 +754,7 @@ fn accent_style(session: &Session) -> Style {
     session.styles.accent_style()
 }
 
+#[allow(dead_code)]
 fn border_inline_style(session: &Session) -> InlineTextStyle {
     session.styles.border_inline_style()
 }
@@ -1584,6 +1590,7 @@ fn modal_render_styles(session: &Session) -> ModalRenderStyles {
     }
 }
 
+#[allow(dead_code)]
 pub(super) fn adjust_scroll_after_change(session: &mut Session, previous_max_offset: usize) {
     let new_max_offset = current_max_scroll_offset(session);
     let current_offset = session.scroll_manager.offset();
@@ -1599,6 +1606,7 @@ pub(super) fn adjust_scroll_after_change(session: &mut Session, previous_max_off
     enforce_scroll_bounds(session);
 }
 
+#[allow(dead_code)]
 pub(super) fn scroll_line_up(session: &mut Session) {
     let previous_offset = session.scroll_manager.offset();
     session.scroll_manager.scroll_up(1);
@@ -1608,6 +1616,7 @@ pub(super) fn scroll_line_up(session: &mut Session) {
     }
 }
 
+#[allow(dead_code)]
 pub(super) fn scroll_line_down(session: &mut Session) {
     let previous_offset = session.scroll_manager.offset();
     session.scroll_manager.scroll_down(1);
@@ -1617,6 +1626,7 @@ pub(super) fn scroll_line_down(session: &mut Session) {
     }
 }
 
+#[allow(dead_code)]
 pub(super) fn scroll_page_up(session: &mut Session) {
     let previous_offset = session.scroll_manager.offset();
     let page = viewport_height(session).max(1);
@@ -1627,6 +1637,7 @@ pub(super) fn scroll_page_up(session: &mut Session) {
     }
 }
 
+#[allow(dead_code)]
 pub(super) fn scroll_page_down(session: &mut Session) {
     let page = viewport_height(session).max(1);
     let previous_offset = session.scroll_manager.offset();
@@ -1637,6 +1648,7 @@ pub(super) fn scroll_page_down(session: &mut Session) {
     }
 }
 
+#[allow(dead_code)]
 pub(super) fn toggle_timeline_pane(session: &mut Session) {
     session.show_timeline_pane = !session.show_timeline_pane;
     // recalculate_transcript_rows is in render.rs.
@@ -1645,6 +1657,7 @@ pub(super) fn toggle_timeline_pane(session: &mut Session) {
     session.mark_dirty();
 }
 
+#[allow(dead_code)]
 pub(super) fn handle_tool_code_fence_marker(session: &mut Session, text: &str) -> bool {
     let trimmed = text.trim();
     let stripped = trimmed
@@ -1669,6 +1682,7 @@ pub(super) fn handle_tool_code_fence_marker(session: &mut Session, text: &str) -
     true
 }
 
+#[allow(dead_code)]
 fn remove_trailing_empty_tool_line(session: &mut Session) {
     let should_remove = session
         .lines

@@ -15,6 +15,7 @@ const USER_PREFIX: &str = "";
 
 impl Session {
     /// Get the prefix text for a message kind
+    #[allow(dead_code)]
     pub(super) fn prefix_text(&self, kind: InlineMessageKind) -> Option<String> {
         match kind {
             InlineMessageKind::User => Some(
@@ -31,6 +32,7 @@ impl Session {
     }
 
     /// Get the prefix style for a message line
+    #[allow(dead_code)]
     pub(super) fn prefix_style(&self, line: &MessageLine) -> InlineTextStyle {
         self.styles.prefix_style(line)
     }

@@ -823,7 +823,11 @@ impl PtyManager {
         size: PtySize,
     ) -> Result<VTCodePtySession> {
         if command.is_empty() {
-            return Err(anyhow!("PTY session command cannot be empty"));
+            return Err(anyhow!(
+                "PTY session command cannot be empty.\n\
+                 This is an internal error - command validation should have caught this earlier.\n\
+                 Please report this with the run_pty_cmd parameters used."
+            ));
         }
 
         let mut sessions = self.inner.sessions.lock();

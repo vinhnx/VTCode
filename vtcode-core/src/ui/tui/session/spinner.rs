@@ -8,6 +8,7 @@ pub(in crate::ui::tui::session) struct ThinkingSpinner {
     spinner_index: usize,
     last_update: Instant,
     pub(in crate::ui::tui::session) spinner_line_index: Option<usize>,
+    #[allow(dead_code)]
     pub(in crate::ui::tui::session) label: String,
 }
 
@@ -53,10 +54,12 @@ impl ThinkingSpinner {
         }
     }
 
+    #[allow(dead_code)]
     pub fn is_active(&self) -> bool {
         self.is_active
     }
 
+    #[allow(dead_code)]
     pub fn spinner_line_index(&self) -> Option<usize> {
         self.spinner_line_index
     }

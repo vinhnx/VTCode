@@ -170,6 +170,7 @@ pub mod factory;
 pub mod provider;
 pub mod providers;
 pub mod rig_adapter;
+pub mod tool_bridge;
 
 pub mod token_metrics;
 pub mod types;
@@ -184,6 +185,10 @@ pub use factory::{create_provider_with_config, get_factory};
 pub use provider::{LLMStream, LLMStreamEvent};
 pub use providers::{
     AnthropicProvider, GeminiProvider, OllamaProvider, OpenAIProvider, XAIProvider, ZAIProvider,
+};
+pub use tool_bridge::{
+    CorrelationStats, IntentFulfillment, MessageCorrelationTracker, MessageToolCorrelation,
+    ToolExecution, ToolIntent, ToolIntentExtractor,
 };
 
 pub use token_metrics::{TokenCounter, TokenMetrics, TokenTypeMetrics};

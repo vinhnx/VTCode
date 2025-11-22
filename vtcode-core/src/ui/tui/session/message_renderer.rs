@@ -5,10 +5,10 @@ use ratatui::{
 
 use super::super::style::ratatui_style_from_inline;
 use super::super::types::{InlineMessageKind, InlineTextStyle, InlineTheme};
-use super::ansi_utils;
 use super::message::{MessageLabels, MessageLine};
 use crate::config::constants::ui;
 
+#[allow(dead_code)]
 pub(super) fn render_message_spans(
     line: &MessageLine,
     theme: &InlineTheme,
@@ -77,6 +77,7 @@ pub(super) fn render_message_spans(
     spans
 }
 
+#[allow(dead_code)]
 fn agent_prefix_spans(
     line: &MessageLine,
     theme: &InlineTheme,
@@ -102,6 +103,7 @@ fn agent_prefix_spans(
     spans
 }
 
+#[allow(dead_code)]
 fn render_tool_segments(line: &MessageLine, theme: &InlineTheme) -> Vec<Span<'static>> {
     // Render tool output without header decorations - just display segments directly
     let mut spans = Vec::new();
@@ -113,6 +115,7 @@ fn render_tool_segments(line: &MessageLine, theme: &InlineTheme) -> Vec<Span<'st
 }
 
 
+#[allow(dead_code)]
 fn render_styled_action_text(
     spans: &mut Vec<Span<'static>>,
     action: &str,
@@ -162,6 +165,7 @@ fn render_styled_action_text(
     }
 }
 
+#[allow(dead_code)]
 fn strip_tool_status_prefix(text: &str) -> &str {
     let trimmed = text.trim_start();
     const STATUS_ICONS: [&str; 4] = ["✓", "✗", "~", "✕"];
@@ -173,6 +177,7 @@ fn strip_tool_status_prefix(text: &str) -> &str {
     text
 }
 
+#[allow(dead_code)]
 fn simplify_tool_display(text: &str) -> String {
     let simplified = if text.starts_with("file ") {
         text.replacen("file ", "accessing ", 1)
@@ -193,6 +198,7 @@ fn simplify_tool_display(text: &str) -> String {
     format_tool_parameters(&simplified)
 }
 
+#[allow(dead_code)]
 fn format_tool_parameters(text: &str) -> String {
     let mut formatted = text.to_string();
 
@@ -221,6 +227,7 @@ fn format_tool_parameters(text: &str) -> String {
     formatted
 }
 
+#[allow(dead_code)]
 fn normalize_tool_name(tool_name: &str) -> String {
     match tool_name.to_lowercase().as_str() {
         "grep" | "rg" | "ripgrep" | "grep_file" | "search" | "find" | "ag" => "search".to_string(),
@@ -232,6 +239,7 @@ fn normalize_tool_name(tool_name: &str) -> String {
     }
 }
 
+#[allow(dead_code)]
 fn tool_inline_style(tool_name: &str, theme: &InlineTheme) -> InlineTextStyle {
     let normalized_name = normalize_tool_name(tool_name);
     let mut style = InlineTextStyle::default().bold();
@@ -249,6 +257,7 @@ fn tool_inline_style(tool_name: &str, theme: &InlineTheme) -> InlineTextStyle {
     style
 }
 
+#[allow(dead_code)]
 fn accent_style(theme: &InlineTheme) -> Style {
     let accent_inline = InlineTextStyle {
         color: theme.primary.or(theme.foreground),
