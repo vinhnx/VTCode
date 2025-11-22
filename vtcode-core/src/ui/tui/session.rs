@@ -1,8 +1,8 @@
-use std::{sync::Arc, time::Instant};
+use std::sync::Arc;
 
 #[cfg(test)]
 use anstyle::Color as AnsiColorEnum;
-use anstyle::{AnsiColor, RgbColor};
+use anstyle::RgbColor;
 use crossterm::event::{
     Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind, MouseEvent, MouseEventKind,
 };
@@ -19,8 +19,8 @@ use tokio::sync::mpsc::UnboundedSender;
 use super::{
     style::{measure_text_width, ratatui_color_from_ansi, ratatui_style_from_inline},
     types::{
-        InlineCommand, InlineEvent, InlineHeaderContext, InlineMessageKind, InlineTextStyle,
-        InlineTheme,
+        InlineCommand, InlineEvent, InlineHeaderContext, InlineMessageKind, InlineSegment,
+        InlineTextStyle, InlineTheme,
     },
 };
 use crate::config::constants::ui;
@@ -53,6 +53,7 @@ mod messages;
 mod palette;
 mod palette_views;
 mod reflow;
+mod spinner;
 mod state;
 mod tool_renderer;
 
@@ -65,6 +66,7 @@ use self::prompt_palette::PromptPalette;
 use self::queue::QueueOverlay;
 use self::scroll::ScrollManager;
 use self::slash_palette::SlashPalette;
+use self::spinner::ThinkingSpinner;
 use self::styling::SessionStyles;
 use self::transcript::TranscriptReflowCache;
 #[cfg(test)]
@@ -81,58 +83,6 @@ const LEGACY_PROMPT_COMMAND_NAME: &str = "prompts";
 const PROMPT_INVOKE_PREFIX: &str = "prompt:";
 const LEGACY_PROMPT_INVOKE_PREFIX: &str = "prompts:";
 const PROMPT_COMMAND_PREFIX: &str = "/prompt:";
-
-/// Spinner state for showing AI thinking indicator
-#[derive(Clone)]
-struct ThinkingSpinner {
-    is_active: bool,
-    started_at: Instant,
-    spinner_index: usize,
-    last_update: Instant,
-    spinner_line_index: Option<usize>, // Track which message line is the spinner
-}
-
-impl ThinkingSpinner {
-    fn new() -> Self {
-        Self {
-            is_active: false,
-            started_at: Instant::now(),
-            spinner_index: 0,
-            last_update: Instant::now(),
-            spinner_line_index: None,
-        }
-    }
-
-    fn start(&mut self, line_index: usize) {
-        self.is_active = true;
-        self.spinner_line_index = Some(line_index);
-        self.started_at = Instant::now();
-        self.last_update = Instant::now();
-        self.spinner_index = 0;
-    }
-
-    fn stop(&mut self) {
-        self.is_active = false;
-        self.spinner_line_index = None;
-    }
-
-    fn update(&mut self) {
-        if self.is_active && self.last_update.elapsed().as_millis() >= 80 {
-            self.spinner_index = (self.spinner_index + 1) % 4;
-            self.last_update = Instant::now();
-        }
-    }
-
-    fn current_frame(&self) -> &'static str {
-        match self.spinner_index {
-            0 => "⠋",
-            1 => "⠙",
-            2 => "⠹",
-            3 => "⠸",
-            _ => "⠋",
-        }
-    }
-}
 
 pub struct Session {
     // --- Managers (Phase 2) ---
@@ -551,7 +501,15 @@ impl Session {
             self.recalculate_transcript_rows();
         }
 
-        let status_height = if viewport.width > 0 && self.has_input_status() {
+        let has_status = self
+            .input_status_left
+            .as_ref()
+            .is_some_and(|v| !v.trim().is_empty())
+            || self
+                .input_status_right
+                .as_ref()
+                .is_some_and(|v| !v.trim().is_empty());
+        let status_height = if viewport.width > 0 && has_status {
             1
         } else {
             0
@@ -620,10 +578,6 @@ impl Session {
         self.mark_dirty();
     }
 
-    fn modal_list_highlight_style(&self) -> Style {
-        self.styles.modal_list_highlight_style()
-    }
-
     fn apply_view_rows(&mut self, rows: u16) {
         let resolved = rows.max(2);
         if self.view_rows != resolved {
@@ -661,8 +615,8 @@ impl Session {
         let block = Block::default()
             .borders(Borders::NONE)
             .border_type(BorderType::Rounded)
-            .style(self.default_style())
-            .border_style(self.border_style());
+            .style(self.styles.default_style())
+            .border_style(self.styles.border_style());
         let inner = block.inner(area);
         frame.render_widget(block, area);
         if inner.height == 0 || inner.width == 0 {
@@ -700,7 +654,7 @@ impl Session {
         }
         self.overlay_queue_lines(&mut visible_lines, content_width);
         let paragraph = Paragraph::new(visible_lines)
-            .style(self.default_style())
+            .style(self.styles.default_style())
             .wrap(Wrap { trim: true });
 
         // Only clear if content actually changed, not on viewport-only scroll
@@ -712,16 +666,10 @@ impl Session {
         frame.render_widget(paragraph, scroll_area);
     }
 
-    fn header_reserved_rows(&self) -> u16 {
-        self.header_rows.max(ui::INLINE_HEADER_HEIGHT)
-    }
-
-    fn input_reserved_rows(&self) -> u16 {
-        self.header_reserved_rows() + self.input_height
-    }
-
     fn recalculate_transcript_rows(&mut self) {
-        let reserved = self.input_reserved_rows().saturating_add(2); // account for transcript block borders
+        // Calculate reserved rows: header + input + borders (2)
+        let header_rows = self.header_rows.max(ui::INLINE_HEADER_HEIGHT);
+        let reserved = (header_rows + self.input_height).saturating_add(2);
         let available = self.view_rows.saturating_sub(reserved).max(1);
         self.apply_transcript_rows(available);
     }
@@ -741,72 +689,6 @@ impl Session {
 
         palette_views::render_file_palette(frame, viewport, palette, &self.theme);
     }
-    fn render_file_palette_loading(&self, frame: &mut Frame<'_>, viewport: Rect) {
-        let width_hint = 40u16;
-        let modal_height = 3;
-        let area = compute_modal_area(viewport, width_hint, modal_height, 0, 0, true);
-
-        frame.render_widget(Clear, area);
-        let block = Block::default()
-            .title("File Browser")
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .style(self.default_style())
-            .border_style(self.border_style());
-        let inner = block.inner(area);
-        frame.render_widget(block, area);
-
-        if inner.height > 0 && inner.width > 0 {
-            let loading_text = vec![Line::from(Span::styled(
-                "Loading workspace files...".to_string(),
-                self.default_style().add_modifier(Modifier::DIM),
-            ))];
-            let paragraph = Paragraph::new(loading_text).wrap(Wrap { trim: true });
-            frame.render_widget(paragraph, inner);
-        }
-    }
-
-    fn file_palette_instructions(&self, palette: &FilePalette) -> Vec<Line<'static>> {
-        let mut lines = vec![];
-
-        if palette.is_empty() {
-            lines.push(Line::from(Span::styled(
-                "No files found matching filter".to_string(),
-                self.default_style().add_modifier(Modifier::DIM),
-            )));
-        } else {
-            let total = palette.total_items();
-            let count_text = if total == 1 {
-                "1 file".to_string()
-            } else {
-                format!("{} files", total)
-            };
-
-            let nav_text = "↑↓ Navigate · PgUp/PgDn Page · Tab/Enter Select";
-
-            lines.push(Line::from(vec![Span::styled(
-                format!("{} · Esc Close", nav_text),
-                self.default_style(),
-            )]));
-
-            lines.push(Line::from(vec![
-                Span::styled(
-                    format!("Showing {}", count_text),
-                    self.default_style().add_modifier(Modifier::DIM),
-                ),
-                Span::styled(
-                    if !palette.filter_query().is_empty() {
-                        format!(" matching '{}'", palette.filter_query())
-                    } else {
-                        String::new()
-                    },
-                    self.accent_style(),
-                ),
-            ]));
-        }
-
-        lines
-    }
 
     fn render_prompt_palette(&mut self, frame: &mut Frame<'_>, viewport: Rect) {
         if !self.prompt_palette_active {
@@ -823,672 +705,21 @@ impl Session {
 
         palette_views::render_prompt_palette(frame, viewport, palette, &self.theme);
     }
-    fn render_prompt_palette_loading(&self, frame: &mut Frame<'_>, viewport: Rect) {
-        let width_hint = 40u16;
-        let modal_height = 3;
-        let area = compute_modal_area(viewport, width_hint, modal_height, 0, 0, true);
-
-        frame.render_widget(Clear, area);
-        let block = Block::default()
-            .title("Custom Prompts")
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .style(self.default_style())
-            .border_style(self.border_style());
-        let inner = block.inner(area);
-        frame.render_widget(block, area);
-
-        if inner.height > 0 && inner.width > 0 {
-            let loading_text = vec![Line::from(Span::styled(
-                "Loading custom prompts...".to_string(),
-                self.default_style().add_modifier(Modifier::DIM),
-            ))];
-            let paragraph = Paragraph::new(loading_text).wrap(Wrap { trim: true });
-            frame.render_widget(paragraph, inner);
-        }
-    }
-
-    fn prompt_palette_instructions(&self, palette: &PromptPalette) -> Vec<Line<'static>> {
-        let mut lines = vec![];
-
-        if palette.is_empty() {
-            lines.push(Line::from(Span::styled(
-                "No prompts found matching filter".to_string(),
-                self.default_style().add_modifier(Modifier::DIM),
-            )));
-        } else {
-            let total = palette.total_items();
-            let count_text = if total == 1 {
-                "1 prompt".to_string()
-            } else {
-                format!("{} prompts", total)
-            };
-
-            lines.push(Line::from(vec![Span::styled(
-                "↑↓ Navigate · Enter/Tab Select · Esc Close",
-                self.default_style(),
-            )]));
-
-            lines.push(Line::from(vec![
-                Span::styled(
-                    format!("Showing {}", count_text),
-                    self.default_style().add_modifier(Modifier::DIM),
-                ),
-                Span::styled(
-                    if !palette.filter_query().is_empty() {
-                        format!(" matching '{}'", palette.filter_query())
-                    } else {
-                        String::new()
-                    },
-                    self.accent_style(),
-                ),
-            ]));
-        }
-
-        lines
-    }
-
-    fn has_input_status(&self) -> bool {
-        let left_present = self
-            .input_status_left
-            .as_ref()
-            .is_some_and(|value| !value.trim().is_empty());
-        if left_present {
-            return true;
-        }
-        self.input_status_right
-            .as_ref()
-            .is_some_and(|value| !value.trim().is_empty())
-    }
 
     fn render_message_spans(&self, index: usize) -> Vec<Span<'static>> {
         let Some(line) = self.lines.get(index) else {
             return vec![Span::raw(String::new())];
         };
-        let mut spans = Vec::new();
-        if line.kind == InlineMessageKind::Agent {
-            spans.extend(self.agent_prefix_spans(line));
-        } else if let Some(prefix) = self.prefix_text(line.kind) {
-            let style = self.prefix_style(line);
-            spans.push(Span::styled(
-                prefix,
-                ratatui_style_from_inline(&style, self.theme.foreground),
-            ));
-        }
-
-        if line.kind == InlineMessageKind::Agent {
-            spans.push(Span::raw(ui::INLINE_AGENT_MESSAGE_LEFT_PADDING));
-        }
-
-        if line.segments.is_empty() {
-            if spans.is_empty() {
-                spans.push(Span::raw(String::new()));
-            }
-            return spans;
-        }
-
-        if line.kind == InlineMessageKind::Tool {
-            let tool_spans = self.render_tool_segments(line);
-            if tool_spans.is_empty() {
-                spans.push(Span::raw(String::new()));
-            } else {
-                spans.extend(tool_spans);
-            }
-            return spans;
-        }
-
-        if line.kind == InlineMessageKind::Pty {
-            let prev_is_pty = index
-                .checked_sub(1)
-                .and_then(|prev| self.lines.get(prev))
-                .map(|prev| prev.kind == InlineMessageKind::Pty)
-                .unwrap_or(false);
-            if !prev_is_pty {
-                let mut combined = String::new();
-                for segment in &line.segments {
-                    combined.push_str(segment.text.as_str());
-                }
-                let header_text = if combined.trim().is_empty() {
-                    ui::INLINE_PTY_PLACEHOLDER.to_string()
-                } else {
-                    combined.trim().to_string()
-                };
-                let label_style = InlineTextStyle::default()
-                    .with_color(self.theme.primary.or(self.theme.foreground))
-                    .bold();
-                spans.push(Span::styled(
-                    format!("[{}]", ui::INLINE_PTY_HEADER_LABEL),
-                    ratatui_style_from_inline(&label_style, self.theme.foreground),
-                ));
-                spans.push(Span::raw(" "));
-                let _body_style = InlineTextStyle::default()
-                    .with_color(self.theme.foreground)
-                    .bold();
-                // Parse ANSI escape sequences in PTY output for color support
-                // Limit to last 30 lines for performance and readability
-                let output_text = if header_text.lines().count() > 30 {
-                    let lines: Vec<&str> = header_text.lines().collect();
-                    let start = lines.len().saturating_sub(30);
-                    format!(
-                        "[... {} lines truncated ...]\n{}",
-                        lines.len() - 30,
-                        lines[start..].join("\n")
-                    )
-                } else {
-                    header_text.clone()
-                };
-
-                // Skip ANSI parsing and return plain text without styles or Unicode formatting
-                spans.push(Span::raw(output_text));
-                return spans;
-            }
-        }
-
-        let fallback = self.text_fallback(line.kind).or(self.theme.foreground);
-        for segment in &line.segments {
-            let mut style = ratatui_style_from_inline(&segment.style, fallback);
-            if line.kind == InlineMessageKind::Agent {
-                // Apply italic effect for agent messages
-                style = style.add_modifier(ratatui::style::Modifier::ITALIC);
-            }
-            spans.push(Span::styled(segment.text.clone(), style));
-        }
-
-        if spans.is_empty() {
-            spans.push(Span::raw(String::new()));
-        }
-
-        spans
-    }
-
-    fn agent_prefix_spans(&self, line: &MessageLine) -> Vec<Span<'static>> {
-        let mut spans = Vec::new();
-        let prefix_style =
-            ratatui_style_from_inline(&self.prefix_style(line), self.theme.foreground);
-        if !ui::INLINE_AGENT_QUOTE_PREFIX.is_empty() {
-            spans.push(Span::styled(
-                ui::INLINE_AGENT_QUOTE_PREFIX.to_string(),
-                prefix_style,
-            ));
-        }
-
-        if let Some(label) = self.labels.agent.clone() {
-            if !label.is_empty() {
-                let label_style =
-                    ratatui_style_from_inline(&self.prefix_style(line), self.theme.foreground);
-                spans.push(Span::styled(label, label_style));
-            }
-        }
-
-        spans
-    }
-
-    /// Strips ANSI escape codes from text to ensure plain text output
-    fn strip_ansi_codes(&self, text: &str) -> String {
-        // Comprehensive ANSI code stripping by looking for various escape sequences
-        let mut result = String::new();
-        let mut chars = text.chars().peekable();
-
-        while let Some(ch) = chars.next() {
-            if ch == '\x1b' {
-                // Found escape character, check what follows
-                match chars.peek() {
-                    Some('[') => {
-                        // CSI (Control Sequence Introducer): ESC[...m
-                        chars.next(); // consume the '['
-                        // Skip the parameters and final character
-                        let mut param_length = 0;
-                        while let Some(&next_ch) = chars.peek() {
-                            chars.next(); // consume the character
-                            param_length += 1;
-                            if next_ch.is_ascii_digit() || next_ch == ';' || next_ch == ':' {
-                                // These are parameter characters, continue
-                                continue;
-                            } else if ('@'..='~').contains(&next_ch) {
-                                // This is the final command character, stop here
-                                break;
-                            } else if param_length > 20 {
-                                // prevent infinite loops
-                                break;
-                            } else {
-                                // Some other character, continue
-                                continue;
-                            }
-                        }
-                    }
-                    Some(']') => {
-                        // OSC (Operating System Command): ESC]...ST (where ST is \x1b\\ or BEL)
-                        chars.next(); // consume the ']'
-                        // Skip until we find the string terminator
-                        loop {
-                            match chars.peek() {
-                                Some(&'\x07') => {
-                                    // BEL character (0x07) terminates the sequence
-                                    chars.next(); // consume the BEL
-                                    break;
-                                }
-                                Some(&'\x1b') => {
-                                    // Check if next char after ESC is backslash to form ST
-                                    let mut peekable_copy = chars.clone();
-                                    peekable_copy.next(); // consume the second ESC
-                                    if peekable_copy.peek() == Some(&'\\') {
-                                        chars.next(); // consume the second ESC
-                                        chars.next(); // consume the '\\'
-                                        break; // ESC\\ terminates the sequence
-                                    } else {
-                                        // This is just part of the OSC data, continue
-                                        chars.next();
-                                        continue;
-                                    }
-                                }
-                                Some(_) => {
-                                    // Continue consuming characters in the sequence
-                                    chars.next();
-                                }
-                                None => {
-                                    // End of string
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    Some('(') | Some(')') | Some('*') | Some('+') | Some('-') | Some('.') => {
-                        // G0, G1, G2, G3 character set selection: ESC(...)
-                        chars.next(); // consume the special character
-                        // consume one more parameter character if available
-                        if chars.peek().is_some() {
-                            chars.next();
-                        }
-                    }
-                    Some(_) => {
-                        // Other ESC sequences with specific characters
-                        let next_ch = chars.peek().unwrap();
-                        match next_ch {
-                            '7' | '8' | '=' | '>' | 'D' | 'E' | 'H' | 'M' | 'O' | 'P' | 'V'
-                            | 'W' | 'X' | 'Z' | '[' | '\\' | ']' | '^' | '_' => {
-                                // These are single-character ESC sequences, consume the character
-                                chars.next();
-                            }
-                            _ => {
-                                // Not a known ESC sequence, treat as regular character
-                                result.push(ch);
-                            }
-                        }
-                    }
-                    None => {
-                        // End of string, just add the escape character
-                        result.push(ch);
-                    }
-                }
-            } else {
-                result.push(ch);
-            }
-        }
-
-        result
-    }
-
-    fn render_tool_segments(&self, line: &MessageLine) -> Vec<Span<'static>> {
-        let mut combined = String::new();
-        for segment in &line.segments {
-            // Strip ANSI codes from each segment to ensure plain text output
-            let stripped_text = self.strip_ansi_codes(&segment.text);
-            combined.push_str(&stripped_text);
-        }
-
-        if combined.is_empty() {
-            return Vec::new();
-        }
-
-        // Always render tool calls as a single combined line
-        self.render_tool_header_line(&combined)
-    }
-
-    fn render_tool_header_line(&self, text: &str) -> Vec<Span<'static>> {
-        let mut spans = Vec::new();
-        let indent_len = text.chars().take_while(|ch| ch.is_whitespace()).count();
-        let indent: String = text.chars().take(indent_len).collect();
-        let mut remaining = if indent_len < text.len() {
-            &text[indent_len..]
-        } else {
-            ""
-        };
-
-        if !indent.is_empty() {
-            let mut indent_style = InlineTextStyle::default();
-            indent_style.color = self.theme.tool_body.or(self.theme.foreground);
-            spans.push(Span::styled(
-                indent,
-                ratatui_style_from_inline(&indent_style, self.theme.foreground),
-            ));
-        }
-
-        if remaining.is_empty() {
-            return spans;
-        }
-
-        remaining = self.strip_tool_status_prefix(remaining);
-        if remaining.is_empty() {
-            return spans;
-        }
-
-        let (name, tail) = if remaining.starts_with('[') {
-            if let Some(end) = remaining.find(']') {
-                let name = &remaining[1..end];
-                let tail = &remaining[end + 1..];
-                (name, tail)
-            } else {
-                (remaining, "")
-            }
-        } else {
-            let mut name_end = remaining.len();
-            for (index, character) in remaining.char_indices() {
-                if character.is_whitespace() {
-                    name_end = index;
-                    break;
-                }
-            }
-            remaining.split_at(name_end)
-        };
-        if !name.is_empty() {
-            // Add bracket wrapper with different styling
-            spans.push(Span::styled(
-                "[",
-                self.accent_style().add_modifier(Modifier::BOLD),
-            ));
-
-            // Get distinctive color based on the tool name for better differentiation
-            let tool_name_style = self.tool_inline_style(name);
-
-            spans.push(Span::styled(
-                name.to_string(),
-                ratatui_style_from_inline(&tool_name_style, self.theme.foreground),
-            ));
-
-            spans.push(Span::styled(
-                "] ",
-                self.accent_style().add_modifier(Modifier::BOLD),
-            ));
-        }
-
-        let trimmed_tail = tail.trim_start();
-        if !trimmed_tail.is_empty() {
-            // Parse the tail to extract tool action and parameters for better formatting
-            let parts: Vec<&str> = trimmed_tail.split(" · ").collect();
-            if parts.len() > 1 {
-                // Format as "action → description · parameter1 · parameter2"
-                let action = parts[0];
-                let body_style = InlineTextStyle::default()
-                    .with_color(self.theme.tool_body.or(self.theme.foreground));
-
-                // Parse and style the action text with special highlighting
-                self.render_styled_action_text(&mut spans, action, &body_style);
-
-                // Format additional parameters (limit to avoid multi-line)
-                let max_parts = 3; // Limit parameters to keep on one line
-                for (i, part) in parts[1..].iter().enumerate() {
-                    if i >= max_parts {
-                        spans.push(Span::raw(" "));
-                        spans.push(Span::styled(
-                            "· ...",
-                            self.accent_style().add_modifier(Modifier::DIM),
-                        ));
-                        break;
-                    }
-                    spans.push(Span::raw(" "));
-                    spans.push(Span::styled(
-                        "·",
-                        self.accent_style().add_modifier(Modifier::DIM),
-                    ));
-                    spans.push(Span::raw(" "));
-
-                    // Differentiate between parameter names and values
-                    let param_parts: Vec<&str> = part.split(": ").collect();
-                    if param_parts.len() > 1 {
-                        // Parameter name (before colon) - in accent color with bold
-                        spans.push(Span::styled(
-                            format!("{}: ", param_parts[0]),
-                            self.accent_style().add_modifier(Modifier::BOLD),
-                        ));
-
-                        // Parameter value (after colon) - highlighted with different color
-                        let value_style = InlineTextStyle::default()
-                            .with_color(Some(AnsiColor::Green.into())) // Green for argument values
-                            .bold();
-                        spans.push(Span::styled(
-                            param_parts[1].to_string(),
-                            ratatui_style_from_inline(&value_style, self.theme.foreground),
-                        ));
-                    } else {
-                        spans.push(Span::styled(
-                            part.to_string(),
-                            ratatui_style_from_inline(&body_style, self.theme.foreground),
-                        ));
-                    }
-                }
-            } else {
-                // Fallback for original formatting
-                let body_style = InlineTextStyle::default()
-                    .with_color(self.theme.tool_body.or(self.theme.foreground));
-
-                // Simplify common tool call patterns for human readability
-                let mut simplified_text = self.simplify_tool_display(trimmed_tail);
-                // Truncate to fit in one line (approximately 100 characters for readability)
-                if simplified_text.len() > 100 {
-                    simplified_text = simplified_text.chars().take(97).collect::<String>() + "...";
-                }
-                spans.push(Span::styled(
-                    simplified_text,
-                    ratatui_style_from_inline(&body_style, self.theme.foreground),
-                ));
-            }
-        }
-
-        spans
-    }
-
-    fn render_styled_action_text(
-        &self,
-        spans: &mut Vec<Span<'static>>,
-        action: &str,
-        body_style: &InlineTextStyle,
-    ) {
-        let words: Vec<&str> = action.split_whitespace().collect();
-
-        for (i, word) in words.iter().enumerate() {
-            if i > 0 {
-                spans.push(Span::raw(" "));
-            }
-
-            if *word == "in" {
-                // Style "in" with italic and different color (cyan)
-                let in_style = InlineTextStyle::default()
-                    .with_color(Some(AnsiColor::Cyan.into()))
-                    .italic();
-                spans.push(Span::styled(
-                    word.to_string(),
-                    ratatui_style_from_inline(&in_style, self.theme.foreground),
-                ));
-            } else if i < 2
-                && (word.starts_with("List")
-                    || word.starts_with("Read")
-                    || word.starts_with("Write")
-                    || word.starts_with("Find")
-                    || word.starts_with("Search")
-                    || word.starts_with("Run"))
-            {
-                // Highlight the main action verb (first 1-2 words) with bold and accent color
-                let action_style = InlineTextStyle::default()
-                    .with_color(self.theme.tool_accent.or(Some(AnsiColor::Yellow.into())))
-                    .bold();
-                spans.push(Span::styled(
-                    word.to_string(),
-                    ratatui_style_from_inline(&action_style, self.theme.foreground),
-                ));
-            } else {
-                // Normal styling for other words
-                spans.push(Span::styled(
-                    word.to_string(),
-                    ratatui_style_from_inline(body_style, self.theme.foreground),
-                ));
-            }
-        }
-    }
-
-    fn strip_tool_status_prefix<'a>(&self, text: &'a str) -> &'a str {
-        let trimmed = text.trim_start();
-        const STATUS_ICONS: [&str; 4] = ["✓", "✗", "~", "✕"];
-        for icon in STATUS_ICONS {
-            if trimmed.starts_with(icon) {
-                return trimmed[icon.len()..].trim_start();
-            }
-        }
-        text
-    }
-
-    /// Simplify tool call display text for better human readability
-    fn simplify_tool_display(&self, text: &str) -> String {
-        // Common patterns to simplify for human readability
-        let simplified = if text.starts_with("file ") {
-            // Convert "file path/to/file" to "accessing path/to/file"
-            text.replacen("file ", "accessing ", 1)
-        } else if text.starts_with("path: ") {
-            // Convert "path: path/to/file" to "file: path/to/file"
-            text.replacen("path: ", "file: ", 1)
-        } else if text.contains(" → file ") {
-            // Convert complex patterns to simpler ones
-            text.replace(" → file ", " → ")
-        } else if text.starts_with("grep ") {
-            // Simplify grep patterns for better readability
-            text.replacen("grep ", "searching for ", 1)
-        } else if text.starts_with("find ") {
-            // Simplify find patterns
-            text.replacen("find ", "finding ", 1)
-        } else if text.starts_with("list ") {
-            // Simplify list patterns
-            text.replacen("list ", "listing ", 1)
-        } else {
-            // Return original text if no simplification needed
-            text.to_string()
-        };
-
-        // Further simplify parameter displays
-        self.format_tool_parameters(&simplified)
-    }
-
-    /// Format tool parameters for better readability
-    fn format_tool_parameters(&self, text: &str) -> String {
-        // Convert common parameter patterns to more readable formats
-        let mut formatted = text.to_string();
-
-        // Convert "pattern: xyz" to "matching 'xyz'"
-        if formatted.contains("pattern: ") {
-            formatted = formatted.replace("pattern: ", "matching '");
-            // Close the quote if there's a parameter separator
-            if formatted.contains(" · ") {
-                formatted = formatted.replacen(" · ", "' · ", 1);
-            } else if formatted.contains("  ") {
-                formatted = formatted.replacen("  ", "' ", 1);
-            } else {
-                formatted.push('\'');
-            }
-        }
-
-        // Convert "path: xyz" to "in 'xyz'"
-        if formatted.contains("path: ") {
-            formatted = formatted.replace("path: ", "in '");
-            // Close the quote if there's a parameter separator
-            if formatted.contains(" · ") {
-                formatted = formatted.replacen(" · ", "' · ", 1);
-            } else if formatted.contains("  ") {
-                formatted = formatted.replacen("  ", "' ", 1);
-            } else {
-                formatted.push('\'');
-            }
-        }
-
-        formatted
-    }
-
-    /// Normalize tool names to group similar tools together
-    fn normalize_tool_name(&self, tool_name: &str) -> String {
-        // Group similar tools under common names for consistent styling
-        match tool_name.to_lowercase().as_str() {
-            "grep" | "rg" | "ripgrep" | "grep_file" | "search" | "find" | "ag" => {
-                "search".to_string()
-            }
-            "list" | "ls" | "dir" | "list_files" => "list".to_string(),
-            "read" | "cat" | "file" | "read_file" => "read".to_string(),
-            "write" | "edit" | "save" | "insert" | "edit_file" => "write".to_string(),
-            "run" | "command" | "bash" | "sh" => "run".to_string(),
-            _ => tool_name.to_string(),
-        }
-    }
-
-    fn tool_inline_style(&self, tool_name: &str) -> InlineTextStyle {
-        let normalized_name = self.normalize_tool_name(tool_name);
-        let mut style = InlineTextStyle::default().bold();
-
-        // Assign distinctive colors based on normalized tool type
-        style.color = match normalized_name.to_lowercase().as_str() {
-            "read" => {
-                // Blue for file reading operations
-                Some(AnsiColor::Blue.into())
-            }
-            "list" => {
-                // Green for listing operations
-                Some(AnsiColor::Green.into())
-            }
-            "search" => {
-                // Yellow for search operations
-                Some(AnsiColor::Yellow.into())
-            }
-            "write" => {
-                // Magenta for write/edit operations
-                Some(AnsiColor::Magenta.into())
-            }
-            "run" => {
-                // Red for execution operations
-                Some(AnsiColor::Red.into())
-            }
-            "git" | "version_control" => {
-                // Cyan for version control
-                Some(AnsiColor::Cyan.into())
-            }
-            _ => {
-                // Use the default tool accent color for other tools
-                self.theme
-                    .tool_accent
-                    .or(self.theme.primary)
-                    .or(self.theme.foreground)
-            }
-        };
-
-        style
-    }
-
-    fn tool_border_style(&self) -> InlineTextStyle {
-        self.styles.tool_border_style()
-    }
-
-    fn default_style(&self) -> Style {
-        self.styles.default_style()
-    }
-
-    fn accent_inline_style(&self) -> InlineTextStyle {
-        self.styles.accent_inline_style()
-    }
-
-    fn accent_style(&self) -> Style {
-        self.styles.accent_style()
-    }
-
-    fn border_inline_style(&self) -> InlineTextStyle {
-        self.styles.border_inline_style()
-    }
-
-    fn border_style(&self) -> Style {
-        self.styles.border_style()
+        message_renderer::render_message_spans(
+            line,
+            index,
+            &self.lines,
+            &self.theme,
+            &self.labels,
+            |kind| self.prefix_text(kind),
+            |line| self.prefix_style(line),
+            |kind| self.text_fallback(kind),
+        )
     }
 
     // All palette, editing, message, reflow, and state methods moved to session/ modules
