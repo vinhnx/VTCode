@@ -430,7 +430,7 @@ fn parse_channel_tool_call(text: &str) -> Option<(String, Value)> {
     let parsed: Value = serde_json::from_str(json_text).ok()?;
 
     // Convert to expected format based on tool name and arguments
-    let args = convert_harmony_args_to_tool_format(tool_name, parsed);
+    let args = convert_harmony_args_to_tool_format(tool_name, parsed).ok()?;
 
     Some((tool_name.to_string(), args))
 }
@@ -453,7 +453,7 @@ fn parse_tool_name_from_reference(tool_ref: &str) -> &str {
     }
 }
 
-fn convert_harmony_args_to_tool_format(tool_name: &str, parsed: Value) -> Value {
+fn convert_harmony_args_to_tool_format(tool_name: &str, parsed: Value) -> Result<Value, String> {
     match tool_name {
         "run_pty_cmd" | "bash" => {
             let mut result = serde_json::Map::new();
@@ -476,27 +476,19 @@ fn convert_harmony_args_to_tool_format(tool_name: &str, parsed: Value) -> Value 
 
                 // Validate non-empty command and executable
                 if command.is_empty() || command[0].trim().is_empty() {
-                    result.insert(
-                        "_validation_error".to_string(),
-                        serde_json::json!("command executable cannot be empty"),
-                    );
-                    return Value::Object(result);
+                    return Err("command executable cannot be empty".to_string());
                 }
 
                 result.insert("command".to_string(), serde_json::json!(command));
-                Value::Object(result)
+                Ok(Value::Object(result))
             } else if let Some(cmd_str) = parsed.get("cmd").and_then(|v| v.as_str()) {
                 // Handle string command from 'cmd' parameter
                 if cmd_str.trim().is_empty() {
-                    result.insert(
-                        "_validation_error".to_string(),
-                        serde_json::json!("command executable cannot be empty"),
-                    );
-                    return Value::Object(result);
+                    return Err("command executable cannot be empty".to_string());
                 }
 
-                result.insert("command".to_string(), serde_json::json!(cmd_str));
-                Value::Object(result)
+                result.insert("command".to_string(), serde_json::json!([cmd_str]));
+                Ok(Value::Object(result))
             } else if let Some(cmd) = parsed.get("command").and_then(|v| v.as_array()) {
                 // Fallback: handle 'command' array parameter
                 let command: Vec<String> = cmd
@@ -505,34 +497,22 @@ fn convert_harmony_args_to_tool_format(tool_name: &str, parsed: Value) -> Value 
                     .collect();
 
                 if command.is_empty() || command[0].trim().is_empty() {
-                    result.insert(
-                        "_validation_error".to_string(),
-                        serde_json::json!("command executable cannot be empty"),
-                    );
-                    return Value::Object(result);
+                    return Err("command executable cannot be empty".to_string());
                 }
 
                 result.insert("command".to_string(), serde_json::json!(command));
-                Value::Object(result)
+                Ok(Value::Object(result))
             } else if let Some(cmd_str) = parsed.get("command").and_then(|v| v.as_str()) {
                 // Fallback: handle 'command' string parameter
                 if cmd_str.trim().is_empty() {
-                    result.insert(
-                        "_validation_error".to_string(),
-                        serde_json::json!("command executable cannot be empty"),
-                    );
-                    return Value::Object(result);
+                    return Err("command executable cannot be empty".to_string());
                 }
 
-                result.insert("command".to_string(), serde_json::json!(cmd_str));
-                Value::Object(result)
+                result.insert("command".to_string(), serde_json::json!([cmd_str]));
+                Ok(Value::Object(result))
             } else {
                 // No command found - return error
-                result.insert(
-                    "_validation_error".to_string(),
-                    serde_json::json!("no 'cmd' or 'command' parameter provided"),
-                );
-                Value::Object(result)
+                Err("no 'cmd' or 'command' parameter provided".to_string())
             }
         }
         "list_files" => {
@@ -547,9 +527,9 @@ fn convert_harmony_args_to_tool_format(tool_name: &str, parsed: Value) -> Value 
                 args.insert("recursive".to_string(), recursive.clone());
             }
 
-            Value::Object(args)
+            Ok(Value::Object(args))
         }
-        _ => parsed,
+        _ => Ok(parsed),
     }
 }
 
@@ -1445,10 +1425,10 @@ mode: overwrite
     fn test_convert_harmony_args_rejects_empty_command_array() {
         let parsed = serde_json::json!({ "cmd": [] });
         let result = convert_harmony_args_to_tool_format("run_pty_cmd", parsed);
-        assert!(result.get("_validation_error").is_some());
+        assert!(result.is_err());
         assert_eq!(
-            result["_validation_error"],
-            serde_json::json!("command executable cannot be empty")
+            result.unwrap_err(),
+            "command executable cannot be empty"
         );
     }
 
@@ -1456,10 +1436,10 @@ mode: overwrite
     fn test_convert_harmony_args_rejects_empty_command_string() {
         let parsed = serde_json::json!({ "cmd": "" });
         let result = convert_harmony_args_to_tool_format("run_pty_cmd", parsed);
-        assert!(result.get("_validation_error").is_some());
+        assert!(result.is_err());
         assert_eq!(
-            result["_validation_error"],
-            serde_json::json!("command executable cannot be empty")
+            result.unwrap_err(),
+            "command executable cannot be empty"
         );
     }
 
@@ -1467,29 +1447,56 @@ mode: overwrite
     fn test_convert_harmony_args_rejects_whitespace_only_command() {
         let parsed = serde_json::json!({ "cmd": "   " });
         let result = convert_harmony_args_to_tool_format("run_pty_cmd", parsed);
-        assert!(result.get("_validation_error").is_some());
+        assert!(result.is_err());
     }
 
     #[test]
     fn test_convert_harmony_args_rejects_empty_executable_in_array() {
         let parsed = serde_json::json!({ "cmd": ["", "arg1"] });
         let result = convert_harmony_args_to_tool_format("run_pty_cmd", parsed);
-        assert!(result.get("_validation_error").is_some());
+        assert!(result.is_err());
     }
 
     #[test]
     fn test_convert_harmony_args_accepts_valid_command_array() {
         let parsed = serde_json::json!({ "cmd": ["ls", "-la"] });
         let result = convert_harmony_args_to_tool_format("run_pty_cmd", parsed);
-        assert!(result.get("_validation_error").is_none());
-        assert_eq!(result["command"], serde_json::json!(["ls", "-la"]));
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert_eq!(value["command"], serde_json::json!(["ls", "-la"]));
     }
 
     #[test]
     fn test_convert_harmony_args_accepts_valid_command_string() {
         let parsed = serde_json::json!({ "cmd": "echo test" });
         let result = convert_harmony_args_to_tool_format("run_pty_cmd", parsed);
-        assert!(result.get("_validation_error").is_none());
-        assert_eq!(result["command"], serde_json::json!(["echo test"]));
+        assert!(result.is_ok());
+        let value = result.unwrap();
+        assert_eq!(value["command"], serde_json::json!(["echo test"]));
+    }
+
+    #[test]
+    fn test_parse_harmony_channel_rejects_empty_command() {
+        // Harmony format parser (OpenAI/GPT-OSS): should reject tool call if command is empty
+        // because convert_harmony_args_to_tool_format() returns Err which parse_channel_tool_call() rejects
+        let message = "<|start|>assistant<|channel|>commentary to=bash<|message|>{\"cmd\":\"\"}<|call|>";
+        let result = parse_channel_tool_call(message);
+        assert!(result.is_none(), "Should reject Harmony format with empty command");
+    }
+
+    #[test]
+    fn test_parse_harmony_channel_rejects_empty_array() {
+        // Harmony format parser: should reject tool call if command array is empty
+        let message = "<|start|>assistant<|channel|>commentary to=container.exec<|message|>{\"cmd\":[]}<|call|>";
+        let result = parse_channel_tool_call(message);
+        assert!(result.is_none(), "Should reject Harmony format with empty array");
+    }
+
+    #[test]
+    fn test_parse_harmony_channel_rejects_whitespace_command() {
+        // Harmony format parser: should reject tool call if command is whitespace-only
+        let message = "<|start|>assistant<|channel|>commentary to=bash<|message|>{\"cmd\":\"   \"}<|call|>";
+        let result = parse_channel_tool_call(message);
+        assert!(result.is_none(), "Should reject Harmony format with whitespace-only command");
     }
 }
