@@ -280,6 +280,7 @@ pub async fn run_turn_loop(
                 assistant_text,
                 reasoning: _,
             } => {
+                // Note: reasoning already rendered during streaming; don't fabricate announcements
                 // Add assistant message if there's any text content
                 if !assistant_text.trim().is_empty() {
                     working_history.push(uni::Message::assistant(assistant_text));
@@ -554,6 +555,7 @@ pub async fn run_turn_loop(
                 }
             }
             TurnProcessingResult::TextResponse { text, reasoning: _ } => {
+                // Note: reasoning already rendered during streaming; don't fabricate announcements
                 // Check if the text response contains textual tool calls to execute
                 if let Some((tool_name, args)) =
                     crate::agent::runloop::text_tools::detect_textual_tool_call(&text)
