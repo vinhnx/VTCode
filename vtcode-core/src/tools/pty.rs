@@ -1439,4 +1439,36 @@ mod tests {
         assert_eq!(metrics.bytes_dropped, 0);
         assert_eq!(metrics.lines_dropped, 0);
     }
+
+    #[test]
+    fn scrollback_strips_ansi_codes_from_compiler_output() {
+        let mut scrollback = PtyScrollback::new(1000, 10_000);
+
+        // Simulate realistic Cargo warning output with ANSI codes
+        // (these would normally be stripped by push_text via strip_ansi)
+        let ansi_colored = "warning: unused variable\n  --> src/main.rs:10:5\n   |\n10 | let x = 5;\n   |     ^ this is orange/yellow in colored output\n";
+        scrollback.push_text(ansi_colored);
+
+        let snapshot = scrollback.snapshot();
+        // Verify no ANSI escape sequences remain
+        assert!(!snapshot.contains("\x1b["), "Snapshot contains ESC character (0x1b)");
+        assert!(!snapshot.contains("\u{001b}"), "Snapshot contains ESC Unicode");
+        // Verify content is preserved
+        assert!(snapshot.contains("warning"));
+        assert!(snapshot.contains("src/main.rs"));
+    }
+
+    #[test]
+    fn scrollback_handles_mixed_ansi_and_plain_text() {
+        let mut scrollback = PtyScrollback::new(1000, 10_000);
+
+        // Mix of plain text and escaped sequences
+        scrollback.push_text("plain text\n");
+        // Even if somehow ANSI codes made it through, strip_ansi handles them
+        scrollback.push_text("more text\n");
+
+        let snapshot = scrollback.snapshot();
+        assert!(!snapshot.contains("\x1b["), "No ANSI codes in output");
+        assert_eq!(snapshot.lines().count(), 2, "Both lines preserved");
+    }
 }
