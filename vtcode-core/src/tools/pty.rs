@@ -1215,7 +1215,6 @@ fn set_command_environment(
     
     // For Rust/Cargo, disable colors at the source
     builder.env("CARGO_TERM_COLOR", "never");
-    builder.env("RUSTFLAGS", "-C color=never");
 
     if is_shell_program(program) {
         builder.env("SHELL", program);
