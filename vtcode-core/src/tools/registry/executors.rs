@@ -1480,17 +1480,20 @@ impl ToolRegistry {
     async fn execute_run_pty_command(&mut self, args: Value) -> Result<Value> {
         let payload = value_as_object(&args, "run_pty_cmd expects an object payload")?;
         let setup = self.prepare_ephemeral_pty_command(payload).await?;
-        
+
         // Guard: ensure command is not empty - this should not happen if parse_command_parts worked correctly
         if setup.command.is_empty() {
-            let debug_info = format!("Available keys in payload: {:?}", payload.keys().collect::<Vec<_>>());
+            let debug_info = format!(
+                "Available keys in payload: {:?}",
+                payload.keys().collect::<Vec<_>>()
+            );
             return Err(anyhow!(
                 "Internal error: prepared PTY command is empty after parsing. {}. \
                  Please ensure 'command' parameter is a non-empty string or array in run_pty_cmd call.",
                 debug_info
             ));
         }
-        
+
         self.run_ephemeral_pty_command(setup).await
     }
 
@@ -1580,7 +1583,7 @@ impl ToolRegistry {
         if setup.command.is_empty() {
             return Err(anyhow!("PTY command cannot be empty"));
         }
-        
+
         // Execute the PTY command exactly once.
         // We do NOT retry on exit code (application error) because:
         // 1. It causes "multi retry" behavior where a single failed command runs 3 times.
@@ -2410,7 +2413,7 @@ fn collect_command_vector(
             entries.sort_unstable_by_key(|(idx, _)| *idx);
             let min_index = entries.first().unwrap().0;
             let max_index = entries.last().unwrap().0;
-            
+
             // Validate that command starts at index 0 or 1 (not after gaps)
             if min_index > 1 {
                 return Err(anyhow!(
@@ -2418,7 +2421,7 @@ fn collect_command_vector(
                     min_index
                 ));
             }
-            
+
             let mut computed = vec![String::new(); max_index + 1 - min_index];
             for (idx, seg) in entries.into_iter() {
                 let position = if min_index == 1 { idx - 1 } else { idx };
@@ -2427,12 +2430,14 @@ fn collect_command_vector(
                 }
                 computed[position] = seg;
             }
-            
+
             // Validate first element is not empty
             if computed.is_empty() || computed[0].trim().is_empty() {
-                return Err(anyhow!("command executable (command.0 or command.1) cannot be empty"));
+                return Err(anyhow!(
+                    "command executable (command.0 or command.1) cannot be empty"
+                ));
             }
-            
+
             return Ok(computed);
         }
         return Err(anyhow!(missing_error.to_string()));
@@ -2796,7 +2801,7 @@ fn parse_command_parts(
             entries.sort_unstable_by_key(|(idx, _)| *idx);
             let min_index = entries.first().unwrap().0;
             let max_index = entries.last().unwrap().0;
-            
+
             // Validate that command starts at index 0 or 1 (not after gaps)
             if min_index > 1 {
                 return Err(anyhow!(
@@ -2804,7 +2809,7 @@ fn parse_command_parts(
                     min_index
                 ));
             }
-            
+
             let mut computed_parts = vec![String::new(); max_index + 1 - min_index];
             for (idx, seg) in entries.into_iter() {
                 let position = if min_index == 1 { idx - 1 } else { idx };

@@ -62,10 +62,7 @@ pub enum AbortCondition {
     TimeoutMs { timeout_ms: u64 },
 
     /// Stop if we have sufficient quality results
-    SufficientResults {
-        min_count: usize,
-        min_quality: f32,
-    },
+    SufficientResults { min_count: usize, min_quality: f32 },
 }
 
 /// A fallback chain definition
@@ -110,7 +107,9 @@ impl FallbackChain {
             name: "file_search".to_string(),
             primary: FallbackStep::new("grep_file").min_confidence(0.7),
             fallbacks: vec![
-                FallbackStep::new("ripgrep").min_confidence(0.65).non_terminal(),
+                FallbackStep::new("ripgrep")
+                    .min_confidence(0.65)
+                    .non_terminal(),
                 FallbackStep::new("find").min_confidence(0.5),
             ],
             abort_conditions: vec![
@@ -207,14 +206,12 @@ impl FallbackChainResult {
 
     /// Get the best result (highest quality)
     pub fn best_result(&self) -> Option<&EnhancedToolResult> {
-        self.results
-            .iter()
-            .max_by(|a, b| {
-                a.metadata
-                    .quality_score()
-                    .partial_cmp(&b.metadata.quality_score())
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            })
+        self.results.iter().max_by(|a, b| {
+            a.metadata
+                .quality_score()
+                .partial_cmp(&b.metadata.quality_score())
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
     }
 
     /// Merge all results into a single value
@@ -237,10 +234,7 @@ pub struct FallbackChainExecutor;
 
 impl FallbackChainExecutor {
     /// Execute a fallback chain
-    pub async fn execute<F>(
-        chain: &FallbackChain,
-        executor: F,
-    ) -> FallbackChainResult
+    pub async fn execute<F>(chain: &FallbackChain, executor: F) -> FallbackChainResult
     where
         F: Fn(&str) -> futures::future::BoxFuture<'static, anyhow::Result<(Value, ResultMetadata)>>,
     {
@@ -253,7 +247,8 @@ impl FallbackChainExecutor {
         attempts += 1;
         match execute_tool_step(&chain.primary, &executor, start).await {
             Some((value, metadata)) => {
-                let result = EnhancedToolResult::new(value, metadata.clone(), chain.primary.tool.clone());
+                let result =
+                    EnhancedToolResult::new(value, metadata.clone(), chain.primary.tool.clone());
 
                 if metadata.confidence >= chain.primary.min_confidence {
                     results.push(result);
@@ -304,20 +299,27 @@ impl FallbackChainExecutor {
             attempts += 1;
 
             // Check timeout
-            if start.elapsed().as_millis() as u64 > chain.abort_conditions.iter().find_map(|c| {
-                if let AbortCondition::TimeoutMs { timeout_ms } = c {
-                    Some(*timeout_ms)
-                } else {
-                    None
-                }
-            }).unwrap_or(30000) {
+            if start.elapsed().as_millis() as u64
+                > chain
+                    .abort_conditions
+                    .iter()
+                    .find_map(|c| {
+                        if let AbortCondition::TimeoutMs { timeout_ms } = c {
+                            Some(*timeout_ms)
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or(30000)
+            {
                 stop_reason = ChainStopReason::Timeout;
                 break;
             }
 
             match execute_tool_step(fallback, &executor, start).await {
                 Some((value, metadata)) => {
-                    let result = EnhancedToolResult::new(value, metadata.clone(), fallback.tool.clone());
+                    let result =
+                        EnhancedToolResult::new(value, metadata.clone(), fallback.tool.clone());
 
                     if metadata.confidence >= fallback.min_confidence {
                         results.push(result);
@@ -487,7 +489,12 @@ mod tests {
         let results = vec![];
         let start = Instant::now();
 
-        assert!(!should_abort_chain(&[condition.clone()], 2, &results, start));
+        assert!(!should_abort_chain(
+            &[condition.clone()],
+            2,
+            &results,
+            start
+        ));
         assert!(should_abort_chain(&[condition], 3, &results, start));
     }
 

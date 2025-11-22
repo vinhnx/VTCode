@@ -652,12 +652,13 @@ impl ZedAgent {
             let mut items: Vec<(usize, String)> = Vec::new();
             for (key, value) in map.iter() {
                 if let Some(index_str) = key.strip_prefix("command.")
-                    && let Ok(index) = index_str.parse::<usize>() {
-                        let Some(segment) = value.as_str() else {
-                            return Err("command array must contain only strings".to_string());
-                        };
-                        items.push((index, segment.to_string()));
-                    }
+                    && let Ok(index) = index_str.parse::<usize>()
+                {
+                    let Some(segment) = value.as_str() else {
+                        return Err("command array must contain only strings".to_string());
+                    };
+                    items.push((index, segment.to_string()));
+                }
             }
             if !items.is_empty() {
                 // Sort by index and normalize 1-based indexing to 0-based if needed

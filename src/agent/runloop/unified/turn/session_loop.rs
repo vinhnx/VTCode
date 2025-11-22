@@ -1038,14 +1038,14 @@ impl Drop for TerminalCleanupGuard {
         // Minimal terminal cleanup as last resort
         // The TUI's run_inline_tui should handle full cleanup, this is just a safety net
         // We deliberately avoid sending escape sequences to prevent conflicts with TUI cleanup
-        
+
         // Attempt to disable raw mode if still enabled
         let _ = disable_raw_mode();
-        
+
         // Ensure stdout is flushed
         let mut stdout = std::io::stdout();
         let _ = stdout.flush();
-        
+
         // Wait for terminal to finish processing any pending operations
         // This prevents incomplete writes from corrupting the terminal
         std::thread::sleep(std::time::Duration::from_millis(50));

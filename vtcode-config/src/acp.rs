@@ -184,7 +184,6 @@ pub enum WorkspaceTrustLevel {
     FullAuto,
 }
 
-
 impl std::fmt::Display for WorkspaceTrustLevel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

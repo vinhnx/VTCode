@@ -6,10 +6,10 @@
 //! - Observability hooks for cache operations
 //! - Async-compatible for tokio-based systems
 
+use crate::tools::improvements_errors::{EventType, ObservabilityContext};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
-use crate::tools::improvements_errors::{ObservabilityContext, EventType};
 
 /// Cache entry with TTL and LRU metadata
 #[derive(Clone)]
@@ -70,11 +70,11 @@ impl<K: Clone + Eq + std::hash::Hash + std::fmt::Debug, V: Clone + std::fmt::Deb
     /// Get value from cache (updates LRU metadata)
     pub fn get(&self, key: &K) -> Option<V> {
         let mut entries = self.entries.write().unwrap();
-        
+
         // Check if key exists
         if entries.contains_key(key) {
             let entry = entries.get(key).unwrap();
-            
+
             // Check TTL
             if entry.is_expired() {
                 let age = entry.age();
@@ -87,28 +87,20 @@ impl<K: Clone + Eq + std::hash::Hash + std::fmt::Debug, V: Clone + std::fmt::Deb
                 );
                 return None;
             }
-            
+
             // Get value and update LRU
             let value = entry.value.clone();
             if let Some(entry) = entries.get_mut(key) {
                 entry.last_accessed = Instant::now();
             }
-            
-            self.obs_context.event(
-                EventType::CacheHit,
-                "cache",
-                "cache hit",
-                Some(1.0),
-            );
-            
+
+            self.obs_context
+                .event(EventType::CacheHit, "cache", "cache hit", Some(1.0));
+
             Some(value)
         } else {
-            self.obs_context.event(
-                EventType::CacheMiss,
-                "cache",
-                "cache miss",
-                Some(0.0),
-            );
+            self.obs_context
+                .event(EventType::CacheMiss, "cache", "cache miss", Some(0.0));
             None
         }
     }
@@ -126,12 +118,8 @@ impl<K: Clone + Eq + std::hash::Hash + std::fmt::Debug, V: Clone + std::fmt::Deb
                 .map(|(k, _)| k.clone())
             {
                 entries.remove(&lru_key);
-                self.obs_context.event(
-                    EventType::CacheEvicted,
-                    "cache",
-                    "evicted LRU entry",
-                    None,
-                );
+                self.obs_context
+                    .event(EventType::CacheEvicted, "cache", "evicted LRU entry", None);
             }
         }
 
@@ -149,9 +137,9 @@ impl<K: Clone + Eq + std::hash::Hash + std::fmt::Debug, V: Clone + std::fmt::Deb
     pub fn evict_expired(&self) -> usize {
         let mut entries = self.entries.write().unwrap();
         let before = entries.len();
-        
+
         entries.retain(|_, entry| !entry.is_expired());
-        
+
         let evicted = before - entries.len();
         if evicted > 0 {
             self.obs_context.event(
@@ -173,7 +161,7 @@ impl<K: Clone + Eq + std::hash::Hash + std::fmt::Debug, V: Clone + std::fmt::Deb
     pub fn stats(&self) -> CacheStats {
         let entries = self.entries.read().unwrap();
         let expired_count = entries.values().filter(|e| e.is_expired()).count();
-        
+
         CacheStats {
             total_entries: entries.len(),
             max_size: self.max_size,
@@ -199,7 +187,7 @@ mod tests {
     #[test]
     fn test_cache_basic_get_put() {
         let cache = LruCache::new(10, Duration::from_secs(60));
-        
+
         cache.put("key1", "value1").unwrap();
         assert_eq!(cache.get(&"key1"), Some("value1"));
     }
@@ -207,10 +195,10 @@ mod tests {
     #[test]
     fn test_cache_ttl_expiration() {
         let cache = LruCache::new(10, Duration::from_millis(100));
-        
+
         cache.put("key1", "value1").unwrap();
         assert_eq!(cache.get(&"key1"), Some("value1"));
-        
+
         // Wait for expiration
         std::thread::sleep(Duration::from_millis(150));
         assert_eq!(cache.get(&"key1"), None);
@@ -219,18 +207,18 @@ mod tests {
     #[test]
     fn test_cache_lru_eviction() {
         let cache = LruCache::new(3, Duration::from_secs(60));
-        
+
         // Fill cache
         cache.put("key1", "value1").unwrap();
         cache.put("key2", "value2").unwrap();
         cache.put("key3", "value3").unwrap();
-        
+
         // Access key1 to mark it recently used
         cache.get(&"key1");
-        
+
         // Add new entry (should evict key2 as LRU)
         cache.put("key4", "value4").unwrap();
-        
+
         assert_eq!(cache.get(&"key1"), Some("value1"));
         assert_eq!(cache.get(&"key2"), None); // Evicted
         assert_eq!(cache.get(&"key3"), Some("value3"));
@@ -240,10 +228,10 @@ mod tests {
     #[test]
     fn test_cache_stats() {
         let cache = LruCache::new(10, Duration::from_secs(60));
-        
+
         cache.put("key1", "value1").unwrap();
         cache.put("key2", "value2").unwrap();
-        
+
         let stats = cache.stats();
         assert_eq!(stats.total_entries, 2);
         assert_eq!(stats.max_size, 10);
@@ -253,10 +241,10 @@ mod tests {
     #[test]
     fn test_cache_clear() {
         let cache = LruCache::new(10, Duration::from_secs(60));
-        
+
         cache.put("key1", "value1").unwrap();
         assert_eq!(cache.size(), 1);
-        
+
         cache.clear();
         assert_eq!(cache.size(), 0);
     }
@@ -264,12 +252,12 @@ mod tests {
     #[test]
     fn test_cache_evict_expired() {
         let cache = LruCache::new(10, Duration::from_millis(100));
-        
+
         cache.put("key1", "value1").unwrap();
         cache.put("key2", "value2").unwrap();
-        
+
         std::thread::sleep(Duration::from_millis(150));
-        
+
         let evicted = cache.evict_expired();
         assert_eq!(evicted, 2);
         assert_eq!(cache.size(), 0);

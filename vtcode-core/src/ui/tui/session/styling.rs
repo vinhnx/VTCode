@@ -18,7 +18,7 @@ impl SessionStyles {
         Self { theme }
     }
 
-#[allow(dead_code)]
+    #[allow(dead_code)]
     pub fn theme(&self) -> &InlineTheme {
         &self.theme
     }
@@ -33,7 +33,7 @@ impl SessionStyles {
     }
 
     /// Normalize tool names to group similar tools together
-#[allow(dead_code)]
+    #[allow(dead_code)]
     pub fn normalize_tool_name(&self, tool_name: &str) -> String {
         match tool_name.to_lowercase().as_str() {
             "grep" | "rg" | "ripgrep" | "grep_file" | "search" | "find" | "ag" => {
@@ -48,7 +48,7 @@ impl SessionStyles {
     }
 
     /// Get the inline style for a tool based on its name
-#[allow(dead_code)]
+    #[allow(dead_code)]
     pub fn tool_inline_style(&self, tool_name: &str) -> InlineTextStyle {
         let normalized_name = self.normalize_tool_name(tool_name);
         let mut style = InlineTextStyle::default().bold();

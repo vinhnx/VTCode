@@ -8,8 +8,8 @@
 
 use serde_json::json;
 use vtcode_tools::{
-    middleware::{LoggingMiddleware, MetricsMiddleware},
     CachedToolExecutor,
+    middleware::{LoggingMiddleware, MetricsMiddleware},
 };
 
 #[tokio::main]
@@ -34,7 +34,10 @@ async fn main() -> anyhow::Result<()> {
 
     println!("\n   b) Grep for function definitions");
     executor
-        .execute("grep_file", json!({"pattern": "pub fn", "path": "/workspace"}))
+        .execute(
+            "grep_file",
+            json!({"pattern": "pub fn", "path": "/workspace"}),
+        )
         .await?;
 
     println!("\n   c) List files again (cache hit expected)");
@@ -44,7 +47,10 @@ async fn main() -> anyhow::Result<()> {
 
     println!("\n   d) Grep again with same pattern (cache hit expected)");
     executor
-        .execute("grep_file", json!({"pattern": "pub fn", "path": "/workspace"}))
+        .execute(
+            "grep_file",
+            json!({"pattern": "pub fn", "path": "/workspace"}),
+        )
         .await?;
 
     println!("\n   e) List different directory");
@@ -111,8 +117,10 @@ async fn main() -> anyhow::Result<()> {
 
     // Step 8: Summary
     println!("\n8. Key Takeaways:\n");
-    println!("   ✓ Cache reduced latency ({}ms saved from cache hits)", 
-             cache_stats.hits * 0); // Would be real if tools had latency
+    println!(
+        "   ✓ Cache reduced latency ({}ms saved from cache hits)",
+        cache_stats.hits * 0
+    ); // Would be real if tools had latency
     println!("   ✓ Detected {} workflow patterns", patterns.len());
     println!("   ✓ Middleware provides observability without intrusion");
     println!("   ✓ ML features ready for optimization algorithms");

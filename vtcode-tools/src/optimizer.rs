@@ -52,10 +52,7 @@ pub struct WorkflowOptimizer {
 
 impl WorkflowOptimizer {
     /// Create optimizer from detector output.
-    pub fn from_detector(
-        patterns: Vec<DetectedPattern>,
-        features: Vec<f64>,
-    ) -> Self {
+    pub fn from_detector(patterns: Vec<DetectedPattern>, features: Vec<f64>) -> Self {
         let mut optimizer = Self {
             patterns: patterns.clone(),
             features,
@@ -94,8 +91,7 @@ impl WorkflowOptimizer {
             // If pattern has 2+ tools and high frequency, consider parallelizing
             if pattern.sequence.len() >= 2 && pattern.frequency >= 3 {
                 // Check if tools are independent (this is a heuristic)
-                let tools_are_likely_independent =
-                    !self.tools_have_dependencies(&pattern.sequence);
+                let tools_are_likely_independent = !self.tools_have_dependencies(&pattern.sequence);
 
                 if tools_are_likely_independent && pattern.success_rate > 0.95 {
                     let improvement = (pattern.frequency as f64 / 10.0).min(0.5);
@@ -107,7 +103,9 @@ impl WorkflowOptimizer {
                         expected_improvement: improvement,
                         reason: format!(
                             "Tools {:?} appear {} times together with {:.0}% success rate",
-                            pattern.sequence, pattern.frequency, pattern.success_rate * 100.0
+                            pattern.sequence,
+                            pattern.frequency,
+                            pattern.success_rate * 100.0
                         ),
                         confidence,
                     });
@@ -181,10 +179,7 @@ impl WorkflowOptimizer {
     /// Check if tools likely have dependencies (simple heuristic).
     fn tools_have_dependencies(&self, tools: &[String]) -> bool {
         // Heuristic: grep likely depends on find, etc.
-        let dependencies = vec![
-            ("grep_file", "find_files"),
-            ("edit_file", "list_files"),
-        ];
+        let dependencies = vec![("grep_file", "find_files"), ("edit_file", "list_files")];
 
         for (i, tool1) in tools.iter().enumerate() {
             for (j, tool2) in tools.iter().enumerate() {
@@ -248,16 +243,14 @@ mod tests {
 
     #[test]
     fn test_optimizer_from_patterns() {
-        let patterns = vec![
-            DetectedPattern {
-                name: "test".into(),
-                sequence: vec!["find".into(), "grep".into()],
-                frequency: 5,
-                success_rate: 0.95,
-                avg_duration_ms: 150,
-                confidence: 0.7,
-            },
-        ];
+        let patterns = vec![DetectedPattern {
+            name: "test".into(),
+            sequence: vec!["find".into(), "grep".into()],
+            frequency: 5,
+            success_rate: 0.95,
+            avg_duration_ms: 150,
+            confidence: 0.7,
+        }];
 
         let features = vec![5.0, 0.95, 150.0, 2.0, 0.6];
         let optimizer = WorkflowOptimizer::from_detector(patterns, features);
@@ -267,16 +260,14 @@ mod tests {
 
     #[test]
     fn test_optimizer_improvement_estimate() {
-        let patterns = vec![
-            DetectedPattern {
-                name: "test".into(),
-                sequence: vec!["find".into(), "grep".into()],
-                frequency: 5,
-                success_rate: 0.95,
-                avg_duration_ms: 150,
-                confidence: 0.7,
-            },
-        ];
+        let patterns = vec![DetectedPattern {
+            name: "test".into(),
+            sequence: vec!["find".into(), "grep".into()],
+            frequency: 5,
+            success_rate: 0.95,
+            avg_duration_ms: 150,
+            confidence: 0.7,
+        }];
 
         let features = vec![5.0, 0.95, 150.0, 2.0, 0.6];
         let optimizer = WorkflowOptimizer::from_detector(patterns, features);
@@ -288,16 +279,14 @@ mod tests {
 
     #[test]
     fn test_optimizer_recommendations() {
-        let patterns = vec![
-            DetectedPattern {
-                name: "p1".into(),
-                sequence: vec!["list_files".into(), "find_files".into(), "grep_file".into()],
-                frequency: 10,
-                success_rate: 0.98,
-                avg_duration_ms: 200,
-                confidence: 0.8,
-            },
-        ];
+        let patterns = vec![DetectedPattern {
+            name: "p1".into(),
+            sequence: vec!["list_files".into(), "find_files".into(), "grep_file".into()],
+            frequency: 10,
+            success_rate: 0.98,
+            avg_duration_ms: 200,
+            confidence: 0.8,
+        }];
 
         let features = vec![10.0, 0.98, 200.0, 3.0, 0.75];
         let optimizer = WorkflowOptimizer::from_detector(patterns, features);

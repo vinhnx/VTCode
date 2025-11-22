@@ -7,9 +7,9 @@
 //! - Observability integration
 
 use crate::tools::{
+    improvements_cache::LruCache,
     improvements_errors::ObservabilityContext,
     pattern_engine::{ExecutionEvent, PatternEngine},
-    improvements_cache::LruCache,
 };
 use std::sync::Arc;
 use std::time::Duration;
@@ -91,9 +91,9 @@ impl ToolRegistryImprovement {
                 entry.successful_calls += 1;
             }
             entry.total_duration_ms += duration_ms;
-            entry.avg_quality =
-                (entry.avg_quality * (entry.total_calls as f32 - 1.0) + quality_score)
-                    / entry.total_calls as f32;
+            entry.avg_quality = (entry.avg_quality * (entry.total_calls as f32 - 1.0)
+                + quality_score)
+                / entry.total_calls as f32;
         }
 
         // Record pattern event
@@ -173,7 +173,8 @@ impl ToolRegistryImprovement {
         let mut tools: Vec<_> = metrics
             .values()
             .map(|m| {
-                let score = (m.success_rate() * 0.6) + ((1.0 - (m.avg_duration_ms() as f32 / 5000.0).min(1.0)) * 0.4);
+                let score = (m.success_rate() * 0.6)
+                    + ((1.0 - (m.avg_duration_ms() as f32 / 5000.0).min(1.0)) * 0.4);
                 (m.name.clone(), score)
             })
             .collect();
@@ -192,7 +193,13 @@ mod tests {
         let obs = Arc::new(ObservabilityContext::noop());
         let ext = ToolRegistryImprovement::new(obs);
 
-        ext.record_execution("grep_file".to_string(), "pattern".to_string(), true, 0.8, 100);
+        ext.record_execution(
+            "grep_file".to_string(),
+            "pattern".to_string(),
+            true,
+            0.8,
+            100,
+        );
 
         let metrics = ext.get_tool_metrics("grep_file");
         assert!(metrics.is_some());

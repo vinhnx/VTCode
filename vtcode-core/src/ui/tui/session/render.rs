@@ -718,8 +718,6 @@ pub(super) fn render_tool_segments(session: &Session, line: &MessageLine) -> Vec
     spans
 }
 
-
-
 /// Simplify tool call display text for better human readability
 #[allow(dead_code)]
 fn simplify_tool_display(text: &str) -> String {

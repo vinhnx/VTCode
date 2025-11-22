@@ -13,17 +13,17 @@ pub type ImprovementResult<T> = Result<T, ImprovementError>;
 pub struct ImprovementError {
     /// Error kind
     pub kind: ErrorKind,
-    
+
     /// Context information
     pub context: String,
-    
+
     /// Original source error (if any)
     #[serde(skip)]
     pub source: Option<String>,
-    
+
     /// Operation that failed
     pub operation: String,
-    
+
     /// Severity level
     pub severity: ErrorSeverity,
 }
@@ -36,30 +36,30 @@ pub enum ErrorKind {
     ScoringFailed,
     InvalidMetadata,
     UnsupportedToolType,
-    
+
     // Selection errors
     SelectionFailed,
     NoViableCandidate,
     ContextMissing,
-    
+
     // Fallback errors
     ChainExecutionFailed,
     AllFallbacksFailed,
     TimeoutExceeded,
-    
+
     // Cache errors
     CacheOperationFailed,
     CacheCorrupted,
     SerializationFailed,
-    
+
     // Context errors
     PatternDetectionFailed,
     ContextTruncated,
-    
+
     // Correlation errors
     IntentExtractionFailed,
     CorrelationFailed,
-    
+
     // Configuration errors
     ConfigurationInvalid,
     ConfigurationMissing,
@@ -138,7 +138,9 @@ impl fmt::Display for ImprovementError {
         write!(
             f,
             "{}: {} ({})",
-            self.operation, self.context, self.to_log_entry()
+            self.operation,
+            self.context,
+            self.to_log_entry()
         )
     }
 }
@@ -150,16 +152,16 @@ impl std::error::Error for ImprovementError {}
 pub struct ImprovementEvent {
     /// Event type
     pub event_type: EventType,
-    
+
     /// Component that generated event
     pub component: String,
-    
+
     /// Detailed message
     pub message: String,
-    
+
     /// Metric value (if applicable)
     pub metric: Option<f32>,
-    
+
     /// Timestamp (unix seconds)
     pub timestamp: u64,
 }
@@ -171,29 +173,29 @@ pub enum EventType {
     // Scoring events
     ResultScored,
     ScoreDegraded,
-    
+
     // Selection events
     ToolSelected,
     SelectionAlternative,
-    
+
     // Fallback events
     FallbackAttempt,
     FallbackSuccess,
     ChainAborted,
-    
+
     // Cache events
     CacheHit,
     CacheMiss,
     CacheEvicted,
-    
+
     // Context events
     PatternDetected,
     RedundancyDetected,
-    
+
     // Correlation events
     IntentExtracted,
     FulfillmentAssessed,
-    
+
     // Error events
     ErrorOccurred,
     ErrorRecovered,
@@ -203,10 +205,10 @@ pub enum EventType {
 pub trait ObservabilitySink: Send + Sync {
     /// Record an event
     fn record_event(&self, event: ImprovementEvent);
-    
+
     /// Record an error
     fn record_error(&self, error: &ImprovementError);
-    
+
     /// Record a metric
     fn record_metric(&self, component: &str, name: &str, value: f32);
 }

@@ -114,7 +114,6 @@ fn render_tool_segments(line: &MessageLine, theme: &InlineTheme) -> Vec<Span<'st
     spans
 }
 
-
 #[allow(dead_code)]
 fn render_styled_action_text(
     spans: &mut Vec<Span<'static>>,

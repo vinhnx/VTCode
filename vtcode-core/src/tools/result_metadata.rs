@@ -89,8 +89,9 @@ impl Default for ResultMetadata {
 impl ResultMetadata {
     /// Overall quality score (0.0-1.0)
     pub fn quality_score(&self) -> f32 {
-        let weighted =
-            (self.confidence * 0.4) + (self.relevance * 0.4) + (self.false_positive_likelihood * -0.2);
+        let weighted = (self.confidence * 0.4)
+            + (self.relevance * 0.4)
+            + (self.false_positive_likelihood * -0.2);
         weighted.max(0.0).min(1.0)
     }
 
@@ -397,10 +398,7 @@ impl ResultScorer for ShellScorer {
         match result {
             Value::Object(map) => {
                 // Check for exit code
-                let exit_code = map
-                    .get("exit_code")
-                    .and_then(|v| v.as_i64())
-                    .unwrap_or(-1);
+                let exit_code = map.get("exit_code").and_then(|v| v.as_i64()).unwrap_or(-1);
 
                 // Success means high confidence
                 if exit_code == 0 {
@@ -438,13 +436,22 @@ pub struct ScorerRegistry {
 impl ScorerRegistry {
     pub fn new() -> Self {
         let mut scorers: HashMap<String, Box<dyn ResultScorer>> = HashMap::new();
-        scorers.insert("grep_file".to_string(), Box::new(GrepScorer) as Box<dyn ResultScorer>);
-        scorers.insert("find".to_string(), Box::new(FindScorer) as Box<dyn ResultScorer>);
+        scorers.insert(
+            "grep_file".to_string(),
+            Box::new(GrepScorer) as Box<dyn ResultScorer>,
+        );
+        scorers.insert(
+            "find".to_string(),
+            Box::new(FindScorer) as Box<dyn ResultScorer>,
+        );
         scorers.insert(
             "tree_sitter_query".to_string(),
             Box::new(TreeSitterScorer) as Box<dyn ResultScorer>,
         );
-        scorers.insert("shell".to_string(), Box::new(ShellScorer) as Box<dyn ResultScorer>);
+        scorers.insert(
+            "shell".to_string(),
+            Box::new(ShellScorer) as Box<dyn ResultScorer>,
+        );
 
         Self { scorers }
     }

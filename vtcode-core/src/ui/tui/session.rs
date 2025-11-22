@@ -18,8 +18,8 @@ use tokio::sync::mpsc::UnboundedSender;
 use super::{
     style::{measure_text_width, ratatui_color_from_ansi, ratatui_style_from_inline},
     types::{
-        InlineCommand, InlineEvent, InlineHeaderContext, InlineMessageKind,
-        InlineTextStyle, InlineTheme,
+        InlineCommand, InlineEvent, InlineHeaderContext, InlineMessageKind, InlineTextStyle,
+        InlineTheme,
     },
 };
 use crate::config::constants::ui;

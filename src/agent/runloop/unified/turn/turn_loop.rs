@@ -292,7 +292,9 @@ pub async fn run_turn_loop(
                     working_history.push(msg_with_reasoning);
                 } else if let Some(reasoning_text) = reasoning {
                     // If no assistant text but reasoning exists, create assistant message with just reasoning
-                    working_history.push(uni::Message::assistant(String::new()).with_reasoning(Some(reasoning_text)));
+                    working_history.push(
+                        uni::Message::assistant(String::new()).with_reasoning(Some(reasoning_text)),
+                    );
                 }
 
                 // Handle tool calls if any exist

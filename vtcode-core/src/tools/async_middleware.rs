@@ -3,9 +3,9 @@
 //! Proper composition pattern with async/await support.
 //! Suitable for tokio-based systems handling LLM operations.
 
+use crate::tools::improvements_errors::ObservabilityContext;
 use std::sync::Arc;
 use std::time::Instant;
-use crate::tools::improvements_errors::ObservabilityContext;
 
 /// Async middleware trait
 #[async_trait::async_trait]
@@ -17,7 +17,15 @@ pub trait AsyncMiddleware: Send + Sync {
     async fn execute<'a>(
         &'a self,
         request: ToolRequest,
-        next: Box<dyn Fn(ToolRequest) -> std::pin::Pin<Box<dyn std::future::Future<Output = ToolResult> + Send>> + Send + Sync + 'a>,
+        next: Box<
+            dyn Fn(
+                    ToolRequest,
+                )
+                    -> std::pin::Pin<Box<dyn std::future::Future<Output = ToolResult> + Send>>
+                + Send
+                + Sync
+                + 'a,
+        >,
     ) -> ToolResult;
 }
 
@@ -57,7 +65,7 @@ impl AsyncMiddlewareChain {
     }
 
     /// Execute request through chain (simplified)
-    pub async fn execute_simple<F>(&self, request: ToolRequest, executor: F) -> ToolResult 
+    pub async fn execute_simple<F>(&self, request: ToolRequest, executor: F) -> ToolResult
     where
         F: Fn(ToolRequest) -> ToolResult + Send,
     {
@@ -96,7 +104,15 @@ impl AsyncMiddleware for AsyncLoggingMiddleware {
     async fn execute<'a>(
         &'a self,
         request: ToolRequest,
-        next: Box<dyn Fn(ToolRequest) -> std::pin::Pin<Box<dyn std::future::Future<Output = ToolResult> + Send>> + Send + Sync + 'a>,
+        next: Box<
+            dyn Fn(
+                    ToolRequest,
+                )
+                    -> std::pin::Pin<Box<dyn std::future::Future<Output = ToolResult> + Send>>
+                + Send
+                + Sync
+                + 'a,
+        >,
     ) -> ToolResult {
         tracing::debug!(
             tool = %request.tool_name,
@@ -171,7 +187,15 @@ impl AsyncMiddleware for AsyncCachingMiddleware {
     async fn execute<'a>(
         &'a self,
         request: ToolRequest,
-        next: Box<dyn Fn(ToolRequest) -> std::pin::Pin<Box<dyn std::future::Future<Output = ToolResult> + Send>> + Send + Sync + 'a>,
+        next: Box<
+            dyn Fn(
+                    ToolRequest,
+                )
+                    -> std::pin::Pin<Box<dyn std::future::Future<Output = ToolResult> + Send>>
+                + Send
+                + Sync
+                + 'a,
+        >,
     ) -> ToolResult {
         let key = Self::cache_key(&request.tool_name, &request.arguments);
 
@@ -245,7 +269,15 @@ impl AsyncMiddleware for AsyncRetryMiddleware {
     async fn execute<'a>(
         &'a self,
         request: ToolRequest,
-        next: Box<dyn Fn(ToolRequest) -> std::pin::Pin<Box<dyn std::future::Future<Output = ToolResult> + Send>> + Send + Sync + 'a>,
+        next: Box<
+            dyn Fn(
+                    ToolRequest,
+                )
+                    -> std::pin::Pin<Box<dyn std::future::Future<Output = ToolResult> + Send>>
+                + Send
+                + Sync
+                + 'a,
+        >,
     ) -> ToolResult {
         for attempt in 0..self.max_attempts {
             if attempt > 0 {
@@ -317,9 +349,7 @@ mod tests {
             })
         };
 
-        let result = middleware
-            .execute(request, Box::new(executor))
-            .await;
+        let result = middleware.execute(request, Box::new(executor)).await;
 
         assert!(result.success);
         assert!(result.duration_ms >= 0);

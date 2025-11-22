@@ -2,8 +2,8 @@
 //!
 //! Analyzes tool call sequences to detect patterns, anomalies, and trends.
 
+use serde_json::{Value, json};
 use std::collections::HashMap;
-use serde_json::{json, Value};
 
 /// A single tool call event.
 #[derive(Clone, Debug)]
@@ -75,8 +75,8 @@ impl PatternDetector {
                 // Pattern appears at least twice.
                 let success_count = events.iter().filter(|e| e.success).count();
                 let success_rate = success_count as f64 / events.len() as f64;
-                let avg_duration = events.iter().map(|e| e.duration_ms).sum::<u64>()
-                    / events.len() as u64;
+                let avg_duration =
+                    events.iter().map(|e| e.duration_ms).sum::<u64>() / events.len() as u64;
                 let frequency = events.len();
 
                 // Confidence: based on frequency and consistency.
@@ -119,9 +119,8 @@ impl PatternDetector {
         features.push(success_rate);
 
         // Feature 3: Average duration.
-        let avg_duration =
-            self.events.iter().map(|e| e.duration_ms).sum::<u64>() as f64
-                / self.events.len().max(1) as f64;
+        let avg_duration = self.events.iter().map(|e| e.duration_ms).sum::<u64>() as f64
+            / self.events.len().max(1) as f64;
         features.push(avg_duration);
 
         // Feature 4: Tool diversity (unique tools).

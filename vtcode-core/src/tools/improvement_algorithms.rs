@@ -94,13 +94,13 @@ fn jaro_similarity(s1: &str, s2: &str) -> f32 {
 pub struct TimeDecayedScore {
     /// Base score (0.0-1.0)
     pub base_score: f32,
-    
+
     /// Age in seconds
     pub age_seconds: u64,
-    
+
     /// Decay constant (default 0.1 per 24 hours)
     pub decay_lambda: f32,
-    
+
     /// Decayed score (0.0-1.0)
     pub decayed_score: f32,
 }
@@ -181,7 +181,11 @@ impl PatternDetector {
             return PatternState::Single;
         }
 
-        let recent = history.iter().rev().take(self.window_size).collect::<Vec<_>>();
+        let recent = history
+            .iter()
+            .rev()
+            .take(self.window_size)
+            .collect::<Vec<_>>();
 
         if recent.len() < 2 {
             return PatternState::Single;
@@ -214,25 +218,26 @@ impl PatternDetector {
 
         // Check for refinement chain (increasing quality)
         let qualities: Vec<f32> = recent.iter().map(|r| r.2).collect();
-        let is_improving = qualities
-            .windows(2)
-            .all(|w| w[1] > w[0] + 0.05); // Noticeable improvement
+        let is_improving = qualities.windows(2).all(|w| w[1] > w[0] + 0.05); // Noticeable improvement
 
         if is_improving && qualities.len() >= 3 {
             return PatternState::RefinementChain;
         }
 
         // Check for degradation
-        let is_degrading = qualities
-            .windows(2)
-            .all(|w| w[1] < w[0] - 0.05);
+        let is_degrading = qualities.windows(2).all(|w| w[1] < w[0] - 0.05);
 
         if is_degrading && qualities.len() >= 3 {
             return PatternState::Degradation;
         }
 
         // Check for convergence (different tools, similar quality)
-        let different_tools = recent.iter().map(|r| &r.0).collect::<std::collections::HashSet<_>>().len() > 1;
+        let different_tools = recent
+            .iter()
+            .map(|r| &r.0)
+            .collect::<std::collections::HashSet<_>>()
+            .len()
+            > 1;
         let quality_consistent = {
             let avg = qualities.iter().sum::<f32>() / qualities.len() as f32;
             qualities.iter().all(|&q| (q - avg).abs() < 0.1)
@@ -252,22 +257,22 @@ impl PatternDetector {
 pub struct MLScoreComponents {
     /// Success rate (0-1)
     pub success_rate: f32,
-    
+
     /// Average execution time (ms)
     pub avg_execution_time: f32,
-    
+
     /// Result quality (0-1)
     pub result_quality: f32,
-    
+
     /// Failure modes count
     pub failure_count: usize,
-    
+
     /// Time since last use (hours)
     pub age_hours: f32,
-    
+
     /// Usage frequency (calls per hour)
     pub frequency: f32,
-    
+
     /// Confidence in measurement (0-1)
     pub confidence: f32,
 }
@@ -291,7 +296,7 @@ impl MLScoreComponents {
                 .as_secs();
             now.saturating_sub((self.age_hours * 3600.0) as u64)
         });
-        
+
         // Adjust for age (older measurements less confident)
         self.confidence = (self.confidence * (-self.age_hours / 168.0).exp()).max(0.1); // 1-week half-life
         self
@@ -304,7 +309,7 @@ impl MLScoreComponents {
             self.avg_execution_time / 10000.0, // Normalize
             self.result_quality,
             (self.failure_count as f32).min(10.0) / 10.0, // Cap at 10 failures
-            self.age_hours / 168.0, // Normalize to weeks
+            self.age_hours / 168.0,                       // Normalize to weeks
             self.frequency,
             self.confidence,
         ]

@@ -1,8 +1,5 @@
 use anyhow::{Context, Result};
-#[cfg(any(
-    not(feature = "powershell-process"),
-    feature = "pure-rust"
-))]
+#[cfg(any(not(feature = "powershell-process"), feature = "pure-rust"))]
 use anyhow::{anyhow, bail};
 #[cfg(feature = "pure-rust")]
 use std::path::Path;

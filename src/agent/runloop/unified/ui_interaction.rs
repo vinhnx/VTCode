@@ -525,28 +525,29 @@ impl StreamingReasoningState {
             // 1. It wasn't streamed at all, OR
             // 2. It was truncated during streaming (we have more content now)
             if let Some(reasoning) = final_reasoning.map(str::trim)
-                && !reasoning.is_empty() {
-                    let aggregated_trimmed = self.aggregated.trim();
-                    let is_truncated = aggregated_trimmed.ends_with("...");
-                    let was_not_streamed = aggregated_trimmed.is_empty();
+                && !reasoning.is_empty()
+            {
+                let aggregated_trimmed = self.aggregated.trim();
+                let is_truncated = aggregated_trimmed.ends_with("...");
+                let was_not_streamed = aggregated_trimmed.is_empty();
 
-                    // Show the reasoning if it wasn't displayed yet OR if what was displayed was truncated
+                // Show the reasoning if it wasn't displayed yet OR if what was displayed was truncated
+                if was_not_streamed
+                    || (is_truncated && reasoning.len() > aggregated_trimmed.len() - 3)
+                {
+                    // Only show if it's genuinely new content or is different from what was shown
                     if was_not_streamed
-                        || (is_truncated && reasoning.len() > aggregated_trimmed.len() - 3)
+                        || reasoning
+                            != &aggregated_trimmed[..aggregated_trimmed.len().saturating_sub(3)]
                     {
-                        // Only show if it's genuinely new content or is different from what was shown
-                        if was_not_streamed
-                            || reasoning
-                                != &aggregated_trimmed[..aggregated_trimmed.len().saturating_sub(3)]
-                        {
-                            renderer.line(
-                                MessageStyle::Reasoning,
-                                &format!("{REASONING_PREFIX}{reasoning}"),
-                            )?;
-                            self.aggregated = reasoning.to_string();
-                        }
+                        renderer.line(
+                            MessageStyle::Reasoning,
+                            &format!("{REASONING_PREFIX}{reasoning}"),
+                        )?;
+                        self.aggregated = reasoning.to_string();
                     }
                 }
+            }
             Ok(())
         }
     }
@@ -628,11 +629,10 @@ impl StreamingReasoningState {
     /// Flush any pending reasoning display without full finalization
     /// Used to ensure reasoning appears before response content
     fn flush_pending(&mut self, renderer: &mut AnsiRenderer) -> Result<()> {
-        if self.inline_enabled
-            && !self.pending_inline.is_empty() {
-                self.render_inline(renderer)?;
-                self.pending_inline.clear();
-            }
+        if self.inline_enabled && !self.pending_inline.is_empty() {
+            self.render_inline(renderer)?;
+            self.pending_inline.clear();
+        }
         Ok(())
     }
 

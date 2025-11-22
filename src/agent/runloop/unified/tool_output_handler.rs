@@ -218,8 +218,7 @@ pub(crate) async fn handle_pipeline_output_renderer(
                 }
             }
 
-            render_tool_output(renderer, Some(name), output, vt_config, Some(token_budget))
-                .await?;
+            render_tool_output(renderer, Some(name), output, vt_config, Some(token_budget)).await?;
 
             last_tool_stdout = if *command_success {
                 stdout.clone()

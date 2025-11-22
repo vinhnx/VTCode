@@ -818,43 +818,41 @@ fn parse_function_call_block(block: &str) -> Option<(String, Value)> {
     // Validate required parameters based on tool type
     match canonical.as_deref() {
         Some(tools::RUN_PTY_CMD) => {
-            if !positional.is_empty()
-                && !object.contains_key("command") {
-                    let mut positional_parts = Vec::new();
-                    let mut all_strings = true;
-                    for value in &positional {
-                        if let Value::String(part) = value {
-                            positional_parts.push(part.clone());
-                        } else {
-                            all_strings = false;
-                            break;
-                        }
+            if !positional.is_empty() && !object.contains_key("command") {
+                let mut positional_parts = Vec::new();
+                let mut all_strings = true;
+                for value in &positional {
+                    if let Value::String(part) = value {
+                        positional_parts.push(part.clone());
+                    } else {
+                        all_strings = false;
+                        break;
                     }
+                }
 
-                    if all_strings && !positional_parts.is_empty() {
-                        if positional_parts.len() == 1 {
-                            let command = &positional_parts[0];
-                            if let Some(array) = normalize_command_string(command) {
-                                object.insert("command".to_string(), Value::Array(array));
-                            } else {
-                                object
-                                    .insert("command".to_string(), Value::String(command.clone()));
-                            }
-                        } else {
-                            let array = positional_parts
-                                .into_iter()
-                                .map(Value::String)
-                                .collect::<Vec<_>>();
-                            object.insert("command".to_string(), Value::Array(array));
-                        }
-                    } else if let Some(Value::String(command)) = positional.first() {
+                if all_strings && !positional_parts.is_empty() {
+                    if positional_parts.len() == 1 {
+                        let command = &positional_parts[0];
                         if let Some(array) = normalize_command_string(command) {
                             object.insert("command".to_string(), Value::Array(array));
                         } else {
                             object.insert("command".to_string(), Value::String(command.clone()));
                         }
+                    } else {
+                        let array = positional_parts
+                            .into_iter()
+                            .map(Value::String)
+                            .collect::<Vec<_>>();
+                        object.insert("command".to_string(), Value::Array(array));
+                    }
+                } else if let Some(Value::String(command)) = positional.first() {
+                    if let Some(array) = normalize_command_string(command) {
+                        object.insert("command".to_string(), Value::Array(array));
+                    } else {
+                        object.insert("command".to_string(), Value::String(command.clone()));
                     }
                 }
+            }
             // Validate that command is present and not empty
             if !object.contains_key("command") {
                 return None;
@@ -862,10 +860,12 @@ fn parse_function_call_block(block: &str) -> Option<(String, Value)> {
         }
         Some(tools::GREP_FILE) => {
             // For grep_file, ensure pattern is present
-            if !positional.is_empty() && !object.contains_key("pattern")
-                && let Value::String(pattern) = &positional[0] {
-                    object.insert("pattern".to_string(), Value::String(pattern.clone()));
-                }
+            if !positional.is_empty()
+                && !object.contains_key("pattern")
+                && let Value::String(pattern) = &positional[0]
+            {
+                object.insert("pattern".to_string(), Value::String(pattern.clone()));
+            }
             // Validate that pattern is required
             if !object.contains_key("pattern") {
                 return None;
@@ -873,10 +873,12 @@ fn parse_function_call_block(block: &str) -> Option<(String, Value)> {
         }
         Some(tools::READ_FILE | tools::WRITE_FILE | tools::EDIT_FILE) => {
             // These tools require a 'path' parameter
-            if !positional.is_empty() && !object.contains_key("path")
-                && let Value::String(path) = &positional[0] {
-                    object.insert("path".to_string(), Value::String(path.clone()));
-                }
+            if !positional.is_empty()
+                && !object.contains_key("path")
+                && let Value::String(path) = &positional[0]
+            {
+                object.insert("path".to_string(), Value::String(path.clone()));
+            }
             if !object.contains_key("path") {
                 return None;
             }

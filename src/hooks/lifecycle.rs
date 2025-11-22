@@ -1141,8 +1141,7 @@ pub struct PostToolHookOutcome {
     pub block_reason: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, Default)]
 pub enum PreToolHookDecision {
     #[default]
     Continue,
@@ -1150,7 +1149,6 @@ pub enum PreToolHookDecision {
     Deny,
     Ask,
 }
-
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]

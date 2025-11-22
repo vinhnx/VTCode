@@ -31,7 +31,7 @@ fn restore_terminal_on_exit() -> io::Result<()> {
 
     // Ensure stdout is flushed
     stdout.flush()?;
-    
+
     // Brief delay to allow any pending terminal operations to complete
     std::thread::sleep(std::time::Duration::from_millis(50));
 
@@ -225,20 +225,21 @@ pub(super) async fn finalize_session(
     }
 
     if let Some(mcp_manager) = async_mcp_manager
-        && let Err(e) = mcp_manager.shutdown().await {
-            let error_msg = e.to_string();
-            if error_msg.contains("EPIPE")
-                || error_msg.contains("Broken pipe")
-                || error_msg.contains("write EPIPE")
-            {
-                eprintln!(
-                    "Info: MCP client shutdown encountered pipe errors (normal): {}",
-                    e
-                );
-            } else {
-                eprintln!("Warning: Failed to shutdown MCP client cleanly: {}", e);
-            }
+        && let Err(e) = mcp_manager.shutdown().await
+    {
+        let error_msg = e.to_string();
+        if error_msg.contains("EPIPE")
+            || error_msg.contains("Broken pipe")
+            || error_msg.contains("write EPIPE")
+        {
+            eprintln!(
+                "Info: MCP client shutdown encountered pipe errors (normal): {}",
+                e
+            );
+        } else {
+            eprintln!("Warning: Failed to shutdown MCP client cleanly: {}", e);
         }
+    }
 
     handle.shutdown();
 

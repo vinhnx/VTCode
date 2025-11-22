@@ -151,14 +151,14 @@ pub mod types;
 pub mod web_fetch;
 
 // Production-grade improvements modules
+pub mod async_middleware;
 pub mod improvement_algorithms;
+pub mod improvements_cache;
 pub mod improvements_config;
 pub mod improvements_errors;
-pub mod middleware;
-pub mod improvements_cache;
-pub mod async_middleware;
-pub mod pattern_engine;
 pub mod improvements_registry_ext;
+pub mod middleware;
+pub mod pattern_engine;
 
 #[cfg(test)]
 mod improvements_integration_tests;
@@ -196,41 +196,37 @@ pub use search_metrics::{SearchMetric, SearchMetrics, SearchMetricsStats};
 pub use smart_cache::{CachedResult as SmartCachedResult, SmartResultCache};
 pub use tool_effectiveness::{
     AdaptiveToolSelector, ToolEffectiveness, ToolEffectivenessTracker, ToolFailureMode,
-    ToolSelector, ToolSelectionContext,
+    ToolSelectionContext, ToolSelector,
 };
 pub use traits::{Tool, ToolExecutor};
 pub use types::*;
 pub use web_fetch::WebFetchTool;
 
 // Production-grade improvements re-exports
-pub use improvement_algorithms::{
-    jaro_winkler_similarity, MLScoreComponents, PatternDetector, PatternState, TimeDecayedScore,
+pub use async_middleware::{
+    AsyncCachingMiddleware, AsyncLoggingMiddleware, AsyncMiddleware, AsyncMiddlewareChain,
+    AsyncRetryMiddleware, ToolRequest as AsyncToolRequest, ToolResult,
 };
+pub use improvement_algorithms::{
+    MLScoreComponents, PatternDetector, PatternState, TimeDecayedScore, jaro_winkler_similarity,
+};
+pub use improvements_cache::CacheStats as LruCacheStats;
+pub use improvements_cache::LruCache;
 pub use improvements_config::{
-    CacheConfig, ContextConfig, FallbackConfig, ImprovementsConfig, PatternConfig, SimilarityConfig,
-    TimeDecayConfig,
+    CacheConfig, ContextConfig, FallbackConfig, ImprovementsConfig, PatternConfig,
+    SimilarityConfig, TimeDecayConfig,
 };
 pub use improvements_errors::{
-    ErrorKind, ErrorSeverity, ImprovementError, ImprovementEvent, ImprovementResult, EventType,
+    ErrorKind, ErrorSeverity, EventType, ImprovementError, ImprovementEvent, ImprovementResult,
     ObservabilityContext, ObservabilitySink,
 };
+pub use improvements_registry_ext::{ToolMetrics, ToolRegistryImprovement};
 pub use middleware::{
     CachingMiddleware, ExecutionMetadata, LoggingMiddleware, Middleware, MiddlewareChain,
     MiddlewareError, MiddlewareResult, RequestMetadata, RetryMiddleware, ToolRequest,
     ValidationMiddleware,
 };
-pub use improvements_cache::LruCache;
-pub use improvements_cache::CacheStats as LruCacheStats;
-pub use async_middleware::{
-    AsyncMiddleware, AsyncMiddlewareChain, AsyncLoggingMiddleware, AsyncCachingMiddleware,
-    AsyncRetryMiddleware, ToolRequest as AsyncToolRequest, ToolResult,
-};
-pub use pattern_engine::{
-    PatternEngine, ExecutionEvent, DetectedPattern, ExecutionSummary,
-};
-pub use improvements_registry_ext::{
-    ToolRegistryImprovement, ToolMetrics,
-};
+pub use pattern_engine::{DetectedPattern, ExecutionEvent, ExecutionSummary, PatternEngine};
 
 // Re-export function declarations for external use
 pub use registry::build_function_declarations;

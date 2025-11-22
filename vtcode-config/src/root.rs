@@ -10,7 +10,6 @@ pub enum ToolOutputMode {
     Full,
 }
 
-
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]

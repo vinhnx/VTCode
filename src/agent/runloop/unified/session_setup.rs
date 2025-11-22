@@ -174,12 +174,13 @@ pub(crate) async fn initialize_session(
 
     // Add GPT-5.1 specific tools if the model supports them
     if let Ok(model_id) = ModelId::from_str(&config.model)
-        && model_id.is_gpt51_variant() {
-            // Add apply_patch tool for GPT-5.1's structured diff editing
-            tool_definitions.push(uni::ToolDefinition::apply_patch(
+        && model_id.is_gpt51_variant()
+    {
+        // Add apply_patch tool for GPT-5.1's structured diff editing
+        tool_definitions.push(uni::ToolDefinition::apply_patch(
                 "Apply structured diffs to modify files. Use this tool to create, update, or delete file content using unified diff format. The tool enables iterative, multi-step code editing workflows by applying patches and reporting results back.".to_string()
             ));
-        }
+    }
 
     // Add MCP tools if available (from async manager). Poll briefly for readiness
     // so a fast-starting MCP server will be exposed during session startup.

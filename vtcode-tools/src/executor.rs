@@ -36,7 +36,7 @@ pub struct CachedToolExecutor {
 
 impl CachedToolExecutor {
     /// Create a new executor with default settings.
-    /// 
+    ///
     /// - Cache capacity: 1000 entries
     /// - Cache TTL: 1 hour
     /// - Pattern window: 3-tool sequences
@@ -74,11 +74,7 @@ impl CachedToolExecutor {
     }
 
     /// Execute a tool with full caching and observability.
-    pub async fn execute(
-        &self,
-        tool_name: &str,
-        args: Value,
-    ) -> anyhow::Result<Value> {
+    pub async fn execute(&self, tool_name: &str, args: Value) -> anyhow::Result<Value> {
         let start = std::time::Instant::now();
         let cache_key = format!("{}:{}", tool_name, args);
 
@@ -126,9 +122,7 @@ impl CachedToolExecutor {
 
         // Execute tool (caller provides actual execution)
         // This is where your tool registry would call the actual tool
-        let result = self
-            .execute_tool_internal(tool_name, &args)
-            .await?;
+        let result = self.execute_tool_internal(tool_name, &args).await?;
 
         let duration_ms = start.elapsed().as_millis() as u64;
 
@@ -222,7 +216,7 @@ impl CachedToolExecutor {
         let patterns = self.patterns().await;
 
         println!("\n=== ToolExecutor Report ===\n");
-        
+
         println!("Execution Statistics:");
         println!("  Total calls:      {}", stats.total_calls);
         println!("  Successful:       {}", stats.successful_calls);
@@ -239,8 +233,11 @@ impl CachedToolExecutor {
         println!("\nWorkflow Patterns ({} detected):", patterns.len());
         for (i, pattern) in patterns.iter().take(5).enumerate() {
             println!("  {}. {:?}", i + 1, pattern.sequence);
-            println!("     Frequency: {}, Confidence: {:.1}%",
-                     pattern.frequency, pattern.confidence * 100.0);
+            println!(
+                "     Frequency: {}, Confidence: {:.1}%",
+                pattern.frequency,
+                pattern.confidence * 100.0
+            );
         }
 
         println!("\n");
@@ -298,12 +295,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_executor_with_middleware() -> anyhow::Result<()> {
-        let executor = CachedToolExecutor::new()
-            .with_middleware(LoggingMiddleware::new("test"));
+        let executor = CachedToolExecutor::new().with_middleware(LoggingMiddleware::new("test"));
 
-        executor
-            .execute("test_tool", serde_json::json!({}))
-            .await?;
+        executor.execute("test_tool", serde_json::json!({})).await?;
 
         let stats = executor.stats().await;
         assert_eq!(stats.total_calls, 1);
@@ -331,9 +325,7 @@ mod tests {
     async fn test_executor_clear() -> anyhow::Result<()> {
         let executor = CachedToolExecutor::new();
 
-        executor
-            .execute("test", serde_json::json!({}))
-            .await?;
+        executor.execute("test", serde_json::json!({})).await?;
 
         let stats_before = executor.stats().await;
         assert_eq!(stats_before.total_calls, 1);

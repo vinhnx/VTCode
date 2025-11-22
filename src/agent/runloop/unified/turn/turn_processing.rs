@@ -6,11 +6,11 @@ use tokio::task;
 
 use crate::agent::runloop::mcp_events::McpPanelState;
 use crate::agent::runloop::unified::context_manager::ContextManager;
+use crate::agent::runloop::unified::extract_action_from_messages;
 use crate::agent::runloop::unified::state::{CtrlCState, SessionStats};
 use crate::agent::runloop::unified::ui_interaction::{
     PlaceholderSpinner, stream_and_render_response,
 };
-use crate::agent::runloop::unified::extract_action_from_messages;
 #[cfg(debug_assertions)]
 use tracing::debug;
 use vtcode_core::config::loader::VTCodeConfig;

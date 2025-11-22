@@ -136,11 +136,7 @@ impl SmartResultCache {
     }
 
     /// Get cached result with exact or fuzzy matching
-    pub fn get(
-        &mut self,
-        tool: &str,
-        args: &Value,
-    ) -> Option<(EnhancedToolResult, bool)> {
+    pub fn get(&mut self, tool: &str, args: &Value) -> Option<(EnhancedToolResult, bool)> {
         let sig = ResultSignature::from_tool_call(tool, args);
 
         // Try exact match first
@@ -186,10 +182,8 @@ impl SmartResultCache {
         let mut best: Option<(f32, &CachedResult)> = None;
 
         for cached in self.cache.values() {
-            let other_sig = ResultSignature::from_tool_call(
-                &cached.result.tool_name,
-                &cached.result.value,
-            );
+            let other_sig =
+                ResultSignature::from_tool_call(&cached.result.tool_name, &cached.result.value);
 
             let similarity = sig.similarity(&other_sig);
             if similarity >= self.fuzzy_threshold {

@@ -40,11 +40,11 @@ use crate::agent::runloop::slash_commands::handle_slash_command;
 use crate::agent::runloop::text_tools::{detect_textual_tool_call, extract_code_fence_blocks};
 use crate::agent::runloop::tool_output::render_code_fence_blocks;
 use crate::agent::runloop::ui::{build_inline_header_context, render_session_banner};
+use crate::agent::runloop::unified::extract_action_from_messages;
 use crate::agent::runloop::unified::mcp_tool_manager::McpToolManager;
 use crate::agent::runloop::unified::ui_interaction::{
     PlaceholderSpinner, stream_and_render_response,
 };
-use crate::agent::runloop::unified::extract_action_from_messages;
 
 use super::finalization::finalize_session;
 use super::harmony::strip_harmony_syntax;
@@ -2026,31 +2026,32 @@ pub(crate) async fn run_single_agent_loop_unified(
 
                     if tool_calls.is_empty()
                         && let Some(text) = final_text.clone()
-                            && !text.trim().is_empty()
-                                && let Some((name, args)) = detect_textual_tool_call(&text) {
-                                    let args_json = serde_json::to_string(&args)
-                                        .unwrap_or_else(|_| "{}".to_string());
-                                    let code_blocks = extract_code_fence_blocks(&text);
-                                    if !code_blocks.is_empty() {
-                                        render_code_fence_blocks(renderer, &code_blocks)?;
-                                        renderer.line(MessageStyle::Output, "")?;
-                                    }
-                                    let (headline, _) = describe_tool_action(&name, &args);
-                                    let notice = if headline.is_empty() {
-                                        format!("Detected {} request", humanize_tool_name(&name))
-                                    } else {
-                                        format!("Detected {headline}")
-                                    };
-                                    renderer.line(MessageStyle::Info, &notice)?;
-                                    let call_id = format!("call_textual_{}", conversation_len);
-                                    tool_calls.push(uni::ToolCall::function(
-                                        call_id.clone(),
-                                        name.clone(),
-                                        args_json.clone(),
-                                    ));
-                                    interpreted_textual_call = true;
-                                    final_text = None;
-                                }
+                        && !text.trim().is_empty()
+                        && let Some((name, args)) = detect_textual_tool_call(&text)
+                    {
+                        let args_json =
+                            serde_json::to_string(&args).unwrap_or_else(|_| "{}".to_string());
+                        let code_blocks = extract_code_fence_blocks(&text);
+                        if !code_blocks.is_empty() {
+                            render_code_fence_blocks(renderer, &code_blocks)?;
+                            renderer.line(MessageStyle::Output, "")?;
+                        }
+                        let (headline, _) = describe_tool_action(&name, &args);
+                        let notice = if headline.is_empty() {
+                            format!("Detected {} request", humanize_tool_name(&name))
+                        } else {
+                            format!("Detected {headline}")
+                        };
+                        renderer.line(MessageStyle::Info, &notice)?;
+                        let call_id = format!("call_textual_{}", conversation_len);
+                        tool_calls.push(uni::ToolCall::function(
+                            call_id.clone(),
+                            name.clone(),
+                            args_json.clone(),
+                        ));
+                        interpreted_textual_call = true;
+                        final_text = None;
+                    }
 
                     Ok((final_text, tool_calls, interpreted_textual_call))
                 }

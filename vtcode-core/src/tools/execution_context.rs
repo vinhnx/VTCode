@@ -49,10 +49,7 @@ impl ToolExecutionRecord {
 #[serde(tag = "type")]
 pub enum ToolPattern {
     /// Same tool/pattern searched with multiple tools
-    RedundantSearch {
-        tools: Vec<String>,
-        pattern: String,
-    },
+    RedundantSearch { tools: Vec<String>, pattern: String },
 
     /// Results build on each other sequentially
     SequentialRefinement {
@@ -67,10 +64,7 @@ pub enum ToolPattern {
     },
 
     /// Tool produced low quality despite multiple attempts
-    LowQualityLoop {
-        tool: String,
-        attempts: usize,
-    },
+    LowQualityLoop { tool: String, attempts: usize },
 }
 
 /// Context for cross-tool awareness
@@ -128,9 +122,7 @@ impl ToolExecutionContext {
             .iter()
             .rev()
             .take(recent_limit)
-            .any(|record| {
-                record.tool_name == tool && are_args_equivalent(&record.args, args)
-            })
+            .any(|record| record.tool_name == tool && are_args_equivalent(&record.args, args))
     }
 
     /// Get recent tool names (up to N)
@@ -167,7 +159,8 @@ impl ToolExecutionContext {
         self.effectiveness_snapshot
             .values()
             .filter(|eff| {
-                eff.success_rate > 0.7 && !recent.contains(&eff.tool_name)
+                eff.success_rate > 0.7
+                    && !recent.contains(&eff.tool_name)
                     && eff.tool_name != failed_tool
             })
             .max_by(|a, b| {
@@ -201,12 +194,7 @@ impl ToolExecutionContext {
     /// Detect patterns in execution
     fn detect_patterns(&mut self, new_record: &ToolExecutionRecord) {
         // Pattern 1: Redundant searches
-        let recent_records: Vec<_> = self
-            .execution_history
-            .iter()
-            .rev()
-            .take(10)
-            .collect();
+        let recent_records: Vec<_> = self.execution_history.iter().rev().take(10).collect();
 
         let mut same_pattern_tools = vec![new_record.tool_name.clone()];
         for record in &recent_records {
@@ -259,11 +247,7 @@ pub fn are_args_equivalent(a: &Value, b: &Value) -> bool {
                     .all(|(k, v)| b_map.get(k).map_or(false, |bv| bv == v))
         }
         (Value::Array(a_arr), Value::Array(b_arr)) => {
-            a_arr.len() == b_arr.len()
-                && a_arr
-                    .iter()
-                    .zip(b_arr.iter())
-                    .all(|(av, bv)| av == bv)
+            a_arr.len() == b_arr.len() && a_arr.iter().zip(b_arr.iter()).all(|(av, bv)| av == bv)
         }
         (Value::String(a_str), Value::String(b_str)) => a_str == b_str,
         (Value::Number(a_num), Value::Number(b_num)) => a_num == b_num,
@@ -293,10 +277,7 @@ mod tests {
 
     #[test]
     fn test_execution_context_creation() {
-        let ctx = ToolExecutionContext::new(
-            "session-1".to_string(),
-            "find errors".to_string(),
-        );
+        let ctx = ToolExecutionContext::new("session-1".to_string(), "find errors".to_string());
 
         assert_eq!(ctx.session_id, "session-1");
         assert_eq!(ctx.current_task, "find errors");
@@ -304,10 +285,7 @@ mod tests {
 
     #[test]
     fn test_add_record() {
-        let mut ctx = ToolExecutionContext::new(
-            "session-1".to_string(),
-            "test".to_string(),
-        );
+        let mut ctx = ToolExecutionContext::new("session-1".to_string(), "test".to_string());
 
         let record = make_record("grep", 1);
         ctx.add_record(record);
@@ -317,10 +295,7 @@ mod tests {
 
     #[test]
     fn test_is_redundant() {
-        let mut ctx = ToolExecutionContext::new(
-            "session-1".to_string(),
-            "test".to_string(),
-        );
+        let mut ctx = ToolExecutionContext::new("session-1".to_string(), "test".to_string());
 
         let args = Value::String("pattern".to_string());
 
@@ -336,10 +311,7 @@ mod tests {
 
     #[test]
     fn test_recent_tools() {
-        let mut ctx = ToolExecutionContext::new(
-            "session-1".to_string(),
-            "test".to_string(),
-        );
+        let mut ctx = ToolExecutionContext::new("session-1".to_string(), "test".to_string());
 
         ctx.add_record(make_record("grep", 1));
         ctx.add_record(make_record("find", 2));
