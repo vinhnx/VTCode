@@ -23,6 +23,7 @@ cargo fmt                   # Format code
 - **Naming**: snake_case functions/vars, PascalCase types (standard Rust)
 - **Error Handling**: `anyhow::Result<T>` + `anyhow::Context`; NO `unwrap()`
 - **Constants**: Use `vtcode-core/src/config/constants.rs` (never hardcode, especially model IDs)
+- **ANSI Codes**: **NEVER hardcode** escape sequences. Always use constants from `vtcode-core/src/utils/ansi_codes.rs` (e.g., `ALT_BUFFER_DISABLE`, `CURSOR_SHOW`, `RESET`, `CLEAR_SCREEN`)
 - **Config**: Read from `vtcode.toml` at runtime
 - **Docs**: Markdown ONLY in `./docs/`; use `docs/models.json` for latest LLM models
 - **Formatting**: 4-space indentation, early returns, simple variable names
