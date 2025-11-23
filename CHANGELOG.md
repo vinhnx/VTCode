@@ -3,6 +3,58 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Version 0.43.0] - 2025-11-09
+# [Version 0.47.1] - 2025-11-23
+
+
+### Features
+    - feat: Enhance tool policy with pre-approval allowlist, improve file operation error messages, and refine tool declarations.
+    - feat: Integrate production-grade tool improvements system
+    - feat: Implement animated thinking spinner for user input submission
+    - feat: Add comprehensive ANSI escape sequence documentation and a new core utility module for ANSI codes.
+    - feat: Refactor install script, rename `run_pty_cmd` to `run_terminal_cmd`, and update installation instructions for Homebrew and NPM.
+
+
+### Bug Fixes
+    - fix: correct RUSTFLAGS invalid option and align system prompt with actual tool definitions
+    - fix: resolve all cargo clippy warnings and update rust toolchain to stable
+    - fix: Revise thinking spinner message to use first-person agent voice
+    - fix: Move thinking spinner display to after user message in transcript
+    - fix: Clear thinking spinner message on all agent response command types
+    - fix: Update public re-export and documentation to reference file_helpers instead of legacy
+    - fix: Improve `edit_file` tool's robustness
+
+
+### Refactors
+    - refactor: Update ThinkingSpinner struct visibility for better encapsulation
+    - refactor: remove redundant reasoning handling, clarify intent
+    - refactor: Rename `legacy` module to `file_helpers` and fix critical `edit_file` bugs related to newline handling, matching, and trailing newlines.
+    - refactor(mcp): Clean up unused imports
+    - refactor: Rename `run_terminal_cmd` to `run_pty_cmd` across documentation, examples, and tests.
+
+
+### Documentation
+    - docs: update changelog for v0.47.0 [skip ci]
+    - docs: update changelog for v0.46.0 [skip ci]
+    - docs/mcp: integrate DEPLOYMENT_GUIDE and update INDEX navigation
+    - docs/mcp: Add lessons learned - project retrospective
+    - docs/mcp: Add team communication kit - ready-to-use materials
+    - docs/mcp: Add master index - 00_START_HERE.md
+    - docs/mcp: Add implementation guides for immediate team use
+    - docs/mcp: Add executive summary document
+    - docs/mcp: Add team announcement document
+    - docs: Link MCP module docs and add team guide
+    - docs/mcp: Add comprehensive INDEX.md for navigation
+    - docs/mcp: Complete documentation migration - consolidate and organize
+    - docs: Update and expand documentation across various topics, add a new MCP diagnostic guide, and adjust project configurations and dependencies.
+
+
+### Chores
+    - chore: release v0.47.0
+    - chore: update VSCode extension package.json to v0.46.0 [skip ci]
+    - chore: update npm package.json to v0.46.0 [skip ci]
+    - chore: release v0.46.0
+    - chore: update VSCode extension package.json to v0.45.6 [skip ci]
+    - chore: update npm package.json to v0.45.6 [skip ci]
 # [Version 0.47.0] - 2025-11-23
 
 
