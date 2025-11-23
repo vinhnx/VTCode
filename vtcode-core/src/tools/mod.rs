@@ -121,6 +121,7 @@
 //! the monolithic implementation into focused, reusable components.
 
 pub mod apply_patch;
+pub mod error_messages;
 
 pub mod cache;
 pub mod command;

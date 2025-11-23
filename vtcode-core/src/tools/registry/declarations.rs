@@ -194,26 +194,26 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
                 "type": "object",
                 "properties": {
                     "pattern": {"type": "string", "description": "Regex pattern or literal string to search for. Examples: 'fn \\\\w+\\\\(', 'TODO|FIXME', '^import\\\\s', '\\\\.get\\\\(' for HTTP verbs"},
-                    "path": {"type": "string", "description": "Directory path (relative). Defaults to current directory", "default": "."},
-                    "max_results": {"type": "integer", "description": "Maximum number of results to return (1-1000)", "default": 100},
-                    "case_sensitive": {"type": "boolean", "description": "Case-sensitive matching. Default uses smart-case: lowercase pattern = case-insensitive, with uppercase = case-sensitive", "default": false},
-                    "literal": {"type": "boolean", "description": "Treat pattern as literal string, not regex. Use for exact string matching", "default": false},
-                    "glob_pattern": {"type": "string", "description": "Filter files by glob pattern. Examples: '**/*.rs' (all Rust), 'src/**/*.ts' (TypeScript in src), '*.test.js'"},
-                    "context_lines": {"type": "integer", "description": "Lines of context before/after matches (0-20). Use 3-5 to see surrounding code for understanding. Default 0 for concise output", "default": 0},
-                    "respect_ignore_files": {"type": "boolean", "description": "Respect .gitignore and .ignore files. Set false to search all files including ignored ones", "default": true},
-                    "include_hidden": {"type": "boolean", "description": "Include hidden files (those starting with dot) in search results", "default": false},
-                    "max_file_size": {"type": "integer", "description": "Maximum file size to search in bytes. Skips files larger than this. Example: 5242880 for 5MB"},
-                    "search_hidden": {"type": "boolean", "description": "Search inside hidden directories (those starting with dot)", "default": false},
-                    "search_binary": {"type": "boolean", "description": "Search binary files. Usually false to avoid noise from compiled code/media", "default": false},
-                    "files_with_matches": {"type": "boolean", "description": "Return only filenames containing matches, not the match lines themselves", "default": false},
-                    "type_pattern": {"type": "string", "description": "Filter by file type: 'rust', 'python', 'typescript', 'javascript', 'java', 'go', etc. Faster than glob for language filtering"},
-                    "invert_match": {"type": "boolean", "description": "Invert matching: return lines that do NOT match the pattern", "default": false},
-                    "word_boundaries": {"type": "boolean", "description": "Match only at word boundaries (\\\\b in regex). Prevents partial word matches", "default": false},
-                    "line_number": {"type": "boolean", "description": "Include line numbers in output. Recommended true for file navigation", "default": true},
-                    "column": {"type": "boolean", "description": "Include column numbers in output for precise positioning", "default": false},
-                    "only_matching": {"type": "boolean", "description": "Show only the matched part of each line, not the full line", "default": false},
-                    "trim": {"type": "boolean", "description": "Trim leading/trailing whitespace from output lines", "default": false},
-                    "response_format": {"type": "string", "description": "Output format: 'concise' (compact JSON) or 'detailed' (with metadata)", "default": "concise"}
+                    "path": {"type": "string", "description": "Directory path (relative). Defaults to current directory.", "default": "."},
+                    "max_results": {"type": "integer", "description": "Maximum number of results to return (1-1000).", "default": 100},
+                    "case_sensitive": {"type": "boolean", "description": "Case-sensitive matching. Default uses smart-case: lowercase pattern = case-insensitive, with uppercase = case-sensitive.", "default": false},
+                    "literal": {"type": "boolean", "description": "Treat pattern as literal string, not regex. Use for exact string matching.", "default": false},
+                    "glob_pattern": {"type": "string", "description": "Filter files by glob pattern. Examples: '**/*.rs' (all Rust), 'src/**/*.ts' (TypeScript in src), '*.test.js'."},
+                    "context_lines": {"type": "integer", "description": "Lines of context before/after matches (0-20). Use 3-5 to see surrounding code. Default 0 for concise output.", "default": 0},
+                    "respect_ignore_files": {"type": "boolean", "description": "Respect .gitignore and .ignore files. Set false to search all files including ignored ones.", "default": true},
+                    "include_hidden": {"type": "boolean", "description": "Include hidden files (those starting with dot) in search results.", "default": false},
+                    "max_file_size": {"type": "integer", "description": "Maximum file size to search in bytes. Skips files larger than this. Example: 5242880 for 5MB."},
+                    "search_hidden": {"type": "boolean", "description": "Search inside hidden directories (those starting with dot).", "default": false},
+                    "search_binary": {"type": "boolean", "description": "Search binary files. Usually false to avoid noise from compiled code/media.", "default": false},
+                    "files_with_matches": {"type": "boolean", "description": "Return only filenames containing matches, not the match lines themselves.", "default": false},
+                    "type_pattern": {"type": "string", "description": "Filter by file type: 'rust', 'python', 'typescript', 'javascript', 'java', 'go', etc. Faster than glob for language filtering."},
+                    "invert_match": {"type": "boolean", "description": "Invert matching: return lines that do NOT match the pattern.", "default": false},
+                    "word_boundaries": {"type": "boolean", "description": "Match only at word boundaries (\\\\b in regex). Prevents partial word matches.", "default": false},
+                    "line_number": {"type": "boolean", "description": "Include line numbers in output. Recommended true for file navigation.", "default": true},
+                    "column": {"type": "boolean", "description": "Include column numbers in output for precise positioning.", "default": false},
+                    "only_matching": {"type": "boolean", "description": "Show only the matched part of each line, not the full line.", "default": false},
+                    "trim": {"type": "boolean", "description": "Trim leading/trailing whitespace from output lines.", "default": false},
+                    "response_format": {"type": "string", "description": "Output format: 'concise' (compact JSON) or 'detailed' (with metadata).", "default": "concise"}
                 },
                 "required": ["pattern"]
             }),
@@ -221,25 +221,25 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
 
         FunctionDeclaration {
             name: "list_files".to_string(),
-            description: "Explore workspace. Modes: list|recursive|find_name|find_content|largest. Use pagination for large directories.".to_string(),
+            description: "Explore workspace. Modes: list (directory contents), recursive (full tree), find_name (by filename), find_content (by content), largest (by file size). Use pagination for large directories.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
-                    "path": {"type": "string", "description": "Starting directory (relative)"},
-                    "mode": {"type": "string", "description": "list|recursive|find_name|find_content|largest", "default": "list"},
-                    "max_items": {"type": "integer", "description": "Maximum items to scan", "default": 1000},
-                    "page": {"type": "integer", "description": "Page number (1-based)", "default": 1},
-                    "per_page": {"type": "integer", "description": "Items per page", "default": 50},
-                    "response_format": {"type": "string", "description": "concise|detailed", "default": "concise"},
-                    "include_hidden": {"type": "boolean", "description": "Include hidden files", "default": false},
-                    "name_pattern": {"type": "string", "description": "File pattern (e.g. *.rs)", "default": "*"},
-                    "content_pattern": {"type": "string", "description": "Content search pattern"},
+                    "path": {"type": "string", "description": "Directory path (relative). Defaults to workspace root."},
+                    "mode": {"type": "string", "description": "Operation mode: 'list' (directory contents), 'recursive' (full tree), 'find_name' (find by filename), 'find_content' (find by content), 'largest' (find largest files).", "default": "list"},
+                    "max_items": {"type": "integer", "description": "Maximum items to scan (higher = slower but more complete).", "default": 1000},
+                    "page": {"type": "integer", "description": "Page number for pagination (1-based).", "default": 1},
+                    "per_page": {"type": "integer", "description": "Items per page.", "default": 50},
+                    "response_format": {"type": "string", "description": "Output format: 'concise' (compact JSON) or 'detailed' (with metadata).", "default": "concise"},
+                    "include_hidden": {"type": "boolean", "description": "Include hidden files and directories (starting with dot).", "default": false},
+                    "name_pattern": {"type": "string", "description": "Glob pattern for filenames when mode='find_name' (e.g., '*.rs').", "default": "*"},
+                    "content_pattern": {"type": "string", "description": "Regex pattern to search file contents when mode='find_content'."},
                     "file_extensions": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "Filter by extensions"
+                        "description": "Filter results by file extensions (e.g., ['rs', 'toml'])."
                     },
-                    "case_sensitive": {"type": "boolean", "description": "Case-sensitive matching", "default": true}
+                    "case_sensitive": {"type": "boolean", "description": "Case-sensitive matching for patterns.", "default": true}
                 },
                 "required": ["path"]
             }),
@@ -251,10 +251,10 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
             parameters: json!({
                 "type": "object",
                 "properties": {
-                    "command": {"type": "string", "description": "Shell command to execute (e.g., 'git diff', 'cargo test', 'npm install')"},
-                    "cwd": {"type": "string", "description": "Working directory for the command (relative or absolute)"},
-                    "timeout_secs": {"type": "integer", "description": "Timeout in seconds. Default 180 for commands, longer for cargo/build commands", "default": 180},
-                    "confirm": {"type": "boolean", "description": "Require confirmation before executing destructive commands (rm, git reset, etc)", "default": false}
+                    "command": {"type": "string", "description": "Shell command to execute (e.g., 'git diff', 'cargo test', 'npm install'). Can be string or array of strings."},
+                    "cwd": {"type": "string", "description": "Working directory for the command (relative or absolute)."},
+                    "timeout_secs": {"type": "integer", "description": "Timeout in seconds. Default 180 for most commands, longer for cargo/build commands.", "default": 180},
+                    "confirm": {"type": "boolean", "description": "Require confirmation before executing destructive commands (rm, git reset, etc).", "default": false}
                 },
                 "required": ["command"]
             }),
@@ -302,63 +302,64 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
         },
         FunctionDeclaration {
             name: tools::GET_ERRORS.to_string(),
-            description: "Aggregate recent error traces from session archives and tool outputs. Useful for diagnosing runtime failures, patterns, and suggested recovery actions. Use 'scope' to specify 'archive' or 'session' and 'limit' to control the number of sessions to analyze.".to_string(),
+            description: "Aggregate recent error traces from session archives and tool outputs. Useful for diagnosing runtime failures, patterns, and suggested recovery actions.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
-                    "scope": {"type": "string", "description": "Scope to analyze: 'archive' or 'session'", "default": "archive"},
-                    "limit": {"type": "integer", "description": "How many recent sessions to analyze for errors", "default": 5}
+                    "scope": {"type": "string", "enum": ["archive", "session"], "description": "Scope to analyze: 'archive' (all sessions) or 'session' (current session).", "default": "archive"},
+                    "limit": {"type": "integer", "description": "Number of recent sessions/errors to analyze (default: 5).", "default": 5},
+                    "detailed": {"type": "boolean", "description": "Include detailed stack traces and suggestions (default: false).", "default": false}
                 }
             }),
         },
         FunctionDeclaration {
             name: tools::DEBUG_AGENT.to_string(),
-            description: "Return a lightweight diagnostic snapshot of the agent environment and available tools; useful for quick introspection.".to_string(),
+            description: "Return diagnostic information about the agent environment: current configuration, available tools, workspace state, and system info. Useful for troubleshooting setup issues.".to_string(),
             parameters: json!({"type": "object", "properties": {}}),
         },
         FunctionDeclaration {
             name: tools::ANALYZE_AGENT.to_string(),
-            description: "Return a brief analysis summary for agent behavior such as tool usage counts and available tools for diagnosing behavior patterns.".to_string(),
+            description: "Return analysis of agent behavior: tool usage patterns, failure rates, context window usage, and performance metrics. Useful for understanding tool interaction patterns.".to_string(),
             parameters: json!({"type": "object", "properties": {}}),
         },
 
         FunctionDeclaration {
             name: "save_skill".to_string(),
-            description: "Save a reusable skill (code function) to .vtcode/skills/ for later use. Skills can be loaded across conversations.".to_string(),
+            description: "Save a reusable skill (code function) to .vtcode/skills/ for later use. Skills can be shared and loaded across conversations and sessions.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
-                    "name": {"type": "string", "description": "Skill name in snake_case (e.g., 'filter_test_files')"},
-                    "code": {"type": "string", "description": "Function implementation (Python 3 or JavaScript)"},
+                    "name": {"type": "string", "description": "Skill name in snake_case (e.g., 'filter_test_files'). Must be unique."},
+                    "code": {"type": "string", "description": "Function/method implementation (Python 3 or JavaScript). Must define a callable named 'main'."},
                     "language": {
                         "type": "string",
                         "enum": ["python3", "javascript"],
-                        "description": "Programming language"
+                        "description": "Programming language for the skill."
                     },
-                    "description": {"type": "string", "description": "Brief description of what the skill does"},
+                    "description": {"type": "string", "description": "Brief description of what the skill does and its use cases."},
                     "inputs": {
                         "type": "array",
-                        "description": "List of input parameters",
+                        "description": "List of input parameters the skill accepts.",
                         "items": {
                             "type": "object",
                             "properties": {
-                                "name": {"type": "string"},
-                                "type": {"type": "string"},
-                                "description": {"type": "string"},
-                                "required": {"type": "boolean"}
+                                "name": {"type": "string", "description": "Parameter name."},
+                                "type": {"type": "string", "description": "Parameter type (e.g., 'string', 'array', 'object')."},
+                                "description": {"type": "string", "description": "Parameter description."},
+                                "required": {"type": "boolean", "description": "Whether this parameter is required."}
                             }
                         }
                     },
-                    "output": {"type": "string", "description": "What the skill returns"},
+                    "output": {"type": "string", "description": "Description of what the skill returns (type and format)."},
                     "tags": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "Tags for categorizing skills (e.g., ['files', 'filtering'])"
+                        "description": "Tags for categorizing and discovering skills (e.g., ['files', 'filtering', 'data'])."
                     },
                     "examples": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "Usage examples"
+                        "description": "Usage examples showing how to call the skill with sample input."
                     }
                 },
                 "required": ["name", "code", "language", "description", "output"]
@@ -367,11 +368,11 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
 
         FunctionDeclaration {
             name: "load_skill".to_string(),
-            description: "Load a saved skill by name and get its code and documentation.".to_string(),
+            description: "Load and retrieve a saved skill by name, including its code, documentation, inputs, and examples.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
-                    "name": {"type": "string", "description": "Skill name to load"}
+                    "name": {"type": "string", "description": "Skill name to load (must match exactly)."}
                 },
                 "required": ["name"]
             }),
@@ -379,7 +380,7 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
 
         FunctionDeclaration {
             name: "list_skills".to_string(),
-            description: "List all available saved skills in the workspace.".to_string(),
+            description: "List all available saved skills in the workspace, including metadata (name, description, tags, last modified).".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {}
@@ -388,11 +389,12 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
 
         FunctionDeclaration {
             name: "search_skills".to_string(),
-            description: "Search for skills by keyword or tag.".to_string(),
+            description: "Search for skills by keyword, skill name, description, or tag. Returns matching skills with relevance scores.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "Search term (skill name, description, or tag)"}
+                    "query": {"type": "string", "description": "Search term to find skills (searches name, description, and tags)."},
+                    "limit": {"type": "integer", "description": "Maximum number of results to return (default: 10).", "default": 10}
                 },
                 "required": ["query"]
             }),
@@ -407,11 +409,11 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
             parameters: json!({
                 "type": "object",
                 "properties": {
-                    "path": {"type": "string", "description": "File path"},
-                    "max_bytes": {"type": "integer", "description": "Maximum bytes to read"},
-                    "chunk_lines": {"type": "integer", "description": "Chunking threshold", "default": 2000},
-                    "max_lines": {"type": "integer", "description": "Deprecated: Alternative chunk parameter (prefer using `max_tokens` which is token-based)"},
-                    "max_tokens": {"type": "integer", "description": "Maximum tokens to include from this file (per-call token budget). Prefer token-based limits instead of lines."}
+                    "path": {"type": "string", "description": "File path (absolute or relative to workspace)."},
+                    "max_bytes": {"type": "integer", "description": "Maximum bytes to read. Returns truncated content if file is larger."},
+                    "chunk_lines": {"type": "integer", "description": "Lines per chunk for large files. Lower value = more paginated output.", "default": 2000},
+                    "max_lines": {"type": "integer", "description": "Deprecated: Use max_tokens instead for token-based limits."},
+                    "max_tokens": {"type": "integer", "description": "Maximum tokens to include from this file (per-call token budget). Preferred over line-based limits."}
                 },
                 "required": ["path"]
             }),
@@ -419,7 +421,7 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
 
         FunctionDeclaration {
             name: tools::CREATE_FILE.to_string(),
-            description: "Create a new file. Fails if the file already exists.".to_string(),
+            description: "Create a new file. Fails if file already exists to prevent accidental overwrites.".to_string(),
             parameters: {
                 let mut properties = Map::new();
 
@@ -483,7 +485,7 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
 
         FunctionDeclaration {
             name: tools::WRITE_FILE.to_string(),
-            description: "Create or modify a file. Use for full-file rewrites or new files. Modes: overwrite|append|skip_if_exists.".to_string(),
+            description: "Create or modify a file. Use for full-file rewrites or new files. Modes: overwrite (default), append, or skip_if_exists.".to_string(),
             parameters: {
                 let mut properties = Map::new();
                 insert_string_with_aliases(
@@ -525,7 +527,7 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
 
         FunctionDeclaration {
             name: tools::EDIT_FILE.to_string(),
-            description: "Replace existing text in a file by exact match. Best for surgical updates.".to_string(),
+            description: "Replace existing text in a file by exact string match. Best for surgical updates to preserve surrounding code.".to_string(),
             parameters: {
                 let mut properties = Map::new();
                 insert_string_with_aliases(

@@ -120,8 +120,7 @@ pub(super) fn builtin_tool_registrations() -> Vec<ToolRegistration> {
             CapabilityLevel::Editing,
             false,
             ToolRegistry::apply_patch_executor,
-        )
-        .with_llm_visibility(false),
+        ),
         ToolRegistration::new(
             tools::SEARCH_TOOLS,
             CapabilityLevel::Bash,

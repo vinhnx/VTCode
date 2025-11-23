@@ -758,6 +758,13 @@ pub mod tools {
     pub const WEB_FETCH: &str = "web_fetch";
     pub const SEARCH_TOOLS: &str = "search_tools";
     pub const EXECUTE_CODE: &str = "execute_code";
+    
+    // Skill management tools
+    pub const SAVE_SKILL: &str = "save_skill";
+    pub const LOAD_SKILL: &str = "load_skill";
+    pub const LIST_SKILLS: &str = "list_skills";
+    pub const SEARCH_SKILLS: &str = "search_skills";
+    
     /// Returns recent errors and suggested fixes gathered from session snapshots and tool history
     pub const GET_ERRORS: &str = "get_errors";
     pub const DEBUG_AGENT: &str = "debug_agent";

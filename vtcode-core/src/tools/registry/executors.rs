@@ -4,9 +4,9 @@ use crate::tools::apply_patch::{Patch, PatchOperation};
 use crate::tools::editing::PatchLine;
 use crate::tools::grep_file::GrepSearchInput;
 use crate::tools::traits::Tool;
-use crate::tools::types::{EnhancedTerminalInput, VTCodePtySession};
+use crate::tools::types::VTCodePtySession;
 use crate::tools::{
-    PlanUpdateResult, PtyCommandRequest, PtyCommandResult, PtyManager, UpdatePlanArgs,
+    PlanUpdateResult, UpdatePlanArgs,
 };
 
 use crate::utils::diff::{DiffOptions, compute_diff};
@@ -20,7 +20,6 @@ use serde::Deserialize;
 use serde_json::{Map, Value, json};
 use shell_words::{join, split};
 use std::{
-    borrow::Cow,
     env,
     path::{Path, PathBuf},
     time::{Duration, Instant},
@@ -29,59 +28,12 @@ use tokio::fs;
 use tokio::time::sleep;
 use tracing::{debug, trace, warn};
 
-#[allow(dead_code)]
-const DEFAULT_TERMINAL_TIMEOUT_SECS: u64 = 180;
-#[allow(dead_code)]
-const DEFAULT_PTY_TIMEOUT_SECS: u64 = 300;
 const RUN_PTY_POLL_TIMEOUT_SECS: u64 = 5;
-#[allow(dead_code)]
-const LONG_RUNNING_COMMAND_TIMEOUT_SECS: u64 = 600;
 // For known long-running commands, wait longer before returning partial output
 const RUN_PTY_POLL_TIMEOUT_LONG_RUNNING: u64 = 30;
 
 const LONG_RUNNING_COMMANDS: &[&str] = &[
     "cargo", "npm", "yarn", "pnpm", "pip", "python", "make", "docker",
-];
-#[allow(dead_code)]
-const INTERACTIVE_COMMANDS: &[&str] = &[
-    "python",
-    "python3",
-    "node",
-    "npm",
-    "yarn",
-    "pnpm",
-    "bun",
-    "irb",
-    "pry",
-    "node-repl",
-    "mysql",
-    "psql",
-    "sqlite3",
-    "vim",
-    "nvim",
-    "nano",
-    "emacs",
-    "code",
-    "top",
-    "htop",
-    "ssh",
-    "telnet",
-    "ftp",
-    "sftp",
-    "cargo",
-    "make",
-    "cmake",
-    "ninja",
-    "gradle",
-    "mvn",
-    "ant",
-    "go",
-    "rustc",
-    "gcc",
-    "g++",
-    "clang",
-    "javac",
-    "dotnet",
 ];
 
 use super::ToolRegistry;
@@ -584,7 +536,7 @@ impl ToolRegistry {
             }
 
             let payload: GrepArgs =
-                serde_json::from_value(args).context("grep_file requires a 'pattern' field")?;
+                serde_json::from_value(args).context("Error: Invalid 'grep_file' arguments. Expected JSON object with: pattern (required, string), path (optional, string, defaults to '.'), max_results (optional, number). Example: {\"pattern\": \"TODO\", \"path\": \"src\", \"max_results\": 5}")?;
 
             // Validate the path parameter to avoid security issues
             if payload.path.contains("..") || payload.path.starts_with('/') {
@@ -705,10 +657,7 @@ impl ToolRegistry {
         Box::pin(async move { self.execute_run_pty_command(args).await })
     }
 
-    #[allow(dead_code)]
-    pub(super) fn run_command_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move { self.execute_run_command(args).await })
-    }
+
 
     pub(super) fn create_pty_session_executor(
         &mut self,
@@ -882,6 +831,16 @@ impl ToolRegistry {
 
             let parsed: ExecuteCodeArgs = serde_json::from_value(args)
                 .context("execute_code requires 'code' and 'language' fields")?;
+
+            // SECURITY FIX: Warn if code appears to be calling tool invocation methods
+            // This is a heuristic check - documents expectations that tool calls are not supported
+            let code_lower = parsed.code.to_lowercase();
+            if code_lower.contains("_call_tool") || code_lower.contains("\"tool_name\"") {
+                tracing::warn!(
+                    "Code execution contains potential tool invocation attempt. \
+                    User code should use documented APIs only."
+                );
+            }
 
             // Validate language
             let language = match parsed.language.as_str() {
@@ -1161,7 +1120,7 @@ impl ToolRegistry {
 
         let input = patch_source.and_then(|v| v.as_str()).ok_or_else(|| {
             anyhow!(
-                "Error: Missing 'input' string with patch content (aliases: 'patch', 'diff'). Example: apply_patch({{ \"input\": '*** Begin Patch...*** End Patch' }})"
+                "Error: Invalid 'apply_patch' arguments. Expected JSON object with: input (required, string with patch content). Aliases for input: 'patch', 'diff'. Example: {{\"input\": \"--- a/file.txt\\n+++ b/file.txt\\n@@ ... \"}}"
             )
         })?;
         let patch = Patch::parse(input)?;
@@ -1448,34 +1407,7 @@ impl ToolRegistry {
         }))
     }
 
-    #[allow(dead_code)]
-    async fn execute_run_command(&mut self, mut args: Value) -> Result<Value> {
-        normalize_run_command_payload(&mut args)?;
 
-        let resolved_mode = resolve_run_mode(&args);
-        ensure_default_timeout(
-            &mut args,
-            "run_command expects an object payload",
-            resolved_mode.default_timeout(),
-        )?;
-
-        if resolved_mode.is_pty() {
-            self.execute_run_pty_command(args).await
-        } else {
-            self.execute_run_terminal_internal(args).await
-        }
-    }
-
-    #[allow(dead_code)]
-    async fn execute_run_terminal_internal(&mut self, mut args: Value) -> Result<Value> {
-        match prepare_terminal_execution(&mut args)? {
-            TerminalExecution::Pty { args } => self.execute_run_pty_command(args).await,
-            TerminalExecution::Terminal(execution) => {
-                let plan = self.build_terminal_command_plan(execution).await?;
-                plan.execute(self.pty_manager()).await
-            }
-        }
-    }
 
     async fn execute_run_pty_command(&mut self, args: Value) -> Result<Value> {
         let payload = value_as_object(&args, "run_pty_cmd expects an object payload")?;
@@ -1719,50 +1651,7 @@ impl ToolRegistry {
         }
     }
 
-    #[allow(dead_code)]
-    async fn build_terminal_command_plan(
-        &mut self,
-        execution: TerminalExecutionInput,
-    ) -> Result<TerminalCommandPlan> {
-        let TerminalExecutionInput { input, mode_label } = execution;
-        let invocation = self
-            .inventory
-            .command_tool()
-            .prepare_invocation(&input)
-            .await?;
 
-        let working_dir_path = self
-            .pty_manager()
-            .resolve_working_dir(input.working_dir.as_deref())
-            .await?;
-
-        let timeout_secs = validated_timeout_secs(
-            input.timeout_secs,
-            self.pty_config().command_timeout_seconds,
-        )?;
-
-        let command = assemble_command_segments(&invocation.program, &invocation.args);
-        let request = PtyCommandRequest {
-            command,
-            working_dir: working_dir_path.clone(),
-            timeout: Duration::from_secs(timeout_secs),
-            size: default_pty_size(
-                self.pty_config().default_rows,
-                self.pty_config().default_cols,
-            ),
-            max_tokens: input.max_tokens,
-        };
-
-        let working_directory = self.pty_manager().describe_working_dir(&working_dir_path);
-
-        Ok(TerminalCommandPlan {
-            request,
-            command_display: invocation.display,
-            working_directory,
-            mode_label,
-            timeout_secs,
-        })
-    }
 
     async fn execute_create_pty_session(&mut self, args: Value) -> Result<Value> {
         let payload = value_as_object(&args, "create_pty_session expects an object payload")?;
@@ -2187,98 +2076,9 @@ impl ToolRegistry {
     }
 }
 
-#[allow(dead_code)]
-fn copy_value_if_absent(map: &mut Map<String, Value>, source_key: &str, target_key: &str) {
-    if map.contains_key(target_key) {
-        return;
-    }
 
-    if let Some(value) = map.get(source_key).cloned() {
-        map.insert(target_key.to_string(), value);
-    }
-}
 
-#[allow(dead_code)]
-fn normalize_payload<'a>(
-    args: &'a mut Value,
-    context: &str,
-    legacy_error: &str,
-) -> Result<&'a mut Map<String, Value>> {
-    let map = value_as_object_mut(args, context)?;
-    if map.contains_key("bash_command") {
-        return Err(anyhow!(legacy_error.to_string()));
-    }
-    copy_value_if_absent(map, "cwd", "working_dir");
-    Ok(map)
-}
 
-#[allow(dead_code)]
-fn normalize_run_command_payload(args: &mut Value) -> Result<()> {
-    normalize_payload(
-        args,
-        "run_command expects an object payload",
-        "bash_command is no longer supported. Use run_command instead.",
-    )?;
-    Ok(())
-}
-
-fn normalize_terminal_payload(args: &mut Value) -> Result<()> {
-    {
-        let map = normalize_payload(
-            args,
-            "run_pty_cmd expects an object payload",
-            "bash_command is no longer supported. Use run_pty_cmd instead.",
-        )?;
-        if !map.contains_key("mode") {
-            match map.get("tty").and_then(|value| value.as_bool()) {
-                Some(true) => {
-                    map.insert("mode".to_string(), Value::String("pty".to_string()));
-                }
-                Some(false) => {
-                    map.insert("mode".to_string(), Value::String("terminal".to_string()));
-                }
-                None => {}
-            }
-        }
-        copy_value_if_absent(map, "timeout", "timeout_secs");
-    }
-    Ok(())
-}
-
-#[allow(dead_code)]
-fn ensure_default_timeout(args: &mut Value, context: &str, default: u64) -> Result<()> {
-    let map = value_as_object_mut(args, context)?;
-    if !map.contains_key("timeout_secs") {
-        let timeout = if let Some(cmd_parts) = collect_command_array(map).ok().flatten() {
-            if is_long_running_command(&cmd_parts) {
-                LONG_RUNNING_COMMAND_TIMEOUT_SECS
-            } else {
-                default
-            }
-        } else {
-            default
-        };
-        map.insert("timeout_secs".to_string(), Value::Number(timeout.into()));
-    }
-    Ok(())
-}
-
-#[allow(dead_code)]
-fn collect_command_array(map: &Map<String, Value>) -> Result<Option<Vec<String>>> {
-    if let Some(cmd) = map.get("command") {
-        if let Some(cmd_str) = cmd.as_str() {
-            return Ok(Some(vec![cmd_str.to_string()]));
-        } else if let Some(cmd_array) = cmd.as_array() {
-            return Ok(Some(
-                cmd_array
-                    .iter()
-                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                    .collect(),
-            ));
-        }
-    }
-    Ok(None)
-}
 
 fn parse_timeout_secs(value: Option<&Value>, fallback: u64) -> Result<u64> {
     let parsed = value
@@ -2298,466 +2098,13 @@ fn validated_timeout_secs(raw: Option<u64>, fallback: u64) -> Result<u64> {
     Ok(timeout_secs)
 }
 
-#[allow(dead_code)]
-fn assemble_command_segments(program: &str, args: &[String]) -> Vec<String> {
-    let mut command = Vec::with_capacity(1 + args.len());
-    command.push(program.to_string());
-    command.extend(args.iter().cloned());
-    command
-}
-
-#[allow(dead_code)]
-fn default_pty_size(default_rows: u16, default_cols: u16) -> PtySize {
-    PtySize {
-        rows: default_rows,
-        cols: default_cols,
-        pixel_width: 0,
-        pixel_height: 0,
-    }
-}
-
-#[allow(dead_code)]
-fn run_mode_label(args: &Value) -> String {
-    args.get("mode")
-        .and_then(|value| value.as_str())
-        .unwrap_or("terminal")
-        .to_string()
-}
-
-#[allow(dead_code)]
-fn build_terminal_command_response(
-    result: &PtyCommandResult,
-    mode_label: &str,
-    command_display: &str,
-    working_directory: String,
-    timeout_secs: u64,
-) -> Value {
-    json!({
-        "success": result.exit_code == 0,
-        "exit_code": result.exit_code,
-        "is_exited": true,
-        "stdout": result.output,
-        "stderr": "",
-        "output": result.output,
-        "mode": mode_label,
-        "pty_enabled": true,
-        "command": command_display,
-        "working_directory": working_directory,
-        "working_dir": working_directory,
-        "timeout_secs": timeout_secs,
-        "duration_ms": result.duration.as_millis(),
-        "rows": result.size.rows,
-        "cols": result.size.cols,
-        "pty": {
-            "rows": result.size.rows,
-            "cols": result.size.cols,
-        },
-    })
-}
-
-#[allow(dead_code)]
-fn convert_command_string_to_array(
-    args: &mut Value,
-    shell_hint: Option<&str>,
-    context: &str,
-) -> Result<Option<String>> {
-    let map = value_as_object_mut(args, context)?;
-    let maybe_command = map
-        .get("command")
-        .and_then(|value| value.as_str().map(|value| value.to_string()));
-    let Some(command_str) = maybe_command else {
-        return Ok(None);
-    };
-
-    let sanitized = sanitize_command_string(&command_str);
-    let segments = tokenize_command_string(sanitized.as_ref(), shell_hint)
-        .map_err(|err| anyhow!("failed to parse command string: {}", err))?;
-    if segments.is_empty() {
-        return Err(anyhow!("command string cannot be empty"));
-    }
-
-    let command_array = segments.into_iter().map(Value::String).collect::<Vec<_>>();
-    map.insert("command".to_string(), Value::Array(command_array));
-
-    Ok(Some(command_str))
-}
-
-#[allow(dead_code)]
-fn collect_command_vector(
-    args: &Value,
-    missing_error: &str,
-    type_error: &str,
-) -> Result<Vec<String>> {
-    let map = value_as_object(args, missing_error)?;
-    // Prefer explicit `command` array if present
-    let array_opt = map.get("command");
-
-    let array = if let Some(Value::Array(arr)) = array_opt {
-        arr
-    } else if array_opt.is_some() {
-        return Err(anyhow!(missing_error.to_string()));
-    } else {
-        // No explicit `command` array found; try to collect dotted `command.N` entries
-        let mut entries: Vec<(usize, String)> = Vec::new();
-        for (key, value) in map.iter() {
-            if let Some(idx_str) = key.strip_prefix("command.") {
-                if let Ok(idx) = idx_str.parse::<usize>() {
-                    let Some(seg) = value.as_str() else {
-                        return Err(anyhow!(type_error.to_string()));
-                    };
-                    entries.push((idx, seg.to_string()));
-                }
-            }
-        }
-        if !entries.is_empty() {
-            entries.sort_unstable_by_key(|(idx, _)| *idx);
-            let min_index = entries.first().unwrap().0;
-            let max_index = entries.last().unwrap().0;
-
-            // Validate that command starts at index 0 or 1 (not after gaps)
-            if min_index > 1 {
-                return Err(anyhow!(
-                    "command array from dotted notation must start at command.0 or command.1, got command.{}",
-                    min_index
-                ));
-            }
-
-            let mut computed = vec![String::new(); max_index + 1 - min_index];
-            for (idx, seg) in entries.into_iter() {
-                let position = if min_index == 1 { idx - 1 } else { idx };
-                if position >= computed.len() {
-                    computed.resize(position + 1, String::new());
-                }
-                computed[position] = seg;
-            }
-
-            // Validate first element is not empty
-            if computed.is_empty() || computed[0].trim().is_empty() {
-                return Err(anyhow!(
-                    "command executable (command.0 or command.1) cannot be empty"
-                ));
-            }
-
-            return Ok(computed);
-        }
-        return Err(anyhow!(missing_error.to_string()));
-    };
-
-    array
-        .iter()
-        .map(|value| {
-            value
-                .as_str()
-                .map(|part| part.to_string())
-                .ok_or_else(|| anyhow!(type_error.to_string()))
-        })
-        .collect()
-}
-
-#[allow(dead_code)]
-fn determine_terminal_run_mode(args: &Value) -> Result<RunMode> {
-    if matches!(
-        args.get("mode").and_then(|value| value.as_str()),
-        Some("streaming")
-    ) {
-        return Err(anyhow!("run_pty_cmd does not support streaming mode"));
-    }
-
-    Ok(resolve_run_mode(args))
-}
-
-#[allow(dead_code)]
-fn build_terminal_command_payload(
-    args: &Value,
-    command_vec: &[String],
-    raw_command: Option<&str>,
-) -> Map<String, Value> {
-    let mut sanitized = serde_json::Map::new();
-    let command_array = command_vec
-        .iter()
-        .cloned()
-        .map(Value::String)
-        .collect::<Vec<Value>>();
-    sanitized.insert("command".to_string(), Value::Array(command_array));
-
-    if let Some(working_dir) = args.get("working_dir").cloned() {
-        sanitized.insert("working_dir".to_string(), working_dir);
-    }
-    if let Some(timeout) = args.get("timeout_secs").cloned() {
-        sanitized.insert("timeout_secs".to_string(), timeout);
-    }
-    if let Some(response_format) = args.get("response_format").cloned() {
-        sanitized.insert("response_format".to_string(), response_format);
-    }
-    if let Some(raw) = raw_command {
-        sanitized.insert("raw_command".to_string(), Value::String(raw.to_string()));
-    }
-    if let Some(shell) = args.get("shell").cloned() {
-        sanitized.insert("shell".to_string(), shell);
-    }
-    if let Some(login) = args.get("login").cloned() {
-        sanitized.insert("login".to_string(), login);
-    }
-
-    sanitized
-}
-
-#[allow(dead_code)]
-fn build_pty_args_from_terminal(args: &Value, command_vec: &[String]) -> Map<String, Value> {
-    let mut pty_args = serde_json::Map::new();
-    if let Some(program) = command_vec.first() {
-        pty_args.insert("command".to_string(), Value::String(program.clone()));
-    }
-    if command_vec.len() > 1 {
-        let rest = command_vec[1..]
-            .iter()
-            .cloned()
-            .map(Value::String)
-            .collect::<Vec<Value>>();
-        pty_args.insert("args".to_string(), Value::Array(rest));
-    }
-    if let Some(timeout) = args.get("timeout_secs").cloned() {
-        pty_args.insert("timeout_secs".to_string(), timeout);
-    }
-    if let Some(working_dir) = args.get("working_dir").cloned() {
-        pty_args.insert("working_dir".to_string(), working_dir);
-    }
-    if let Some(response_format) = args.get("response_format").cloned() {
-        pty_args.insert("response_format".to_string(), response_format);
-    }
-    if let Some(rows) = args.get("rows").cloned() {
-        pty_args.insert("rows".to_string(), rows);
-    }
-    if let Some(cols) = args.get("cols").cloned() {
-        pty_args.insert("cols".to_string(), cols);
-    }
-    if let Some(shell) = args.get("shell").cloned() {
-        pty_args.insert("shell".to_string(), shell);
-    }
-    if let Some(login) = args.get("login").cloned() {
-        pty_args.insert("login".to_string(), login);
-    }
-    if let Some(raw_command) = args.get("raw_command").cloned() {
-        pty_args.insert("raw_command".to_string(), raw_command);
-    }
-
-    pty_args
-}
-
-#[allow(dead_code)]
-struct TerminalExecutionInput {
-    input: EnhancedTerminalInput,
-    mode_label: String,
-}
-
-#[allow(dead_code)]
-enum TerminalExecution {
-    Terminal(TerminalExecutionInput),
-    Pty { args: Value },
-}
-
-#[allow(dead_code)]
-struct TerminalCommandPayload {
-    sanitized: Map<String, Value>,
-    run_mode: RunMode,
-    mode_label: String,
-    pty_args: Option<Map<String, Value>>,
-}
-
-impl TerminalCommandPayload {
-    fn parse(args: &mut Value) -> Result<Self> {
-        normalize_terminal_payload(args)?;
-
-        let mode_label = run_mode_label(args);
-        let shell_hint = args
-            .get("shell")
-            .and_then(|value| value.as_str())
-            .map(|value| value.to_string());
-        let raw_command = convert_command_string_to_array(
-            args,
-            shell_hint.as_deref(),
-            "run_pty_cmd expects an object payload",
-        )?;
-        let command_vec = collect_command_vector(
-            args,
-            "run_pty_cmd requires a 'command' array",
-            "command array must contain only strings",
-        )?;
-        if command_vec.is_empty() {
-            return Err(anyhow!(
-                "command array is empty. run_pty_cmd requires a non-empty 'command' parameter.\n\
-                 Supported formats: \"ls -la\" or [\"ls\", \"-la\"]"
-            ));
-        }
-        if command_vec[0].trim().is_empty() {
-            return Err(anyhow!(
-                "command executable (first element) cannot be empty or whitespace-only.\n\
-                 Got command array: {:?}",
-                command_vec
-            ));
-        }
-
-        let run_mode = determine_terminal_run_mode(args)?;
-        let sanitized = build_terminal_command_payload(args, &command_vec, raw_command.as_deref());
-        let pty_args = run_mode
-            .is_pty()
-            .then(|| build_pty_args_from_terminal(args, &command_vec));
-
-        Ok(Self {
-            sanitized,
-            run_mode,
-            mode_label,
-            pty_args,
-        })
-    }
-
-    fn into_execution(self) -> Result<TerminalExecution> {
-        let TerminalCommandPayload {
-            sanitized,
-            run_mode,
-            mode_label,
-            pty_args,
-        } = self;
-
-        match run_mode {
-            RunMode::Pty => {
-                let args = pty_args
-                    .ok_or_else(|| anyhow!("failed to prepare PTY payload for terminal command"))?;
-                Ok(TerminalExecution::Pty {
-                    args: Value::Object(args),
-                })
-            }
-            RunMode::Terminal => {
-                let sanitized_value = Value::Object(sanitized);
-                let input: EnhancedTerminalInput = serde_json::from_value(sanitized_value)
-                    .context("failed to parse terminal command input")?;
-                Ok(TerminalExecution::Terminal(TerminalExecutionInput {
-                    input,
-                    mode_label,
-                }))
-            }
-        }
-    }
-}
-
-#[allow(dead_code)]
-struct TerminalCommandPlan {
-    request: PtyCommandRequest,
-    command_display: String,
-    working_directory: String,
-    mode_label: String,
-    timeout_secs: u64,
-}
-
-impl TerminalCommandPlan {
-    async fn execute(self, manager: &PtyManager) -> Result<Value> {
-        let TerminalCommandPlan {
-            request,
-            command_display,
-            working_directory,
-            mode_label,
-            timeout_secs,
-        } = self;
-
-        let result = manager.run_command(request).await?;
-        Ok(build_terminal_command_response(
-            &result,
-            &mode_label,
-            &command_display,
-            working_directory,
-            timeout_secs,
-        ))
-    }
-}
-
-#[allow(dead_code)]
-fn prepare_terminal_execution(args: &mut Value) -> Result<TerminalExecution> {
-    let payload = TerminalCommandPayload::parse(args)?;
-    payload.into_execution()
-}
-
 fn value_as_object<'a>(value: &'a Value, context: &str) -> Result<&'a Map<String, Value>> {
     value.as_object().ok_or_else(|| anyhow!("{}", context))
 }
 
-#[allow(dead_code)]
-fn value_as_object_mut<'a>(
-    value: &'a mut Value,
-    context: &str,
-) -> Result<&'a mut Map<String, Value>> {
-    value.as_object_mut().ok_or_else(|| anyhow!("{}", context))
-}
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[allow(dead_code)]
-enum RunMode {
-    Terminal,
-    Pty,
-}
 
-impl RunMode {
-    fn default_timeout(self) -> u64 {
-        match self {
-            RunMode::Terminal => DEFAULT_TERMINAL_TIMEOUT_SECS,
-            RunMode::Pty => DEFAULT_PTY_TIMEOUT_SECS,
-        }
-    }
 
-    fn is_pty(self) -> bool {
-        matches!(self, RunMode::Pty)
-    }
-}
-
-fn resolve_run_mode(args: &Value) -> RunMode {
-    if let Some(mode_value) = args.get("mode").and_then(|value| value.as_str()) {
-        return match mode_value {
-            "pty" => RunMode::Pty,
-            "terminal" => RunMode::Terminal,
-            "auto" => detect_auto_mode(args),
-            _ => RunMode::Terminal,
-        };
-    }
-
-    if args
-        .get("tty")
-        .and_then(|value| value.as_bool())
-        .unwrap_or(false)
-    {
-        return RunMode::Pty;
-    }
-
-    detect_auto_mode(args)
-}
-
-fn detect_auto_mode(args: &Value) -> RunMode {
-    if let Some(command) = primary_command(args) {
-        if should_use_pty_for_command(&command) {
-            return RunMode::Pty;
-        }
-    }
-
-    RunMode::Terminal
-}
-
-fn primary_command(args: &Value) -> Option<String> {
-    let command_value = args.get("command")?;
-
-    if let Some(command) = command_value.as_str() {
-        return Some(command.to_string());
-    }
-
-    command_value
-        .as_array()
-        .and_then(|values| values.get(0))
-        .and_then(|value| value.as_str())
-        .map(|value| value.to_string())
-}
-
-fn should_use_pty_for_command(command: &str) -> bool {
-    INTERACTIVE_COMMANDS
-        .iter()
-        .any(|candidate| command.contains(candidate))
-}
 
 fn parse_command_parts(
     payload: &Map<String, Value>,
@@ -2842,11 +2189,11 @@ fn parse_command_parts(
 
     if parts.is_empty() {
         return Err(anyhow!(
-            "{}\n\nSupported formats:\n\
-             - command: \"ls -la\"\n\
-             - command: [\"ls\", \"-la\"]\n\
-             - command.0: \"ls\", command.1: \"-la\"\n\
-             - command: \"cargo build\", args: [\"--release\"]",
+            "Error: Invalid 'run_pty_cmd' arguments. Expected JSON object with 'command' (string or array). Optional: 'args' (array). \
+             Format 1 (string command): {{\"command\": \"ls -la\"}} \
+             Format 2 (array command): {{\"command\": [\"ls\", \"-la\"]}} \
+             Format 3 (command + args): {{\"command\": \"cargo\", \"args\": [\"build\", \"--release\"]}}. \
+             {}",
             empty_error
         ));
     }
@@ -3609,11 +2956,6 @@ fn quote_windows_argument(arg: &str) -> String {
 
     result.push('"');
     result
-}
-
-#[allow(dead_code)]
-fn sanitize_command_string(command: &str) -> Cow<'_, str> {
-    Cow::Borrowed(command.trim())
 }
 
 fn tokenize_command_string(command: &str, _shell_hint: Option<&str>) -> Result<Vec<String>> {

@@ -1153,8 +1153,24 @@ impl ToolRegistry {
         }
     }
 
+    /// Mark a tool as pre-approved, but only for specific internal diagnostic tools.
+    /// This prevents accidental bypass of permission gates for arbitrary tools.
     pub fn mark_tool_preapproved(&mut self, name: &str) {
-        self.policy_gateway.preapprove(name);
+        // Allowlist of tools that can be preapproved (typically for slash commands)
+        const PREAPPROVABLE_TOOLS: &[&str] = &[
+            "debug_agent",
+            "analyze_agent",
+            "get_errors",
+        ];
+        
+        if PREAPPROVABLE_TOOLS.contains(&name) {
+            self.policy_gateway.preapprove(name);
+        } else {
+            tracing::warn!(
+                tool = %name,
+                "Attempted to preapprove non-whitelisted tool. Use permission pipeline instead."
+            );
+        }
     }
 
     pub async fn persist_mcp_tool_policy(&mut self, name: &str, policy: ToolPolicy) -> Result<()> {

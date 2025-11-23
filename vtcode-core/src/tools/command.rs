@@ -45,6 +45,7 @@ impl CommandTool {
         );
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) async fn prepare_invocation(
         &self,
         input: &EnhancedTerminalInput,
