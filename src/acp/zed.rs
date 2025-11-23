@@ -1192,6 +1192,26 @@ impl ZedAgent {
     }
 
     async fn execute_local_tool(&self, tool_name: &str, args: &Value) -> ToolExecutionReport {
+        // SECURITY FIX: Block sensitive tools from external ACP clients
+        // These are internal diagnostic and code execution tools that should not be exposed
+        let restricted_tools = [
+            "debug_agent",    // Internal diagnostic tool
+            "analyze_agent",  // Internal diagnostic tool
+            "get_errors",     // Internal diagnostic tool
+            "execute_code",   // Code execution tool - dangerous for external clients
+        ];
+        
+        if restricted_tools.contains(&tool_name) {
+            warn!(
+                tool = tool_name,
+                "Attempted execution of restricted tool from external ACP client"
+            );
+            return ToolExecutionReport::failure(
+                tool_name,
+                &format!("Tool '{}' is not available to external clients", tool_name),
+            );
+        }
+
         let result = {
             let mut registry = self.local_tool_registry.borrow_mut();
             registry.execute_tool(tool_name, args.clone()).await

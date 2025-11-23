@@ -29,7 +29,13 @@ const AUTO_ALLOW_TOOLS: &[&str] = &[
     tools::LIST_FILES,
     tools::UPDATE_PLAN,
     tools::READ_FILE,
-    tools::EDIT_FILE,
+    tools::SEARCH_TOOLS,
+    tools::GET_ERRORS,
+    "list_skills",
+    "search_skills",
+    tools::DEBUG_AGENT,
+    tools::ANALYZE_AGENT,
+    tools::LIST_PTY_SESSIONS,
 ];
 
 /// Tool execution policy

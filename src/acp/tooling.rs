@@ -32,6 +32,21 @@ pub const TOOL_LIST_FILES_MESSAGE_KEY: &str = "message";
 pub const TOOL_LIST_FILES_RESULT_KEY: &str = "result";
 pub const TOOL_LIST_FILES_SUMMARY_MAX_ITEMS: usize = 20;
 
+/// Enum of tools available via the Agent Client Protocol (ACP) integration with Zed
+/// 
+/// Only a subset of VTCode tools are exposed via ACP for security and integration reasons:
+/// - **ReadFile**: Safe, non-invasive file reading within workspace bounds
+/// - **ListFiles**: Safe file discovery and pattern matching within workspace
+/// 
+/// Tools NOT exposed via ACP (and why):
+/// - Terminal/PTY operations (run_pty_cmd, etc.): Requires sandboxing not available in Zed context
+/// - Code execution: Potential security risk in editor integration
+/// - Patch application: Complex state management not suitable for ACP
+/// - Write operations: Reserved for local-only agent to prevent unintended edits
+/// - Skill management: VTCode-specific feature, not relevant to Zed integration
+/// - Diagnostic tools (get_errors, debug_agent, analyze_agent): Internal agent state, not for editor
+/// - Web fetch: Network access restricted in editor context
+/// - Search tools: Integrated into Zed's own search functionality
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SupportedTool {
     ReadFile,

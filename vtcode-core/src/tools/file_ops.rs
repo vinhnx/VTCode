@@ -266,7 +266,7 @@ impl FileOpsTool {
         let file_name = input
             .name_pattern
             .as_ref()
-            .ok_or_else(|| anyhow!("Error: Missing 'name_pattern'. Example: list_files(path='.', mode='find_name', name_pattern='Cargo.toml')"))?;
+            .ok_or_else(|| anyhow!("Error: Invalid 'list_files' arguments. When mode='find_name', must provide name_pattern (string). Example: {{\"path\": \".\", \"mode\": \"find_name\", \"name_pattern\": \"Cargo.toml\"}}"))?;
         let search_path = self.workspace_root.join(&input.path);
 
         for entry in WalkDir::new(&search_path).max_depth(10) {
@@ -461,7 +461,7 @@ impl FileOpsTool {
         let content_pattern = input
             .content_pattern
             .as_ref()
-            .ok_or_else(|| anyhow!("Error: Missing 'content_pattern'. Example: list_files(path='src', mode='find_content', content_pattern='fn main')"))?;
+            .ok_or_else(|| anyhow!("Error: Invalid 'list_files' arguments. When mode='find_content', must provide content_pattern (string). Example: {{\"path\": \"src\", \"mode\": \"find_content\", \"content_pattern\": \"fn main\"}}"))?;
 
         let search_root = self.workspace_root.join(&input.path);
         if self.should_exclude(&search_root).await {
@@ -698,7 +698,7 @@ impl FileOpsTool {
     /// Read file with intelligent path resolution, paging, and offset functionality
     pub async fn read_file(&self, args: Value) -> Result<Value> {
         let input: Input = serde_json::from_value(args)
-            .context("Error: Invalid 'read_file' arguments. Required: {{ path: string }}. Optional: {{ max_bytes: number, offset_bytes: number, page_size_bytes: number, offset_lines: number, page_size_lines: number }}. Example: read_file({{\"path\": \"src/main.rs\", \"offset_lines\": 100, \"page_size_lines\": 50}})")?;
+            .context("Error: Invalid 'read_file' arguments. Expected JSON object with: path (required, string). Optional: max_bytes, offset_bytes, page_size_bytes, offset_lines, page_size_lines. Example: {\"path\": \"src/main.rs\", \"offset_lines\": 100, \"page_size_lines\": 50}")?;
 
         // Try to resolve the file path
         let potential_paths = self.resolve_file_path(&input.path)?;
@@ -794,7 +794,7 @@ impl FileOpsTool {
         }
 
         Err(anyhow!(
-            "Error: File not found: {}. Tried paths: {}. Suggestions: 1) Check the file path and case sensitivity, 2) Use 'list_files' to explore the directory structure, 3) Try case-insensitive search with just the filename. Example: read_file({{\"path\": \"src/main.rs\"}})",
+            "Error: File not found: {}. Tried paths: {}. Suggestions: 1) Check the file path and case sensitivity, 2) Use list_files to explore the directory structure, 3) Try case-insensitive search with just the filename. Example: {{\"path\": \"src/main.rs\"}}",
             input.path,
             potential_paths
                 .iter()
@@ -807,7 +807,7 @@ impl FileOpsTool {
     /// Create a brand-new file, returning an error if the target already exists.
     pub async fn create_file(&self, args: Value) -> Result<Value> {
         let input: CreateInput = serde_json::from_value(args).context(
-            "Error: Invalid 'create_file' arguments. Required: { path: string, content: string }. Example: create_file({\"path\": \"src/lib.rs\", \"content\": \"fn main() {}\\n\" })",
+            "Error: Invalid 'create_file' arguments. Expected JSON object with: path (required, string), content (required, string). Example: {\"path\": \"src/lib.rs\", \"content\": \"fn main() {}\\n\"}",
         )?;
 
         let CreateInput {
@@ -858,7 +858,7 @@ impl FileOpsTool {
     /// Delete a file or directory (with recursive flag).
     pub async fn delete_file(&self, args: Value) -> Result<Value> {
         let input: DeleteInput = serde_json::from_value(args).context(
-            "Error: Invalid 'delete_file' arguments. Required: { path: string }. Optional: { recursive: bool, force: bool }. Example: delete_file({\"path\": \"src/lib.rs\"})",
+            "Error: Invalid 'delete_file' arguments. Expected JSON object with: path (required, string). Optional: recursive (bool), force (bool). Example: {\"path\": \"src/lib.rs\"}",
         )?;
 
         let DeleteInput {
@@ -942,7 +942,7 @@ impl FileOpsTool {
     /// Write file with various modes and chunking support for large content
     pub async fn write_file(&self, args: Value) -> Result<Value> {
         let input: WriteInput = serde_json::from_value(args)
-            .context("Error: Invalid 'write_file' arguments. Required: {{ path: string, content: string }}. Optional: {{ mode: 'overwrite'|'append'|'skip_if_exists' }}. Example: write_file({{\"path\": \"README.md\", \"content\": \"Hello\", \"mode\": \"overwrite\"}})")?;
+            .context("Error: Invalid 'write_file' arguments. Expected JSON object with: path (required, string), content (required, string). Optional: mode (string, one of: overwrite, append, skip_if_exists). Example: {\"path\": \"README.md\", \"content\": \"Hello\", \"mode\": \"overwrite\"}")?;
         let file_path = self.normalize_and_validate_user_path(&input.path).await?;
 
         if self.should_exclude(&file_path).await {
@@ -1434,7 +1434,7 @@ mod tests {
 impl Tool for FileOpsTool {
     async fn execute(&self, args: Value) -> Result<Value> {
         let input: ListInput = serde_json::from_value(args).context(
-            "Error: Invalid 'list_files' arguments. Required: {{ path: string }}. Optional: {{ mode, max_items, page, per_page, include_hidden, response_format }}. Example: list_files({{\"path\": \"src\", \"page\": 1, \"per_page\": 50, \"response_format\": \"concise\"}})",
+            "Error: Invalid 'list_files' arguments. Expected JSON object with: path (required, string). Optional: mode (string), max_items (number), page (number), per_page (number), include_hidden (bool), response_format (string). Example: {\"path\": \"src\", \"page\": 1, \"per_page\": 50, \"response_format\": \"concise\"}",
         )?;
 
         let mode_clone = input.mode.clone();
