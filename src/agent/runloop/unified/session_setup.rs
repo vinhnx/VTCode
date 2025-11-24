@@ -381,7 +381,7 @@ pub(crate) async fn initialize_session_ui(
 ) -> Result<SessionUISetup> {
     use crate::hooks::lifecycle::{LifecycleHookEngine, SessionEndReason, SessionStartTrigger};
     use vtcode_core::config::constants::ui;
-    use vtcode_core::ui::tui::{InlineEvent, spawn_session};
+    use vtcode_core::ui::tui::InlineEvent;
 
     let session_trigger = if resume_state.is_some() {
         SessionStartTrigger::Resume
