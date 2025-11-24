@@ -38,7 +38,7 @@ use vtcode_core::tools::ToolRegistry;
 use vtcode_core::tools::build_function_declarations_with_mode;
 use vtcode_core::tools::{SearchMetrics, ToolResultCache};
 use vtcode_core::ui::theme;
-use vtcode_core::ui::tui::{InlineEventCallback, InlineHandle, InlineSession, theme_from_styles};
+use vtcode_core::ui::tui::{InlineEventCallback, InlineHandle, InlineSession, theme_from_styles, spawn_session_with_prompts};
 use vtcode_core::ui::user_confirmation::TaskComplexity;
 use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_core::utils::session_archive::{SessionArchive, SessionArchiveMetadata};
@@ -440,13 +440,14 @@ pub(crate) async fn initialize_session_ui(
         })
     };
 
-    let session = spawn_session(
+    let session = spawn_session_with_prompts(
         theme_spec.clone(),
         default_placeholder.clone(),
         config.ui_surface,
         inline_rows,
         show_timeline_pane,
         Some(interrupt_callback),
+        Some(session_state.custom_prompts.clone()),
     )
     .context("failed to launch inline session")?;
     let handle = session.clone_inline_handle();

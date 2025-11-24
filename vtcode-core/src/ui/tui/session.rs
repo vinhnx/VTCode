@@ -374,7 +374,7 @@ impl Session {
             InlineCommand::ClearScreen => {
                 self.clear_screen();
             }
-            InlineCommand::SuspendEventLoop | InlineCommand::ResumeEventLoop => {
+            InlineCommand::SuspendEventLoop | InlineCommand::ResumeEventLoop | InlineCommand::ClearInputQueue => {
                 // Handled by drive_terminal
             }
             InlineCommand::Shutdown => {
@@ -440,7 +440,6 @@ impl Session {
     /// 1. Calling the callback if present
     /// 2. Sending the event through the channel
     ///
-
     pub fn render(&mut self, frame: &mut Frame<'_>) {
         let viewport = frame.area();
         if viewport.height == 0 || viewport.width == 0 {

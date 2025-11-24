@@ -20,39 +20,43 @@ use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::state::{CtrlCState, SessionStats};
 
+pub(crate) struct SessionStatusContext<'a> {
+    pub config: &'a CoreAgentConfig,
+    pub message_count: usize,
+    pub stats: &'a SessionStats,
+    pub token_budget: &'a TokenBudgetManager,
+    pub token_budget_enabled: bool,
+    pub max_tokens: usize,
+    pub available_tools: usize,
+}
+
 pub(crate) async fn display_session_status(
     renderer: &mut AnsiRenderer,
-    config: &CoreAgentConfig,
-    message_count: usize,
-    stats: &SessionStats,
-    token_budget: &TokenBudgetManager,
-    token_budget_enabled: bool,
-    max_tokens: usize,
-    available_tools: usize,
+    ctx: SessionStatusContext<'_>,
 ) -> Result<()> {
     renderer.line(MessageStyle::Info, "Session status:")?;
     renderer.line(
         MessageStyle::Info,
-        &format!("  Model: {} ({})", config.model, config.provider),
+        &format!("  Model: {} ({})", ctx.config.model, ctx.config.provider),
     )?;
     renderer.line(
         MessageStyle::Info,
-        &format!("  Workspace: {}", config.workspace.display()),
+        &format!("  Workspace: {}", ctx.config.workspace.display()),
     )?;
     renderer.line(
         MessageStyle::Info,
-        &format!("  Reasoning effort: {}", config.reasoning_effort),
+        &format!("  Reasoning effort: {}", ctx.config.reasoning_effort),
     )?;
     renderer.line(
         MessageStyle::Info,
-        &format!("  Messages so far: {}", message_count),
+        &format!("  Messages so far: {}", ctx.message_count),
     )?;
 
-    let used_tools = stats.sorted_tools();
+    let used_tools = ctx.stats.sorted_tools();
     if used_tools.is_empty() {
         renderer.line(
             MessageStyle::Info,
-            &format!("  Tools used: 0 / {}", available_tools),
+            &format!("  Tools used: 0 / {}", ctx.available_tools),
         )?;
     } else {
         renderer.line(
@@ -60,7 +64,7 @@ pub(crate) async fn display_session_status(
             &format!(
                 "  Tools used: {} / {} ({})",
                 used_tools.len(),
-                available_tools,
+                ctx.available_tools,
                 used_tools.join(", ")
             ),
         )?;
@@ -68,9 +72,9 @@ pub(crate) async fn display_session_status(
 
     display_token_cost(
         renderer,
-        token_budget,
-        token_budget_enabled,
-        max_tokens,
+        ctx.token_budget,
+        ctx.token_budget_enabled,
+        ctx.max_tokens,
         "  ",
     )
     .await?;

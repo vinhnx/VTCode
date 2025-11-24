@@ -34,9 +34,8 @@ impl Session {
             if let Some((_start, _end, query)) =
                 extract_file_reference(self.input_manager.content(), self.input_manager.cursor())
             {
-                let is_empty = query.is_empty();
                 palette.set_filter(query);
-                if !self.file_palette_active && !is_empty {
+                if !self.file_palette_active {
                     self.file_palette_active = true;
                 }
             } else if self.file_palette_active {
@@ -155,9 +154,8 @@ impl Session {
             if let Some((_start, _end, query)) =
                 extract_prompt_reference(self.input_manager.content(), self.input_manager.cursor())
             {
-                let is_empty = query.is_empty();
                 palette.set_filter(query);
-                if !self.prompt_palette_active && !is_empty {
+                if !self.prompt_palette_active {
                     self.prompt_palette_active = true;
                 }
             } else if self.prompt_palette_active {

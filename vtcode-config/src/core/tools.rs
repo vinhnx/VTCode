@@ -159,16 +159,13 @@ const DEFAULT_TOOL_POLICIES: &[(&str, ToolPolicy)] = &[
     (tools::LIST_FILES, ToolPolicy::Allow),
     (tools::GREP_FILE, ToolPolicy::Allow),
     (tools::READ_FILE, ToolPolicy::Allow),
-    
     // File operations (write/create)
     (tools::WRITE_FILE, ToolPolicy::Allow),
     (tools::EDIT_FILE, ToolPolicy::Allow),
     (tools::CREATE_FILE, ToolPolicy::Allow),
-    
     // File operations (destructive - require confirmation)
     (tools::DELETE_FILE, ToolPolicy::Prompt),
     (tools::APPLY_PATCH, ToolPolicy::Prompt),
-    
     // PTY/Terminal operations
     (tools::RUN_PTY_CMD, ToolPolicy::Allow),
     (tools::CREATE_PTY_SESSION, ToolPolicy::Allow),
@@ -177,20 +174,16 @@ const DEFAULT_TOOL_POLICIES: &[(&str, ToolPolicy)] = &[
     (tools::RESIZE_PTY_SESSION, ToolPolicy::Allow),
     (tools::SEND_PTY_INPUT, ToolPolicy::Prompt),
     (tools::CLOSE_PTY_SESSION, ToolPolicy::Allow),
-    
     // Code execution (requires confirmation)
     (tools::EXECUTE_CODE, ToolPolicy::Prompt),
-    
     // Planning and meta tools
     (tools::UPDATE_PLAN, ToolPolicy::Allow),
     (tools::SEARCH_TOOLS, ToolPolicy::Allow),
-    
     // Skill management (non-destructive)
     (tools::SAVE_SKILL, ToolPolicy::Allow),
     (tools::LOAD_SKILL, ToolPolicy::Allow),
     (tools::LIST_SKILLS, ToolPolicy::Allow),
     (tools::SEARCH_SKILLS, ToolPolicy::Allow),
-    
     // Diagnostic and introspection tools
     // GET_ERRORS: Requires session state inspection (diagnostic, low risk)
     (tools::GET_ERRORS, ToolPolicy::Allow),
@@ -198,7 +191,6 @@ const DEFAULT_TOOL_POLICIES: &[(&str, ToolPolicy)] = &[
     (tools::DEBUG_AGENT, ToolPolicy::Allow),
     // ANALYZE_AGENT: Analyzes agent behavior patterns (diagnostic, read-only)
     (tools::ANALYZE_AGENT, ToolPolicy::Allow),
-    
     // Web operations (requires confirmation)
     (tools::WEB_FETCH, ToolPolicy::Prompt),
 ];

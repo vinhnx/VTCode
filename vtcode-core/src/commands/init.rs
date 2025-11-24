@@ -57,7 +57,7 @@ pub struct GenerateAgentsFileReport {
 }
 
 /// Handle the init command - analyze project and generate AGENTS.md
-pub async fn handle_init_command(registry: &mut ToolRegistry, workspace: &PathBuf) -> Result<()> {
+pub async fn handle_init_command(registry: &mut ToolRegistry, workspace: &Path) -> Result<()> {
     println!(
         "{}",
         style("Initializing project with AGENTS.md...")
@@ -143,17 +143,16 @@ async fn write_agents_file(
         )
         .await?;
 
-    if !overwrite {
-        if response
+    if !overwrite
+        && response
             .get("skipped")
             .and_then(|value| value.as_bool())
             .unwrap_or(false)
-        {
-            return Ok(GenerateAgentsFileReport {
-                path: agents_md_path,
-                status: GenerateAgentsFileStatus::SkippedExisting,
-            });
-        }
+    {
+        return Ok(GenerateAgentsFileReport {
+            path: agents_md_path,
+            status: GenerateAgentsFileStatus::SkippedExisting,
+        });
     }
 
     let status = if existed_before {
@@ -171,7 +170,7 @@ async fn write_agents_file(
 /// Analyze the current project structure
 async fn analyze_project(
     registry: &mut ToolRegistry,
-    workspace: &PathBuf,
+    workspace: &Path,
 ) -> Result<ProjectAnalysis> {
     let project_name = workspace
         .file_name()
@@ -201,12 +200,12 @@ async fn analyze_project(
         .execute_tool(tools::LIST_FILES, json!({"path": ".", "max_items": 100}))
         .await?;
 
-    if let Some(files) = root_files.get("files") {
-        if let Some(files_array) = files.as_array() {
-            for file_obj in files_array {
-                if let Some(path) = file_obj.get("path").and_then(|p| p.as_str()) {
-                    analyze_file(&mut analysis, path, registry).await?;
-                }
+    if let Some(files) = root_files.get("files")
+        && let Some(files_array) = files.as_array()
+    {
+        for file_obj in files_array {
+            if let Some(path) = file_obj.get("path").and_then(|p| p.as_str()) {
+                analyze_file(&mut analysis, path, registry).await?;
             }
         }
     }
@@ -348,10 +347,10 @@ fn extract_cargo_dependencies(analysis: &mut ProjectAnalysis, content: &str) {
     // Simple regex-like parsing for dependencies
     for line in content.lines() {
         let line = line.trim();
-        if line.starts_with('"') && line.contains(" = ") {
-            if let Some(dep_name) = line.split('"').nth(1) {
-                deps.push(dep_name.to_string());
-            }
+        if line.starts_with('"') && line.contains(" = ")
+            && let Some(dep_name) = line.split('"').nth(1)
+        {
+            deps.push(dep_name.to_string());
         }
     }
 
@@ -374,14 +373,13 @@ fn extract_package_dependencies(analysis: &mut ProjectAnalysis, content: &str) {
                 && line.contains(":")
                 && !line.contains("{")
                 && !line.contains("}")
+                && let Some(dep_name) = line.split('"').nth(1)
             {
-                if let Some(dep_name) = line.split('"').nth(1) {
-                    if !dep_name.is_empty()
-                        && dep_name != "dependencies"
-                        && dep_name != "devDependencies"
-                    {
-                        deps.push(dep_name.to_string());
-                    }
+                if !dep_name.is_empty()
+                    && dep_name != "dependencies"
+                    && dep_name != "devDependencies"
+                {
+                    deps.push(dep_name.to_string());
                 }
             }
         }

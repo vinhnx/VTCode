@@ -228,12 +228,11 @@ Cargo.lock
 
     match test_build_result {
         Ok(result) => {
-            if let Some(files) = result.get("files") {
-                if let Some(files_array) = files.as_array() {
-                    if !files_array.is_empty() {
-                        println!("   {} Project structure verified", style("✓").green());
-                    }
-                }
+            if let Some(files) = result.get("files")
+                && let Some(files_array) = files.as_array()
+                && !files_array.is_empty()
+            {
+                println!("   {} Project structure verified", style("✓").green());
             }
         }
         Err(e) => println!(

@@ -13,6 +13,7 @@ use vtcode_core::config::constants::ui;
 use vtcode_core::config::{StatusLineConfig, StatusLineMode};
 use vtcode_core::models::ModelId;
 use vtcode_core::ui::tui::InlineHandle;
+use vtcode_core::utils::ansi_parser::strip_ansi;
 
 use crate::agent::runloop::git::{GitStatusSummary, git_status_summary};
 
@@ -339,7 +340,8 @@ async fn run_status_line_command(
         .lines()
         .next()
         .map(|line| line.trim_end().to_string())
-        .filter(|line| !line.is_empty());
+        .filter(|line| !line.is_empty())
+        .map(|line| strip_ansi(&line));
 
     Ok(first_line)
 }

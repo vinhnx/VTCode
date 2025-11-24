@@ -5,9 +5,7 @@ use crate::tools::editing::PatchLine;
 use crate::tools::grep_file::GrepSearchInput;
 use crate::tools::traits::Tool;
 use crate::tools::types::VTCodePtySession;
-use crate::tools::{
-    PlanUpdateResult, UpdatePlanArgs,
-};
+use crate::tools::{PlanUpdateResult, UpdatePlanArgs};
 
 use crate::utils::diff::{DiffOptions, compute_diff};
 use anyhow::{Context, Result, anyhow};
@@ -656,8 +654,6 @@ impl ToolRegistry {
     pub(super) fn run_pty_cmd_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move { self.execute_run_pty_command(args).await })
     }
-
-
 
     pub(super) fn create_pty_session_executor(
         &mut self,
@@ -1407,8 +1403,6 @@ impl ToolRegistry {
         }))
     }
 
-
-
     async fn execute_run_pty_command(&mut self, args: Value) -> Result<Value> {
         let payload = value_as_object(&args, "run_pty_cmd expects an object payload")?;
         let setup = self.prepare_ephemeral_pty_command(payload).await?;
@@ -1650,8 +1644,6 @@ impl ToolRegistry {
             sleep(poll_interval).await;
         }
     }
-
-
 
     async fn execute_create_pty_session(&mut self, args: Value) -> Result<Value> {
         let payload = value_as_object(&args, "create_pty_session expects an object payload")?;
@@ -2076,10 +2068,6 @@ impl ToolRegistry {
     }
 }
 
-
-
-
-
 fn parse_timeout_secs(value: Option<&Value>, fallback: u64) -> Result<u64> {
     let parsed = value
         .map(|raw| {
@@ -2101,10 +2089,6 @@ fn validated_timeout_secs(raw: Option<u64>, fallback: u64) -> Result<u64> {
 fn value_as_object<'a>(value: &'a Value, context: &str) -> Result<&'a Map<String, Value>> {
     value.as_object().ok_or_else(|| anyhow!("{}", context))
 }
-
-
-
-
 
 fn parse_command_parts(
     payload: &Map<String, Value>,

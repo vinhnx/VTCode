@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::RwLock;
 
-use crate::agent::runloop::unified::state::{CtrlCState, SessionStats};
+use crate::agent::runloop::unified::state::CtrlCState;
 use vtcode_core::acp::ToolPermissionCache;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::core::agent::snapshots::SnapshotManager;
@@ -51,41 +51,44 @@ pub struct TurnLoopOutcome {
 }
 
 // Apply Turn Outcome: Modify the canonical conversation history and session state for the outcome
+pub struct TurnOutcomeContext<'a> {
+    pub conversation_history: &'a mut Vec<uni::Message>,
+    pub renderer: &'a mut AnsiRenderer,
+    pub handle: &'a InlineHandle,
+    pub ctrl_c_state: &'a Arc<CtrlCState>,
+    pub default_placeholder: &'a Option<String>,
+    pub checkpoint_manager: Option<&'a SnapshotManager>,
+    pub next_checkpoint_turn: &'a mut usize,
+    pub session_end_reason: &'a mut crate::hooks::lifecycle::SessionEndReason,
+}
+
+// Apply Turn Outcome: Modify the canonical conversation history and session state for the outcome
 pub async fn apply_turn_outcome(
     outcome: &TurnLoopOutcome,
-    conversation_history: &mut Vec<uni::Message>,
-    renderer: &mut AnsiRenderer,
-    handle: &InlineHandle,
-    ctrl_c_state: &Arc<CtrlCState>,
-    default_placeholder: &Option<String>,
-    checkpoint_manager: Option<&SnapshotManager>,
-    next_checkpoint_turn: &mut usize,
-    _session_stats: &mut SessionStats,
-    session_end_reason: &mut crate::hooks::lifecycle::SessionEndReason,
-    _pruning_ledger: &Arc<RwLock<PruningDecisionLedger>>,
+    ctx: TurnOutcomeContext<'_>,
 ) -> Result<()> {
     match outcome.result {
         TurnLoopResult::Cancelled => {
-            if ctrl_c_state.is_exit_requested() {
-                *session_end_reason = crate::hooks::lifecycle::SessionEndReason::Exit;
+            if ctx.ctrl_c_state.is_exit_requested() {
+                *ctx.session_end_reason = crate::hooks::lifecycle::SessionEndReason::Exit;
                 return Ok(());
             }
-            renderer.line_if_not_empty(MessageStyle::Output)?;
-            renderer.line(
+            ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
+            ctx.renderer.line(
                 MessageStyle::Info,
                 "Interrupted current task. Press Ctrl+C again to exit.",
             )?;
-            handle.clear_input();
-            handle.set_placeholder(default_placeholder.clone());
-            ctrl_c_state.clear_cancel();
-            *session_end_reason = crate::hooks::lifecycle::SessionEndReason::Cancelled;
+            ctx.handle.clear_input();
+            ctx.handle.set_placeholder(ctx.default_placeholder.clone());
+            ctx.ctrl_c_state.clear_cancel();
+            *ctx.session_end_reason = crate::hooks::lifecycle::SessionEndReason::Cancelled;
             Ok(())
         }
         TurnLoopResult::Aborted => {
-            if let Some(last) = conversation_history.last() {
+            if let Some(last) = ctx.conversation_history.last() {
                 match last.role {
                     uni::MessageRole::Assistant | uni::MessageRole::Tool => {
-                        let _ = conversation_history.pop();
+                        let _ = ctx.conversation_history.pop();
                     }
                     _ => {}
                 }
@@ -93,20 +96,20 @@ pub async fn apply_turn_outcome(
             Ok(())
         }
         TurnLoopResult::Blocked { reason: _ } => {
-            *conversation_history = outcome.working_history.clone();
-            handle.clear_input();
-            handle.set_placeholder(default_placeholder.clone());
+            *ctx.conversation_history = outcome.working_history.clone();
+            ctx.handle.clear_input();
+            ctx.handle.set_placeholder(ctx.default_placeholder.clone());
             Ok(())
         }
         TurnLoopResult::Completed => {
-            *conversation_history = outcome.working_history.clone();
-            if let Some(manager) = checkpoint_manager {
+            *ctx.conversation_history = outcome.working_history.clone();
+            if let Some(manager) = ctx.checkpoint_manager {
                 let conversation_snapshot: Vec<SessionMessage> = outcome
                     .working_history
                     .iter()
                     .map(SessionMessage::from)
                     .collect();
-                let turn_number = *next_checkpoint_turn;
+                let turn_number = *ctx.next_checkpoint_turn;
                 let description = outcome
                     .working_history
                     .last()
@@ -124,7 +127,7 @@ pub async fn apply_turn_outcome(
                     .await
                 {
                     Ok(Some(meta)) => {
-                        *next_checkpoint_turn = meta.turn_number.saturating_add(1);
+                        *ctx.next_checkpoint_turn = meta.turn_number.saturating_add(1);
                     }
                     Ok(None) => {}
                     Err(err) => tracing::warn!(
@@ -142,8 +145,8 @@ pub async fn apply_turn_outcome(
                     || text.contains("I have updated")
                     || text.contains("updated the `");
                 if claims_write && !outcome.any_write_effect {
-                    renderer.line_if_not_empty(MessageStyle::Output)?;
-                    renderer.line(
+                    ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
+                    ctx.renderer.line(
                         MessageStyle::Info,
                         "Note: The assistant mentioned edits but no write tool ran.",
                     )?;

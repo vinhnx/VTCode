@@ -137,13 +137,14 @@ impl LintingOrchestrator {
     fn parse_clippy_output(&self, output: &str, base_path: &Path) -> Vec<LintFinding> {
         let mut findings = Vec::new();
         for line in output.lines() {
+
             if let Ok(json) = serde_json::from_str::<Value>(line)
                 && json.get("reason").and_then(Value::as_str) == Some("compiler-message")
+                && let Some(message) = json.get("message")
+                && let Some(spans) = message.get("spans").and_then(Value::as_array)
             {
-                if let Some(message) = json.get("message") {
-                    if let Some(spans) = message.get("spans").and_then(Value::as_array) {
-                        for span in spans {
-                            if span.get("is_primary").and_then(Value::as_bool) == Some(true) {
+                for span in spans {
+                    if span.get("is_primary").and_then(Value::as_bool) == Some(true) {
                                 let file =
                                     span.get("file_name").and_then(Value::as_str).unwrap_or("");
                                 let line_num =
@@ -183,8 +184,7 @@ impl LintingOrchestrator {
                                 });
                             }
                         }
-                    }
-                }
+
             }
         }
         findings

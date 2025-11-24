@@ -290,9 +290,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                         session.mark_dirty();
                         return None;
                     }
-                    _ => {
-                        return None;
-                    }
+                    _ => {}
                 }
             }
 

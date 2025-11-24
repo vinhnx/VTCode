@@ -602,7 +602,7 @@ pub mod ui {
     pub const HEADER_INPUT_ENABLED: &str = "Enabled";
     pub const HEADER_INPUT_DISABLED: &str = "Disabled";
     pub const INLINE_USER_PREFIX: &str = " ";
-    pub const CHAT_INPUT_PLACEHOLDER_BOOTSTRAP: &str = "Task (@files, #prompts, /commands)";
+    pub const CHAT_INPUT_PLACEHOLDER_BOOTSTRAP: &str = "Implement {feature} in {file} (@files, #prompts, /commands, or ctrl+e to edit {file})";
     pub const CHAT_INPUT_PLACEHOLDER_FOLLOW_UP: &str =
         "Build something (tip: you can use @files, #prompts, /commands, or ctrl+e to edit {file})";
     pub const HEADER_SHORTCUT_HINT: &str = "Shortcuts: Enter=submit | Shift+Enter=newline | Ctrl/Cmd+Enter=queue | Esc=cancel | Ctrl+C=interrupt | @=file picker | #=custom prompts | /=slash commands";
@@ -758,13 +758,13 @@ pub mod tools {
     pub const WEB_FETCH: &str = "web_fetch";
     pub const SEARCH_TOOLS: &str = "search_tools";
     pub const EXECUTE_CODE: &str = "execute_code";
-    
+
     // Skill management tools
     pub const SAVE_SKILL: &str = "save_skill";
     pub const LOAD_SKILL: &str = "load_skill";
     pub const LIST_SKILLS: &str = "list_skills";
     pub const SEARCH_SKILLS: &str = "search_skills";
-    
+
     /// Returns recent errors and suggested fixes gathered from session snapshots and tool history
     pub const GET_ERRORS: &str = "get_errors";
     pub const DEBUG_AGENT: &str = "debug_agent";

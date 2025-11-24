@@ -630,13 +630,15 @@ pub async fn handle_outcome(
             let tool_count = ctx.tools.read().await.len();
             display_session_status(
                 ctx.renderer,
-                ctx.config,
-                ctx.conversation_history.len(),
-                ctx.session_stats,
-                token_budget.as_ref(),
-                ctx.token_budget_enabled,
-                ctx.trim_config.max_tokens,
-                tool_count,
+                crate::agent::runloop::unified::ui_interaction::SessionStatusContext {
+                    config: ctx.config,
+                    message_count: ctx.conversation_history.len(),
+                    stats: ctx.session_stats,
+                    token_budget: token_budget.as_ref(),
+                    token_budget_enabled: ctx.token_budget_enabled,
+                    max_tokens: ctx.trim_config.max_tokens,
+                    available_tools: tool_count,
+                },
             )
             .await?;
             Ok(SlashCommandControl::Continue)
@@ -845,9 +847,12 @@ pub async fn handle_outcome(
                 }
             });
 
-            // Suspend TUI event loop to prevent input stealing
+            // Pause event loop to prevent it from reading input while editor is running.
+            // This prevents stdin conflicts between the TUI event loop and the external editor.
             ctx.handle.suspend_event_loop();
-            // Give a small moment for the suspend command to propagate to the TUI thread
+            // Wait for pause to take effect. The event loop polls every 16ms, and might be
+            // in the middle of a poll when we send the suspend message. Wait a bit longer
+            // to ensure the pause flag is checked before the editor launches.
             tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
             match launcher.launch_editor(file_path) {
@@ -874,7 +879,7 @@ pub async fn handle_outcome(
                 }
             }
 
-            // Resume TUI event loop
+            // Resume event loop to process input again
             ctx.handle.resume_event_loop();
 
             ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
