@@ -3,6 +3,43 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Version 0.43.0] - 2025-11-09
+# [Version 0.47.3] - 2025-11-25
+
+
+### Features
+    - feat: Enhance tool policy with pre-approval allowlist, improve file operation error messages, and refine tool declarations.
+    - feat: Integrate production-grade tool improvements system
+    - feat: Implement animated thinking spinner for user input submission
+    - feat: Add comprehensive ANSI escape sequence documentation and a new core utility module for ANSI codes.
+
+
+### Bug Fixes
+    - fix: correct RUSTFLAGS invalid option and align system prompt with actual tool definitions
+    - fix: resolve all cargo clippy warnings and update rust toolchain to stable
+    - fix: Revise thinking spinner message to use first-person agent voice
+    - fix: Move thinking spinner display to after user message in transcript
+    - fix: Clear thinking spinner message on all agent response command types
+
+
+### Refactors
+    - refactor: Update ThinkingSpinner struct visibility for better encapsulation
+    - refactor: remove redundant reasoning handling, clarify intent
+
+
+### Documentation
+    - docs: update changelog for v0.47.2 [skip ci]
+    - docs: update changelog for v0.47.1 [skip ci]
+    - docs: update changelog for v0.47.0 [skip ci]
+
+
+### Chores
+    - chore: release v0.47.2
+    - chore: update VSCode extension package.json to v0.47.1 [skip ci]
+    - chore: update npm package.json to v0.47.1 [skip ci]
+    - chore: release v0.47.1
+    - chore: release v0.47.0
+    - chore: update VSCode extension package.json to v0.46.0 [skip ci]
+    - chore: update npm package.json to v0.46.0 [skip ci]
 # [Version 0.47.2] - 2025-11-25
 
 
