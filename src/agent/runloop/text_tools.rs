@@ -1426,10 +1426,7 @@ mode: overwrite
         let parsed = serde_json::json!({ "cmd": [] });
         let result = convert_harmony_args_to_tool_format("run_pty_cmd", parsed);
         assert!(result.is_err());
-        assert_eq!(
-            result.unwrap_err(),
-            "command executable cannot be empty"
-        );
+        assert_eq!(result.unwrap_err(), "command executable cannot be empty");
     }
 
     #[test]
@@ -1437,10 +1434,7 @@ mode: overwrite
         let parsed = serde_json::json!({ "cmd": "" });
         let result = convert_harmony_args_to_tool_format("run_pty_cmd", parsed);
         assert!(result.is_err());
-        assert_eq!(
-            result.unwrap_err(),
-            "command executable cannot be empty"
-        );
+        assert_eq!(result.unwrap_err(), "command executable cannot be empty");
     }
 
     #[test]
@@ -1479,9 +1473,13 @@ mode: overwrite
     fn test_parse_harmony_channel_rejects_empty_command() {
         // Harmony format parser (OpenAI/GPT-OSS): should reject tool call if command is empty
         // because convert_harmony_args_to_tool_format() returns Err which parse_channel_tool_call() rejects
-        let message = "<|start|>assistant<|channel|>commentary to=bash<|message|>{\"cmd\":\"\"}<|call|>";
+        let message =
+            "<|start|>assistant<|channel|>commentary to=bash<|message|>{\"cmd\":\"\"}<|call|>";
         let result = parse_channel_tool_call(message);
-        assert!(result.is_none(), "Should reject Harmony format with empty command");
+        assert!(
+            result.is_none(),
+            "Should reject Harmony format with empty command"
+        );
     }
 
     #[test]
@@ -1489,14 +1487,21 @@ mode: overwrite
         // Harmony format parser: should reject tool call if command array is empty
         let message = "<|start|>assistant<|channel|>commentary to=container.exec<|message|>{\"cmd\":[]}<|call|>";
         let result = parse_channel_tool_call(message);
-        assert!(result.is_none(), "Should reject Harmony format with empty array");
+        assert!(
+            result.is_none(),
+            "Should reject Harmony format with empty array"
+        );
     }
 
     #[test]
     fn test_parse_harmony_channel_rejects_whitespace_command() {
         // Harmony format parser: should reject tool call if command is whitespace-only
-        let message = "<|start|>assistant<|channel|>commentary to=bash<|message|>{\"cmd\":\"   \"}<|call|>";
+        let message =
+            "<|start|>assistant<|channel|>commentary to=bash<|message|>{\"cmd\":\"   \"}<|call|>";
         let result = parse_channel_tool_call(message);
-        assert!(result.is_none(), "Should reject Harmony format with whitespace-only command");
+        assert!(
+            result.is_none(),
+            "Should reject Harmony format with whitespace-only command"
+        );
     }
 }

@@ -58,6 +58,12 @@ impl ValidationResult {
     }
 }
 
+impl Default for ValidationResult {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Load and parse models.json
 fn load_models_json() -> Result<JsonValue> {
     // Try to load from docs/models.json relative to current dir or workspace
@@ -87,11 +93,11 @@ fn get_available_models() -> Result<HashMap<String, Vec<String>>> {
 
     if let Some(providers) = models_json.as_object() {
         for (provider_name, provider_data) in providers {
-            if let Some(provider_obj) = provider_data.as_object() {
-                if let Some(models_obj) = provider_obj.get("models").and_then(|m| m.as_object()) {
-                    let model_ids: Vec<String> = models_obj.keys().cloned().collect();
-                    result.insert(provider_name.clone(), model_ids);
-                }
+            if let Some(provider_obj) = provider_data.as_object()
+                && let Some(models_obj) = provider_obj.get("models").and_then(|m| m.as_object())
+            {
+                let model_ids: Vec<String> = models_obj.keys().cloned().collect();
+                result.insert(provider_name.clone(), model_ids);
             }
         }
     }
@@ -131,17 +137,15 @@ pub fn validate_model_exists(provider: &str, model: &str) -> Result<()> {
 fn get_model_context_window(provider: &str, model: &str) -> Result<Option<usize>> {
     let models_json = load_models_json()?;
 
-    if let Some(provider_data) = models_json.get(provider).and_then(|p| p.as_object()) {
-        if let Some(model_data) = provider_data
+    if let Some(provider_data) = models_json.get(provider).and_then(|p| p.as_object())
+        && let Some(model_data) = provider_data
             .get("models")
             .and_then(|m| m.as_object())
             .and_then(|m| m.get(model))
             .and_then(|m| m.as_object())
-        {
-            if let Some(context_size) = model_data.get("context").and_then(|c| c.as_u64()) {
-                return Ok(Some(context_size as usize));
-            }
-        }
+        && let Some(context_size) = model_data.get("context").and_then(|c| c.as_u64())
+    {
+        return Ok(Some(context_size as usize));
     }
 
     Ok(None)
@@ -162,10 +166,10 @@ pub fn validate_config(config: &VTCodeConfig, workspace: &Path) -> Result<Valida
     validate_context_window(config, &mut result);
 
     // Validate checkpointing directory if enabled
-    if config.agent.checkpointing.enabled {
-        if let Some(storage_dir) = &config.agent.checkpointing.storage_dir {
-            validate_checkpointing_dir(storage_dir, workspace, &mut result);
-        }
+    if config.agent.checkpointing.enabled
+        && let Some(storage_dir) = &config.agent.checkpointing.storage_dir
+    {
+        validate_checkpointing_dir(storage_dir, workspace, &mut result);
     }
 
     // Validate automation configuration
@@ -199,18 +203,16 @@ fn validate_agent_model(provider: &str, model: &str, result: &mut ValidationResu
 
 fn validate_context_window(config: &VTCodeConfig, result: &mut ValidationResult) {
     let context_window = config.context.max_context_tokens;
-    if context_window > 0 {
-        if let Ok(Some(model_context)) =
+    if context_window > 0
+        && let Ok(Some(model_context)) =
             get_model_context_window(&config.agent.provider, &config.agent.default_model)
-        {
-            if context_window > model_context {
-                result.add_warning(format!(
-                    "Configured context window {} exceeds model capacity {}. \
-                     The model will use its maximum context size.",
-                    context_window, model_context
-                ));
-            }
-        }
+        && context_window > model_context
+    {
+        result.add_warning(format!(
+            "Configured context window {} exceeds model capacity {}. \
+             The model will use its maximum context size.",
+            context_window, model_context
+        ));
     }
 }
 

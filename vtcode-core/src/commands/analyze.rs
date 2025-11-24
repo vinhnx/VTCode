@@ -75,17 +75,16 @@ pub async fn handle_analyze_command(
                 json!({"path": ".", "include_hidden": false}),
             )
             .await;
-        if let Ok(result) = check_file {
-            if let Some(files) = result.get("files") {
-                if let Some(files_array) = files.as_array() {
-                    for file_obj in files_array {
-                        if let Some(path) = file_obj.get("path") {
-                            if path.as_str().unwrap_or("") == file {
-                                println!("   {} Detected: {}", style("Detected").green(), file);
-                                break;
-                            }
-                        }
-                    }
+        if let Ok(result) = check_file
+            && let Some(files) = result.get("files")
+            && let Some(files_array) = files.as_array()
+        {
+            for file_obj in files_array {
+                if let Some(path) = file_obj.get("path")
+                    && path.as_str().unwrap_or("") == file
+                {
+                    println!("   {} Detected: {}", style("Detected").green(), file);
+                    break;
                 }
             }
         }
@@ -102,19 +101,16 @@ pub async fn handle_analyze_command(
                 json!({"path": config_file, "max_bytes": 2000}),
             )
             .await;
-        match read_result {
-            Ok(result) => {
-                println!(
-                    "   {} Read {} ({} bytes)",
-                    style("Read").green(),
-                    config_file,
-                    result
-                        .get("metadata")
-                        .and_then(|m| m.get("size"))
-                        .unwrap_or(&serde_json::json!(null))
-                );
-            }
-            Err(_) => {} // File doesn't exist, that's ok
+        if let Ok(result) = read_result {
+            println!(
+                "   {} Read {} ({} bytes)",
+                style("Read").green(),
+                config_file,
+                result
+                    .get("metadata")
+                    .and_then(|m| m.get("size"))
+                    .unwrap_or(&serde_json::json!(null))
+            );
         }
     }
 
@@ -130,21 +126,20 @@ pub async fn handle_analyze_command(
                 json!({"path": ".", "include_hidden": false}),
             )
             .await;
-        if let Ok(result) = check_dir {
-            if let Some(files) = result.get("files") {
-                if let Some(files_array) = files.as_array() {
-                    for file_obj in files_array {
-                        if let Some(path) = file_obj.get("path") {
-                            if path.as_str().unwrap_or("") == dir {
-                                println!(
-                                    "   {} Found source directory: {}",
-                                    style("Found").green(),
-                                    dir
-                                );
-                                break;
-                            }
-                        }
-                    }
+        if let Ok(result) = check_dir
+            && let Some(files) = result.get("files")
+            && let Some(files_array) = files.as_array()
+        {
+            for file_obj in files_array {
+                if let Some(path) = file_obj.get("path")
+                    && path.as_str().unwrap_or("") == dir
+                {
+                    println!(
+                        "   {} Found source directory: {}",
+                        style("Found").green(),
+                        dir
+                    );
+                    break;
                 }
             }
         }
@@ -198,67 +193,67 @@ async fn perform_tree_sitter_analysis(config: &AgentConfig) -> Result<()> {
         .execute_tool(tools::LIST_FILES, json!({"path": ".", "recursive": true}))
         .await?;
 
-    if let Some(files) = list_result.get("files") {
-        if let Some(files_array) = files.as_array() {
-            let mut analyzed_files = 0;
-            let mut total_lines = 0;
-            let mut total_functions = 0;
+    if let Some(files) = list_result.get("files")
+        && let Some(files_array) = files.as_array()
+    {
+        let mut analyzed_files = 0;
+        let mut total_lines = 0;
+        let mut total_functions = 0;
 
-            for file_obj in files_array {
-                if let Some(path) = file_obj.get("path").and_then(|p| p.as_str()) {
-                    if path.ends_with(".rs") {
-                        // Analyze Rust files
-                        match analyzer.parse_file(std::path::Path::new(path)).await {
-                            Ok(syntax_tree) => {
-                                let analysis = code_analyzer.analyze(&syntax_tree, path);
-                                analyzed_files += 1;
-                                total_lines += analysis.metrics.lines_of_code;
-                                total_functions += analysis.metrics.functions_count;
+        for file_obj in files_array {
+            if let Some(path) = file_obj.get("path").and_then(|p| p.as_str())
+                && path.ends_with(".rs")
+            {
+                // Analyze Rust files
+                match analyzer.parse_file(std::path::Path::new(path)).await {
+                    Ok(syntax_tree) => {
+                        let analysis = code_analyzer.analyze(&syntax_tree, path);
+                        analyzed_files += 1;
+                        total_lines += analysis.metrics.lines_of_code;
+                        total_functions += analysis.metrics.functions_count;
 
-                                if config.verbose {
-                                    println!(
-                                        "     Analyzed {}: {} lines, {} functions",
-                                        path,
-                                        analysis.metrics.lines_of_code,
-                                        analysis.metrics.functions_count
-                                    );
+                        if config.verbose {
+                            println!(
+                                "     Analyzed {}: {} lines, {} functions",
+                                path,
+                                analysis.metrics.lines_of_code,
+                                analysis.metrics.functions_count
+                            );
 
-                                    if !analysis.issues.is_empty() {
-                                        println!("       {} issues found", analysis.issues.len());
-                                    }
-                                }
+                            if !analysis.issues.is_empty() {
+                                println!("       {} issues found", analysis.issues.len());
                             }
-                            Err(e) => {
-                                if config.verbose {
-                                    println!("     Failed to analyze {}: {}", path, e);
-                                }
-                            }
+                        }
+                    }
+                    Err(e) => {
+                        if config.verbose {
+                            println!("     Failed to analyze {}: {}", path, e);
                         }
                     }
                 }
             }
+        }
 
-            if analyzed_files > 0 {
-                println!(
-                    "     Analyzed {} files: {} total lines, {} functions",
-                    analyzed_files, total_lines, total_functions
-                );
+        if analyzed_files > 0 {
+            println!(
+                "     Analyzed {} files: {} total lines, {} functions",
+                analyzed_files, total_lines, total_functions
+            );
 
-                // Calculate quality metrics for the project
-                let avg_lines_per_function = if total_functions > 0 {
-                    total_lines as f64 / total_functions as f64
-                } else {
-                    0.0
-                };
+            // Calculate quality metrics for the project
+            let avg_lines_per_function = if total_functions > 0 {
+                total_lines as f64 / total_functions as f64
+            } else {
+                0.0
+            };
 
-                println!(
-                    "     Average lines per function: {:.1}",
-                    avg_lines_per_function
-                );
+            println!(
+                "     Average lines per function: {:.1}",
+                avg_lines_per_function
+            );
 
-                if avg_lines_per_function > 50.0 {
-                    println!("       Consider breaking down large functions");
-                }
+            if avg_lines_per_function > 50.0 {
+                println!("       Consider breaking down large functions");
             }
         }
     }

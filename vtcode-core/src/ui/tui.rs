@@ -29,6 +29,27 @@ pub fn spawn_session(
     show_timeline_pane: bool,
     event_callback: Option<InlineEventCallback>,
 ) -> Result<InlineSession> {
+    spawn_session_with_prompts(
+        theme,
+        placeholder,
+        surface_preference,
+        inline_rows,
+        show_timeline_pane,
+        event_callback,
+        None,
+    )
+}
+
+/// Spawn session with optional custom prompts pre-loaded
+pub fn spawn_session_with_prompts(
+    theme: InlineTheme,
+    placeholder: Option<String>,
+    surface_preference: UiSurfacePreference,
+    inline_rows: u16,
+    show_timeline_pane: bool,
+    event_callback: Option<InlineEventCallback>,
+    custom_prompts: Option<crate::prompts::CustomPromptRegistry>,
+) -> Result<InlineSession> {
     let (command_tx, command_rx) = mpsc::unbounded_channel();
     let (event_tx, event_rx) = mpsc::unbounded_channel();
 
@@ -42,6 +63,7 @@ pub fn spawn_session(
             inline_rows,
             show_timeline_pane,
             event_callback,
+            custom_prompts,
         )
         .await
         {

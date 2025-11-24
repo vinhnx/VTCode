@@ -1,8 +1,7 @@
 /// Centralized error messages for tool operations
-/// 
+///
 /// This module provides consistent, reusable error messages across all tool implementations
 /// to ensure uniformity in user-facing error reporting.
-
 /// File operation error messages
 pub mod file_ops {
     pub const FILE_NOT_FOUND: &str = "File not found";
@@ -62,7 +61,8 @@ pub mod tool_system {
     pub const TOOL_NOT_FOUND: &str = "Tool not found";
     pub const TOOL_NOT_AVAILABLE: &str = "Tool is not available in this context";
     pub const TOOL_EXECUTION_DENIED: &str = "Tool execution is denied by policy";
-    pub const TOOL_EXECUTION_REQUIRES_CONFIRMATION: &str = "Tool execution requires user confirmation";
+    pub const TOOL_EXECUTION_REQUIRES_CONFIRMATION: &str =
+        "Tool execution requires user confirmation";
     pub const INTERNAL_ERROR: &str = "Internal tool system error";
 }
 

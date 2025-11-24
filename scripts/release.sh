@@ -65,8 +65,81 @@ Options:
   --skip-github-packages  Skip publishing to GitHub Packages (pass --no-publish)
   --skip-binaries     Skip building and uploading binaries
   --skip-docs         Skip docs.rs rebuild trigger
+  --trusted-publishers-info  Show information about trusted publishers setup
+  --verify-trusted-publishing  Verify trusted publishing setup
   -h, --help          Show this help message
+
+Note: For CI/CD environments, this script supports npm trusted publishers (OIDC) for secure publishing.
+      Ensure your CI/CD workflow is configured for trusted publishing: https://docs.npmjs.com/trusted-publishers
 USAGE
+}
+
+# Explain trusted publishers setup
+show_trusted_publishers_info() {
+    cat <<'INFO'
+Trusted Publishers Setup Information:
+
+Trusted publishing allows secure publishing from CI/CD workflows using OpenID Connect (OIDC),
+eliminating the need for long-lived npm tokens.
+
+To configure trusted publishers for this project:
+
+1. For npmjs.com:
+   - Go to https://www.npmjs.com/settings/{username}/tokens
+   - Set up trusted publishing for your CI/CD provider (GitHub Actions or GitLab CI/CD)
+   - Provide your GitHub/GitLab organization, repository, and workflow filename
+
+2. For GitHub Packages:
+   - Configure your CI/CD workflow with the required permissions
+
+3. For GitHub Actions, add this to your workflow:
+   ```yaml
+   permissions:
+     id-token: write  # Required for trusted publishing
+     contents: read
+   ```
+
+4. Your CI/CD workflow should use npm CLI version 11.5.1 or later
+
+Learn more: https://docs.npmjs.com/trusted-publishers
+INFO
+}
+
+# Verify trusted publishing setup
+verify_trusted_publishing_setup() {
+    cat <<'VERIFY'
+Trusted Publishing Verification:
+
+1. Check if you're properly set up for trusted publishing:
+
+   # Check npm version (should be >= 11.5.1)
+   npm --version
+
+   # Check if running in CI environment
+   echo $CI
+   echo $GITHUB_ACTIONS
+
+   # Check if npm registry is properly configured
+   npm config get registry
+
+2. For testing trusted publishing locally, you can configure a test setup:
+   # Login to npm if needed
+   npm login
+
+   # Verify your account
+   npm whoami
+
+3. For CI/CD verification, ensure your workflow includes:
+   ```yaml
+   permissions:
+     id-token: write  # Required for trusted publishing
+     contents: read
+   ```
+
+4. If you have already configured trusted publishing on npmjs.com, simply run this script
+   in your CI/CD environment and publishing should work automatically without tokens.
+
+VERIFY
 }
 
 # Ultra-optimized changelog generation using awk for everything
@@ -97,7 +170,7 @@ update_changelog_from_commits() {
     local changelog_content
     local date_str
     date_str=$(date +%Y-%m-%d)
-    
+
     changelog_content=$(git log "$commits_range" --no-merges --pretty=format:"%s" | awk -v vers="$version" -v date="$date_str" '
     {
         line = $0
@@ -215,7 +288,7 @@ check_clean_tree() {
     fi
 }
 
-# Run all authentication checks (without npm)
+# Run all authentication checks (with trusted publishers info)
 check_all_auth() {
     local skip_npm=$1
     local skip_github_packages=$2
@@ -224,7 +297,7 @@ check_all_auth() {
     if command -v cargo >/dev/null 2>&1; then
         local credentials_file="$HOME/.cargo/credentials.toml"
         if [[ -f "$credentials_file" && -s "$credentials_file" ]]; then
-            print_success 'Cargo authentication verified' 
+            print_success 'Cargo authentication verified'
         else
             print_warning 'Cargo credentials not found or empty. Run `cargo login` before releasing.'
         fi
@@ -235,18 +308,35 @@ check_all_auth() {
     # Check npm authentication
     if [[ "$skip_npm" == 'false' ]]; then
         if command -v npm >/dev/null 2>&1; then
+            print_info 'npm detected - since you have trusted publishing configured, no token required in CI/CD'
+            print_info 'Trusted publishing uses OIDC tokens provided by the CI/CD environment'
+            print_info 'In local environments, ensure npm is authenticated: npm whoami'
+
+            # Check if we're in a CI environment
+            if [[ -n "${CI:-}" || -n "${GITHUB_ACTIONS:-}" ]]; then
+                print_info 'Running in CI/CD environment - trusted publishing will be used automatically'
+            else
+                print_info 'Running locally - trusted publishing may not be available, fallback to token auth'
+            fi
+
+            # Check if npm is logged in locally (useful for local testing)
+            if ! npm whoami >/dev/null 2>&1; then
+                print_info 'npm not logged in locally - this is OK if running in CI/CD with trusted publishing'
+            else
+                print_info 'npm is logged in locally - authentication check passed'
+            fi
+
             if [[ -n "${GITHUB_TOKEN:-}" ]]; then
                 local token_config
                 token_config=$(npm config get //npm.pkg.github.com/:_authToken 2>/dev/null || echo "")
-                
+
                 if [[ -n "$token_config" && "$token_config" != "null" ]]; then
-                    print_success 'npm authentication verified for GitHub Packages'
+                    print_info 'GitHub Packages token is configured (used as fallback if trusted publishing not available)'
                 else
-                    print_warning 'npm GitHub Packages token may not be configured.'
-                    print_info 'Set up with: npm config set //npm.pkg.github.com/:_authToken $GITHUB_TOKEN'
+                    print_info 'GitHub Packages token not configured - relying on trusted publishing for GitHub Packages'
                 fi
             else
-                print_warning 'GITHUB_TOKEN environment variable not set. npm publish will use existing .npmrc configuration.'
+                print_info 'GITHUB_TOKEN not set - relying on trusted publishing for GitHub Packages'
             fi
         else
             print_warning 'npm is not available (required for npm publishing)'
@@ -256,19 +346,21 @@ check_all_auth() {
     if [[ "$skip_github_packages" == 'false' ]]; then
         # GitHub Packages authentication still requires npm but we'll provide info
         if command -v npm >/dev/null 2>&1; then
+            print_info 'GitHub Packages publishing - since you have trusted publishing configured, no token required in CI/CD'
+            print_info 'Trusted publishing uses OIDC tokens provided by the CI/CD environment'
+            print_info 'Ensure your CI/CD workflow is configured for trusted publishing: https://docs.npmjs.com/trusted-publishers'
+
             if [[ -n "${GITHUB_TOKEN:-}" ]]; then
                 local token_config
                 token_config=$(npm config get //npm.pkg.github.com/:_authToken 2>/dev/null || echo "")
-                
+
                 if [[ -n "$token_config" && "$token_config" != "null" ]]; then
-                    print_success 'GitHub Packages authentication verified'
+                    print_info 'GitHub Packages authentication configured (used as fallback if trusted publishing not available)'
                 else
-                    print_warning 'GITHUB_TOKEN may not be properly configured for GitHub Packages.'
-                    print_info 'Make sure your GitHub token has write:packages, read:packages, and repo scopes.'
+                    print_info 'GitHub Packages token not configured - relying on trusted publishing'
                 fi
             else
-                print_warning 'GITHUB_TOKEN environment variable not set. Set it before releasing to GitHub Packages.'
-                print_info 'Make sure your GitHub token has write:packages, read:packages, and repo scopes.'
+                print_info 'GITHUB_TOKEN not set - relying on trusted publishing for GitHub Packages'
             fi
         else
             print_warning 'npm is not available (required for GitHub Packages authentication)'
@@ -332,11 +424,11 @@ trigger_docs_rs_rebuild() {
         local crate_name=$1
         local version=$2
         local url="https://docs.rs/crates/$crate_name/$version"
-        
+
         # Try GET request to check if the crate exists
         local response
         response=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 10 "$url" 2>/dev/null || echo "0")
-        
+
         if [[ "$response" == "200" ]]; then
             print_info "Crate $crate_name v$version exists on docs.rs - documentation will update on next publish"
         elif [[ "$response" == "404" ]]; then
@@ -351,7 +443,7 @@ trigger_docs_rs_rebuild() {
     # Run both checks in parallel
     _trigger_docs "vtcode-core" "$version" &
     local pid_core=$!
-    
+
     _trigger_docs "vtcode" "$version" &
     local pid_main=$!
 
@@ -360,14 +452,10 @@ trigger_docs_rs_rebuild() {
     wait "$pid_main"
 }
 
-
-
-
-
 publish_npm_package() {
     local version=$1
 
-    print_distribution "Publishing npm package v$version to both npmjs.com and GitHub Packages..."
+    print_distribution "Publishing npm package v$version to both npmjs.com and GitHub Packages using trusted publishers..."
 
     if [[ ! -f 'npm/package.json' ]]; then
         print_warning 'npm package.json not found - skipping npm publish'
@@ -379,74 +467,128 @@ publish_npm_package() {
         return 0
     fi
 
+    # Ensure npm CLI version 11.5.1 or later for trusted publishing support
+    local npm_version
+    npm_version=$(npm --version)
+    print_info "Current npm version: $npm_version"
+
+    # Extract major.minor.patch from version string to compare
+    local npm_major npm_minor npm_patch
+    IFS='.' read -ra version_parts <<< "$npm_version"
+    npm_major=${version_parts[0]:-0}
+    npm_minor=${version_parts[1]:-0}
+    npm_patch=${version_parts[2]:-0}
+
+    # Compare versions - trusted publishing requires npm v11.5.1 or later
+    if [[ $npm_major -lt 11 ]] ||
+       [[ $npm_major -eq 11 && $npm_minor -lt 5 ]] ||
+       [[ $npm_major -eq 11 && $npm_minor -eq 5 && $npm_patch -lt 1 ]]; then
+        print_warning "npm version $npm_version is too old for trusted publishing (requires v11.5.1+)"
+        print_info "Updating npm to latest version for trusted publishing support..."
+        npm install -g npm@latest || {
+            print_error "Failed to update npm - trusted publishing will not work properly"
+            return 1
+        }
+    fi
+
+    # Check if in a CI/CD environment (detected by environment variables)
+    local in_ci=false
+    if [[ -n "${CI:-}" || -n "${GITHUB_ACTIONS:-}" || -n "${GITLAB_CI:-}" || -n "${CIRCLECI:-}" || -n "${TRAVIS:-}" ]]; then
+        in_ci=true
+        print_info "Running in CI/CD environment - trusted publishing should work automatically"
+    else
+        print_info "Running in local environment - trusted publishing may not be available"
+        print_info "If publishing fails, you may need to configure npm tokens locally or run in CI/CD environment"
+    fi
+
     local npm_publish_success=0
     local github_publish_success=0
 
-    # Publish to npmjs.com with different package name (if NPM_TOKEN is available)
-    if [[ -n "${NPM_TOKEN:-}" ]]; then
-        print_distribution "Publishing npm package v$version to npmjs.com..."
-        
-        # Create a temporary copy of package.json with different name for npmjs.com
-        local temp_npm_dir=$(mktemp -d)
-        cp -r npm/* "$temp_npm_dir/"
-        
-        # Modify the package name for npmjs.com (since 'vtcode' is already taken)
-        jq --arg new_name "vtcode-bin" '.name = $new_name' "$temp_npm_dir/package.json" > "$temp_npm_dir/package.json.tmp" && mv "$temp_npm_dir/package.json.tmp" "$temp_npm_dir/package.json"
-        
-        # Remove the scoped registry config for npmjs.com publish
-        if jq 'del(.publishConfig)' "$temp_npm_dir/package.json" > "$temp_npm_dir/package.json.tmp" 2>/dev/null; then
-            mv "$temp_npm_dir/package.json.tmp" "$temp_npm_dir/package.json"
+    # Publish to npmjs.com with different package name using trusted publishing (OIDC)
+    print_distribution "Publishing npm package v$version to npmjs.com using trusted publishers (OIDC)..."
+
+    # Create a temporary copy of package.json with different name for npmjs.com
+    local temp_npm_dir=$(mktemp -d)
+    cp -r npm/* "$temp_npm_dir/"
+
+    # Modify the package name for npmjs.com (since 'vtcode' is already taken)
+    jq --arg new_name "vtcode-bin" '.name = $new_name' "$temp_npm_dir/package.json" > "$temp_npm_dir/package.json.tmp" && mv "$temp_npm_dir/package.json.tmp" "$temp_npm_dir/package.json"
+
+    # Remove the scoped registry config for npmjs.com publish
+    if jq 'del(.publishConfig)' "$temp_npm_dir/package.json" > "$temp_npm_dir/package.json.tmp" 2>/dev/null; then
+        mv "$temp_npm_dir/package.json.tmp" "$temp_npm_dir/package.json"
+    fi
+
+    (
+        cd "$temp_npm_dir" || return 1
+
+        # For trusted publishing in CI/CD, no token is required
+        # npm will automatically use OIDC tokens provided by the CI/CD environment
+        # In local environments, this may fallback to configured tokens
+        if npm publish; then
+            print_success "npm package v$version published to npmjs.com as vtcode-bin using trusted publishers"
+            npm_publish_success=1
+        else
+            print_warning "npm publish to npmjs.com failed"
+
+            # Provide more specific guidance based on environment
+            if [[ "$in_ci" == true ]]; then
+                print_warning "Running in CI/CD - check trusted publishing configuration at npmjs.com"
+                print_info "Ensure your workflow is configured with proper permissions and trusted publishers are set up"
+                print_info "Visit: https://docs.npmjs.com/trusted-publishers to configure trusted publishers"
+            else
+                print_info "For local publishing, you may need to run: npm login"
+                print_info "Or ensure you have proper token configured in ~/.npmrc"
+            fi
+
+            npm_publish_success=0
         fi
-        
-        (
-            cd "$temp_npm_dir" || return 1
+    )
 
-            # Temporarily configure npm auth for npmjs.com
-            npm config set //registry.npmjs.org/:_authToken "$NPM_TOKEN" || return 1
+    # Clean up temporary directory
+    rm -rf "$temp_npm_dir"
 
-            if npm publish; then
-                print_success "npm package v$version published to npmjs.com as vtcode-bin"
-                npm_publish_success=1
+    # Publish to GitHub Packages with original package using trusted publishing or fallback
+    print_distribution "Publishing npm package v$version to GitHub Packages..."
+    (
+        cd npm || return 1
+
+        # Try trusted publishing first (works in CI/CD with proper permissions)
+        if npm publish --registry https://npm.pkg.github.com; then
+            print_success "npm package v$version published to GitHub Packages as @vinhnx/vtcode using trusted publishers"
+            github_publish_success=1
+        else
+            print_warning "Trusted publishing to GitHub Packages failed"
+
+            # Fallback to token-based authentication if available
+            if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+                print_info "Attempting fallback to token-based publishing to GitHub Packages..."
+
+                # Temporarily configure npm auth for GitHub Packages as fallback
+                npm config set //npm.pkg.github.com/:_authToken "$GITHUB_TOKEN" || {
+                    print_warning "Failed to set GitHub token for GitHub Packages"
+                    return 1
+                }
+
+                if npm publish --registry https://npm.pkg.github.com; then
+                    print_success "npm package v$version published to GitHub Packages as @vinhnx/vtcode using token authentication"
+                    github_publish_success=1
+                else
+                    print_warning "GitHub Packages publishing failed with both trusted publishing and token fallback"
+                fi
+
+                # Clean up npm config
+                npm config delete //npm.pkg.github.com/:_authToken || true
             else
-                print_warning "npm publish to npmjs.com failed"
-                npm_publish_success=0
+                print_info "No GITHUB_TOKEN available for fallback - ensure trusted publishing is configured"
+                print_info "For GitHub Actions, ensure GITHUB_TOKEN is available and workflow has proper permissions"
             fi
 
-            # Clean up npm config
-            npm config delete //registry.npmjs.org/:_authToken || true
-        )
-        
-        # Clean up temporary directory
-        rm -rf "$temp_npm_dir"
-    else
-        print_warning 'NPM_TOKEN not set - skipping publish to npmjs.com'
-        npm_publish_success=0
-    fi
-
-    # Publish to GitHub Packages with original package
-    if [[ -n "${GITHUB_TOKEN:-}" ]]; then
-        print_distribution "Publishing npm package v$version to GitHub Packages..."
-        (
-            cd npm || return 1
-
-            # Temporarily configure npm auth for GitHub Packages
-            npm config set //npm.pkg.github.com/:_authToken "$GITHUB_TOKEN" || return 1
-
-            if npm publish --registry https://npm.pkg.github.com; then
-                print_success "npm package v$version published to GitHub Packages as @vinhnx/vtcode"
-                github_publish_success=1
-            else
-                print_warning "npm publish to GitHub Packages failed"
-                github_publish_success=0
+            if [[ $github_publish_success -eq 0 ]]; then
+                print_info "To configure trusted publishing for GitHub Packages, visit: https://docs.npmjs.com/trusted-publishers"
             fi
-
-            # Clean up npm config
-            npm config delete //npm.pkg.github.com/:_authToken || true
-        )
-    else
-        print_warning 'GITHUB_TOKEN not set - skipping publish to GitHub Packages'
-        github_publish_success=0
-    fi
+        fi
+    )
 
     # Return success if at least one registry published successfully
     if [[ $npm_publish_success -eq 1 || $github_publish_success -eq 1 ]]; then
@@ -495,32 +637,32 @@ update_extensions_version() {
 # update_zed_extension_version() {
 #     local version=$1
 #     local manifest="zed-extension/extension.toml"
-# 
+#
 #     if [[ ! -f "$manifest" ]]; then
 #         print_warning "Zed extension manifest not found at $manifest; skipping version update"
 #         return 0
 #     fi
-# 
+#
 #     print_distribution "Updating Zed extension version to $version"
-# 
+#
 #     # Use Python to update the version and URLs in extension.toml
 #     python3 -c "
 # import re
 # from pathlib import Path
-# 
+#
 # manifest_path = Path('$manifest')
 # content = manifest_path.read_text()
-# 
+#
 # # Update the main version field
 # content = re.sub(r'^version = \".*\"', f'version = \"{version}\"', content, flags=re.MULTILINE)
-# 
+#
 # # Update URLs to use the new version
 # content = re.sub(
 #     r'https://github.com/vinhnx/vtcode/releases/download/v[0-9.]+/vtcode-v[0-9.]+-(aarch64-apple-darwin|x86_64-apple-darwin)\.tar\.gz',
 #     f'https://github.com/vinhnx/vtcode/releases/download/v{version}/vtcode-v{version}-\\\\1.tar.gz',
 #     content
 # )
-# 
+#
 # manifest_path.write_text(content)
 # print(f'INFO: Zed extension version updated to {version}')
 # "
@@ -556,74 +698,74 @@ update_vscode_extension_version() {
 #     local version=$1
 #     local manifest="zed-extension/extension.toml"
 #     local dist_dir="dist"
-# 
+#
 #     if [[ ! -f "$manifest" ]]; then
 #         print_warning "Zed extension manifest not found at $manifest; skipping checksum update"
 #         return 0
 #     fi
-# 
+#
 #     if [[ ! -d "$dist_dir" ]]; then
 #         print_warning "Distribution directory $dist_dir missing; skipping checksum update"
 #         return 0
 #     fi
-# 
+#
 #     print_distribution "Updating Zed extension checksums from $dist_dir"
-# 
+#
 #     # Create a more efficient Python script for checksum updates
 #     cat > /tmp/zed_checksum_update.py << 'PYTHON_EOF'
 # import re
 # import subprocess
 # import sys
 # from pathlib import Path
-# 
+#
 # def main(version, manifest_path, dist_dir):
 #     manifest_path = Path(manifest_path)
 #     dist_dir = Path(dist_dir)
-# 
+#
 #     targets = {
 #         "darwin-aarch64": f"vtcode-v{version}-aarch64-apple-darwin.tar.gz",
 #         "darwin-x86_64": f"vtcode-v{version}-x86_64-apple-darwin.tar.gz",
 #     }
-# 
+#
 #     text = manifest_path.read_text()
 #     updated = False
-# 
+#
 #     for target, filename in targets.items():
 #         archive = dist_dir / filename
 #         if not archive.exists():
 #             print(f"WARNING: Archive {archive} not found; leaving sha256 unchanged for {target}", file=sys.stderr)
 #             continue
-# 
+#
 #         try:
 #             result = subprocess.run(["shasum", "-a", "256", str(archive)], capture_output=True, text=True, check=True)
 #             sha = result.stdout.split()[0]
-#             
+#
 #             pattern = re.compile(rf"(\[agent_servers\.vtcode\.targets\.{re.escape(target)}\][^\[]*?sha256 = \")([^\"]*)(\")", re.DOTALL)
 #             new_text, count = pattern.subn("\\g<1>" + sha + "\\g<3>", text, count=1)
-#             
+#
 #             if count == 0:
 #                 print(f"WARNING: sha256 entry not found for target {target}", file=sys.stderr)
 #             else:
 #                 text = new_text
 #                 updated = True
 #                 print(f"INFO: Updated {target} checksum to {sha}")
-# 
+#
 #         except subprocess.CalledProcessError as e:
 #             print(f"ERROR: Failed to compute checksum for {archive}: {e}", file=sys.stderr)
-# 
+#
 #     if updated:
 #         manifest_path.write_text(text)
 #         print(f"INFO: Zed extension checksums updated in {manifest_path}")
 #     else:
 #         print("WARNING: No sha256 fields updated in Zed extension manifest", file=sys.stderr)
-# 
+#
 # if __name__ == "__main__":
 #     if len(sys.argv) != 4:
 #         print("Usage: python script.py <version> <manifest_path> <dist_dir>", file=sys.stderr)
 #         sys.exit(1)
 #     main(sys.argv[1], sys.argv[2], sys.argv[3])
 # PYTHON_EOF
-# 
+#
 #     python3 /tmp/zed_checksum_update.py "$version" "$manifest" "$dist_dir"
 #     rm -f /tmp/zed_checksum_update.py
 # }
@@ -733,11 +875,20 @@ main() {
     local skip_docs=false
     local pre_release=false
     local pre_release_suffix='alpha.0'
+    local show_trusted_publishers=false
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
             -h|--help)
                 show_usage
+                exit 0
+                ;;
+            --trusted-publishers-info)
+                show_trusted_publishers_info
+                exit 0
+                ;;
+            --verify-trusted-publishing)
+                verify_trusted_publishing_setup
                 exit 0
                 ;;
             -p|--patch)
@@ -823,14 +974,14 @@ main() {
     check_branch
     check_clean_tree
     ensure_cargo_release
-    
+
     # Only install cross if we're not in dry-run mode and not skipping binaries
     if [[ "$dry_run" != 'true' ]] && [[ "$skip_binaries" == 'false' ]]; then
         ensure_cross_support || true
     elif [[ "$dry_run" == 'true' ]]; then
         print_info 'Dry run - skipping automatic cross installation check'
     fi
-    
+
     # Run all auth checks together (they are fast and don't block each other)
     check_all_auth "$skip_npm" "$skip_github_packages"
 
@@ -949,7 +1100,7 @@ main() {
     print_success 'Release process finished'
     print_info "GitHub Release should now contain changelog notes generated by cargo-release"
     print_info "All commits, tags, and releases have been pushed to the remote repository"
-    
+
     if [[ "$skip_npm" == 'false' ]]; then
         if [[ $npm_publish_success -eq 1 ]]; then
             print_success "npm package published to both registries:"

@@ -297,6 +297,7 @@ pub enum InlineCommand {
     ClearScreen,
     SuspendEventLoop,
     ResumeEventLoop,
+    ClearInputQueue,
     Shutdown,
 }
 
@@ -357,6 +358,10 @@ impl InlineHandle {
 
     pub fn resume_event_loop(&self) {
         let _ = self.sender.send(InlineCommand::ResumeEventLoop);
+    }
+
+    pub fn clear_input_queue(&self) {
+        let _ = self.sender.send(InlineCommand::ClearInputQueue);
     }
 
     pub fn set_prompt(&self, prefix: String, style: InlineTextStyle) {

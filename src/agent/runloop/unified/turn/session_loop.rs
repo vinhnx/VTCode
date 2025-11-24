@@ -968,18 +968,19 @@ pub(crate) async fn run_single_agent_loop_unified(
             )
             .await?;
             // Apply canonical side-effects for the turn outcome (history, checkpoints, session end reason)
+            // Apply canonical side-effects for the turn outcome (history, checkpoints, session end reason)
             crate::agent::runloop::unified::turn::apply_turn_outcome(
                 &outcome,
-                &mut conversation_history,
-                &mut renderer,
-                &handle,
-                &ctrl_c_state,
-                &default_placeholder,
-                checkpoint_manager.as_ref(),
-                &mut next_checkpoint_turn,
-                &mut session_stats,
-                &mut session_end_reason,
-                &pruning_ledger,
+                crate::agent::runloop::unified::turn::TurnOutcomeContext {
+                    conversation_history: &mut conversation_history,
+                    renderer: &mut renderer,
+                    handle: &handle,
+                    ctrl_c_state: &ctrl_c_state,
+                    default_placeholder: &default_placeholder,
+                    checkpoint_manager: checkpoint_manager.as_ref(),
+                    next_checkpoint_turn: &mut next_checkpoint_turn,
+                    session_end_reason: &mut session_end_reason,
+                },
             )
             .await?;
             let _turn_result = outcome.result;

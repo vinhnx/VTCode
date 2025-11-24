@@ -52,16 +52,16 @@ impl ComplexityAnalyzer {
             .into_iter()
             .filter_map(|e| e.ok())
         {
-            if entry.file_type().is_file() {
-                if let Some(ext) = entry.path().extension() {
-                    // Check if this is a source code file
-                    let source_extensions = ["rs", "js", "ts", "py", "java", "cpp", "c", "go"];
-                    if source_extensions.contains(&ext.to_str().unwrap_or("")) {
-                        if let Ok(content) = fs::read_to_string(entry.path()) {
-                            let result = self.analyze_file(entry.path(), &content);
-                            results.push(result);
-                        }
-                    }
+            if entry.file_type().is_file()
+                && let Some(ext) = entry.path().extension()
+            {
+                // Check if this is a source code file
+                let source_extensions = ["rs", "js", "ts", "py", "java", "cpp", "c", "go"];
+                if source_extensions.contains(&ext.to_str().unwrap_or(""))
+                    && let Ok(content) = fs::read_to_string(entry.path())
+                {
+                    let result = self.analyze_file(entry.path(), &content);
+                    results.push(result);
                 }
             }
         }
@@ -137,7 +137,7 @@ impl ComplexityAnalyzer {
             - 16.2 * (lines_of_code as f64).ln();
 
         // Normalize to 0-100 scale
-        mi.max(0.0).min(100.0)
+        mi.clamp(0.0, 100.0)
     }
 }
 

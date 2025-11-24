@@ -86,6 +86,13 @@ impl EventListener {
     async fn recv(&mut self) -> Option<TerminalEvent> {
         self.receiver.recv().await
     }
+
+    /// Clear all queued events from the input channel
+    fn clear_queue(&mut self) {
+        while self.receiver.try_recv().is_ok() {
+            // Keep draining until empty
+        }
+    }
 }
 
 // Spawn the async event loop with proper cancellation token support
@@ -93,6 +100,7 @@ impl EventListener {
 async fn spawn_event_loop(
     event_tx: UnboundedSender<TerminalEvent>,
     cancellation_token: CancellationToken,
+    rx_paused: std::sync::Arc<std::sync::atomic::AtomicBool>,
 ) {
     let mut tick_interval = interval(Duration::from_secs_f64(1.0 / 4.0)); // 4 ticks per second
     let poll_timeout = Duration::from_millis(16);
@@ -108,9 +116,13 @@ async fn spawn_event_loop(
             _ = async {
                 // Use block_in_place to allow crossterm's blocking poll
                 tokio::task::block_in_place(|| {
-                    if event::poll(poll_timeout).unwrap_or(false) {
-                        if let Ok(event) = event::read() {
-                            let _ = event_tx.send(event);
+                    // Only poll if not paused. When paused (e.g., during external editor launch),
+                    // skip polling to prevent reading from stdin while the editor is active.
+                    if !rx_paused.load(std::sync::atomic::Ordering::Acquire) {
+                        if event::poll(poll_timeout).unwrap_or(false) {
+                            if let Ok(event) = event::read() {
+                                let _ = event_tx.send(event);
+                            }
                         }
                     }
                 })
@@ -185,19 +197,26 @@ pub async fn run_tui(
     inline_rows: u16,
     show_timeline_pane: bool,
     event_callback: Option<InlineEventCallback>,
+    custom_prompts: Option<crate::prompts::CustomPromptRegistry>,
 ) -> Result<()> {
     let surface = TerminalSurface::detect(surface_preference, inline_rows)?;
     let mut session = Session::new(theme, placeholder, surface.rows(), show_timeline_pane);
+    
+    // Pre-load custom prompts if provided
+    if let Some(prompts) = custom_prompts {
+        session.set_custom_prompts(prompts);
+    }
 
     // Create event listener and channels using the new async pattern
     let (mut input_listener, event_channels) = EventListener::new();
     let cancellation_token = CancellationToken::new();
     let event_loop_token = cancellation_token.clone();
     let event_channels_for_loop = event_channels.clone();
+    let rx_paused = event_channels.rx_paused.clone();
 
     // Spawn the async event loop
     let event_loop_handle = tokio::spawn(async move {
-        spawn_event_loop(event_channels_for_loop.tx.clone(), event_loop_token).await;
+        spawn_event_loop(event_channels_for_loop.tx.clone(), event_loop_token, rx_paused).await;
     });
 
     let mut stdout = io::stdout();
@@ -334,6 +353,9 @@ async fn drive_terminal<B: Backend>(
                     InlineCommand::ResumeEventLoop => {
                         event_channels.resume();
                     }
+                    InlineCommand::ClearInputQueue => {
+                        inputs.clear_queue();
+                    }
                     InlineCommand::ForceRedraw => {
                         terminal
                             .clear()
@@ -352,7 +374,8 @@ async fn drive_terminal<B: Backend>(
             }
         }
 
-        if session.take_redraw() {
+        // Only redraw if not suspended
+        if !event_channels.rx_paused.load(std::sync::atomic::Ordering::Acquire) && session.take_redraw() {
             terminal
                 .draw(|frame| session.render(frame))
                 .context("failed to draw inline session")?;
@@ -373,6 +396,9 @@ async fn drive_terminal<B: Backend>(
                             InlineCommand::ResumeEventLoop => {
                                 event_channels.resume();
                             }
+                            InlineCommand::ClearInputQueue => {
+                                inputs.clear_queue();
+                            }
                             InlineCommand::ForceRedraw => {
                                 terminal.clear().context("failed to clear terminal for redraw")?;
                                 session.handle_command(command);
@@ -391,15 +417,18 @@ async fn drive_terminal<B: Backend>(
             result = inputs.recv() => {
                 match result {
                     Some(event) => {
-                        session.handle_event(
-                            event,
-                            events,
-                            event_callback.as_ref().map(|callback| callback.as_ref()),
-                        );
-                        if session.take_redraw() {
-                            terminal
-                                .draw(|frame| session.render(frame))
-                                .context("failed to draw inline session")?;
+                        // Skip event processing if the TUI is suspended (e.g., external editor is running)
+                        if !event_channels.rx_paused.load(std::sync::atomic::Ordering::Acquire) {
+                            session.handle_event(
+                                event,
+                                events,
+                                event_callback.as_ref().map(|callback| callback.as_ref()),
+                            );
+                            if session.take_redraw() {
+                                terminal
+                                    .draw(|frame| session.render(frame))
+                                    .context("failed to draw inline session")?;
+                            }
                         }
                     }
                     None => {

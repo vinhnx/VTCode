@@ -1147,9 +1147,11 @@ impl ModelId {
     }
 
     /// Get the default model for general use
-    pub fn default() -> Self {
+    /// Get the default model for general use
+    pub fn default_model() -> Self {
         ModelId::Gemini25FlashPreview
     }
+
 
     /// Get the default orchestrator model (more capable)
     pub fn default_orchestrator() -> Self {
@@ -1591,6 +1593,12 @@ impl fmt::Display for ModelParseError {
                 )
             }
         }
+    }
+}
+
+impl Default for ModelId {
+    fn default() -> Self {
+        Self::default_model()
     }
 }
 

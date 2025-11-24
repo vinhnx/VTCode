@@ -25,7 +25,6 @@
 /// // Display width (for alignment)
 /// let width = display_width("\x1b[31mHello\x1b[0m"); // Returns 5
 /// ```
-
 /// Escape character (ESC = 0x1B = 27)
 pub const ESC: &str = "\x1b";
 

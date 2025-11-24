@@ -141,7 +141,7 @@ pub fn handle_command(session: &mut Session, command: InlineCommand) {
         InlineCommand::ClearScreen => {
             clear_screen(session);
         }
-        InlineCommand::SuspendEventLoop | InlineCommand::ResumeEventLoop => {
+        InlineCommand::SuspendEventLoop | InlineCommand::ResumeEventLoop | InlineCommand::ClearInputQueue => {
             // Handled by drive_terminal
         }
         InlineCommand::Shutdown => {

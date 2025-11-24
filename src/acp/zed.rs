@@ -1195,12 +1195,12 @@ impl ZedAgent {
         // SECURITY FIX: Block sensitive tools from external ACP clients
         // These are internal diagnostic and code execution tools that should not be exposed
         let restricted_tools = [
-            "debug_agent",    // Internal diagnostic tool
-            "analyze_agent",  // Internal diagnostic tool
-            "get_errors",     // Internal diagnostic tool
-            "execute_code",   // Code execution tool - dangerous for external clients
+            "debug_agent",   // Internal diagnostic tool
+            "analyze_agent", // Internal diagnostic tool
+            "get_errors",    // Internal diagnostic tool
+            "execute_code",  // Code execution tool - dangerous for external clients
         ];
-        
+
         if restricted_tools.contains(&tool_name) {
             warn!(
                 tool = tool_name,
