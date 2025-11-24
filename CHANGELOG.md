@@ -3,6 +3,25 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Version 0.43.0] - 2025-11-09
+# [Version 0.47.4] - 2025-11-25
+
+
+### Bug Fixes
+    - fix: remove unused spawn_session import
+
+
+### Documentation
+    - docs: update changelog for v0.47.3 [skip ci]
+    - docs: update changelog for v0.47.2 [skip ci]
+
+
+### Chores
+    - chore: update VSCode extension package.json to v0.47.3 [skip ci]
+    - chore: update npm package.json to v0.47.3 [skip ci]
+    - chore: release v0.47.3
+    - chore: release v0.47.2
+    - chore: update VSCode extension package.json to v0.47.1 [skip ci]
+    - chore: update npm package.json to v0.47.1 [skip ci]
 # [Version 0.47.3] - 2025-11-25
 
 
