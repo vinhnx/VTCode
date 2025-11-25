@@ -190,7 +190,7 @@ fn validate_agent_model(provider: &str, model: &str, result: &mut ValidationResu
                 } else if context_size >= 1_000 {
                     format!("{}K", context_size / 1_000)
                 } else {
-                    format!("{}", context_size)
+                    context_size.to_string()
                 };
                 tracing::debug!("Agent model '{}' context window: {}", model, display_size);
             }
