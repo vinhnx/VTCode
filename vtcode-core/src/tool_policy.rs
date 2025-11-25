@@ -562,7 +562,7 @@ impl ToolPolicyManager {
         let lookup = canonical.as_ref();
 
         if let Some(policy) = tools_config.policies.get(lookup) {
-            return policy.clone();
+            return *policy;
         }
 
         match tool_name {
@@ -573,7 +573,7 @@ impl ToolPolicyManager {
                 .cloned(),
             _ => None,
         }
-        .unwrap_or_else(|| tools_config.default_policy.clone())
+        .unwrap_or(tools_config.default_policy)
     }
 
     /// Apply policies defined in vtcode.toml to the runtime policy manager

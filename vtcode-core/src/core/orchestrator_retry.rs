@@ -105,7 +105,7 @@ impl RetryManager {
                 primary_model
             );
 
-            match operation(primary_model.clone()).await {
+            match operation(*primary_model).await {
                 Ok(result) => {
                     if attempt > 0 {
                         self.stats.successful_retries += 1;
@@ -170,7 +170,7 @@ impl RetryManager {
             );
             self.stats.fallback_activations += 1;
 
-            match operation(fallback.clone()).await {
+            match operation(*fallback).await {
                 Ok(result) => {
                     eprintln!(
                         "Fallback model {} succeeded for operation '{}'",

@@ -251,7 +251,7 @@ impl Session {
                 body_prefix,
                 content,
                 max_width,
-                border_style.clone(),
+                border_style,
             ));
         } else {
             // For simple tool output, render without borders
@@ -395,7 +395,7 @@ impl Session {
                 continuation_prefix,
                 body_spans,
                 max_width,
-                border_style.clone(),
+                border_style,
             ));
         } else {
             // Simple indent prefix without border characters
@@ -405,7 +405,7 @@ impl Session {
                 body_prefix,
                 body_spans,
                 max_width,
-                border_style.clone(),
+                border_style,
             ));
         }
 
