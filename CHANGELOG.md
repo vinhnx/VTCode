@@ -3,6 +3,34 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Version 0.43.0] - 2025-11-09
+# [Version 0.47.5] - 2025-11-25
+
+
+### Features
+    - feat: parse and display friendly error messages from Anthropic API responses
+
+
+### Bug Fixes
+    - fix: clear spinner before displaying error message
+    - fix: gracefully handle provider API errors without panicking
+    - fix: remove unused spawn_session import
+
+
+### Refactors
+    - refactor: streamline code formatting and improve readability across multiple files
+
+
+### Documentation
+    - docs: update changes summary with comprehensive error handling improvements
+    - docs: update changelog for v0.47.4 [skip ci]
+
+
+### Chores
+    - chore: update VSCode extension package.json to v0.47.4 [skip ci]
+    - chore: update npm package.json to v0.47.4 [skip ci]
+    - chore: release v0.47.4
+    - chore: update VSCode extension package.json to v0.47.3 [skip ci]
+    - chore: update npm package.json to v0.47.3 [skip ci]
 # [Version 0.47.4] - 2025-11-25
 
 
