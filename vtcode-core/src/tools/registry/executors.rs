@@ -1554,7 +1554,8 @@ impl ToolRegistry {
 
             if is_build_output {
                 // Smart extraction: prioritize errors/warnings for build output
-                capture.output = extract_build_errors_and_summary(&capture.output, setup.max_tokens);
+                capture.output =
+                    extract_build_errors_and_summary(&capture.output, setup.max_tokens);
             } else {
                 // Generic head+tail truncation for other commands
                 use crate::core::agent::runloop::token_trunc::truncate_content_by_tokens;
@@ -1573,8 +1574,10 @@ impl ToolRegistry {
             // Apply byte fuse as secondary safeguard
             if capture.output.len() > DEFAULT_PTY_OUTPUT_BYTE_FUSE {
                 use crate::core::agent::runloop::token_trunc::safe_truncate_to_bytes_with_marker;
-                capture.output =
-                    safe_truncate_to_bytes_with_marker(&capture.output, DEFAULT_PTY_OUTPUT_BYTE_FUSE);
+                capture.output = safe_truncate_to_bytes_with_marker(
+                    &capture.output,
+                    DEFAULT_PTY_OUTPUT_BYTE_FUSE,
+                );
             }
 
             // Add truncation notice if output was reduced

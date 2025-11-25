@@ -281,11 +281,11 @@ pub mod models {
             "claude-sonnet-4-5-20250929", // Latest flagship model for complex agents and coding
             "claude-haiku-4-5-20251001",  // Fastest model with near-frontier intelligence
             "claude-opus-4-1-20250805",   // Exceptional model for specialized reasoning tasks
-            "claude-opus-4-5-20251101",   // Latest flagship model with exceptional reasoning capabilities
-            "claude-sonnet-4-5",          // Alias for latest Claude Sonnet 4.5
-            "claude-haiku-4-5",           // Alias for latest Claude Haiku 4.5
-            "claude-opus-4-1",            // Alias for latest Claude Opus 4.1
-            "claude-opus-4-5",            // Alias for latest Claude Opus 4.5
+            "claude-opus-4-5-20251101", // Latest flagship model with exceptional reasoning capabilities
+            "claude-sonnet-4-5",        // Alias for latest Claude Sonnet 4.5
+            "claude-haiku-4-5",         // Alias for latest Claude Haiku 4.5
+            "claude-opus-4-1",          // Alias for latest Claude Opus 4.1
+            "claude-opus-4-5",          // Alias for latest Claude Opus 4.5
         ];
 
         // Convenience constants for versioned models

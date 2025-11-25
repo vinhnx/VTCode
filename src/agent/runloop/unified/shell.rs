@@ -29,15 +29,7 @@ pub(crate) fn detect_explicit_run_command(input: &str) -> Option<(String, serde_
     // Don't intercept if it looks like a natural language request
     // e.g., "run the tests" or "run all unit tests"
     let natural_language_indicators = [
-        "the ",
-        "all ",
-        "some ",
-        "this ",
-        "that ",
-        "my ",
-        "our ",
-        "a ",
-        "an ",
+        "the ", "all ", "some ", "this ", "that ", "my ", "our ", "a ", "an ",
     ];
     let command_lower = command_part.to_lowercase();
     for indicator in natural_language_indicators {

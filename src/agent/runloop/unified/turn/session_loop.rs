@@ -39,7 +39,7 @@ use crate::agent::runloop::unified::mcp_tool_manager::McpToolManager;
 
 use super::finalization::finalize_session;
 use super::run_loop::TurnLoopResult as RunLoopTurnLoopResult;
-use super::turn_loop::{TurnLoopOutcome};
+use super::turn_loop::TurnLoopOutcome;
 use super::utils::render_hook_messages;
 use super::workspace::{load_workspace_files, refresh_vt_config};
 use crate::agent::runloop::unified::async_mcp_manager::McpInitStatus;
@@ -852,7 +852,10 @@ pub(crate) async fn run_single_agent_loop_unified(
 
                 // Execute the tool directly via tool registry
                 let tool_call_id = format!("explicit_run_{}", conversation_history.len());
-                match tool_registry.execute_tool(&tool_name, tool_args.clone()).await {
+                match tool_registry
+                    .execute_tool(&tool_name, tool_args.clone())
+                    .await
+                {
                     Ok(result) => {
                         // Render the command output using the standard tool output renderer
                         crate::agent::runloop::tool_output::render_tool_output(
@@ -872,10 +875,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                         ));
                     }
                     Err(err) => {
-                        renderer.line(
-                            MessageStyle::Error,
-                            &format!("Command failed: {}", err),
-                        )?;
+                        renderer.line(MessageStyle::Error, &format!("Command failed: {}", err))?;
                         conversation_history.push(uni::Message::tool_response(
                             tool_call_id.clone(),
                             format!("{{\"error\": \"{}\"}}", err),
@@ -1018,7 +1018,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                 skip_confirmations,
                 &mut session_end_reason,
             )
-            .await {
+            .await
+            {
                 Ok(outcome) => outcome,
                 Err(err) => {
                     // Handle errors gracefully - display to user but continue the session
@@ -1052,9 +1053,15 @@ pub(crate) async fn run_single_agent_loop_unified(
                     session_end_reason: &mut session_end_reason,
                 },
             )
-            .await {
+            .await
+            {
                 tracing::error!("Failed to apply turn outcome: {}", err);
-                renderer.line(MessageStyle::Error, &format!("Failed to finalize turn: {}", err)).ok();
+                renderer
+                    .line(
+                        MessageStyle::Error,
+                        &format!("Failed to finalize turn: {}", err),
+                    )
+                    .ok();
             }
             let _turn_result = outcome.result;
 
@@ -1077,9 +1084,15 @@ pub(crate) async fn run_single_agent_loop_unified(
             &handle,
             Some(&pruning_ledger),
         )
-        .await {
+        .await
+        {
             tracing::error!("Failed to finalize session: {}", err);
-            renderer.line(MessageStyle::Error, &format!("Failed to finalize session: {}", err)).ok();
+            renderer
+                .line(
+                    MessageStyle::Error,
+                    &format!("Failed to finalize session: {}", err),
+                )
+                .ok();
         }
 
         // If the session ended with NewSession, restart the loop with fresh config
