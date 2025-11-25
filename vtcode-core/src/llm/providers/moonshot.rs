@@ -9,7 +9,7 @@ use crate::llm::provider::{
 };
 use crate::llm::providers::common::{
     convert_usage_to_llm_types, forward_prompt_cache_with_state, make_default_request,
-    override_base_url, resolve_model,
+    override_base_url, resolve_model, validate_request_common,
 };
 use crate::llm::rig_adapter::reasoning_parameters_for;
 use crate::llm::types as llm_types;
@@ -459,27 +459,12 @@ impl LLMProvider for MoonshotProvider {
     }
 
     fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {
-        if request.messages.is_empty() {
-            let formatted = error_display::format_llm_error("Moonshot", "Messages cannot be empty");
-            return Err(LLMError::InvalidRequest(formatted));
-        }
-
-        if !request.model.trim().is_empty() && !self.supported_models().contains(&request.model) {
-            let formatted = error_display::format_llm_error(
-                "Moonshot",
-                &format!("Unsupported model: {}", request.model),
-            );
-            return Err(LLMError::InvalidRequest(formatted));
-        }
-
-        for message in &request.messages {
-            if let Err(err) = message.validate_for_provider("openai") {
-                let formatted = error_display::format_llm_error("Moonshot", &err);
-                return Err(LLMError::InvalidRequest(formatted));
-            }
-        }
-
-        Ok(())
+        validate_request_common(
+            request,
+            PROVIDER_NAME,
+            "openai",
+            Some(&self.supported_models()),
+        )
     }
 }
 
