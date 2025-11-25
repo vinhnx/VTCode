@@ -166,8 +166,8 @@ pub(super) fn reasoning_level_label(level: ReasoningEffortLevel) -> &'static str
 
 pub(super) fn reasoning_level_description(level: ReasoningEffortLevel) -> &'static str {
     match level {
-        ReasoningEffortLevel::None => "No reasoning overhead - fastest responses (GPT-5.1)",
-        ReasoningEffortLevel::Minimal => "Minimal reasoning overhead - very fast responses (GPT-5)",
+        ReasoningEffortLevel::None => "No reasoning overhead - fastest responses",
+        ReasoningEffortLevel::Minimal => "Minimal reasoning overhead - very fast responses",
         ReasoningEffortLevel::Low => reasoning::DESCRIPTION_LOW,
         ReasoningEffortLevel::Medium => reasoning::DESCRIPTION_MEDIUM,
         ReasoningEffortLevel::High => reasoning::DESCRIPTION_HIGH,

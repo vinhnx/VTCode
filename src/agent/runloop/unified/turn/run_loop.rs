@@ -1560,6 +1560,56 @@ pub(crate) async fn run_single_agent_loop_unified(
 
             let input = input_owned.as_str();
 
+            // Check for explicit "run <command>" pattern BEFORE processing
+            // This bypasses LLM interpretation and executes the command directly
+            if let Some((tool_name, tool_args)) =
+                crate::agent::runloop::unified::shell::detect_explicit_run_command(input)
+            {
+                // Display the user message
+                display_user_message(&mut renderer, input)?;
+
+                // Add user message to history
+                conversation_history.push(uni::Message::user(input.to_string()));
+
+                // Execute the tool directly via tool registry
+                let tool_call_id = format!("explicit_run_{}", conversation_history.len());
+                match tool_registry.execute_tool(&tool_name, tool_args.clone()).await {
+                    Ok(result) => {
+                        // Render the command output using the standard tool output renderer
+                        crate::agent::runloop::tool_output::render_tool_output(
+                            &mut renderer,
+                            Some(&tool_name),
+                            &result,
+                            vt_cfg.as_ref(),
+                            None,
+                        )
+                        .await?;
+
+                        // Add tool response to history
+                        let result_str = serde_json::to_string(&result).unwrap_or_default();
+                        conversation_history.push(uni::Message::tool_response(
+                            tool_call_id.clone(),
+                            result_str,
+                        ));
+                    }
+                    Err(err) => {
+                        renderer.line(
+                            MessageStyle::Error,
+                            &format!("Command failed: {}", err),
+                        )?;
+                        conversation_history.push(uni::Message::tool_response(
+                            tool_call_id.clone(),
+                            format!("{{\"error\": \"{}\"}}", err),
+                        ));
+                    }
+                }
+
+                // Clear input and continue to next iteration
+                handle.clear_input();
+                handle.set_placeholder(default_placeholder.clone());
+                continue;
+            }
+
             // Process @ patterns to embed images as base64 content
             let processed_content = match parse_at_patterns(input, &config.workspace).await {
                 Ok(content) => content,

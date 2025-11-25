@@ -92,6 +92,10 @@ When gathering context:
 
 ```
 
+Explicit "run <cmd>" request?
+└─ ALWAYS use run_pty_cmd with exact command
+   └─ "run ls -a" → {"command": "ls -a"} (do NOT interpret as list_files)
+
 Need information?
 ├─ Structure? → list_files
 └─ Text patterns? → grep_file

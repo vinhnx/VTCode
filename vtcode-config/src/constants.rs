@@ -281,20 +281,24 @@ pub mod models {
             "claude-sonnet-4-5-20250929", // Latest flagship model for complex agents and coding
             "claude-haiku-4-5-20251001",  // Fastest model with near-frontier intelligence
             "claude-opus-4-1-20250805",   // Exceptional model for specialized reasoning tasks
+            "claude-opus-4-5-20251101",   // Latest flagship model with exceptional reasoning capabilities
             "claude-sonnet-4-5",          // Alias for latest Claude Sonnet 4.5
             "claude-haiku-4-5",           // Alias for latest Claude Haiku 4.5
             "claude-opus-4-1",            // Alias for latest Claude Opus 4.1
+            "claude-opus-4-5",            // Alias for latest Claude Opus 4.5
         ];
 
         // Convenience constants for versioned models
         pub const CLAUDE_SONNET_4_5_20250929: &str = "claude-sonnet-4-5-20250929";
         pub const CLAUDE_HAIKU_4_5_20251001: &str = "claude-haiku-4-5-20251001";
         pub const CLAUDE_OPUS_4_1_20250805: &str = "claude-opus-4-1-20250805";
+        pub const CLAUDE_OPUS_4_5_20251101: &str = "claude-opus-4-5-20251101";
 
         // Convenience constants for alias models
         pub const CLAUDE_HAIKU_4_5: &str = "claude-haiku-4-5";
         pub const CLAUDE_SONNET_4_5: &str = "claude-sonnet-4-5";
         pub const CLAUDE_OPUS_4_1: &str = "claude-opus-4-1";
+        pub const CLAUDE_OPUS_4_5: &str = "claude-opus-4-5";
 
         // Legacy aliases for backwards compatibility
         pub const CLAUDE_OPUS_4_1_20250805_LEGACY: &str = "claude-opus-4-1-20250805"; // legacy alias
@@ -304,9 +308,11 @@ pub mod models {
             CLAUDE_SONNET_4_5_20250929,
             CLAUDE_HAIKU_4_5_20251001,
             CLAUDE_OPUS_4_1_20250805,
+            CLAUDE_OPUS_4_5_20251101,
             CLAUDE_SONNET_4_5,
             CLAUDE_HAIKU_4_5,
             CLAUDE_OPUS_4_1,
+            CLAUDE_OPUS_4_5,
         ];
     }
 
@@ -351,11 +357,13 @@ pub mod models {
     pub const CODEX_MINI: &str = openai::CODEX_MINI_LATEST;
     pub const CODEX_MINI_LATEST: &str = openai::CODEX_MINI_LATEST;
     pub const CLAUDE_OPUS_4_1_20250805: &str = anthropic::CLAUDE_OPUS_4_1_20250805;
+    pub const CLAUDE_OPUS_4_5_20251101: &str = anthropic::CLAUDE_OPUS_4_5_20251101;
     pub const CLAUDE_SONNET_4_5: &str = anthropic::CLAUDE_SONNET_4_5;
     pub const CLAUDE_HAIKU_4_5: &str = anthropic::CLAUDE_HAIKU_4_5;
     pub const CLAUDE_SONNET_4_5_20250929: &str = anthropic::CLAUDE_SONNET_4_5_20250929;
     pub const CLAUDE_HAIKU_4_5_20251001: &str = anthropic::CLAUDE_HAIKU_4_5_20251001;
     pub const CLAUDE_OPUS_4_1: &str = anthropic::CLAUDE_OPUS_4_1;
+    pub const CLAUDE_OPUS_4_5: &str = anthropic::CLAUDE_OPUS_4_5;
     pub const MINIMAX_M2: &str = minimax::MINIMAX_M2;
     pub const MOONSHOT_KIMI_K2_TURBO_PREVIEW: &str = moonshot::KIMI_K2_TURBO_PREVIEW;
     pub const MOONSHOT_KIMI_K2_THINKING: &str = moonshot::KIMI_K2_THINKING;
@@ -509,6 +517,16 @@ pub mod defaults {
     pub const DEFAULT_PTY_STDOUT_TAIL_LINES: usize = 20;
     pub const DEFAULT_PTY_SCROLLBACK_LINES: usize = 400;
     pub const DEFAULT_TOOL_OUTPUT_MODE: &str = ui::TOOL_OUTPUT_MODE_COMPACT;
+
+    /// Default maximum tokens for PTY command output truncation.
+    /// Prevents context overflow for verbose commands like `cargo clippy`.
+    /// Set to 8000 tokens (~32KB) - enough for error analysis while staying
+    /// well within model context limits.
+    pub const DEFAULT_PTY_OUTPUT_MAX_TOKENS: usize = 8_000;
+
+    /// Byte fuse for PTY output - secondary safeguard after token truncation.
+    /// Protects against edge cases where token estimation underestimates size.
+    pub const DEFAULT_PTY_OUTPUT_BYTE_FUSE: usize = 40 * 1024; // 40 KiB
 }
 
 pub mod ui {
@@ -602,7 +620,8 @@ pub mod ui {
     pub const HEADER_INPUT_ENABLED: &str = "Enabled";
     pub const HEADER_INPUT_DISABLED: &str = "Disabled";
     pub const INLINE_USER_PREFIX: &str = " ";
-    pub const CHAT_INPUT_PLACEHOLDER_BOOTSTRAP: &str = "Implement {feature} in {file} (@files, #prompts, /commands, or ctrl+e to edit {file})";
+    pub const CHAT_INPUT_PLACEHOLDER_BOOTSTRAP: &str =
+        "Implement {feature} in {file} (@files, #prompts, /commands, or ctrl+e to edit {file})";
     pub const CHAT_INPUT_PLACEHOLDER_FOLLOW_UP: &str =
         "Build something (tip: you can use @files, #prompts, /commands, or ctrl+e to edit {file})";
     pub const HEADER_SHORTCUT_HINT: &str = "Shortcuts: Enter=submit | Shift+Enter=newline | Ctrl/Cmd+Enter=queue | Esc=cancel | Ctrl+C=interrupt | @=file picker | #=custom prompts | /=slash commands";

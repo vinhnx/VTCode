@@ -247,14 +247,15 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
 
         FunctionDeclaration {
             name: tools::RUN_PTY_CMD.to_string(),
-            description: "Execute shell commands (git, cargo, npm, shell scripts, etc). Full terminal emulation with PTY support for both one-off and interactive modes. Respects command policies for safety.".to_string(),
+            description: "Execute shell commands (git, cargo, npm, shell scripts, etc). Full terminal emulation with PTY support for both one-off and interactive modes. Respects command policies for safety. Output is automatically truncated to prevent context overflow.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
                     "command": {"type": "string", "description": "Shell command to execute (e.g., 'git diff', 'cargo test', 'npm install'). Can be string or array of strings."},
                     "cwd": {"type": "string", "description": "Working directory for the command (relative or absolute)."},
                     "timeout_secs": {"type": "integer", "description": "Timeout in seconds. Default 180 for most commands, longer for cargo/build commands.", "default": 180},
-                    "confirm": {"type": "boolean", "description": "Require confirmation before executing destructive commands (rm, git reset, etc).", "default": false}
+                    "confirm": {"type": "boolean", "description": "Require confirmation before executing destructive commands (rm, git reset, etc).", "default": false},
+                    "max_tokens": {"type": "integer", "description": "Maximum output tokens before truncation (default: 8000). Set to 0 to disable truncation (not recommended). Helps prevent context window overflow for verbose commands like 'cargo clippy'."}
                 },
                 "required": ["command"]
             }),

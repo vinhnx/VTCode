@@ -116,14 +116,49 @@ impl Session {
         max_width: usize,
         border_style: Style,
     ) -> Vec<Line<'static>> {
+        self.wrap_block_lines_with_options(first_prefix, _continuation_prefix, content, max_width, border_style, true)
+    }
+
+    /// Wrap content with left border only (no right border)
+    #[allow(dead_code)]
+    pub(super) fn wrap_block_lines_no_right_border(
+        &self,
+        first_prefix: &str,
+        _continuation_prefix: &str,
+        content: Vec<Span<'static>>,
+        max_width: usize,
+        border_style: Style,
+    ) -> Vec<Line<'static>> {
+        self.wrap_block_lines_with_options(first_prefix, _continuation_prefix, content, max_width, border_style, false)
+    }
+
+    /// Wrap content with configurable border options
+    fn wrap_block_lines_with_options(
+        &self,
+        first_prefix: &str,
+        _continuation_prefix: &str,
+        content: Vec<Span<'static>>,
+        max_width: usize,
+        border_style: Style,
+        show_right_border: bool,
+    ) -> Vec<Line<'static>> {
         if max_width < 2 {
+            let fallback = if show_right_border {
+                format!("{}││", first_prefix)
+            } else {
+                format!("{}│", first_prefix)
+            };
             return vec![Line::from(vec![Span::styled(
-                format!("{}││", first_prefix),
+                fallback,
                 border_style,
             )])];
         }
 
-        let right_border = ui::INLINE_BLOCK_BODY_RIGHT;
+        let right_border = if show_right_border {
+            ui::INLINE_BLOCK_BODY_RIGHT
+        } else {
+            ""
+        };
         let prefix_width = first_prefix.chars().count();
         let border_width = right_border.chars().count();
         let consumed_width = prefix_width.saturating_add(border_width);
@@ -132,7 +167,9 @@ impl Session {
         if max_width == usize::MAX {
             let mut spans = vec![Span::styled(first_prefix.to_string(), border_style)];
             spans.extend(content);
-            spans.push(Span::styled(right_border.to_string(), border_style));
+            if show_right_border {
+                spans.push(Span::styled(right_border.to_string(), border_style));
+            }
             return vec![Line::from(spans)];
         }
 
@@ -144,14 +181,20 @@ impl Session {
         // Add borders to each wrapped line
         for line in wrapped.iter_mut() {
             let line_width = line.spans.iter().map(|s| s.width()).sum::<usize>();
-            let padding = content_width.saturating_sub(line_width);
+            let padding = if show_right_border {
+                content_width.saturating_sub(line_width)
+            } else {
+                0
+            };
 
             let mut new_spans = vec![Span::styled(first_prefix.to_string(), border_style)];
             new_spans.extend(line.spans.drain(..));
             if padding > 0 {
                 new_spans.push(Span::styled(" ".repeat(padding), Style::default()));
             }
-            new_spans.push(Span::styled(right_border.to_string(), border_style));
+            if show_right_border {
+                new_spans.push(Span::styled(right_border.to_string(), border_style));
+            }
             line.spans = new_spans;
         }
 
@@ -189,11 +232,12 @@ impl Session {
 
         let mut lines = Vec::new();
         if is_detail {
-            let body_prefix = format!("{} ", ui::INLINE_BLOCK_BODY_LEFT);
+            // Simple indent prefix without border characters
+            let body_prefix = "  ";
             let content = render::render_tool_segments(self, line);
             lines.extend(self.wrap_block_lines(
-                &body_prefix,
-                &body_prefix,
+                body_prefix,
+                body_prefix,
                 content,
                 max_width,
                 border_style.clone(),
@@ -320,44 +364,34 @@ impl Session {
             return Vec::new();
         }
 
-        // Render body content
+        // Render body content - strip ANSI codes to ensure plain text output
         let fallback = self
             .text_fallback(InlineMessageKind::Pty)
             .or(self.theme.foreground);
         let mut body_spans = Vec::new();
         for segment in &line.segments {
+            let stripped_text = render::strip_ansi_codes(&segment.text);
             let style = ratatui_style_from_inline(&segment.style, fallback);
-            body_spans.push(Span::styled(segment.text.clone(), style));
+            body_spans.push(Span::styled(stripped_text, style));
         }
 
         if is_start {
-            // Add top border
-            if max_width > 2 {
-                let top_border_content = format!(
-                    "{}{}{}",
-                    ui::INLINE_BLOCK_TOP_LEFT,
-                    ui::INLINE_BLOCK_HORIZONTAL.repeat(max_width.saturating_sub(2)),
-                    ui::INLINE_BLOCK_TOP_RIGHT
-                );
-                lines.push(Line::from(vec![Span::styled(
-                    top_border_content,
-                    border_style.clone(),
-                )]));
-            }
-            let first_prefix = format!("{} ", ui::INLINE_BLOCK_BODY_LEFT);
-            let continuation_prefix = format!("{} ", ui::INLINE_BLOCK_BODY_LEFT);
-            lines.extend(self.wrap_block_lines(
-                &first_prefix,
-                &continuation_prefix,
+            // Simple indent prefix without border characters
+            let first_prefix = "  ";
+            let continuation_prefix = "  ";
+            lines.extend(self.wrap_block_lines_no_right_border(
+                first_prefix,
+                continuation_prefix,
                 body_spans,
                 max_width,
                 border_style.clone(),
             ));
         } else {
-            let body_prefix = format!("{} ", ui::INLINE_BLOCK_BODY_LEFT);
-            lines.extend(self.wrap_block_lines(
-                &body_prefix,
-                &body_prefix,
+            // Simple indent prefix without border characters
+            let body_prefix = "  ";
+            lines.extend(self.wrap_block_lines_no_right_border(
+                body_prefix,
+                body_prefix,
                 body_spans,
                 max_width,
                 border_style.clone(),

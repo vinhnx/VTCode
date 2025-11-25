@@ -665,11 +665,7 @@ pub(super) fn render_message_spans(session: &Session, index: usize) -> Vec<Span<
 
     let fallback = text_fallback(session, line.kind).or(session.theme.foreground);
     for segment in &line.segments {
-        let mut style = ratatui_style_from_inline(&segment.style, fallback);
-        if line.kind == InlineMessageKind::Agent {
-            // Apply italic effect for agent messages
-            style = style.add_modifier(ratatui::style::Modifier::ITALIC);
-        }
+        let style = ratatui_style_from_inline(&segment.style, fallback);
         spans.push(Span::styled(segment.text.clone(), style));
     }
 
@@ -996,14 +992,46 @@ fn wrap_block_lines(
     max_width: usize,
     border_style: Style,
 ) -> Vec<Line<'static>> {
+    wrap_block_lines_with_options(session, first_prefix, _continuation_prefix, content, max_width, border_style, true)
+}
+
+fn wrap_block_lines_no_right_border(
+    session: &Session,
+    first_prefix: &str,
+    _continuation_prefix: &str,
+    content: Vec<Span<'static>>,
+    max_width: usize,
+    border_style: Style,
+) -> Vec<Line<'static>> {
+    wrap_block_lines_with_options(session, first_prefix, _continuation_prefix, content, max_width, border_style, false)
+}
+
+fn wrap_block_lines_with_options(
+    session: &Session,
+    first_prefix: &str,
+    _continuation_prefix: &str,
+    content: Vec<Span<'static>>,
+    max_width: usize,
+    border_style: Style,
+    show_right_border: bool,
+) -> Vec<Line<'static>> {
     if max_width < 2 {
+        let fallback = if show_right_border {
+            format!("{}││", first_prefix)
+        } else {
+            format!("{}│", first_prefix)
+        };
         return vec![Line::from(vec![Span::styled(
-            format!("{}││", first_prefix),
+            fallback,
             border_style,
         )])];
     }
 
-    let right_border = ui::INLINE_BLOCK_BODY_RIGHT;
+    let right_border = if show_right_border {
+        ui::INLINE_BLOCK_BODY_RIGHT
+    } else {
+        ""
+    };
     let prefix_width = first_prefix.chars().count();
     let border_width = right_border.chars().count();
     let consumed_width = prefix_width.saturating_add(border_width);
@@ -1012,7 +1040,9 @@ fn wrap_block_lines(
     if max_width == usize::MAX {
         let mut spans = vec![Span::styled(first_prefix.to_string(), border_style)];
         spans.extend(content);
-        spans.push(Span::styled(right_border.to_string(), border_style));
+        if show_right_border {
+            spans.push(Span::styled(right_border.to_string(), border_style));
+        }
         return vec![Line::from(spans)];
     }
 
@@ -1024,14 +1054,20 @@ fn wrap_block_lines(
     // Add borders to each wrapped line
     for line in wrapped.iter_mut() {
         let line_width = line.spans.iter().map(|s| s.width()).sum::<usize>();
-        let padding = content_width.saturating_sub(line_width);
+        let padding = if show_right_border {
+            content_width.saturating_sub(line_width)
+        } else {
+            0
+        };
 
         let mut new_spans = vec![Span::styled(first_prefix.to_string(), border_style)];
         new_spans.extend(line.spans.drain(..));
         if padding > 0 {
             new_spans.push(Span::styled(" ".repeat(padding), Style::default()));
         }
-        new_spans.push(Span::styled(right_border.to_string(), border_style));
+        if show_right_border {
+            new_spans.push(Span::styled(right_border.to_string(), border_style));
+        }
         line.spans = new_spans;
     }
 
@@ -1067,12 +1103,13 @@ fn reflow_tool_lines(session: &Session, index: usize, width: u16) -> Vec<Line<'s
 
     let mut lines = Vec::new();
     if is_detail {
-        let body_prefix = format!("{} ", ui::INLINE_BLOCK_BODY_LEFT);
+        // Simple indent prefix without border characters
+        let body_prefix = "  ";
         let content = render_tool_segments(session, line);
         lines.extend(wrap_block_lines(
             session,
-            &body_prefix,
-            &body_prefix,
+            body_prefix,
+            body_prefix,
             content,
             max_width,
             border_style.clone(),
@@ -1235,34 +1272,23 @@ fn reflow_pty_lines(session: &Session, index: usize, width: u16) -> Vec<Line<'st
         return Vec::new();
     }
 
-    // Render body content
+    // Render body content - strip ANSI codes to ensure plain text output
     let fallback = text_fallback(session, InlineMessageKind::Pty).or(session.theme.foreground);
     let mut body_spans = Vec::new();
     for segment in &line.segments {
+        let stripped_text = strip_ansi_codes(&segment.text);
         let style = ratatui_style_from_inline(&segment.style, fallback);
-        body_spans.push(Span::styled(segment.text.clone(), style));
+        body_spans.push(Span::styled(stripped_text, style));
     }
 
     // Check if this is a thinking spinner line (skip border rendering)
     let is_thinking_spinner = combined.contains("Thinking...");
 
     if is_start {
-        // Add top border line (skip for thinking spinner)
-        if !is_thinking_spinner && max_width > 2 {
-            let top_border_content = format!(
-                "{}{}{}",
-                ui::INLINE_BLOCK_TOP_LEFT,
-                ui::INLINE_BLOCK_HORIZONTAL.repeat(max_width.saturating_sub(2)),
-                ui::INLINE_BLOCK_TOP_RIGHT
-            );
-            lines.push(Line::from(vec![Span::styled(
-                top_border_content,
-                border_style.clone(),
-            )]));
-        }
+        // Render body without borders - just indent with spaces for visual separation
         if is_thinking_spinner {
             // Render thinking spinner without borders
-            lines.extend(wrap_block_lines(
+            lines.extend(wrap_block_lines_no_right_border(
                 session,
                 "",
                 "",
@@ -1271,23 +1297,25 @@ fn reflow_pty_lines(session: &Session, index: usize, width: u16) -> Vec<Line<'st
                 border_style.clone(),
             ));
         } else {
-            let first_prefix = format!("{} ", ui::INLINE_BLOCK_BODY_LEFT);
-            let continuation_prefix = format!("{} ", ui::INLINE_BLOCK_BODY_LEFT);
-            lines.extend(wrap_block_lines(
+            // Simple indent prefix without border characters
+            let first_prefix = "  ";
+            let continuation_prefix = "  ";
+            lines.extend(wrap_block_lines_no_right_border(
                 session,
-                &first_prefix,
-                &continuation_prefix,
+                first_prefix,
+                continuation_prefix,
                 body_spans,
                 max_width,
                 border_style.clone(),
             ));
         }
     } else {
-        let body_prefix = format!("{} ", ui::INLINE_BLOCK_BODY_LEFT);
-        lines.extend(wrap_block_lines(
+        // Simple indent prefix without border characters
+        let body_prefix = "  ";
+        lines.extend(wrap_block_lines_no_right_border(
             session,
-            &body_prefix,
-            &body_prefix,
+            body_prefix,
+            body_prefix,
             body_spans,
             max_width,
             border_style.clone(),

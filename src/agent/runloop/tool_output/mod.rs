@@ -1,12 +1,21 @@
 mod commands;
 mod files;
+pub(crate) mod large_output;
 mod mcp;
 mod panels;
 mod plan;
 mod streams;
 mod styles;
 
-pub(crate) use streams::render_code_fence_blocks;
+// Re-export large output handling utilities for external use
+#[allow(unused_imports)]
+pub(crate) use large_output::{
+    LargeOutputConfig, SpoolResult, cleanup_old_spool_dirs, format_compact_notification,
+    format_spool_notification, spool_large_output,
+};
+// Re-export stream utilities
+#[allow(unused_imports)]
+pub(crate) use streams::{render_code_fence_blocks, spool_output_with_notification};
 
 use anyhow::Result;
 use serde_json::Value;
@@ -129,7 +138,7 @@ pub(crate) async fn render_tool_output(
             tool_name,
             &git_styles,
             &ls_styles,
-            MessageStyle::Response,
+            MessageStyle::ToolOutput,
             allow_tool_ansi,
             vt_config,
             token_budget,
@@ -145,7 +154,7 @@ pub(crate) async fn render_tool_output(
             tool_name,
             &git_styles,
             &ls_styles,
-            MessageStyle::Response,
+            MessageStyle::ToolOutput,
             allow_tool_ansi,
             vt_config,
             token_budget,

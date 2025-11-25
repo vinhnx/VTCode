@@ -26,12 +26,22 @@ use tokio::fs;
 use tokio::time::sleep;
 use tracing::{debug, trace, warn};
 
+use crate::config::constants::defaults::{
+    DEFAULT_PTY_OUTPUT_BYTE_FUSE, DEFAULT_PTY_OUTPUT_MAX_TOKENS,
+};
+
 const RUN_PTY_POLL_TIMEOUT_SECS: u64 = 5;
 // For known long-running commands, wait longer before returning partial output
 const RUN_PTY_POLL_TIMEOUT_LONG_RUNNING: u64 = 30;
 
 const LONG_RUNNING_COMMANDS: &[&str] = &[
     "cargo", "npm", "yarn", "pnpm", "pip", "python", "make", "docker",
+];
+
+/// Commands that produce structured build output (errors, warnings)
+/// For these, we apply smarter extraction that prioritizes error lines.
+const BUILD_OUTPUT_COMMANDS: &[&str] = &[
+    "cargo", "rustc", "npm", "yarn", "pnpm", "tsc", "eslint", "make", "gcc", "clang",
 ];
 
 use super::ToolRegistry;
@@ -1493,6 +1503,13 @@ impl ToolRegistry {
             .await?;
         let working_dir_display = self.pty_manager().describe_working_dir(&working_dir_path);
 
+        // Parse max_tokens for output truncation (defaults to DEFAULT_PTY_OUTPUT_MAX_TOKENS)
+        let max_tokens = payload
+            .get("max_tokens")
+            .and_then(|v| v.as_u64())
+            .map(|v| v as usize)
+            .unwrap_or(DEFAULT_PTY_OUTPUT_MAX_TOKENS);
+
         Ok(PtyCommandSetup {
             command,
             working_dir_path,
@@ -1501,6 +1518,7 @@ impl ToolRegistry {
             rows,
             cols,
             timeout_secs,
+            max_tokens,
         })
     }
 
@@ -1519,8 +1537,59 @@ impl ToolRegistry {
         // We pass 0 as retry_count since we are not retrying.
         let result = self.execute_single_pty_attempt(&setup, 0).await?;
 
-        let capture = result.1;
+        let mut capture = result.1;
         let snapshot = result.2;
+
+        // Apply smart truncation to prevent context overflow
+        // This is critical for commands like `cargo clippy` that can produce 8000+ lines
+        if setup.max_tokens > 0 && !capture.output.is_empty() {
+            let original_len = capture.output.len();
+            let original_lines = capture.output.lines().count();
+
+            // Check if this is build tool output that benefits from error extraction
+            let is_build_output = setup.command.iter().any(|arg| {
+                let lower = arg.to_lowercase();
+                BUILD_OUTPUT_COMMANDS.iter().any(|cmd| lower.contains(cmd))
+            });
+
+            if is_build_output {
+                // Smart extraction: prioritize errors/warnings for build output
+                capture.output = extract_build_errors_and_summary(&capture.output, setup.max_tokens);
+            } else {
+                // Generic head+tail truncation for other commands
+                use crate::core::agent::runloop::token_trunc::truncate_content_by_tokens;
+                use crate::core::token_budget::TokenBudgetManager;
+
+                let token_budget = TokenBudgetManager::default();
+                let (truncated_output, was_truncated) =
+                    truncate_content_by_tokens(&capture.output, setup.max_tokens, &token_budget)
+                        .await;
+
+                if was_truncated {
+                    capture.output = truncated_output;
+                }
+            }
+
+            // Apply byte fuse as secondary safeguard
+            if capture.output.len() > DEFAULT_PTY_OUTPUT_BYTE_FUSE {
+                use crate::core::agent::runloop::token_trunc::safe_truncate_to_bytes_with_marker;
+                capture.output =
+                    safe_truncate_to_bytes_with_marker(&capture.output, DEFAULT_PTY_OUTPUT_BYTE_FUSE);
+            }
+
+            // Add truncation notice if output was reduced
+            let final_lines = capture.output.lines().count();
+            if original_lines > final_lines || original_len > capture.output.len() {
+                capture.output = format!(
+                    "{}\n\n[Output truncated: {} lines / {} bytes → {} lines / {} bytes]",
+                    capture.output,
+                    original_lines,
+                    original_len,
+                    final_lines,
+                    capture.output.len()
+                );
+            }
+        }
 
         let response = build_ephemeral_pty_response(&setup, capture, snapshot);
         Ok(response)
@@ -2239,6 +2308,9 @@ struct PtyCommandSetup {
     rows: u16,
     cols: u16,
     timeout_secs: u64,
+    /// Maximum tokens for output truncation. Defaults to DEFAULT_PTY_OUTPUT_MAX_TOKENS.
+    /// Set to 0 to disable truncation (not recommended for large outputs).
+    max_tokens: usize,
 }
 
 impl PtyCommandSetup {
@@ -2872,6 +2944,130 @@ fn generate_command_not_found_message(cmd: &str) -> String {
             )
         }
     }
+}
+
+/// Extract errors, warnings, and summary from build tool output.
+/// Prioritizes error messages over verbose compilation progress.
+///
+/// For cargo/rustc output, extracts:
+/// - All error lines (error[E...]:) with 2 lines of context
+/// - All warning lines (warning:) with 1 line of context
+/// - Summary lines (Finished, error: could not compile, etc.)
+///
+/// This dramatically reduces output size while preserving actionable information.
+fn extract_build_errors_and_summary(output: &str, max_tokens: usize) -> String {
+    use crate::core::token_constants::TOKENS_PER_CHARACTER;
+
+    let lines: Vec<&str> = output.lines().collect();
+    let total_lines = lines.len();
+
+    // If output is small enough, return as-is
+    let estimated_tokens = (output.len() as f64 / TOKENS_PER_CHARACTER).ceil() as usize;
+    if estimated_tokens <= max_tokens {
+        return output.to_string();
+    }
+
+    let mut extracted = Vec::new();
+    let mut i = 0;
+
+    // Patterns that indicate important lines to keep
+    let error_patterns = ["error[E", "error:", "Error:", "ERROR:"];
+    let warning_patterns = ["warning:", "Warning:", "WARN:"];
+    let summary_patterns = [
+        "Finished",
+        "error: could not compile",
+        "error: aborting",
+        "Build failed",
+        "npm ERR!",
+        "failed to compile",
+        "generated",
+        "warning:",
+        "error:",
+    ];
+
+    while i < total_lines {
+        let line = lines[i];
+        let is_error = error_patterns.iter().any(|p| line.contains(p));
+        let is_warning = warning_patterns.iter().any(|p| line.contains(p));
+        let is_summary = summary_patterns.iter().any(|p| line.contains(p));
+
+        if is_error {
+            // Include 2 lines before and after error for context
+            let start = i.saturating_sub(2);
+            let end = (i + 3).min(total_lines);
+            for j in start..end {
+                if !extracted.contains(&j) {
+                    extracted.push(j);
+                }
+            }
+        } else if is_warning {
+            // Include 1 line before and after warning
+            let start = i.saturating_sub(1);
+            let end = (i + 2).min(total_lines);
+            for j in start..end {
+                if !extracted.contains(&j) {
+                    extracted.push(j);
+                }
+            }
+        } else if is_summary {
+            if !extracted.contains(&i) {
+                extracted.push(i);
+            }
+        }
+
+        i += 1;
+    }
+
+    // Always include the last 10 lines (usually contains summary)
+    let tail_start = total_lines.saturating_sub(10);
+    for j in tail_start..total_lines {
+        if !extracted.contains(&j) {
+            extracted.push(j);
+        }
+    }
+
+    // Sort to maintain original order
+    extracted.sort();
+
+    // Build output with markers for skipped sections
+    let mut result = String::new();
+    let mut last_idx: Option<usize> = None;
+
+    for &idx in &extracted {
+        if let Some(last) = last_idx {
+            if idx > last + 1 {
+                let skipped = idx - last - 1;
+                result.push_str(&format!("\n[... {} lines skipped ...]\n", skipped));
+            }
+        }
+        result.push_str(lines[idx]);
+        result.push('\n');
+        last_idx = Some(idx);
+    }
+
+    // If we extracted nothing useful, fall back to head+tail
+    if extracted.is_empty() || result.trim().is_empty() {
+        let head_lines = 50.min(total_lines / 3);
+        let tail_lines = 30.min(total_lines / 3);
+
+        result.clear();
+        for line in lines.iter().take(head_lines) {
+            result.push_str(line);
+            result.push('\n');
+        }
+        if total_lines > head_lines + tail_lines {
+            result.push_str(&format!(
+                "\n[... {} lines skipped ...]\n\n",
+                total_lines - head_lines - tail_lines
+            ));
+        }
+        for line in lines.iter().skip(total_lines.saturating_sub(tail_lines)) {
+            result.push_str(line);
+            result.push('\n');
+        }
+    }
+
+    result
 }
 
 fn build_shell_command_string(

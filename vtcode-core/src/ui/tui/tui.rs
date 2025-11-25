@@ -201,7 +201,7 @@ pub async fn run_tui(
 ) -> Result<()> {
     let surface = TerminalSurface::detect(surface_preference, inline_rows)?;
     let mut session = Session::new(theme, placeholder, surface.rows(), show_timeline_pane);
-    
+
     // Pre-load custom prompts if provided
     if let Some(prompts) = custom_prompts {
         session.set_custom_prompts(prompts);
@@ -216,7 +216,12 @@ pub async fn run_tui(
 
     // Spawn the async event loop
     let event_loop_handle = tokio::spawn(async move {
-        spawn_event_loop(event_channels_for_loop.tx.clone(), event_loop_token, rx_paused).await;
+        spawn_event_loop(
+            event_channels_for_loop.tx.clone(),
+            event_loop_token,
+            rx_paused,
+        )
+        .await;
     });
 
     let mut stdout = io::stdout();
@@ -375,7 +380,11 @@ async fn drive_terminal<B: Backend>(
         }
 
         // Only redraw if not suspended
-        if !event_channels.rx_paused.load(std::sync::atomic::Ordering::Acquire) && session.take_redraw() {
+        if !event_channels
+            .rx_paused
+            .load(std::sync::atomic::Ordering::Acquire)
+            && session.take_redraw()
+        {
             terminal
                 .draw(|frame| session.render(frame))
                 .context("failed to draw inline session")?;

@@ -104,6 +104,7 @@ For tasks spanning 100+ tokens or multiple turns, use `.progress.md`:
 ### Tool Decision Tree
 | Goal | Tool | Parameters/Notes |
 |------|------|------------------|
+| **"run <cmd>"** (explicit) | `run_pty_cmd` | **ALWAYS** use PTY for explicit "run" requests (e.g., "run ls -a" → `{"command": "ls -a"}`). Do NOT interpret semantically. |
 | List/find files | `list_files` | Use `mode="find_name"` to find by filename pattern; `mode="recursive"` for directory tree |
 | Search file content | `grep_file` | Regex search with pattern, path, max_results, context_lines, glob_pattern, etc. |
 | Discover tools/MCP | `search_tools` | Find available MCP tools and integrations |
@@ -122,6 +123,7 @@ For tasks spanning 100+ tokens or multiple turns, use `.progress.md`:
 | Skill Management | `save_skill`, `load_skill`, `list_skills`, `search_skills` | Save/reuse code functions across sessions. |
 
 ### Execution Guidelines
+-   **Explicit Shell Commands**: When user says "run <command>" (e.g., "run ls -a", "run git status"), ALWAYS use `run_pty_cmd` with the exact command. Do NOT interpret "run ls" as "list files" semantically—execute the literal shell command.
 -   **File Discovery**: `list_files` (with mode="find_name") for filename patterns; `grep_file` for content search.
 -   **File Reading**: `read_file` with `max_tokens` parameter to limit output for large files (default chunks at 2000 lines).
 -   **File Modification**: Prefer `edit_file` for surgical edits. Use `create_file` for new files, `write_file` for complete rewrites, `apply_patch` for complex multi-hunk changes.
