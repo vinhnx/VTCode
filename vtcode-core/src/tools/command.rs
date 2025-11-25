@@ -112,7 +112,7 @@ impl CommandTool {
                     .shell
                     .clone()
                     .filter(|s| !s.trim().is_empty())
-                    .unwrap_or_else(|| resolve_fallback_shell());
+                    .unwrap_or_else(resolve_fallback_shell);
                 let use_login = input.login.unwrap_or(true);
                 let full_command = format_command(command);
                 CommandInvocation {

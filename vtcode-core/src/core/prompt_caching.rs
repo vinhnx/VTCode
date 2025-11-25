@@ -202,15 +202,15 @@ impl PromptCache {
         // Ensure cache directory exists
         fs::create_dir_all(&self.config.cache_dir)
             .await
-            .map_err(|e| PromptCacheError::Io(e))?;
+            .map_err(PromptCacheError::Io)?;
 
         let cache_path = self.config.cache_dir.join("prompt_cache.json");
         let data = serde_json::to_string_pretty(&self.cache)
-            .map_err(|e| PromptCacheError::Serialization(e))?;
+            .map_err(PromptCacheError::Serialization)?;
 
         fs::write(cache_path, data)
             .await
-            .map_err(|e| PromptCacheError::Io(e))?;
+            .map_err(PromptCacheError::Io)?;
 
         Ok(())
     }
@@ -228,9 +228,9 @@ impl PromptCache {
 
         let data = fs::read_to_string(cache_path)
             .await
-            .map_err(|e| PromptCacheError::Io(e))?;
+            .map_err(PromptCacheError::Io)?;
 
-        self.cache = serde_json::from_str(&data).map_err(|e| PromptCacheError::Serialization(e))?;
+        self.cache = serde_json::from_str(&data).map_err(PromptCacheError::Serialization)?;
 
         Ok(())
     }
