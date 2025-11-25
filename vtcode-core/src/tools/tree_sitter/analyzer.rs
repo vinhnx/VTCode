@@ -125,9 +125,9 @@ impl TreeSitterAnalyzer {
 
         for language in &languages {
             let mut parser = Parser::new();
-            let ts_language = get_language(language.clone())?;
+            let ts_language = get_language(*language)?;
             parser.set_language(&ts_language)?;
-            parsers.insert(language.clone(), parser);
+            parsers.insert(*language, parser);
         }
 
         Ok(Self {
@@ -390,7 +390,7 @@ impl TreeSitterAnalyzer {
             self.extract_symbols_recursive(
                 child,
                 source_code,
-                language.clone(),
+                language,
                 symbols,
                 parent_scope.clone(),
             )?;
@@ -689,7 +689,7 @@ impl TreeSitterAnalyzer {
             .await
             .map_err(|e| TreeSitterError::FileReadError(e.to_string()))?;
 
-        let tree = self.parse(&source_code, language.clone())?;
+        let tree = self.parse(&source_code, language)?;
 
         // Convert tree-sitter tree to our SyntaxTree representation
         let root = self.convert_tree_to_syntax_node(tree.root_node(), &source_code);
@@ -834,11 +834,11 @@ impl TreeSitterAnalyzer {
 
         self.current_file = file_path.to_string_lossy().to_string();
 
-        let tree = self.parse(source_code, language.clone())?;
+        let tree = self.parse(source_code, language)?;
 
         // Extract actual symbols and dependencies
-        let symbols = self.extract_symbols(&tree, source_code, language.clone())?;
-        let dependencies = self.extract_dependencies(&tree, language.clone())?;
+        let symbols = self.extract_symbols(&tree, source_code, language)?;
+        let dependencies = self.extract_dependencies(&tree, language)?;
         let metrics = self.calculate_metrics(&tree, source_code)?;
 
         Ok(CodeAnalysis {

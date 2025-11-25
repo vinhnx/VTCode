@@ -1125,7 +1125,7 @@ fn reflow_tool_lines(session: &Session, index: usize, width: u16) -> Vec<Line<'s
             body_prefix,
             content,
             max_width,
-            border_style.clone(),
+            border_style,
         ));
     } else {
         // For simple tool output, render without borders
@@ -1307,7 +1307,7 @@ fn reflow_pty_lines(session: &Session, index: usize, width: u16) -> Vec<Line<'st
                 "",
                 body_spans,
                 max_width,
-                border_style.clone(),
+                border_style,
             ));
         } else {
             // Simple indent prefix without border characters
@@ -1319,7 +1319,7 @@ fn reflow_pty_lines(session: &Session, index: usize, width: u16) -> Vec<Line<'st
                 continuation_prefix,
                 body_spans,
                 max_width,
-                border_style.clone(),
+                border_style,
             ));
         }
     } else {
@@ -1331,7 +1331,7 @@ fn reflow_pty_lines(session: &Session, index: usize, width: u16) -> Vec<Line<'st
             body_prefix,
             body_spans,
             max_width,
-            border_style.clone(),
+            border_style,
         ));
     }
 

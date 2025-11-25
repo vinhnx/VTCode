@@ -446,8 +446,8 @@ impl PromptInvocation {
         };
 
         if !named.contains_key("TASK") {
-            if let Some(all) = all_arguments.clone() {
-                named.insert("TASK".to_string(), all);
+            if let Some(all) = &all_arguments {
+                named.insert("TASK".to_string(), all.clone());
             }
         }
 

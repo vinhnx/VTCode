@@ -187,18 +187,18 @@ impl Agent {
         // Parse the file
         let syntax_tree = self
             .tree_sitter_analyzer
-            .parse(source_code, language.clone())?;
+            .parse(source_code, language)?;
 
         // Extract symbols
         let symbols = self
             .tree_sitter_analyzer
-            .extract_symbols(&syntax_tree, source_code, language.clone())
+            .extract_symbols(&syntax_tree, source_code, language)
             .unwrap_or_default();
 
         // Extract dependencies
         let dependencies = self
             .tree_sitter_analyzer
-            .extract_dependencies(&syntax_tree, language.clone())
+            .extract_dependencies(&syntax_tree, language)
             .unwrap_or_default();
 
         // Calculate metrics
