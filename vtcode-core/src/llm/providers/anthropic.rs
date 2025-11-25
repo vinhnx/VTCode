@@ -582,7 +582,7 @@ impl AnthropicProvider {
             }
         }
 
-        let mut messages = Vec::new();
+        let mut messages = Vec::with_capacity(request.messages.len());
 
         for msg in &request.messages {
             if msg.role == MessageRole::System {

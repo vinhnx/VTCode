@@ -25,7 +25,7 @@ pub fn compose_system_instruction(
 
 /// Build the initial conversation payload (without the system instruction message).
 pub fn build_conversation(task: &Task, contexts: &[ContextItem]) -> Vec<Content> {
-    let mut conversation = Vec::new();
+    let mut conversation = Vec::with_capacity(3);
     conversation.push(Content::user_text(format!(
         "Task: {}\nDescription: {}",
         task.title, task.description
@@ -54,7 +54,7 @@ pub fn build_messages_from_conversation(
     system_instruction: &str,
     conversation: &[Content],
 ) -> Vec<Message> {
-    let mut messages = Vec::new();
+    let mut messages = Vec::with_capacity(conversation.len() + 1);
     messages.push(Message::system(system_instruction.to_string()));
 
     for content in conversation {

@@ -126,8 +126,8 @@ pub async fn aggregate_tool_output_for_model(
     byte_fuse: usize,
     token_budget: &TokenBudgetManager,
 ) -> String {
-    // Collect likely text fields in preferred order
-    let mut parts: Vec<(String, String)> = Vec::new();
+    // Collect likely text fields in preferred order (max 5 standard fields)
+    let mut parts: Vec<(String, String)> = Vec::with_capacity(5);
 
     // Common fields
     if let Some(s) = output.get("output").and_then(Value::as_str) {
