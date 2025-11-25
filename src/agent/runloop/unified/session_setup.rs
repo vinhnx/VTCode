@@ -38,7 +38,9 @@ use vtcode_core::tools::ToolRegistry;
 use vtcode_core::tools::build_function_declarations_with_mode;
 use vtcode_core::tools::{SearchMetrics, ToolResultCache};
 use vtcode_core::ui::theme;
-use vtcode_core::ui::tui::{InlineEventCallback, InlineHandle, InlineSession, theme_from_styles, spawn_session_with_prompts};
+use vtcode_core::ui::tui::{
+    InlineEventCallback, InlineHandle, InlineSession, spawn_session_with_prompts, theme_from_styles,
+};
 use vtcode_core::ui::user_confirmation::TaskComplexity;
 use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_core::utils::session_archive::{SessionArchive, SessionArchiveMetadata};

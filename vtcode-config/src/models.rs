@@ -192,7 +192,9 @@ pub enum ModelId {
     OpenAIGptOss120b,
 
     // Anthropic models
-    /// Claude Opus 4.1 - Latest most capable Anthropic model (2025-08-05)
+    /// Claude Opus 4.5 - Latest flagship Anthropic model with exceptional reasoning (2025-11-01)
+    ClaudeOpus45,
+    /// Claude Opus 4.1 - Previous most capable Anthropic model (2025-08-05)
     ClaudeOpus41,
     /// Claude Sonnet 4.5 - Latest balanced Anthropic model (2025-10-15)
     ClaudeSonnet45,
@@ -496,6 +498,7 @@ impl ModelId {
             ModelId::GPT5Nano => models::GPT_5_NANO,
             ModelId::CodexMiniLatest => models::CODEX_MINI_LATEST,
             // Anthropic models
+            ModelId::ClaudeOpus45 => models::CLAUDE_OPUS_4_5,
             ModelId::ClaudeOpus41 => models::CLAUDE_OPUS_4_1,
             ModelId::ClaudeSonnet45 => models::CLAUDE_SONNET_4_5,
             ModelId::ClaudeHaiku45 => models::CLAUDE_HAIKU_4_5,
@@ -567,7 +570,8 @@ impl ModelId {
             | ModelId::CodexMiniLatest
             | ModelId::OpenAIGptOss20b
             | ModelId::OpenAIGptOss120b => Provider::OpenAI,
-            ModelId::ClaudeOpus41
+            ModelId::ClaudeOpus45
+            | ModelId::ClaudeOpus41
             | ModelId::ClaudeSonnet45
             | ModelId::ClaudeHaiku45
             | ModelId::ClaudeSonnet4 => Provider::Anthropic,
@@ -635,6 +639,7 @@ impl ModelId {
             ModelId::GPT5Nano => "GPT-5 Nano",
             ModelId::CodexMiniLatest => "Codex Mini Latest",
             // Anthropic models
+            ModelId::ClaudeOpus45 => "Claude Opus 4.5",
             ModelId::ClaudeOpus41 => "Claude Opus 4.1",
             ModelId::ClaudeSonnet45 => "Claude Sonnet 4.5",
             ModelId::ClaudeHaiku45 => "Claude Haiku 4.5",
@@ -722,7 +727,8 @@ impl ModelId {
                 "OpenAI's open-source 120B parameter GPT-OSS model using harmony tokenization"
             }
             // Anthropic models
-            ModelId::ClaudeOpus41 => "Latest most capable Anthropic model with advanced reasoning",
+            ModelId::ClaudeOpus45 => "Latest flagship Anthropic model with exceptional reasoning capabilities",
+            ModelId::ClaudeOpus41 => "Previous most capable Anthropic model with advanced reasoning",
             ModelId::ClaudeSonnet45 => "Latest balanced Anthropic model for general tasks",
             ModelId::ClaudeHaiku45 => {
                 "Latest efficient Anthropic model optimized for low-latency agent workflows"
@@ -852,6 +858,7 @@ impl ModelId {
             ModelId::GPT5Nano,
             ModelId::CodexMiniLatest,
             // Anthropic models
+            ModelId::ClaudeOpus45,
             ModelId::ClaudeOpus41,
             ModelId::ClaudeSonnet45,
             ModelId::ClaudeHaiku45,
@@ -919,6 +926,7 @@ impl ModelId {
             ModelId::Gemini25Pro,
             ModelId::GPT5,
             ModelId::OpenAIGptOss20b,
+            ModelId::ClaudeOpus45,
             ModelId::ClaudeOpus41,
             ModelId::ClaudeSonnet45,
             ModelId::DeepSeekReasoner,
@@ -944,7 +952,7 @@ impl ModelId {
         match provider {
             Provider::Gemini => ModelId::Gemini25Pro,
             Provider::OpenAI => ModelId::GPT5,
-            Provider::Anthropic => ModelId::ClaudeOpus41,
+            Provider::Anthropic => ModelId::ClaudeOpus45,
             Provider::DeepSeek => ModelId::DeepSeekReasoner,
             Provider::Moonshot => ModelId::MoonshotKimiK20905Preview,
             Provider::XAI => ModelId::XaiGrok4,
@@ -976,7 +984,7 @@ impl ModelId {
         match provider {
             Provider::Gemini => ModelId::Gemini25FlashPreview,
             Provider::OpenAI => ModelId::GPT5,
-            Provider::Anthropic => ModelId::ClaudeOpus41,
+            Provider::Anthropic => ModelId::ClaudeOpus45,
             Provider::DeepSeek => ModelId::DeepSeekReasoner,
             Provider::Moonshot => ModelId::MoonshotKimiK2TurboPreview,
             Provider::XAI => ModelId::XaiGrok4,
@@ -1101,6 +1109,7 @@ impl ModelId {
             | ModelId::GPT5Nano
             | ModelId::CodexMiniLatest => "5",
             // Anthropic generations
+            ModelId::ClaudeOpus45 => "4.5",
             ModelId::ClaudeSonnet45 | ModelId::ClaudeHaiku45 => "4.5",
             ModelId::ClaudeSonnet4 => "4",
             ModelId::ClaudeOpus41 => "4.1",
@@ -1176,6 +1185,7 @@ impl FromStr for ModelId {
             s if s == models::openai::GPT_OSS_20B => Ok(ModelId::OpenAIGptOss20b),
             s if s == models::openai::GPT_OSS_120B => Ok(ModelId::OpenAIGptOss120b),
             // Anthropic models
+            s if s == models::CLAUDE_OPUS_4_5 => Ok(ModelId::ClaudeOpus45),
             s if s == models::CLAUDE_OPUS_4_1 => Ok(ModelId::ClaudeOpus41),
             s if s == models::CLAUDE_SONNET_4_5 => Ok(ModelId::ClaudeSonnet45),
             s if s == models::CLAUDE_HAIKU_4_5 => Ok(ModelId::ClaudeHaiku45),

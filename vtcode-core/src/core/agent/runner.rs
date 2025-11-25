@@ -572,7 +572,7 @@ impl AgentRunner {
         verbosity: Option<VerbosityLevel>,
     ) -> Result<Self> {
         // Create client based on model
-        let client: AnyClient = make_client(api_key.clone(), model.clone());
+        let client: AnyClient = make_client(api_key.clone(), model);
 
         // Create unified provider client for tool calling
         let provider_client = create_provider_for_model(model.as_str(), api_key.clone(), None)
@@ -859,10 +859,8 @@ impl AgentRunner {
 
                 let mut had_tool_call = false;
 
-                if !reasoning_recorded {
-                    if let Some(reasoning) = reasoning.as_ref() {
-                        event_recorder.reasoning(reasoning);
-                    }
+                if !reasoning_recorded && let Some(reasoning) = reasoning.as_ref() {
+                    event_recorder.reasoning(reasoning);
                 }
                 {
                     runner_println!(
@@ -917,24 +915,22 @@ impl AgentRunner {
                 if effective_tool_calls
                     .as_ref()
                     .map_or(true, |calls| calls.is_empty())
-                {
-                    if let Some(args_value) = resp
+                    && let Some(args_value) = resp
                         .content
                         .as_ref()
                         .and_then(|text| detect_textual_run_pty_cmd(text))
-                    {
-                        let call_id = format!(
-                            "textual_call_{}_{}",
-                            turn,
-                            task_state.conversation_messages.len()
-                        );
-                        let args_json = serde_json::to_string(&args_value)?;
-                        effective_tool_calls = Some(vec![ToolCall::function(
-                            call_id,
-                            tools::RUN_PTY_CMD.to_string(),
-                            args_json,
-                        )]);
-                    }
+                {
+                    let call_id = format!(
+                        "textual_call_{}_{}",
+                        turn,
+                        task_state.conversation_messages.len()
+                    );
+                    let args_json = serde_json::to_string(&args_value)?;
+                    effective_tool_calls = Some(vec![ToolCall::function(
+                        call_id,
+                        tools::RUN_PTY_CMD.to_string(),
+                        args_json,
+                    )]);
                 }
 
                 if let Some(tool_calls) = effective_tool_calls.as_ref() {
@@ -1012,13 +1008,12 @@ impl AgentRunner {
                                         "",
                                     );
 
-                                    if name == tools::WRITE_FILE {
-                                        if let Some(filepath) =
+                                    if name == tools::WRITE_FILE
+                                        && let Some(filepath) =
                                             args.get("path").and_then(|p| p.as_str())
-                                        {
-                                            task_state.modified_files.push(filepath.to_string());
-                                            event_recorder.file_change_completed(filepath);
-                                        }
+                                    {
+                                        task_state.modified_files.push(filepath.to_string());
+                                        event_recorder.file_change_completed(filepath);
                                     }
                                 }
                                 Err(e) => {

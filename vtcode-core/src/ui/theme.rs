@@ -130,6 +130,11 @@ impl ThemePalette {
             ],
         );
 
+        // Tool output style: dimmed for less visual prominence, non-italic for readability
+        let tool_output_style = Style::new()
+            .fg_color(Some(Color::Rgb(tool_body_color)))
+            .effects(Effects::DIMMED);
+
         ThemeStyles {
             info: Self::style_from(info_color, true),
             error: Self::style_from(alert_color, true),
@@ -138,6 +143,7 @@ impl ThemePalette {
             reasoning: reasoning_style,
             tool: tool_style,
             tool_detail: tool_detail_style,
+            tool_output: tool_output_style,
             status: Self::style_from(
                 ensure_contrast(
                     lighten(primary, ui::THEME_PRIMARY_STATUS_LIGHTEN_RATIO),
@@ -183,6 +189,7 @@ pub struct ThemeStyles {
     pub reasoning: Style,
     pub tool: Style,
     pub tool_detail: Style,
+    pub tool_output: Style,
     pub status: Style,
     pub mcp: Style,
     pub user: Style,

@@ -208,6 +208,8 @@ pub enum ModelId {
     // Anthropic models
     /// Claude Opus 4.1 - Latest most capable Anthropic model (2025-08-05)
     ClaudeOpus41,
+    /// Claude Opus 4.5 - Latest flagship model with exceptional reasoning (2025-11-01)
+    ClaudeOpus45,
     /// Claude Sonnet 4.5 - Latest balanced Anthropic model (2025-11-15)
     ClaudeSonnet45,
     /// Claude Haiku 4.5 - Latest efficient Anthropic model (2025-11-15)
@@ -461,6 +463,7 @@ impl ModelId {
             ModelId::OpenAIGptOss120b => models::openai::GPT_OSS_120B,
             // Anthropic models
             ModelId::ClaudeOpus41 => models::CLAUDE_OPUS_4_1,
+            ModelId::ClaudeOpus45 => models::CLAUDE_OPUS_4_5,
             ModelId::ClaudeSonnet45 => models::CLAUDE_SONNET_4_5,
             ModelId::ClaudeHaiku45 => models::CLAUDE_HAIKU_4_5,
             ModelId::ClaudeSonnet4 => models::CLAUDE_SONNET_4_5_20250929,
@@ -588,6 +591,7 @@ impl ModelId {
             | ModelId::OpenAIGptOss20b
             | ModelId::OpenAIGptOss120b => Provider::OpenAI,
             ModelId::ClaudeOpus41
+            | ModelId::ClaudeOpus45
             | ModelId::ClaudeSonnet45
             | ModelId::ClaudeHaiku45
             | ModelId::ClaudeSonnet4 => Provider::Anthropic,
@@ -776,6 +780,7 @@ impl ModelId {
             ModelId::CodexMiniLatest => "Codex Mini Latest",
             // Anthropic models
             ModelId::ClaudeOpus41 => "Claude Opus 4.1",
+            ModelId::ClaudeOpus45 => "Claude Opus 4.5",
             ModelId::ClaudeSonnet45 => "Claude Sonnet 4.5",
             ModelId::ClaudeHaiku45 => "Claude Haiku 4.5",
             ModelId::ClaudeSonnet4 => "Claude Sonnet 4",
@@ -874,6 +879,9 @@ impl ModelId {
             // Anthropic models
             ModelId::ClaudeOpus41 => {
                 "Latest most capable Anthropic model with advanced reasoning and structured outputs"
+            }
+            ModelId::ClaudeOpus45 => {
+                "Latest flagship model with exceptional reasoning. Most capable Anthropic model for complex multi-step tasks"
             }
             ModelId::ClaudeSonnet45 => "Latest balanced Anthropic model for general tasks",
             ModelId::ClaudeHaiku45 => {
@@ -1065,6 +1073,7 @@ impl ModelId {
             ModelId::GPT51Mini,
             ModelId::CodexMiniLatest,
             // Anthropic models
+            ModelId::ClaudeOpus45,
             ModelId::ClaudeOpus41,
             ModelId::ClaudeSonnet45,
             ModelId::ClaudeHaiku45,
@@ -1136,6 +1145,7 @@ impl ModelId {
             ModelId::GPT5,
             ModelId::GPT51,
             ModelId::OpenAIGptOss20b,
+            ModelId::ClaudeOpus45,
             ModelId::ClaudeOpus41,
             ModelId::ClaudeSonnet45,
             ModelId::DeepSeekReasoner,
@@ -1152,7 +1162,6 @@ impl ModelId {
         ModelId::Gemini25FlashPreview
     }
 
-
     /// Get the default orchestrator model (more capable)
     pub fn default_orchestrator() -> Self {
         ModelId::Gemini25Pro
@@ -1168,7 +1177,7 @@ impl ModelId {
         match provider {
             Provider::Gemini => ModelId::Gemini25Pro,
             Provider::OpenAI => ModelId::GPT5,
-            Provider::Anthropic => ModelId::ClaudeOpus41,
+            Provider::Anthropic => ModelId::ClaudeOpus45,
             Provider::Minimax => ModelId::MinimaxM2,
             Provider::DeepSeek => ModelId::DeepSeekReasoner,
             Provider::Moonshot => ModelId::MoonshotKimiK20905Preview,
@@ -1336,7 +1345,7 @@ impl ModelId {
             | ModelId::OpenAIGptOss20b
             | ModelId::OpenAIGptOss120b => "5",
             // Anthropic generations
-            ModelId::ClaudeOpus41 | ModelId::ClaudeSonnet45 | ModelId::ClaudeHaiku45 => "4.5",
+            ModelId::ClaudeOpus41 | ModelId::ClaudeOpus45 | ModelId::ClaudeSonnet45 | ModelId::ClaudeHaiku45 => "4.5",
             ModelId::ClaudeSonnet4 => "4",
             // DeepSeek generations
             ModelId::DeepSeekChat | ModelId::DeepSeekReasoner => "V3.2-Exp",
@@ -1481,6 +1490,8 @@ impl FromStr for ModelId {
             // Anthropic models
             s if s == models::CLAUDE_OPUS_4_1_20250805 => Ok(ModelId::ClaudeOpus41),
             s if s == models::CLAUDE_OPUS_4_1 => Ok(ModelId::ClaudeOpus41),
+            s if s == models::CLAUDE_OPUS_4_5_20251101 => Ok(ModelId::ClaudeOpus45),
+            s if s == models::CLAUDE_OPUS_4_5 => Ok(ModelId::ClaudeOpus45),
             s if s == models::CLAUDE_SONNET_4_5 => Ok(ModelId::ClaudeSonnet45),
             s if s == models::CLAUDE_HAIKU_4_5 => Ok(ModelId::ClaudeHaiku45),
             s if s == models::CLAUDE_SONNET_4_5_20250929 => Ok(ModelId::ClaudeSonnet4),

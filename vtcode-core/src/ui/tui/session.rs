@@ -374,7 +374,9 @@ impl Session {
             InlineCommand::ClearScreen => {
                 self.clear_screen();
             }
-            InlineCommand::SuspendEventLoop | InlineCommand::ResumeEventLoop | InlineCommand::ClearInputQueue => {
+            InlineCommand::SuspendEventLoop
+            | InlineCommand::ResumeEventLoop
+            | InlineCommand::ClearInputQueue => {
                 // Handled by drive_terminal
             }
             InlineCommand::Shutdown => {

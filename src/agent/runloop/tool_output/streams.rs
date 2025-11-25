@@ -35,6 +35,8 @@
 //! - `MAX_CODE_LINES: 500`: For code fence blocks (still truncated by tokens upstream)
 //!
 //! Full output is spooled to `.vtcode/tool-output/` for later review.
+//! For very large outputs, files are saved to `~/.vtcode/tmp/<session_hash>/call_<id>.output`
+//! with a notification displayed to the client.
 
 use std::borrow::Cow;
 use std::io::Write as IoWrite;
@@ -49,6 +51,7 @@ use vtcode_core::core::token_budget::TokenBudgetManager;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::files::truncate_text_safe;
+use super::large_output::{LargeOutputConfig, spool_large_output};
 use super::panels::{PanelContentLine, clamp_panel_text, render_panel};
 use super::styles::{GitStyles, LsStyles, select_line_style};
 use crate::agent::runloop::text_tools::CodeFenceBlock;
@@ -73,6 +76,8 @@ const LARGE_OUTPUT_THRESHOLD_MB: usize = 1_000_000;
 const VERY_LARGE_OUTPUT_THRESHOLD_MB: usize = 500_000;
 /// Size threshold (bytes) at which to skip preview entirely
 const EXTREME_OUTPUT_THRESHOLD_MB: usize = 2_000_000;
+/// Size threshold (bytes) for using new large output handler with hashed directories
+const LARGE_OUTPUT_NOTIFICATION_THRESHOLD: usize = 60_000;
 
 /// Determine preview line count based on content size
 fn calculate_preview_lines(content_size: usize) -> usize {
@@ -407,6 +412,12 @@ pub(crate) fn resolve_stdout_tail_limit(config: Option<&VTCodeConfig>) -> usize 
         .unwrap_or(defaults::DEFAULT_PTY_STDOUT_TAIL_LINES)
 }
 
+/// Spool large output to a file with improved directory structure and notifications
+///
+/// For outputs exceeding the threshold, saves to `~/.vtcode/tmp/<session_hash>/call_<id>.output`
+/// and returns the path. The session hash groups related outputs together for easier cleanup.
+///
+/// This function also supports the legacy spool directory for backwards compatibility.
 pub(crate) fn spool_output_if_needed(
     content: &str,
     tool_name: &str,
@@ -420,6 +431,18 @@ pub(crate) fn spool_output_if_needed(
         return Ok(None);
     }
 
+    // For very large outputs, use the new large output handler with hashed directories
+    // This provides cleaner notifications and better organization
+    if content.len() >= LARGE_OUTPUT_NOTIFICATION_THRESHOLD {
+        let large_output_config =
+            LargeOutputConfig::default().with_threshold(LARGE_OUTPUT_NOTIFICATION_THRESHOLD);
+
+        if let Ok(Some(result)) = spool_large_output(content, tool_name, &large_output_config) {
+            return Ok(Some(result.file_path));
+        }
+    }
+
+    // Fall back to legacy spool directory for smaller outputs or if new handler fails
     let spool_dir = config
         .and_then(|cfg| cfg.ui.tool_output_spool_dir.as_deref())
         .map(PathBuf::from)
@@ -458,6 +481,32 @@ pub(crate) fn spool_output_if_needed(
     .map_err(|_| anyhow::anyhow!("Spool thread panicked"))?;
 
     result.map(Some)
+}
+
+/// Spool large output with full SpoolResult for agent access
+///
+/// Returns the SpoolResult which is the SOURCE OF TRUTH for large outputs.
+/// The SpoolResult provides:
+/// - `file_path`: Where the full output is stored
+/// - `read_full_content()`: Read the entire output
+/// - `read_lines(start, end)`: Read specific line ranges
+/// - `get_preview()`: Get head+tail preview
+/// - `to_agent_response()`: Get formatted response for agent
+#[allow(dead_code)]
+pub(crate) fn spool_output_with_notification(
+    content: &str,
+    tool_name: &str,
+    session_id: Option<&str>,
+) -> Result<Option<super::large_output::SpoolResult>> {
+    if content.len() < LARGE_OUTPUT_NOTIFICATION_THRESHOLD {
+        return Ok(None);
+    }
+
+    let config = LargeOutputConfig::default()
+        .with_threshold(LARGE_OUTPUT_NOTIFICATION_THRESHOLD)
+        .with_session_id(session_id.unwrap_or("default").to_string());
+
+    spool_large_output(content, tool_name, &config)
 }
 
 pub(crate) fn tail_lines_streaming<'a>(

@@ -357,18 +357,6 @@ pub(super) fn render_reasoning_inline(
         });
     }
 
-    // Include "None" for non-GPT-5.1 models as well after the standard levels
-    if !is_gpt51 {
-        items.push(InlineListItem {
-            title: reasoning_level_label(ReasoningEffortLevel::None).to_string(),
-            subtitle: Some(reasoning_level_description(ReasoningEffortLevel::None).to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::Reasoning(ReasoningEffortLevel::None)),
-            search_value: None,
-        });
-    }
-
     if let Some(alternative) = selection.reasoning_off_model {
         items.push(InlineListItem {
             title: format!("Use {} (reasoning off)", alternative.display_name()),

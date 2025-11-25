@@ -199,7 +199,7 @@ pub(crate) async fn render_terminal_command_panel(
             Some(tools::RUN_PTY_CMD),
             git_styles,
             ls_styles,
-            MessageStyle::Response, // This is the normal terminal output
+            MessageStyle::ToolOutput, // Dimmed, non-italic style for tool output
             allow_ansi,
             vt_config,
             token_budget,

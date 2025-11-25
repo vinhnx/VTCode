@@ -126,6 +126,8 @@ indicatif = { version = "0.18", default-features = false }
 async-trait = "0.1.89"
 # Environment helpers
 dotenvy = "0.15"
+# Hashing for large output file paths
+sha2 = "0.10"
 # ANSI styling
 anstyle = "1.0"
 anstyle-git = "1.1"

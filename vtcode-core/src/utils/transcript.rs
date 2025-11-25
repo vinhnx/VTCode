@@ -142,7 +142,7 @@ fn message_kind(style: MessageStyle) -> InlineMessageKind {
     match style {
         MessageStyle::Info => InlineMessageKind::Info,
         MessageStyle::Error => InlineMessageKind::Error,
-        MessageStyle::Output => InlineMessageKind::Pty,
+        MessageStyle::Output | MessageStyle::ToolOutput => InlineMessageKind::Pty,
         MessageStyle::Response => InlineMessageKind::Agent,
         MessageStyle::Tool | MessageStyle::ToolDetail => InlineMessageKind::Tool,
         MessageStyle::Status | MessageStyle::McpStatus => InlineMessageKind::Info,

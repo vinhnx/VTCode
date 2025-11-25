@@ -310,6 +310,34 @@
                 },
                 "context": 200000,
                 "status": "stable"
+            },
+            "claude-opus-4-5-20251101": {
+                "id": "claude-opus-4-5-20251101",
+                "name": "Claude Opus 4.5",
+                "description": "Latest flagship model with exceptional reasoning. Most capable Anthropic model for complex multi-step tasks.",
+                "reasoning": true,
+                "tool_call": true,
+                "modalities": {
+                    "input": ["text", "image"],
+                    "output": ["text"]
+                },
+                "context": 200000,
+                "output_tokens": 64000,
+                "status": "current"
+            },
+            "claude-opus-4-5": {
+                "id": "claude-opus-4-5",
+                "name": "Claude Opus 4.5 (alias)",
+                "description": "Alias for latest Claude Opus 4.5. Auto-updates with new releases.",
+                "alias": "claude-opus-4-5-20251101",
+                "reasoning": true,
+                "tool_call": true,
+                "modalities": {
+                    "input": ["text", "image"],
+                    "output": ["text"]
+                },
+                "context": 200000,
+                "status": "stable"
             }
         }
     },

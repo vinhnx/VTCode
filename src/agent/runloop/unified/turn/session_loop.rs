@@ -1023,7 +1023,9 @@ pub(crate) async fn run_single_agent_loop_unified(
                 Err(err) => {
                     // Handle errors gracefully - display to user but continue the session
                     tracing::error!("Turn execution error: {}", err);
-                    // Clear any pending spinner/output before showing error
+                    // Clear the spinner from input status area
+                    handle.set_input_status(None, None);
+                    // Clear any pending output before showing error
                     let _ = renderer.line_if_not_empty(MessageStyle::Output);
                     // Display error without panicking even if renderer fails
                     let _ = renderer.line(MessageStyle::Error, &format!("Error: {}", err));

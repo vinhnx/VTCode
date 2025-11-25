@@ -14,19 +14,19 @@ cargo fmt                   # Format code
 
 ## Architecture & Key Modules
 
-- **Workspace**: `vtcode-core/` (library) + `src/main.rs` (binary) + 9 workspace crates
-- **Core**: `llm/` (multi-provider), `tools/` (trait-based), `config/` (TOML-based)
-- **Integrations**: Tree-sitter, PTY execution, ACP/MCP protocol, Gemini/OpenAI/Anthropic APIs
+-   **Workspace**: `vtcode-core/` (library) + `src/main.rs` (binary) + 9 workspace crates
+-   **Core**: `llm/` (multi-provider), `tools/` (trait-based), `config/` (TOML-based)
+-   **Integrations**: Tree-sitter, PTY execution, ACP/MCP protocol, Gemini/OpenAI/Anthropic APIs
 
 ## Code Style & Conventions
 
-- **Naming**: snake_case functions/vars, PascalCase types (standard Rust)
-- **Error Handling**: `anyhow::Result<T>` + `anyhow::Context`; NO `unwrap()`
-- **Constants**: Use `vtcode-core/src/config/constants.rs` (never hardcode, especially model IDs)
-- **ANSI Codes**: **NEVER hardcode** escape sequences. Always use constants from `vtcode-core/src/utils/ansi_codes.rs` (e.g., `ALT_BUFFER_DISABLE`, `CURSOR_SHOW`, `RESET`, `CLEAR_SCREEN`)
-- **Config**: Read from `vtcode.toml` at runtime
-- **Docs**: Markdown ONLY in `./docs/`; use `docs/models.json` for latest LLM models
-- **Formatting**: 4-space indentation, early returns, simple variable names
+-   **Naming**: snake_case functions/vars, PascalCase types (standard Rust)
+-   **Error Handling**: `anyhow::Result<T>` + `anyhow::Context`; NO `unwrap()`
+-   **Constants**: Use `vtcode-core/src/config/constants.rs` (never hardcode, especially model IDs)
+-   **ANSI Codes**: **NEVER hardcode** escape sequences. Always use constants from `vtcode-core/src/utils/ansi_codes.rs` (e.g., `ALT_BUFFER_DISABLE`, `CURSOR_SHOW`, `RESET`, `CLEAR_SCREEN`)
+-   **Config**: Read from `vtcode.toml` at runtime
+-   **Docs**: Markdown ONLY in `./docs/`; use `docs/models.json` for latest LLM models
+-   **Formatting**: 4-space indentation, early returns, simple variable names
 
 ## Context Engineering & Output Curation (NEW - Phase 1 Optimization)
 
@@ -34,78 +34,90 @@ cargo fmt                   # Format code
 
 ### Per-Tool Output Rules
 
-**grep_file / Grep**: 
-- Return max **5 most relevant matches**
-- Indicate if more exist: `[+12 more matches]`
-- Don't: Dump all 100 results
+**grep_file / Grep**:
+
+-   Return max **5 most relevant matches**
+-   Indicate if more exist: `[+12 more matches]`
+-   Don't: Dump all 100 results
 
 **list_files / glob**:
-- For 50+ items, summarize: `42 .rs files in src/ (showing first 5: main.rs, lib.rs, ...)`
-- Don't: List all 50 items individually
+
+-   For 50+ items, summarize: `42 .rs files in src/ (showing first 5: main.rs, lib.rs, ...)`
+-   Don't: List all 50 items individually
 
 **read_file / Read**:
-- For files >1000 lines, use `read_range=[start, end]`
-- Don't: Read entire massive files; request sections
+
+-   For files >1000 lines, use `read_range=[start, end]`
+-   Don't: Read entire massive files; request sections
 
 **Cargo / Build Output**:
-- Extract **error lines + 2 context lines**
-- Discard: Verbose padding, build progress, repetitive info
-- Format: `Error: [message]\n  --> src/main.rs:10:5`
+
+-   Extract **error lines + 2 context lines**
+-   Discard: Verbose padding, build progress, repetitive info
+-   Format: `Error: [message]\n  --> src/main.rs:10:5`
 
 **git / Git Commands**:
-- Show: commit hash + first message line
-- Discard: Full diffs, verbose logs
-- Format: `a1b2c3d Fix user validation logic`
+
+-   Show: commit hash + first message line
+-   Discard: Full diffs, verbose logs
+-   Format: `a1b2c3d Fix user validation logic`
 
 **Test Output**:
-- Show: Pass/Fail + failure summary only
-- Discard: Verbose passing tests, coverage details
+
+-   Show: Pass/Fail + failure summary only
+-   Discard: Verbose passing tests, coverage details
 
 ### Context Triage Rules
 
 When context window fills:
 
 **Keep** (critical signals):
-- Architecture decisions (why, not what)
-- Error paths and debugging info
-- Current blockers and next steps
-- File paths + line numbers
+
+-   Architecture decisions (why, not what)
+-   Error paths and debugging info
+-   Current blockers and next steps
+-   File paths + line numbers
 
 **Discard** (low signal):
-- Verbose tool outputs (already used)
-- Search results (file locations noted)
-- Full file contents (only keep line numbers)
-- Explanatory text from past messages
+
+-   Verbose tool outputs (already used)
+-   Search results (file locations noted)
+-   Full file contents (only keep line numbers)
+-   Explanatory text from past messages
 
 ### Token Budget Awareness
 
-- **70% full**: Start compacting old steps
-- **85% full**: Aggressive compaction (summarize completed work)
-- **90% full**: Create `.progress.md` with state, reset context
-- **Continue**: Resume from `.progress.md` with fresh window
+-   **70% full**: Start compacting old steps
+-   **85% full**: Aggressive compaction (summarize completed work)
+-   **90% full**: Create `.progress.md` with state, reset context
+-   **Continue**: Resume from `.progress.md` with fresh window
 
 ## Multi-LLM Compatibility (NEW - Phase 2 Optimization)
 
 VT Code supports Claude 3.5+, OpenAI GPT-4/4o, and Google Gemini 2.0+ with **95% compatibility**.
 
 ### Universal Patterns (Work on All Models)
-- Direct task language: "Find X", "Update Y", "Fix Z"
-- Active voice: "Update the validation logic"
-- Specific outcomes: "Return file path + line number"
-- Flat structures: Max 2 levels of nesting
-- Clear examples: Input/output pairs
+
+-   Direct task language: "Find X", "Update Y", "Fix Z"
+-   Active voice: "Update the validation logic"
+-   Specific outcomes: "Return file path + line number"
+-   Flat structures: Max 2 levels of nesting
+-   Clear examples: Input/output pairs
 
 ### Model-Specific Optimizations
+
 **Claude 3.5 Sonnet**: XML tags (`<task>`, `<analysis>`), "CRITICAL" keywords, detailed reasoning
 **GPT-4/4o**: Numbered lists, 3-4 examples, compact instructions (~1.5K tokens)
 **Gemini 2.0+**: Flat lists, markdown headers, direct language, explicit parameters
 
 ### Tool Consistency Across Models
+
 All models use identical tool interfaces:
-- grep_file: Max 5 matches, mark overflow
-- list_files: Summarize 50+ items
-- read_file: Use read_range for large files
-- All other tools: Identical behavior
+
+-   grep_file: Max 5 matches, mark overflow
+-   list_files: Summarize 50+ items
+-   read_file: Use read_range for large files
+-   All other tools: Identical behavior
 
 ## See Also
 
@@ -172,11 +184,15 @@ When gathering context:
 
 ```
 
+Explicit "run <cmd>" request?
+└─ ALWAYS use run_pty_cmd with exact command
+└─ "run ls -a" → {"command": "ls -a"} (do NOT interpret as list_files)
+
 Need information?
 ├─ Structure? → list_files
-│  └─ 50+ items? Use summarization (counts + sample)
+│ └─ 50+ items? Use summarization (counts + sample)
 └─ Text patterns? → grep_file
-   └─ 100+ matches? Show top 5, mark overflow
+└─ 100+ matches? Show top 5, mark overflow
 
 Modifying files?
 ├─ Surgical edit (1-5 lines)? → edit_file (preferred)
@@ -185,13 +201,13 @@ Modifying files?
 
 Running commands?
 ├─ One-off (cargo, git, npm)? → shell tool
-│  └─ 1000+ line output? Extract errors + 2 context lines
+│ └─ 1000+ line output? Extract errors + 2 context lines
 └─ Interactive (debugger, REPL)? → create_pty_session
-   └─ Session output? Keep only key observations
+└─ Session output? Keep only key observations
 
 Processing 100+ items?
 └─ execute_code (Python/JavaScript) for filtering/aggregation
-   └─ Return: count + summary, not raw list
+└─ Return: count + summary, not raw list
 
 Done?
 └─ ONE decisive reply; stop (no re-running model unnecessarily)

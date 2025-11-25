@@ -168,10 +168,7 @@ async fn write_agents_file(
 }
 
 /// Analyze the current project structure
-async fn analyze_project(
-    registry: &mut ToolRegistry,
-    workspace: &Path,
-) -> Result<ProjectAnalysis> {
+async fn analyze_project(registry: &mut ToolRegistry, workspace: &Path) -> Result<ProjectAnalysis> {
     let project_name = workspace
         .file_name()
         .and_then(|n| n.to_str())
@@ -347,7 +344,8 @@ fn extract_cargo_dependencies(analysis: &mut ProjectAnalysis, content: &str) {
     // Simple regex-like parsing for dependencies
     for line in content.lines() {
         let line = line.trim();
-        if line.starts_with('"') && line.contains(" = ")
+        if line.starts_with('"')
+            && line.contains(" = ")
             && let Some(dep_name) = line.split('"').nth(1)
         {
             deps.push(dep_name.to_string());
