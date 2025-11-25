@@ -12,6 +12,7 @@ use base64::Engine;
 use serde_json::{Value, json};
 use std::borrow::Cow;
 use std::collections::HashSet;
+use std::fmt::Write as FmtWrite;
 use std::io::Write;
 use std::path::{Component, Path, PathBuf};
 use std::process::Command;
@@ -1746,10 +1747,11 @@ impl FileOpsTool {
         let tail_line_count = tail_lines.len();
         let truncated_line_count = total_lines.saturating_sub(head_line_count + tail_line_count);
         if truncated_line_count > 0 {
-            chunked_content.push_str(&format!(
+            let _ = write!(
+                chunked_content,
                 "\n\n... [{} lines truncated - showing first {} and last {} lines] ...\n\n",
                 truncated_line_count, head_line_count, tail_line_count
-            ));
+            );
         } else {
             chunked_content.push_str("\n\n");
         }

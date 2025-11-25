@@ -33,6 +33,7 @@ use crate::instructions::{InstructionBundle, InstructionScope, read_instruction_
 use crate::project_doc::read_project_doc;
 use dirs::home_dir;
 use std::env;
+use std::fmt::Write as _;
 use std::path::Path;
 use tracing::warn;
 
@@ -377,29 +378,33 @@ pub async fn compose_system_instruction_text(
         }
 
         if !cfg.commands.allow_list.is_empty() {
-            instruction.push_str(&format!(
+            let _ = write!(
+                instruction,
                 "- **Allowed commands**: {} commands in allow list\n",
                 cfg.commands.allow_list.len()
-            ));
+            );
         }
         if !cfg.commands.deny_list.is_empty() {
-            instruction.push_str(&format!(
+            let _ = write!(
+                instruction,
                 "- **Denied commands**: {} commands in deny list\n",
                 cfg.commands.deny_list.len()
-            ));
+            );
         }
 
         if cfg.pty.enabled {
             instruction.push_str("- **PTY functionality**: Enabled\n");
             let (rows, cols) = (cfg.pty.default_rows, cfg.pty.default_cols);
-            instruction.push_str(&format!(
+            let _ = write!(
+                instruction,
                 "- **Default terminal size**: {} rows × {} columns\n",
                 rows, cols
-            ));
-            instruction.push_str(&format!(
+            );
+            let _ = write!(
+                instruction,
                 "- **PTY command timeout**: {} seconds\n",
                 cfg.pty.command_timeout_seconds
-            ));
+            );
         } else {
             instruction.push_str("- **PTY functionality**: Disabled\n");
         }
@@ -425,12 +430,13 @@ pub async fn compose_system_instruction_text(
             let display_path =
                 format_instruction_path(&segment.source.path, project_root, home_ref);
 
-            instruction.push_str(&format!(
+            let _ = write!(
+                instruction,
                 "### {}. {} ({})\n\n",
                 index + 1,
                 display_path,
                 scope
-            ));
+            );
             instruction.push_str(segment.contents.trim());
             instruction.push_str("\n");
         }
