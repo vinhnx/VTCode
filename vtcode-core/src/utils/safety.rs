@@ -53,7 +53,7 @@ impl SafetyValidator {
                     "Falling back to default model: {}",
                     current_default.display_name()
                 );
-                return Ok(current_default.as_str().to_string());
+                return Ok(current_default.to_string());
             }
         }
 

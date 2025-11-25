@@ -351,7 +351,7 @@ impl AgentBuilder {
     pub fn new() -> Self {
         Self {
             config: AgentConfig {
-                model: ModelId::default().as_str().to_string(),
+                model: ModelId::default().to_string(),
                 api_key: String::new(),
                 provider: Provider::Gemini.to_string(),
                 api_key_env: Provider::Gemini.default_api_key_env().to_string(),

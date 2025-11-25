@@ -380,7 +380,7 @@ impl OllamaProvider {
         if models::ollama::REASONING_LEVEL_MODELS.contains(&model_id) {
             request
                 .reasoning_effort
-                .map(|effort| Value::String(effort.as_str().to_string()))
+                .map(|effort| Value::String(effort.to_string()))
         } else {
             Some(Value::Bool(true))
         }

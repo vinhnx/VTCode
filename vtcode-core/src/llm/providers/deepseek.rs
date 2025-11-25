@@ -233,7 +233,7 @@ impl DeepSeekProvider {
         if let Some(effort) = request.reasoning_effort {
             payload.insert(
                 "reasoning_effort".to_string(),
-                Value::String(effort.as_str().to_string()),
+                Value::String(effort.to_string()),
             );
         }
 

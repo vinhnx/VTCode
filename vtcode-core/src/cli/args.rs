@@ -803,7 +803,7 @@ impl Default for Cli {
                 color: ColorChoice::Auto,
             },
             workspace_path: None,
-            model: Some(ModelId::default().as_str().to_string()),
+            model: Some(ModelId::default().to_string()),
             provider: Some("gemini".to_string()),
             api_key_env: "GEMINI_API_KEY".to_string(),
             workspace: None,
@@ -837,7 +837,7 @@ impl Cli {
     pub fn get_model(&self) -> String {
         self.model
             .clone()
-            .unwrap_or_else(|| ModelId::default().as_str().to_string())
+            .unwrap_or_else(|| ModelId::default().to_string())
     }
 
     /// Load configuration from a simple TOML-like file without external deps

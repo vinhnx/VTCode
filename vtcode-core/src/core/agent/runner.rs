@@ -597,7 +597,7 @@ impl AgentRunner {
             system_prompt,
             session_id,
             _workspace: workspace,
-            model: model.as_str().to_string(),
+            model: model.to_string(),
             _api_key: api_key,
             reasoning_effort,
             verbosity,
