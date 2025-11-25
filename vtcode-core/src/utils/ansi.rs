@@ -529,11 +529,11 @@ impl InlineSink {
         let added = style.add_modifier;
 
         if added.contains(RatModifier::BOLD) {
-            resolved.effects = resolved.effects | Effects::BOLD;
+            resolved.effects |= Effects::BOLD;
         }
 
         if added.contains(RatModifier::ITALIC) {
-            resolved.effects = resolved.effects | Effects::ITALIC;
+            resolved.effects |= Effects::ITALIC;
         }
 
         resolved

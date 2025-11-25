@@ -21,7 +21,7 @@ enum TranscriptMode {
 }
 
 thread_local! {
-    static MODE_STACK: RefCell<Vec<TranscriptMode>> = RefCell::new(Vec::new());
+    static MODE_STACK: RefCell<Vec<TranscriptMode>> = const { RefCell::new(Vec::new()) };
 }
 
 fn is_suppressed() -> bool {

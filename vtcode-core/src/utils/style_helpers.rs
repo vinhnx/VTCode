@@ -41,14 +41,14 @@ pub fn render_styled(text: &str, color: Color, effects: Option<String>) -> Strin
         for effect in effects_str.split(',') {
             let effect = effect.trim().to_lowercase();
             match effect.as_str() {
-                "bold" => ansi_effects = ansi_effects | anstyle::Effects::BOLD,
-                "dim" | "dimmed" => ansi_effects = ansi_effects | anstyle::Effects::DIMMED,
-                "italic" => ansi_effects = ansi_effects | anstyle::Effects::ITALIC,
-                "underline" => ansi_effects = ansi_effects | anstyle::Effects::UNDERLINE,
-                "blink" => ansi_effects = ansi_effects | anstyle::Effects::BLINK,
-                "invert" | "reversed" => ansi_effects = ansi_effects | anstyle::Effects::INVERT,
-                "hidden" => ansi_effects = ansi_effects | anstyle::Effects::HIDDEN,
-                "strikethrough" => ansi_effects = ansi_effects | anstyle::Effects::STRIKETHROUGH,
+                "bold" => ansi_effects |= anstyle::Effects::BOLD,
+                "dim" | "dimmed" => ansi_effects |= anstyle::Effects::DIMMED,
+                "italic" => ansi_effects |= anstyle::Effects::ITALIC,
+                "underline" => ansi_effects |= anstyle::Effects::UNDERLINE,
+                "blink" => ansi_effects |= anstyle::Effects::BLINK,
+                "invert" | "reversed" => ansi_effects |= anstyle::Effects::INVERT,
+                "hidden" => ansi_effects |= anstyle::Effects::HIDDEN,
+                "strikethrough" => ansi_effects |= anstyle::Effects::STRIKETHROUGH,
                 _ => {} // Ignore unknown effects
             }
         }

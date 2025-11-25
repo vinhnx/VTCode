@@ -116,25 +116,25 @@ impl InlineTextStyle {
 
     #[must_use]
     pub fn bold(mut self) -> Self {
-        self.effects = self.effects | Effects::BOLD;
+        self.effects |= Effects::BOLD;
         self
     }
 
     #[must_use]
     pub fn italic(mut self) -> Self {
-        self.effects = self.effects | Effects::ITALIC;
+        self.effects |= Effects::ITALIC;
         self
     }
 
     #[must_use]
     pub fn underline(mut self) -> Self {
-        self.effects = self.effects | Effects::UNDERLINE;
+        self.effects |= Effects::UNDERLINE;
         self
     }
 
     #[must_use]
     pub fn dim(mut self) -> Self {
-        self.effects = self.effects | Effects::DIMMED;
+        self.effects |= Effects::DIMMED;
         self
     }
 
