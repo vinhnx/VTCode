@@ -605,7 +605,7 @@ impl FileOpsTool {
                 let extension = path
                     .extension()
                     .and_then(|ext| ext.to_str())
-                    .map(|ext| normalize_extension(ext));
+                    .map(normalize_extension);
 
                 match extension {
                     Some(ext) if filters.contains(&ext) => {}
