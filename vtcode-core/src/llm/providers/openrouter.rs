@@ -24,8 +24,8 @@ use tracing::debug;
 use super::{
     ReasoningBuffer,
     common::{
-        convert_usage_to_llm_types, extract_prompt_cache_settings, override_base_url,
-        parse_client_prompt_common, resolve_model,
+        convert_usage_to_llm_types, extract_prompt_cache_settings, map_finish_reason_common,
+        override_base_url, parse_client_prompt_common, resolve_model,
     },
     extract_reasoning_trace, gpt5_codex_developer_prompt,
     shared::{
@@ -405,13 +405,7 @@ fn parse_usage_value(value: &Value) -> Usage {
 }
 
 fn map_finish_reason(reason: &str) -> FinishReason {
-    match reason {
-        "stop" | "completed" | "done" | "finished" => FinishReason::Stop,
-        "length" => FinishReason::Length,
-        "tool_calls" => FinishReason::ToolCalls,
-        "content_filter" => FinishReason::ContentFilter,
-        other => FinishReason::Error(other.to_string()),
-    }
+    map_finish_reason_common(reason)
 }
 
 fn push_reasoning_value(

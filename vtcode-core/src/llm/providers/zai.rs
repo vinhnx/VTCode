@@ -14,7 +14,8 @@ use serde_json::{Value, json};
 use std::collections::HashSet;
 
 use super::common::{
-    convert_usage_to_llm_types, override_base_url, parse_client_prompt_common, resolve_model,
+    convert_usage_to_llm_types, map_finish_reason_common, override_base_url,
+    parse_client_prompt_common, parse_tool_call_openai_format, resolve_model,
 };
 
 const PROVIDER_NAME: &str = "Z.AI";
@@ -192,23 +193,7 @@ impl ZAIProvider {
     }
 
     fn parse_tool_call(value: &Value) -> Option<ToolCall> {
-        let id = value.get("id").and_then(|v| v.as_str())?;
-        let function = value.get("function")?;
-        let name = function.get("name").and_then(|v| v.as_str())?;
-        let arguments = function.get("arguments");
-        let serialized = arguments.map_or("{}".to_string(), |value| {
-            if value.is_string() {
-                value.as_str().unwrap_or("").to_string()
-            } else {
-                value.to_string()
-            }
-        });
-
-        Some(ToolCall::function(
-            id.to_string(),
-            name.to_string(),
-            serialized,
-        ))
+        parse_tool_call_openai_format(value)
     }
 
     fn convert_to_zai_format(&self, request: &LLMRequest) -> Result<Value, LLMError> {
@@ -411,13 +396,7 @@ impl ZAIProvider {
     }
 
     fn map_finish_reason(reason: &str) -> FinishReason {
-        match reason {
-            "stop" => FinishReason::Stop,
-            "length" => FinishReason::Length,
-            "tool_calls" => FinishReason::ToolCalls,
-            "sensitive" => FinishReason::ContentFilter,
-            other => FinishReason::Error(other.to_string()),
-        }
+        map_finish_reason_common(reason)
     }
 
     fn available_models() -> Vec<String> {

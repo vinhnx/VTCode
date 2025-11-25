@@ -1,5 +1,5 @@
 use crate::config::core::{PromptCachingConfig, ProviderPromptCachingConfig};
-use crate::llm::provider::{LLMRequest, Message};
+use crate::llm::provider::{FinishReason, LLMRequest, Message, ToolCall};
 use crate::llm::types as llm_types;
 use serde_json::Value;
 
@@ -122,5 +122,40 @@ where
             }
         }
         None => (default_enabled, None),
+    }
+}
+
+/// Parses a tool call from OpenAI-compatible JSON format.
+/// Works for DeepSeek, ZAI, and other OpenAI-compatible providers.
+#[inline]
+pub fn parse_tool_call_openai_format(value: &Value) -> Option<ToolCall> {
+    let id = value.get("id").and_then(|v| v.as_str())?;
+    let function = value.get("function")?;
+    let name = function.get("name").and_then(|v| v.as_str())?;
+    let arguments = function.get("arguments").map(|arg| {
+        if let Some(text) = arg.as_str() {
+            text.to_string()
+        } else {
+            arg.to_string()
+        }
+    });
+
+    Some(ToolCall::function(
+        id.to_string(),
+        name.to_string(),
+        arguments.unwrap_or_else(|| "{}".to_string()),
+    ))
+}
+
+/// Maps common finish reason strings to FinishReason enum.
+/// Handles standard OpenAI-compatible finish reasons.
+#[inline]
+pub fn map_finish_reason_common(reason: &str) -> FinishReason {
+    match reason {
+        "stop" | "completed" | "done" | "finished" => FinishReason::Stop,
+        "length" => FinishReason::Length,
+        "tool_calls" => FinishReason::ToolCalls,
+        "content_filter" | "sensitive" => FinishReason::ContentFilter,
+        other => FinishReason::Error(other.to_string()),
     }
 }
