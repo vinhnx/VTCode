@@ -3,6 +3,7 @@ use crate::ui::git_config::GitColorConfig;
 use crate::utils::style_helpers::style_from_color_name;
 use anstyle::{Reset, Style};
 use anstyle_git;
+use std::fmt::Write as _;
 use std::path::Path;
 
 pub(crate) struct GitDiffPalette {
@@ -527,10 +528,11 @@ impl DiffChatRenderer {
         let estimated_size = changes.len() * 512; // Rough estimate per file
         let mut output = String::with_capacity(estimated_size);
 
-        output.push_str(&format!(
+        let _ = write!(
+            output,
             "\nMultiple File Changes ({} files)\n",
             changes.len()
-        ));
+        );
         output.push_str(&"═".repeat(60));
         output.push_str("\n\n");
 
@@ -683,7 +685,7 @@ impl DiffChatRenderer {
         output.push_str("\n\n");
 
         // Overall summary with colored stats
-        output.push_str(&format!("Summary: {} file(s) changed", check.file_count));
+        let _ = write!(output, "Summary: {} file(s) changed", check.file_count);
         if check.total_additions > 0 || check.total_deletions > 0 {
             let additions = self.diff_renderer.paint(
                 &self.diff_renderer.palette.stat_added,
@@ -693,7 +695,7 @@ impl DiffChatRenderer {
                 &self.diff_renderer.palette.stat_removed,
                 &format!("-{}", check.total_deletions),
             );
-            output.push_str(&format!(" ({} {})", additions, deletions));
+            let _ = write!(output, " ({} {})", additions, deletions);
         }
         output.push_str("\n");
 
@@ -704,7 +706,7 @@ impl DiffChatRenderer {
             for (i, stat) in check.file_stats.iter().enumerate() {
                 if i >= max_files_to_show {
                     let remaining = check.file_stats.len() - max_files_to_show;
-                    output.push_str(&format!("  ... and {} more file(s)\n", remaining));
+                    let _ = writeln!(output, "  ... and {} more file(s)", remaining);
                     break;
                 }
                 let additions = self.diff_renderer.paint(
@@ -715,16 +717,17 @@ impl DiffChatRenderer {
                     &self.diff_renderer.palette.stat_removed,
                     &format!("-{}", stat.deletions),
                 );
-                output.push_str(&format!(
-                    "  • {} ({} {})\n",
+                let _ = writeln!(
+                    output,
+                    "  • {} ({} {})",
                     stat.path, additions, deletions
-                ));
+                );
             }
         }
 
         // Show reason in dimmed text
         if let Some(reason) = &check.reason {
-            output.push_str(&format!("\nReason: {}\n", reason));
+            let _ = writeln!(output, "\nReason: {}", reason);
         }
 
         // Tip for viewing full diff
@@ -744,7 +747,7 @@ impl DiffChatRenderer {
         let status_indicator = if success { "✓" } else { "✗" };
         let status_label = if success { "Success" } else { "Failure" };
         let mut summary = format!("\n{} [{}] {}\n", status_indicator, status_label, operation);
-        summary.push_str(&format!("└─ {} file(s) affected\n", files_affected));
+        let _ = writeln!(summary, "└─ {} file(s) affected", files_affected);
 
         if success {
             summary.push_str("   Operation completed successfully\n");
