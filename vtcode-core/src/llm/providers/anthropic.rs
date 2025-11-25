@@ -999,7 +999,7 @@ impl LLMProvider for AnthropicProvider {
 
             // Parse error response to extract friendly message
             let (friendly_msg, error_type, _request_id) = Self::parse_error_response(&error_text);
-            
+
             // Build user-friendly error message with additional context if available
             let error_message = if error_text.contains("cache_control") {
                 format!(
@@ -1421,13 +1421,13 @@ impl AnthropicProvider {
                     .get("request_id")
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string());
-                
+
                 if !message.is_empty() {
                     return (message.to_string(), error_type, request_id);
                 }
             }
         }
-        
+
         // Fallback: return raw error text
         (error_text.to_string(), None, None)
     }

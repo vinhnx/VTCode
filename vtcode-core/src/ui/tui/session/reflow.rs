@@ -116,7 +116,14 @@ impl Session {
         max_width: usize,
         border_style: Style,
     ) -> Vec<Line<'static>> {
-        self.wrap_block_lines_with_options(first_prefix, _continuation_prefix, content, max_width, border_style, true)
+        self.wrap_block_lines_with_options(
+            first_prefix,
+            _continuation_prefix,
+            content,
+            max_width,
+            border_style,
+            true,
+        )
     }
 
     /// Wrap content with left border only (no right border)
@@ -129,7 +136,14 @@ impl Session {
         max_width: usize,
         border_style: Style,
     ) -> Vec<Line<'static>> {
-        self.wrap_block_lines_with_options(first_prefix, _continuation_prefix, content, max_width, border_style, false)
+        self.wrap_block_lines_with_options(
+            first_prefix,
+            _continuation_prefix,
+            content,
+            max_width,
+            border_style,
+            false,
+        )
     }
 
     /// Wrap content with configurable border options
@@ -148,10 +162,7 @@ impl Session {
             } else {
                 format!("{}│", first_prefix)
             };
-            return vec![Line::from(vec![Span::styled(
-                fallback,
-                border_style,
-            )])];
+            return vec![Line::from(vec![Span::styled(fallback, border_style)])];
         }
 
         let right_border = if show_right_border {

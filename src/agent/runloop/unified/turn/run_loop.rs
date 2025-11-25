@@ -1573,7 +1573,10 @@ pub(crate) async fn run_single_agent_loop_unified(
 
                 // Execute the tool directly via tool registry
                 let tool_call_id = format!("explicit_run_{}", conversation_history.len());
-                match tool_registry.execute_tool(&tool_name, tool_args.clone()).await {
+                match tool_registry
+                    .execute_tool(&tool_name, tool_args.clone())
+                    .await
+                {
                     Ok(result) => {
                         // Render the command output using the standard tool output renderer
                         crate::agent::runloop::tool_output::render_tool_output(
@@ -1593,10 +1596,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                         ));
                     }
                     Err(err) => {
-                        renderer.line(
-                            MessageStyle::Error,
-                            &format!("Command failed: {}", err),
-                        )?;
+                        renderer.line(MessageStyle::Error, &format!("Command failed: {}", err))?;
                         conversation_history.push(uni::Message::tool_response(
                             tool_call_id.clone(),
                             format!("{{\"error\": \"{}\"}}", err),

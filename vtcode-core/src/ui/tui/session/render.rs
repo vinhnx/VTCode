@@ -992,7 +992,15 @@ fn wrap_block_lines(
     max_width: usize,
     border_style: Style,
 ) -> Vec<Line<'static>> {
-    wrap_block_lines_with_options(session, first_prefix, _continuation_prefix, content, max_width, border_style, true)
+    wrap_block_lines_with_options(
+        session,
+        first_prefix,
+        _continuation_prefix,
+        content,
+        max_width,
+        border_style,
+        true,
+    )
 }
 
 fn wrap_block_lines_no_right_border(
@@ -1003,7 +1011,15 @@ fn wrap_block_lines_no_right_border(
     max_width: usize,
     border_style: Style,
 ) -> Vec<Line<'static>> {
-    wrap_block_lines_with_options(session, first_prefix, _continuation_prefix, content, max_width, border_style, false)
+    wrap_block_lines_with_options(
+        session,
+        first_prefix,
+        _continuation_prefix,
+        content,
+        max_width,
+        border_style,
+        false,
+    )
 }
 
 fn wrap_block_lines_with_options(
@@ -1021,10 +1037,7 @@ fn wrap_block_lines_with_options(
         } else {
             format!("{}│", first_prefix)
         };
-        return vec![Line::from(vec![Span::styled(
-            fallback,
-            border_style,
-        )])];
+        return vec![Line::from(vec![Span::styled(fallback, border_style)])];
     }
 
     let right_border = if show_right_border {
