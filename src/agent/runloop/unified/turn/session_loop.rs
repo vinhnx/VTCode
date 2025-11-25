@@ -38,6 +38,8 @@ use crate::agent::runloop::ui::{build_inline_header_context, render_session_bann
 use crate::agent::runloop::unified::mcp_tool_manager::McpToolManager;
 
 use super::finalization::finalize_session;
+use super::run_loop::TurnLoopResult as RunLoopTurnLoopResult;
+use super::turn_loop::{TurnLoopOutcome};
 use super::utils::render_hook_messages;
 use super::workspace::{load_workspace_files, refresh_vt_config};
 use crate::agent::runloop::unified::async_mcp_manager::McpInitStatus;
@@ -837,6 +839,56 @@ pub(crate) async fn run_single_agent_loop_unified(
 
             let input = input_owned.as_str();
 
+            // Check for explicit "run <command>" pattern BEFORE processing
+            // This bypasses LLM interpretation and executes the command directly
+            if let Some((tool_name, tool_args)) =
+                crate::agent::runloop::unified::shell::detect_explicit_run_command(input)
+            {
+                // Display the user message
+                display_user_message(&mut renderer, input)?;
+
+                // Add user message to history
+                conversation_history.push(uni::Message::user(input.to_string()));
+
+                // Execute the tool directly via tool registry
+                let tool_call_id = format!("explicit_run_{}", conversation_history.len());
+                match tool_registry.execute_tool(&tool_name, tool_args.clone()).await {
+                    Ok(result) => {
+                        // Render the command output using the standard tool output renderer
+                        crate::agent::runloop::tool_output::render_tool_output(
+                            &mut renderer,
+                            Some(&tool_name),
+                            &result,
+                            vt_cfg.as_ref(),
+                            None,
+                        )
+                        .await?;
+
+                        // Add tool response to history
+                        let result_str = serde_json::to_string(&result).unwrap_or_default();
+                        conversation_history.push(uni::Message::tool_response(
+                            tool_call_id.clone(),
+                            result_str,
+                        ));
+                    }
+                    Err(err) => {
+                        renderer.line(
+                            MessageStyle::Error,
+                            &format!("Command failed: {}", err),
+                        )?;
+                        conversation_history.push(uni::Message::tool_response(
+                            tool_call_id.clone(),
+                            format!("{{\"error\": \"{}\"}}", err),
+                        ));
+                    }
+                }
+
+                // Clear input and continue to next iteration
+                handle.clear_input();
+                handle.set_placeholder(default_placeholder.clone());
+                continue;
+            }
+
             // Process @ patterns to embed images as base64 content
             let processed_content = match parse_at_patterns(input, &config.workspace).await {
                 Ok(content) => content,
@@ -955,7 +1007,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                 default_placeholder: &default_placeholder,
                 tool_permission_cache: &tool_permission_cache,
             };
-            let outcome = crate::agent::runloop::unified::turn::run_turn_loop(
+            let outcome = match crate::agent::runloop::unified::turn::run_turn_loop(
                 input,
                 working_history.clone(),
                 turn_loop_ctx,
@@ -966,10 +1018,24 @@ pub(crate) async fn run_single_agent_loop_unified(
                 skip_confirmations,
                 &mut session_end_reason,
             )
-            .await?;
+            .await {
+                Ok(outcome) => outcome,
+                Err(err) => {
+                    // Handle errors gracefully - display to user but continue the session
+                    tracing::error!("Turn execution error: {}", err);
+                    // Display error without panicking even if renderer fails
+                    let _ = renderer.line(MessageStyle::Error, &format!("Error: {}", err));
+                    TurnLoopOutcome {
+                        result: RunLoopTurnLoopResult::Aborted,
+                        working_history: working_history,
+                        any_write_effect: false,
+                        turn_modified_files: std::collections::BTreeSet::new(),
+                    }
+                }
+            };
             // Apply canonical side-effects for the turn outcome (history, checkpoints, session end reason)
             // Apply canonical side-effects for the turn outcome (history, checkpoints, session end reason)
-            crate::agent::runloop::unified::turn::apply_turn_outcome(
+            if let Err(err) = crate::agent::runloop::unified::turn::apply_turn_outcome(
                 &outcome,
                 crate::agent::runloop::unified::turn::TurnOutcomeContext {
                     conversation_history: &mut conversation_history,
@@ -982,7 +1048,10 @@ pub(crate) async fn run_single_agent_loop_unified(
                     session_end_reason: &mut session_end_reason,
                 },
             )
-            .await?;
+            .await {
+                tracing::error!("Failed to apply turn outcome: {}", err);
+                renderer.line(MessageStyle::Error, &format!("Failed to finalize turn: {}", err)).ok();
+            }
             let _turn_result = outcome.result;
 
             // Check for session exit and continue to next iteration otherwise.
@@ -992,7 +1061,7 @@ pub(crate) async fn run_single_agent_loop_unified(
             continue;
         }
 
-        finalize_session(
+        if let Err(err) = finalize_session(
             &mut renderer,
             lifecycle_hooks.as_ref(),
             session_end_reason,
@@ -1004,7 +1073,10 @@ pub(crate) async fn run_single_agent_loop_unified(
             &handle,
             Some(&pruning_ledger),
         )
-        .await?;
+        .await {
+            tracing::error!("Failed to finalize session: {}", err);
+            renderer.line(MessageStyle::Error, &format!("Failed to finalize session: {}", err)).ok();
+        }
 
         // If the session ended with NewSession, restart the loop with fresh config
         if matches!(session_end_reason, SessionEndReason::NewSession) {
