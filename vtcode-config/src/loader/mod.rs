@@ -892,31 +892,32 @@ impl ConfigManager {
         let config_dir = workspace_paths.config_dir();
         let config_file_name = defaults_provider.config_file_name().to_string();
 
+        // Helper to finalize manager with workspace info
+        let finalize = |mut manager: Self, root: PathBuf, name: String| {
+            manager.workspace_root = Some(root);
+            manager.config_file_name = name;
+            manager
+        };
+
         // Try configuration file in workspace root first
         let config_path = workspace_root.join(&config_file_name);
         if config_path.exists() {
-            let mut manager = Self::load_from_file(&config_path)?;
-            manager.workspace_root = Some(workspace_root.clone());
-            manager.config_file_name = config_file_name.clone();
-            return Ok(manager);
+            let manager = Self::load_from_file(&config_path)?;
+            return Ok(finalize(manager, workspace_root, config_file_name));
         }
 
         // Try config directory fallback (e.g., .vtcode/vtcode.toml)
         let fallback_path = config_dir.join(&config_file_name);
         if fallback_path.exists() {
-            let mut manager = Self::load_from_file(&fallback_path)?;
-            manager.workspace_root = Some(workspace_root.clone());
-            manager.config_file_name = config_file_name.clone();
-            return Ok(manager);
+            let manager = Self::load_from_file(&fallback_path)?;
+            return Ok(finalize(manager, workspace_root, config_file_name));
         }
 
         // Try ~/.vtcode/vtcode.toml in user home directory
         for home_config_path in defaults_provider.home_config_paths(&config_file_name) {
             if home_config_path.exists() {
-                let mut manager = Self::load_from_file(&home_config_path)?;
-                manager.workspace_root = Some(workspace_root.clone());
-                manager.config_file_name = config_file_name.clone();
-                return Ok(manager);
+                let manager = Self::load_from_file(&home_config_path)?;
+                return Ok(finalize(manager, workspace_root, config_file_name));
             }
         }
 
@@ -924,10 +925,8 @@ impl ConfigManager {
         if let Some(project_config_path) =
             Self::project_config_path(&config_dir, &workspace_root, &config_file_name)
         {
-            let mut manager = Self::load_from_file(&project_config_path)?;
-            manager.workspace_root = Some(workspace_root.clone());
-            manager.config_file_name = config_file_name.clone();
-            return Ok(manager);
+            let manager = Self::load_from_file(&project_config_path)?;
+            return Ok(finalize(manager, workspace_root, config_file_name));
         }
 
         // Use default configuration if no file found
