@@ -107,8 +107,6 @@ pub enum DiffLineType {
 #[derive(Debug)]
 pub struct FileDiff {
     pub file_path: String,
-    pub old_content: String,
-    pub new_content: String,
     pub lines: Vec<DiffLine>,
     pub stats: DiffStats,
 }
@@ -145,6 +143,35 @@ pub struct FileChangeStats {
     pub path: String,
     pub additions: usize,
     pub deletions: usize,
+}
+
+/// Cached diff entry to avoid recomputation
+#[derive(Debug)]
+struct DiffCacheEntry {
+    diff: FileDiff,
+}
+
+/// Result of suppression check with optional cached diffs
+pub struct SuppressionResult {
+    pub check: DiffSuppressionCheck,
+    /// Cached diffs if not suppressed (avoids recomputation)
+    cached_diffs: Option<Vec<DiffCacheEntry>>,
+}
+
+impl SuppressionResult {
+    fn suppressed(check: DiffSuppressionCheck) -> Self {
+        Self {
+            check,
+            cached_diffs: None,
+        }
+    }
+
+    fn not_suppressed(check: DiffSuppressionCheck, diffs: Vec<DiffCacheEntry>) -> Self {
+        Self {
+            check,
+            cached_diffs: Some(diffs),
+        }
+    }
 }
 
 impl DiffSuppressionCheck {
@@ -221,7 +248,9 @@ impl DiffRenderer {
     }
 
     pub fn render_diff(&self, diff: &FileDiff) -> String {
-        let mut output = String::new();
+        // Pre-allocate buffer: header (~100 chars) + lines (~80 chars each)
+        let estimated_size = 100 + diff.lines.len() * 80;
+        let mut output = String::with_capacity(estimated_size);
 
         // File header with edit indicator
         output.push_str("─ ");
@@ -229,7 +258,7 @@ impl DiffRenderer {
         output.push('\n');
 
         for line in &diff.lines {
-            output.push_str(&self.render_line(line));
+            self.render_line_into(&mut output, line);
             output.push('\n');
         }
 
@@ -250,7 +279,8 @@ impl DiffRenderer {
         )
     }
 
-    fn render_line(&self, line: &DiffLine) -> String {
+    /// Render line directly into buffer to avoid allocation
+    fn render_line_into(&self, output: &mut String, line: &DiffLine) {
         let (style, prefix, line_number) = match line.line_type {
             DiffLineType::Added => (&self.palette.line_added, "+", line.line_number_new),
             DiffLineType::Removed => (&self.palette.line_removed, "-", line.line_number_old),
@@ -262,29 +292,33 @@ impl DiffRenderer {
             DiffLineType::Header => (&self.palette.line_header, "", None),
         };
 
-        let mut rendered = String::new();
-
         if self.show_line_numbers {
-            let number_text = line_number
-                .map(|n| format!("{:>4}", n))
-                .unwrap_or_else(|| "    ".to_string());
-            rendered.push_str(&self.paint(&self.palette.line_number, &number_text));
-            rendered.push(' ');
+            if let Some(n) = line_number {
+                self.paint_into(output, &self.palette.line_number, &format!("{:>4}", n));
+            } else {
+                output.push_str("    ");
+            }
+            output.push(' ');
         }
 
-        let content = match line.line_type {
-            DiffLineType::Header => line.content.clone(),
+        match line.line_type {
+            DiffLineType::Header => {
+                self.paint_into(output, style, &line.content);
+            }
             _ => {
-                if line.content.is_empty() {
-                    prefix.to_string()
-                } else {
-                    format!("{} {}", prefix, line.content)
+                if self.use_colors {
+                    output.push_str(&style.render().to_string());
+                }
+                output.push_str(prefix);
+                if !line.content.is_empty() {
+                    output.push(' ');
+                    output.push_str(&line.content);
+                }
+                if self.use_colors {
+                    output.push_str(&Reset.render().to_string());
                 }
             }
-        };
-
-        rendered.push_str(&self.paint(style, &content));
-        rendered
+        }
     }
 
     pub(crate) fn paint(&self, style: &Style, text: &str) -> String {
@@ -297,14 +331,26 @@ impl DiffRenderer {
         }
     }
 
+    /// Paint directly into buffer to avoid allocation
+    fn paint_into(&self, output: &mut String, style: &Style, text: &str) {
+        if self.use_colors {
+            output.push_str(&style.render().to_string());
+            output.push_str(text);
+            output.push_str(&Reset.render().to_string());
+        } else {
+            output.push_str(text);
+        }
+    }
+
     pub fn generate_diff(&self, old_content: &str, new_content: &str, file_path: &str) -> FileDiff {
         let old_lines: Vec<&str> = old_content.lines().collect();
         let new_lines: Vec<&str> = new_content.lines().collect();
 
-        let mut lines = Vec::new();
+        // Pre-allocate with estimated capacity
+        let estimated_lines = old_lines.len().max(new_lines.len());
+        let mut lines = Vec::with_capacity(estimated_lines);
         let mut additions = 0;
         let mut deletions = 0;
-        let _changes = 0;
 
         // Simple diff algorithm - can be enhanced with more sophisticated diffing
         let mut old_idx = 0;
@@ -379,8 +425,6 @@ impl DiffRenderer {
 
         FileDiff {
             file_path: file_path.to_string(),
-            old_content: old_content.to_string(),
-            new_content: new_content.to_string(),
             lines,
             stats: DiffStats {
                 additions,
@@ -472,109 +516,161 @@ impl DiffChatRenderer {
     }
 
     pub fn render_multiple_changes(&self, changes: Vec<(String, String, String)>) -> String {
-        // Check if we should suppress diffs
-        let suppression_check = self.check_suppression(&changes);
+        // Check suppression and get cached diffs if not suppressed
+        let result = self.check_suppression_with_cache(&changes);
 
-        if suppression_check.should_suppress {
-            return self.render_suppressed_summary(&suppression_check);
+        if result.check.should_suppress {
+            return self.render_suppressed_summary(&result.check);
         }
 
-        let mut output = format!("\nMultiple File Changes ({} files)\n", changes.len());
-        output.push_str("═".repeat(60).as_str());
+        // Pre-allocate output buffer with estimated size
+        let estimated_size = changes.len() * 512; // Rough estimate per file
+        let mut output = String::with_capacity(estimated_size);
+
+        output.push_str(&format!(
+            "\nMultiple File Changes ({} files)\n",
+            changes.len()
+        ));
+        output.push_str(&"═".repeat(60));
         output.push_str("\n\n");
 
-        for (file_path, old_content, new_content) in changes {
-            let diff = self
-                .diff_renderer
-                .generate_diff(&old_content, &new_content, &file_path);
-            output.push_str(&self.diff_renderer.render_diff(&diff));
+        // Use cached diffs to avoid recomputation
+        if let Some(cached_diffs) = result.cached_diffs {
+            for entry in cached_diffs {
+                output.push_str(&self.diff_renderer.render_diff(&entry.diff));
+            }
         }
 
         output
     }
 
     /// Check if diffs should be suppressed based on size/count thresholds
-    pub fn check_suppression(&self, changes: &[(String, String, String)]) -> DiffSuppressionCheck {
+    /// Returns cached diffs if not suppressed to avoid recomputation
+    fn check_suppression_with_cache(
+        &self,
+        changes: &[(String, String, String)],
+    ) -> SuppressionResult {
         let file_count = changes.len();
-        let mut total_lines = 0usize;
-        let mut total_additions = 0usize;
-        let mut total_deletions = 0usize;
-        let mut single_file_exceeds = false;
-        let mut file_stats = Vec::with_capacity(file_count);
 
-        for (file_path, old_content, new_content) in changes {
-            let diff = self
-                .diff_renderer
-                .generate_diff(old_content, new_content, file_path);
-            total_lines += diff.lines.len();
-            total_additions += diff.stats.additions;
-            total_deletions += diff.stats.deletions;
-
-            // Collect per-file stats for the summary
-            file_stats.push(FileChangeStats {
-                path: file_path.clone(),
-                additions: diff.stats.additions,
-                deletions: diff.stats.deletions,
-            });
-
-            // Check if a single file exceeds the threshold
-            if diff.stats.changes > diff_constants::MAX_SINGLE_FILE_CHANGES {
-                single_file_exceeds = true;
-            }
-        }
-
-        // Check suppression conditions
+        // Early termination: check file count first (cheapest check)
         if file_count > diff_constants::MAX_INLINE_DIFF_FILES {
-            return DiffSuppressionCheck::suppressed(
+            // Still need to compute stats for summary, but can use lightweight estimation
+            let (file_stats, total_additions, total_deletions) =
+                self.estimate_stats_lightweight(changes);
+            return SuppressionResult::suppressed(DiffSuppressionCheck::suppressed(
                 format!(
                     "Too many files changed ({} files, max {})",
                     file_count,
                     diff_constants::MAX_INLINE_DIFF_FILES
                 ),
                 file_count,
+                0, // Lines not computed for performance
+                total_additions,
+                total_deletions,
+                file_stats,
+            ));
+        }
+
+        let mut total_lines = 0usize;
+        let mut total_additions = 0usize;
+        let mut total_deletions = 0usize;
+        let mut file_stats = Vec::with_capacity(file_count);
+        let mut cached_diffs = Vec::with_capacity(file_count);
+        let mut suppression_reason: Option<String> = None;
+
+        for (file_path, old_content, new_content) in changes {
+            let diff = self
+                .diff_renderer
+                .generate_diff(old_content, new_content, file_path);
+
+            total_lines += diff.lines.len();
+            total_additions += diff.stats.additions;
+            total_deletions += diff.stats.deletions;
+
+            file_stats.push(FileChangeStats {
+                path: file_path.clone(),
+                additions: diff.stats.additions,
+                deletions: diff.stats.deletions,
+            });
+
+            // Check thresholds with early termination
+            if suppression_reason.is_none() {
+                if diff.stats.changes > diff_constants::MAX_SINGLE_FILE_CHANGES {
+                    suppression_reason = Some(format!(
+                        "Single file exceeds change limit (max {} changes per file)",
+                        diff_constants::MAX_SINGLE_FILE_CHANGES
+                    ));
+                } else if total_lines > diff_constants::MAX_TOTAL_DIFF_LINES {
+                    suppression_reason = Some(format!(
+                        "Too many diff lines ({} lines, max {})",
+                        total_lines,
+                        diff_constants::MAX_TOTAL_DIFF_LINES
+                    ));
+                }
+            }
+
+            // Cache diff for potential reuse
+            cached_diffs.push(DiffCacheEntry { diff });
+        }
+
+        if let Some(reason) = suppression_reason {
+            SuppressionResult::suppressed(DiffSuppressionCheck::suppressed(
+                reason,
+                file_count,
                 total_lines,
                 total_additions,
                 total_deletions,
                 file_stats,
-            );
-        }
-
-        if total_lines > diff_constants::MAX_TOTAL_DIFF_LINES {
-            return DiffSuppressionCheck::suppressed(
-                format!(
-                    "Too many diff lines ({} lines, max {})",
+            ))
+        } else {
+            SuppressionResult::not_suppressed(
+                DiffSuppressionCheck::no_suppression(
+                    file_count,
                     total_lines,
-                    diff_constants::MAX_TOTAL_DIFF_LINES
+                    total_additions,
+                    total_deletions,
+                    file_stats,
                 ),
-                file_count,
-                total_lines,
-                total_additions,
-                total_deletions,
-                file_stats,
-            );
+                cached_diffs,
+            )
+        }
+    }
+
+    /// Lightweight stats estimation without full diff generation
+    fn estimate_stats_lightweight(
+        &self,
+        changes: &[(String, String, String)],
+    ) -> (Vec<FileChangeStats>, usize, usize) {
+        let mut file_stats = Vec::with_capacity(changes.len());
+        let mut total_additions = 0usize;
+        let mut total_deletions = 0usize;
+
+        for (file_path, old_content, new_content) in changes {
+            // Estimate changes by line count difference (much faster than full diff)
+            let old_lines = old_content.lines().count();
+            let new_lines = new_content.lines().count();
+            let (additions, deletions) = if new_lines >= old_lines {
+                (new_lines - old_lines, 0)
+            } else {
+                (0, old_lines - new_lines)
+            };
+
+            total_additions += additions;
+            total_deletions += deletions;
+
+            file_stats.push(FileChangeStats {
+                path: file_path.clone(),
+                additions,
+                deletions,
+            });
         }
 
-        if single_file_exceeds {
-            return DiffSuppressionCheck::suppressed(
-                format!(
-                    "Single file exceeds change limit (max {} changes per file)",
-                    diff_constants::MAX_SINGLE_FILE_CHANGES
-                ),
-                file_count,
-                total_lines,
-                total_additions,
-                total_deletions,
-                file_stats,
-            );
-        }
+        (file_stats, total_additions, total_deletions)
+    }
 
-        DiffSuppressionCheck::no_suppression(
-            file_count,
-            total_lines,
-            total_additions,
-            total_deletions,
-            file_stats,
-        )
+    /// Public API for checking suppression (without cache access)
+    pub fn check_suppression(&self, changes: &[(String, String, String)]) -> DiffSuppressionCheck {
+        self.check_suppression_with_cache(changes).check
     }
 
     /// Render a summary when diffs are suppressed
@@ -661,10 +757,18 @@ impl DiffChatRenderer {
 }
 
 pub fn generate_unified_diff(old_content: &str, new_content: &str, filename: &str) -> String {
-    let mut diff = format!("--- a/{}\n+++ b/{}\n", filename, filename);
-
     let old_lines: Vec<&str> = old_content.lines().collect();
     let new_lines: Vec<&str> = new_content.lines().collect();
+
+    // Pre-allocate buffer: header + estimated hunk size
+    let estimated_size = 100 + (old_lines.len() + new_lines.len()) * 40;
+    let mut diff = String::with_capacity(estimated_size);
+
+    diff.push_str("--- a/");
+    diff.push_str(filename);
+    diff.push_str("\n+++ b/");
+    diff.push_str(filename);
+    diff.push('\n');
 
     let mut old_idx = 0;
     let mut new_idx = 0;
@@ -710,43 +814,53 @@ pub fn generate_unified_diff(old_content: &str, new_content: &str, filename: &st
             end_new = new_lines.len();
         }
 
-        // Generate hunk
+        // Generate hunk header
         let old_count = end_old - start_old;
         let new_count = end_new - start_new;
 
-        diff.push_str(&format!(
+        use std::fmt::Write;
+        let _ = write!(
+            diff,
             "@@ -{},{} +{},{} @@\n",
             start_old + 1,
             old_count,
             start_new + 1,
             new_count
-        ));
+        );
 
-        // Add context before
+        // Add context before (avoid format! allocations)
         for i in (start_old.saturating_sub(3))..start_old {
             if i < old_lines.len() {
-                diff.push_str(&format!(" {}\n", old_lines[i]));
+                diff.push(' ');
+                diff.push_str(old_lines[i]);
+                diff.push('\n');
             }
         }
 
         // Add removed lines
         for i in start_old..end_old {
             if i < old_lines.len() {
-                diff.push_str(&format!("-{}\n", old_lines[i]));
+                diff.push('-');
+                diff.push_str(old_lines[i]);
+                diff.push('\n');
             }
         }
 
         // Add added lines
         for i in start_new..end_new {
             if i < new_lines.len() {
-                diff.push_str(&format!("+{}\n", new_lines[i]));
+                diff.push('+');
+                diff.push_str(new_lines[i]);
+                diff.push('\n');
             }
         }
 
         // Add context after
         for i in end_old..(end_old + 3) {
             if i < old_lines.len() {
-                diff.push_str(&format!(" {}\n", old_lines[i]));
+                diff.push(' ');
+                diff.push_str(old_lines[i]);
+                diff.push('\n');
             }
         }
 
