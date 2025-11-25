@@ -58,7 +58,7 @@ pub fn make_client(api_key: String, model: ModelId) -> AnyClient {
             model.as_str().to_string(),
         )),
         Provider::XAI => Box::new(XAIProvider::with_model(
-            api_key.clone(),
+            api_key,
             model.as_str().to_string(),
         )),
         Provider::ZAI => Box::new(ZAIProvider::with_model(api_key, model.as_str().to_string())),

@@ -23,7 +23,10 @@ use tracing::debug;
 
 use super::{
     ReasoningBuffer,
-    common::{extract_prompt_cache_settings, override_base_url, resolve_model},
+    common::{
+        convert_usage_to_llm_types, extract_prompt_cache_settings, override_base_url,
+        parse_client_prompt_common, resolve_model,
+    },
     extract_reasoning_trace, gpt5_codex_developer_prompt,
     shared::{
         StreamAssemblyError, StreamDelta, StreamFragment, StreamTelemetry, ToolCallBuilder,
@@ -705,35 +708,8 @@ impl OpenRouterProvider {
         }
     }
 
-    fn default_request(&self, prompt: &str) -> LLMRequest {
-        LLMRequest {
-            messages: vec![Message::user(prompt.to_string())],
-            system_prompt: None,
-            tools: None,
-            model: self.model.clone(),
-            max_tokens: None,
-            temperature: None,
-            stream: false,
-            output_format: None,
-            tool_choice: None,
-            parallel_tool_calls: None,
-            parallel_tool_config: None,
-            reasoning_effort: None,
-            verbosity: None,
-        }
-    }
-
     fn parse_client_prompt(&self, prompt: &str) -> LLMRequest {
-        let trimmed = prompt.trim_start();
-        if trimmed.starts_with('{') {
-            if let Ok(value) = serde_json::from_str::<Value>(trimmed) {
-                if let Some(request) = self.parse_chat_request(&value) {
-                    return request;
-                }
-            }
-        }
-
-        self.default_request(prompt)
+        parse_client_prompt_common(prompt, &self.model, |value| self.parse_chat_request(value))
     }
 
     fn is_gpt5_codex_model(model: &str) -> bool {
@@ -2070,14 +2046,7 @@ impl LLMClient for OpenRouterProvider {
         Ok(llm_types::LLMResponse {
             content: response.content.unwrap_or_default(),
             model: request_model,
-            usage: response.usage.map(|u| llm_types::Usage {
-                prompt_tokens: u.prompt_tokens as usize,
-                completion_tokens: u.completion_tokens as usize,
-                total_tokens: u.total_tokens as usize,
-                cached_prompt_tokens: u.cached_prompt_tokens.map(|v| v as usize),
-                cache_creation_tokens: u.cache_creation_tokens.map(|v| v as usize),
-                cache_read_tokens: u.cache_read_tokens.map(|v| v as usize),
-            }),
+            usage: response.usage.map(convert_usage_to_llm_types),
             reasoning: response.reasoning,
         })
     }
