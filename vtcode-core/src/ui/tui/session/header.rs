@@ -40,7 +40,7 @@ fn compact_tools_format(tools_str: &str) -> String {
         }
     }
 
-    format!("{}", allow_count)
+    allow_count.to_string()
 }
 
 impl Session {

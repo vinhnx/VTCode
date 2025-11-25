@@ -66,12 +66,12 @@ impl Styles {
 
     /// Render style to ANSI string
     pub fn render(style: &Style) -> String {
-        format!("{}", style)
+        style.to_string()
     }
 
     /// Render reset ANSI string
     pub fn render_reset() -> String {
-        format!("{}", Reset)
+        Reset.to_string()
     }
 }
 

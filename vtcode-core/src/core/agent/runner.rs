@@ -457,8 +457,8 @@ impl AgentRunner {
                                     err
                                 );
                                 let warning = format!("Streaming response interrupted: {}", err);
-                                warnings.push(warning.clone());
                                 event_recorder.warning(&warning);
+                                warnings.push(warning);
                                 if agent_message_streamed {
                                     event_recorder.agent_message_stream_complete();
                                 }
@@ -477,17 +477,17 @@ impl AgentRunner {
                         err
                     );
                     let warning = format!("Streaming request failed: {}", err);
-                    warnings.push(warning.clone());
                     event_recorder.warning(&warning);
+                    warnings.push(warning);
                     used_streaming_fallback = agent_message_streamed;
                 }
             }
         }
 
         if let Some(mut response) = streaming_response {
-            let response_text = response.content.clone().unwrap_or_default();
+            let response_text = response.content.take().unwrap_or_default();
             if !response_text.is_empty() {
-                aggregated_text = response_text.clone();
+                aggregated_text = response_text;
             }
 
             if !aggregated_text.trim().is_empty() {
@@ -504,9 +504,9 @@ impl AgentRunner {
             if !aggregated_reasoning.trim().is_empty() {
                 event_recorder.reasoning(&aggregated_reasoning);
                 reasoning_recorded = true;
-                response.reasoning = Some(aggregated_reasoning.clone());
-            } else if let Some(reasoning) = response.reasoning.clone() {
-                event_recorder.reasoning(&reasoning);
+                response.reasoning = Some(aggregated_reasoning);
+            } else if let Some(ref reasoning) = response.reasoning {
+                event_recorder.reasoning(reasoning);
                 reasoning_recorded = true;
             }
 
@@ -529,7 +529,7 @@ impl AgentRunner {
         let mut fallback_request = request.clone();
         fallback_request.stream = false;
 
-        let response = self
+        let mut response = self
             .provider_client
             .generate(fallback_request)
             .await
@@ -548,7 +548,7 @@ impl AgentRunner {
                 )
             })?;
 
-        let content = response.content.clone().unwrap_or_default();
+        let content = response.content.take().unwrap_or_default();
         let reasoning = response.reasoning.clone();
 
         Ok(ProviderResponseSummary {
