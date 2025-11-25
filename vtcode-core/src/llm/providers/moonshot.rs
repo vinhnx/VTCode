@@ -5,10 +5,11 @@ use crate::config::models::Provider as ModelProvider;
 use crate::llm::client::LLMClient;
 use crate::llm::error_display;
 use crate::llm::provider::{
-    FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, Message, MessageRole, Usage,
+    FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, Usage,
 };
 use crate::llm::providers::common::{
-    forward_prompt_cache_with_state, override_base_url, resolve_model,
+    convert_usage_to_llm_types, forward_prompt_cache_with_state, make_default_request,
+    override_base_url, resolve_model,
 };
 use crate::llm::rig_adapter::reasoning_parameters_for;
 use crate::llm::types as llm_types;
@@ -485,45 +486,12 @@ impl LLMProvider for MoonshotProvider {
 #[async_trait]
 impl LLMClient for MoonshotProvider {
     async fn generate(&mut self, prompt: &str) -> Result<llm_types::LLMResponse, LLMError> {
-        // Create a simple request to send to the model
-        use crate::llm::provider::MessageContent;
-
-        let request = LLMRequest {
-            messages: vec![Message {
-                role: MessageRole::User,
-                content: MessageContent::Text(prompt.to_string()),
-                reasoning: None,
-                reasoning_details: None,
-                tool_calls: None,
-                tool_call_id: None,
-                origin_tool: None,
-            }],
-            system_prompt: None,
-            tools: None,
-            model: self.model.clone(),
-            max_tokens: None,
-            temperature: Some(0.7),
-            stream: false,
-            output_format: None,
-            tool_choice: None,
-            parallel_tool_calls: None,
-            parallel_tool_config: None,
-            reasoning_effort: None,
-            verbosity: None,
-        };
-
+        let request = make_default_request(prompt, &self.model);
         let response = <MoonshotProvider as LLMProvider>::generate(self, request).await?;
         Ok(llm_types::LLMResponse {
-            content: response.content.unwrap_or_else(|| String::new()),
+            content: response.content.unwrap_or_default(),
             model: self.model.clone(),
-            usage: response.usage.map(|u| llm_types::Usage {
-                prompt_tokens: u.prompt_tokens as usize,
-                completion_tokens: u.completion_tokens as usize,
-                total_tokens: u.total_tokens as usize,
-                cached_prompt_tokens: u.cached_prompt_tokens.map(|x| x as usize),
-                cache_creation_tokens: u.cache_creation_tokens.map(|x| x as usize),
-                cache_read_tokens: u.cache_read_tokens.map(|x| x as usize),
-            }),
+            usage: response.usage.map(convert_usage_to_llm_types),
             reasoning: response.reasoning,
         })
     }

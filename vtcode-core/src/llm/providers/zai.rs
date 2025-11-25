@@ -13,7 +13,9 @@ use reqwest::Client as HttpClient;
 use serde_json::{Value, json};
 use std::collections::HashSet;
 
-use super::common::{override_base_url, resolve_model};
+use super::common::{
+    convert_usage_to_llm_types, override_base_url, parse_client_prompt_common, resolve_model,
+};
 
 const PROVIDER_NAME: &str = "Z.AI";
 const PROVIDER_KEY: &str = "zai";
@@ -87,35 +89,8 @@ impl ZAIProvider {
         Self::with_model_internal(api_key_value, model_value, base_url, prompt_cache)
     }
 
-    fn default_request(&self, prompt: &str) -> LLMRequest {
-        LLMRequest {
-            messages: vec![Message::user(prompt.to_string())],
-            system_prompt: None,
-            tools: None,
-            model: self.model.clone(),
-            max_tokens: None,
-            temperature: None,
-            stream: false,
-            output_format: None,
-            tool_choice: None,
-            parallel_tool_calls: None,
-            parallel_tool_config: None,
-            reasoning_effort: None,
-            verbosity: None,
-        }
-    }
-
     fn parse_client_prompt(&self, prompt: &str) -> LLMRequest {
-        let trimmed = prompt.trim_start();
-        if trimmed.starts_with('{') {
-            if let Ok(value) = serde_json::from_str::<Value>(trimmed) {
-                if let Some(request) = self.parse_chat_request(&value) {
-                    return request;
-                }
-            }
-        }
-
-        self.default_request(prompt)
+        parse_client_prompt_common(prompt, &self.model, |value| self.parse_chat_request(value))
     }
 
     fn parse_chat_request(&self, value: &Value) -> Option<LLMRequest> {
@@ -631,14 +606,7 @@ impl LLMClient for ZAIProvider {
         Ok(llm_types::LLMResponse {
             content: response.content.unwrap_or_default(),
             model: request_model,
-            usage: response.usage.map(|usage| llm_types::Usage {
-                prompt_tokens: usage.prompt_tokens as usize,
-                completion_tokens: usage.completion_tokens as usize,
-                total_tokens: usage.total_tokens as usize,
-                cached_prompt_tokens: usage.cached_prompt_tokens.map(|v| v as usize),
-                cache_creation_tokens: usage.cache_creation_tokens.map(|v| v as usize),
-                cache_read_tokens: usage.cache_read_tokens.map(|v| v as usize),
-            }),
+            usage: response.usage.map(convert_usage_to_llm_types),
             reasoning: response.reasoning,
         })
     }

@@ -54,7 +54,9 @@ fn fallback_model_if_not_found(model: &str) -> Option<String> {
 
 use super::{
     ReasoningBuffer,
-    common::{extract_prompt_cache_settings, override_base_url, resolve_model},
+    common::{
+        extract_prompt_cache_settings, override_base_url, parse_client_prompt_common, resolve_model,
+    },
     extract_reasoning_trace, gpt5_codex_developer_prompt,
     shared::{
         StreamAssemblyError, StreamTelemetry, append_reasoning_segments, extract_data_payload,
@@ -602,35 +604,8 @@ impl OpenAIProvider {
         modes.insert(model.to_string(), state);
     }
 
-    fn default_request(&self, prompt: &str) -> LLMRequest {
-        LLMRequest {
-            messages: vec![Message::user(prompt.to_string())],
-            system_prompt: None,
-            tools: None,
-            model: self.model.clone(),
-            max_tokens: None,
-            temperature: None,
-            stream: false,
-            output_format: None,
-            tool_choice: None,
-            parallel_tool_calls: None,
-            parallel_tool_config: None,
-            reasoning_effort: None,
-            verbosity: None,
-        }
-    }
-
     fn parse_client_prompt(&self, prompt: &str) -> LLMRequest {
-        let trimmed = prompt.trim_start();
-        if trimmed.starts_with('{') {
-            if let Ok(value) = serde_json::from_str::<Value>(trimmed) {
-                if let Some(request) = self.parse_chat_request(&value) {
-                    return request;
-                }
-            }
-        }
-
-        self.default_request(prompt)
+        parse_client_prompt_common(prompt, &self.model, |value| self.parse_chat_request(value))
     }
 
     fn parse_chat_request(&self, value: &Value) -> Option<LLMRequest> {
