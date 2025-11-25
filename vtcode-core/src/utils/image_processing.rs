@@ -77,7 +77,7 @@ pub async fn read_image_file<P: AsRef<Path>>(file_path: P) -> Result<ImageData> 
     validate_image_path(path)?;
 
     // Check if file exists
-    if !tokio::fs::metadata(path).await.is_ok() {
+    if tokio::fs::metadata(path).await.is_err() {
         return Err(anyhow::anyhow!(
             "Image file does not exist: {}",
             path.display()

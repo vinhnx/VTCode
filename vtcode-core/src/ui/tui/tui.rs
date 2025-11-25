@@ -118,12 +118,11 @@ async fn spawn_event_loop(
                 tokio::task::block_in_place(|| {
                     // Only poll if not paused. When paused (e.g., during external editor launch),
                     // skip polling to prevent reading from stdin while the editor is active.
-                    if !rx_paused.load(std::sync::atomic::Ordering::Acquire) {
-                        if event::poll(poll_timeout).unwrap_or(false) {
-                            if let Ok(event) = event::read() {
-                                let _ = event_tx.send(event);
-                            }
-                        }
+                    if !rx_paused.load(std::sync::atomic::Ordering::Acquire)
+                        && event::poll(poll_timeout).unwrap_or(false)
+                        && let Ok(event) = event::read()
+                    {
+                        let _ = event_tx.send(event);
                     }
                 })
             } => {
@@ -315,22 +314,22 @@ fn enable_terminal_modes(stdout: &mut io::Stdout) -> Result<TerminalModeState> {
 
 fn restore_terminal_modes(state: &TerminalModeState) -> Result<()> {
     let mut stdout = io::stdout();
-    if state.keyboard_enhancements_pushed {
-        if let Err(error) = execute!(stdout, PopKeyboardEnhancementFlags) {
-            tracing::debug!(
-                %error,
-                "failed to disable keyboard enhancement flags for inline terminal"
-            );
-        }
+    if state.keyboard_enhancements_pushed
+        && let Err(error) = execute!(stdout, PopKeyboardEnhancementFlags)
+    {
+        tracing::debug!(
+            %error,
+            "failed to disable keyboard enhancement flags for inline terminal"
+        );
     }
 
-    if state.focus_change_enabled {
-        if let Err(error) = execute!(stdout, DisableFocusChange) {
-            tracing::debug!(
-                %error,
-                "failed to disable focus change events for inline terminal"
-            );
-        }
+    if state.focus_change_enabled
+        && let Err(error) = execute!(stdout, DisableFocusChange)
+    {
+        tracing::debug!(
+            %error,
+            "failed to disable focus change events for inline terminal"
+        );
     }
 
     execute!(stdout, DisableBracketedPaste).context(DISABLE_BRACKETED_PASTE_ERROR)?;

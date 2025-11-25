@@ -656,11 +656,11 @@ fn compute_hunk_ranges(records: &[LineRecord<'_>], context: usize) -> Vec<(usize
                 current_start = Some(start);
                 current_end = end;
             }
-        } else if let Some(start) = current_start {
-            if idx > current_end {
-                ranges.push((start, current_end));
-                current_start = None;
-            }
+        } else if let Some(start) = current_start
+            && idx > current_end
+        {
+            ranges.push((start, current_end));
+            current_start = None;
         }
     }
 
