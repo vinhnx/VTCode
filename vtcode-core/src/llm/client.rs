@@ -20,47 +20,25 @@ pub type AnyClient = Box<dyn LLMClient>;
 
 /// Create a client based on the model ID
 pub fn make_client(api_key: String, model: ModelId) -> AnyClient {
+    // Extract model string once to avoid repeated allocations
+    let model_str = model.to_string();
     match model.provider() {
-        Provider::Gemini => Box::new(GeminiProvider::with_model(
-            api_key,
-            model.as_str().to_string(),
-        )),
-        Provider::OpenAI => Box::new(OpenAIProvider::with_model(
-            api_key,
-            model.as_str().to_string(),
-        )),
+        Provider::Gemini => Box::new(GeminiProvider::with_model(api_key, model_str)),
+        Provider::OpenAI => Box::new(OpenAIProvider::with_model(api_key, model_str)),
         Provider::Anthropic => Box::new(AnthropicProvider::new(api_key)),
         Provider::Minimax => Box::new(MinimaxProvider::from_config(
             Some(api_key),
-            Some(model.as_str().to_string()),
+            Some(model_str),
             None,
             None,
             None,
         )),
-        Provider::DeepSeek => Box::new(DeepSeekProvider::with_model(
-            api_key,
-            model.as_str().to_string(),
-        )),
-        Provider::OpenRouter => Box::new(OpenRouterProvider::with_model(
-            api_key,
-            model.as_str().to_string(),
-        )),
-        Provider::Ollama => Box::new(OllamaProvider::with_model(
-            api_key,
-            model.as_str().to_string(),
-        )),
-        Provider::LmStudio => Box::new(LmStudioProvider::with_model(
-            api_key,
-            model.as_str().to_string(),
-        )),
-        Provider::Moonshot => Box::new(MoonshotProvider::with_model(
-            api_key,
-            model.as_str().to_string(),
-        )),
-        Provider::XAI => Box::new(XAIProvider::with_model(
-            api_key,
-            model.as_str().to_string(),
-        )),
-        Provider::ZAI => Box::new(ZAIProvider::with_model(api_key, model.as_str().to_string())),
+        Provider::DeepSeek => Box::new(DeepSeekProvider::with_model(api_key, model_str)),
+        Provider::OpenRouter => Box::new(OpenRouterProvider::with_model(api_key, model_str)),
+        Provider::Ollama => Box::new(OllamaProvider::with_model(api_key, model_str)),
+        Provider::LmStudio => Box::new(LmStudioProvider::with_model(api_key, model_str)),
+        Provider::Moonshot => Box::new(MoonshotProvider::with_model(api_key, model_str)),
+        Provider::XAI => Box::new(XAIProvider::with_model(api_key, model_str)),
+        Provider::ZAI => Box::new(ZAIProvider::with_model(api_key, model_str)),
     }
 }
