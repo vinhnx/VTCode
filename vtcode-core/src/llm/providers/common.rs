@@ -161,6 +161,63 @@ pub fn map_finish_reason_common(reason: &str) -> FinishReason {
     }
 }
 
+/// Serializes messages to OpenAI-compatible JSON format.
+/// Used by DeepSeek, Moonshot, and other OpenAI-compatible providers.
+pub fn serialize_messages_openai_format(
+    request: &LLMRequest,
+    provider_key: &str,
+) -> Result<Vec<Value>, LLMError> {
+    use serde_json::{json, Map};
+
+    let mut messages = Vec::with_capacity(request.messages.len());
+
+    for message in &request.messages {
+        message
+            .validate_for_provider(provider_key)
+            .map_err(LLMError::InvalidRequest)?;
+
+        let mut message_map = Map::new();
+        message_map.insert(
+            "role".to_string(),
+            Value::String(message.role.as_generic_str().to_string()),
+        );
+        message_map.insert(
+            "content".to_string(),
+            Value::String(message.content.as_text()),
+        );
+
+        if let Some(tool_calls) = &message.tool_calls {
+            let serialized_calls = tool_calls
+                .iter()
+                .filter_map(|call| {
+                    call.function.as_ref().map(|func| {
+                        json!({
+                            "id": call.id.clone(),
+                            "type": "function",
+                            "function": {
+                                "name": func.name.clone(),
+                                "arguments": func.arguments.clone()
+                            }
+                        })
+                    })
+                })
+                .collect::<Vec<_>>();
+            message_map.insert("tool_calls".to_string(), Value::Array(serialized_calls));
+        }
+
+        if let Some(tool_call_id) = &message.tool_call_id {
+            message_map.insert(
+                "tool_call_id".to_string(),
+                Value::String(tool_call_id.clone()),
+            );
+        }
+
+        messages.push(Value::Object(message_map));
+    }
+
+    Ok(messages)
+}
+
 /// Validates an LLM request with common checks.
 /// Checks for empty messages and validates each message for the given provider.
 pub fn validate_request_common(

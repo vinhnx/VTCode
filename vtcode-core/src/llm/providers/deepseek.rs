@@ -7,6 +7,7 @@ use crate::llm::provider::{
     FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, Message, MessageContent,
     MessageRole, ToolCall, ToolDefinition, Usage,
 };
+use crate::llm::providers::common::serialize_messages_openai_format;
 use crate::llm::types as llm_types;
 use async_trait::async_trait;
 use reqwest::Client as HttpClient;
@@ -241,53 +242,7 @@ impl DeepSeekProvider {
     }
 
     fn serialize_messages(&self, request: &LLMRequest) -> Result<Vec<Value>, LLMError> {
-        let mut messages = Vec::with_capacity(request.messages.len());
-
-        for message in &request.messages {
-            message
-                .validate_for_provider(PROVIDER_KEY)
-                .map_err(LLMError::InvalidRequest)?;
-
-            let mut message_map = Map::new();
-            message_map.insert(
-                "role".to_string(),
-                Value::String(message.role.as_generic_str().to_string()),
-            );
-            message_map.insert(
-                "content".to_string(),
-                Value::String(message.content.as_text()),
-            );
-
-            if let Some(tool_calls) = &message.tool_calls {
-                let serialized_calls = tool_calls
-                    .iter()
-                    .filter_map(|call| {
-                        call.function.as_ref().map(|func| {
-                            json!({
-                                "id": call.id.clone(),
-                                "type": "function",
-                                "function": {
-                                    "name": func.name.clone(),
-                                    "arguments": func.arguments.clone()
-                                }
-                            })
-                        })
-                    })
-                    .collect::<Vec<_>>();
-                message_map.insert("tool_calls".to_string(), Value::Array(serialized_calls));
-            }
-
-            if let Some(tool_call_id) = &message.tool_call_id {
-                message_map.insert(
-                    "tool_call_id".to_string(),
-                    Value::String(tool_call_id.clone()),
-                );
-            }
-
-            messages.push(Value::Object(message_map));
-        }
-
-        Ok(messages)
+        serialize_messages_openai_format(request, PROVIDER_KEY)
     }
 
     fn serialize_tools(tools: &[ToolDefinition]) -> Option<Vec<Value>> {

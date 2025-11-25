@@ -9,7 +9,7 @@ use crate::llm::provider::{
 };
 use crate::llm::providers::common::{
     convert_usage_to_llm_types, forward_prompt_cache_with_state, make_default_request,
-    override_base_url, resolve_model, validate_request_common,
+    override_base_url, resolve_model, serialize_messages_openai_format, validate_request_common,
 };
 use crate::llm::rig_adapter::reasoning_parameters_for;
 use crate::llm::types as llm_types;
@@ -162,54 +162,8 @@ impl MoonshotProvider {
     }
 
     fn serialize_messages(&self, request: &LLMRequest) -> Result<Vec<Value>, LLMError> {
-        let mut messages = Vec::with_capacity(request.messages.len());
-
-        for message in &request.messages {
-            // Validate for OpenAI since Moonshot is OpenAI-compatible
-            message
-                .validate_for_provider("openai")
-                .map_err(LLMError::InvalidRequest)?;
-
-            let mut message_map = Map::new();
-            message_map.insert(
-                "role".to_string(),
-                Value::String(message.role.as_generic_str().to_string()),
-            );
-
-            // Handle content as text
-            let content_value = Value::String(message.content.as_text());
-            message_map.insert("content".to_string(), content_value);
-
-            if let Some(tool_calls) = &message.tool_calls {
-                let serialized_calls = tool_calls
-                    .iter()
-                    .filter_map(|call| {
-                        call.function.as_ref().map(|func| {
-                            json!({
-                                "id": call.id.clone(),
-                                "type": "function",
-                                "function": {
-                                    "name": func.name.clone(),
-                                    "arguments": func.arguments.clone()
-                                }
-                            })
-                        })
-                    })
-                    .collect::<Vec<_>>();
-                message_map.insert("tool_calls".to_string(), Value::Array(serialized_calls));
-            }
-
-            if let Some(tool_call_id) = &message.tool_call_id {
-                message_map.insert(
-                    "tool_call_id".to_string(),
-                    Value::String(tool_call_id.clone()),
-                );
-            }
-
-            messages.push(Value::Object(message_map));
-        }
-
-        Ok(messages)
+        // Use "openai" as provider key since Moonshot is OpenAI-compatible
+        serialize_messages_openai_format(request, "openai")
     }
 
     fn parse_response(&self, response_json: Value) -> Result<LLMResponse, LLMError> {
