@@ -1273,6 +1273,21 @@ fn diff_preview_size_skip() -> Value {
     })
 }
 
+/// Create a diff preview response when inline diffs are suppressed due to too many changes
+fn diff_preview_suppressed(additions: usize, deletions: usize, line_count: usize) -> Value {
+    json!({
+        "skipped": true,
+        "suppressed": true,
+        "reason": "too_many_changes",
+        "message": diff::SUPPRESSION_MESSAGE,
+        "summary": {
+            "additions": additions,
+            "deletions": deletions,
+            "total_lines": line_count
+        }
+    })
+}
+
 fn diff_preview_error_skip(reason: &str, detail: Option<&str>) -> Value {
     match detail {
         Some(value) => json!({
@@ -1306,7 +1321,19 @@ fn build_diff_preview(path: &str, before: Option<&str>, after: &str) -> Value {
         });
     }
 
-    let mut lines: Vec<String> = diff_output.lines().map(|line| line.to_string()).collect();
+    let lines: Vec<String> = diff_output.lines().map(|line| line.to_string()).collect();
+
+    // Count additions and deletions for suppression check
+    let additions = lines.iter().filter(|l| l.starts_with('+')).count();
+    let deletions = lines.iter().filter(|l| l.starts_with('-')).count();
+    let total_changes = additions + deletions;
+
+    // Check if we should suppress the diff due to too many changes
+    if total_changes > diff::MAX_SINGLE_FILE_CHANGES {
+        return diff_preview_suppressed(additions, deletions, lines.len());
+    }
+
+    let mut lines = lines;
     let mut truncated = false;
     let mut omitted = 0usize;
 

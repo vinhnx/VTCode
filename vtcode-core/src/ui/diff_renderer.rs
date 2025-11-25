@@ -1,20 +1,21 @@
+use crate::config::constants::diff as diff_constants;
 use crate::ui::git_config::GitColorConfig;
 use crate::utils::style_helpers::style_from_color_name;
 use anstyle::{Reset, Style};
 use anstyle_git;
 use std::path::Path;
 
-struct GitDiffPalette {
-    bullet: Style,
-    label: Style,
-    path: Style,
-    stat_added: Style,
-    stat_removed: Style,
-    line_added: Style,
-    line_removed: Style,
-    line_context: Style,
-    line_header: Style,
-    line_number: Style,
+pub(crate) struct GitDiffPalette {
+    pub(crate) bullet: Style,
+    pub(crate) label: Style,
+    pub(crate) path: Style,
+    pub(crate) stat_added: Style,
+    pub(crate) stat_removed: Style,
+    pub(crate) line_added: Style,
+    pub(crate) line_removed: Style,
+    pub(crate) line_context: Style,
+    pub(crate) line_header: Style,
+    pub(crate) line_number: Style,
 }
 
 impl GitDiffPalette {
@@ -112,18 +113,86 @@ pub struct FileDiff {
     pub stats: DiffStats,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DiffStats {
     pub additions: usize,
     pub deletions: usize,
     pub changes: usize,
 }
 
+/// Result of checking whether diffs should be suppressed
+#[derive(Debug, Clone)]
+pub struct DiffSuppressionCheck {
+    /// Whether diffs should be suppressed
+    pub should_suppress: bool,
+    /// Reason for suppression (if applicable)
+    pub reason: Option<String>,
+    /// Total number of files with changes
+    pub file_count: usize,
+    /// Total number of diff lines across all files
+    pub total_lines: usize,
+    /// Total additions across all files
+    pub total_additions: usize,
+    /// Total deletions across all files
+    pub total_deletions: usize,
+    /// List of changed files with their individual stats (path, additions, deletions)
+    pub file_stats: Vec<FileChangeStats>,
+}
+
+/// Statistics for a single changed file
+#[derive(Debug, Clone)]
+pub struct FileChangeStats {
+    pub path: String,
+    pub additions: usize,
+    pub deletions: usize,
+}
+
+impl DiffSuppressionCheck {
+    /// Create a new check indicating no suppression needed
+    pub fn no_suppression(
+        file_count: usize,
+        total_lines: usize,
+        additions: usize,
+        deletions: usize,
+        file_stats: Vec<FileChangeStats>,
+    ) -> Self {
+        Self {
+            should_suppress: false,
+            reason: None,
+            file_count,
+            total_lines,
+            total_additions: additions,
+            total_deletions: deletions,
+            file_stats,
+        }
+    }
+
+    /// Create a new check indicating suppression is needed
+    pub fn suppressed(
+        reason: String,
+        file_count: usize,
+        total_lines: usize,
+        additions: usize,
+        deletions: usize,
+        file_stats: Vec<FileChangeStats>,
+    ) -> Self {
+        Self {
+            should_suppress: true,
+            reason: Some(reason),
+            file_count,
+            total_lines,
+            total_additions: additions,
+            total_deletions: deletions,
+            file_stats,
+        }
+    }
+}
+
 pub struct DiffRenderer {
     show_line_numbers: bool,
     context_lines: usize,
     use_colors: bool,
-    palette: GitDiffPalette,
+    pub(crate) palette: GitDiffPalette,
 }
 
 impl DiffRenderer {
@@ -218,7 +287,7 @@ impl DiffRenderer {
         rendered
     }
 
-    fn paint(&self, style: &Style, text: &str) -> String {
+    pub(crate) fn paint(&self, style: &Style, text: &str) -> String {
         if self.use_colors {
             // CRITICAL: Apply style and reset without including newlines in the styled block
             // This ensures Reset appears before any line terminators, preventing color bleed
@@ -403,6 +472,13 @@ impl DiffChatRenderer {
     }
 
     pub fn render_multiple_changes(&self, changes: Vec<(String, String, String)>) -> String {
+        // Check if we should suppress diffs
+        let suppression_check = self.check_suppression(&changes);
+
+        if suppression_check.should_suppress {
+            return self.render_suppressed_summary(&suppression_check);
+        }
+
         let mut output = format!("\nMultiple File Changes ({} files)\n", changes.len());
         output.push_str("═".repeat(60).as_str());
         output.push_str("\n\n");
@@ -413,6 +489,152 @@ impl DiffChatRenderer {
                 .generate_diff(&old_content, &new_content, &file_path);
             output.push_str(&self.diff_renderer.render_diff(&diff));
         }
+
+        output
+    }
+
+    /// Check if diffs should be suppressed based on size/count thresholds
+    pub fn check_suppression(&self, changes: &[(String, String, String)]) -> DiffSuppressionCheck {
+        let file_count = changes.len();
+        let mut total_lines = 0usize;
+        let mut total_additions = 0usize;
+        let mut total_deletions = 0usize;
+        let mut single_file_exceeds = false;
+        let mut file_stats = Vec::with_capacity(file_count);
+
+        for (file_path, old_content, new_content) in changes {
+            let diff = self
+                .diff_renderer
+                .generate_diff(old_content, new_content, file_path);
+            total_lines += diff.lines.len();
+            total_additions += diff.stats.additions;
+            total_deletions += diff.stats.deletions;
+
+            // Collect per-file stats for the summary
+            file_stats.push(FileChangeStats {
+                path: file_path.clone(),
+                additions: diff.stats.additions,
+                deletions: diff.stats.deletions,
+            });
+
+            // Check if a single file exceeds the threshold
+            if diff.stats.changes > diff_constants::MAX_SINGLE_FILE_CHANGES {
+                single_file_exceeds = true;
+            }
+        }
+
+        // Check suppression conditions
+        if file_count > diff_constants::MAX_INLINE_DIFF_FILES {
+            return DiffSuppressionCheck::suppressed(
+                format!(
+                    "Too many files changed ({} files, max {})",
+                    file_count,
+                    diff_constants::MAX_INLINE_DIFF_FILES
+                ),
+                file_count,
+                total_lines,
+                total_additions,
+                total_deletions,
+                file_stats,
+            );
+        }
+
+        if total_lines > diff_constants::MAX_TOTAL_DIFF_LINES {
+            return DiffSuppressionCheck::suppressed(
+                format!(
+                    "Too many diff lines ({} lines, max {})",
+                    total_lines,
+                    diff_constants::MAX_TOTAL_DIFF_LINES
+                ),
+                file_count,
+                total_lines,
+                total_additions,
+                total_deletions,
+                file_stats,
+            );
+        }
+
+        if single_file_exceeds {
+            return DiffSuppressionCheck::suppressed(
+                format!(
+                    "Single file exceeds change limit (max {} changes per file)",
+                    diff_constants::MAX_SINGLE_FILE_CHANGES
+                ),
+                file_count,
+                total_lines,
+                total_additions,
+                total_deletions,
+                file_stats,
+            );
+        }
+
+        DiffSuppressionCheck::no_suppression(
+            file_count,
+            total_lines,
+            total_additions,
+            total_deletions,
+            file_stats,
+        )
+    }
+
+    /// Render a summary when diffs are suppressed
+    pub fn render_suppressed_summary(&self, check: &DiffSuppressionCheck) -> String {
+        let mut output = String::new();
+
+        // Header with warning indicator
+        output.push_str("\n⚠ ");
+        output.push_str(diff_constants::SUPPRESSION_MESSAGE);
+        output.push_str("\n\n");
+
+        // Overall summary with colored stats
+        output.push_str(&format!("Summary: {} file(s) changed", check.file_count));
+        if check.total_additions > 0 || check.total_deletions > 0 {
+            let additions = self.diff_renderer.paint(
+                &self.diff_renderer.palette.stat_added,
+                &format!("+{}", check.total_additions),
+            );
+            let deletions = self.diff_renderer.paint(
+                &self.diff_renderer.palette.stat_removed,
+                &format!("-{}", check.total_deletions),
+            );
+            output.push_str(&format!(" ({} {})", additions, deletions));
+        }
+        output.push_str("\n");
+
+        // List changed files with individual stats
+        if !check.file_stats.is_empty() {
+            output.push_str("\nChanged files:\n");
+            let max_files_to_show = diff_constants::MAX_FILES_IN_SUMMARY;
+            for (i, stat) in check.file_stats.iter().enumerate() {
+                if i >= max_files_to_show {
+                    let remaining = check.file_stats.len() - max_files_to_show;
+                    output.push_str(&format!("  ... and {} more file(s)\n", remaining));
+                    break;
+                }
+                let additions = self.diff_renderer.paint(
+                    &self.diff_renderer.palette.stat_added,
+                    &format!("+{}", stat.additions),
+                );
+                let deletions = self.diff_renderer.paint(
+                    &self.diff_renderer.palette.stat_removed,
+                    &format!("-{}", stat.deletions),
+                );
+                output.push_str(&format!(
+                    "  • {} ({} {})\n",
+                    stat.path, additions, deletions
+                ));
+            }
+        }
+
+        // Show reason in dimmed text
+        if let Some(reason) = &check.reason {
+            output.push_str(&format!("\nReason: {}\n", reason));
+        }
+
+        // Tip for viewing full diff
+        output.push('\n');
+        output.push_str(diff_constants::SUPPRESSION_HINT);
+        output.push('\n');
 
         output
     }
@@ -533,4 +755,124 @@ pub fn generate_unified_diff(old_content: &str, new_content: &str, filename: &st
     }
 
     diff
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_suppression_check_no_suppression() {
+        let renderer = DiffChatRenderer::new(true, 3, false);
+        let changes = vec![
+            (
+                "file1.rs".to_string(),
+                "old1".to_string(),
+                "new1".to_string(),
+            ),
+            (
+                "file2.rs".to_string(),
+                "old2".to_string(),
+                "new2".to_string(),
+            ),
+        ];
+
+        let check = renderer.check_suppression(&changes);
+        assert!(!check.should_suppress);
+        assert!(check.reason.is_none());
+        assert_eq!(check.file_count, 2);
+    }
+
+    #[test]
+    fn test_suppression_check_too_many_files() {
+        let renderer = DiffChatRenderer::new(true, 3, false);
+        // Create more files than MAX_INLINE_DIFF_FILES
+        let mut changes = Vec::new();
+        for i in 0..(diff_constants::MAX_INLINE_DIFF_FILES + 5) {
+            changes.push((
+                format!("file{}.rs", i),
+                format!("old{}", i),
+                format!("new{}", i),
+            ));
+        }
+
+        let check = renderer.check_suppression(&changes);
+        assert!(check.should_suppress);
+        assert!(check.reason.is_some());
+        assert!(check.reason.as_ref().unwrap().contains("Too many files"));
+    }
+
+    #[test]
+    fn test_suppression_check_large_single_file() {
+        let renderer = DiffChatRenderer::new(true, 3, false);
+
+        // Create a file with many changes
+        let old_content: String = (0..300).map(|i| format!("old line {}\n", i)).collect();
+        let new_content: String = (0..300).map(|i| format!("new line {}\n", i)).collect();
+
+        let changes = vec![("large_file.rs".to_string(), old_content, new_content)];
+
+        let check = renderer.check_suppression(&changes);
+        assert!(check.should_suppress);
+        assert!(check.reason.is_some());
+    }
+
+    #[test]
+    fn test_render_suppressed_summary() {
+        let renderer = DiffChatRenderer::new(true, 3, false);
+        let file_stats = vec![
+            FileChangeStats {
+                path: "file1.rs".to_string(),
+                additions: 20,
+                deletions: 10,
+            },
+            FileChangeStats {
+                path: "file2.rs".to_string(),
+                additions: 30,
+                deletions: 20,
+            },
+        ];
+        let check =
+            DiffSuppressionCheck::suppressed("Test reason".to_string(), 5, 100, 50, 30, file_stats);
+
+        let output = renderer.render_suppressed_summary(&check);
+        assert!(output.contains(diff_constants::SUPPRESSION_MESSAGE));
+        assert!(output.contains("5 file(s) changed"));
+        assert!(output.contains("50")); // additions
+        assert!(output.contains("30")); // deletions
+        assert!(output.contains("Test reason"));
+        assert!(output.contains("file1.rs"));
+        assert!(output.contains("file2.rs"));
+    }
+
+    #[test]
+    fn test_render_multiple_changes_with_suppression() {
+        let renderer = DiffChatRenderer::new(true, 3, false);
+
+        // Create enough changes to trigger suppression
+        let mut changes = Vec::new();
+        for i in 0..(diff_constants::MAX_INLINE_DIFF_FILES + 2) {
+            changes.push((
+                format!("file{}.rs", i),
+                "old".to_string(),
+                "new".to_string(),
+            ));
+        }
+
+        let output = renderer.render_multiple_changes(changes);
+        assert!(output.contains(diff_constants::SUPPRESSION_MESSAGE));
+    }
+
+    #[test]
+    fn test_render_multiple_changes_without_suppression() {
+        let renderer = DiffChatRenderer::new(true, 3, false);
+        let changes = vec![
+            ("file1.rs".to_string(), "a".to_string(), "b".to_string()),
+            ("file2.rs".to_string(), "c".to_string(), "d".to_string()),
+        ];
+
+        let output = renderer.render_multiple_changes(changes);
+        assert!(output.contains("Multiple File Changes"));
+        assert!(!output.contains(diff_constants::SUPPRESSION_MESSAGE));
+    }
 }
