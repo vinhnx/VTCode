@@ -132,30 +132,34 @@ impl SearchMetrics {
 
     /// Format metrics for display
     pub fn format_summary(&self) -> String {
+        use std::fmt::Write;
         let mut output = String::new();
         output.push_str("🔍 Search Metrics Summary\n");
-        output.push_str(&format!("  Total searches: {}\n", self.total_searches));
-        output.push_str(&format!("  Total tokens: {}\n", self.total_tokens));
-        output.push_str(&format!(
-            "  Avg tokens/search: {:.0}\n",
+        let _ = writeln!(output, "  Total searches: {}", self.total_searches);
+        let _ = writeln!(output, "  Total tokens: {}", self.total_tokens);
+        let _ = writeln!(
+            output,
+            "  Avg tokens/search: {:.0}",
             self.avg_tokens_per_search()
-        ));
-        output.push_str(&format!(
-            "  Expensive searches: {}\n",
+        );
+        let _ = writeln!(
+            output,
+            "  Expensive searches: {}",
             self.searches.values().filter(|s| s.is_expensive).count()
-        ));
+        );
 
         let expensive = self.expensive_searches(3);
         if !expensive.is_empty() {
             output.push_str("\n  Most expensive searches:\n");
             for (i, metric) in expensive.iter().enumerate() {
-                output.push_str(&format!(
-                    "    {}. '{}': {} tokens ({} matches)\n",
+                let _ = writeln!(
+                    output,
+                    "    {}. '{}': {} tokens ({} matches)",
                     i + 1,
                     metric.pattern,
                     metric.result_tokens,
                     metric.match_count
-                ));
+                );
             }
         }
 
