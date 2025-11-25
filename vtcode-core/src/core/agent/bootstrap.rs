@@ -119,11 +119,11 @@ impl<'config> AgentComponentBuilder<'config> {
             None => Arc::new(ToolRegistry::new(self.config.workspace.clone()).await),
         };
 
-        let decision_tracker = self.decision_tracker.unwrap_or_else(DecisionTracker::new);
+        let decision_tracker = self.decision_tracker.unwrap_or_default();
 
         let error_recovery = self
             .error_recovery
-            .unwrap_or_else(ErrorRecoveryManager::new);
+            .unwrap_or_default();
 
         let session_info = match self.session_info.take() {
             Some(info) => info,

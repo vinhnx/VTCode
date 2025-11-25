@@ -1820,7 +1820,7 @@ impl LoggingClientHandler {
     }
 
     fn handle_logging(&self, params: LoggingMessageNotificationParam) {
-        let logger = params.logger.unwrap_or_else(|| "".to_string());
+        let logger = params.logger.unwrap_or_default();
         let summary = params
             .data
             .get("message")

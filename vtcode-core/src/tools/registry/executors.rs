@@ -17,6 +17,7 @@ use portable_pty::PtySize;
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 use shell_words::{join, split};
+use std::fmt::Write as _;
 use std::{
     env,
     path::{Path, PathBuf},
@@ -3040,7 +3041,7 @@ fn extract_build_errors_and_summary(output: &str, max_tokens: usize) -> String {
         if let Some(last) = last_idx {
             if idx > last + 1 {
                 let skipped = idx - last - 1;
-                result.push_str(&format!("\n[... {} lines skipped ...]\n", skipped));
+                let _ = writeln!(result, "\n[... {} lines skipped ...]", skipped);
             }
         }
         result.push_str(lines[idx]);
@@ -3059,10 +3060,11 @@ fn extract_build_errors_and_summary(output: &str, max_tokens: usize) -> String {
             result.push('\n');
         }
         if total_lines > head_lines + tail_lines {
-            result.push_str(&format!(
-                "\n[... {} lines skipped ...]\n\n",
+            let _ = writeln!(
+                result,
+                "\n[... {} lines skipped ...]\n",
                 total_lines - head_lines - tail_lines
-            ));
+            );
         }
         for line in lines.iter().skip(total_lines.saturating_sub(tail_lines)) {
             result.push_str(line);

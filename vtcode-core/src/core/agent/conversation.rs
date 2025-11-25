@@ -3,6 +3,7 @@
 use crate::core::agent::task::{ContextItem, Task};
 use crate::gemini::{Content, Part};
 use crate::llm::provider::Message;
+use std::fmt::Write;
 
 /// Compose the full system instruction text combining the base prompt with task metadata.
 pub fn compose_system_instruction(
@@ -11,12 +12,12 @@ pub fn compose_system_instruction(
     contexts: &[ContextItem],
 ) -> String {
     let mut instruction = base_prompt.to_string();
-    instruction.push_str(&format!("\n\nTask: {}\n{}", task.title, task.description));
+    let _ = write!(instruction, "\n\nTask: {}\n{}", task.title, task.description);
 
     if !contexts.is_empty() {
         instruction.push_str("\n\nRelevant Context:");
         for ctx in contexts {
-            instruction.push_str(&format!("\n[{}] {}", ctx.id, ctx.content));
+            let _ = write!(instruction, "\n[{}] {}", ctx.id, ctx.content);
         }
     }
 
