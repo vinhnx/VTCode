@@ -15,7 +15,7 @@ use serde_json::{Map, Value, json};
 use super::{
     common::{
         convert_usage_to_llm_types, extract_prompt_cache_settings, override_base_url,
-        parse_client_prompt_common, resolve_model,
+        parse_client_prompt_common, parse_tool_call_openai_format, resolve_model,
     },
     extract_reasoning_trace,
 };
@@ -178,19 +178,7 @@ impl DeepSeekProvider {
     }
 
     fn parse_tool_call(value: &Value) -> Option<ToolCall> {
-        let id = value.get("id").and_then(|v| v.as_str())?;
-        let function = value.get("function")?.as_object()?;
-        let name = function.get("name").and_then(|v| v.as_str())?;
-        let arguments = function.get("arguments").map(|arg| match arg {
-            Value::String(text) => text.to_string(),
-            _ => arg.to_string(),
-        });
-
-        Some(ToolCall::function(
-            id.to_string(),
-            name.to_string(),
-            arguments.unwrap_or_else(|| "{}".to_string()),
-        ))
+        parse_tool_call_openai_format(value)
     }
 
     fn convert_to_deepseek_format(&self, request: &LLMRequest) -> Result<Value, LLMError> {
