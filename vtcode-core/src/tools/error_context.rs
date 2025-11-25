@@ -3,6 +3,7 @@
 /// Provides structured error reporting with file/line context,
 /// partial output preservation, and helpful suggestions.
 use std::fmt;
+use std::fmt::Write as _;
 
 /// Error context for tool execution failures
 #[derive(Debug, Clone)]
@@ -83,27 +84,27 @@ impl ToolErrorContext {
     pub fn format_for_user(&self) -> String {
         let mut output = String::new();
 
-        output.push_str(&format!("{} failed\n", self.tool_name));
-        output.push_str(&format!("   Error: {}\n", self.message));
+        let _ = writeln!(output, "{} failed", self.tool_name);
+        let _ = writeln!(output, "   Error: {}", self.message);
 
         if let Some(file) = &self.file_path {
-            output.push_str(&format!("   File: {}\n", file));
+            let _ = writeln!(output, "   File: {}", file);
             if let Some(line) = self.line_number {
-                output.push_str(&format!("   Line: {}\n", line));
+                let _ = writeln!(output, "   Line: {}", line);
             }
         }
 
         if let Some(output_text) = &self.partial_output {
             output.push_str("\n   Partial Output:\n");
             for line in output_text.lines() {
-                output.push_str(&format!("   {}\n", line));
+                let _ = writeln!(output, "   {}", line);
             }
         }
 
         if !self.suggestions.is_empty() {
             output.push_str("\n   Suggestions:\n");
             for (i, suggestion) in self.suggestions.iter().enumerate() {
-                output.push_str(&format!("   {}. {}\n", i + 1, suggestion));
+                let _ = writeln!(output, "   {}. {}", i + 1, suggestion);
             }
         }
 
@@ -117,7 +118,7 @@ impl ToolErrorContext {
         if !self.error_chain.is_empty() {
             output.push_str("\n   Debug Chain:\n");
             for (i, error) in self.error_chain.iter().enumerate() {
-                output.push_str(&format!("   [{}] {}\n", i, error));
+                let _ = writeln!(output, "   [{}] {}", i, error);
             }
         }
 
