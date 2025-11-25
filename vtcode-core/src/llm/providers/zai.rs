@@ -16,6 +16,7 @@ use std::collections::HashSet;
 use super::common::{
     convert_usage_to_llm_types, map_finish_reason_common, override_base_url,
     parse_client_prompt_common, parse_tool_call_openai_format, resolve_model,
+    validate_request_common,
 };
 
 const PROVIDER_NAME: &str = "Z.AI";
@@ -550,28 +551,12 @@ impl LLMProvider for ZAIProvider {
     }
 
     fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {
-        if request.messages.is_empty() {
-            let formatted =
-                error_display::format_llm_error(PROVIDER_NAME, "Messages cannot be empty");
-            return Err(LLMError::InvalidRequest(formatted));
-        }
-
-        if !request.model.is_empty() && !Self::available_models().contains(&request.model) {
-            let formatted = error_display::format_llm_error(
-                PROVIDER_NAME,
-                &format!("Unsupported model: {}", request.model),
-            );
-            return Err(LLMError::InvalidRequest(formatted));
-        }
-
-        for message in &request.messages {
-            if let Err(err) = message.validate_for_provider(PROVIDER_KEY) {
-                let formatted = error_display::format_llm_error(PROVIDER_NAME, &err);
-                return Err(LLMError::InvalidRequest(formatted));
-            }
-        }
-
-        Ok(())
+        validate_request_common(
+            request,
+            PROVIDER_NAME,
+            PROVIDER_KEY,
+            Some(&Self::available_models()),
+        )
     }
 }
 

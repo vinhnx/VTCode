@@ -1,5 +1,6 @@
 use crate::config::core::{PromptCachingConfig, ProviderPromptCachingConfig};
-use crate::llm::provider::{FinishReason, LLMRequest, Message, ToolCall};
+use crate::llm::error_display;
+use crate::llm::provider::{FinishReason, LLMError, LLMRequest, Message, ToolCall};
 use crate::llm::types as llm_types;
 use serde_json::Value;
 
@@ -158,4 +159,38 @@ pub fn map_finish_reason_common(reason: &str) -> FinishReason {
         "content_filter" | "sensitive" => FinishReason::ContentFilter,
         other => FinishReason::Error(other.to_string()),
     }
+}
+
+/// Validates an LLM request with common checks.
+/// Checks for empty messages and validates each message for the given provider.
+pub fn validate_request_common(
+    request: &LLMRequest,
+    provider_name: &str,
+    validation_provider: &str,
+    supported_models: Option<&[String]>,
+) -> Result<(), LLMError> {
+    if request.messages.is_empty() {
+        let formatted =
+            error_display::format_llm_error(provider_name, "Messages cannot be empty");
+        return Err(LLMError::InvalidRequest(formatted));
+    }
+
+    if let Some(models) = supported_models {
+        if !request.model.trim().is_empty() && !models.contains(&request.model) {
+            let formatted = error_display::format_llm_error(
+                provider_name,
+                &format!("Unsupported model: {}", request.model),
+            );
+            return Err(LLMError::InvalidRequest(formatted));
+        }
+    }
+
+    for message in &request.messages {
+        if let Err(err) = message.validate_for_provider(validation_provider) {
+            let formatted = error_display::format_llm_error(provider_name, &err);
+            return Err(LLMError::InvalidRequest(formatted));
+        }
+    }
+
+    Ok(())
 }
