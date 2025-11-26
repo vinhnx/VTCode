@@ -438,3 +438,131 @@ pub fn parse_usage_openai_format(
             cache_read_tokens: None,
         })
 }
+
+/// Parses OpenAI-compatible response format.
+/// Used by DeepSeek, Moonshot, and other OpenAI-compatible providers.
+///
+/// # Arguments
+/// * `response_json` - The JSON response from the API
+/// * `provider_name` - Provider name for error messages
+/// * `include_cache_metrics` - Whether to parse cache-related usage metrics
+/// * `extract_reasoning` - Optional function to extract reasoning content from message/choice
+///
+/// # Returns
+/// Parsed LLMResponse or error
+pub fn parse_response_openai_format<F>(
+    response_json: Value,
+    provider_name: &str,
+    include_cache_metrics: bool,
+    extract_reasoning: Option<F>,
+) -> Result<crate::llm::provider::LLMResponse, LLMError>
+where
+    F: Fn(&Value, &Value) -> Option<String>,
+{
+    use crate::llm::provider::LLMResponse;
+
+    let choices = response_json
+        .get("choices")
+        .and_then(|value| value.as_array())
+        .ok_or_else(|| {
+            let formatted_error =
+                error_display::format_llm_error(provider_name, "Invalid response format: missing choices");
+            LLMError::Provider(formatted_error)
+        })?;
+
+    if choices.is_empty() {
+        let formatted_error =
+            error_display::format_llm_error(provider_name, "No choices in response");
+        return Err(LLMError::Provider(formatted_error));
+    }
+
+    let choice = &choices[0];
+    let message = choice.get("message").ok_or_else(|| {
+        let formatted_error = error_display::format_llm_error(
+            provider_name,
+            "Invalid response format: missing message",
+        );
+        LLMError::Provider(formatted_error)
+    })?;
+
+    let content = extract_content_from_message(message);
+
+    let tool_calls = message
+        .get("tool_calls")
+        .and_then(|tc| tc.as_array())
+        .map(|calls| {
+            calls
+                .iter()
+                .filter_map(parse_tool_call_openai_format)
+                .collect::<Vec<_>>()
+        })
+        .filter(|calls| !calls.is_empty());
+
+    // Extract reasoning using custom extractor if provided
+    let reasoning = if let Some(extractor) = extract_reasoning {
+        extractor(message, choice)
+    } else {
+        // Default: check message.reasoning_content
+        message
+            .get("reasoning_content")
+            .and_then(|rc| rc.as_str())
+            .map(|s| s.to_string())
+    };
+
+    let finish_reason = choice
+        .get("finish_reason")
+        .and_then(|value| value.as_str())
+        .map(map_finish_reason_common)
+        .unwrap_or(FinishReason::Stop);
+
+    let usage = parse_usage_openai_format(&response_json, include_cache_metrics);
+
+    Ok(LLMResponse {
+        content,
+        tool_calls,
+        usage,
+        finish_reason,
+        reasoning,
+        reasoning_details: None,
+    })
+}
+
+/// Handles HTTP errors consistently across OpenAI-compatible providers.
+///
+/// # Arguments
+/// * `response` - The HTTP response to check
+/// * `provider_name` - Provider name for error messages
+/// * `api_key_env_var` - Environment variable name for API key (for auth error messages)
+///
+/// # Returns
+/// Ok(()) if response is successful, Err(LLMError) otherwise
+pub async fn handle_http_error(
+    response: reqwest::Response,
+    provider_name: &str,
+    api_key_env_var: &str,
+) -> Result<reqwest::Response, LLMError> {
+    if response.status().is_success() {
+        return Ok(response);
+    }
+
+    let status = response.status();
+    let error_text = response.text().await.unwrap_or_default();
+
+    if status.as_u16() == 401 {
+        let formatted_error = error_display::format_llm_error(
+            provider_name,
+            &format!("Authentication failed (check {})", api_key_env_var),
+        );
+        return Err(LLMError::Authentication(formatted_error));
+    }
+
+    if status.as_u16() == 429 || error_text.contains("quota") {
+        return Err(LLMError::RateLimit);
+    }
+
+    let formatted_error = error_display::format_llm_error(
+        provider_name,
+        &format!("HTTP {}: {}", status, error_text),
+    );
+    Err(LLMError::Provider(formatted_error))
+}

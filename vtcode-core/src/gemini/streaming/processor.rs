@@ -66,7 +66,8 @@ impl StreamingProcessor {
         Self {
             config: StreamingConfig::default(),
             metrics: StreamingMetrics::default(),
-            current_event_data: String::new(),
+            // Optimize: Pre-allocate for typical JSON event size
+            current_event_data: String::with_capacity(512),
             progress_callback: None,
             warning_threshold: 0.8,
         }
@@ -77,7 +78,8 @@ impl StreamingProcessor {
         Self {
             config,
             metrics: StreamingMetrics::default(),
-            current_event_data: String::new(),
+            // Optimize: Pre-allocate for typical JSON event size
+            current_event_data: String::with_capacity(512),
             progress_callback: None,
             warning_threshold: 0.8,
         }
@@ -129,7 +131,8 @@ impl StreamingProcessor {
         };
 
         let mut _has_valid_content = false;
-        let mut buffer = String::new();
+        // Optimize: Pre-allocate buffer with typical SSE line size to reduce reallocations
+        let mut buffer = String::with_capacity(self.config.buffer_size);
         let request_start = Instant::now();
 
         // Wait for the first chunk with a longer timeout

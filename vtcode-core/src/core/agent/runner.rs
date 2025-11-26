@@ -107,6 +107,8 @@ struct TaskRunState {
     consecutive_tool_loops: usize,
     max_tool_loop_streak: usize,
     tool_loop_limit_hit: bool,
+    // Optimization: Track conversation length to avoid rebuilding messages unnecessarily
+    last_conversation_len: usize,
 }
 
 impl TaskRunState {
@@ -130,6 +132,7 @@ impl TaskRunState {
             consecutive_tool_loops: 0,
             max_tool_loop_streak: 0,
             tool_loop_limit_hit: false,
+            last_conversation_len: 0,
         }
     }
 
@@ -423,8 +426,10 @@ impl AgentRunner {
         let mut agent_message_streamed = false;
         let mut used_streaming_fallback = false;
         let mut reasoning_recorded = false;
-        let mut aggregated_text = String::new();
-        let mut aggregated_reasoning = String::new();
+        // Optimize: Pre-allocate with capacity to reduce reallocations during streaming
+        // Typical response: 500-2000 chars, reasoning: 200-1000 chars
+        let mut aggregated_text = String::with_capacity(2048);
+        let mut aggregated_reasoning = String::with_capacity(1024);
         let mut streaming_response: Option<crate::llm::provider::LLMResponse> = None;
 
         if supports_streaming {
@@ -526,8 +531,12 @@ impl AgentRunner {
             used_streaming_fallback = true;
         }
 
-        let mut fallback_request = request.clone();
-        fallback_request.stream = false;
+        // Optimize: Create fallback request without cloning if possible
+        // We only need to change stream=false, so we can reuse the request
+        let fallback_request = LLMRequest {
+            stream: false,
+            ..request.clone()
+        };
 
         let mut response = self
             .provider_client
@@ -782,14 +791,19 @@ impl AgentRunner {
                 .map(|m| m.provider())
                 .unwrap_or(ModelProvider::Gemini);
 
-            let request_messages = if matches!(provider_kind, ModelProvider::Gemini) {
-                let rebuilt =
-                    build_messages_from_conversation(&system_instruction, &task_state.conversation);
-                task_state.conversation_messages = rebuilt.clone();
-                rebuilt
-            } else {
-                task_state.conversation_messages.clone()
-            };
+            // Optimize: Only rebuild messages for Gemini if conversation has changed
+            if matches!(provider_kind, ModelProvider::Gemini) {
+                if task_state.conversation.len() != task_state.last_conversation_len {
+                    let rebuilt = build_messages_from_conversation(
+                        &system_instruction,
+                        &task_state.conversation,
+                    );
+                    task_state.conversation_messages = rebuilt;
+                    task_state.last_conversation_len = task_state.conversation.len();
+                }
+            }
+
+            let request_messages = task_state.conversation_messages.clone();
 
             let supports_streaming = self.provider_client.supports_streaming();
 

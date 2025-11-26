@@ -81,7 +81,7 @@ impl AnsiRenderer {
         };
         Self {
             writer: AutoStream::new(std::io::stdout(), choice),
-            buffer: String::new(),
+            buffer: String::with_capacity(1024),
             color,
             sink: None,
             last_line_was_empty: false,
@@ -754,8 +754,9 @@ impl InlineSink {
         }
 
         // Fallback: Process as plain text without ANSI parsing
-        let mut converted_lines = Vec::new();
-        let mut plain_lines = Vec::new();
+        let line_count_estimate = text.as_bytes().iter().filter(|&&b| b == b'\n').count() + 1;
+        let mut converted_lines = Vec::with_capacity(line_count_estimate);
+        let mut plain_lines = Vec::with_capacity(line_count_estimate);
 
         for line in text.split('\n') {
             let mut segments = Vec::new();
