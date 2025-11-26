@@ -697,7 +697,7 @@ impl DiffChatRenderer {
             );
             let _ = write!(output, " ({} {})", additions, deletions);
         }
-        output.push_str("\n");
+        output.push('\n');
 
         // List changed files with individual stats
         if !check.file_stats.is_empty() {
@@ -717,11 +717,7 @@ impl DiffChatRenderer {
                     &self.diff_renderer.palette.stat_removed,
                     &format!("-{}", stat.deletions),
                 );
-                let _ = writeln!(
-                    output,
-                    "  • {} ({} {})",
-                    stat.path, additions, deletions
-                );
+                let _ = writeln!(output, "  • {} ({} {})", stat.path, additions, deletions);
             }
         }
 

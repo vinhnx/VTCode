@@ -663,7 +663,7 @@ fn handle_end_tag(
                 theme_styles,
                 base_style,
             );
-            if let Some(_) = list_stack.pop() {
+            if list_stack.pop().is_some() {
                 if let Some(state) = list_stack.last() {
                     pending_list_prefix.replace(state.continuation.clone());
                 } else {

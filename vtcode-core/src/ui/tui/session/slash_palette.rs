@@ -208,7 +208,7 @@ impl SlashPalette {
                             || prompt
                                 .description
                                 .as_ref()
-                                .map_or(false, |desc| desc.to_lowercase().contains(&normalized))
+                                .is_some_and(|desc| desc.to_lowercase().contains(&normalized))
                         {
                             new_suggestions.push(SlashPaletteSuggestion::Custom(prompt.clone()));
                         }
@@ -233,7 +233,7 @@ impl SlashPalette {
         } else {
             // Handle regular slash commands
             let static_suggestions = suggestions_for(prefix);
-            for &info in static_suggestions.iter() {
+            for info in static_suggestions {
                 new_suggestions.push(SlashPaletteSuggestion::Static(info));
             }
         }

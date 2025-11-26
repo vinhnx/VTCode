@@ -438,7 +438,7 @@ pub async fn compose_system_instruction_text(
                 scope
             );
             instruction.push_str(segment.contents.trim());
-            instruction.push_str("\n");
+            instruction.push('\n');
         }
 
         if bundle.truncated {

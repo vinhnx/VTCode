@@ -384,20 +384,24 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
     };
 
     // Extract justification from decision ledger if not provided
-    let extracted_justification = if justification.is_none() && decision_ledger.is_some() {
-        let ledger = decision_ledger.unwrap().read().await;
-        if let Some(latest) = ledger.latest_decision() {
-            // Calculate risk level for this tool
-            let mut risk_context = ToolRiskContext::new(
-                tool_name.to_string(),
-                ToolSource::Internal,
-                WorkspaceTrust::Untrusted,
-            );
-            if let Some(args) = tool_args {
-                risk_context.command_args = vec![args.to_string()];
+    let extracted_justification = if justification.is_none() {
+        if let Some(ledger_ref) = decision_ledger {
+            let ledger = ledger_ref.read().await;
+            if let Some(latest) = ledger.latest_decision() {
+                // Calculate risk level for this tool
+                let mut risk_context = ToolRiskContext::new(
+                    tool_name.to_string(),
+                    ToolSource::Internal,
+                    WorkspaceTrust::Untrusted,
+                );
+                if let Some(args) = tool_args {
+                    risk_context.command_args = vec![args.to_string()];
+                }
+                let risk_level = ToolRiskScorer::calculate_risk(&risk_context);
+                JustificationExtractor::extract_from_decision(latest, tool_name, &risk_level)
+            } else {
+                None
             }
-            let risk_level = ToolRiskScorer::calculate_risk(&risk_context);
-            JustificationExtractor::extract_from_decision(latest, tool_name, &risk_level)
         } else {
             None
         }

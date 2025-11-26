@@ -89,11 +89,7 @@ impl TokenMetrics {
         output.push_str("📊 Token Metrics Summary\n");
         let _ = writeln!(output, "  Total tokens: {}", self.total_tokens);
         let _ = writeln!(output, "  Total chars: {}", self.total_chars);
-        let _ = writeln!(
-            output,
-            "  Avg chars/token: {:.2}",
-            self.avg_chars_per_token
-        );
+        let _ = writeln!(output, "  Avg chars/token: {:.2}", self.avg_chars_per_token);
         let _ = writeln!(
             output,
             "  Total time: {:.2}ms",

@@ -77,7 +77,7 @@ impl FileOpsTool {
                 .with_context(|| format!("Failed to read directory entry in: {}", input.path))?
             {
                 let path = entry.path();
-                let name = entry.file_name().to_string_lossy().to_string();
+                let name = entry.file_name().to_string_lossy().into_owned();
 
                 if !input.include_hidden && name.starts_with('.') {
                     continue;
@@ -205,6 +205,7 @@ impl FileOpsTool {
         // Allow recursive listing without pattern by defaulting to "*" (match all)
         let default_pattern = "*".to_string();
         let pattern = input.name_pattern.as_ref().unwrap_or(&default_pattern);
+        let pattern_lower = pattern.to_lowercase();
         let search_path = self.workspace_root.join(&input.path);
 
         let mut items = Vec::new();
@@ -233,14 +234,14 @@ impl FileOpsTool {
             } else if input.case_sensitive.unwrap_or(true) {
                 name.contains(pattern)
             } else {
-                name.to_lowercase().contains(&pattern.to_lowercase())
+                name.to_lowercase().contains(&pattern_lower)
             };
 
             if matches {
                 // Extension filtering
                 if let Some(ref extensions) = input.file_extensions {
                     if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-                        if !extensions.contains(&ext.to_string()) {
+                        if !extensions.iter().any(|e| e == ext) {
                             continue;
                         }
                     } else {
@@ -346,7 +347,7 @@ impl FileOpsTool {
                     let mut entries_list = Vec::new();
                     let mut entry = entries;
                     while let Ok(Some(file_entry)) = entry.next_entry().await {
-                        let entry_name = file_entry.file_name().to_string_lossy().to_string();
+                        let entry_name = file_entry.file_name().to_string_lossy().into_owned();
                         if !input.include_hidden && entry_name.starts_with('.') {
                             continue;
                         }
@@ -651,7 +652,7 @@ impl FileOpsTool {
 
         entries.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
 
-        let effective_max = input.max_items.min(1000).max(1);
+        let effective_max = input.max_items.clamp(1, 1000);
         let selected_total = entries.len().min(effective_max);
 
         let mut ranked = Vec::with_capacity(selected_total);
@@ -660,7 +661,7 @@ impl FileOpsTool {
         {
             let name = rel_path
                 .file_name()
-                .map(|n| n.to_string_lossy().to_string())
+                .map(|n| n.to_string_lossy().into_owned())
                 .unwrap_or_else(|| rel_path.display().to_string());
             ranked.push(json!({
                 "rank": idx + 1,
@@ -820,17 +821,17 @@ impl FileOpsTool {
         let file_path = self.normalize_and_validate_user_path(&path).await?;
 
         if self.should_exclude(&file_path).await {
-            return Err(anyhow!(format!(
+            return Err(anyhow!(
                 "Error: Path '{}' is excluded by .vtcodegitignore",
                 path
-            )));
+            ));
         }
 
         if tokio::fs::try_exists(&file_path).await? {
-            return Err(anyhow!(format!(
+            return Err(anyhow!(
                 "Error: File '{}' already exists. Use write_file with mode='overwrite' to replace it.",
                 path
-            )));
+            ));
         }
 
         if let Some(parent) = file_path.parent() {
@@ -885,10 +886,10 @@ impl FileOpsTool {
                 }));
             }
 
-            return Err(anyhow!(format!(
+            return Err(anyhow!(
                 "Error: Path '{}' does not exist. Provide force=true to ignore missing files.",
                 path
-            )));
+            ));
         }
 
         let canonical = tokio::fs::canonicalize(&target_path)
@@ -896,17 +897,17 @@ impl FileOpsTool {
             .with_context(|| format!("Failed to resolve canonical path for '{}'", path))?;
 
         if !canonical.starts_with(self.canonical_workspace_root()) {
-            return Err(anyhow!(format!(
+            return Err(anyhow!(
                 "Error: Path '{}' resolves outside the workspace and cannot be deleted.",
                 path
-            )));
+            ));
         }
 
         if self.should_exclude(&canonical).await {
-            return Err(anyhow!(format!(
+            return Err(anyhow!(
                 "Error: Path '{}' is excluded by .vtcodegitignore and cannot be deleted.",
                 path
-            )));
+            ));
         }
 
         let metadata = tokio::fs::metadata(&canonical)
@@ -915,10 +916,10 @@ impl FileOpsTool {
 
         let deleted_kind = if metadata.is_dir() {
             if !recursive {
-                return Err(anyhow!(format!(
+                return Err(anyhow!(
                     "Error: '{}' is a directory. Pass recursive=true to remove directories.",
                     path
-                )));
+                ));
             }
 
             tokio::fs::remove_dir_all(&canonical)
@@ -947,10 +948,10 @@ impl FileOpsTool {
         let file_path = self.normalize_and_validate_user_path(&input.path).await?;
 
         if self.should_exclude(&file_path).await {
-            return Err(anyhow!(format!(
+            return Err(anyhow!(
                 "Error: Path '{}' is excluded by .vtcodegitignore",
                 input.path
-            )));
+            ));
         }
 
         // Check if content needs chunking
@@ -1009,10 +1010,10 @@ impl FileOpsTool {
                 tokio::fs::write(&file_path, &input.content).await?;
             }
             _ => {
-                return Err(anyhow!(format!(
+                return Err(anyhow!(
                     "Error: Unsupported write mode '{}'. Allowed: overwrite, append, skip_if_exists.",
                     input.mode
-                )));
+                ));
             }
         }
 
@@ -1130,10 +1131,10 @@ impl FileOpsTool {
                 file.flush().await?;
             }
             _ => {
-                return Err(anyhow!(format!(
+                return Err(anyhow!(
                     "Error: Unsupported write mode '{}'. Allowed: overwrite, append, skip_if_exists.",
                     input.mode
-                )));
+                ));
             }
         }
 
@@ -1182,11 +1183,11 @@ impl FileOpsTool {
 
     fn workspace_relative_display(&self, path: &Path) -> String {
         if let Ok(relative) = path.strip_prefix(&self.workspace_root) {
-            relative.to_string_lossy().to_string()
+            relative.to_string_lossy().into_owned()
         } else if let Ok(relative) = path.strip_prefix(self.canonical_workspace_root()) {
-            relative.to_string_lossy().to_string()
+            relative.to_string_lossy().into_owned()
         } else {
-            path.to_string_lossy().to_string()
+            path.to_string_lossy().into_owned()
         }
     }
 
@@ -1213,18 +1214,18 @@ impl FileOpsTool {
         let normalized_root = normalize_path(&self.workspace_root);
 
         if !normalized.starts_with(&normalized_root) {
-            return Err(anyhow!(format!(
+            return Err(anyhow!(
                 "Error: Path '{}' resolves outside the workspace.",
                 original_display
-            )));
+            ));
         }
 
         let canonical = self.canonicalize_allow_missing(&normalized).await?;
         if !canonical.starts_with(self.canonical_workspace_root()) {
-            return Err(anyhow!(format!(
+            return Err(anyhow!(
                 "Error: Path '{}' resolves outside the workspace.",
                 original_display
-            )));
+            ));
         }
 
         Ok(canonical)
@@ -1343,14 +1344,14 @@ fn build_diff_preview(path: &str, before: Option<&str>, after: &str) -> Value {
         let head_count = diff::HEAD_LINE_COUNT.min(lines.len());
         let tail_count = diff::TAIL_LINE_COUNT.min(lines.len().saturating_sub(head_count));
         let mut condensed = Vec::with_capacity(head_count + tail_count + 1);
-        condensed.extend(lines.iter().take(head_count).cloned());
+        condensed.extend(lines[..head_count].iter().cloned());
         omitted = lines.len().saturating_sub(head_count + tail_count);
         if omitted > 0 {
             condensed.push(format!("... {omitted} lines omitted ..."));
         }
         if tail_count > 0 {
             let tail_start = lines.len().saturating_sub(tail_count);
-            condensed.extend(lines.iter().skip(tail_start).cloned());
+            condensed.extend(lines[tail_start..].iter().cloned());
         }
         lines = condensed;
     }
@@ -1968,16 +1969,16 @@ impl FileOpsTool {
 
         // Handle empty file case
         if total_lines == 0 {
-            return Ok(("".to_string(), false));
+            return Ok((String::new(), false));
         }
 
         // Validate offset is not beyond the file size
         if offset_lines >= total_lines {
             if offset_lines == 0 {
                 // Special case: if offset is 0 but file is empty, return empty string
-                return Ok(("".to_string(), false));
+                return Ok((String::new(), false));
             }
-            return Ok(("".to_string(), false)); // Return empty if offset is beyond file size
+            return Ok((String::new(), false)); // Return empty if offset is beyond file size
         }
 
         // Calculate the end position (don't exceed file boundaries)
@@ -2006,9 +2007,9 @@ impl FileOpsTool {
         if offset_bytes >= file_size {
             if offset_bytes == 0 && file_size == 0 {
                 // Special case: empty file with offset 0
-                return Ok(("".to_string(), false));
+                return Ok((String::new(), false));
             }
-            return Ok(("".to_string(), false)); // Return empty if offset is beyond file size
+            return Ok((String::new(), false)); // Return empty if offset is beyond file size
         }
 
         // Prevent potential overflow when calculating end position

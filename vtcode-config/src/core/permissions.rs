@@ -43,39 +43,50 @@ pub struct PermissionsConfig {
     pub cache_ttl_seconds: u64,
 }
 
-fn default_enabled() -> bool {
+#[inline]
+const fn default_enabled() -> bool {
     true
 }
 
-fn default_resolve_commands() -> bool {
+#[inline]
+const fn default_resolve_commands() -> bool {
     true
 }
 
-fn default_audit_enabled() -> bool {
+#[inline]
+const fn default_audit_enabled() -> bool {
     true
 }
 
+const DEFAULT_AUDIT_DIR: &str = "~/.vtcode/audit";
+
+#[inline]
 fn default_audit_directory() -> String {
-    "~/.vtcode/audit".to_string()
+    DEFAULT_AUDIT_DIR.to_owned()
 }
 
-fn default_log_allowed_commands() -> bool {
+#[inline]
+const fn default_log_allowed_commands() -> bool {
     true
 }
 
-fn default_log_denied_commands() -> bool {
+#[inline]
+const fn default_log_denied_commands() -> bool {
     true
 }
 
-fn default_log_permission_prompts() -> bool {
+#[inline]
+const fn default_log_permission_prompts() -> bool {
     true
 }
 
-fn default_cache_enabled() -> bool {
+#[inline]
+const fn default_cache_enabled() -> bool {
     true
 }
 
-fn default_cache_ttl_seconds() -> u64 {
+#[inline]
+const fn default_cache_ttl_seconds() -> u64 {
     300 // 5 minutes
 }
 

@@ -108,14 +108,12 @@ impl PromptCache {
         if !self.config.enabled {
             return None;
         }
-        if let Some(entry) = self.cache.get_mut(prompt_hash) {
+        self.cache.get_mut(prompt_hash).map(|entry| {
             entry.last_used = Self::current_timestamp();
             entry.usage_count += 1;
             self.dirty = true;
-            Some(entry)
-        } else {
-            None
-        }
+            entry as &CachedPrompt
+        })
     }
 
     /// Store optimized prompt in cache
@@ -206,8 +204,8 @@ impl PromptCache {
             .map_err(PromptCacheError::Io)?;
 
         let cache_path = self.config.cache_dir.join("prompt_cache.json");
-        let data = serde_json::to_string_pretty(&self.cache)
-            .map_err(PromptCacheError::Serialization)?;
+        let data =
+            serde_json::to_string_pretty(&self.cache).map_err(PromptCacheError::Serialization)?;
 
         fs::write(cache_path, data)
             .await

@@ -216,7 +216,9 @@ impl AnthropicProvider {
     }
 
     fn parse_client_prompt(&self, prompt: &str) -> LLMRequest {
-        parse_client_prompt_common(prompt, &self.model, |value| self.parse_messages_request(value))
+        parse_client_prompt_common(prompt, &self.model, |value| {
+            self.parse_messages_request(value)
+        })
     }
 
     fn parse_messages_request(&self, value: &Value) -> Option<LLMRequest> {
@@ -326,8 +328,7 @@ impl AnthropicProvider {
                             content_array
                                 .iter()
                                 .filter_map(|block| block.get("text").and_then(|t| t.as_str()))
-                                .collect::<Vec<_>>()
-                                .join("")
+                                .collect::<String>()
                         } else {
                             entry
                                 .get("content")
@@ -535,18 +536,19 @@ impl AnthropicProvider {
             if !tools.is_empty() {
                 let mut built_tools: Vec<Value> = tools
                     .iter()
-                    .map(|tool| {
+                    .filter_map(|tool| {
+                        let func = tool.function.as_ref()?;
                         let mut obj = json!({
-                            "name": tool.function.as_ref().unwrap().name,
-                            "description": tool.function.as_ref().unwrap().description,
-                            "input_schema": tool.function.as_ref().unwrap().parameters
+                            "name": func.name,
+                            "description": func.description,
+                            "input_schema": func.parameters
                         });
                         if let Some(strict) = tool.strict {
                             if strict {
                                 obj["strict"] = json!(true);
                             }
                         }
-                        obj
+                        Some(obj)
                     })
                     .collect();
 
@@ -867,7 +869,7 @@ impl AnthropicProvider {
             content: if text_parts.is_empty() {
                 None
             } else {
-                Some(text_parts.join(""))
+                Some(text_parts.into_iter().collect())
             },
             tool_calls: if tool_calls.is_empty() {
                 None
@@ -1027,7 +1029,10 @@ impl LLMProvider for AnthropicProvider {
             return Err(LLMError::InvalidRequest(formatted_error));
         }
 
-        if !self.supported_models().contains(&request.model) {
+        if !models::anthropic::SUPPORTED_MODELS
+            .iter()
+            .any(|m| *m == request.model)
+        {
             let formatted_error = error_display::format_llm_error(
                 "Anthropic",
                 &format!("Unsupported model: {}", request.model),

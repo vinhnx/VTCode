@@ -1,3 +1,4 @@
+use crate::utils::current_timestamp;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -78,12 +79,15 @@ pub struct DecisionTracker {
     session_start: u64,
 }
 
+impl Default for DecisionTracker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DecisionTracker {
     pub fn new() -> Self {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+        let now = current_timestamp();
 
         Self {
             decisions: Vec::new(),
@@ -315,10 +319,4 @@ pub struct TransparencyReport {
     pub tool_calls: usize,
     pub avg_confidence: Option<f64>,
     pub recent_decisions: Vec<Decision>,
-}
-
-impl Default for DecisionTracker {
-    fn default() -> Self {
-        Self::new()
-    }
 }

@@ -71,7 +71,7 @@ impl BashRunner {
 
     /// Print working directory (like pwd)
     pub fn pwd(&self) -> String {
-        self.working_dir.to_string_lossy().to_string()
+        self.working_dir.to_string_lossy().into_owned()
     }
 
     /// Create directory (like mkdir)

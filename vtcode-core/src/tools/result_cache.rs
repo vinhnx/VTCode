@@ -206,7 +206,7 @@ mod tests {
         let output = "line 1\nline 2".to_string();
 
         cache.insert(key.clone(), output.clone());
-        assert_eq!(cache.get(&key), Some(output));
+        assert_eq!(cache.get(&key).as_ref(), Some(&output));
     }
 
     #[test]

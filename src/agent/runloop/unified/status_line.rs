@@ -384,13 +384,13 @@ impl StatusLineCommandPayload {
         git: Option<&GitStatusSummary>,
         context: Option<StatusLineContext>,
     ) -> Self {
-        let workspace_path = workspace.to_string_lossy().to_string();
+        let workspace_path = workspace.to_string_lossy().into_owned();
         Self {
             hook_event_name: "Status",
             cwd: workspace_path.clone(),
             workspace: StatusLineWorkspace {
                 current_dir: workspace_path.clone(),
-                project_dir: workspace_path.clone(),
+                project_dir: workspace_path,
             },
             model: StatusLineModel {
                 id: model_id.to_string(),

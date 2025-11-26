@@ -110,8 +110,7 @@ impl ContextPruner {
             .iter()
             .enumerate()
             .map(|(i, msg)| {
-                let recency_bonus =
-                    msg.age_in_turns.saturating_mul(self.recency_bonus_per_turn) as u32;
+                let recency_bonus = msg.age_in_turns.saturating_mul(self.recency_bonus_per_turn);
                 let adjusted_score = (msg.semantic_score + recency_bonus).min(1000);
                 (i, msg, adjusted_score)
             })
@@ -218,11 +217,7 @@ impl ContextPruner {
             "  Tokens Used: {}/{} ({:.1}%)\n",
             efficiency.total_tokens, self.max_tokens, efficiency.context_utilization_percent
         );
-        let _ = write!(
-            report,
-            "  Messages: {} total\n",
-            efficiency.total_messages
-        );
+        let _ = write!(report, "  Messages: {} total\n", efficiency.total_messages);
         let _ = write!(
             report,
             "  Avg Semantic Score: {}/1000\n",

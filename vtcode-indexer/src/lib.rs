@@ -317,7 +317,7 @@ impl SimpleIndexer {
         let language = self.detect_language(file_path);
 
         let index = FileIndex {
-            path: file_path.to_string_lossy().to_string(),
+            path: file_path.to_string_lossy().into_owned(),
             hash,
             modified,
             size,
@@ -326,7 +326,7 @@ impl SimpleIndexer {
         };
 
         self.index_cache
-            .insert(file_path.to_string_lossy().to_string(), index.clone());
+            .insert(file_path.to_string_lossy().into_owned(), index.clone());
 
         self.storage.persist(self.config.index_dir(), &index)?;
 
@@ -455,7 +455,7 @@ impl SimpleIndexer {
 
         for entry in fs::read_dir(path)? {
             let entry = entry?;
-            let file_name = entry.file_name().to_string_lossy().to_string();
+            let file_name = entry.file_name().to_string_lossy().into_owned();
 
             if !show_hidden && file_name.starts_with('.') {
                 continue;
@@ -710,7 +710,7 @@ mod tests {
         assert_eq!(entries.len(), 1);
         assert_eq!(
             entries[0].path,
-            workspace.join("notes.txt").to_string_lossy().to_string()
+            workspace.join("notes.txt").to_string_lossy().into_owned()
         );
 
         Ok(())

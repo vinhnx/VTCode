@@ -3,13 +3,13 @@ use super::context::PromptContext;
 use super::templates::PromptTemplates;
 
 /// System prompt generator
-pub struct SystemPromptGenerator {
-    config: SystemPromptConfig,
-    context: PromptContext,
+pub struct SystemPromptGenerator<'a> {
+    config: &'a SystemPromptConfig,
+    context: &'a PromptContext,
 }
 
-impl SystemPromptGenerator {
-    pub fn new(config: SystemPromptConfig, context: PromptContext) -> Self {
+impl<'a> SystemPromptGenerator<'a> {
+    pub fn new(config: &'a SystemPromptConfig, context: &'a PromptContext) -> Self {
         Self { config, context }
     }
 
@@ -73,6 +73,6 @@ pub fn generate_system_instruction_with_config(
     config: &SystemPromptConfig,
     context: &PromptContext,
 ) -> String {
-    let generator = SystemPromptGenerator::new(config.clone(), context.clone());
+    let generator = SystemPromptGenerator::new(config, context);
     generator.generate()
 }

@@ -24,7 +24,7 @@ impl Session {
     pub(super) fn reflow_transcript_lines(&self, width: u16) -> Vec<Line<'static>> {
         if width == 0 {
             let mut lines: Vec<Line<'static>> = Vec::new();
-            for index in 0..self.lines.len() {
+            for (index, _) in self.lines.iter().enumerate() {
                 lines.extend(self.reflow_message_lines(index, 0));
             }
             if lines.is_empty() {
@@ -34,7 +34,7 @@ impl Session {
         }
 
         let mut wrapped_lines = Vec::new();
-        for index in 0..self.lines.len() {
+        for (index, _) in self.lines.iter().enumerate() {
             wrapped_lines.extend(self.reflow_message_lines(index, width));
         }
 
@@ -199,7 +199,7 @@ impl Session {
             };
 
             let mut new_spans = vec![Span::styled(first_prefix.to_string(), border_style)];
-            new_spans.extend(line.spans.drain(..));
+            new_spans.append(&mut line.spans);
             if padding > 0 {
                 new_spans.push(Span::styled(" ".repeat(padding), Style::default()));
             }
@@ -517,7 +517,7 @@ impl Session {
             return false;
         }
         let trimmed = text.trim();
-        if trimmed.starts_with(|ch: char| matches!(ch, '-' | '*' | '`' | '>' | '#')) {
+        if trimmed.starts_with(['-', '*', '`', '>', '#']) {
             return false;
         }
         if trimmed.contains("```") {

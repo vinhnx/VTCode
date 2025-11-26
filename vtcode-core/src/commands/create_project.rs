@@ -67,7 +67,7 @@ edition = "2021"
 [dependencies]
 {}"#,
         name,
-        if features.contains(&"serde".to_string()) {
+        if features.iter().any(|s| s == "serde") {
             "serde = { version = \"1.0\", features = [\"derive\"] }"
         } else {
             ""
@@ -97,7 +97,7 @@ edition = "2021"
         style("Step 3: Creating source code structure...").yellow()
     );
 
-    let main_rs_content = if features.contains(&"serde".to_string()) {
+    let main_rs_content = if features.iter().any(|s| s == "serde") {
         r#"use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]

@@ -124,7 +124,7 @@ impl SearchMetrics {
 
             // Linear interpolation: at threshold = 1.0, at 2x threshold = 0.1
             let ratio = self.expensive_threshold as f64 / metric.result_tokens as f64;
-            (ratio * 0.9 + 0.1).min(1.0).max(0.1)
+            (ratio * 0.9 + 0.1).clamp(0.1, 1.0)
         } else {
             1.0 // No sampling if not tracked
         }

@@ -130,7 +130,7 @@ async fn write_agents_file(
     } else {
         "skip_if_exists"
     };
-    let path_string = agents_md_path.to_string_lossy().to_string();
+    let path_string = agents_md_path.to_string_lossy().into_owned();
 
     let response = registry
         .execute_tool(
@@ -278,7 +278,7 @@ async fn analyze_file(
 
         // Python project files
         "requirements.txt" | "pyproject.toml" | "setup.py" | "Pipfile" => {
-            if !analysis.languages.contains(&"Python".to_string()) {
+            if !analysis.languages.iter().any(|s| s == "Python") {
                 analysis.languages.push("Python".to_string());
             }
             analysis.build_systems.push("pip/poetry".to_string());
@@ -468,18 +468,19 @@ async fn analyze_git_history(
 fn analyze_project_characteristics(analysis: &mut ProjectAnalysis) {
     // Determine if it's a library or application
     analysis.is_library = analysis.config_files.iter().any(|f| {
-        f == "Cargo.toml" && analysis.languages.contains(&"Rust".to_string())
+        f == "Cargo.toml" && analysis.languages.iter().any(|l| l == "Rust")
             || f == "package.json"
                 && analysis
                     .languages
-                    .contains(&"JavaScript/TypeScript".to_string())
+                    .iter()
+                    .any(|l| l == "JavaScript/TypeScript")
             || f == "setup.py"
             || f == "pyproject.toml"
     });
 
-    analysis.is_application = analysis.source_dirs.contains(&"src".to_string())
-        || analysis.source_dirs.contains(&"cmd".to_string())
-        || analysis.source_dirs.contains(&"app".to_string());
+    analysis.is_application = analysis.source_dirs.iter().any(|d| d == "src")
+        || analysis.source_dirs.iter().any(|d| d == "cmd")
+        || analysis.source_dirs.iter().any(|d| d == "app");
 
     // Check for CI/CD files
     analysis.has_ci_cd = analysis.config_files.iter().any(|f| {

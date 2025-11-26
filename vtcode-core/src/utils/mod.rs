@@ -115,3 +115,4 @@ pub mod vtcodegitignore;
 pub use anstyle_utils::*;
 pub use cached_style_parser::CachedStyleParser;
 pub use color_utils::*;
+pub use utils::current_timestamp;

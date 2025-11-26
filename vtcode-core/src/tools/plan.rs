@@ -16,18 +16,13 @@ const CHECKBOX_IN_PROGRESS: &str = "[ ]";
 const CHECKBOX_COMPLETED: &str = "[x]";
 const IN_PROGRESS_NOTE: &str = " _(in progress)_";
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum StepStatus {
+    #[default]
     Pending,
     InProgress,
     Completed,
-}
-
-impl Default for StepStatus {
-    fn default() -> Self {
-        StepStatus::Pending
-    }
 }
 
 impl StepStatus {

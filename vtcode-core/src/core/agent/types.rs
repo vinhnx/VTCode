@@ -12,18 +12,13 @@ pub enum MessageType {
 }
 
 /// Priority levels for messages and tasks
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Priority {
     Low = 1,
+    #[default]
     Medium = 2,
     High = 3,
     Critical = 4,
-}
-
-impl Default for Priority {
-    fn default() -> Self {
-        Priority::Medium
-    }
 }
 
 /// Agent type for single-agent architecture

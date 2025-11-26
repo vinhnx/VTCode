@@ -93,10 +93,10 @@ fn agent_prefix_spans(
         ));
     }
 
-    if let Some(label) = labels.agent.clone() {
+    if let Some(label) = &labels.agent {
         if !label.is_empty() {
             let label_style = ratatui_style_from_inline(&prefix_style_fn(line), theme.foreground);
-            spans.push(Span::styled(label, label_style));
+            spans.push(Span::styled(label.clone(), label_style));
         }
     }
 
@@ -121,14 +121,13 @@ fn render_styled_action_text(
     body_style: &InlineTextStyle,
     theme: &InlineTheme,
 ) {
-    let words: Vec<&str> = action.split_whitespace().collect();
-
-    for (i, word) in words.iter().enumerate() {
+    // Iterate directly without collecting to Vec
+    for (i, word) in action.split_whitespace().enumerate() {
         if i > 0 {
             spans.push(Span::raw(" "));
         }
 
-        if *word == "in" {
+        if word == "in" {
             let in_style = InlineTextStyle::default()
                 .with_color(Some(anstyle::AnsiColor::Cyan.into()))
                 .italic();
@@ -169,8 +168,8 @@ fn strip_tool_status_prefix(text: &str) -> &str {
     let trimmed = text.trim_start();
     const STATUS_ICONS: [&str; 4] = ["✓", "✗", "~", "✕"];
     for icon in STATUS_ICONS {
-        if trimmed.starts_with(icon) {
-            return trimmed[icon.len()..].trim_start();
+        if let Some(rest) = trimmed.strip_prefix(icon) {
+            return rest.trim_start();
         }
     }
     text

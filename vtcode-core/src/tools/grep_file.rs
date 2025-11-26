@@ -331,7 +331,9 @@ impl GrepSearchManager {
         })?;
 
         let output_str = String::from_utf8_lossy(&output.stdout);
-        let mut matches = Vec::new();
+        // Pre-allocate with reasonable estimate (typically less than max_results lines in output)
+        let line_count = output_str.lines().count();
+        let mut matches = Vec::with_capacity(line_count.min(max_results));
         for line in output_str.lines() {
             if let Ok(value) = serde_json::from_str::<Value>(line) {
                 matches.push(value);
@@ -378,17 +380,20 @@ impl GrepSearchManager {
         let output = String::from_utf8(output_buffer)
             .with_context(|| "perg search output was not valid UTF-8".to_string())?;
 
-        let glob_filter =
-            if let Some(pattern) = &input.glob_pattern {
-                Some(Pattern::new(pattern).with_context(|| {
+        let glob_filter = input
+            .glob_pattern
+            .as_ref()
+            .map(|pattern| {
+                Pattern::new(pattern).with_context(|| {
                     format!("invalid glob pattern '{}' for perg fallback", pattern)
-                })?)
-            } else {
-                None
-            };
+                })
+            })
+            .transpose()?;
 
         let max_results = input.max_results.unwrap_or(MAX_SEARCH_RESULTS.get());
-        let mut matches = Vec::new();
+        // Pre-allocate with estimate based on output lines
+        let line_count = output.lines().count();
+        let mut matches = Vec::with_capacity(line_count.min(max_results));
 
         for line in output.lines() {
             if matches.len() >= max_results {
@@ -447,7 +452,7 @@ impl GrepSearchManager {
 
             let line_number = numeric_segments
                 .get(1)
-                .or_else(|| numeric_segments.get(0))
+                .or_else(|| numeric_segments.first())
                 .and_then(|num| num.parse::<u64>().ok())
                 .unwrap_or(0);
 

@@ -73,8 +73,8 @@ async fn gather_inline_status_details(
         }
     };
 
-    let mcp_status = if let Some(error) = session_bootstrap.mcp_error.clone() {
-        McpStatusSummary::Error(error)
+    let mcp_status = if let Some(error) = &session_bootstrap.mcp_error {
+        McpStatusSummary::Error(error.clone())
     } else if let Some(enabled) = session_bootstrap.mcp_enabled {
         if enabled {
             let configured = session_bootstrap.mcp_providers.is_some();

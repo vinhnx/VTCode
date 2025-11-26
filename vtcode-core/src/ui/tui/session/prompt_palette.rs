@@ -342,7 +342,7 @@ impl PromptPalette {
         if self.filtered_prompts.is_empty() {
             1
         } else {
-            (self.filtered_prompts.len() + PAGE_SIZE - 1) / PAGE_SIZE
+            self.filtered_prompts.len().div_ceil(PAGE_SIZE)
         }
     }
 

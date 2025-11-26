@@ -120,9 +120,7 @@ impl ExecEventRecorder {
                     text: text.to_string(),
                 }),
             };
-            self.record(ThreadEvent::ItemStarted(ItemStartedEvent {
-                item: item.clone(),
-            }));
+            self.record(ThreadEvent::ItemStarted(ItemStartedEvent { item }));
             self.active_agent_message = Some(StreamingAgentMessage {
                 id,
                 buffer: text.to_string(),

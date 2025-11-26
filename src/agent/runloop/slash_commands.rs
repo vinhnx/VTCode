@@ -604,7 +604,7 @@ fn handle_custom_prompt(
             Ok(SlashCommandOutcome::SubmitPrompt { prompt: expanded })
         }
         Err(err) => {
-            renderer.line(MessageStyle::Error, &format!("{}", err))?;
+            renderer.line(MessageStyle::Error, &err.to_string())?;
             Ok(SlashCommandOutcome::Handled)
         }
     }

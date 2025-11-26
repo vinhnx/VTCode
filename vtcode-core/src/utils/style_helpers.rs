@@ -15,8 +15,8 @@ pub struct ColorPalette {
     pub muted: Color,   // Gray/Dim
 }
 
-impl ColorPalette {
-    pub fn default() -> Self {
+impl Default for ColorPalette {
+    fn default() -> Self {
         Self {
             success: Color::Ansi(AnsiColor::Green),
             error: Color::Ansi(AnsiColor::Red),

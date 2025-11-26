@@ -71,10 +71,8 @@ impl<K: Clone + Eq + std::hash::Hash + std::fmt::Debug, V: Clone + std::fmt::Deb
     pub fn get(&self, key: &K) -> Option<V> {
         let mut entries = self.entries.write().unwrap();
 
-        // Check if key exists
-        if entries.contains_key(key) {
-            let entry = entries.get(key).unwrap();
-
+        // Use get directly instead of contains_key + get
+        if let Some(entry) = entries.get(key) {
             // Check TTL
             if entry.is_expired() {
                 let age = entry.age();

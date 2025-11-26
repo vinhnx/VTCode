@@ -13,7 +13,7 @@ use std::time::Duration;
 use tracing::debug;
 
 /// Statistics about skill usage patterns
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct SkillStatistics {
     /// Time from creation to first reuse
     pub creation_to_reuse_time: Option<Duration>,
@@ -29,20 +29,6 @@ pub struct SkillStatistics {
     pub total_skills: usize,
     /// Skills reused more than once
     pub reused_skills: usize,
-}
-
-impl Default for SkillStatistics {
-    fn default() -> Self {
-        Self {
-            creation_to_reuse_time: None,
-            avg_lifecycle: None,
-            reuse_ratio_by_tag: HashMap::new(),
-            most_effective_skills: vec![],
-            rarely_used_skills: vec![],
-            total_skills: 0,
-            reused_skills: 0,
-        }
-    }
 }
 
 /// Statistics about tool usage patterns
@@ -128,26 +114,17 @@ impl Default for FailurePatterns {
 }
 
 /// Analyzes agent behavior from metrics history
+#[derive(Default)]
 pub struct AgentBehaviorAnalyzer {
     skill_stats: SkillStatistics,
     tool_stats: ToolStatistics,
     failure_patterns: FailurePatterns,
 }
 
-impl Default for AgentBehaviorAnalyzer {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl AgentBehaviorAnalyzer {
     /// Create a new behavior analyzer
     pub fn new() -> Self {
-        Self {
-            skill_stats: SkillStatistics::default(),
-            tool_stats: ToolStatistics::default(),
-            failure_patterns: FailurePatterns::default(),
-        }
+        Self::default()
     }
 
     /// Get skill statistics
@@ -168,10 +145,11 @@ impl AgentBehaviorAnalyzer {
     /// Recommend tools based on usage patterns
     pub fn recommend_tools(&self, query: &str, limit: usize) -> Vec<String> {
         let mut recommendations = vec![];
+        let query_lower = query.to_lowercase();
 
         // Find tools that match the query
         for (tool, _count) in self.tool_stats.usage_frequency.iter().take(limit) {
-            if tool.to_lowercase().contains(&query.to_lowercase()) {
+            if tool.to_lowercase().contains(&query_lower) {
                 recommendations.push(tool.clone());
             }
         }
@@ -298,16 +276,8 @@ impl AgentBehaviorAnalyzer {
         output.push_str("=== Agent Behavior Analysis ===\n\n");
 
         output.push_str("## Skill Statistics\n");
-        let _ = writeln!(
-            output,
-            "Total skills: {}",
-            self.skill_stats.total_skills
-        );
-        let _ = writeln!(
-            output,
-            "Reused skills: {}",
-            self.skill_stats.reused_skills
-        );
+        let _ = writeln!(output, "Total skills: {}", self.skill_stats.total_skills);
+        let _ = writeln!(output, "Reused skills: {}", self.skill_stats.reused_skills);
         if !self.skill_stats.most_effective_skills.is_empty() {
             let _ = writeln!(
                 output,
@@ -331,12 +301,7 @@ impl AgentBehaviorAnalyzer {
         if !self.failure_patterns.high_failure_tools.is_empty() {
             output.push_str("\n## High-Risk Tools\n");
             for (tool, rate) in self.failure_patterns.high_failure_tools.iter().take(5) {
-                let _ = writeln!(
-                    output,
-                    "- {} (failure rate: {:.1}%)",
-                    tool,
-                    rate * 100.0
-                );
+                let _ = writeln!(output, "- {} (failure rate: {:.1}%)", tool, rate * 100.0);
             }
         }
 

@@ -688,11 +688,11 @@ fn agent_prefix_spans(session: &Session, line: &MessageLine) -> Vec<Span<'static
         ));
     }
 
-    if let Some(label) = session.labels.agent.clone() {
+    if let Some(label) = &session.labels.agent {
         if !label.is_empty() {
             let label_style =
                 ratatui_style_from_inline(&prefix_style_inline, session.theme.foreground);
-            spans.push(Span::styled(label, label_style));
+            spans.push(Span::styled(label.clone(), label_style));
         }
     }
 

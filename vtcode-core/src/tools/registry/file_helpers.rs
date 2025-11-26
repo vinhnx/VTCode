@@ -83,9 +83,12 @@ impl ToolRegistry {
                     let replacement_lines: Vec<&str> = input.new_str.lines().collect();
 
                     // Build new content by replacing the matched window
-                    let mut result_lines = Vec::new();
+                    let mut result_lines = Vec::with_capacity(
+                        i + replacement_lines.len()
+                            + content_lines.len().saturating_sub(i + old_lines.len()),
+                    );
                     result_lines.extend_from_slice(&content_lines[..i]);
-                    result_lines.extend(replacement_lines.iter().map(|s| *s));
+                    result_lines.extend_from_slice(&replacement_lines);
                     result_lines.extend_from_slice(&content_lines[i + old_lines.len()..]);
 
                     new_content = result_lines.join("\n");
@@ -112,9 +115,12 @@ impl ToolRegistry {
                         let replacement_lines: Vec<&str> = input.new_str.lines().collect();
 
                         // Build new content by replacing the matched window
-                        let mut result_lines = Vec::new();
+                        let mut result_lines = Vec::with_capacity(
+                            i + replacement_lines.len()
+                                + content_lines.len().saturating_sub(i + old_lines.len()),
+                        );
                         result_lines.extend_from_slice(&content_lines[..i]);
-                        result_lines.extend(replacement_lines.iter().map(|s| *s));
+                        result_lines.extend_from_slice(&replacement_lines);
                         result_lines.extend_from_slice(&content_lines[i + old_lines.len()..]);
 
                         new_content = result_lines.join("\n");

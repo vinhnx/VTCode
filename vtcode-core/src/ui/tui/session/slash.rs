@@ -237,7 +237,7 @@ fn preview_selected_slash_suggestion(session: &mut Session) {
     let cursor_position = new_input.len();
 
     if !suffix.is_empty() {
-        if !suffix.chars().next().map_or(false, char::is_whitespace) {
+        if !suffix.chars().next().is_some_and(char::is_whitespace) {
             new_input.push(' ');
         }
         new_input.push_str(suffix);
@@ -263,7 +263,7 @@ pub(super) fn apply_selected_slash_suggestion(session: &mut Session) -> bool {
 
         let suffix = &input_content[range.end..];
         if !suffix.is_empty() {
-            if !suffix.chars().next().map_or(false, char::is_whitespace) {
+            if !suffix.chars().next().is_some_and(char::is_whitespace) {
                 new_input.push(' ');
             }
             new_input.push_str(suffix);
@@ -299,7 +299,7 @@ pub(super) fn apply_selected_slash_suggestion(session: &mut Session) -> bool {
         new_input.push(' ');
         new_input.len()
     } else {
-        if !suffix.chars().next().map_or(false, char::is_whitespace) {
+        if !suffix.chars().next().is_some_and(char::is_whitespace) {
             new_input.push(' ');
         }
         let position = new_input.len();

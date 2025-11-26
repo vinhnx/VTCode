@@ -89,7 +89,7 @@ impl PermissionAuditLog {
             .create(true)
             .append(true)
             .open(&log_path)
-            .context(format!("Failed to open audit log at {:?}", log_path))?;
+            .with_context(|| format!("Failed to open audit log at {:?}", log_path))?;
 
         let writer = BufWriter::new(file);
 

@@ -199,12 +199,12 @@ fn score_tool(tool_name: &str, context: &ToolSelectionContext) -> f32 {
     }
 
     // Factor 4: Tool diversity - penalize recently used tools
-    if context.prior_tools_used.contains(&tool_name.to_string()) {
+    if context.prior_tools_used.iter().any(|s| s == tool_name) {
         score -= 0.15; // Avoid repeating same tool
     }
 
     // Normalize to 0.0-1.0 range
-    score.max(0.0).min(1.0)
+    score.clamp(0.0, 1.0)
 }
 
 /// Tracker for tool effectiveness across a session

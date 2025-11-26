@@ -234,7 +234,7 @@ fn process_content_value(
 
 fn extract_tool_calls_from_content(message: &Value) -> Option<Vec<ToolCall>> {
     let parts = message.get("content").and_then(|value| value.as_array())?;
-    let mut calls: Vec<ToolCall> = Vec::new();
+    let mut calls: Vec<ToolCall> = Vec::with_capacity(parts.len());
 
     for (index, part) in parts.iter().enumerate() {
         let map = match part.as_object() {
@@ -1069,13 +1069,14 @@ impl OpenRouterProvider {
             Value::Array(parts) => parts
                 .iter()
                 .filter_map(|part| {
-                    if let Some(text) = part.get("text").and_then(|t| t.as_str()) {
-                        Some(text.to_string())
-                    } else if let Some(Value::String(text)) = part.get("content") {
-                        Some(text.clone())
-                    } else {
-                        None
-                    }
+                    part.get("text")
+                        .and_then(|t| t.as_str())
+                        .map(|s| s.to_string())
+                        .or_else(|| {
+                            part.get("content")
+                                .and_then(|c| c.as_str())
+                                .map(|s| s.to_string())
+                        })
                 })
                 .collect::<Vec<_>>()
                 .join(""),
@@ -1364,15 +1365,16 @@ impl OpenRouterProvider {
             if !tools.is_empty() {
                 let tools_json: Vec<Value> = tools
                     .iter()
-                    .map(|tool| {
-                        json!({
+                    .filter_map(|tool| {
+                        let func = tool.function.as_ref()?;
+                        Some(json!({
                             "type": "function",
                             "function": {
-                                "name": tool.function.as_ref().unwrap().name,
-                                "description": tool.function.as_ref().unwrap().description,
-                                "parameters": tool.function.as_ref().unwrap().parameters
+                                "name": func.name,
+                                "description": func.description,
+                                "parameters": func.parameters
                             }
-                        })
+                        }))
                     })
                     .collect();
                 provider_request["tools"] = Value::Array(tools_json);
@@ -1484,15 +1486,16 @@ impl OpenRouterProvider {
             if !tools.is_empty() {
                 let tools_json: Vec<Value> = tools
                     .iter()
-                    .map(|tool| {
-                        json!({
+                    .filter_map(|tool| {
+                        let func = tool.function.as_ref()?;
+                        Some(json!({
                             "type": "function",
                             "function": {
-                                "name": tool.function.as_ref().unwrap().name,
-                                "description": tool.function.as_ref().unwrap().description,
-                                "parameters": tool.function.as_ref().unwrap().parameters
+                                "name": func.name,
+                                "description": func.description,
+                                "parameters": func.parameters
                             }
-                        })
+                        }))
                     })
                     .collect();
                 provider_request["tools"] = Value::Array(tools_json);

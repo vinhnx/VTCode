@@ -1,9 +1,9 @@
 use crate::core::timeout_detector::{OperationType, TIMEOUT_DETECTOR};
+use crate::utils::current_timestamp;
 use anyhow::Result;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Represents an error that occurred during execution
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -78,6 +78,12 @@ pub struct ErrorRecoveryManager {
     operation_type_mapping: IndexMap<ErrorType, OperationType>,
 }
 
+impl Default for ErrorRecoveryManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ErrorRecoveryManager {
     pub fn new() -> Self {
         let mut recovery_strategies = IndexMap::new();
@@ -92,8 +98,8 @@ impl ErrorRecoveryManager {
                     attempt_number: 1,
                 },
                 RecoveryStrategy::AlternativeTool {
-                    original_tool: "".to_string(),
-                    alternative_tool: "".to_string(),
+                    original_tool: String::default(),
+                    alternative_tool: String::default(),
                 },
             ],
         );
@@ -133,21 +139,11 @@ impl ErrorRecoveryManager {
         message: String,
         context: ErrorContext,
     ) -> String {
-        let error_id = format!(
-            "error_{}_{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
-            self.errors.len()
-        );
+        let error_id = format!("error_{}_{}", current_timestamp(), self.errors.len());
 
         let error = ExecutionError {
             id: error_id.clone(),
-            timestamp: SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
+            timestamp: current_timestamp(),
             error_type: error_type.clone(),
             message,
             context,
@@ -169,10 +165,7 @@ impl ErrorRecoveryManager {
         new_context_size: Option<usize>,
     ) {
         let attempt = RecoveryAttempt {
-            timestamp: SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
+            timestamp: current_timestamp(),
             strategy,
             success,
             result,
@@ -262,10 +255,7 @@ impl ErrorRecoveryManager {
 
     /// Check if a specific error pattern is recurring
     pub fn detect_error_pattern(&self, error_type: &ErrorType, time_window_seconds: u64) -> bool {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+        let now = current_timestamp();
 
         let recent_errors = self
             .errors
@@ -426,10 +416,4 @@ pub struct EnhancedContextPreservationPlan {
     pub timeout_rate: f64,
     pub retry_success_rate: f64,
     pub timeout_stats: crate::core::timeout_detector::TimeoutStats,
-}
-
-impl Default for ErrorRecoveryManager {
-    fn default() -> Self {
-        Self::new()
-    }
 }

@@ -130,13 +130,12 @@ impl CodeAnalyzer {
 
     /// Calculate basic code metrics
     fn calculate_metrics(&self, tree: &SyntaxTree, symbols: &[SymbolInfo]) -> CodeMetrics {
-        let lines = tree.source_code.lines().collect::<Vec<_>>();
-        let total_lines = lines.len();
+        let total_lines = tree.source_code.lines().count();
 
         let mut comment_lines = 0;
         let mut blank_lines = 0;
 
-        for line in &lines {
+        for line in tree.source_code.lines() {
             let trimmed = line.trim();
             if trimmed.is_empty() {
                 blank_lines += 1;
@@ -462,7 +461,7 @@ impl CodeAnalyzer {
             0.0
         };
 
-        let function_length_max = function_lengths.iter().cloned().max().unwrap_or(0);
+        let function_length_max = function_lengths.iter().copied().max().unwrap_or(0);
 
         // Calculate parameter statistics
         let parameter_counts: Vec<usize> = symbols
@@ -483,7 +482,7 @@ impl CodeAnalyzer {
             0.0
         };
 
-        let parameters_max = parameter_counts.iter().cloned().max().unwrap_or(0);
+        let parameters_max = parameter_counts.iter().copied().max().unwrap_or(0);
 
         ComplexityMetrics {
             cyclomatic_complexity,
@@ -521,7 +520,7 @@ impl CodeAnalyzer {
                 *cc += node
                     .named_children
                     .get("body")
-                    .and_then(|children| Some(children.len().saturating_sub(1)))
+                    .map(|children| children.len().saturating_sub(1))
                     .unwrap_or(0);
                 *cognitive += 1;
             }
@@ -637,7 +636,7 @@ impl AnalysisUtils {
             - 5.2 * halstead_volume.log2()
             - 0.23 * cyclomatic_complexity
             - 16.2 * lines_of_code.log2();
-        mi.max(0.0).min(171.0) // Clamp between 0 and 171
+        mi.clamp(0.0, 171.0) // Clamp between 0 and 171
     }
 
     /// Generate code quality score
@@ -662,6 +661,6 @@ impl AnalysisUtils {
             score += 10.0;
         }
 
-        score.max(0.0).min(100.0)
+        score.clamp(0.0, 100.0)
     }
 }

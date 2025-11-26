@@ -106,7 +106,7 @@ pub(crate) fn resolve_program_path_from_paths(
     for path_dir in paths {
         let full_path = path_dir.join(program);
         if full_path.is_file() {
-            return Some(full_path.to_string_lossy().to_string());
+            return Some(full_path.to_string_lossy().into_owned());
         }
     }
     None

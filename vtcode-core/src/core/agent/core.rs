@@ -185,9 +185,7 @@ impl Agent {
             })?;
 
         // Parse the file
-        let syntax_tree = self
-            .tree_sitter_analyzer
-            .parse(source_code, language)?;
+        let syntax_tree = self.tree_sitter_analyzer.parse(source_code, language)?;
 
         // Extract symbols
         let symbols = self
@@ -208,7 +206,7 @@ impl Agent {
             .unwrap_or_default();
 
         Ok(CodeAnalysis {
-            file_path: file_path.to_string_lossy().to_string(),
+            file_path: file_path.to_string_lossy().into_owned(),
             language,
             symbols,
             dependencies,

@@ -111,7 +111,11 @@ impl LLMProvider for XAIProvider {
             return Err(LLMError::InvalidRequest(formatted));
         }
 
-        if !request.model.trim().is_empty() && !self.supported_models().contains(&request.model) {
+        if !request.model.trim().is_empty()
+            && !models::xai::SUPPORTED_MODELS
+                .iter()
+                .any(|m| *m == request.model)
+        {
             let formatted = error_display::format_llm_error(
                 "xAI",
                 &format!("Unsupported model: {}", request.model),

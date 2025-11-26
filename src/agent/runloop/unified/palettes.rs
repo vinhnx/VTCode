@@ -91,7 +91,7 @@ pub(crate) fn show_sessions_palette(
         return Ok(false);
     }
 
-    let mut items = Vec::new();
+    let mut items = Vec::with_capacity(listings.len());
     for (index, listing) in listings.iter().enumerate() {
         let ended_local = listing
             .snapshot

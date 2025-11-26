@@ -46,7 +46,7 @@ impl Router {
     pub fn route(vt_cfg: &VTCodeConfig, core: &CoreAgentConfig, input: &str) -> RouteDecision {
         let router_cfg = &vt_cfg.router;
         let classifier = TaskClassifier::new(&router_cfg.heuristics);
-        let selector = ModelSelector::new(&router_cfg, &core.model);
+        let selector = ModelSelector::new(router_cfg, &core.model);
 
         let class = if router_cfg.heuristic_classification {
             classifier.classify(input)

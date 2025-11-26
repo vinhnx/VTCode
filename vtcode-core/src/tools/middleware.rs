@@ -58,7 +58,7 @@ impl fmt::Display for MiddlewareError {
 }
 
 /// Metadata about execution through middleware
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ExecutionMetadata {
     /// Total execution time (ms)
     pub duration_ms: u64,
@@ -74,18 +74,6 @@ pub struct ExecutionMetadata {
 
     /// Any warnings
     pub warnings: Vec<String>,
-}
-
-impl Default for ExecutionMetadata {
-    fn default() -> Self {
-        Self {
-            duration_ms: 0,
-            from_cache: false,
-            retry_count: 0,
-            layers_executed: Vec::new(),
-            warnings: Vec::new(),
-        }
-    }
 }
 
 /// Core middleware trait

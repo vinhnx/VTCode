@@ -53,8 +53,8 @@ pub(crate) fn gpt5_codex_developer_prompt(additional_guidance: &[String]) -> Str
         }
 
         let trimmed_owned = trimmed.to_string();
-        if seen.insert(trimmed_owned.clone()) {
-            extras.push(trimmed_owned);
+        if seen.insert(trimmed_owned) {
+            extras.push(trimmed.to_string());
         }
     }
 

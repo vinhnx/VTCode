@@ -110,7 +110,7 @@ pub async fn handle_outcome(
                         ctx.renderer
                             .line(MessageStyle::Info, "Debug information (tool):")?;
                         ctx.renderer
-                            .line(MessageStyle::Output, &format!("{}", value))?;
+                            .line(MessageStyle::Output, &value.to_string())?;
                         return Ok(SlashCommandControl::Continue);
                     }
                     Err(err) => {
@@ -179,7 +179,7 @@ pub async fn handle_outcome(
                         ctx.renderer
                             .line(MessageStyle::Info, "Recent errors (via get_errors):")?;
                         ctx.renderer
-                            .line(MessageStyle::Output, &format!("{}", value))?;
+                            .line(MessageStyle::Output, &value.to_string())?;
                     }
                     Err(err) => {
                         ctx.renderer.line(
@@ -209,7 +209,7 @@ pub async fn handle_outcome(
                         ctx.renderer
                             .line(MessageStyle::Info, "Agent analysis (tool):")?;
                         ctx.renderer
-                            .line(MessageStyle::Output, &format!("{}", value))?;
+                            .line(MessageStyle::Output, &value.to_string())?;
                         return Ok(SlashCommandControl::Continue);
                     }
                     Err(err) => {
@@ -293,7 +293,7 @@ pub async fn handle_outcome(
                         ctx.renderer
                             .line(MessageStyle::Info, "get_errors analysis:")?;
                         ctx.renderer
-                            .line(MessageStyle::Output, &format!("{}", value))?;
+                            .line(MessageStyle::Output, &value.to_string())?;
                     }
                     Err(err) => {
                         ctx.renderer.line(

@@ -159,7 +159,7 @@ impl ContextManager {
             }
 
             // Get decisions from ContextPruner in batch
-            let metrics_only: Vec<_> = metrics_list.iter().map(|(_, m)| m.clone()).collect();
+            let metrics_only: Vec<_> = metrics_list.iter().map(|(_, m)| m).cloned().collect();
             let decisions = self.context_pruner.prune_messages(&metrics_only);
 
             // Record decisions and collect indices to remove

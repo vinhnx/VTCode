@@ -17,6 +17,12 @@ pub struct ClientConfig {
     pub user_agent: String,
 }
 
+const USER_AGENT_DEFAULT: &str = "vtcode/1.0.0";
+const USER_AGENT_HIGH_THROUGHPUT: &str = "vtcode/1.0.0-high-throughput";
+const USER_AGENT_LOW_MEMORY: &str = "vtcode/1.0.0-low-memory";
+const USER_AGENT_ULTRA_LOW_MEMORY: &str = "vtcode/1.0.0-ultra-low-memory";
+const USER_AGENT_LOW_LATENCY: &str = "vtcode/1.0.0-low-latency";
+
 impl Default for ClientConfig {
     fn default() -> Self {
         Self {
@@ -25,7 +31,7 @@ impl Default for ClientConfig {
             tcp_keepalive: Duration::from_secs(60),
             request_timeout: Duration::from_secs(60),
             connect_timeout: Duration::from_secs(10),
-            user_agent: "vtcode/1.0.0".to_string(),
+            user_agent: USER_AGENT_DEFAULT.to_owned(),
         }
     }
 }
@@ -39,7 +45,7 @@ impl ClientConfig {
             tcp_keepalive: Duration::from_secs(60),
             request_timeout: Duration::from_secs(120),
             connect_timeout: Duration::from_secs(15),
-            user_agent: "vtcode/1.0.0-high-throughput".to_string(),
+            user_agent: USER_AGENT_HIGH_THROUGHPUT.to_owned(),
         }
     }
 
@@ -51,7 +57,7 @@ impl ClientConfig {
             tcp_keepalive: Duration::from_secs(30),
             request_timeout: Duration::from_secs(60),
             connect_timeout: Duration::from_secs(5),
-            user_agent: "vtcode/1.0.0-low-memory".to_string(),
+            user_agent: USER_AGENT_LOW_MEMORY.to_owned(),
         }
     }
 
@@ -63,7 +69,7 @@ impl ClientConfig {
             tcp_keepalive: Duration::from_secs(15),
             request_timeout: Duration::from_secs(30),
             connect_timeout: Duration::from_secs(3),
-            user_agent: "vtcode/1.0.0-ultra-low-memory".to_string(),
+            user_agent: USER_AGENT_ULTRA_LOW_MEMORY.to_owned(),
         }
     }
 
@@ -75,7 +81,7 @@ impl ClientConfig {
             tcp_keepalive: Duration::from_secs(30),
             request_timeout: Duration::from_secs(30),
             connect_timeout: Duration::from_secs(5),
-            user_agent: "vtcode/1.0.0-low-latency".to_string(),
+            user_agent: USER_AGENT_LOW_LATENCY.to_owned(),
         }
     }
 }

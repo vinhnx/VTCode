@@ -203,8 +203,8 @@ impl TokenBudgetManager {
 
     /// Ensure a tokenizer (or fallback counter) is available for the configured model
     async fn token_counter(&self) -> Result<TokenCounter> {
-        if let Some(counter) = self.tokenizer_cache.read().await.clone() {
-            return Ok(counter);
+        if let Some(counter) = &*self.tokenizer_cache.read().await {
+            return Ok(counter.clone());
         }
 
         let (model, tokenizer_id) = {
@@ -451,7 +451,7 @@ impl TokenBudgetManager {
             let mut sorted: Vec<_> = components.iter().collect();
             sorted.sort_by(|a, b| b.1.cmp(a.1));
             for (component, tokens) in sorted.iter().take(10) {
-                let _ = write!(report, "  - {}: {} tokens\n", component, tokens);
+                let _ = writeln!(report, "  - {}: {} tokens", component, tokens);
             }
         }
 
@@ -521,7 +521,7 @@ impl TokenBudgetManager {
         }
 
         let mut summary = String::from("Recent max_tokens Usage Summary:\n");
-        let _ = write!(summary, "Total recorded: {} tool calls\n", history.len());
+        let _ = writeln!(summary, "Total recorded: {} tool calls", history.len());
 
         let mut with_max_tokens = 0;
         let mut total_max_tokens = 0;
@@ -692,9 +692,7 @@ fn resolve_local_tokenizer_path(identifier: &str) -> Option<PathBuf> {
 fn map_model_to_pretrained(model: &str) -> &'static str {
     let normalized = model.to_ascii_lowercase();
 
-    if normalized.contains("gpt-4o") {
-        "openai-community/gpt-4o-mini-tokenizer"
-    } else if normalized.contains("gpt-5") {
+    if normalized.contains("gpt-4o") || normalized.contains("gpt-5") {
         "openai-community/gpt-4o-mini-tokenizer"
     } else if normalized.contains("gpt") {
         "openai-community/gpt2"

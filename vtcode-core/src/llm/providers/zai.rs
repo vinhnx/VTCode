@@ -4,8 +4,8 @@ use crate::config::core::PromptCachingConfig;
 use crate::llm::client::LLMClient;
 use crate::llm::error_display;
 use crate::llm::provider::{
-    FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, Message, MessageContent,
-    MessageRole, ToolCall, ToolChoice, ToolDefinition, Usage,
+    FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, MessageRole, ToolCall,
+    ToolChoice, Usage,
 };
 use crate::llm::types as llm_types;
 use async_trait::async_trait;
@@ -15,7 +15,8 @@ use std::collections::HashSet;
 
 use super::common::{
     convert_usage_to_llm_types, map_finish_reason_common, override_base_url,
-    parse_client_prompt_common, parse_tool_call_openai_format, resolve_model,
+    parse_chat_request_openai_format_with_extractor, parse_client_prompt_common,
+    parse_tool_call_openai_format, resolve_model, serialize_tools_openai_format,
     validate_request_common,
 };
 
@@ -31,28 +32,6 @@ pub struct ZAIProvider {
 }
 
 impl ZAIProvider {
-    fn serialize_tools(tools: &[ToolDefinition]) -> Option<Value> {
-        if tools.is_empty() {
-            return None;
-        }
-
-        let serialized = tools
-            .iter()
-            .map(|tool| {
-                json!({
-                    "type": tool.tool_type,
-                    "function": {
-                        "name": tool.function.as_ref().unwrap().name,
-                        "description": tool.function.as_ref().unwrap().description,
-                        "parameters": tool.function.as_ref().unwrap().parameters,
-                    }
-                })
-            })
-            .collect::<Vec<Value>>();
-
-        Some(Value::Array(serialized))
-    }
-
     fn with_model_internal(
         api_key: String,
         model: String,
@@ -96,101 +75,24 @@ impl ZAIProvider {
     }
 
     fn parse_chat_request(&self, value: &Value) -> Option<LLMRequest> {
-        let messages_value = value.get("messages")?.as_array()?;
-        let mut system_prompt = value
-            .get("system")
-            .and_then(|entry| entry.as_str())
-            .map(|text| text.to_string());
-        let mut messages = Vec::new();
+        let mut request =
+            parse_chat_request_openai_format_with_extractor(value, &self.model, |c| match c {
+                Value::String(text) => text.to_string(),
+                other => other.to_string(),
+            })?;
 
-        for entry in messages_value {
-            let role = entry
-                .get("role")
-                .and_then(|r| r.as_str())
-                .unwrap_or(crate::config::constants::message_roles::USER);
-            let content = entry
-                .get("content")
-                .map(|c| match c {
-                    Value::String(text) => text.to_string(),
-                    other => other.to_string(),
-                })
-                .unwrap_or_default();
-
-            match role {
-                "system" => {
-                    if system_prompt.is_none() && !content.is_empty() {
-                        system_prompt = Some(content);
-                    }
-                }
-                "assistant" => {
-                    let tool_calls = entry
-                        .get("tool_calls")
-                        .and_then(|tc| tc.as_array())
-                        .map(|calls| {
-                            calls
-                                .iter()
-                                .filter_map(|call| Self::parse_tool_call(call))
-                                .collect::<Vec<_>>()
-                        })
-                        .filter(|calls| !calls.is_empty());
-
-                    messages.push(Message {
-                        role: MessageRole::Assistant,
-                        content: MessageContent::Text(content),
-                        reasoning: None,
-                        reasoning_details: None,
-                        tool_calls,
-                        tool_call_id: None,
-                        origin_tool: None,
-                    });
-                }
-                "tool" => {
-                    if let Some(tool_call_id) = entry.get("tool_call_id").and_then(|v| v.as_str()) {
-                        messages.push(Message::tool_response(tool_call_id.to_string(), content));
-                    }
-                }
-                _ => {
-                    messages.push(Message::user(content));
-                }
-            }
-        }
-
-        Some(LLMRequest {
-            messages,
-            system_prompt,
-            model: value
-                .get("model")
-                .and_then(|m| m.as_str())
-                .unwrap_or(&self.model)
-                .to_string(),
-            max_tokens: value
-                .get("max_tokens")
-                .and_then(|m| m.as_u64())
-                .map(|m| m as u32),
-            temperature: value
-                .get("temperature")
-                .and_then(|t| t.as_f64())
-                .map(|t| t as f32),
-            stream: value
-                .get("stream")
-                .and_then(|s| s.as_bool())
-                .unwrap_or(false),
-            tools: None,
-            output_format: None,
-            tool_choice: value.get("tool_choice").and_then(|choice| match choice {
-                Value::String(s) => match s.as_str() {
-                    "auto" => Some(ToolChoice::auto()),
-                    "none" => Some(ToolChoice::none()),
-                    "any" | "required" => Some(ToolChoice::any()),
-                    _ => None,
-                },
+        // ZAI supports tool_choice parsing
+        request.tool_choice = value.get("tool_choice").and_then(|choice| match choice {
+            Value::String(s) => match s.as_str() {
+                "auto" => Some(ToolChoice::auto()),
+                "none" => Some(ToolChoice::none()),
+                "any" | "required" => Some(ToolChoice::any()),
                 _ => None,
-            }),
-            parallel_tool_calls: None,
-            parallel_tool_config: None,
-            reasoning_effort: None,
-            verbosity: None,
-        })
+            },
+            _ => None,
+        });
+
+        Some(request)
     }
 
     fn parse_tool_call(value: &Value) -> Option<ToolCall> {
@@ -279,8 +181,8 @@ impl ZAIProvider {
         }
 
         if let Some(tools) = &request.tools {
-            if let Some(serialized) = Self::serialize_tools(tools) {
-                payload["tools"] = serialized;
+            if let Some(serialized) = serialize_tools_openai_format(tools) {
+                payload["tools"] = Value::Array(serialized);
             }
         }
 
@@ -353,7 +255,7 @@ impl ZAIProvider {
             .map(|calls| {
                 calls
                     .iter()
-                    .filter_map(|call| Self::parse_tool_call(call))
+                    .filter_map(Self::parse_tool_call)
                     .collect::<Vec<_>>()
             })
             .filter(|calls| !calls.is_empty());

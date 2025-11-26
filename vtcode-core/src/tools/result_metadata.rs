@@ -92,7 +92,7 @@ impl ResultMetadata {
         let weighted = (self.confidence * 0.4)
             + (self.relevance * 0.4)
             + (self.false_positive_likelihood * -0.2);
-        weighted.max(0.0).min(1.0)
+        weighted.clamp(0.0, 1.0)
     }
 
     /// Create metadata for a successful tool execution
@@ -139,10 +139,13 @@ impl ResultMetadata {
             }
         }
 
-        // Merge tool metrics
-        for (k, v) in &other.tool_metrics {
-            self.tool_metrics.insert(k.clone(), v.clone());
-        }
+        // Merge tool metrics - use extend to avoid double clone
+        self.tool_metrics.extend(
+            other
+                .tool_metrics
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone())),
+        );
     }
 }
 
@@ -259,7 +262,7 @@ impl ResultScorer for GrepScorer {
                         // High confidence if specific matches
                         metadata.confidence = if count.len() > 5 {
                             0.85
-                        } else if count.len() > 0 {
+                        } else if !count.is_empty() {
                             0.80
                         } else {
                             1.0 // High confidence in "no matches"

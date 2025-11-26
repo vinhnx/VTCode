@@ -10,6 +10,14 @@ pub struct RetryConfig {
     pub retryable_errors: Vec<String>,
 }
 
+const RETRYABLE_ERRORS: &[&str] = &[
+    "timeout",
+    "connection",
+    "rate_limit",
+    "server_error",
+    "network",
+];
+
 impl Default for RetryConfig {
     fn default() -> Self {
         Self {
@@ -17,13 +25,7 @@ impl Default for RetryConfig {
             initial_delay: Duration::from_millis(500),
             max_delay: Duration::from_secs(30),
             backoff_multiplier: 2.0,
-            retryable_errors: vec![
-                "timeout".to_string(),
-                "connection".to_string(),
-                "rate_limit".to_string(),
-                "server_error".to_string(),
-                "network".to_string(),
-            ],
+            retryable_errors: RETRYABLE_ERRORS.iter().map(|s| (*s).to_owned()).collect(),
         }
     }
 }

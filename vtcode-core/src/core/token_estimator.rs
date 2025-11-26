@@ -40,7 +40,7 @@ impl TokenEstimator for CharacterRatioTokenEstimator {
         }
 
         let byte_len = text.len();
-        let tokens = (byte_len + (self.chars_per_token - 1)) / self.chars_per_token;
+        let tokens = byte_len.div_ceil(self.chars_per_token);
         tokens.max(1)
     }
 }

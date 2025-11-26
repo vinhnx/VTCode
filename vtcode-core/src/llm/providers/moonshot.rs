@@ -4,18 +4,18 @@ use crate::config::core::PromptCachingConfig;
 use crate::config::models::Provider as ModelProvider;
 use crate::llm::client::LLMClient;
 use crate::llm::error_display;
-use crate::llm::provider::{
-    FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, Usage,
-};
+use crate::llm::provider::{FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse};
 use crate::llm::providers::common::{
-    convert_usage_to_llm_types, forward_prompt_cache_with_state, make_default_request,
-    override_base_url, resolve_model, serialize_messages_openai_format, validate_request_common,
+    convert_usage_to_llm_types, extract_content_from_message, forward_prompt_cache_with_state,
+    make_default_request, override_base_url, parse_tool_call_openai_format,
+    parse_usage_openai_format, resolve_model, serialize_messages_openai_format,
+    serialize_tools_openai_format, validate_request_common,
 };
 use crate::llm::rig_adapter::reasoning_parameters_for;
 use crate::llm::types as llm_types;
 use async_trait::async_trait;
 use reqwest::Client;
-use serde_json::{Map, Value, json};
+use serde_json::{Map, Value};
 
 const PROVIDER_NAME: &str = "Moonshot";
 const PROVIDER_KEY: &str = "moonshot";
@@ -113,8 +113,7 @@ impl MoonshotProvider {
 
         // Add tools if present
         if let Some(tools) = &request.tools {
-            if !tools.is_empty() {
-                let serialized_tools = tools.iter().map(|tool| json!(tool)).collect::<Vec<_>>();
+            if let Some(serialized_tools) = serialize_tools_openai_format(tools) {
                 payload.insert("tools".to_string(), Value::Array(serialized_tools));
 
                 // Add tool choice if specified
@@ -193,29 +192,7 @@ impl MoonshotProvider {
             LLMError::Provider(formatted_error)
         })?;
 
-        let content = message
-            .get("content")
-            .and_then(|value| match value {
-                Value::String(text) => {
-                    let trimmed = text.trim();
-                    if trimmed.is_empty() {
-                        None
-                    } else {
-                        Some(trimmed.to_string())
-                    }
-                }
-                Value::Array(parts) => Some(
-                    parts
-                        .iter()
-                        .filter_map(|part| part.get("text").and_then(|t| t.as_str()))
-                        .map(str::trim)
-                        .filter(|value| !value.is_empty())
-                        .collect::<Vec<_>>()
-                        .join(" "),
-                ),
-                _ => None,
-            })
-            .filter(|text| !text.is_empty());
+        let content = extract_content_from_message(message);
 
         let tool_calls = message
             .get("tool_calls")
@@ -223,37 +200,7 @@ impl MoonshotProvider {
             .map(|calls| {
                 calls
                     .iter()
-                    .filter_map(|call| {
-                        // Parse tool call from Moonshot's format
-                        call.get("id")
-                            .and_then(|id_val| id_val.as_str())
-                            .and_then(|id| {
-                                call.get("function")
-                                    .and_then(|func_val| func_val.as_object())
-                                    .and_then(|func_obj| {
-                                        func_obj
-                                            .get("name")
-                                            .and_then(|name_val| name_val.as_str())
-                                            .and_then(|name| {
-                                                func_obj
-                                                    .get("arguments")
-                                                    .and_then(|args_val| args_val.as_str())
-                                                    .map(|args| crate::llm::provider::ToolCall {
-                                                        id: id.to_string(),
-                                                        function: Some(
-                                                            crate::llm::provider::FunctionCall {
-                                                                name: name.to_string(),
-                                                                arguments: args.to_string(),
-                                                            },
-                                                        ),
-                                                        call_type: "function".to_string(),
-                                                        text: None,
-                                                        thought_signature: None,
-                                                    })
-                                            })
-                                    })
-                            })
-                    })
+                    .filter_map(parse_tool_call_openai_format)
                     .collect::<Vec<_>>()
             })
             .filter(|calls| !calls.is_empty());
@@ -276,37 +223,7 @@ impl MoonshotProvider {
             })
             .unwrap_or(FinishReason::Stop);
 
-        let usage = response_json.get("usage").map(|usage_value| Usage {
-            prompt_tokens: usage_value
-                .get("prompt_tokens")
-                .and_then(|value| value.as_u64())
-                .unwrap_or(0) as u32,
-            completion_tokens: usage_value
-                .get("completion_tokens")
-                .and_then(|value| value.as_u64())
-                .unwrap_or(0) as u32,
-            total_tokens: usage_value
-                .get("total_tokens")
-                .and_then(|value| value.as_u64())
-                .unwrap_or(0) as u32,
-            cached_prompt_tokens: if self.prompt_cache_enabled {
-                usage_value
-                    .get("prompt_cache_hit_tokens")
-                    .and_then(|value| value.as_u64())
-                    .map(|value| value as u32)
-            } else {
-                None
-            },
-            cache_creation_tokens: if self.prompt_cache_enabled {
-                usage_value
-                    .get("prompt_cache_miss_tokens")
-                    .and_then(|value| value.as_u64())
-                    .map(|value| value as u32)
-            } else {
-                None
-            },
-            cache_read_tokens: None,
-        });
+        let usage = parse_usage_openai_format(&response_json, self.prompt_cache_enabled);
 
         Ok(LLMResponse {
             content,

@@ -193,7 +193,11 @@ pub(super) fn select_model_with_ratatui_list(
         outcome: ModelSelectionChoiceOutcome::Manual,
     });
 
-    let entries: Vec<SelectionEntry> = choices.iter().map(|choice| choice.entry.clone()).collect();
+    let entries: Vec<SelectionEntry> = choices
+        .iter()
+        .map(|choice| &choice.entry)
+        .cloned()
+        .collect();
 
     let instructions = "Models marked with [Reasoning] support adjustable reasoning.".to_string();
 
