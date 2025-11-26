@@ -115,9 +115,7 @@ impl DecisionTracker {
 
     /// Update the current state
     pub fn update_state(&mut self, key: &str, value: Value) {
-        self.current_context
-            .current_state
-            .insert(key.to_string(), value);
+        self.current_context.current_state.insert(key.into(), value);
     }
 
     /// Record a decision
@@ -145,10 +143,10 @@ impl DecisionTracker {
         self.decisions.push(decision);
 
         // Update previous actions for next decision
-        let action_summary = match &action {
-            Action::ToolCall { name, .. } => format!("tool_call:{}", name),
-            Action::Response { response_type, .. } => format!("response:{:?}", response_type),
-            Action::ErrorRecovery { .. } => "error_recovery".to_string(),
+        let action_summary: String = match &action {
+            Action::ToolCall { name, .. } => format!("tool_call:{name}"),
+            Action::Response { response_type, .. } => format!("response:{response_type:?}"),
+            Action::ErrorRecovery { .. } => "error_recovery".into(),
         };
         self.current_context.previous_actions.push(action_summary);
 

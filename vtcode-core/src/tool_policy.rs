@@ -107,158 +107,150 @@ pub struct McpProviderPolicy {
     pub tools: IndexMap<String, ToolPolicy>,
 }
 
+// Helper constants to reduce allocations in MCP allowlist configuration
+const MCP_LOGGING_EVENTS: &[&str] = &[
+    "mcp.tool_execution",
+    "mcp.tool_failed",
+    "mcp.tool_denied",
+    "mcp.tool_filtered",
+    "mcp.provider_initialized",
+];
+
+const MCP_DEFAULT_LOGGING_EVENTS: &[&str] = &[
+    "mcp.provider_initialized",
+    "mcp.provider_initialization_failed",
+    "mcp.tool_filtered",
+    "mcp.tool_execution",
+    "mcp.tool_failed",
+    "mcp.tool_denied",
+];
+
+/// Helper to create standard MCP logging configuration
+#[inline]
+fn mcp_standard_logging() -> Vec<String> {
+    MCP_LOGGING_EVENTS.iter().map(|s| (*s).into()).collect()
+}
+
+/// Helper to create provider configuration with max_concurrent_requests
+#[inline]
+fn mcp_provider_config_with(extra: (&str, Vec<&str>)) -> BTreeMap<String, Vec<String>> {
+    BTreeMap::from([
+        ("provider".into(), vec!["max_concurrent_requests".into()]),
+        (
+            extra.0.into(),
+            extra.1.into_iter().map(Into::into).collect(),
+        ),
+    ])
+}
+
 fn default_secure_mcp_allowlist() -> McpAllowListConfig {
     let mut allowlist = McpAllowListConfig::default();
     allowlist.enforce = true;
 
-    allowlist.default.logging = Some(vec![
-        "mcp.provider_initialized".to_string(),
-        "mcp.provider_initialization_failed".to_string(),
-        "mcp.tool_filtered".to_string(),
-        "mcp.tool_execution".to_string(),
-        "mcp.tool_failed".to_string(),
-        "mcp.tool_denied".to_string(),
-    ]);
+    allowlist.default.logging = Some(
+        MCP_DEFAULT_LOGGING_EVENTS
+            .iter()
+            .map(|s| (*s).into())
+            .collect(),
+    );
 
     allowlist.default.configuration = Some(BTreeMap::from([
         (
-            "client".to_string(),
+            "client".into(),
             vec![
-                "max_concurrent_connections".to_string(),
-                "request_timeout_seconds".to_string(),
-                "retry_attempts".to_string(),
-                "startup_timeout_seconds".to_string(),
-                "tool_timeout_seconds".to_string(),
-                "experimental_use_rmcp_client".to_string(),
+                "max_concurrent_connections".into(),
+                "request_timeout_seconds".into(),
+                "retry_attempts".into(),
+                "startup_timeout_seconds".into(),
+                "tool_timeout_seconds".into(),
+                "experimental_use_rmcp_client".into(),
             ],
         ),
         (
-            "ui".to_string(),
+            "ui".into(),
             vec![
-                "mode".to_string(),
-                "max_events".to_string(),
-                "show_provider_names".to_string(),
+                "mode".into(),
+                "max_events".into(),
+                "show_provider_names".into(),
             ],
         ),
         (
-            "server".to_string(),
+            "server".into(),
             vec![
-                "enabled".to_string(),
-                "bind_address".to_string(),
-                "port".to_string(),
-                "transport".to_string(),
-                "name".to_string(),
-                "version".to_string(),
+                "enabled".into(),
+                "bind_address".into(),
+                "port".into(),
+                "transport".into(),
+                "name".into(),
+                "version".into(),
             ],
         ),
     ]));
 
     let mut time_rules = McpAllowListRules::default();
     time_rules.tools = Some(vec![
-        "get_*".to_string(),
-        "list_*".to_string(),
-        "convert_timezone".to_string(),
-        "describe_timezone".to_string(),
-        "time_*".to_string(),
+        "get_*".into(),
+        "list_*".into(),
+        "convert_timezone".into(),
+        "describe_timezone".into(),
+        "time_*".into(),
     ]);
-    time_rules.resources = Some(vec!["timezone:*".to_string(), "location:*".to_string()]);
-    time_rules.logging = Some(vec![
-        "mcp.tool_execution".to_string(),
-        "mcp.tool_failed".to_string(),
-        "mcp.tool_denied".to_string(),
-        "mcp.tool_filtered".to_string(),
-        "mcp.provider_initialized".to_string(),
-    ]);
-    time_rules.configuration = Some(BTreeMap::from([
-        (
-            "provider".to_string(),
-            vec!["max_concurrent_requests".to_string()],
-        ),
-        (
-            "time".to_string(),
-            vec!["local_timezone_override".to_string()],
-        ),
-    ]));
-    allowlist.providers.insert("time".to_string(), time_rules);
+    time_rules.resources = Some(vec!["timezone:*".into(), "location:*".into()]);
+    time_rules.logging = Some(mcp_standard_logging());
+    time_rules.configuration = Some(mcp_provider_config_with((
+        "time",
+        vec!["local_timezone_override"],
+    )));
+    allowlist.providers.insert("time".into(), time_rules);
 
     let mut context_rules = McpAllowListRules::default();
     context_rules.tools = Some(vec![
-        "search_*".to_string(),
-        "fetch_*".to_string(),
-        "list_*".to_string(),
-        "context7_*".to_string(),
-        "get_*".to_string(),
+        "search_*".into(),
+        "fetch_*".into(),
+        "list_*".into(),
+        "context7_*".into(),
+        "get_*".into(),
     ]);
     context_rules.resources = Some(vec![
-        "docs::*".to_string(),
-        "snippets::*".to_string(),
-        "repositories::*".to_string(),
-        "context7::*".to_string(),
+        "docs::*".into(),
+        "snippets::*".into(),
+        "repositories::*".into(),
+        "context7::*".into(),
     ]);
     context_rules.prompts = Some(vec![
-        "context7::*".to_string(),
-        "support::*".to_string(),
-        "docs::*".to_string(),
+        "context7::*".into(),
+        "support::*".into(),
+        "docs::*".into(),
     ]);
-    context_rules.logging = Some(vec![
-        "mcp.tool_execution".to_string(),
-        "mcp.tool_failed".to_string(),
-        "mcp.tool_denied".to_string(),
-        "mcp.tool_filtered".to_string(),
-        "mcp.provider_initialized".to_string(),
-    ]);
-    context_rules.configuration = Some(BTreeMap::from([
-        (
-            "provider".to_string(),
-            vec!["max_concurrent_requests".to_string()],
-        ),
-        (
-            "context7".to_string(),
-            vec![
-                "workspace".to_string(),
-                "search_scope".to_string(),
-                "max_results".to_string(),
-            ],
-        ),
-    ]));
-    allowlist
-        .providers
-        .insert("context7".to_string(), context_rules);
+    context_rules.logging = Some(mcp_standard_logging());
+    context_rules.configuration = Some(mcp_provider_config_with((
+        "context7",
+        vec!["workspace", "search_scope", "max_results"],
+    )));
+    allowlist.providers.insert("context7".into(), context_rules);
 
     let mut seq_rules = McpAllowListRules::default();
     seq_rules.tools = Some(vec![
-        "plan".to_string(),
-        "critique".to_string(),
-        "reflect".to_string(),
-        "decompose".to_string(),
-        "sequential_*".to_string(),
+        "plan".into(),
+        "critique".into(),
+        "reflect".into(),
+        "decompose".into(),
+        "sequential_*".into(),
     ]);
     seq_rules.prompts = Some(vec![
-        "sequential-thinking::*".to_string(),
-        "plan".to_string(),
-        "reflect".to_string(),
-        "critique".to_string(),
+        "sequential-thinking::*".into(),
+        "plan".into(),
+        "reflect".into(),
+        "critique".into(),
     ]);
-    seq_rules.logging = Some(vec![
-        "mcp.tool_execution".to_string(),
-        "mcp.tool_failed".to_string(),
-        "mcp.tool_denied".to_string(),
-        "mcp.tool_filtered".to_string(),
-        "mcp.provider_initialized".to_string(),
-    ]);
-    seq_rules.configuration = Some(BTreeMap::from([
-        (
-            "provider".to_string(),
-            vec!["max_concurrent_requests".to_string()],
-        ),
-        (
-            "sequencing".to_string(),
-            vec!["max_depth".to_string(), "max_branches".to_string()],
-        ),
-    ]));
+    seq_rules.logging = Some(mcp_standard_logging());
+    seq_rules.configuration = Some(mcp_provider_config_with((
+        "sequencing",
+        vec!["max_depth", "max_branches"],
+    )));
     allowlist
         .providers
-        .insert("sequential-thinking".to_string(), seq_rules);
+        .insert("sequential-thinking".into(), seq_rules);
 
     allowlist
 }

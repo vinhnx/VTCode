@@ -87,7 +87,7 @@ pub struct UiConfig {
 impl Default for DotConfig {
     fn default() -> Self {
         Self {
-            version: env!("CARGO_PKG_VERSION").to_string(),
+            version: env!("CARGO_PKG_VERSION").into(),
             last_updated: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
@@ -104,12 +104,12 @@ impl Default for DotConfig {
 impl Default for UserPreferences {
     fn default() -> Self {
         Self {
-            default_model: defaults::DEFAULT_MODEL.to_string(),
-            default_provider: defaults::DEFAULT_PROVIDER.to_string(),
+            default_model: defaults::DEFAULT_MODEL.into(),
+            default_provider: defaults::DEFAULT_PROVIDER.into(),
             max_tokens: Some(4096),
             temperature: Some(0.7),
             auto_save: true,
-            theme: defaults::DEFAULT_THEME.to_string(),
+            theme: defaults::DEFAULT_THEME.into(),
             keybindings: HashMap::new(),
         }
     }

@@ -98,8 +98,8 @@ impl ErrorRecoveryManager {
                     attempt_number: 1,
                 },
                 RecoveryStrategy::AlternativeTool {
-                    original_tool: String::default(),
-                    alternative_tool: String::default(),
+                    original_tool: String::new(),
+                    alternative_tool: String::new(),
                 },
             ],
         );

@@ -446,43 +446,38 @@ mod tests {
     fn test_logging_middleware() {
         let middleware = LoggingMiddleware::new(tracing::Level::INFO);
         let request = ToolRequest {
-            tool_name: "grep_file".to_string(),
-            arguments: "pattern:test".to_string(),
-            context: "src/".to_string(),
+            tool_name: "grep_file".into(),
+            arguments: "pattern:test".into(),
+            context: "src/".into(),
             metadata: RequestMetadata::default(),
         };
 
         let executor = Box::new(|_req: ToolRequest| MiddlewareResult {
             success: true,
-            result: Some("found test".to_string()),
+            result: Some("found test".into()),
             error: None,
             metadata: ExecutionMetadata::default(),
         });
 
         let result = middleware.execute(request, executor);
         assert!(result.success);
-        assert!(
-            result
-                .metadata
-                .layers_executed
-                .contains(&"logging".to_string())
-        );
+        assert!(result.metadata.layers_executed.contains(&"logging".into()));
     }
 
     #[test]
     fn test_caching_middleware() {
         let middleware = CachingMiddleware::new();
         let request = ToolRequest {
-            tool_name: "test_tool".to_string(),
-            arguments: "arg1".to_string(),
-            context: "ctx".to_string(),
+            tool_name: "test_tool".into(),
+            arguments: "arg1".into(),
+            context: "ctx".into(),
             metadata: RequestMetadata::default(),
         };
 
         // First execution (cache miss)
         let executor = Box::new(|_req: ToolRequest| MiddlewareResult {
             success: true,
-            result: Some("result".to_string()),
+            result: Some("result".into()),
             error: None,
             metadata: ExecutionMetadata::default(),
         });
@@ -493,7 +488,7 @@ mod tests {
         // Second execution (cache hit)
         let executor = Box::new(|_req: ToolRequest| MiddlewareResult {
             success: true,
-            result: Some("new result".to_string()),
+            result: Some("new result".into()),
             error: None,
             metadata: ExecutionMetadata::default(),
         });
@@ -508,15 +503,15 @@ mod tests {
         let middleware = ValidationMiddleware::new(obs);
 
         let invalid_request = ToolRequest {
-            tool_name: "".to_string(),
-            arguments: "arg".to_string(),
-            context: "ctx".to_string(),
+            tool_name: String::new(),
+            arguments: "arg".into(),
+            context: "ctx".into(),
             metadata: RequestMetadata::default(),
         };
 
         let executor = Box::new(|_req: ToolRequest| MiddlewareResult {
             success: true,
-            result: Some("result".to_string()),
+            result: Some("result".into()),
             error: None,
             metadata: ExecutionMetadata::default(),
         });

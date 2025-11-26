@@ -186,11 +186,11 @@ impl AgentConfig {
 
         // Validate token limits (use static str to avoid allocation)
         if self.max_tokens == 0 {
-            return Err("max_tokens must be greater than 0".to_owned());
+            return Err("max_tokens must be greater than 0".into());
         }
 
         if self.refine_max_tokens == 0 {
-            return Err("refine_max_tokens must be greater than 0".to_owned());
+            return Err("refine_max_tokens must be greater than 0".into());
         }
 
         Ok(())
@@ -200,22 +200,22 @@ impl AgentConfig {
 // Optimized: Use inline defaults with constants to reduce function call overhead
 #[inline]
 fn default_provider() -> String {
-    defaults::DEFAULT_PROVIDER.to_owned()
+    defaults::DEFAULT_PROVIDER.into()
 }
 
 #[inline]
 fn default_api_key_env() -> String {
-    defaults::DEFAULT_API_KEY_ENV.to_owned()
+    defaults::DEFAULT_API_KEY_ENV.into()
 }
 
 #[inline]
 fn default_model() -> String {
-    defaults::DEFAULT_MODEL.to_owned()
+    defaults::DEFAULT_MODEL.into()
 }
 
 #[inline]
 fn default_theme() -> String {
-    defaults::DEFAULT_THEME.to_owned()
+    defaults::DEFAULT_THEME.into()
 }
 
 #[inline]
@@ -326,7 +326,7 @@ const fn default_custom_prompts_enabled() -> bool {
 
 #[inline]
 fn default_custom_prompts_directory() -> String {
-    prompts::DEFAULT_CUSTOM_PROMPTS_DIR.to_owned()
+    prompts::DEFAULT_CUSTOM_PROMPTS_DIR.into()
 }
 
 #[inline]
@@ -451,9 +451,12 @@ const fn default_onboarding_enabled() -> bool {
     true
 }
 
+const DEFAULT_INTRO_TEXT: &str =
+    "Let's get oriented. I preloaded workspace context so we can move fast.";
+
 #[inline]
 fn default_intro_text() -> String {
-    "Let's get oriented. I preloaded workspace context so we can move fast.".to_owned()
+    DEFAULT_INTRO_TEXT.into()
 }
 
 #[inline]
@@ -500,13 +503,13 @@ const DEFAULT_RECOMMENDED_ACTIONS: &[&str] = &[
 ];
 
 fn default_usage_tips() -> Vec<String> {
-    DEFAULT_USAGE_TIPS.iter().map(|s| (*s).to_owned()).collect()
+    DEFAULT_USAGE_TIPS.iter().map(|s| (*s).into()).collect()
 }
 
 fn default_recommended_actions() -> Vec<String> {
     DEFAULT_RECOMMENDED_ACTIONS
         .iter()
-        .map(|s| (*s).to_owned())
+        .map(|s| (*s).into())
         .collect()
 }
 

@@ -220,222 +220,44 @@ pub fn create_provider_with_config(
     factory.create_provider(provider_name, config)
 }
 
-impl BuiltinProvider for GeminiProvider {
-    fn build_from_config(config: ProviderConfig) -> Box<dyn LLMProvider> {
-        let ProviderConfig {
-            api_key,
-            base_url,
-            model,
-            prompt_cache,
-            timeouts,
-        } = config;
+/// Macro to implement BuiltinProvider for providers with standard from_config signature
+macro_rules! impl_builtin_provider {
+    ($($provider:ty),+ $(,)?) => {
+        $(
+            impl BuiltinProvider for $provider {
+                fn build_from_config(config: ProviderConfig) -> Box<dyn LLMProvider> {
+                    let ProviderConfig {
+                        api_key,
+                        base_url,
+                        model,
+                        prompt_cache,
+                        timeouts,
+                    } = config;
 
-        Box::new(GeminiProvider::from_config(
-            api_key,
-            model,
-            base_url,
-            prompt_cache,
-            timeouts,
-        ))
-    }
+                    Box::new(<$provider>::from_config(
+                        api_key,
+                        model,
+                        base_url,
+                        prompt_cache,
+                        timeouts,
+                    ))
+                }
+            }
+        )+
+    };
 }
 
-impl BuiltinProvider for OpenAIProvider {
-    fn build_from_config(config: ProviderConfig) -> Box<dyn LLMProvider> {
-        let ProviderConfig {
-            api_key,
-            base_url,
-            model,
-            prompt_cache,
-            timeouts,
-        } = config;
-
-        Box::new(OpenAIProvider::from_config(
-            api_key,
-            model,
-            base_url,
-            prompt_cache,
-            timeouts,
-        ))
-    }
-}
-
-impl BuiltinProvider for AnthropicProvider {
-    fn build_from_config(config: ProviderConfig) -> Box<dyn LLMProvider> {
-        let ProviderConfig {
-            api_key,
-            base_url,
-            model,
-            prompt_cache,
-            timeouts,
-        } = config;
-
-        Box::new(AnthropicProvider::from_config(
-            api_key,
-            model,
-            base_url,
-            prompt_cache,
-            timeouts,
-        ))
-    }
-}
-
-impl BuiltinProvider for MinimaxProvider {
-    fn build_from_config(config: ProviderConfig) -> Box<dyn LLMProvider> {
-        let ProviderConfig {
-            api_key,
-            base_url,
-            model,
-            prompt_cache,
-            timeouts,
-        } = config;
-
-        Box::new(MinimaxProvider::from_config(
-            api_key,
-            model,
-            base_url,
-            prompt_cache,
-            timeouts,
-        ))
-    }
-}
-
-impl BuiltinProvider for DeepSeekProvider {
-    fn build_from_config(config: ProviderConfig) -> Box<dyn LLMProvider> {
-        let ProviderConfig {
-            api_key,
-            base_url,
-            model,
-            prompt_cache,
-            timeouts,
-        } = config;
-
-        Box::new(DeepSeekProvider::from_config(
-            api_key,
-            model,
-            base_url,
-            prompt_cache,
-            timeouts,
-        ))
-    }
-}
-
-impl BuiltinProvider for OpenRouterProvider {
-    fn build_from_config(config: ProviderConfig) -> Box<dyn LLMProvider> {
-        let ProviderConfig {
-            api_key,
-            base_url,
-            model,
-            prompt_cache,
-            timeouts,
-        } = config;
-
-        Box::new(OpenRouterProvider::from_config(
-            api_key,
-            model,
-            base_url,
-            prompt_cache,
-            timeouts,
-        ))
-    }
-}
-
-impl BuiltinProvider for MoonshotProvider {
-    fn build_from_config(config: ProviderConfig) -> Box<dyn LLMProvider> {
-        let ProviderConfig {
-            api_key,
-            base_url,
-            model,
-            prompt_cache,
-            timeouts,
-        } = config;
-
-        Box::new(MoonshotProvider::from_config(
-            api_key,
-            model,
-            base_url,
-            prompt_cache,
-            timeouts,
-        ))
-    }
-}
-
-impl BuiltinProvider for OllamaProvider {
-    fn build_from_config(config: ProviderConfig) -> Box<dyn LLMProvider> {
-        let ProviderConfig {
-            api_key,
-            base_url,
-            model,
-            prompt_cache,
-            timeouts,
-        } = config;
-
-        Box::new(OllamaProvider::from_config(
-            api_key,
-            model,
-            base_url,
-            prompt_cache,
-            timeouts,
-        ))
-    }
-}
-
-impl BuiltinProvider for LmStudioProvider {
-    fn build_from_config(config: ProviderConfig) -> Box<dyn LLMProvider> {
-        let ProviderConfig {
-            api_key,
-            base_url,
-            model,
-            prompt_cache,
-            timeouts,
-        } = config;
-
-        Box::new(LmStudioProvider::from_config(
-            api_key,
-            model,
-            base_url,
-            prompt_cache,
-            timeouts,
-        ))
-    }
-}
-
-impl BuiltinProvider for XAIProvider {
-    fn build_from_config(config: ProviderConfig) -> Box<dyn LLMProvider> {
-        let ProviderConfig {
-            api_key,
-            base_url,
-            model,
-            prompt_cache,
-            timeouts,
-        } = config;
-
-        Box::new(XAIProvider::from_config(
-            api_key,
-            model,
-            base_url,
-            prompt_cache,
-            timeouts,
-        ))
-    }
-}
-
-impl BuiltinProvider for ZAIProvider {
-    fn build_from_config(config: ProviderConfig) -> Box<dyn LLMProvider> {
-        let ProviderConfig {
-            api_key,
-            base_url,
-            model,
-            prompt_cache,
-            timeouts,
-        } = config;
-
-        Box::new(ZAIProvider::from_config(
-            api_key,
-            model,
-            base_url,
-            prompt_cache,
-            timeouts,
-        ))
-    }
-}
+// Implement BuiltinProvider for all standard providers using the macro
+impl_builtin_provider!(
+    GeminiProvider,
+    OpenAIProvider,
+    AnthropicProvider,
+    MinimaxProvider,
+    DeepSeekProvider,
+    OpenRouterProvider,
+    MoonshotProvider,
+    OllamaProvider,
+    LmStudioProvider,
+    XAIProvider,
+    ZAIProvider,
+);

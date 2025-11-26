@@ -67,6 +67,62 @@ pub struct GrepSearchInput {
     pub trim: Option<bool>,           // Trim whitespace from matches
 }
 
+impl GrepSearchInput {
+    /// Create a new search input with pattern and path, using sensible defaults
+    #[inline]
+    pub fn new(pattern: String, path: String) -> Self {
+        Self {
+            pattern,
+            path,
+            case_sensitive: None,
+            literal: None,
+            glob_pattern: None,
+            context_lines: None,
+            include_hidden: None,
+            max_results: None,
+            respect_ignore_files: None,
+            max_file_size: None,
+            search_hidden: None,
+            search_binary: None,
+            files_with_matches: None,
+            type_pattern: None,
+            invert_match: None,
+            word_boundaries: None,
+            line_number: None,
+            column: None,
+            only_matching: None,
+            trim: None,
+        }
+    }
+
+    /// Create a search input with common defaults for internal grep searches
+    #[inline]
+    pub fn with_defaults(pattern: String, path: String) -> Self {
+        Self {
+            pattern,
+            path,
+            case_sensitive: Some(true),
+            literal: Some(false),
+            glob_pattern: None,
+            context_lines: None,
+            include_hidden: Some(false),
+            max_results: Some(MAX_SEARCH_RESULTS.get()),
+            respect_ignore_files: Some(true),
+            max_file_size: None,
+            search_hidden: Some(false),
+            search_binary: Some(false),
+            files_with_matches: Some(false),
+            type_pattern: None,
+            invert_match: Some(false),
+            word_boundaries: Some(false),
+            line_number: Some(true),
+            column: Some(false),
+            only_matching: Some(false),
+            trim: Some(false),
+        }
+    }
+}
+
 fn is_hidden_path(path: &str) -> bool {
     Path::new(path)
         .components()
@@ -506,28 +562,10 @@ impl GrepSearchManager {
                 return;
             }
 
-            let input = GrepSearchInput {
-                pattern: query.clone(),
-                path: search_dir.to_string_lossy().into_owned(),
-                case_sensitive: Some(true),
-                literal: Some(false),
-                glob_pattern: None,
-                context_lines: None,
-                include_hidden: Some(false),
-                max_results: Some(MAX_SEARCH_RESULTS.get()),
-                respect_ignore_files: Some(true),
-                max_file_size: None,
-                search_hidden: Some(false),
-                search_binary: Some(false),
-                files_with_matches: Some(false),
-                type_pattern: None,
-                invert_match: Some(false),
-                word_boundaries: Some(false),
-                line_number: Some(true),
-                column: Some(false),
-                only_matching: Some(false),
-                trim: Some(false),
-            };
+            let input = GrepSearchInput::with_defaults(
+                query.clone(),
+                search_dir.to_string_lossy().into_owned(),
+            );
 
             let search_result = GrepSearchManager::execute_with_backends(&input);
 

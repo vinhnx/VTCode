@@ -63,14 +63,14 @@ impl ToolRegistry {
             }
 
             fn default_scope() -> String {
-                "archive".to_string()
+                "archive".into()
             }
 
-            fn default_limit() -> usize {
+            const fn default_limit() -> usize {
                 5
             }
 
-            fn default_detailed() -> bool {
+            const fn default_detailed() -> bool {
                 false
             }
 
@@ -541,7 +541,7 @@ impl ToolRegistry {
             }
 
             fn default_grep_path() -> String {
-                ".".to_string()
+                ".".into()
             }
 
             let payload: GrepArgs =

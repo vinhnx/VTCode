@@ -62,7 +62,7 @@ const DEFAULT_AUDIT_DIR: &str = "~/.vtcode/audit";
 
 #[inline]
 fn default_audit_directory() -> String {
-    DEFAULT_AUDIT_DIR.to_owned()
+    DEFAULT_AUDIT_DIR.into()
 }
 
 #[inline]

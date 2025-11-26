@@ -206,13 +206,13 @@ fn default_max_items() -> usize {
 }
 
 fn default_list_path() -> String {
-    ".".to_string()
+    ".".into()
 }
 fn default_write_mode() -> String {
-    "overwrite".to_string()
+    "overwrite".into()
 }
 
 // Search path default
 pub fn default_search_path() -> String {
-    ".".to_string()
+    ".".into()
 }
