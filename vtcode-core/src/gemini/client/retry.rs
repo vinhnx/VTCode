@@ -25,7 +25,7 @@ impl Default for RetryConfig {
             initial_delay: Duration::from_millis(500),
             max_delay: Duration::from_secs(30),
             backoff_multiplier: 2.0,
-            retryable_errors: RETRYABLE_ERRORS.iter().map(|s| (*s).to_owned()).collect(),
+            retryable_errors: RETRYABLE_ERRORS.iter().map(|s| (*s).into()).collect(),
         }
     }
 }

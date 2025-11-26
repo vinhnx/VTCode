@@ -85,11 +85,11 @@ pub struct CliColors {
 impl Default for CliColors {
     fn default() -> Self {
         Self {
-            success: "green".to_owned(),
-            error: "red".to_owned(),
-            warning: "yellow".to_owned(),
-            info: "cyan".to_owned(),
-            prompt: "bold blue".to_owned(),
+            success: "green".into(),
+            error: "red".into(),
+            warning: "yellow".into(),
+            info: "cyan".into(),
+            prompt: "bold blue".into(),
         }
     }
 }
@@ -125,12 +125,12 @@ pub struct DiffColors {
 impl Default for DiffColors {
     fn default() -> Self {
         Self {
-            new: "green".to_owned(),
-            old: "red".to_owned(),
-            context: "white".to_owned(),
-            header: "bold yellow".to_owned(),
-            meta: "cyan".to_owned(),
-            frag: "magenta".to_owned(),
+            new: "green".into(),
+            old: "red".into(),
+            context: "white".into(),
+            header: "bold yellow".into(),
+            meta: "cyan".into(),
+            frag: "magenta".into(),
         }
     }
 }
@@ -170,13 +170,13 @@ pub struct StatusColors {
 impl Default for StatusColors {
     fn default() -> Self {
         Self {
-            added: "green".to_owned(),
-            modified: "red".to_owned(),
-            deleted: "red bold".to_owned(),
-            untracked: "magenta".to_owned(),
-            current: "green bold".to_owned(),
-            local: "cyan".to_owned(),
-            remote: "blue".to_owned(),
+            added: "green".into(),
+            modified: "red".into(),
+            deleted: "red bold".into(),
+            untracked: "magenta".into(),
+            current: "green bold".into(),
+            local: "cyan".into(),
+            remote: "blue".into(),
         }
     }
 }
@@ -208,18 +208,18 @@ pub struct FileColors {
 impl Default for FileColors {
     fn default() -> Self {
         let mut extensions = std::collections::HashMap::new();
-        extensions.insert("rs".to_string(), "cyan".to_string());
-        extensions.insert("js".to_string(), "yellow".to_string());
-        extensions.insert("ts".to_string(), "blue".to_string());
-        extensions.insert("py".to_string(), "green".to_string());
-        extensions.insert("toml".to_string(), "magenta".to_string());
-        extensions.insert("md".to_string(), "white".to_string());
+        extensions.insert("rs".into(), "cyan".into());
+        extensions.insert("js".into(), "yellow".into());
+        extensions.insert("ts".into(), "blue".into());
+        extensions.insert("py".into(), "green".into());
+        extensions.insert("toml".into(), "magenta".into());
+        extensions.insert("md".into(), "white".into());
 
         Self {
-            directory: "bold blue".to_string(),
-            symlink: "bold magenta".to_string(),
-            executable: "bold green".to_string(),
-            regular: "".to_string(),
+            directory: "bold blue".into(),
+            symlink: "bold magenta".into(),
+            executable: "bold green".into(),
+            regular: String::new(),
             extensions,
         }
     }
@@ -227,73 +227,73 @@ impl Default for FileColors {
 
 // Default value functions
 fn default_cli_success() -> String {
-    "green".to_string()
+    "green".into()
 }
 fn default_cli_error() -> String {
-    "red".to_string()
+    "red".into()
 }
 fn default_cli_warning() -> String {
-    "yellow".to_string()
+    "yellow".into()
 }
 fn default_cli_info() -> String {
-    "cyan".to_string()
+    "cyan".into()
 }
 fn default_cli_prompt() -> String {
-    "bold blue".to_string()
+    "bold blue".into()
 }
 
 fn default_diff_new() -> String {
-    "green".to_string()
+    "green".into()
 }
 fn default_diff_old() -> String {
-    "red".to_string()
+    "red".into()
 }
 fn default_diff_context() -> String {
-    "white".to_string()
+    "white".into()
 }
 fn default_diff_header() -> String {
-    "bold yellow".to_string()
+    "bold yellow".into()
 }
 fn default_diff_meta() -> String {
-    "cyan".to_string()
+    "cyan".into()
 }
 fn default_diff_frag() -> String {
-    "magenta".to_string()
+    "magenta".into()
 }
 
 fn default_status_added() -> String {
-    "green".to_string()
+    "green".into()
 }
 fn default_status_modified() -> String {
-    "red".to_string()
+    "red".into()
 }
 fn default_status_deleted() -> String {
-    "red bold".to_string()
+    "red bold".into()
 }
 fn default_status_untracked() -> String {
-    "magenta".to_string()
+    "magenta".into()
 }
 fn default_status_current() -> String {
-    "green bold".to_string()
+    "green bold".into()
 }
 fn default_status_local() -> String {
-    "cyan".to_string()
+    "cyan".into()
 }
 fn default_status_remote() -> String {
-    "blue".to_string()
+    "blue".into()
 }
 
 fn default_file_directory() -> String {
-    "bold blue".to_string()
+    "bold blue".into()
 }
 fn default_file_symlink() -> String {
-    "bold magenta".to_string()
+    "bold magenta".into()
 }
 fn default_file_executable() -> String {
-    "bold green".to_string()
+    "bold green".into()
 }
 fn default_file_regular() -> String {
-    "".to_string()
+    String::new()
 }
 
 impl ThemeConfig {

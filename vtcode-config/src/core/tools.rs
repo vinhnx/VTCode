@@ -91,7 +91,7 @@ impl Default for ToolsConfig {
     fn default() -> Self {
         let policies = DEFAULT_TOOL_POLICIES
             .iter()
-            .map(|(tool, policy)| ((*tool).to_string(), *policy))
+            .map(|(tool, policy)| ((*tool).into(), *policy))
             .collect::<IndexMap<_, _>>();
         Self {
             default_policy: default_tool_policy(),
@@ -112,14 +112,14 @@ impl Default for WebFetchConfig {
         Self {
             mode: default_web_fetch_mode(),
             dynamic_blocklist_enabled: false,
-            dynamic_blocklist_path: DEFAULT_BLOCKLIST_PATH.to_owned(),
+            dynamic_blocklist_path: DEFAULT_BLOCKLIST_PATH.into(),
             dynamic_whitelist_enabled: false,
-            dynamic_whitelist_path: DEFAULT_WHITELIST_PATH.to_owned(),
+            dynamic_whitelist_path: DEFAULT_WHITELIST_PATH.into(),
             blocked_domains: Vec::new(),
             allowed_domains: Vec::new(),
             blocked_patterns: Vec::new(),
             enable_audit_logging: false,
-            audit_log_path: DEFAULT_AUDIT_LOG_PATH.to_owned(),
+            audit_log_path: DEFAULT_AUDIT_LOG_PATH.into(),
             strict_https_only: true,
         }
     }
@@ -155,7 +155,7 @@ const fn default_max_repeated_tool_calls() -> usize {
 
 #[inline]
 fn default_web_fetch_mode() -> String {
-    "restricted".to_owned()
+    "restricted".into()
 }
 
 fn default_strict_https() -> bool {

@@ -31,7 +31,7 @@ impl Default for ClientConfig {
             tcp_keepalive: Duration::from_secs(60),
             request_timeout: Duration::from_secs(60),
             connect_timeout: Duration::from_secs(10),
-            user_agent: USER_AGENT_DEFAULT.to_owned(),
+            user_agent: USER_AGENT_DEFAULT.into(),
         }
     }
 }
@@ -45,7 +45,7 @@ impl ClientConfig {
             tcp_keepalive: Duration::from_secs(60),
             request_timeout: Duration::from_secs(120),
             connect_timeout: Duration::from_secs(15),
-            user_agent: USER_AGENT_HIGH_THROUGHPUT.to_owned(),
+            user_agent: USER_AGENT_HIGH_THROUGHPUT.into(),
         }
     }
 
@@ -57,7 +57,7 @@ impl ClientConfig {
             tcp_keepalive: Duration::from_secs(30),
             request_timeout: Duration::from_secs(60),
             connect_timeout: Duration::from_secs(5),
-            user_agent: USER_AGENT_LOW_MEMORY.to_owned(),
+            user_agent: USER_AGENT_LOW_MEMORY.into(),
         }
     }
 
@@ -69,7 +69,7 @@ impl ClientConfig {
             tcp_keepalive: Duration::from_secs(15),
             request_timeout: Duration::from_secs(30),
             connect_timeout: Duration::from_secs(3),
-            user_agent: USER_AGENT_ULTRA_LOW_MEMORY.to_owned(),
+            user_agent: USER_AGENT_ULTRA_LOW_MEMORY.into(),
         }
     }
 
@@ -81,7 +81,7 @@ impl ClientConfig {
             tcp_keepalive: Duration::from_secs(30),
             request_timeout: Duration::from_secs(30),
             connect_timeout: Duration::from_secs(5),
-            user_agent: USER_AGENT_LOW_LATENCY.to_owned(),
+            user_agent: USER_AGENT_LOW_LATENCY.into(),
         }
     }
 }

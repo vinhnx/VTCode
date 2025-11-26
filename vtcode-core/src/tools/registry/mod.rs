@@ -134,17 +134,17 @@ impl ToolExecutionHistory {
 
     pub fn get_recent_failures(&self, count: usize) -> Vec<ToolExecutionRecord> {
         let records = self.records.read().unwrap();
-        let failures: Vec<ToolExecutionRecord> = records
+        // Collect in reverse order and reverse at the end for chronological order
+        let mut failures: Vec<ToolExecutionRecord> = records
             .iter()
             .rev() // Go from newest to oldest
             .filter(|r| !r.success)
             .take(count)
             .cloned()
             .collect();
-        // Now reverse again to get chronological order (oldest to newest)
-        let mut result = failures;
-        result.reverse();
-        result
+        // Reverse to get chronological order (oldest to newest)
+        failures.reverse();
+        failures
     }
 
     pub fn clear(&self) {

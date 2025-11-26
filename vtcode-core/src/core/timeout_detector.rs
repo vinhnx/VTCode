@@ -50,6 +50,9 @@ pub struct TimeoutConfig {
     pub retry_on_errors: Vec<String>,
 }
 
+/// Default retryable error types
+const DEFAULT_RETRY_ERRORS: [&str; 4] = ["timeout", "connection", "network", "server_error"];
+
 impl Default for TimeoutConfig {
     fn default() -> Self {
         Self {
@@ -60,12 +63,7 @@ impl Default for TimeoutConfig {
             backoff_multiplier: 2.0,
             use_jitter: true,
             retry_on_timeout: true,
-            retry_on_errors: vec![
-                "timeout".to_string(),
-                "connection".to_string(),
-                "network".to_string(),
-                "server_error".to_string(),
-            ],
+            retry_on_errors: DEFAULT_RETRY_ERRORS.iter().map(|s| (*s).into()).collect(),
         }
     }
 }

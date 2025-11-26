@@ -659,7 +659,7 @@ fn default_allowlist_enforced() -> bool {
 }
 
 fn default_mcp_protocol_version() -> String {
-    "2024-11-05".to_string()
+    "2024-11-05".into()
 }
 
 fn default_mcp_server_enabled() -> bool {
@@ -667,7 +667,7 @@ fn default_mcp_server_enabled() -> bool {
 }
 
 fn default_mcp_server_bind() -> String {
-    "127.0.0.1".to_string()
+    "127.0.0.1".into()
 }
 
 fn default_mcp_server_port() -> u16 {
@@ -679,11 +679,11 @@ fn default_mcp_server_transport() -> McpServerTransport {
 }
 
 fn default_mcp_server_name() -> String {
-    "vtcode-mcp-server".to_string()
+    "vtcode-mcp-server".into()
 }
 
 fn default_mcp_server_version() -> String {
-    env!("CARGO_PKG_VERSION").to_string()
+    env!("CARGO_PKG_VERSION").into()
 }
 
 fn normalize_mcp_identifier(value: &str) -> String {

@@ -848,7 +848,7 @@ pub struct GrammarDefinition {
 impl Default for GrammarDefinition {
     fn default() -> Self {
         Self {
-            syntax: "lark".to_string(),
+            syntax: "lark".into(),
             definition: String::new(),
         }
     }
@@ -857,21 +857,17 @@ impl Default for GrammarDefinition {
 impl Default for ShellToolDefinition {
     fn default() -> Self {
         Self {
-            description: "Execute shell commands in the workspace".to_string(),
+            description: "Execute shell commands in the workspace".into(),
             allowed_commands: vec![
-                "ls".to_string(),
-                "find".to_string(),
-                "grep".to_string(),
-                "cargo".to_string(),
-                "git".to_string(),
-                "python".to_string(),
-                "node".to_string(),
+                "ls".into(),
+                "find".into(),
+                "grep".into(),
+                "cargo".into(),
+                "git".into(),
+                "python".into(),
+                "node".into(),
             ],
-            forbidden_patterns: vec![
-                "rm -rf".to_string(),
-                "sudo".to_string(),
-                "passwd".to_string(),
-            ],
+            forbidden_patterns: vec!["rm -rf".into(), "sudo".into(), "passwd".into()],
             timeout_seconds: 30,
         }
     }

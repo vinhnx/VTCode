@@ -203,8 +203,8 @@ impl FileOpsTool {
     /// Execute recursive file search
     async fn execute_recursive_search(&self, input: &ListInput) -> Result<Value> {
         // Allow recursive listing without pattern by defaulting to "*" (match all)
-        let default_pattern = "*".to_string();
-        let pattern = input.name_pattern.as_ref().unwrap_or(&default_pattern);
+        static DEFAULT_PATTERN: &str = "*";
+        let pattern = input.name_pattern.as_deref().unwrap_or(DEFAULT_PATTERN);
         let pattern_lower = pattern.to_lowercase();
         let search_path = self.workspace_root.join(&input.path);
 
@@ -500,7 +500,7 @@ impl FileOpsTool {
             .grep_manager
             .perform_search(search_input)
             .await
-            .with_context(|| "grep_file search failed for find_content".to_string())?;
+            .context("grep_file search failed for find_content")?;
 
         let mut seen_paths = std::collections::HashSet::new();
         let mut items = Vec::new();
@@ -1306,6 +1306,7 @@ fn diff_preview_error_skip(reason: &str, detail: Option<&str>) -> Value {
 
 fn build_diff_preview(path: &str, before: Option<&str>, after: &str) -> Value {
     let previous = before.unwrap_or("");
+    // Use format strings directly - Cow optimization not needed for short-lived strings
     let old_header = format!("a/{path}");
     let new_header = format!("b/{path}");
 
@@ -1323,47 +1324,60 @@ fn build_diff_preview(path: &str, before: Option<&str>, after: &str) -> Value {
         });
     }
 
-    let lines: Vec<String> = diff_output.lines().map(|line| line.to_string()).collect();
+    // Avoid collecting lines into Vec<String> - use line count directly
+    let line_count = diff_output.lines().count();
 
     // Count additions and deletions for suppression check
-    let additions = lines.iter().filter(|l| l.starts_with('+')).count();
-    let deletions = lines.iter().filter(|l| l.starts_with('-')).count();
+    let additions = diff_output.lines().filter(|l| l.starts_with('+')).count();
+    let deletions = diff_output.lines().filter(|l| l.starts_with('-')).count();
     let total_changes = additions + deletions;
 
     // Check if we should suppress the diff due to too many changes
     if total_changes > diff::MAX_SINGLE_FILE_CHANGES {
-        return diff_preview_suppressed(additions, deletions, lines.len());
+        return diff_preview_suppressed(additions, deletions, line_count);
     }
 
-    let mut lines = lines;
-    let mut truncated = false;
-    let mut omitted = 0usize;
-
-    if lines.len() > diff::MAX_PREVIEW_LINES {
-        truncated = true;
+    // Only collect lines if we need to truncate
+    if line_count > diff::MAX_PREVIEW_LINES {
+        let lines: Vec<&str> = diff_output.lines().collect();
         let head_count = diff::HEAD_LINE_COUNT.min(lines.len());
         let tail_count = diff::TAIL_LINE_COUNT.min(lines.len().saturating_sub(head_count));
+        let omitted = lines.len().saturating_sub(head_count + tail_count);
+
         let mut condensed = Vec::with_capacity(head_count + tail_count + 1);
-        condensed.extend(lines[..head_count].iter().cloned());
-        omitted = lines.len().saturating_sub(head_count + tail_count);
+        condensed.extend(lines[..head_count].iter().copied());
         if omitted > 0 {
-            condensed.push(format!("... {omitted} lines omitted ..."));
+            // Use a static format to avoid allocation in common case
+            condensed.push(""); // placeholder, will be replaced
         }
         if tail_count > 0 {
             let tail_start = lines.len().saturating_sub(tail_count);
-            condensed.extend(lines[tail_start..].iter().cloned());
+            condensed.extend(lines[tail_start..].iter().copied());
         }
-        lines = condensed;
+
+        let diff_output = if omitted > 0 {
+            let mut result = condensed[..head_count].join("\n");
+            result.push_str(&format!("\n... {omitted} lines omitted ...\n"));
+            result.push_str(&condensed[head_count + 1..].join("\n"));
+            result
+        } else {
+            condensed.join("\n")
+        };
+
+        json!({
+            "content": diff_output,
+            "truncated": true,
+            "omitted_line_count": omitted,
+            "skipped": false
+        })
+    } else {
+        json!({
+            "content": diff_output,
+            "truncated": false,
+            "omitted_line_count": 0,
+            "skipped": false
+        })
     }
-
-    let diff_output = lines.join("\n");
-
-    json!({
-        "content": diff_output,
-        "truncated": truncated,
-        "omitted_line_count": omitted,
-        "skipped": false
-    })
 }
 
 /// Generate unified diff using git diff --no-index command.
@@ -1547,7 +1561,7 @@ impl FileOpsTool {
         total_count: usize,
         input: &ListInput,
         mode: &str,
-        pattern: Option<&String>,
+        pattern: Option<&str>,
     ) -> Value {
         let (page, per_page) = (
             input.page.unwrap_or(1).max(1),
