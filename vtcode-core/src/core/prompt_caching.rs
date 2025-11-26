@@ -3,6 +3,7 @@ use crate::config::core::PromptCachingConfig;
 use crate::llm::provider::{Message, MessageContent, MessageRole};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt::Write;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::fs;
@@ -406,7 +407,7 @@ impl PromptOptimizer {
         );
 
         if let Some(ctx) = context {
-            user_prompt.push_str(&format!("CONTEXT:\n{}\n\n", ctx));
+            let _ = write!(user_prompt, "CONTEXT:\n{}\n\n", ctx);
         }
 
         user_prompt.push_str(
