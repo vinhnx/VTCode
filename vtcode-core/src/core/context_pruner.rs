@@ -6,6 +6,7 @@
 /// allowing preservation of high-semantic-value messages even if older.
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt::Write;
 
 /// Semantic importance score for a message (0-1000 scale)
 /// Higher values indicate more important for context retention
@@ -212,22 +213,26 @@ impl ContextPruner {
         let efficiency = self.analyze_efficiency(messages);
         let mut report = String::new();
         report.push_str("📊 Context Window Efficiency\n");
-        report.push_str(&format!(
+        let _ = write!(
+            report,
             "  Tokens Used: {}/{} ({:.1}%)\n",
             efficiency.total_tokens, self.max_tokens, efficiency.context_utilization_percent
-        ));
-        report.push_str(&format!(
+        );
+        let _ = write!(
+            report,
             "  Messages: {} total\n",
             efficiency.total_messages
-        ));
-        report.push_str(&format!(
+        );
+        let _ = write!(
+            report,
             "  Avg Semantic Score: {}/1000\n",
             efficiency.avg_semantic_score
-        ));
-        report.push_str(&format!(
+        );
+        let _ = write!(
+            report,
             "  Semantic Value/Token: {:.2}\n",
             efficiency.semantic_value_per_token
-        ));
+        );
 
         report
     }

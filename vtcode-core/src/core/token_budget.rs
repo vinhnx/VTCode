@@ -11,6 +11,7 @@ use anyhow::{Context, Result, anyhow};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::collections::VecDeque;
+use std::fmt::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -450,7 +451,7 @@ impl TokenBudgetManager {
             let mut sorted: Vec<_> = components.iter().collect();
             sorted.sort_by(|a, b| b.1.cmp(a.1));
             for (component, tokens) in sorted.iter().take(10) {
-                report.push_str(&format!("  - {}: {} tokens\n", component, tokens));
+                let _ = write!(report, "  - {}: {} tokens\n", component, tokens);
             }
         }
 
@@ -463,10 +464,11 @@ impl TokenBudgetManager {
                     .applied_max_tokens
                     .map(|n| n.to_string())
                     .unwrap_or_else(|| "None".to_string());
-                report.push_str(&format!(
+                let _ = write!(
+                    report,
                     "  - Tool: {} | Applied max_tokens: {} | Context: {}\n",
                     usage.tool_name, applied, usage.context
-                ));
+                );
             }
         }
 
@@ -519,11 +521,11 @@ impl TokenBudgetManager {
         }
 
         let mut summary = String::from("Recent max_tokens Usage Summary:\n");
-        summary.push_str(&format!("Total recorded: {} tool calls\n", history.len()));
+        let _ = write!(summary, "Total recorded: {} tool calls\n", history.len());
 
         let mut with_max_tokens = 0;
         let mut total_max_tokens = 0;
-        for usage in history.iter() {
+        for usage in &*history {
             if let Some(max_tokens) = usage.applied_max_tokens {
                 with_max_tokens += 1;
                 total_max_tokens += max_tokens;
@@ -531,11 +533,12 @@ impl TokenBudgetManager {
         }
 
         if with_max_tokens > 0 {
-            summary.push_str(&format!(
+            let _ = write!(
+                summary,
                 "Tool calls with max_tokens: {} (avg: {:.1})\n",
                 with_max_tokens,
                 total_max_tokens as f64 / with_max_tokens as f64
-            ));
+            );
         } else {
             summary.push_str("No tool calls with max_tokens applied.\n");
         }

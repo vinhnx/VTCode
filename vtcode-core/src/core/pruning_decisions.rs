@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::fmt::Write;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Represents a single context pruning decision
@@ -242,7 +243,8 @@ impl PruningDecisionLedger {
                 RetentionChoice::Keep => "KEEP",
                 RetentionChoice::Remove => "REMOVE",
             };
-            out.push_str(&format!(
+            let _ = write!(
+                out,
                 "- [turn {}] msg#{} {}: score={} tokens={} age={} ({})\n",
                 d.turn_number,
                 d.message_index,
@@ -251,7 +253,7 @@ impl PruningDecisionLedger {
                 d.token_count,
                 d.age_in_turns,
                 d.reason
-            ));
+            );
         }
 
         out

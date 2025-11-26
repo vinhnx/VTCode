@@ -5,6 +5,7 @@ use crate::core::token_constants::{
     LOG_HEAD_RATIO_PERCENT, TOKENS_PER_CHARACTER,
 };
 use serde_json::Value;
+use std::fmt::Write;
 
 /// Truncate content by tokens using a head+tail strategy with code-aware ratios.
 pub async fn truncate_content_by_tokens(
@@ -90,7 +91,7 @@ pub async fn truncate_content_by_tokens(
             out.push_str(head_content.trim_end());
             out.push('\n');
         }
-        out.push_str(&format!("[... {} lines truncated ...]\n", truncated_lines));
+        let _ = write!(out, "[... {} lines truncated ...]\n", truncated_lines);
         out.push_str(&tail_content);
         (out.trim_end().to_string(), true)
     } else {
@@ -162,9 +163,9 @@ pub async fn aggregate_tool_output_for_model(
 
     // Build a readable aggregate with section headers to preserve provenance/order
     let mut aggregate = String::with_capacity(parts.iter().map(|(_, s)| s.len() + 16).sum());
-    aggregate.push_str(&format!("[tool: {}]\n", tool_name));
+    let _ = write!(aggregate, "[tool: {}]\n", tool_name);
     for (label, s) in parts.iter() {
-        aggregate.push_str(&format!("--- {} ---\n", label));
+        let _ = write!(aggregate, "--- {} ---\n", label);
         aggregate.push_str(s);
         if !aggregate.ends_with('\n') {
             aggregate.push('\n');
