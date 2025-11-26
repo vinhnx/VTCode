@@ -4,6 +4,7 @@ use anstyle::Reset;
 use serde::Serialize;
 use std::cmp::min;
 use std::collections::HashMap;
+use std::fmt::Write;
 
 use crate::ui::theme;
 
@@ -496,34 +497,29 @@ fn format_colored_diff(hunks: &[DiffHunk], options: &DiffOptions<'_>) -> String 
     let mut output = String::new();
 
     if let (Some(old_label), Some(new_label)) = (options.old_label, options.new_label) {
-        let formatted = format!("--- {old_label}\n");
-        output.push_str(&format!(
-            "{}{}{}",
+        let _ = write!(
+            output,
+            "{}--- {old_label}\n{}",
             header_style.render(),
-            formatted,
             Reset.render()
-        ));
+        );
 
-        let formatted = format!("+++ {new_label}\n");
-        output.push_str(&format!(
-            "{}{}{}",
+        let _ = write!(
+            output,
+            "{}+++ {new_label}\n{}",
             header_style.render(),
-            formatted,
             Reset.render()
-        ));
+        );
     }
 
     for hunk in hunks {
-        let header = format!(
-            "@@ -{},{} +{},{} @@\n",
-            hunk.old_start, hunk.old_lines, hunk.new_start, hunk.new_lines
-        );
-        output.push_str(&format!(
-            "{}{}{}",
+        let _ = write!(
+            output,
+            "{}@@ -{},{} +{},{} @@\n{}",
             hunk_header_style.render(),
-            header,
+            hunk.old_start, hunk.old_lines, hunk.new_start, hunk.new_lines,
             Reset.render()
-        ));
+        );
 
         for line in &hunk.lines {
             let (style, prefix) = match line.kind {
@@ -545,22 +541,24 @@ fn format_colored_diff(hunks: &[DiffHunk], options: &DiffOptions<'_>) -> String 
                 &display
             };
 
-            output.push_str(&format!(
+            let _ = write!(
+                output,
                 "{}{}{}",
                 style.render(),
                 display_content,
                 Reset.render()
-            ));
+            );
             output.push('\n');
 
             if options.missing_newline_hint && !line.text.ends_with('\n') {
                 let eof_hint = "\\ No newline at end of file";
-                output.push_str(&format!(
+                let _ = write!(
+                    output,
                     "{}{}{}",
                     context_style.render(),
                     eof_hint,
                     Reset.render()
-                ));
+                );
                 output.push('\n');
             }
         }

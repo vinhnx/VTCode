@@ -12,6 +12,7 @@
 use crate::exec::ToolDependency;
 use anyhow::{Context, Result, anyhow};
 use serde::{Deserialize, Serialize};
+use std::fmt::Write;
 use std::path::{Path, PathBuf};
 use tracing::{debug, info};
 
@@ -255,8 +256,8 @@ impl SkillManager {
     fn generate_markdown(skill: &Skill) -> String {
         let mut md = String::new();
 
-        md.push_str(&format!("# {}\n\n", skill.metadata.name));
-        md.push_str(&format!("{}\n\n", skill.metadata.description));
+        let _ = writeln!(md, "# {}\n", skill.metadata.name);
+        let _ = writeln!(md, "{}\n", skill.metadata.description);
 
         if !skill.metadata.tags.is_empty() {
             md.push_str("**Tags:** ");
@@ -265,7 +266,7 @@ impl SkillManager {
         }
 
         md.push_str("## Language\n\n");
-        md.push_str(&format!("`{}`\n\n", skill.metadata.language));
+        let _ = writeln!(md, "`{}`\n", skill.metadata.language);
 
         if !skill.metadata.inputs.is_empty() {
             md.push_str("## Inputs\n\n");
@@ -275,18 +276,19 @@ impl SkillManager {
                 } else {
                     "optional"
                 };
-                md.push_str(&format!(
-                    "- `{name}` ({type}, {required}): {desc}\n",
+                let _ = writeln!(
+                    md,
+                    "- `{name}` ({type}, {required}): {desc}",
                     name = param.name,
                     r#type = param.r#type,
                     desc = param.description
-                ));
+                );
             }
             md.push_str("\n");
         }
 
         md.push_str("## Output\n\n");
-        md.push_str(&format!("{}\n\n", skill.metadata.output));
+        let _ = writeln!(md, "{}\n", skill.metadata.output);
 
         if !skill.metadata.examples.is_empty() {
             md.push_str("## Examples\n\n");
