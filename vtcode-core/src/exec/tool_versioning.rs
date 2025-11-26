@@ -10,6 +10,7 @@ use anyhow::{Result, anyhow};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt::Write;
 use tracing::debug;
 
 /// Represents a specific version of a tool
@@ -270,29 +271,30 @@ impl SkillCompatibilityChecker {
         let report = self.check_compatibility()?;
 
         let mut output = format!("Skill: {}\n", self.skill_name);
-        output.push_str(&format!("Compatible: {}\n", report.compatible));
+        let _ = writeln!(output, "Compatible: {}", report.compatible);
 
         if !report.warnings.is_empty() {
             output.push_str("\nWarnings:\n");
             for warning in &report.warnings {
-                output.push_str(&format!("  - {}\n", warning));
+                let _ = writeln!(output, "  - {}", warning);
             }
         }
 
         if !report.errors.is_empty() {
             output.push_str("\nErrors:\n");
             for error in &report.errors {
-                output.push_str(&format!("  - {}\n", error));
+                let _ = writeln!(output, "  - {}", error);
             }
         }
 
         if !report.migrations.is_empty() {
             output.push_str("\nRequired Migrations:\n");
             for migration in &report.migrations {
-                output.push_str(&format!(
-                    "  - {}: {} -> {}\n",
+                let _ = writeln!(
+                    output,
+                    "  - {}: {} -> {}",
                     migration.tool, migration.from_version, migration.to_version
-                ));
+                );
             }
         }
 

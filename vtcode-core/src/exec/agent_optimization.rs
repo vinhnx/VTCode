@@ -8,6 +8,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt::Write;
 use std::time::Duration;
 use tracing::debug;
 
@@ -297,39 +298,45 @@ impl AgentBehaviorAnalyzer {
         output.push_str("=== Agent Behavior Analysis ===\n\n");
 
         output.push_str("## Skill Statistics\n");
-        output.push_str(&format!(
-            "Total skills: {}\n",
+        let _ = writeln!(
+            output,
+            "Total skills: {}",
             self.skill_stats.total_skills
-        ));
-        output.push_str(&format!(
-            "Reused skills: {}\n",
+        );
+        let _ = writeln!(
+            output,
+            "Reused skills: {}",
             self.skill_stats.reused_skills
-        ));
+        );
         if !self.skill_stats.most_effective_skills.is_empty() {
-            output.push_str(&format!(
-                "Top skill: {}\n",
+            let _ = writeln!(
+                output,
+                "Top skill: {}",
                 self.skill_stats.most_effective_skills.first().unwrap()
-            ));
+            );
         }
 
         output.push_str("\n## Tool Statistics\n");
-        output.push_str(&format!(
-            "Tool discovery success rate: {:.1}%\n",
+        let _ = writeln!(
+            output,
+            "Tool discovery success rate: {:.1}%",
             self.tool_stats.discovery_success_rate * 100.0
-        ));
-        output.push_str(&format!(
-            "Total tools used: {}\n",
+        );
+        let _ = writeln!(
+            output,
+            "Total tools used: {}",
             self.tool_stats.usage_frequency.len()
-        ));
+        );
 
         if !self.failure_patterns.high_failure_tools.is_empty() {
             output.push_str("\n## High-Risk Tools\n");
             for (tool, rate) in self.failure_patterns.high_failure_tools.iter().take(5) {
-                output.push_str(&format!(
-                    "- {} (failure rate: {:.1}%)\n",
+                let _ = writeln!(
+                    output,
+                    "- {} (failure rate: {:.1}%)",
                     tool,
                     rate * 100.0
-                ));
+                );
             }
         }
 

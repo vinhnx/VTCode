@@ -6,6 +6,7 @@
 use crate::utils::colors::style;
 use anyhow::Result;
 use regex::Regex;
+use std::fmt::Write as FmtWrite;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use tokio::fs;
@@ -55,13 +56,13 @@ impl ProjectOverview {
     pub fn short_for_display(&self) -> String {
         let mut out = String::new();
         if let Some(name) = &self.name {
-            out.push_str(&format!("Project: {}", name));
+            let _ = write!(out, "Project: {}", name);
         }
         if let Some(ver) = &self.version {
             if !out.is_empty() {
                 out.push(' ');
             }
-            out.push_str(&format!("v{}", ver));
+            let _ = write!(out, "v{}", ver);
         }
         if !out.is_empty() {
             out.push('\n');
@@ -70,22 +71,22 @@ impl ProjectOverview {
             out.push_str(desc);
             out.push('\n');
         }
-        out.push_str(&format!("Root: {}", self.root.display()));
+        let _ = write!(out, "Root: {}", self.root.display());
         out
     }
 
     pub fn as_prompt_block(&self) -> String {
         let mut s = String::new();
         if let Some(name) = &self.name {
-            s.push_str(&format!("- Name: {}\n", name));
+            let _ = writeln!(s, "- Name: {}", name);
         }
         if let Some(ver) = &self.version {
-            s.push_str(&format!("- Version: {}\n", ver));
+            let _ = writeln!(s, "- Version: {}", ver);
         }
         if let Some(desc) = &self.description {
-            s.push_str(&format!("- Description: {}\n", desc));
+            let _ = writeln!(s, "- Description: {}", desc);
         }
-        s.push_str(&format!("- Workspace Root: {}\n", self.root.display()));
+        let _ = writeln!(s, "- Workspace Root: {}", self.root.display());
         if let Some(excerpt) = &self.readme_excerpt {
             s.push_str("- README Excerpt: \n");
             s.push_str(excerpt);
