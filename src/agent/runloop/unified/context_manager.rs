@@ -11,7 +11,7 @@ use crate::agent::runloop::context::{
 use vtcode_core::constants::context as context_constants;
 use vtcode_core::core::pruning_decisions::{PruningDecisionLedger, RetentionChoice};
 use vtcode_core::core::token_budget::{ContextComponent, TokenBudgetManager};
-use vtcode_core::core::{ContextEfficiency, ContextPruner, MessageMetrics, RetentionDecision};
+use vtcode_core::core::{ContextEfficiency, ContextPruner, MessageMetrics, MessageType, RetentionDecision};
 use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::tree_sitter::TreeSitterAnalyzer;
 
@@ -134,10 +134,10 @@ impl ContextManager {
                 };
 
                 let message_type = match &msg.role {
-                    uni::MessageRole::System => "system",
-                    uni::MessageRole::User => "user",
-                    uni::MessageRole::Assistant => "assistant",
-                    uni::MessageRole::Tool => "tool",
+                    uni::MessageRole::System => MessageType::System,
+                    uni::MessageRole::User => MessageType::User,
+                    uni::MessageRole::Assistant => MessageType::Assistant,
+                    uni::MessageRole::Tool => MessageType::Tool,
                 };
 
                 let token_count = match &msg.content {
@@ -152,7 +152,7 @@ impl ContextManager {
                     token_count,
                     semantic_score,
                     age_in_turns: (history.len().saturating_sub(idx + 1)) as u32,
-                    message_type: message_type.to_string(),
+                    message_type,
                 };
 
                 metrics_list.push((idx, metrics));
@@ -330,10 +330,10 @@ impl ContextManager {
             .enumerate()
             .map(|(idx, msg)| {
                 let message_type = match &msg.role {
-                    uni::MessageRole::System => "system",
-                    uni::MessageRole::User => "user",
-                    uni::MessageRole::Assistant => "assistant",
-                    uni::MessageRole::Tool => "tool",
+                    uni::MessageRole::System => MessageType::System,
+                    uni::MessageRole::User => MessageType::User,
+                    uni::MessageRole::Assistant => MessageType::Assistant,
+                    uni::MessageRole::Tool => MessageType::Tool,
                 };
 
                 let semantic_score = if idx < semantic_scores.len() {
@@ -357,7 +357,7 @@ impl ContextManager {
                     token_count,
                     semantic_score,
                     age_in_turns,
-                    message_type: message_type.to_string(),
+                    message_type,
                 }
             })
             .collect()

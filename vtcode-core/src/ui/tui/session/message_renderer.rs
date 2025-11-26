@@ -6,8 +6,10 @@ use ratatui::{
 use super::super::style::ratatui_style_from_inline;
 use super::super::types::{InlineMessageKind, InlineTextStyle, InlineTheme};
 use super::message::{MessageLabels, MessageLine};
-use super::text_utils::{format_tool_parameters, simplify_tool_display};
 use crate::config::constants::ui;
+
+// Note: format_tool_parameters and simplify_tool_display are available in super::text_utils
+// if needed for future use.
 
 #[allow(dead_code)]
 pub(super) fn render_message_spans(
