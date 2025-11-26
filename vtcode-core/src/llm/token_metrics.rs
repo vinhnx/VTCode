@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt::Write;
 /// Token computation metrics and profiling
 ///
 /// Provides accurate token counting with profiling to understand
@@ -85,25 +86,28 @@ impl TokenMetrics {
     pub fn format_summary(&self) -> String {
         let mut output = String::new();
 
-        output.push_str(&format!("📊 Token Metrics Summary\n"));
-        output.push_str(&format!("  Total tokens: {}\n", self.total_tokens));
-        output.push_str(&format!("  Total chars: {}\n", self.total_chars));
-        output.push_str(&format!(
-            "  Avg chars/token: {:.2}\n",
+        output.push_str("📊 Token Metrics Summary\n");
+        let _ = writeln!(output, "  Total tokens: {}", self.total_tokens);
+        let _ = writeln!(output, "  Total chars: {}", self.total_chars);
+        let _ = writeln!(
+            output,
+            "  Avg chars/token: {:.2}",
             self.avg_chars_per_token
-        ));
-        output.push_str(&format!(
-            "  Total time: {:.2}ms\n",
+        );
+        let _ = writeln!(
+            output,
+            "  Total time: {:.2}ms",
             self.total_time.as_secs_f64() * 1000.0
-        ));
+        );
 
         if !self.by_type.is_empty() {
             output.push_str("\n  By Type:\n");
             for metric in self.top_types(5) {
-                output.push_str(&format!(
-                    "    {}: {} tokens ({} chars, {} ms)\n",
+                let _ = writeln!(
+                    output,
+                    "    {}: {} tokens ({} chars, {} ms)",
                     metric.name, metric.tokens, metric.chars, metric.time_ms
-                ));
+                );
             }
         }
 
