@@ -33,7 +33,7 @@ pub(crate) async fn execute_tool_pipeline(
     ctrl_c_state: &Arc<crate::agent::runloop::unified::state::CtrlCState>,
     ctrl_c_notify: &Arc<Notify>,
 ) -> Vec<crate::agent::runloop::unified::tool_pipeline::ToolExecutionStatus> {
-    let mut results = Vec::new();
+    let mut results = Vec::with_capacity(tool_calls.len());
 
     // For now, just execute each tool call sequentially
     // TODO: Add parallel execution and batching logic

@@ -3,8 +3,7 @@ use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::{DeepSeekPromptCacheSettings, PromptCachingConfig};
 use crate::llm::client::LLMClient;
 use crate::llm::error_display;
-use crate::llm::provider::{FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse};
-use crate::llm::providers::common::serialize_messages_openai_format;
+use crate::llm::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse};
 use crate::llm::types as llm_types;
 use async_trait::async_trait;
 use reqwest::Client as HttpClient;
@@ -12,9 +11,9 @@ use serde_json::{Map, Value};
 
 use super::{
     common::{
-        convert_usage_to_llm_types, extract_content_from_message, extract_prompt_cache_settings,
+        convert_usage_to_llm_types, extract_prompt_cache_settings, handle_http_error,
         override_base_url, parse_chat_request_openai_format, parse_client_prompt_common,
-        parse_tool_call_openai_format, parse_usage_openai_format, resolve_model,
+        parse_response_openai_format, resolve_model, serialize_messages_openai_format,
         serialize_tools_openai_format,
     },
     extract_reasoning_trace,
@@ -157,77 +156,27 @@ impl DeepSeekProvider {
     }
 
     fn parse_response(&self, response_json: Value) -> Result<LLMResponse, LLMError> {
-        let choices = response_json
-            .get("choices")
-            .and_then(|value| value.as_array())
-            .ok_or_else(|| {
-                let formatted_error = error_display::format_llm_error(
-                    PROVIDER_NAME,
-                    "Invalid response format: missing choices",
-                );
-                LLMError::Provider(formatted_error)
-            })?;
-
-        if choices.is_empty() {
-            let formatted_error =
-                error_display::format_llm_error(PROVIDER_NAME, "No choices in response");
-            return Err(LLMError::Provider(formatted_error));
-        }
-
-        let choice = &choices[0];
-        let message = choice.get("message").ok_or_else(|| {
-            let formatted_error = error_display::format_llm_error(
-                PROVIDER_NAME,
-                "Invalid response format: missing message",
-            );
-            LLMError::Provider(formatted_error)
-        })?;
-
-        let content = extract_content_from_message(message);
-
-        let tool_calls = message
-            .get("tool_calls")
-            .and_then(|tc| tc.as_array())
-            .map(|calls| {
-                calls
-                    .iter()
-                    .filter_map(parse_tool_call_openai_format)
-                    .collect::<Vec<_>>()
-            })
-            .filter(|calls| !calls.is_empty());
-
-        let reasoning = message
-            .get("reasoning_content")
-            .and_then(extract_reasoning_trace)
-            .or_else(|| message.get("reasoning").and_then(extract_reasoning_trace))
-            .or_else(|| {
-                choice
-                    .get("reasoning_content")
-                    .and_then(extract_reasoning_trace)
-            });
-
-        let finish_reason = choice
-            .get("finish_reason")
-            .and_then(|value| value.as_str())
-            .map(|reason| match reason {
-                "stop" => FinishReason::Stop,
-                "length" => FinishReason::Length,
-                "tool_calls" => FinishReason::ToolCalls,
-                other => FinishReason::Error(other.to_string()),
-            })
-            .unwrap_or(FinishReason::Stop);
-
         let include_cache = self.prompt_cache_enabled && self.prompt_cache_settings.surface_metrics;
-        let usage = parse_usage_openai_format(&response_json, include_cache);
-
-        Ok(LLMResponse {
-            content,
-            tool_calls,
-            usage,
-            finish_reason,
-            reasoning,
-            reasoning_details: None,
-        })
+        
+        // Custom reasoning extractor for DeepSeek
+        let reasoning_extractor = |message: &Value, choice: &Value| {
+            message
+                .get("reasoning_content")
+                .and_then(extract_reasoning_trace)
+                .or_else(|| message.get("reasoning").and_then(extract_reasoning_trace))
+                .or_else(|| {
+                    choice
+                        .get("reasoning_content")
+                        .and_then(extract_reasoning_trace)
+                })
+        };
+        
+        parse_response_openai_format(
+            response_json,
+            PROVIDER_NAME,
+            include_cache,
+            Some(reasoning_extractor),
+        )
     }
 }
 
@@ -274,28 +223,9 @@ impl LLMProvider for DeepSeekProvider {
                 LLMError::Network(formatted_error)
             })?;
 
-        if !response.status().is_success() {
-            let status = response.status();
-            let error_text = response.text().await.unwrap_or_default();
 
-            if status.as_u16() == 401 {
-                let formatted_error = error_display::format_llm_error(
-                    PROVIDER_NAME,
-                    "Authentication failed (check DEEPSEEK_API_KEY)",
-                );
-                return Err(LLMError::Authentication(formatted_error));
-            }
+        let response = handle_http_error(response, PROVIDER_NAME, "DEEPSEEK_API_KEY").await?;
 
-            if status.as_u16() == 429 || error_text.contains("quota") {
-                return Err(LLMError::RateLimit);
-            }
-
-            let formatted_error = error_display::format_llm_error(
-                PROVIDER_NAME,
-                &format!("HTTP {}: {}", status, error_text),
-            );
-            return Err(LLMError::Provider(formatted_error));
-        }
 
         let response_json: Value = response.json().await.map_err(|e| {
             let formatted_error = error_display::format_llm_error(

@@ -4,8 +4,7 @@ use crate::config::core::PromptCachingConfig;
 use crate::llm::client::LLMClient;
 use crate::llm::error_display;
 use crate::llm::provider::{
-    FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, MessageRole, ToolCall,
-    ToolChoice, Usage,
+    LLMError, LLMProvider, LLMRequest, LLMResponse, MessageRole, ToolChoice, Usage,
 };
 use crate::llm::types as llm_types;
 use async_trait::async_trait;
@@ -14,10 +13,9 @@ use serde_json::{Value, json};
 use std::collections::HashSet;
 
 use super::common::{
-    convert_usage_to_llm_types, map_finish_reason_common, override_base_url,
+    convert_usage_to_llm_types, override_base_url,
     parse_chat_request_openai_format_with_extractor, parse_client_prompt_common,
-    parse_tool_call_openai_format, resolve_model, serialize_tools_openai_format,
-    validate_request_common,
+    resolve_model, serialize_tools_openai_format, validate_request_common,
 };
 
 const PROVIDER_NAME: &str = "Z.AI";
@@ -95,9 +93,7 @@ impl ZAIProvider {
         Some(request)
     }
 
-    fn parse_tool_call(value: &Value) -> Option<ToolCall> {
-        parse_tool_call_openai_format(value)
-    }
+
 
     fn convert_to_zai_format(&self, request: &LLMRequest) -> Result<Value, LLMError> {
         let mut messages = Vec::new();
@@ -198,75 +194,39 @@ impl ZAIProvider {
     }
 
     fn parse_zai_response(&self, response_json: Value) -> Result<LLMResponse, LLMError> {
-        let choices = response_json
-            .get("choices")
-            .and_then(|c| c.as_array())
-            .ok_or_else(|| {
-                let formatted = error_display::format_llm_error(
-                    PROVIDER_NAME,
-                    "Invalid response format: missing choices",
-                );
-                LLMError::Provider(formatted)
-            })?;
-
-        if choices.is_empty() {
-            let formatted =
-                error_display::format_llm_error(PROVIDER_NAME, "No choices in response");
-            return Err(LLMError::Provider(formatted));
-        }
-
-        let choice = &choices[0];
-        let message = choice.get("message").ok_or_else(|| {
-            let formatted = error_display::format_llm_error(
-                PROVIDER_NAME,
-                "Invalid response format: missing message",
-            );
-            LLMError::Provider(formatted)
-        })?;
-
-        let content = message
-            .get("content")
-            .and_then(|c| c.as_str())
-            .map(|s| s.to_string());
-
-        let reasoning = message
-            .get("reasoning_content")
-            .map(|value| match value {
-                Value::String(text) => Some(text.to_string()),
-                Value::Array(parts) => {
-                    let combined = parts
-                        .iter()
-                        .filter_map(|part| part.as_str())
-                        .collect::<Vec<_>>()
-                        .join("");
-                    if combined.is_empty() {
-                        None
-                    } else {
-                        Some(combined)
+        // Custom reasoning extractor for ZAI's array format
+        let reasoning_extractor = |message: &Value, _choice: &Value| {
+            message
+                .get("reasoning_content")
+                .and_then(|value| match value {
+                    Value::String(text) => Some(text.to_string()),
+                    Value::Array(parts) => {
+                        let combined = parts
+                            .iter()
+                            .filter_map(|part| part.as_str())
+                            .collect::<Vec<_>>()
+                            .join("");
+                        if combined.is_empty() {
+                            None
+                        } else {
+                            Some(combined)
+                        }
                     }
-                }
-                _ => None,
-            })
-            .flatten();
+                    _ => None,
+                })
+        };
 
-        let tool_calls = message
-            .get("tool_calls")
-            .and_then(|tc| tc.as_array())
-            .map(|calls| {
-                calls
-                    .iter()
-                    .filter_map(Self::parse_tool_call)
-                    .collect::<Vec<_>>()
-            })
-            .filter(|calls| !calls.is_empty());
+        // ZAI uses cached_tokens in prompt_tokens_details, not at top level
+        // We'll parse usage manually after getting the base response
+        let mut response = super::common::parse_response_openai_format(
+            response_json.clone(),
+            PROVIDER_NAME,
+            false, // Don't use standard cache metrics
+            Some(reasoning_extractor),
+        )?;
 
-        let finish_reason = choice
-            .get("finish_reason")
-            .and_then(|fr| fr.as_str())
-            .map(Self::map_finish_reason)
-            .unwrap_or(FinishReason::Stop);
-
-        let usage = response_json.get("usage").map(|usage_value| Usage {
+        // Override usage with ZAI-specific parsing
+        response.usage = response_json.get("usage").map(|usage_value| Usage {
             prompt_tokens: usage_value
                 .get("prompt_tokens")
                 .and_then(|pt| pt.as_u64())
@@ -288,19 +248,10 @@ impl ZAIProvider {
             cache_read_tokens: None,
         });
 
-        Ok(LLMResponse {
-            content,
-            tool_calls,
-            usage,
-            finish_reason,
-            reasoning,
-            reasoning_details: None,
-        })
+        Ok(response)
     }
 
-    fn map_finish_reason(reason: &str) -> FinishReason {
-        map_finish_reason_common(reason)
-    }
+
 
     fn available_models() -> Vec<String> {
         models::zai::SUPPORTED_MODELS

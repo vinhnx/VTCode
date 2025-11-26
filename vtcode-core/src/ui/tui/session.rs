@@ -197,7 +197,7 @@ impl Session {
             scroll_manager: ScrollManager::new(initial_transcript_rows),
 
             // --- Message Management ---
-            lines: Vec::new(),
+            lines: Vec::with_capacity(64),
             styles: SessionStyles::new(theme.clone()),
             theme,
             header_context: InlineHeaderContext::default(),
@@ -229,7 +229,7 @@ impl Session {
             // --- Rendering ---
             transcript_cache: None,
             visible_lines_cache: None,
-            queued_inputs: Vec::new(),
+            queued_inputs: Vec::with_capacity(4),
             queue_overlay_cache: None,
             queue_overlay_version: 0,
             modal: None,

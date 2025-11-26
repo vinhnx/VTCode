@@ -52,7 +52,7 @@ pub mod trajectory;
 
 // Re-export main types
 pub use context_pruner::{
-    ContextEfficiency, ContextPruner, MessageMetrics, RetentionDecision, SemanticScore,
+    ContextEfficiency, ContextPruner, MessageMetrics, MessageType, RetentionDecision, SemanticScore,
 };
 pub use pruning_decisions::{
     PruningDecision, PruningDecisionLedger, PruningReport, RetentionChoice,

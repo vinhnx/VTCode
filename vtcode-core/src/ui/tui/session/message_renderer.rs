@@ -6,6 +6,7 @@ use ratatui::{
 use super::super::style::ratatui_style_from_inline;
 use super::super::types::{InlineMessageKind, InlineTextStyle, InlineTheme};
 use super::message::{MessageLabels, MessageLine};
+use super::text_utils::{format_tool_parameters, simplify_tool_display};
 use crate::config::constants::ui;
 
 #[allow(dead_code)]
@@ -176,64 +177,14 @@ fn strip_tool_status_prefix(text: &str) -> &str {
 }
 
 #[allow(dead_code)]
-fn simplify_tool_display(text: &str) -> String {
-    let simplified = if text.starts_with("file ") {
-        text.replacen("file ", "accessing ", 1)
-    } else if text.starts_with("path: ") {
-        text.replacen("path: ", "file: ", 1)
-    } else if text.contains(" → file ") {
-        text.replace(" → file ", " → ")
-    } else if text.starts_with("grep ") {
-        text.replacen("grep ", "searching for ", 1)
-    } else if text.starts_with("find ") {
-        text.replacen("find ", "finding ", 1)
-    } else if text.starts_with("list ") {
-        text.replacen("list ", "listing ", 1)
-    } else {
-        text.to_string()
-    };
-
-    format_tool_parameters(&simplified)
-}
-
-#[allow(dead_code)]
-fn format_tool_parameters(text: &str) -> String {
-    let mut formatted = text.to_string();
-
-    if formatted.contains("pattern: ") {
-        formatted = formatted.replace("pattern: ", "matching '");
-        if formatted.contains(" · ") {
-            formatted = formatted.replacen(" · ", "' · ", 1);
-        } else if formatted.contains("  ") {
-            formatted = formatted.replacen("  ", "' ", 1);
-        } else {
-            formatted.push('\'');
-        }
-    }
-
-    if formatted.contains("path: ") {
-        formatted = formatted.replace("path: ", "in '");
-        if formatted.contains(" · ") {
-            formatted = formatted.replacen(" · ", "' · ", 1);
-        } else if formatted.contains("  ") {
-            formatted = formatted.replacen("  ", "' ", 1);
-        } else {
-            formatted.push('\'');
-        }
-    }
-
-    formatted
-}
-
-#[allow(dead_code)]
-fn normalize_tool_name(tool_name: &str) -> String {
+fn normalize_tool_name(tool_name: &str) -> &'static str {
     match tool_name.to_lowercase().as_str() {
-        "grep" | "rg" | "ripgrep" | "grep_file" | "search" | "find" | "ag" => "search".to_string(),
-        "list" | "ls" | "dir" | "list_files" => "list".to_string(),
-        "read" | "cat" | "file" | "read_file" => "read".to_string(),
-        "write" | "edit" | "save" | "insert" | "edit_file" => "write".to_string(),
-        "run" | "command" | "bash" | "sh" => "run".to_string(),
-        _ => tool_name.to_string(),
+        "grep" | "rg" | "ripgrep" | "grep_file" | "search" | "find" | "ag" => "search",
+        "list" | "ls" | "dir" | "list_files" => "list",
+        "read" | "cat" | "file" | "read_file" => "read",
+        "write" | "edit" | "save" | "insert" | "edit_file" => "write",
+        "run" | "command" | "bash" | "sh" => "run",
+        _ => "other",
     }
 }
 
@@ -242,7 +193,7 @@ fn tool_inline_style(tool_name: &str, theme: &InlineTheme) -> InlineTextStyle {
     let normalized_name = normalize_tool_name(tool_name);
     let mut style = InlineTextStyle::default().bold();
 
-    style.color = match normalized_name.to_lowercase().as_str() {
+    style.color = match normalized_name {
         "read" => Some(anstyle::AnsiColor::Blue.into()),
         "list" => Some(anstyle::AnsiColor::Green.into()),
         "search" => Some(anstyle::AnsiColor::Yellow.into()),

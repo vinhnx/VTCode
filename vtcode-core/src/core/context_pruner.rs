@@ -50,6 +50,24 @@ impl SemanticScore {
     }
 }
 
+/// Message type for context pruning (avoids String allocation)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MessageType {
+    System,
+    User,
+    Assistant,
+    Tool,
+}
+
+impl MessageType {
+    /// Check if this is a system message
+    #[inline]
+    pub fn is_system(&self) -> bool {
+        matches!(self, MessageType::System)
+    }
+}
+
 /// Message retention metrics for pruning decisions
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MessageMetrics {
@@ -61,8 +79,8 @@ pub struct MessageMetrics {
     pub semantic_score: u32,
     /// Age in turns (0 = most recent)
     pub age_in_turns: u32,
-    /// Message type: "system", "user", "assistant", "tool"
-    pub message_type: String,
+    /// Message type: system, user, assistant, tool
+    pub message_type: MessageType,
 }
 
 /// Retention decision for a message
@@ -118,7 +136,7 @@ impl ContextPruner {
 
         // Always keep system and very recent important messages
         for (i, msg, score) in &scored_messages {
-            if msg.message_type == "system" || *score >= self.min_keep_semantic {
+            if msg.message_type.is_system() || *score >= self.min_keep_semantic {
                 decisions.insert(*i, RetentionDecision::Keep);
                 total_tokens += msg.token_count;
             }
@@ -265,35 +283,35 @@ mod tests {
                 token_count: 100,
                 semantic_score: 950,
                 age_in_turns: 10,
-                message_type: "system".to_string(),
+                message_type: MessageType::System,
             },
             MessageMetrics {
                 index: 1,
                 token_count: 500,
                 semantic_score: 850,
                 age_in_turns: 9,
-                message_type: "user".to_string(),
+                message_type: MessageType::User,
             },
             MessageMetrics {
                 index: 2,
                 token_count: 200,
                 semantic_score: 500,
                 age_in_turns: 8,
-                message_type: "assistant".to_string(),
+                message_type: MessageType::Assistant,
             },
             MessageMetrics {
                 index: 3,
                 token_count: 300,
                 semantic_score: 600,
                 age_in_turns: 2,
-                message_type: "tool".to_string(),
+                message_type: MessageType::Tool,
             },
             MessageMetrics {
                 index: 4,
                 token_count: 150,
                 semantic_score: 800,
                 age_in_turns: 0,
-                message_type: "user".to_string(),
+                message_type: MessageType::User,
             },
         ]
     }
