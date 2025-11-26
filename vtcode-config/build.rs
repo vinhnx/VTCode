@@ -418,17 +418,18 @@ fn sanitize_doc_comment(input: &str) -> String {
 }
 
 fn escape_rust_string(input: &str) -> String {
-    input
-        .chars()
-        .flat_map(|ch| match ch {
-            '\\' => "\\\\".chars().collect::<Vec<_>>(),
-            '"' => "\\\"".chars().collect::<Vec<_>>(),
-            '\n' => "\\n".chars().collect::<Vec<_>>(),
-            '\r' => "\\r".chars().collect::<Vec<_>>(),
-            '\t' => "\\t".chars().collect::<Vec<_>>(),
-            other => vec![other],
-        })
-        .collect()
+    let mut output = String::with_capacity(input.len());
+    for ch in input.chars() {
+        match ch {
+            '\\' => output.push_str("\\\\"),
+            '"' => output.push_str("\\\""),
+            '\n' => output.push_str("\\n"),
+            '\r' => output.push_str("\\r"),
+            '\t' => output.push_str("\\t"),
+            other => output.push(other),
+        }
+    }
+    output
 }
 
 fn to_module_name(vendor: &str) -> String {

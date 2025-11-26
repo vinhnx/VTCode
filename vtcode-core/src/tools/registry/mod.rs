@@ -72,6 +72,32 @@ pub struct ToolExecutionRecord {
     pub success: bool,
 }
 
+impl ToolExecutionRecord {
+    /// Create a new failed execution record
+    #[inline]
+    pub fn failure(tool_name: String, args: Value, error_msg: String) -> Self {
+        Self {
+            tool_name,
+            args,
+            result: Err(error_msg),
+            timestamp: SystemTime::now(),
+            success: false,
+        }
+    }
+
+    /// Create a new successful execution record
+    #[inline]
+    pub fn success(tool_name: String, args: Value, result: Value) -> Self {
+        Self {
+            tool_name,
+            args,
+            result: Ok(result),
+            timestamp: SystemTime::now(),
+            success: true,
+        }
+    }
+}
+
 /// Thread-safe execution history for recording tool executions
 #[derive(Clone)]
 pub struct ToolExecutionHistory {
@@ -432,7 +458,9 @@ impl ToolRegistry {
     }
 
     fn mcp_policy_keys(&self) -> Vec<String> {
-        let mut keys = Vec::new();
+        // Pre-calculate capacity
+        let capacity: usize = self.mcp_tool_index.values().map(|tools| tools.len()).sum();
+        let mut keys = Vec::with_capacity(capacity);
         for (provider, tools) in &self.mcp_tool_index {
             for tool in tools {
                 keys.push(format!("mcp::{}::{}", provider, tool));
@@ -478,8 +506,7 @@ impl ToolRegistry {
         }
 
         // If not found, check if it's an MCP tool
-        if name.starts_with("mcp_") {
-            let tool_name = &name[4..];
+        if let Some(tool_name) = name.strip_prefix("mcp_") {
             if self.find_mcp_provider(tool_name).is_some() {
                 return true;
             }
@@ -648,13 +675,15 @@ impl ToolRegistry {
     pub async fn execute_tool(&mut self, name: &str, args: Value) -> Result<Value> {
         let canonical_name = canonical_tool_name(name);
         let tool_name = canonical_name.as_ref();
+        // Cache tool_name as owned String once for all record usage
+        let tool_name_owned = tool_name.to_string();
         let display_name = if tool_name == name {
-            name.to_string()
+            tool_name_owned.clone()
         } else {
             format!("{} (alias for {})", name, tool_name)
         };
 
-        // Clone args early to use in error recording
+        // Clone args once at the start for error recording paths
         let args_for_recording = args.clone();
 
         // LOOP DETECTION: Check if we're calling the same tool repeatedly with identical params
@@ -672,7 +701,7 @@ impl ToolRegistry {
             && !self.policy_gateway.is_allowed_in_full_auto(tool_name)
         {
             let error = ToolExecutionError::new(
-                tool_name.to_string(),
+                tool_name_owned.clone(),
                 ToolErrorType::PolicyViolation,
                 format!(
                     "Tool '{}' is not permitted while full-auto mode is active",
@@ -680,15 +709,12 @@ impl ToolRegistry {
                 ),
             );
 
-            // Record the failed execution
-            let record = ToolExecutionRecord {
-                tool_name: tool_name.to_string(),
-                args: args_for_recording,
-                result: Err("Tool execution denied by policy".to_string()),
-                timestamp: SystemTime::now(),
-                success: false,
-            };
-            self.execution_history.add_record(record);
+            self.execution_history
+                .add_record(ToolExecutionRecord::failure(
+                    tool_name_owned,
+                    args_for_recording,
+                    "Tool execution denied by policy".to_string(),
+                ));
 
             return Ok(error.to_json_value());
         }
@@ -697,20 +723,17 @@ impl ToolRegistry {
 
         if !skip_policy_prompt && !self.policy_gateway.should_execute_tool(tool_name).await? {
             let error = ToolExecutionError::new(
-                tool_name.to_string(),
+                tool_name_owned.clone(),
                 ToolErrorType::PolicyViolation,
                 format!("Tool '{}' execution denied by policy", display_name),
             );
 
-            // Record the failed execution
-            let record = ToolExecutionRecord {
-                tool_name: tool_name.to_string(),
-                args: args_for_recording,
-                result: Err("Tool execution denied by policy".to_string()),
-                timestamp: SystemTime::now(),
-                success: false,
-            };
-            self.execution_history.add_record(record);
+            self.execution_history
+                .add_record(ToolExecutionRecord::failure(
+                    tool_name_owned,
+                    args_for_recording,
+                    "Tool execution denied by policy".to_string(),
+                ));
 
             return Ok(error.to_json_value());
         }
@@ -722,21 +745,18 @@ impl ToolRegistry {
             Ok(processed_args) => processed_args,
             Err(err) => {
                 let error = ToolExecutionError::with_original_error(
-                    tool_name.to_string(),
+                    tool_name_owned.clone(),
                     ToolErrorType::InvalidParameters,
                     "Failed to apply policy constraints".to_string(),
                     err.to_string(),
                 );
 
-                // Record the failed execution
-                let record = ToolExecutionRecord {
-                    tool_name: tool_name.to_string(),
-                    args: args_for_recording,
-                    result: Err(format!("Failed to apply policy constraints: {}", err)),
-                    timestamp: SystemTime::now(),
-                    success: false,
-                };
-                self.execution_history.add_record(record);
+                self.execution_history
+                    .add_record(ToolExecutionRecord::failure(
+                        tool_name_owned,
+                        args_for_recording,
+                        format!("Failed to apply policy constraints: {}", err),
+                    ));
 
                 return Ok(error.to_json_value());
             }
@@ -759,7 +779,7 @@ impl ToolRegistry {
             let resolved_mcp_name = if let Some(stripped) = name.strip_prefix("mcp_") {
                 stripped.to_string()
             } else {
-                tool_name.to_string()
+                tool_name_owned.clone()
             };
 
             match mcp_client.has_mcp_tool(&resolved_mcp_name).await {
@@ -783,43 +803,34 @@ impl ToolRegistry {
         if !tool_exists {
             if let Some(err) = mcp_lookup_error {
                 let error = ToolExecutionError::with_original_error(
-                    tool_name.to_string(),
+                    tool_name_owned.clone(),
                     ToolErrorType::ExecutionError,
                     format!("Failed to resolve MCP tool '{}': {}", display_name, err),
                     err.to_string(),
                 );
 
-                // Record the failed execution
-                let record = ToolExecutionRecord {
-                    tool_name: tool_name.to_string(),
-                    args: args.clone(),
-                    result: Err(format!(
-                        "Failed to resolve MCP tool '{}': {}",
-                        display_name, err
-                    )),
-                    timestamp: SystemTime::now(),
-                    success: false,
-                };
-                self.execution_history.add_record(record);
+                self.execution_history
+                    .add_record(ToolExecutionRecord::failure(
+                        tool_name_owned,
+                        args_for_recording,
+                        format!("Failed to resolve MCP tool '{}': {}", display_name, err),
+                    ));
 
                 return Ok(error.to_json_value());
             }
 
             let error = ToolExecutionError::new(
-                tool_name.to_string(),
+                tool_name_owned.clone(),
                 ToolErrorType::ToolNotFound,
                 format!("Unknown tool: {}", display_name),
             );
 
-            // Record the failed execution
-            let record = ToolExecutionRecord {
-                tool_name: tool_name.to_string(),
-                args: args.clone(),
-                result: Err(format!("Unknown tool: {}", display_name)),
-                timestamp: SystemTime::now(),
-                success: false,
-            };
-            self.execution_history.add_record(record);
+            self.execution_history
+                .add_record(ToolExecutionRecord::failure(
+                    tool_name_owned,
+                    args_for_recording,
+                    format!("Unknown tool: {}", display_name),
+                ));
 
             return Ok(error.to_json_value());
         }
@@ -830,21 +841,18 @@ impl ToolRegistry {
                 Ok(guard) => Some(guard),
                 Err(err) => {
                     let error = ToolExecutionError::with_original_error(
-                        tool_name.to_string(),
+                        tool_name_owned.clone(),
                         ToolErrorType::ExecutionError,
                         "Failed to start PTY session".to_string(),
                         err.to_string(),
                     );
 
-                    // Record the failed execution
-                    let record = ToolExecutionRecord {
-                        tool_name: tool_name.to_string(),
-                        args: args_for_recording,
-                        result: Err("Failed to start PTY session".to_string()),
-                        timestamp: SystemTime::now(),
-                        success: false,
-                    };
-                    self.execution_history.add_record(record);
+                    self.execution_history
+                        .add_record(ToolExecutionRecord::failure(
+                            tool_name_owned,
+                            args_for_recording,
+                            "Failed to start PTY session".to_string(),
+                        ));
 
                     return Ok(error.to_json_value());
                 }
@@ -880,20 +888,17 @@ impl ToolRegistry {
         } else {
             // This should theoretically never happen since we checked tool_exists above
             let error = ToolExecutionError::new(
-                tool_name.to_string(),
+                tool_name_owned.clone(),
                 ToolErrorType::ToolNotFound,
                 "Tool not found in registry".to_string(),
             );
 
-            // Record the failed execution
-            let record = ToolExecutionRecord {
-                tool_name: tool_name.to_string(),
-                args: args_for_recording,
-                result: Err("Tool not found in registry".to_string()),
-                timestamp: SystemTime::now(),
-                success: false,
-            };
-            self.execution_history.add_record(record);
+            self.execution_history
+                .add_record(ToolExecutionRecord::failure(
+                    tool_name_owned,
+                    args_for_recording,
+                    "Tool not found in registry".to_string(),
+                ));
 
             return Ok(error.to_json_value());
         };
@@ -905,36 +910,30 @@ impl ToolRegistry {
             Ok(value) => {
                 let normalized_value = normalize_tool_output(value);
 
-                // Record the successful execution
-                let record = ToolExecutionRecord {
-                    tool_name: tool_name.to_string(),
-                    args: args_for_recording,
-                    result: Ok(normalized_value.clone()),
-                    timestamp: SystemTime::now(),
-                    success: true,
-                };
-                self.execution_history.add_record(record);
+                self.execution_history
+                    .add_record(ToolExecutionRecord::success(
+                        tool_name_owned,
+                        args_for_recording,
+                        normalized_value.clone(),
+                    ));
 
                 Ok(normalized_value)
             }
             Err(err) => {
                 let error_type = classify_error(&err);
                 let error = ToolExecutionError::with_original_error(
-                    tool_name.to_string(),
+                    tool_name_owned.clone(),
                     error_type,
                     format!("Tool execution failed: {}", err),
                     err.to_string(),
                 );
 
-                // Record the failed execution
-                let record = ToolExecutionRecord {
-                    tool_name: tool_name.to_string(),
-                    args: args_for_recording,
-                    result: Err(format!("Tool execution failed: {}", err)),
-                    timestamp: SystemTime::now(),
-                    success: false,
-                };
-                self.execution_history.add_record(record);
+                self.execution_history
+                    .add_record(ToolExecutionRecord::failure(
+                        tool_name_owned,
+                        args_for_recording,
+                        format!("Tool execution failed: {}", err),
+                    ));
 
                 Ok(error.to_json_value())
             }

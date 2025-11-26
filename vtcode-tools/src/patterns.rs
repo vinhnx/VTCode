@@ -59,7 +59,7 @@ impl PatternDetector {
         // Slide window and extract sequences.
         for i in 0..=(self.events.len() - self.sequence_length) {
             let window = &self.events[i..i + self.sequence_length];
-            let seq: Vec<String> = window.iter().map(|e| e.tool_name.clone()).collect();
+            let seq: Vec<String> = window.iter().map(|e| &e.tool_name).cloned().collect();
 
             sequence_map.entry(seq.clone()).or_insert_with(Vec::new);
             for event in window {

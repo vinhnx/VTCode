@@ -175,14 +175,17 @@ impl PiiTokenizer {
         // Process detections in reverse order to maintain offsets
         for detection in detected.iter().rev() {
             let token = self.generate_token(&detection.value, detection.pii_type)?;
-            new_tokens.insert(token.token.clone(), token.clone());
-            result.replace_range(detection.start..detection.end, &token.token);
+            let token_str = token.token.clone();
+            result.replace_range(detection.start..detection.end, &token_str);
+            new_tokens.insert(token_str, token);
         }
 
         // Store tokens for later de-tokenization
         {
             let mut store = self.token_store.lock().unwrap();
-            store.extend(new_tokens.clone());
+            for (k, v) in new_tokens.iter() {
+                store.insert(k.clone(), v.clone());
+            }
         }
 
         debug!(pii_count = detected.len(), "Tokenized PII in string");
@@ -212,11 +215,10 @@ impl PiiTokenizer {
     /// Get audit trail of tokenized data.
     pub fn audit_trail(&self) -> Result<Vec<(String, PiiType, String)>> {
         let store = self.token_store.lock().unwrap();
-        let trail: Vec<_> = store
+        Ok(store
             .values()
             .map(|t| (t.token.clone(), t.pii_type, t.created_at.clone()))
-            .collect();
-        Ok(trail)
+            .collect())
     }
 
     /// Generate a secure token for PII value.

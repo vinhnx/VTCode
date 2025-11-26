@@ -194,42 +194,48 @@ fn default_long_request_min_chars() -> usize {
     1200
 }
 
+const CODE_PATCH_MARKERS: &[&str] = &[
+    "```",
+    "diff --git",
+    "apply_patch",
+    "unified diff",
+    "patch",
+    "edit_file",
+    "create_file",
+];
+
 fn default_code_patch_markers() -> Vec<String> {
-    vec![
-        "```".to_string(),
-        "diff --git".to_string(),
-        "apply_patch".to_string(),
-        "unified diff".to_string(),
-        "patch".to_string(),
-        "edit_file".to_string(),
-        "create_file".to_string(),
-    ]
+    CODE_PATCH_MARKERS.iter().map(|s| (*s).to_owned()).collect()
 }
+
+const RETRIEVAL_MARKERS: &[&str] = &[
+    "search",
+    "web",
+    "google",
+    "docs",
+    "cite",
+    "source",
+    "up-to-date",
+];
 
 fn default_retrieval_markers() -> Vec<String> {
-    vec![
-        "search".to_string(),
-        "web".to_string(),
-        "google".to_string(),
-        "docs".to_string(),
-        "cite".to_string(),
-        "source".to_string(),
-        "up-to-date".to_string(),
-    ]
+    RETRIEVAL_MARKERS.iter().map(|s| (*s).to_owned()).collect()
 }
 
+const COMPLEX_MARKERS: &[&str] = &[
+    "plan",
+    "multi-step",
+    "decompose",
+    "orchestrate",
+    "architecture",
+    "benchmark",
+    "implement end-to-end",
+    "design api",
+    "refactor module",
+    "evaluate",
+    "tests suite",
+];
+
 fn default_complex_markers() -> Vec<String> {
-    vec![
-        "plan".to_string(),
-        "multi-step".to_string(),
-        "decompose".to_string(),
-        "orchestrate".to_string(),
-        "architecture".to_string(),
-        "benchmark".to_string(),
-        "implement end-to-end".to_string(),
-        "design api".to_string(),
-        "refactor module".to_string(),
-        "evaluate".to_string(),
-        "tests suite".to_string(),
-    ]
+    COMPLEX_MARKERS.iter().map(|s| (*s).to_owned()).collect()
 }

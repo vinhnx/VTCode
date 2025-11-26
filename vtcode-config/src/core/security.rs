@@ -30,6 +30,7 @@ impl Default for SecurityConfig {
     }
 }
 
-fn default_true() -> bool {
+#[inline]
+const fn default_true() -> bool {
     true
 }

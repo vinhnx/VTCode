@@ -2011,7 +2011,7 @@ impl acp::Agent for ZedAgent {
                     continue;
                 }
 
-                if let Some(content) = response.content.clone() {
+                if let Some(content) = &response.content {
                     if !content.is_empty() {
                         if plan.has_context_step()
                             && !plan.context_completed()
@@ -2033,7 +2033,7 @@ impl acp::Agent for ZedAgent {
                         )
                         .await?;
                     }
-                    assistant_message = content;
+                    assistant_message = content.clone();
                 }
 
                 if let Some(reasoning) =

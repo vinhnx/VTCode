@@ -215,8 +215,8 @@ pub fn is_empty_response(response: &serde_json::Value) -> bool {
         serde_json::Value::Object(obj) => {
             obj.is_empty() ||
             // Check for common empty response patterns
-            (obj.get("candidates").map_or(false, |c| c.as_array().map_or(false, |arr| arr.is_empty()))) ||
-            (obj.get("content").map_or(false, |c| match c {
+            (obj.get("candidates").is_some_and(|c| c.as_array().is_some_and(|arr| arr.is_empty()))) ||
+            (obj.get("content").is_some_and(|c| match c {
                 serde_json::Value::String(s) => s.trim().is_empty(),
                 serde_json::Value::Array(arr) => arr.is_empty(),
                 _ => false,

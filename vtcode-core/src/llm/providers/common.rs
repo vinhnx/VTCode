@@ -1,8 +1,19 @@
 use crate::config::core::{PromptCachingConfig, ProviderPromptCachingConfig};
 use crate::llm::error_display;
-use crate::llm::provider::{FinishReason, LLMError, LLMRequest, Message, ToolCall};
+use crate::llm::provider::{FinishReason, LLMError, LLMRequest, Message, ToolCall, ToolDefinition};
 use crate::llm::types as llm_types;
 use serde_json::Value;
+
+/// Serializes tool definitions to OpenAI-compatible JSON format.
+/// Used by DeepSeek, ZAI, Moonshot, and other OpenAI-compatible providers.
+/// For OpenAI-specific features (GPT-5.1 native tools), use OpenAIProvider's serialize_tools.
+#[inline]
+pub fn serialize_tools_openai_format(tools: &[ToolDefinition]) -> Option<Vec<Value>> {
+    if tools.is_empty() {
+        return None;
+    }
+    Some(tools.iter().map(|tool| serde_json::json!(tool)).collect())
+}
 
 pub fn resolve_model(model: Option<String>, default_model: &str) -> String {
     model
@@ -167,7 +178,7 @@ pub fn serialize_messages_openai_format(
     request: &LLMRequest,
     provider_key: &str,
 ) -> Result<Vec<Value>, LLMError> {
-    use serde_json::{json, Map};
+    use serde_json::{Map, json};
 
     let mut messages = Vec::with_capacity(request.messages.len());
 
@@ -227,8 +238,7 @@ pub fn validate_request_common(
     supported_models: Option<&[String]>,
 ) -> Result<(), LLMError> {
     if request.messages.is_empty() {
-        let formatted =
-            error_display::format_llm_error(provider_name, "Messages cannot be empty");
+        let formatted = error_display::format_llm_error(provider_name, "Messages cannot be empty");
         return Err(LLMError::InvalidRequest(formatted));
     }
 
@@ -250,4 +260,181 @@ pub fn validate_request_common(
     }
 
     Ok(())
+}
+
+/// Parses chat request from OpenAI-compatible JSON format.
+/// Used by DeepSeek, ZAI, OpenRouter, and other OpenAI-compatible providers.
+///
+/// # Arguments
+/// * `value` - JSON value containing the chat request
+/// * `default_model` - Default model to use if not specified in request
+/// * `content_extractor` - Optional function to extract content from JSON (defaults to simple string extraction)
+///
+/// # Returns
+/// `Some(LLMRequest)` if parsing succeeds, `None` otherwise
+pub fn parse_chat_request_openai_format(value: &Value, default_model: &str) -> Option<LLMRequest> {
+    parse_chat_request_openai_format_with_extractor(value, default_model, |c| {
+        c.as_str().map(|s| s.to_string()).unwrap_or_default()
+    })
+}
+
+/// Parses chat request with custom content extraction logic.
+/// Use this when provider has special content format (e.g., array of content blocks).
+pub fn parse_chat_request_openai_format_with_extractor<F>(
+    value: &Value,
+    default_model: &str,
+    content_extractor: F,
+) -> Option<LLMRequest>
+where
+    F: Fn(&Value) -> String,
+{
+    use crate::llm::provider::Message;
+
+    let messages_value = value.get("messages")?.as_array()?;
+    let mut system_prompt = value
+        .get("system")
+        .and_then(|entry| entry.as_str())
+        .map(|text| text.to_string());
+    let mut messages = Vec::with_capacity(messages_value.len());
+
+    for entry in messages_value {
+        let role = entry
+            .get("role")
+            .and_then(|r| r.as_str())
+            .unwrap_or(crate::config::constants::message_roles::USER);
+        let content = entry
+            .get("content")
+            .map(&content_extractor)
+            .unwrap_or_default();
+
+        match role {
+            "system" => {
+                if system_prompt.is_none() && !content.is_empty() {
+                    system_prompt = Some(content);
+                }
+            }
+            "assistant" => {
+                let tool_calls = entry
+                    .get("tool_calls")
+                    .and_then(|tc| tc.as_array())
+                    .map(|calls| {
+                        calls
+                            .iter()
+                            .filter_map(parse_tool_call_openai_format)
+                            .collect::<Vec<_>>()
+                    })
+                    .filter(|calls| !calls.is_empty());
+
+                if let Some(calls) = tool_calls {
+                    messages.push(Message::assistant_with_tools(content, calls));
+                } else {
+                    messages.push(Message::assistant(content));
+                }
+            }
+            "tool" => {
+                if let Some(tool_call_id) = entry.get("tool_call_id").and_then(|v| v.as_str()) {
+                    messages.push(Message::tool_response(tool_call_id.to_string(), content));
+                }
+            }
+            _ => {
+                messages.push(Message::user(content));
+            }
+        }
+    }
+
+    Some(LLMRequest {
+        messages,
+        system_prompt,
+        model: value
+            .get("model")
+            .and_then(|m| m.as_str())
+            .unwrap_or(default_model)
+            .to_string(),
+        max_tokens: value
+            .get("max_tokens")
+            .and_then(|m| m.as_u64())
+            .map(|m| m as u32),
+        temperature: value
+            .get("temperature")
+            .and_then(|t| t.as_f64())
+            .map(|t| t as f32),
+        stream: value
+            .get("stream")
+            .and_then(|s| s.as_bool())
+            .unwrap_or(false),
+        tools: None,
+        output_format: None,
+        tool_choice: None,
+        parallel_tool_calls: None,
+        parallel_tool_config: None,
+        reasoning_effort: None,
+        verbosity: None,
+    })
+}
+
+/// Extracts content from a message value, handling both string and array formats.
+#[inline]
+pub fn extract_content_from_message(message: &Value) -> Option<String> {
+    message.get("content").and_then(|value| match value {
+        Value::String(text) => {
+            let trimmed = text.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        }
+        Value::Array(parts) => {
+            let text = parts
+                .iter()
+                .filter_map(|part| part.get("text").and_then(|t| t.as_str()))
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .collect::<Vec<_>>()
+                .join(" ");
+            if text.is_empty() { None } else { Some(text) }
+        }
+        _ => None,
+    })
+}
+
+/// Parses usage information from OpenAI-compatible response format.
+#[inline]
+pub fn parse_usage_openai_format(
+    response_json: &Value,
+    include_cache_metrics: bool,
+) -> Option<crate::llm::provider::Usage> {
+    response_json
+        .get("usage")
+        .map(|usage_value| crate::llm::provider::Usage {
+            prompt_tokens: usage_value
+                .get("prompt_tokens")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0) as u32,
+            completion_tokens: usage_value
+                .get("completion_tokens")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0) as u32,
+            total_tokens: usage_value
+                .get("total_tokens")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0) as u32,
+            cached_prompt_tokens: if include_cache_metrics {
+                usage_value
+                    .get("prompt_cache_hit_tokens")
+                    .and_then(|v| v.as_u64())
+                    .map(|v| v as u32)
+            } else {
+                None
+            },
+            cache_creation_tokens: if include_cache_metrics {
+                usage_value
+                    .get("prompt_cache_miss_tokens")
+                    .and_then(|v| v.as_u64())
+                    .map(|v| v as u32)
+            } else {
+                None
+            },
+            cache_read_tokens: None,
+        })
 }

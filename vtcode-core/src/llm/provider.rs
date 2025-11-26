@@ -175,37 +175,60 @@ impl ToolChoice {
         }
     }
 
+    /// OpenAI-compatible providers that share the same tool_choice format
+    const OPENAI_STYLE_PROVIDERS: &'static [&'static str] = &[
+        "openai",
+        "deepseek",
+        "openrouter",
+        "xai",
+        "zai",
+        "moonshot",
+        "lmstudio",
+    ];
+
     /// Convert to provider-specific format
+    #[inline]
     pub fn to_provider_format(&self, provider: &str) -> Value {
-        match (self, provider) {
-            (Self::Auto, "openai") | (Self::Auto, "deepseek") => json!("auto"),
-            (Self::None, "openai") | (Self::None, "deepseek") => json!("none"),
-            (Self::Any, "openai") | (Self::Any, "deepseek") => json!("required"),
-            (Self::Specific(choice), "openai") | (Self::Specific(choice), "deepseek") => {
-                json!(choice)
-            }
+        if Self::OPENAI_STYLE_PROVIDERS.contains(&provider) {
+            return self.to_openai_format();
+        }
 
-            (Self::Auto, "anthropic") => json!({"type": "auto"}),
-            (Self::None, "anthropic") => json!({"type": "none"}),
-            (Self::Any, "anthropic") => json!({"type": "any"}),
-            (Self::Specific(choice), "anthropic") => {
-                json!({"type": "tool", "name": choice.function.name})
-            }
+        match provider {
+            "anthropic" => self.to_anthropic_format(),
+            "gemini" => self.to_gemini_format(),
+            _ => self.to_openai_format(), // Default to OpenAI format
+        }
+    }
 
-            (Self::Auto, "gemini") => json!({"mode": "auto"}),
-            (Self::None, "gemini") => json!({"mode": "none"}),
-            (Self::Any, "gemini") => json!({"mode": "any"}),
-            (Self::Specific(choice), "gemini") => {
-                json!({"mode": "any", "allowed_function_names": [choice.function.name]})
-            }
+    #[inline]
+    fn to_openai_format(&self) -> Value {
+        match self {
+            Self::Auto => json!("auto"),
+            Self::None => json!("none"),
+            Self::Any => json!("required"),
+            Self::Specific(choice) => json!(choice),
+        }
+    }
 
-            // Generic follows OpenAI format
-            _ => match self {
-                Self::Auto => json!("auto"),
-                Self::None => json!("none"),
-                Self::Any => json!("required"),
-                Self::Specific(choice) => json!(choice),
-            },
+    #[inline]
+    fn to_anthropic_format(&self) -> Value {
+        match self {
+            Self::Auto => json!({"type": "auto"}),
+            Self::None => json!({"type": "none"}),
+            Self::Any => json!({"type": "any"}),
+            Self::Specific(choice) => json!({"type": "tool", "name": &choice.function.name}),
+        }
+    }
+
+    #[inline]
+    fn to_gemini_format(&self) -> Value {
+        match self {
+            Self::Auto => json!({"mode": "auto"}),
+            Self::None => json!({"mode": "none"}),
+            Self::Any => json!({"mode": "any"}),
+            Self::Specific(choice) => {
+                json!({"mode": "any", "allowed_function_names": [&choice.function.name]})
+            }
         }
     }
 }
@@ -333,19 +356,48 @@ impl MessageContent {
         MessageContent::Parts(parts)
     }
 
-    pub fn as_text(&self) -> String {
+    /// Returns a borrowed reference to the text content if this is a simple Text variant.
+    /// For Parts variant, returns None (use as_text() for combined content).
+    #[inline]
+    pub fn as_text_borrowed(&self) -> Option<&str> {
         match self {
-            MessageContent::Text(text) => text.clone(),
-            MessageContent::Parts(parts) => parts
-                .iter()
-                .filter_map(|part| part.as_text())
-                .collect::<Vec<_>>()
-                .join(" "),
+            MessageContent::Text(text) => Some(text.as_str()),
+            MessageContent::Parts(_) => None,
         }
     }
 
-    pub fn trim(&self) -> String {
-        self.as_text().trim().to_string()
+    /// Returns the text content, cloning if necessary.
+    /// For Parts variant, joins all text parts with spaces.
+    pub fn as_text(&self) -> String {
+        match self {
+            MessageContent::Text(text) => text.clone(),
+            MessageContent::Parts(parts) => {
+                // Pre-calculate capacity to avoid reallocations
+                let text_parts: Vec<&str> =
+                    parts.iter().filter_map(|part| part.as_text()).collect();
+                if text_parts.is_empty() {
+                    return String::new();
+                }
+                let total_len = text_parts.iter().map(|s| s.len()).sum::<usize>()
+                    + text_parts.len().saturating_sub(1); // spaces between parts
+                let mut result = String::with_capacity(total_len);
+                for (i, part) in text_parts.iter().enumerate() {
+                    if i > 0 {
+                        result.push(' ');
+                    }
+                    result.push_str(part);
+                }
+                result
+            }
+        }
+    }
+
+    /// Returns trimmed text content. Avoids allocation when possible.
+    pub fn trim(&self) -> std::borrow::Cow<'_, str> {
+        match self {
+            MessageContent::Text(text) => std::borrow::Cow::Borrowed(text.trim()),
+            MessageContent::Parts(_) => std::borrow::Cow::Owned(self.as_text().trim().to_string()),
+        }
     }
 
     pub fn is_empty(&self) -> bool {
@@ -395,117 +447,86 @@ impl From<&str> for MessageContent {
 }
 
 impl Message {
-    /// Create a user message with text content
-    pub fn user(content: String) -> Self {
+    /// Helper to create a base message with common defaults.
+    /// Public for use in provider implementations.
+    #[inline]
+    pub const fn base(role: MessageRole, content: MessageContent) -> Self {
         Self {
-            role: MessageRole::User,
-            content: MessageContent::Text(content),
+            role,
+            content,
             reasoning: None,
             reasoning_details: None,
             tool_calls: None,
             tool_call_id: None,
             origin_tool: None,
         }
+    }
+
+    /// Create a user message with text content
+    #[inline]
+    pub fn user(content: String) -> Self {
+        Self::base(MessageRole::User, MessageContent::Text(content))
     }
 
     /// Create a user message with multiple content parts (text and images)
+    #[inline]
     pub fn user_with_parts(content_parts: Vec<ContentPart>) -> Self {
-        Self {
-            role: MessageRole::User,
-            content: MessageContent::Parts(content_parts),
-            reasoning: None,
-            reasoning_details: None,
-            tool_calls: None,
-            tool_call_id: None,
-            origin_tool: None,
-        }
+        Self::base(MessageRole::User, MessageContent::Parts(content_parts))
     }
 
     /// Create an assistant message with text content
+    #[inline]
     pub fn assistant(content: String) -> Self {
-        Self {
-            role: MessageRole::Assistant,
-            content: MessageContent::Text(content),
-            reasoning: None,
-            reasoning_details: None,
-            tool_calls: None,
-            tool_call_id: None,
-            origin_tool: None,
-        }
+        Self::base(MessageRole::Assistant, MessageContent::Text(content))
     }
 
     /// Create an assistant message with multiple content parts
+    #[inline]
     pub fn assistant_with_parts(content_parts: Vec<ContentPart>) -> Self {
-        Self {
-            role: MessageRole::Assistant,
-            content: MessageContent::Parts(content_parts),
-            reasoning: None,
-            reasoning_details: None,
-            tool_calls: None,
-            tool_call_id: None,
-            origin_tool: None,
-        }
+        Self::base(MessageRole::Assistant, MessageContent::Parts(content_parts))
     }
 
     /// Create an assistant message with tool calls
     /// Based on OpenAI Cookbook patterns for function calling
+    #[inline]
     pub fn assistant_with_tools(content: String, tool_calls: Vec<ToolCall>) -> Self {
         Self {
-            role: MessageRole::Assistant,
-            content: MessageContent::Text(content),
-            reasoning: None,
-            reasoning_details: None,
             tool_calls: Some(tool_calls),
-            tool_call_id: None,
-            origin_tool: None,
+            ..Self::base(MessageRole::Assistant, MessageContent::Text(content))
         }
     }
 
     /// Create an assistant message with tool calls and multiple content parts
+    #[inline]
     pub fn assistant_with_tools_and_parts(
         content_parts: Vec<ContentPart>,
         tool_calls: Vec<ToolCall>,
     ) -> Self {
         Self {
-            role: MessageRole::Assistant,
-            content: MessageContent::Parts(content_parts),
-            reasoning: None,
-            reasoning_details: None,
             tool_calls: Some(tool_calls),
-            tool_call_id: None,
-            origin_tool: None,
+            ..Self::base(MessageRole::Assistant, MessageContent::Parts(content_parts))
         }
     }
 
     /// Create an assistant message with tool calls and reasoning details
     /// Used for preserving reasoning state in multi-turn conversations
+    #[inline]
     pub fn assistant_with_tools_and_reasoning(
         content: String,
         tool_calls: Vec<ToolCall>,
         reasoning_details: Option<Vec<serde_json::Value>>,
     ) -> Self {
         Self {
-            role: MessageRole::Assistant,
-            content: MessageContent::Text(content),
-            reasoning: None,
-            reasoning_details,
             tool_calls: Some(tool_calls),
-            tool_call_id: None,
-            origin_tool: None,
+            reasoning_details,
+            ..Self::base(MessageRole::Assistant, MessageContent::Text(content))
         }
     }
 
     /// Create a system message
+    #[inline]
     pub fn system(content: String) -> Self {
-        Self {
-            role: MessageRole::System,
-            content: MessageContent::Text(content),
-            reasoning: None,
-            reasoning_details: None,
-            tool_calls: None,
-            tool_call_id: None,
-            origin_tool: None,
-        }
+        Self::base(MessageRole::System, MessageContent::Text(content))
     }
 
     /// Create a tool response message
@@ -517,20 +538,17 @@ impl Message {
     ///   "content": "Function result"
     /// }
     /// ```
+    #[inline]
     pub fn tool_response(tool_call_id: String, content: String) -> Self {
         Self {
-            role: MessageRole::Tool,
-            content: MessageContent::Text(content),
-            reasoning: None,
-            reasoning_details: None,
-            tool_calls: None,
             tool_call_id: Some(tool_call_id),
-            origin_tool: None,
+            ..Self::base(MessageRole::Tool, MessageContent::Text(content))
         }
     }
 
     /// Create a tool response message with function name (for compatibility)
     /// Some providers might need the function name in addition to tool_call_id
+    #[inline]
     pub fn tool_response_with_name(
         tool_call_id: String,
         _function_name: String,
@@ -542,19 +560,16 @@ impl Message {
 
     /// Create a tool response message with origin tool tracking
     /// The origin_tool field helps with tool-aware context retention
+    #[inline]
     pub fn tool_response_with_origin(
         tool_call_id: String,
         content: String,
         origin_tool: String,
     ) -> Self {
         Self {
-            role: MessageRole::Tool,
-            content: MessageContent::Text(content),
-            reasoning: None,
-            reasoning_details: None,
-            tool_calls: None,
             tool_call_id: Some(tool_call_id),
             origin_tool: Some(origin_tool),
+            ..Self::base(MessageRole::Tool, MessageContent::Text(content))
         }
     }
 
@@ -652,7 +667,7 @@ impl Message {
     pub fn has_tool_calls(&self) -> bool {
         self.tool_calls
             .as_ref()
-            .map_or(false, |calls| !calls.is_empty())
+            .is_some_and(|calls| !calls.is_empty())
     }
 
     /// Get the tool calls if present
@@ -834,7 +849,7 @@ impl Default for GrammarDefinition {
     fn default() -> Self {
         Self {
             syntax: "lark".to_string(),
-            definition: "".to_string(),
+            definition: String::new(),
         }
     }
 }
@@ -1333,6 +1348,6 @@ mod tests {
             "  Line 1  \n".to_string(),
             json!({"type": "object", "properties": {}}),
         );
-        assert_eq!(tool.function.description, "Line 1");
+        assert_eq!(tool.function.as_ref().unwrap().description, "Line 1");
     }
 }

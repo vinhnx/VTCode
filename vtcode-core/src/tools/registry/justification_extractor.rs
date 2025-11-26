@@ -110,11 +110,7 @@ impl JustificationExtractor {
         };
 
         let just = ToolJustification::new(tool_name, reason, risk_level);
-        if let Some(outcome_str) = outcome {
-            Some(just.with_outcome(outcome_str))
-        } else {
-            Some(just)
-        }
+        Some(outcome.map_or(just.clone(), |outcome_str| just.with_outcome(outcome_str)))
     }
 }
 

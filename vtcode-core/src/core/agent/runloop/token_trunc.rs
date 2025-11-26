@@ -91,7 +91,7 @@ pub async fn truncate_content_by_tokens(
             out.push_str(head_content.trim_end());
             out.push('\n');
         }
-        let _ = write!(out, "[... {} lines truncated ...]\n", truncated_lines);
+        let _ = writeln!(out, "[... {} lines truncated ...]", truncated_lines);
         out.push_str(&tail_content);
         (out.trim_end().to_string(), true)
     } else {
@@ -163,9 +163,9 @@ pub async fn aggregate_tool_output_for_model(
 
     // Build a readable aggregate with section headers to preserve provenance/order
     let mut aggregate = String::with_capacity(parts.iter().map(|(_, s)| s.len() + 16).sum());
-    let _ = write!(aggregate, "[tool: {}]\n", tool_name);
+    let _ = writeln!(aggregate, "[tool: {}]", tool_name);
     for (label, s) in parts.iter() {
-        let _ = write!(aggregate, "--- {} ---\n", label);
+        let _ = writeln!(aggregate, "--- {} ---", label);
         aggregate.push_str(s);
         if !aggregate.ends_with('\n') {
             aggregate.push('\n');

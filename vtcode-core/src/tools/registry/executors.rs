@@ -886,7 +886,6 @@ impl ToolRegistry {
 
                     // Attempt direct code execution without MCP if no client available
                     let code = parsed.code.clone();
-                    let language = language;
 
                     // Create a direct code executor using process execution
                     use std::io::Write;
@@ -925,7 +924,7 @@ impl ToolRegistry {
                                 .context("failed to execute JavaScript code")?;
 
                             crate::exec::code_executor::ExecutionResult {
-                                exit_code: output.status.code().unwrap_or(1) as i32,
+                                exit_code: output.status.code().unwrap_or(1),
                                 stdout: String::from_utf8_lossy(&output.stdout).to_string(),
                                 stderr: String::from_utf8_lossy(&output.stderr).to_string(),
                                 duration_ms: 0, // Not tracked in this fallback
@@ -1326,7 +1325,7 @@ impl ToolRegistry {
                                             let range_parts: Vec<&str> =
                                                 range_str.split(',').collect();
                                             if let (Some(start_str), Some(_count_str)) =
-                                                (range_parts.get(0), range_parts.get(1))
+                                                (range_parts.first(), range_parts.get(1))
                                             {
                                                 if let Ok(start_line) = start_str.parse::<usize>() {
                                                     let start_idx = start_line.saturating_sub(1); // Convert to 0-indexed
@@ -1792,12 +1791,14 @@ impl ToolRegistry {
                 // Guard will be dropped here, automatically decrementing session count
                 // Attempt to cleanup the failed session if it was created
                 let _ = self.pty_manager().close_session(&session_id);
-                return Err(error).context(format!(
-                    "Failed to create PTY session '{}' with command {:?} in {}",
-                    session_id,
-                    command_parts,
-                    working_dir.display()
-                ));
+                return Err(error).with_context(|| {
+                    format!(
+                        "Failed to create PTY session '{}' with command {:?} in {}",
+                        session_id,
+                        command_parts,
+                        working_dir.display()
+                    )
+                });
             }
         };
 
@@ -1858,13 +1859,15 @@ impl ToolRegistry {
 
     async fn execute_list_pty_sessions(&self) -> Result<Value> {
         let sessions = self.pty_manager().list_sessions();
-        let identifiers: Vec<String> = sessions.iter().map(|session| session.id.clone()).collect();
-        let details: Vec<Value> = sessions
-            .into_iter()
-            .map(|session| {
-                Value::Object(snapshot_to_map(session, PtySnapshotViewOptions::default()))
-            })
-            .collect();
+        let mut identifiers = Vec::with_capacity(sessions.len());
+        let mut details = Vec::with_capacity(sessions.len());
+        for session in sessions {
+            identifiers.push(session.id.clone());
+            details.push(Value::Object(snapshot_to_map(
+                session,
+                PtySnapshotViewOptions::default(),
+            )));
+        }
 
         Ok(json!({
             "success": true,
@@ -3121,13 +3124,13 @@ fn quote_windows_argument(arg: &str) -> String {
                 backslashes += 1;
             }
             '"' => {
-                result.extend(std::iter::repeat('\\').take(backslashes * 2 + 1));
+                result.extend(std::iter::repeat_n('\\', backslashes * 2 + 1));
                 result.push('"');
                 backslashes = 0;
             }
             _ => {
                 if backslashes > 0 {
-                    result.extend(std::iter::repeat('\\').take(backslashes));
+                    result.extend(std::iter::repeat_n('\\', backslashes));
                     backslashes = 0;
                 }
                 result.push(ch);
@@ -3136,7 +3139,7 @@ fn quote_windows_argument(arg: &str) -> String {
     }
 
     if backslashes > 0 {
-        result.extend(std::iter::repeat('\\').take(backslashes * 2));
+        result.extend(std::iter::repeat_n('\\', backslashes * 2));
     }
 
     result.push('"');

@@ -150,7 +150,7 @@ impl RefactoringEngine {
                 description: format!("Add documentation to function {}", symbol.name),
                 changes: vec![],
                 preview: vec![
-                    format!("/// Function documentation"),
+                    "/// Function documentation".to_string(),
                     format!("fn {}(/* parameters */) {{ /* body */ }}", symbol.name),
                 ],
             });
@@ -183,7 +183,7 @@ impl RefactoringEngine {
             kind: RefactoringKind::Rename,
             description: format!("Rename variable {}", symbol.name),
             changes: vec![],
-            preview: vec![format!("let new_name = value;")],
+            preview: vec!["let new_name = value;".to_string()],
         });
 
         operations
@@ -203,9 +203,9 @@ impl RefactoringEngine {
             description: format!("Rename {} {}", symbol.kind_str(), symbol.name),
             changes: vec![],
             preview: vec![
-                format!("struct NewName {{"),
-                format!("    // fields"),
-                format!("}}"),
+                "struct NewName {".to_string(),
+                "    // fields".to_string(),
+                "}".to_string(),
             ],
         });
 

@@ -53,10 +53,9 @@ impl ToolJustification {
         lines.push(String::new());
         lines.push("Agent Reasoning:".to_string());
 
-        // Wrap reason text if needed
-        let reason_lines: Vec<&str> = self.reason.lines().collect();
-        for line in reason_lines {
-            let wrapped = textwrap::fill(&format!("  {}", line), 78);
+        // Wrap reason text if needed - iterate directly without collecting
+        for line in self.reason.lines() {
+            let wrapped = textwrap::fill(&format!("  {line}"), 78);
             for wrapped_line in wrapped.lines() {
                 lines.push(wrapped_line.to_string());
             }
@@ -65,7 +64,7 @@ impl ToolJustification {
         if let Some(outcome) = &self.expected_outcome {
             lines.push(String::new());
             lines.push("Expected Outcome:".to_string());
-            let wrapped = textwrap::fill(&format!("  {}", outcome), 78);
+            let wrapped = textwrap::fill(&format!("  {outcome}"), 78);
             for wrapped_line in wrapped.lines() {
                 lines.push(wrapped_line.to_string());
             }

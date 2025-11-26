@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 /// Context information for prompt generation
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct PromptContext {
     /// Current workspace path
     pub workspace: Option<PathBuf>,
@@ -13,18 +13,6 @@ pub struct PromptContext {
     pub available_tools: Vec<String>,
     /// User preferences
     pub user_preferences: Option<UserPreferences>,
-}
-
-impl Default for PromptContext {
-    fn default() -> Self {
-        Self {
-            workspace: None,
-            languages: Vec::new(),
-            project_type: None,
-            available_tools: Vec::new(),
-            user_preferences: None,
-        }
-    }
 }
 
 /// User preferences for prompt customization

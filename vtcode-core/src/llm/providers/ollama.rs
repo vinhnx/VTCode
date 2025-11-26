@@ -468,7 +468,7 @@ impl OllamaProvider {
         completion_tokens: Option<u32>,
     ) -> LLMResponse {
         let mut finish = Self::finish_reason_from(finish_reason);
-        if tool_calls.as_ref().map_or(false, |calls| !calls.is_empty()) {
+        if tool_calls.as_ref().is_some_and(|calls| !calls.is_empty()) {
             finish = FinishReason::ToolCalls;
         }
 

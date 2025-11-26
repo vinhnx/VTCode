@@ -9,7 +9,20 @@ use regex::Regex;
 use std::fmt::Write as FmtWrite;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::fs;
+
+/// Get current Unix timestamp in seconds
+///
+/// Returns the number of seconds since the Unix epoch (1970-01-01 00:00:00 UTC).
+/// This is commonly used for timestamping events, cache entries, and logging.
+#[inline]
+pub fn current_timestamp() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("System time is before Unix epoch")
+        .as_secs()
+}
 
 /// Render PTY output in a terminal-like interface
 pub fn render_pty_output_fn(output: &str, title: &str, command: Option<&str>) -> Result<()> {

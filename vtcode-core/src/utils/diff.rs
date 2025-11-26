@@ -517,7 +517,10 @@ fn format_colored_diff(hunks: &[DiffHunk], options: &DiffOptions<'_>) -> String 
             output,
             "{}@@ -{},{} +{},{} @@\n{}",
             hunk_header_style.render(),
-            hunk.old_start, hunk.old_lines, hunk.new_start, hunk.new_lines,
+            hunk.old_start,
+            hunk.old_lines,
+            hunk.new_start,
+            hunk.new_lines,
             Reset.render()
         );
 

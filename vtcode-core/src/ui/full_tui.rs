@@ -158,7 +158,7 @@ impl FullTui {
             loop {
                 let tick_delay_fut = tick_interval.tick();
                 let render_delay_fut = render_interval.tick();
-                let event_fut = tokio::task::spawn_blocking(|| crossterm::event::read());
+                let event_fut = tokio::task::spawn_blocking(crossterm::event::read);
 
                 tokio::select! {
                     _ = _cancellation_token.cancelled() => {

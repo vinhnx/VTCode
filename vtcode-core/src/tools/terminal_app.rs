@@ -1,6 +1,6 @@
 use std::fs;
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
 
@@ -105,7 +105,7 @@ impl TerminalAppLauncher {
     }
 
     /// Try common editors in priority order as fallback when EDITOR/VISUAL not set
-    fn try_common_editors(file_path: &PathBuf) -> Result<std::process::Command> {
+    fn try_common_editors(file_path: &Path) -> Result<std::process::Command> {
         let editors = if cfg!(target_os = "windows") {
             vec!["code", "notepad++", "notepad"]
         } else {
@@ -115,7 +115,7 @@ impl TerminalAppLauncher {
         for editor in editors {
             if which::which(editor).is_ok() {
                 let mut cmd = std::process::Command::new(editor);
-                cmd.arg(file_path.to_string_lossy().to_string());
+                cmd.arg(file_path.to_string_lossy().into_owned());
                 debug!("found fallback editor: {}", editor);
                 return Ok(cmd);
             }

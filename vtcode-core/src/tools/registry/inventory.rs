@@ -33,13 +33,14 @@ pub(super) struct ToolInventory {
 
 impl ToolInventory {
     pub fn new(workspace_root: PathBuf) -> Self {
-        let grep_search = Arc::new(GrepSearchManager::new(workspace_root.clone()));
-        let file_ops_tool = FileOpsTool::new(workspace_root.clone(), grep_search.clone());
+        // Clone once for command_tool (needs ownership), share reference for others
         let command_tool = CommandTool::new(workspace_root.clone());
+        let grep_search = Arc::new(GrepSearchManager::new(workspace_root.clone()));
+        let file_ops_tool = FileOpsTool::new(workspace_root.clone(), Arc::clone(&grep_search));
         let plan_manager = PlanManager::new();
 
         Self {
-            workspace_root: workspace_root.clone(),
+            workspace_root,
             tools: HashMap::new(),
             aliases: HashMap::new(),
             frequently_used: HashSet::new(),
@@ -79,24 +80,24 @@ impl ToolInventory {
     pub fn register_tool(&mut self, registration: ToolRegistration) -> anyhow::Result<()> {
         let name = registration.name().to_string();
 
-        // Check if tool already exists
-        if self.tools.contains_key(&name) {
-            return Err(anyhow::anyhow!("Tool '{}' is already registered", name));
+        // Use entry API to check and insert in one operation
+        use std::collections::hash_map::Entry;
+        match self.tools.entry(name.clone()) {
+            Entry::Occupied(_) => {
+                return Err(anyhow::anyhow!("Tool '{}' is already registered", name));
+            }
+            Entry::Vacant(entry) => {
+                entry.insert(ToolCacheEntry {
+                    registration,
+                    last_used: Instant::now(),
+                    use_count: 0,
+                });
+            }
         }
-
-        // Add to cache
-        self.tools.insert(
-            name.clone(),
-            ToolCacheEntry {
-                registration,
-                last_used: Instant::now(),
-                use_count: 0,
-            },
-        );
 
         // Add to frequently used set if it's a common tool
         if self.is_common_tool(&name) {
-            self.frequently_used.insert(name.clone());
+            self.frequently_used.insert(name);
         }
 
         // Clean up old cache entries if needed
@@ -106,23 +107,24 @@ impl ToolInventory {
     }
 
     pub fn registration_for(&mut self, name: &str) -> Option<&mut ToolRegistration> {
-        // First check direct match
-        if self.tools.contains_key(name) {
-            let entry = self.tools.get_mut(name).unwrap();
+        // Check if name exists directly or resolve via alias
+        let resolved_name = if self.tools.contains_key(name) {
+            name.to_string()
+        } else if let Some(aliased) = self.aliases.get(name) {
+            aliased.clone()
+        } else {
+            return None;
+        };
+
+        // Now get_mut with the resolved name
+        if let Some(entry) = self.tools.get_mut(&resolved_name) {
             entry.last_used = Instant::now();
             entry.use_count += 1;
-            return Some(&mut entry.registration);
-        }
-
-        // Then try alias resolution
-        if let Some(actual_name) = self.aliases.get(name) {
-            if self.tools.contains_key(actual_name) {
-                let entry = self.tools.get_mut(actual_name).unwrap();
-                entry.last_used = Instant::now();
-                entry.use_count += 1;
-                self.frequently_used.insert(actual_name.clone());
-                return Some(&mut entry.registration);
+            // Track frequently used for aliased tools
+            if resolved_name != name {
+                self.frequently_used.insert(resolved_name);
             }
+            return Some(&mut entry.registration);
         }
 
         None

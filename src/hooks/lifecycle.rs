@@ -890,7 +890,7 @@ impl LifecycleHookEngine {
     }
 
     async fn build_session_start_payload(&self) -> Result<Value> {
-        let cwd = self.inner.workspace.to_string_lossy().to_string();
+        let cwd = self.inner.workspace.to_string_lossy().into_owned();
         let transcript_path = self.current_transcript_path().await;
         Ok(json!({
             "session_id": self.inner.session_id,
@@ -902,7 +902,7 @@ impl LifecycleHookEngine {
     }
 
     async fn build_session_end_payload(&self, reason: SessionEndReason) -> Result<Value> {
-        let cwd = self.inner.workspace.to_string_lossy().to_string();
+        let cwd = self.inner.workspace.to_string_lossy().into_owned();
         let transcript_path = self.current_transcript_path().await;
         Ok(json!({
             "session_id": self.inner.session_id,
@@ -914,7 +914,7 @@ impl LifecycleHookEngine {
     }
 
     async fn build_user_prompt_payload(&self, prompt: &str) -> Result<Value> {
-        let cwd = self.inner.workspace.to_string_lossy().to_string();
+        let cwd = self.inner.workspace.to_string_lossy().into_owned();
         let transcript_path = self.current_transcript_path().await;
         Ok(json!({
             "session_id": self.inner.session_id,
@@ -930,7 +930,7 @@ impl LifecycleHookEngine {
         tool_name: &str,
         tool_input: Option<&Value>,
     ) -> Result<Value> {
-        let cwd = self.inner.workspace.to_string_lossy().to_string();
+        let cwd = self.inner.workspace.to_string_lossy().into_owned();
         let transcript_path = self.current_transcript_path().await;
         Ok(json!({
             "session_id": self.inner.session_id,
@@ -948,7 +948,7 @@ impl LifecycleHookEngine {
         tool_input: Option<&Value>,
         tool_output: &Value,
     ) -> Result<Value> {
-        let cwd = self.inner.workspace.to_string_lossy().to_string();
+        let cwd = self.inner.workspace.to_string_lossy().into_owned();
         let transcript_path = self.current_transcript_path().await;
         Ok(json!({
             "session_id": self.inner.session_id,
@@ -975,7 +975,7 @@ impl LifecycleHookEngine {
         process.stderr(Stdio::piped());
         process.kill_on_drop(true);
 
-        let workspace_str = self.inner.workspace.to_string_lossy().to_string();
+        let workspace_str = self.inner.workspace.to_string_lossy().into_owned();
         process.env("VT_PROJECT_DIR", &workspace_str);
         process.env("CLAUDE_PROJECT_DIR", &workspace_str);
         process.env("VT_SESSION_ID", &self.inner.session_id);
@@ -1296,7 +1296,7 @@ fn generate_session_id() -> String {
 }
 
 fn path_to_string(path: &Path) -> Option<String> {
-    Some(path.to_string_lossy().to_string())
+    Some(path.to_string_lossy().into_owned())
 }
 
 fn parse_json_output(stdout: &str) -> Option<Value> {

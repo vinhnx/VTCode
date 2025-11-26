@@ -14,12 +14,18 @@ pub struct ChatSession {
     messages: Vec<ChatMessage>,
 }
 
-impl ChatSession {
-    /// Create a new chat session
-    pub fn new() -> Self {
+impl Default for ChatSession {
+    fn default() -> Self {
         Self {
             messages: Vec::new(),
         }
+    }
+}
+
+impl ChatSession {
+    /// Create a new chat session
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// Add a message to the chat session

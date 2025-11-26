@@ -104,7 +104,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             session.mark_dirty();
             Some(InlineEvent::Interrupt)
         }
-        KeyCode::Char(c) if c == '\u{3}' => {
+        KeyCode::Char('\u{3}') => {
             session.mark_dirty();
             Some(InlineEvent::Interrupt)
         }

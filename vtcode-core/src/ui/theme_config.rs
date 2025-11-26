@@ -85,11 +85,11 @@ pub struct CliColors {
 impl Default for CliColors {
     fn default() -> Self {
         Self {
-            success: "green".to_string(),
-            error: "red".to_string(),
-            warning: "yellow".to_string(),
-            info: "cyan".to_string(),
-            prompt: "bold blue".to_string(),
+            success: "green".to_owned(),
+            error: "red".to_owned(),
+            warning: "yellow".to_owned(),
+            info: "cyan".to_owned(),
+            prompt: "bold blue".to_owned(),
         }
     }
 }
@@ -125,12 +125,12 @@ pub struct DiffColors {
 impl Default for DiffColors {
     fn default() -> Self {
         Self {
-            new: "green".to_string(),
-            old: "red".to_string(),
-            context: "white".to_string(),
-            header: "bold yellow".to_string(),
-            meta: "cyan".to_string(),
-            frag: "magenta".to_string(),
+            new: "green".to_owned(),
+            old: "red".to_owned(),
+            context: "white".to_owned(),
+            header: "bold yellow".to_owned(),
+            meta: "cyan".to_owned(),
+            frag: "magenta".to_owned(),
         }
     }
 }
@@ -170,13 +170,13 @@ pub struct StatusColors {
 impl Default for StatusColors {
     fn default() -> Self {
         Self {
-            added: "green".to_string(),
-            modified: "red".to_string(),
-            deleted: "red bold".to_string(),
-            untracked: "magenta".to_string(),
-            current: "green bold".to_string(),
-            local: "cyan".to_string(),
-            remote: "blue".to_string(),
+            added: "green".to_owned(),
+            modified: "red".to_owned(),
+            deleted: "red bold".to_owned(),
+            untracked: "magenta".to_owned(),
+            current: "green bold".to_owned(),
+            local: "cyan".to_owned(),
+            remote: "blue".to_owned(),
         }
     }
 }

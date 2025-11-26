@@ -225,7 +225,7 @@ impl FallbackChainResult {
         }
 
         // Merge multiple results
-        Value::Array(self.results.iter().map(|r| r.value.clone()).collect())
+        Value::Array(self.results.iter().map(|r| &r.value).cloned().collect())
     }
 }
 
@@ -253,10 +253,11 @@ impl FallbackChainExecutor {
                 if metadata.confidence >= chain.primary.min_confidence {
                     results.push(result);
                     stop_reason = ChainStopReason::PrimarySuccess;
+                    let tool_name = chain.primary.tool.clone();
                     return FallbackChainResult {
                         chain_name: chain.name.clone(),
                         results,
-                        successful_tool: Some(chain.primary.tool.clone()),
+                        successful_tool: Some(tool_name),
                         execution_time_ms: start.elapsed().as_millis() as u64,
                         attempts,
                         stop_reason,

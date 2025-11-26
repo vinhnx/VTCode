@@ -360,8 +360,8 @@ impl StreamingProcessor {
             return Ok(false);
         }
 
-        if trimmed.starts_with("data:") {
-            let data_segment = trimmed[5..].trim_start();
+        if let Some(data_segment) = trimmed.strip_prefix("data:") {
+            let data_segment = data_segment.trim_start();
             if data_segment == "[DONE]" {
                 match self.finalize_current_event(accumulated_response, on_chunk) {
                     Ok(valid) => {

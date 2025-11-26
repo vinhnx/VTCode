@@ -60,15 +60,15 @@ pub fn format_tool_result_for_display(tool_name: &str, result: &Value) -> String
                     "truncated": obj.get("truncated"),
                     "url": obj.get("url")
                 });
-                format!("Tool {} result: {}", tool_name, status.to_string())
+                format!("Tool {} result: {}", tool_name, status)
             }
         } else {
             // Fallback if result structure is unexpected
-            format!("Tool {} result: {}", tool_name, result.to_string())
+            format!("Tool {} result: {}", tool_name, result)
         }
     } else {
         // For all other tools, show the full result
-        format!("Tool {} result: {}", tool_name, result.to_string())
+        format!("Tool {} result: {}", tool_name, result)
     }
 }
 
@@ -914,7 +914,7 @@ impl AgentRunner {
 
                 if effective_tool_calls
                     .as_ref()
-                    .map_or(true, |calls| calls.is_empty())
+                    .is_none_or(|calls| calls.is_empty())
                     && let Some(args_value) = resp
                         .content
                         .as_ref()
@@ -2132,10 +2132,10 @@ impl AgentRunner {
 
         let mut resolved_outcome = outcome;
         if matches!(resolved_outcome, TaskOutcome::Unknown) {
-            if conversation.last().map_or(false, |c| {
+            if conversation.last().is_some_and(|c| {
                 c.role == "model"
                     && c.parts.iter().any(|p| {
-                        p.as_text().map_or(false, |t| {
+                        p.as_text().is_some_and(|t| {
                             t.contains("completed") || t.contains("done") || t.contains("finished")
                         })
                     })

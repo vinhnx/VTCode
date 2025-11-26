@@ -258,7 +258,7 @@ impl WebFetchTool {
         }
 
         let content = fs::read_to_string(&expanded_path)
-            .context(format!("Failed to read blocklist from {}", path))?;
+            .with_context(|| format!("Failed to read blocklist from {}", path))?;
 
         #[derive(Deserialize)]
         struct BlocklistFile {
@@ -267,7 +267,7 @@ impl WebFetchTool {
         }
 
         let blocklist: BlocklistFile = serde_json::from_str(&content)
-            .context(format!("Failed to parse blocklist JSON from {}", path))?;
+            .with_context(|| format!("Failed to parse blocklist JSON from {}", path))?;
 
         Ok((
             blocklist.blocked_domains.unwrap_or_default(),
@@ -284,7 +284,7 @@ impl WebFetchTool {
         }
 
         let content = fs::read_to_string(&expanded_path)
-            .context(format!("Failed to read whitelist from {}", path))?;
+            .with_context(|| format!("Failed to read whitelist from {}", path))?;
 
         #[derive(Deserialize)]
         struct WhitelistFile {
@@ -292,7 +292,7 @@ impl WebFetchTool {
         }
 
         let whitelist: WhitelistFile = serde_json::from_str(&content)
-            .context(format!("Failed to parse whitelist JSON from {}", path))?;
+            .with_context(|| format!("Failed to parse whitelist JSON from {}", path))?;
 
         Ok(whitelist.allowed_domains.unwrap_or_default())
     }
@@ -447,8 +447,8 @@ impl Tool for WebFetchTool {
         // - We do not force upstream agents or MCP tools to construct a full prompt.
         // - MCP tools like `get_current_time` remain unaffected (they are separate).
         if let Some(obj) = args.as_object_mut() {
-            let has_url = obj.get("url").map(|v| v.is_string()).unwrap_or(false);
-            let has_prompt = obj.get("prompt").map(|v| v.is_string()).unwrap_or(false);
+            let has_url = obj.get("url").is_some_and(Value::is_string);
+            let has_prompt = obj.get("prompt").is_some_and(Value::is_string);
 
             if has_url && !has_prompt {
                 obj.insert(

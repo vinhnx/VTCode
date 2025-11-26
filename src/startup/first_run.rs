@@ -543,7 +543,7 @@ fn select_trust_with_ratatui(default: WorkspaceTrustLevel) -> Result<WorkspaceTr
     };
 
     let selection_entries: Vec<SelectionEntry> =
-        entries.iter().map(|(_, entry)| entry.clone()).collect();
+        entries.iter().map(|(_, entry)| entry).cloned().collect();
     let default_entry = &selection_entries[default_index];
     let default_summary = default_entry
         .description

@@ -39,21 +39,16 @@ const AUTO_ALLOW_TOOLS: &[&str] = &[
 ];
 
 /// Tool execution policy
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ToolPolicy {
     /// Allow tool execution without prompting
     Allow,
     /// Prompt user for confirmation each time
+    #[default]
     Prompt,
     /// Never allow tool execution
     Deny,
-}
-
-impl Default for ToolPolicy {
-    fn default() -> Self {
-        ToolPolicy::Prompt
-    }
 }
 
 /// Tool policy configuration stored in ~/.vtcode/tool-policy.json
@@ -350,7 +345,7 @@ impl ToolPolicyManager {
     }
 
     /// Create a new tool policy manager with workspace-specific config
-    pub async fn new_with_workspace(workspace_root: &PathBuf) -> Result<Self> {
+    pub async fn new_with_workspace(workspace_root: &Path) -> Result<Self> {
         let config_path = Self::get_workspace_config_path(workspace_root).await?;
         let config = Self::load_or_create_config(&config_path).await?;
 
@@ -402,7 +397,7 @@ impl ToolPolicyManager {
     }
 
     /// Get the path to the workspace-specific tool policy configuration file
-    async fn get_workspace_config_path(workspace_root: &PathBuf) -> Result<PathBuf> {
+    async fn get_workspace_config_path(workspace_root: &Path) -> Result<PathBuf> {
         let workspace_vtcode_dir = workspace_root.join(".vtcode");
 
         if !tokio::fs::try_exists(&workspace_vtcode_dir)
@@ -668,7 +663,7 @@ impl ToolPolicyManager {
                 .mcp
                 .providers
                 .entry(provider.clone())
-                .or_insert_with(McpProviderPolicy::default);
+                .or_default();
 
             let existing_tools: HashSet<String> = entry.tools.keys().cloned().collect();
             let advertised: HashSet<String> = tools.iter().cloned().collect();
@@ -767,7 +762,7 @@ impl ToolPolicyManager {
             .mcp
             .providers
             .entry(provider.to_string())
-            .or_insert_with(McpProviderPolicy::default);
+            .or_default();
         entry.tools.insert(tool.to_string(), policy);
         self.save_config().await
     }

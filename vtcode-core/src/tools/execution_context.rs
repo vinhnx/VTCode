@@ -244,7 +244,7 @@ pub fn are_args_equivalent(a: &Value, b: &Value) -> bool {
             a_map.len() == b_map.len()
                 && a_map
                     .iter()
-                    .all(|(k, v)| b_map.get(k).map_or(false, |bv| bv == v))
+                    .all(|(k, v)| b_map.get(k).is_some_and(|bv| bv == v))
         }
         (Value::Array(a_arr), Value::Array(b_arr)) => {
             a_arr.len() == b_arr.len() && a_arr.iter().zip(b_arr.iter()).all(|(av, bv)| av == bv)

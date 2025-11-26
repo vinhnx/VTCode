@@ -209,13 +209,13 @@ fn parse_responses_payload(
     let content = if content_fragments.is_empty() {
         None
     } else {
-        Some(content_fragments.join(""))
+        Some(content_fragments.into_iter().collect())
     };
 
     let reasoning = if reasoning_fragments.is_empty() {
         None
     } else {
-        Some(reasoning_fragments.join(""))
+        Some(reasoning_fragments.into_iter().collect())
     };
 
     let tool_calls = if tool_calls_vec.is_empty() {
@@ -310,12 +310,13 @@ impl OpenAIProvider {
 
         let serialized_tools = tools
             .iter()
-            .map(|tool| {
-                match tool.tool_type.as_str() {
+            .filter_map(|tool| {
+                Some(match tool.tool_type.as_str() {
                     "function" => {
-                        let name = &tool.function.as_ref().unwrap().name;
-                        let description = &tool.function.as_ref().unwrap().description;
-                        let parameters = &tool.function.as_ref().unwrap().parameters;
+                        let func = tool.function.as_ref()?;
+                        let name = &func.name;
+                        let description = &func.description;
+                        let parameters = &func.parameters;
 
                         json!({
                             "type": &tool.tool_type,
@@ -337,7 +338,7 @@ impl OpenAIProvider {
                         // Fallback for unknown tool types
                         json!(tool)
                     }
-                }
+                })
             })
             .collect::<Vec<Value>>();
 
@@ -406,11 +407,11 @@ impl OpenAIProvider {
                     if tool.tool_type != "function" {
                         return None;
                     }
-
+                    let func = tool.function.as_ref()?;
                     Some(ToolDescription::new(
-                        tool.function.as_ref().unwrap().name.clone(),
-                        tool.function.as_ref().unwrap().description.clone(),
-                        Some(tool.function.as_ref().unwrap().parameters.clone()),
+                        func.name.clone(),
+                        func.description.clone(),
+                        Some(func.parameters.clone()),
                     ))
                 })
                 .collect();
@@ -657,15 +658,7 @@ impl OpenAIProvider {
                         .filter(|calls| !calls.is_empty());
 
                     let message = if let Some(calls) = tool_calls {
-                        Message {
-                            role: MessageRole::Assistant,
-                            content: MessageContent::Text(text_content),
-                            reasoning: None,
-                            reasoning_details: None,
-                            tool_calls: Some(calls),
-                            tool_call_id: None,
-                            origin_tool: None,
-                        }
+                        Message::assistant_with_tools(text_content, calls)
                     } else {
                         Message::assistant(text_content)
                     };
@@ -686,14 +679,19 @@ impl OpenAIProvider {
                             }
                         })
                         .unwrap_or_else(|| text_content.clone());
-                    messages.push(Message {
-                        role: MessageRole::Tool,
-                        content: MessageContent::Text(content_value),
-                        reasoning: None,
-                        reasoning_details: None,
-                        tool_calls: None,
-                        tool_call_id,
-                        origin_tool: None,
+                    messages.push(if let Some(id) = tool_call_id {
+                        Message::tool_response(id, content_value)
+                    } else {
+                        // Fallback: create a tool message without tool_call_id (invalid but graceful)
+                        Message {
+                            role: MessageRole::Tool,
+                            content: MessageContent::Text(content_value),
+                            reasoning: None,
+                            reasoning_details: None,
+                            tool_calls: None,
+                            tool_call_id: None,
+                            origin_tool: None,
+                        }
                     });
                 }
                 _ => {
@@ -792,13 +790,14 @@ impl OpenAIProvider {
             Value::Array(parts) => parts
                 .iter()
                 .filter_map(|part| {
-                    if let Some(text) = part.get("text").and_then(|t| t.as_str()) {
-                        Some(text.to_string())
-                    } else if let Some(Value::String(text)) = part.get("content") {
-                        Some(text.clone())
-                    } else {
-                        None
-                    }
+                    part.get("text")
+                        .and_then(|t| t.as_str())
+                        .map(|s| s.to_string())
+                        .or_else(|| {
+                            part.get("content")
+                                .and_then(|c| c.as_str())
+                                .map(|s| s.to_string())
+                        })
                 })
                 .collect::<Vec<_>>()
                 .join(""),
@@ -2324,7 +2323,7 @@ impl LLMProvider for OpenAIProvider {
         let responses_state = self.responses_api_state(&request.model);
         let prefer_responses_stream = matches!(responses_state, ResponsesApiState::Required)
             || (matches!(responses_state, ResponsesApiState::Allowed)
-                && request.tools.as_ref().map_or(true, Vec::is_empty));
+                && request.tools.as_ref().is_none_or(Vec::is_empty));
 
         if !prefer_responses_stream {
             request.stream = false;
@@ -2635,7 +2634,7 @@ impl LLMProvider for OpenAIProvider {
         let responses_state = self.responses_api_state(&request.model);
         let attempt_responses = !matches!(responses_state, ResponsesApiState::Disabled)
             && (matches!(responses_state, ResponsesApiState::Required)
-                || request.tools.as_ref().map_or(true, Vec::is_empty));
+                || request.tools.as_ref().is_none_or(Vec::is_empty));
         #[cfg(debug_assertions)]
         let request_timer = Instant::now();
         #[cfg(debug_assertions)]
@@ -2847,7 +2846,10 @@ impl LLMProvider for OpenAIProvider {
             return Err(LLMError::InvalidRequest(formatted_error));
         }
 
-        if !self.supported_models().contains(&request.model) {
+        if !models::openai::SUPPORTED_MODELS
+            .iter()
+            .any(|m| *m == request.model)
+        {
             let formatted_error = error_display::format_llm_error(
                 "OpenAI",
                 &format!("Unsupported model: {}", request.model),

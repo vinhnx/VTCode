@@ -53,7 +53,7 @@ impl Session {
 
     pub(super) fn overlay_queue_lines(
         &mut self,
-        visible_lines: &mut Vec<Line<'static>>,
+        visible_lines: &mut [Line<'static>],
         content_width: u16,
     ) {
         if visible_lines.is_empty() || content_width == 0 {

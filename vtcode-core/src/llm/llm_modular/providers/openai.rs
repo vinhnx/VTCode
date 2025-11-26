@@ -68,7 +68,7 @@ impl LLMClient for OpenAIProvider {
                 response_json
                     .get("output")
                     .and_then(|o| o.get("items"))
-                    .and_then(|items| items.get(0))
+                    .and_then(|items| items.first())
                     .and_then(|item| item.get("output_text"))
                     .and_then(|v| v.as_str())
             })

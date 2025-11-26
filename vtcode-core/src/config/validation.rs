@@ -112,7 +112,7 @@ pub fn validate_model_exists(provider: &str, model: &str) -> Result<()> {
 
     match available_models.get(provider) {
         Some(models) => {
-            if !models.contains(&model.to_string()) {
+            if !models.iter().any(|m| m == model) {
                 bail!(
                     "Model '{}' not found for provider '{}'. Available models: {}",
                     model,

@@ -103,19 +103,23 @@ impl Default for ToolsConfig {
     }
 }
 
+const DEFAULT_BLOCKLIST_PATH: &str = "~/.vtcode/web_fetch_blocklist.json";
+const DEFAULT_WHITELIST_PATH: &str = "~/.vtcode/web_fetch_whitelist.json";
+const DEFAULT_AUDIT_LOG_PATH: &str = "~/.vtcode/web_fetch_audit.log";
+
 impl Default for WebFetchConfig {
     fn default() -> Self {
         Self {
             mode: default_web_fetch_mode(),
             dynamic_blocklist_enabled: false,
-            dynamic_blocklist_path: "~/.vtcode/web_fetch_blocklist.json".to_string(),
+            dynamic_blocklist_path: DEFAULT_BLOCKLIST_PATH.to_owned(),
             dynamic_whitelist_enabled: false,
-            dynamic_whitelist_path: "~/.vtcode/web_fetch_whitelist.json".to_string(),
+            dynamic_whitelist_path: DEFAULT_WHITELIST_PATH.to_owned(),
             blocked_domains: Vec::new(),
             allowed_domains: Vec::new(),
             blocked_patterns: Vec::new(),
             enable_audit_logging: false,
-            audit_log_path: "~/.vtcode/web_fetch_audit.log".to_string(),
+            audit_log_path: DEFAULT_AUDIT_LOG_PATH.to_owned(),
             strict_https_only: true,
         }
     }
@@ -134,20 +138,24 @@ pub enum ToolPolicy {
     Deny,
 }
 
-fn default_tool_policy() -> ToolPolicy {
+#[inline]
+const fn default_tool_policy() -> ToolPolicy {
     ToolPolicy::Prompt
 }
 
-fn default_max_tool_loops() -> usize {
+#[inline]
+const fn default_max_tool_loops() -> usize {
     defaults::DEFAULT_MAX_TOOL_LOOPS
 }
 
-fn default_max_repeated_tool_calls() -> usize {
+#[inline]
+const fn default_max_repeated_tool_calls() -> usize {
     defaults::DEFAULT_MAX_REPEATED_TOOL_CALLS
 }
 
+#[inline]
 fn default_web_fetch_mode() -> String {
-    "restricted".to_string()
+    "restricted".to_owned()
 }
 
 fn default_strict_https() -> bool {

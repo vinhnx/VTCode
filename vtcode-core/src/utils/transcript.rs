@@ -174,11 +174,15 @@ pub fn enqueue_message_with_kind(
         if queue.len() >= MAX_QUEUE_SIZE {
             queue.pop_front();
         }
-        queue.push_back(queued.clone());
+        queue.push_back(queued);
     }
 
     // Display immediately if we have an inline handle
-    display_message_now(&queued.text, queued.kind, &queued.style);
+    // Re-read from queue to get reference without extra clone
+    let queue_read = MESSAGE_QUEUE.read();
+    if let Some(last) = queue_read.back() {
+        display_message_now(&last.text, last.kind, &last.style);
+    }
 
     // Also add to transcript for persistence (plain text)
     append(message);

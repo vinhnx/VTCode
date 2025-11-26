@@ -78,9 +78,12 @@ impl CodeNavigator {
         self.position_map.clear();
 
         for symbol in symbols {
+            // Avoid double clone by inserting into one map first, then reference
             self.symbol_map.insert(symbol.name.clone(), symbol.clone());
-            self.position_map
-                .insert(symbol.position.clone(), symbol.clone());
+            if let Some(cached_symbol) = self.symbol_map.get(&symbol.name) {
+                self.position_map
+                    .insert(symbol.position.clone(), cached_symbol.clone());
+            }
         }
     }
 

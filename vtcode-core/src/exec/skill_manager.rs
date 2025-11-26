@@ -284,7 +284,7 @@ impl SkillManager {
                     desc = param.description
                 );
             }
-            md.push_str("\n");
+            md.push('\n');
         }
 
         md.push_str("## Output\n\n");
@@ -294,7 +294,7 @@ impl SkillManager {
             md.push_str("## Examples\n\n");
             for (i, example) in skill.metadata.examples.iter().enumerate() {
                 if i > 0 {
-                    md.push_str("\n");
+                    md.push('\n');
                 }
                 md.push_str("```\n");
                 md.push_str(example);
@@ -302,10 +302,11 @@ impl SkillManager {
             }
         }
 
-        md.push_str("\n## Code\n\n");
+        md.push('\n');
+        md.push_str("## Code\n\n");
         md.push_str("```");
         md.push_str(&skill.metadata.language);
-        md.push_str("\n");
+        md.push('\n');
         md.push_str(&skill.code);
         md.push_str("\n```\n");
 

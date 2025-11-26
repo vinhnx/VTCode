@@ -216,10 +216,10 @@ impl PtyScrollback {
                 self.current_bytes as f64 / 1_000_000.0,
                 self.max_bytes / 1_000_000
             );
-            // Add warning to both buffers
+            // Add warning to both buffers - push to pending first, then clone for lines
             self.current_bytes += warning.len();
-            self.lines.push_back(warning.clone());
-            self.pending_lines.push_back(warning);
+            self.pending_lines.push_back(warning.clone());
+            self.lines.push_back(warning);
         }
 
         // Check byte limit BEFORE processing to prevent memory explosion
@@ -233,8 +233,8 @@ impl PtyScrollback {
                 );
                 // Add warning to both buffers
                 self.current_bytes += warning.len();
-                self.lines.push_back(warning.clone());
-                self.pending_lines.push_back(warning);
+                self.pending_lines.push_back(warning.clone());
+                self.lines.push_back(warning);
             }
 
             // Track metrics for dropped data
@@ -252,8 +252,9 @@ impl PtyScrollback {
                 let _ = std::mem::take(&mut self.pending_partial);
 
                 self.current_bytes += complete.len();
-                self.lines.push_back(complete.clone());
-                self.pending_lines.push_back(complete);
+                // Push clone to pending_lines first, then move complete to lines (avoids extra clone)
+                self.pending_lines.push_back(complete.clone());
+                self.lines.push_back(complete);
 
                 // Circular buffer: drop oldest lines when line capacity exceeded
                 while self.lines.len() > self.capacity_lines {
@@ -1055,16 +1056,10 @@ impl PtyManager {
     pub fn is_session_completed(&self, session_id: &str) -> Result<Option<i32>> {
         let handle = self.session_handle(session_id)?;
         let mut child = handle.child.lock();
-        Ok(
-            if let Some(status) = child
-                .try_wait()
-                .context("failed to poll PTY session status")?
-            {
-                Some(exit_status_code(status))
-            } else {
-                None
-            },
-        )
+        child
+            .try_wait()
+            .context("failed to poll PTY session status")
+            .map(|opt| opt.map(exit_status_code))
     }
 
     pub fn close_session(&self, session_id: &str) -> Result<VTCodePtySession> {
@@ -1121,7 +1116,7 @@ impl PtyManager {
         match path.strip_prefix(&self.workspace_root) {
             Ok(relative) if relative.as_os_str().is_empty() => ".".to_string(),
             Ok(relative) => relative.to_string_lossy().replace("\\", "/"),
-            Err(_) => path.to_string_lossy().to_string(),
+            Err(_) => path.to_string_lossy().into_owned(),
         }
     }
 

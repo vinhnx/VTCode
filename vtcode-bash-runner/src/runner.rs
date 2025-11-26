@@ -134,7 +134,7 @@ where
             self.working_dir.clone(),
         );
         self.policy.check(&invocation)?;
-        Ok(self.working_dir.to_string_lossy().to_string())
+        Ok(self.working_dir.to_string_lossy().into_owned())
     }
 
     pub fn mkdir(&self, path: &str, parents: bool) -> Result<()> {

@@ -302,7 +302,7 @@ impl McpClient {
     fn validate_tool_arguments(&self, _tool_name: &str, args: &Value) -> Result<()> {
         // Check argument size
         if self.config.security.validation.max_argument_size > 0 {
-            let args_size = serde_json::to_string(args).map(|s| s.len()).unwrap_or(0) as u32;
+            let args_size = serde_json::to_string(args).map_or(0, |s| s.len()) as u32;
 
             if args_size > self.config.security.validation.max_argument_size {
                 return Err(anyhow::anyhow!(
@@ -1049,8 +1049,8 @@ impl McpProvider {
         allowlist: &McpAllowListConfig,
         timeout: Option<Duration>,
     ) -> Result<Vec<McpToolInfo>> {
-        if let Some(cache) = self.tools_cache.lock().await.clone() {
-            return Ok(cache);
+        if let Some(cache) = &*self.tools_cache.lock().await {
+            return Ok(cache.clone());
         }
 
         self.refresh_tools(allowlist, timeout).await
@@ -1135,8 +1135,8 @@ impl McpProvider {
         allowlist: &McpAllowListConfig,
         timeout: Option<Duration>,
     ) -> Result<bool> {
-        if let Some(tools) = self.tools_cache.lock().await.clone() {
-            if let Some(tool) = tools.into_iter().find(|tool| tool.name == tool_name) {
+        if let Some(tools) = &*self.tools_cache.lock().await {
+            if let Some(tool) = tools.iter().find(|tool| tool.name == tool_name) {
                 return Ok(schema_requires_field(&tool.input_schema, field));
             }
         }
@@ -1162,8 +1162,8 @@ impl McpProvider {
         allowlist: &McpAllowListConfig,
         timeout: Option<Duration>,
     ) -> Result<Vec<McpResourceInfo>> {
-        if let Some(cache) = self.resources_cache.lock().await.clone() {
-            return Ok(cache);
+        if let Some(cache) = &*self.resources_cache.lock().await {
+            return Ok(cache.clone());
         }
 
         self.refresh_resources(allowlist, timeout).await
@@ -1227,8 +1227,8 @@ impl McpProvider {
         allowlist: &McpAllowListConfig,
         timeout: Option<Duration>,
     ) -> Result<Vec<McpPromptInfo>> {
-        if let Some(cache) = self.prompts_cache.lock().await.clone() {
-            return Ok(cache);
+        if let Some(cache) = &*self.prompts_cache.lock().await {
+            return Ok(cache.clone());
         }
 
         self.refresh_prompts(allowlist, timeout).await
@@ -1694,7 +1694,7 @@ impl RmcpClient {
 
         rmcp_tools
             .into_iter()
-            .map(|tool| convert_to_mcp::<_, Tool>(tool))
+            .map(convert_to_mcp::<_, Tool>)
             .collect::<Result<Vec<_>>>()
             .context("Failed to convert MCP tool list")
     }
@@ -1706,7 +1706,7 @@ impl RmcpClient {
 
         rmcp_prompts
             .into_iter()
-            .map(|prompt| convert_to_mcp::<_, Prompt>(prompt))
+            .map(convert_to_mcp::<_, Prompt>)
             .collect::<Result<Vec<_>>>()
             .context("Failed to convert MCP prompt list")
     }
@@ -1718,7 +1718,7 @@ impl RmcpClient {
 
         rmcp_resources
             .into_iter()
-            .map(|resource| convert_to_mcp::<_, Resource>(resource))
+            .map(convert_to_mcp::<_, Resource>)
             .collect::<Result<Vec<_>>>()
             .context("Failed to convert MCP resource list")
     }
@@ -2154,7 +2154,7 @@ where
 fn convert_call_tool_result(result: rmcp::model::CallToolResult) -> Result<CallToolResult> {
     let mut value = serde_json::to_value(result)?;
     if let Some(obj) = value.as_object_mut() {
-        let missing_or_null = obj.get("content").map(Value::is_null).unwrap_or(true);
+        let missing_or_null = obj.get("content").is_none_or(Value::is_null);
         if missing_or_null {
             obj.insert("content".to_string(), Value::Array(Vec::new()));
         }

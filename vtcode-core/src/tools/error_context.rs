@@ -154,7 +154,7 @@ impl ToolErrorContext {
         if lower_msg.contains("parse") || lower_msg.contains("syntax") {
             self.suggestions
                 .push("Check file format and syntax".to_string());
-            if let Some(path) = &self.file_path.clone() {
+            if let Some(path) = &self.file_path {
                 self.suggestions.push(format!("Validate {}", path));
             }
         }

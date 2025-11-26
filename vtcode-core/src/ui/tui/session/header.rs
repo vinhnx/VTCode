@@ -31,8 +31,7 @@ fn compact_tools_format(tools_str: &str) -> String {
 
     for part in parts {
         let trimmed = part.trim();
-        if trimmed.starts_with("allow ") {
-            let num_str = &trimmed[6..]; // Remove "allow " prefix
+        if let Some(num_str) = trimmed.strip_prefix("allow ") {
             if let Ok(num) = num_str.parse::<i32>() {
                 allow_count = num;
                 break; // We found the allow count, no need to continue
@@ -255,7 +254,7 @@ impl Session {
     }
 
     pub fn header_reasoning_short_value(&self) -> String {
-        let value = self.header_reasoning_value().unwrap_or_else(String::new);
+        let value = self.header_reasoning_value().unwrap_or_default();
         Self::strip_prefix(&value, ui::HEADER_REASONING_PREFIX)
             .trim()
             .to_string()

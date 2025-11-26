@@ -389,7 +389,7 @@ impl OpenBuffersContext {
 
     /// Get languages used in open buffers
     pub fn languages(&self) -> Vec<String> {
-        let mut langs: Vec<String> = self.buffers.iter().map(|b| b.language.clone()).collect();
+        let mut langs: Vec<String> = self.buffers.iter().map(|b| &b.language).cloned().collect();
         langs.sort();
         langs.dedup();
         langs

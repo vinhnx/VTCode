@@ -35,21 +35,11 @@ const BUILTIN_DOCS: &[(&str, &str)] = &[(
     )),
 )];
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct CustomPromptRegistry {
     enabled: bool,
     directories: Vec<PathBuf>,
     prompts: BTreeMap<String, CustomPrompt>,
-}
-
-impl Default for CustomPromptRegistry {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            directories: Vec::new(),
-            prompts: BTreeMap::new(),
-        }
-    }
 }
 
 impl CustomPromptRegistry {

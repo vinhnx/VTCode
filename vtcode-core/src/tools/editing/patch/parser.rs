@@ -182,7 +182,7 @@ fn parse_update_file(
     let mut new_path = None;
 
     if let Some(candidate) = remaining
-        .get(0)
+        .first()
         .and_then(|line| line.trim().strip_prefix(MOVE_TO_MARKER))
     {
         let candidate_trimmed = candidate.trim();
@@ -260,7 +260,6 @@ fn parse_update_chunk(
             &format!("expected '@@' marker, found '{first}'"),
         ));
     };
-    let offset = offset;
 
     if offset >= lines.len() {
         return Err(invalid_hunk(

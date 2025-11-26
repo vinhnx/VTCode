@@ -795,7 +795,7 @@ fn render_secure_prompt(
     }
 
     let grapheme_count = input.chars().count();
-    let sanitized: String = std::iter::repeat('•').take(grapheme_count).collect();
+    let sanitized: String = std::iter::repeat_n('•', grapheme_count).collect();
     let cursor_chars = input[..cursor].chars().count();
 
     let mut state = TextState::new().with_value(sanitized);

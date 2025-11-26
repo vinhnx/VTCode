@@ -24,7 +24,6 @@ pub async fn validate_command(
         .split_first()
         .ok_or_else(|| anyhow!("command cannot be empty (unexpected)"))?;
     let program = program.as_str();
-    let args = args;
 
     match program {
         "echo" => validate_echo(args),
@@ -607,7 +606,7 @@ async fn validate_git_add(
     working_dir: &Path,
 ) -> Result<()> {
     // Block dangerous flags
-    if args.contains(&"-f".to_string()) || args.contains(&"--force".to_string()) {
+    if args.iter().any(|a| a == "-f" || a == "--force") {
         return Err(anyhow!(
             "git add --force is not permitted. Use regular add operations only."
         ));
@@ -679,9 +678,9 @@ fn validate_git_commit(args: &[String]) -> Result<()> {
 
 fn validate_git_reset(args: &[String], confirm: bool) -> Result<()> {
     // Block destructive reset modes
-    if args.contains(&"--hard".to_string())
-        || args.contains(&"--merge".to_string())
-        || args.contains(&"--keep".to_string())
+    if args
+        .iter()
+        .any(|a| a == "--hard" || a == "--merge" || a == "--keep")
     {
         // Require explicit confirmation to perform destructive resets
         if !confirm {
@@ -721,7 +720,7 @@ async fn validate_git_checkout(
     }
 
     // Block forced checkout unless explicit confirm
-    if args.contains(&"-f".to_string()) || args.contains(&"--force".to_string()) {
+    if args.iter().any(|a| a == "-f" || a == "--force") {
         if !confirm {
             return Err(anyhow!(
                 "git checkout --force is potentially destructive; set `confirm=true` to proceed."

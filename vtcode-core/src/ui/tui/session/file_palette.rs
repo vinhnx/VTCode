@@ -230,10 +230,11 @@ impl FilePalette {
 
         // Convert nucleo score to our scoring system, with bonuses for filename matches
         let mut adjusted_score = score as usize;
+        let query_lower = query.to_lowercase();
 
         // Bonus for matching in filename (last path segment)
         if let Some(filename) = path.rsplit('/').next() {
-            if filename.to_lowercase().contains(&query.to_lowercase()) {
+            if filename.to_lowercase().contains(&query_lower) {
                 adjusted_score += 500;
             }
         }
@@ -369,7 +370,7 @@ impl FilePalette {
         if self.filtered_files.is_empty() {
             1
         } else {
-            (self.filtered_files.len() + PAGE_SIZE - 1) / PAGE_SIZE
+            self.filtered_files.len().div_ceil(PAGE_SIZE)
         }
     }
 

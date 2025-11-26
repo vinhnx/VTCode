@@ -121,9 +121,7 @@ impl<'config> AgentComponentBuilder<'config> {
 
         let decision_tracker = self.decision_tracker.unwrap_or_default();
 
-        let error_recovery = self
-            .error_recovery
-            .unwrap_or_default();
+        let error_recovery = self.error_recovery.unwrap_or_default();
 
         let session_info = match self.session_info.take() {
             Some(info) => info,

@@ -169,6 +169,7 @@ impl Default for AgentConfig {
 impl AgentConfig {
     /// Validate LLM generation parameters
     pub fn validate_llm_params(&self) -> Result<(), String> {
+        // Validate temperature range
         if !(0.0..=1.0).contains(&self.temperature) {
             return Err(format!(
                 "temperature must be between 0.0 and 1.0, got {}",
@@ -183,83 +184,107 @@ impl AgentConfig {
             ));
         }
 
+        // Validate token limits (use static str to avoid allocation)
         if self.max_tokens == 0 {
-            return Err("max_tokens must be greater than 0".to_string());
+            return Err("max_tokens must be greater than 0".to_owned());
         }
 
         if self.refine_max_tokens == 0 {
-            return Err("refine_max_tokens must be greater than 0".to_string());
+            return Err("refine_max_tokens must be greater than 0".to_owned());
         }
 
         Ok(())
     }
 }
 
+// Optimized: Use inline defaults with constants to reduce function call overhead
+#[inline]
 fn default_provider() -> String {
-    defaults::DEFAULT_PROVIDER.to_string()
+    defaults::DEFAULT_PROVIDER.to_owned()
 }
 
+#[inline]
 fn default_api_key_env() -> String {
-    defaults::DEFAULT_API_KEY_ENV.to_string()
-}
-fn default_model() -> String {
-    defaults::DEFAULT_MODEL.to_string()
-}
-fn default_theme() -> String {
-    defaults::DEFAULT_THEME.to_string()
+    defaults::DEFAULT_API_KEY_ENV.to_owned()
 }
 
-fn default_todo_planning_mode() -> bool {
+#[inline]
+fn default_model() -> String {
+    defaults::DEFAULT_MODEL.to_owned()
+}
+
+#[inline]
+fn default_theme() -> String {
+    defaults::DEFAULT_THEME.to_owned()
+}
+
+#[inline]
+const fn default_todo_planning_mode() -> bool {
     true
 }
-fn default_max_conversation_turns() -> usize {
+
+#[inline]
+const fn default_max_conversation_turns() -> usize {
     150
 }
+
+#[inline]
 fn default_reasoning_effort() -> ReasoningEffortLevel {
     ReasoningEffortLevel::default()
 }
 
+#[inline]
 fn default_verbosity() -> VerbosityLevel {
     VerbosityLevel::default()
 }
 
-fn default_temperature() -> f32 {
+#[inline]
+const fn default_temperature() -> f32 {
     llm_generation::DEFAULT_TEMPERATURE
 }
 
-fn default_max_tokens() -> u32 {
+#[inline]
+const fn default_max_tokens() -> u32 {
     llm_generation::DEFAULT_MAX_TOKENS
 }
 
-fn default_refine_temperature() -> f32 {
+#[inline]
+const fn default_refine_temperature() -> f32 {
     llm_generation::DEFAULT_REFINE_TEMPERATURE
 }
 
-fn default_refine_max_tokens() -> u32 {
+#[inline]
+const fn default_refine_max_tokens() -> u32 {
     llm_generation::DEFAULT_REFINE_MAX_TOKENS
 }
 
-fn default_enable_self_review() -> bool {
+#[inline]
+const fn default_enable_self_review() -> bool {
     false
 }
 
-fn default_max_review_passes() -> usize {
+#[inline]
+const fn default_max_review_passes() -> usize {
     1
 }
 
-fn default_refine_prompts_enabled() -> bool {
+#[inline]
+const fn default_refine_prompts_enabled() -> bool {
     false
 }
 
-fn default_refine_max_passes() -> usize {
+#[inline]
+const fn default_refine_max_passes() -> usize {
     1
 }
 
-fn default_project_doc_max_bytes() -> usize {
+#[inline]
+const fn default_project_doc_max_bytes() -> usize {
     project_doc::DEFAULT_MAX_BYTES
 }
 
-fn default_instruction_max_bytes() -> usize {
+#[inline]
+const fn default_instruction_max_bytes() -> usize {
     instructions::DEFAULT_MAX_BYTES
 }
 
@@ -294,15 +319,18 @@ impl Default for AgentCustomPromptsConfig {
     }
 }
 
-fn default_custom_prompts_enabled() -> bool {
+#[inline]
+const fn default_custom_prompts_enabled() -> bool {
     true
 }
 
+#[inline]
 fn default_custom_prompts_directory() -> String {
-    prompts::DEFAULT_CUSTOM_PROMPTS_DIR.to_string()
+    prompts::DEFAULT_CUSTOM_PROMPTS_DIR.to_owned()
 }
 
-fn default_custom_prompts_max_file_size_kb() -> usize {
+#[inline]
+const fn default_custom_prompts_max_file_size_kb() -> usize {
     prompts::DEFAULT_CUSTOM_PROMPT_MAX_FILE_SIZE_KB
 }
 
@@ -337,15 +365,18 @@ impl Default for AgentCheckpointingConfig {
     }
 }
 
-fn default_checkpointing_enabled() -> bool {
+#[inline]
+const fn default_checkpointing_enabled() -> bool {
     DEFAULT_CHECKPOINTS_ENABLED
 }
 
-fn default_checkpointing_max_snapshots() -> usize {
+#[inline]
+const fn default_checkpointing_max_snapshots() -> usize {
     DEFAULT_MAX_SNAPSHOTS
 }
 
-fn default_checkpointing_max_age_days() -> Option<u64> {
+#[inline]
+const fn default_checkpointing_max_age_days() -> Option<u64> {
     Some(DEFAULT_MAX_AGE_DAYS)
 }
 
@@ -415,53 +446,68 @@ impl Default for AgentOnboardingConfig {
     }
 }
 
-fn default_onboarding_enabled() -> bool {
+#[inline]
+const fn default_onboarding_enabled() -> bool {
     true
 }
 
+#[inline]
 fn default_intro_text() -> String {
-    "Let's get oriented. I preloaded workspace context so we can move fast.".to_string()
+    "Let's get oriented. I preloaded workspace context so we can move fast.".to_owned()
 }
 
-fn default_show_project_overview() -> bool {
+#[inline]
+const fn default_show_project_overview() -> bool {
     true
 }
 
-fn default_show_language_summary() -> bool {
+#[inline]
+const fn default_show_language_summary() -> bool {
     false
 }
 
-fn default_show_guideline_highlights() -> bool {
+#[inline]
+const fn default_show_guideline_highlights() -> bool {
     true
 }
 
-fn default_show_usage_tips_in_welcome() -> bool {
+#[inline]
+const fn default_show_usage_tips_in_welcome() -> bool {
     false
 }
 
-fn default_show_recommended_actions_in_welcome() -> bool {
+#[inline]
+const fn default_show_recommended_actions_in_welcome() -> bool {
     false
 }
 
-fn default_guideline_highlight_limit() -> usize {
+#[inline]
+const fn default_guideline_highlight_limit() -> usize {
     3
 }
 
+const DEFAULT_USAGE_TIPS: &[&str] = &[
+    "Describe your current coding goal or ask for a quick status overview.",
+    "Reference AGENTS.md guidelines when proposing changes.",
+    "Draft or refresh your TODO list with update_plan before coding.",
+    "Prefer asking for targeted file reads or diffs before editing.",
+];
+
+const DEFAULT_RECOMMENDED_ACTIONS: &[&str] = &[
+    "Start the session by outlining a 3–6 step TODO plan via update_plan.",
+    "Review the highlighted guidelines and share the task you want to tackle.",
+    "Ask for a workspace tour if you need more context.",
+];
+
 fn default_usage_tips() -> Vec<String> {
-    vec![
-        "Describe your current coding goal or ask for a quick status overview.".to_string(),
-        "Reference AGENTS.md guidelines when proposing changes.".to_string(),
-        "Draft or refresh your TODO list with update_plan before coding.".to_string(),
-        "Prefer asking for targeted file reads or diffs before editing.".to_string(),
-    ]
+    DEFAULT_USAGE_TIPS.iter().map(|s| (*s).to_owned()).collect()
 }
 
 fn default_recommended_actions() -> Vec<String> {
-    vec![
-        "Start the session by outlining a 3–6 step TODO plan via update_plan.".to_string(),
-        "Review the highlighted guidelines and share the task you want to tackle.".to_string(),
-        "Ask for a workspace tour if you need more context.".to_string(),
-    ]
+    DEFAULT_RECOMMENDED_ACTIONS
+        .iter()
+        .map(|s| (*s).to_owned())
+        .collect()
 }
 
 /// Small/lightweight model configuration for efficient operations
@@ -520,26 +566,32 @@ impl Default for AgentSmallModelConfig {
     }
 }
 
-fn default_small_model_enabled() -> bool {
+#[inline]
+const fn default_small_model_enabled() -> bool {
     true // Enable by default following Claude Code pattern
 }
 
-fn default_small_model_max_tokens() -> u32 {
+#[inline]
+const fn default_small_model_max_tokens() -> u32 {
     1000 // Smaller responses for summary/parse operations
 }
 
-fn default_small_model_temperature() -> f32 {
+#[inline]
+const fn default_small_model_temperature() -> f32 {
     0.3 // More deterministic for parsing/summarization
 }
 
-fn default_small_model_for_large_reads() -> bool {
+#[inline]
+const fn default_small_model_for_large_reads() -> bool {
     true
 }
 
-fn default_small_model_for_web_summary() -> bool {
+#[inline]
+const fn default_small_model_for_web_summary() -> bool {
     true
 }
 
-fn default_small_model_for_git_history() -> bool {
+#[inline]
+const fn default_small_model_for_git_history() -> bool {
     true
 }

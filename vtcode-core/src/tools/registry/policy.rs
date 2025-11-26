@@ -1,5 +1,5 @@
 use std::collections::HashSet;
-use std::path::PathBuf;
+use std::path::Path;
 
 use anyhow::{Result, anyhow};
 use serde_json::{Value, json};
@@ -20,7 +20,7 @@ pub(super) struct ToolPolicyGateway {
 }
 
 impl ToolPolicyGateway {
-    pub async fn new(workspace_root: &PathBuf) -> Self {
+    pub async fn new(workspace_root: &Path) -> Self {
         let tool_policy = match ToolPolicyManager::new_with_workspace(workspace_root).await {
             Ok(manager) => Some(manager),
             Err(err) => {
@@ -78,12 +78,12 @@ impl ToolPolicyGateway {
                 && let Some(mode) = obj.get("mode").and_then(|v| v.as_str())
                 && !allowed.iter().any(|m| m == mode)
             {
-                return Err(anyhow!(format!(
+                return Err(anyhow!(
                     "Mode '{}' not allowed by policy for '{}'. Allowed: {}",
                     mode,
                     normalized,
                     allowed.join(", ")
-                )));
+                ));
             }
 
             match normalized {

@@ -12,10 +12,10 @@ pub struct DiffColorPalette {
     pub header_color: AnsiColor,
 }
 
-impl DiffColorPalette {
+impl Default for DiffColorPalette {
     /// Green on dark green for additions, red on dark red for deletions
     /// Background colors use 50% brightness (0, 32, 0) and (32, 0, 0) for reduced eye strain
-    pub fn default() -> Self {
+    fn default() -> Self {
         Self {
             added_fg: RgbColor(200, 255, 200),
             added_bg: RgbColor(0, 32, 0), // Reduced from (0, 64, 0) - 50% brightness
@@ -24,7 +24,9 @@ impl DiffColorPalette {
             header_color: AnsiColor::Cyan,
         }
     }
+}
 
+impl DiffColorPalette {
     pub fn added_style(&self) -> Style {
         Style::new()
             .fg_color(Some(Color::Rgb(self.added_fg)))

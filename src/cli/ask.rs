@@ -235,11 +235,11 @@ fn emit_json_response(
         payload.insert("reasoning".to_string(), json!(reasoning));
     }
 
-    if let Some(usage) = response.usage.clone() {
-        payload.insert("usage".to_string(), usage_to_json(&usage));
+    if let Some(usage) = &response.usage {
+        payload.insert("usage".to_string(), usage_to_json(usage));
     }
 
-    if let Some(tool_calls) = response.tool_calls.clone() {
+    if let Some(tool_calls) = &response.tool_calls {
         let tool_value =
             serde_json::to_value(tool_calls).context("failed to serialize tool calls")?;
         payload.insert("tool_calls".to_string(), tool_value);

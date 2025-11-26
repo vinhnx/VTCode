@@ -27,14 +27,17 @@ impl Default for ModelConfig {
     }
 }
 
-fn default_loop_detection_enabled() -> bool {
+#[inline]
+const fn default_loop_detection_enabled() -> bool {
     false
 }
 
-fn default_loop_detection_threshold() -> usize {
+#[inline]
+const fn default_loop_detection_threshold() -> usize {
     3
 }
 
-fn default_loop_detection_interactive() -> bool {
+#[inline]
+const fn default_loop_detection_interactive() -> bool {
     true
 }

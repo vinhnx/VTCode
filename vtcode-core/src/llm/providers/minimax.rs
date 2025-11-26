@@ -74,10 +74,7 @@ impl LLMProvider for MinimaxProvider {
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
         let tools = request.tools.clone();
         let response = self.inner.generate(request).await?;
-        Ok(post_process_response(
-            response,
-            tools.as_ref().map(|defs| defs.as_slice()),
-        ))
+        Ok(post_process_response(response, tools.as_deref()))
     }
 
     async fn stream(&self, request: LLMRequest) -> Result<LLMStream, LLMError> {
@@ -143,8 +140,8 @@ fn post_process_response(
         return response;
     }
 
-    if let Some(content) = response.content.clone() {
-        let (tool_calls, cleaned_content) = parse_minimax_tool_calls(&content, tools);
+    if let Some(content) = &response.content {
+        let (tool_calls, cleaned_content) = parse_minimax_tool_calls(content, tools);
 
         if !tool_calls.is_empty() {
             response.tool_calls = Some(tool_calls);
@@ -244,11 +241,11 @@ fn build_parameter_type_map(
 
     if let Some(defs) = tools {
         for tool in defs {
+            let Some(func) = tool.function.as_ref() else {
+                continue;
+            };
             let mut param_map = HashMap::new();
-            if let Some(properties) = tool
-                .function
-                .as_ref()
-                .unwrap()
+            if let Some(properties) = func
                 .parameters
                 .get("properties")
                 .and_then(|props| props.as_object())
@@ -272,7 +269,7 @@ fn build_parameter_type_map(
                 }
             }
 
-            map.insert(tool.function.as_ref().unwrap().name.clone(), param_map);
+            map.insert(func.name.clone(), param_map);
         }
     }
 
@@ -304,7 +301,7 @@ fn convert_param_value(value: &str, param_type: &str) -> Value {
         "number" | "float" => value
             .parse::<f64>()
             .ok()
-            .and_then(|num| serde_json::Number::from_f64(num))
+            .and_then(serde_json::Number::from_f64)
             .map(Value::Number)
             .unwrap_or_else(|| Value::String(value.to_string())),
         "boolean" | "bool" => {

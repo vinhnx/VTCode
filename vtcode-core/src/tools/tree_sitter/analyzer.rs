@@ -594,7 +594,6 @@ impl TreeSitterAnalyzer {
     /// Calculate code metrics from a syntax tree
     pub fn calculate_metrics(&self, syntax_tree: &Tree, source_code: &str) -> Result<CodeMetrics> {
         let root_node = syntax_tree.root_node();
-        let lines = source_code.lines().collect::<Vec<_>>();
 
         // Count different types of nodes
         let mut functions_count = 0;
@@ -610,9 +609,9 @@ impl TreeSitterAnalyzer {
             &mut imports_count,
         );
 
-        // Count comments
-        let lines_of_comments = lines
-            .iter()
+        // Count line types - iterate twice is cheaper than collecting all lines
+        let lines_of_comments = source_code
+            .lines()
             .filter(|l| {
                 l.trim().starts_with("//")
                     || l.trim().starts_with("/*")
@@ -620,8 +619,8 @@ impl TreeSitterAnalyzer {
             })
             .count();
 
-        let blank_lines = lines.iter().filter(|l| l.trim().is_empty()).count();
-        let lines_of_code = lines.len();
+        let blank_lines = source_code.lines().filter(|l| l.trim().is_empty()).count();
+        let lines_of_code = source_code.lines().count();
 
         let comment_ratio = if lines_of_code > 0 {
             lines_of_comments as f64 / lines_of_code as f64
@@ -832,7 +831,7 @@ impl TreeSitterAnalyzer {
             },
         };
 
-        self.current_file = file_path.to_string_lossy().to_string();
+        self.current_file = file_path.to_string_lossy().into_owned();
 
         let tree = self.parse(source_code, language)?;
 

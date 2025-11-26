@@ -195,13 +195,13 @@ impl CodeExecutor {
         // Set workspace path for scripts
         env.insert(
             OsString::from("VTCODE_WORKSPACE"),
-            OsString::from(self.workspace_root.to_string_lossy().to_string()),
+            OsString::from(self.workspace_root.to_string_lossy().into_owned()),
         );
 
         // Set IPC directory for tool invocation
         env.insert(
             OsString::from("VTCODE_IPC_DIR"),
-            OsString::from(ipc_dir.to_string_lossy().to_string()),
+            OsString::from(ipc_dir.to_string_lossy().into_owned()),
         );
 
         // Spawn IPC handler task that will process tool requests from code
@@ -280,7 +280,7 @@ impl CodeExecutor {
 
         let options = ProcessOptions {
             program: self.language.interpreter().to_string(),
-            args: vec![code_file.to_string_lossy().to_string()],
+            args: vec![code_file.to_string_lossy().into_owned()],
             env,
             current_dir: Some(self.workspace_root.clone()),
             timeout: Some(Duration::from_secs(self.config.timeout_secs)),
@@ -413,18 +413,18 @@ from uuid import uuid4
 
 class MCPTools:
     """Interface to MCP tools from agent code via file-based IPC."""
-    
+
     IPC_DIR = os.environ.get("VTCODE_IPC_DIR", "/tmp/vtcode_ipc")
-    
+
     def __init__(self):
         self._call_count = 0
         self._results = []
         os.makedirs(self.IPC_DIR, exist_ok=True)
-    
+
     def _call_tool(self, name: str, args: Dict[str, Any]) -> Any:
         """Call an MCP tool via file-based IPC."""
         request_id = str(uuid4())
-        
+
         # Write request
         request = {
             "id": request_id,
@@ -434,7 +434,7 @@ class MCPTools:
         request_file = os.path.join(self.IPC_DIR, "request.json")
         with open(request_file, 'w') as f:
             json.dump(request, f)
-        
+
         # Wait for response
         response_file = os.path.join(self.IPC_DIR, "response.json")
         timeout = 30
@@ -443,23 +443,23 @@ class MCPTools:
             if os.path.exists(response_file):
                 with open(response_file, 'r') as f:
                     response = json.load(f)
-                
+
                 if response.get("id") == request_id:
                     # Clean up response
                     try:
                         os.remove(response_file)
                     except:
                         pass
-                    
+
                     if response.get("success"):
                         return response.get("result")
                     else:
                         raise RuntimeError(f"Tool error: {response.get('error', 'unknown error')}")
-            
+
             time.sleep(0.1)
-        
+
         raise TimeoutError(f"Tool '{name}' timed out after {timeout}s")
-    
+
     def log(self, message: str) -> None:
         """Log a message that will be captured."""
         print(f"[LOG] {message}")
@@ -526,7 +526,7 @@ class MCPTools {
       try {
         if (fs.existsSync(responseFile)) {
           const response = JSON.parse(fs.readFileSync(responseFile, 'utf-8'));
-          
+
           if (response.id === requestId) {
             // Clean up response
             try {

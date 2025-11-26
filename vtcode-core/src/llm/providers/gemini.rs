@@ -374,7 +374,10 @@ impl LLMProvider for GeminiProvider {
     }
 
     fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {
-        if !self.supported_models().contains(&request.model) {
+        if !models::google::SUPPORTED_MODELS
+            .iter()
+            .any(|m| *m == request.model)
+        {
             let formatted_error = error_display::format_llm_error(
                 "Gemini",
                 &format!("Unsupported model: {}", request.model),
@@ -575,14 +578,15 @@ impl GeminiProvider {
         let tools: Option<Vec<Tool>> = request.tools.as_ref().map(|definitions| {
             definitions
                 .iter()
-                .map(|tool| Tool {
-                    function_declarations: vec![FunctionDeclaration {
-                        name: tool.function.as_ref().unwrap().name.clone(),
-                        description: tool.function.as_ref().unwrap().description.clone(),
-                        parameters: sanitize_function_parameters(
-                            tool.function.as_ref().unwrap().parameters.clone(),
-                        ),
-                    }],
+                .filter_map(|tool| {
+                    let func = tool.function.as_ref()?;
+                    Some(Tool {
+                        function_declarations: vec![FunctionDeclaration {
+                            name: func.name.clone(),
+                            description: func.description.clone(),
+                            parameters: sanitize_function_parameters(func.parameters.clone()),
+                        }],
+                    })
                 })
                 .collect()
         });
@@ -674,13 +678,11 @@ impl GeminiProvider {
                     }
                 };
 
-                if let Some(level) = thinking_level {
-                    Some(json!({
+                thinking_level.map(|level| {
+                    json!({
                         "thinkingLevel": level
-                    }))
-                } else {
-                    None // Don't include reasoning_config if no level
-                }
+                    })
+                })
             } else {
                 None
             }
@@ -1003,15 +1005,7 @@ impl LLMClient for GeminiProvider {
                             .collect::<Vec<_>>()
                             .join("");
 
-                        messages.push(Message {
-                            role,
-                            content: MessageContent::from(content_text),
-                            reasoning: None,
-                            reasoning_details: None,
-                            tool_calls: None,
-                            tool_call_id: None,
-                            origin_tool: None,
-                        });
+                        messages.push(Message::base(role, MessageContent::from(content_text)));
                     }
 
                     // Convert tools if present
@@ -1080,10 +1074,10 @@ impl LLMClient for GeminiProvider {
                             });
                             tool_call_json.to_string()
                         } else {
-                            response.content.unwrap_or("".to_string())
+                            response.content.unwrap_or_default()
                         }
                     } else {
-                        response.content.unwrap_or("".to_string())
+                        response.content.unwrap_or_default()
                     };
 
                     return Ok(llm_types::LLMResponse {
@@ -1157,7 +1151,7 @@ impl LLMClient for GeminiProvider {
         let response = LLMProvider::generate(self, request).await?;
 
         Ok(llm_types::LLMResponse {
-            content: response.content.unwrap_or("".to_string()),
+            content: response.content.unwrap_or_default(),
             model: self.model.clone(),
             usage: response.usage.map(|u| llm_types::Usage {
                 prompt_tokens: u.prompt_tokens as usize,

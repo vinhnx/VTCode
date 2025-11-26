@@ -3,20 +3,19 @@ use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::{DeepSeekPromptCacheSettings, PromptCachingConfig};
 use crate::llm::client::LLMClient;
 use crate::llm::error_display;
-use crate::llm::provider::{
-    FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, Message, MessageContent,
-    MessageRole, ToolCall, ToolDefinition, Usage,
-};
+use crate::llm::provider::{FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse};
 use crate::llm::providers::common::serialize_messages_openai_format;
 use crate::llm::types as llm_types;
 use async_trait::async_trait;
 use reqwest::Client as HttpClient;
-use serde_json::{Map, Value, json};
+use serde_json::{Map, Value};
 
 use super::{
     common::{
-        convert_usage_to_llm_types, extract_prompt_cache_settings, override_base_url,
-        parse_client_prompt_common, parse_tool_call_openai_format, resolve_model,
+        convert_usage_to_llm_types, extract_content_from_message, extract_prompt_cache_settings,
+        override_base_url, parse_chat_request_openai_format, parse_client_prompt_common,
+        parse_tool_call_openai_format, parse_usage_openai_format, resolve_model,
+        serialize_tools_openai_format,
     },
     extract_reasoning_trace,
 };
@@ -91,95 +90,7 @@ impl DeepSeekProvider {
     }
 
     fn parse_chat_request(&self, value: &Value) -> Option<LLMRequest> {
-        let messages_value = value.get("messages")?.as_array()?;
-        let mut system_prompt = value
-            .get("system")
-            .and_then(|entry| entry.as_str())
-            .map(|text| text.to_string());
-        let mut messages = Vec::new();
-
-        for entry in messages_value {
-            let role = entry
-                .get("role")
-                .and_then(|r| r.as_str())
-                .unwrap_or(crate::config::constants::message_roles::USER);
-            let content = entry
-                .get("content")
-                .and_then(|c| c.as_str())
-                .unwrap_or_default()
-                .to_string();
-
-            match role {
-                "system" => {
-                    if system_prompt.is_none() && !content.is_empty() {
-                        system_prompt = Some(content);
-                    }
-                }
-                "assistant" => {
-                    let tool_calls = entry
-                        .get("tool_calls")
-                        .and_then(|tc| tc.as_array())
-                        .map(|calls| {
-                            calls
-                                .iter()
-                                .filter_map(|call| Self::parse_tool_call(call))
-                                .collect::<Vec<_>>()
-                        })
-                        .filter(|calls| !calls.is_empty());
-
-                    messages.push(Message {
-                        role: MessageRole::Assistant,
-                        content: MessageContent::from(content),
-                        reasoning: None,
-                        reasoning_details: None,
-                        tool_calls,
-                        tool_call_id: None,
-                        origin_tool: None,
-                    });
-                }
-                "tool" => {
-                    if let Some(tool_call_id) = entry.get("tool_call_id").and_then(|v| v.as_str()) {
-                        messages.push(Message::tool_response(tool_call_id.to_string(), content));
-                    }
-                }
-                _ => {
-                    messages.push(Message::user(content));
-                }
-            }
-        }
-
-        Some(LLMRequest {
-            messages,
-            system_prompt,
-            model: value
-                .get("model")
-                .and_then(|m| m.as_str())
-                .unwrap_or(&self.model)
-                .to_string(),
-            max_tokens: value
-                .get("max_tokens")
-                .and_then(|m| m.as_u64())
-                .map(|m| m as u32),
-            temperature: value
-                .get("temperature")
-                .and_then(|t| t.as_f64())
-                .map(|t| t as f32),
-            stream: value
-                .get("stream")
-                .and_then(|s| s.as_bool())
-                .unwrap_or(false),
-            tools: None,
-            output_format: None,
-            tool_choice: None,
-            parallel_tool_calls: None,
-            parallel_tool_config: None,
-            reasoning_effort: None,
-            verbosity: None,
-        })
-    }
-
-    fn parse_tool_call(value: &Value) -> Option<ToolCall> {
-        parse_tool_call_openai_format(value)
+        parse_chat_request_openai_format(value, &self.model)
     }
 
     fn convert_to_deepseek_format(&self, request: &LLMRequest) -> Result<Value, LLMError> {
@@ -219,7 +130,7 @@ impl DeepSeekProvider {
         }
 
         if let Some(tools) = &request.tools {
-            if let Some(serialized_tools) = Self::serialize_tools(tools) {
+            if let Some(serialized_tools) = serialize_tools_openai_format(tools) {
                 payload.insert("tools".to_string(), Value::Array(serialized_tools));
             }
         }
@@ -243,14 +154,6 @@ impl DeepSeekProvider {
 
     fn serialize_messages(&self, request: &LLMRequest) -> Result<Vec<Value>, LLMError> {
         serialize_messages_openai_format(request, PROVIDER_KEY)
-    }
-
-    fn serialize_tools(tools: &[ToolDefinition]) -> Option<Vec<Value>> {
-        if tools.is_empty() {
-            return None;
-        }
-
-        Some(tools.iter().map(|tool| json!(tool)).collect::<Vec<_>>())
     }
 
     fn parse_response(&self, response_json: Value) -> Result<LLMResponse, LLMError> {
@@ -280,29 +183,7 @@ impl DeepSeekProvider {
             LLMError::Provider(formatted_error)
         })?;
 
-        let content = message
-            .get("content")
-            .and_then(|value| match value {
-                Value::String(text) => {
-                    let trimmed = text.trim();
-                    if trimmed.is_empty() {
-                        None
-                    } else {
-                        Some(trimmed.to_string())
-                    }
-                }
-                Value::Array(parts) => Some(
-                    parts
-                        .iter()
-                        .filter_map(|part| part.get("text").and_then(|t| t.as_str()))
-                        .map(str::trim)
-                        .filter(|value| !value.is_empty())
-                        .collect::<Vec<_>>()
-                        .join(" "),
-                ),
-                _ => None,
-            })
-            .filter(|text| !text.is_empty());
+        let content = extract_content_from_message(message);
 
         let tool_calls = message
             .get("tool_calls")
@@ -310,7 +191,7 @@ impl DeepSeekProvider {
             .map(|calls| {
                 calls
                     .iter()
-                    .filter_map(|call| Self::parse_tool_call(call))
+                    .filter_map(parse_tool_call_openai_format)
                     .collect::<Vec<_>>()
             })
             .filter(|calls| !calls.is_empty());
@@ -336,41 +217,8 @@ impl DeepSeekProvider {
             })
             .unwrap_or(FinishReason::Stop);
 
-        let usage = response_json.get("usage").map(|usage_value| Usage {
-            prompt_tokens: usage_value
-                .get("prompt_tokens")
-                .and_then(|value| value.as_u64())
-                .unwrap_or(0) as u32,
-            completion_tokens: usage_value
-                .get("completion_tokens")
-                .and_then(|value| value.as_u64())
-                .unwrap_or(0) as u32,
-            total_tokens: usage_value
-                .get("total_tokens")
-                .and_then(|value| value.as_u64())
-                .unwrap_or(0) as u32,
-            cached_prompt_tokens: if self.prompt_cache_enabled
-                && self.prompt_cache_settings.surface_metrics
-            {
-                usage_value
-                    .get("prompt_cache_hit_tokens")
-                    .and_then(|value| value.as_u64())
-                    .map(|value| value as u32)
-            } else {
-                None
-            },
-            cache_creation_tokens: if self.prompt_cache_enabled
-                && self.prompt_cache_settings.surface_metrics
-            {
-                usage_value
-                    .get("prompt_cache_miss_tokens")
-                    .and_then(|value| value.as_u64())
-                    .map(|value| value as u32)
-            } else {
-                None
-            },
-            cache_read_tokens: None,
-        });
+        let include_cache = self.prompt_cache_enabled && self.prompt_cache_settings.surface_metrics;
+        let usage = parse_usage_openai_format(&response_json, include_cache);
 
         Ok(LLMResponse {
             content,
