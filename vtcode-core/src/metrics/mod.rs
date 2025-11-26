@@ -10,6 +10,7 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::fmt::Write;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
@@ -290,79 +291,89 @@ impl MetricsCollector {
         let mut output = String::new();
 
         // Discovery metrics
-        output.push_str(&format!(
+        let _ = write!(
+            output,
             "# HELP vtcode_discovery_queries_total Total tool discovery queries\n\
              # TYPE vtcode_discovery_queries_total counter\n\
              vtcode_discovery_queries_total {}\n\n",
             discovery.total_queries
-        ));
+        );
 
-        output.push_str(&format!(
+        let _ = write!(
+            output,
             "# HELP vtcode_discovery_hit_rate Hit rate of discovery queries\n\
              # TYPE vtcode_discovery_hit_rate gauge\n\
              vtcode_discovery_hit_rate {}\n\n",
             discovery.hit_rate()
-        ));
+        );
 
         // Execution metrics
-        output.push_str(&format!(
+        let _ = write!(
+            output,
             "# HELP vtcode_execution_total Total code executions\n\
              # TYPE vtcode_execution_total counter\n\
              vtcode_execution_total {}\n\n",
             execution.total_executions
-        ));
+        );
 
-        output.push_str(&format!(
+        let _ = write!(
+            output,
             "# HELP vtcode_execution_duration_ms Code execution average duration\n\
              # TYPE vtcode_execution_duration_ms gauge\n\
              vtcode_execution_duration_ms {}\n\n",
             execution.avg_duration_ms()
-        ));
+        );
 
         // Filtering metrics
-        output.push_str(&format!(
+        let _ = write!(
+            output,
             "# HELP vtcode_filtering_operations_total Total filtering operations\n\
              # TYPE vtcode_filtering_operations_total counter\n\
              vtcode_filtering_operations_total {}\n\n",
             filtering.total_operations
-        ));
+        );
 
-        output.push_str(&format!(
+        let _ = write!(
+            output,
             "# HELP vtcode_context_tokens_saved Estimated tokens saved by filtering\n\
              # TYPE vtcode_context_tokens_saved counter\n\
              vtcode_context_tokens_saved {}\n\n",
             filtering.estimated_tokens_saved()
-        ));
+        );
 
         // Skills metrics
-        output.push_str(&format!(
+        let _ = write!(
+            output,
             "# HELP vtcode_skills_total Total saved skills\n\
              # TYPE vtcode_skills_total gauge\n\
              vtcode_skills_total {}\n\n",
             skills.total_skills
-        ));
+        );
 
-        output.push_str(&format!(
+        let _ = write!(
+            output,
             "# HELP vtcode_skill_reuse_ratio Ratio of skill reuse\n\
              # TYPE vtcode_skill_reuse_ratio gauge\n\
              vtcode_skill_reuse_ratio {}\n\n",
             skills.reuse_ratio()
-        ));
+        );
 
         // Security metrics
-        output.push_str(&format!(
+        let _ = write!(
+            output,
             "# HELP vtcode_pii_detections_total Total PII patterns detected\n\
              # TYPE vtcode_pii_detections_total counter\n\
              vtcode_pii_detections_total {}\n\n",
             security.pii_detections
-        ));
+        );
 
-        output.push_str(&format!(
+        let _ = write!(
+            output,
             "# HELP vtcode_tokens_created_total Total PII tokens created\n\
              # TYPE vtcode_tokens_created_total counter\n\
              vtcode_tokens_created_total {}\n\n",
             security.tokens_created
-        ));
+        );
 
         output
     }
