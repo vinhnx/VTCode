@@ -380,7 +380,7 @@ mod tests {
         ];
         let resolved =
             path_env::resolve_program_path_from_paths("fake-tool", custom_paths.into_iter());
-        let expected = fake_tool_path.to_string_lossy().to_string();
+        let expected = fake_tool_path.to_string_lossy().into_owned();
         assert_eq!(resolved, Some(expected));
     }
 

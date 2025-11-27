@@ -711,7 +711,7 @@ mod tests {
     fn trims_context_lines_to_requested_window() {
         let before: String = (0..200).map(|idx| format!("line {idx}\n")).collect();
         let mut after_lines: Vec<String> = (0..200).map(|idx| format!("line {idx}")).collect();
-        after_lines[100] = "line 100 changed".to_string();
+        after_lines[100] = "line 100 changed".to_owned();
         let after = after_lines.join("\n");
 
         let bundle = compute_diff(

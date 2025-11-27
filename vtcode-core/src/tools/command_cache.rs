@@ -56,11 +56,11 @@ impl PermissionCache {
     /// Store a permission decision in cache
     pub fn put(&mut self, command: &str, allowed: bool, reason: &str) {
         self.entries.insert(
-            command.to_string(),
+            command.to_owned(),
             CacheEntry {
                 allowed,
                 timestamp: Instant::now(),
-                reason: reason.to_string(),
+                reason: reason.to_owned(),
             },
         );
         debug!(

@@ -289,9 +289,9 @@ mod tests {
             enabled: true,
             ui: Default::default(),
             providers: vec![McpProviderConfig {
-                name: "test_provider".to_string(),
+                name: "test_provider".to_owned(),
                 transport: McpTransportConfig::Stdio(McpStdioServerConfig {
-                    command: "test_command".to_string(),
+                    command: "test_command".to_owned(),
                     args: vec![],
                     working_directory: None,
                 }),
@@ -302,11 +302,11 @@ mod tests {
             }],
             server: McpServerConfig {
                 enabled: true,
-                bind_address: "127.0.0.1".to_string(),
+                bind_address: "127.0.0.1".to_owned(),
                 port: 3000,
                 transport: crate::config::mcp::McpServerTransport::Sse,
-                name: "test_server".to_string(),
-                version: "1.0.0".to_string(),
+                name: "test_server".to_owned(),
+                version: "1.0.0".to_owned(),
                 exposed_tools: vec![],
             },
             allowlist: Default::default(),

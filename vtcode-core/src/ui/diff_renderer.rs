@@ -890,16 +890,8 @@ mod tests {
     fn test_suppression_check_no_suppression() {
         let renderer = DiffChatRenderer::new(true, 3, false);
         let changes = vec![
-            (
-                "file1.rs".to_string(),
-                "old1".to_string(),
-                "new1".to_string(),
-            ),
-            (
-                "file2.rs".to_string(),
-                "old2".to_string(),
-                "new2".to_string(),
-            ),
+            ("file1.rs".to_owned(), "old1".to_owned(), "new1".to_owned()),
+            ("file2.rs".to_owned(), "old2".to_owned(), "new2".to_owned()),
         ];
 
         let check = renderer.check_suppression(&changes);
@@ -935,7 +927,7 @@ mod tests {
         let old_content: String = (0..300).map(|i| format!("old line {}\n", i)).collect();
         let new_content: String = (0..300).map(|i| format!("new line {}\n", i)).collect();
 
-        let changes = vec![("large_file.rs".to_string(), old_content, new_content)];
+        let changes = vec![("large_file.rs".to_owned(), old_content, new_content)];
 
         let check = renderer.check_suppression(&changes);
         assert!(check.should_suppress);
@@ -947,12 +939,12 @@ mod tests {
         let renderer = DiffChatRenderer::new(true, 3, false);
         let file_stats = vec![
             FileChangeStats {
-                path: "file1.rs".to_string(),
+                path: "file1.rs".to_owned(),
                 additions: 20,
                 deletions: 10,
             },
             FileChangeStats {
-                path: "file2.rs".to_string(),
+                path: "file2.rs".to_owned(),
                 additions: 30,
                 deletions: 20,
             },

@@ -264,7 +264,7 @@ impl CustomPrompt {
         let (segments, required_named, required_positionals) = parse_segments(body, name, path)?;
 
         let prompt = CustomPrompt {
-            name: name.to_string(),
+            name: name.to_owned(),
             description: frontmatter.as_ref().and_then(|fm| fm.description.clone()),
             argument_hint: frontmatter.as_ref().and_then(|fm| fm.argument_hint.clone()),
             path: path.to_path_buf(),
@@ -330,9 +330,9 @@ pub struct BuiltinDocs {
 
 impl Default for BuiltinDocs {
     fn default() -> Self {
-        let mut docs = BTreeMap::new();
+        let mut docs: BTreeMap<String, &'static str> = BTreeMap::new();
         for (name, content) in BUILTIN_DOCS {
-            docs.insert(name.to_string(), *content);
+            docs.insert((*name).to_owned(), *content);
         }
         Self { docs }
     }
@@ -412,7 +412,7 @@ impl PromptInvocation {
         }
 
         let tokens = shell_split(trimmed)
-            .with_context(|| "failed to parse custom prompt arguments".to_string())?;
+            .with_context(|| "failed to parse custom prompt arguments".to_owned())?;
 
         let mut positional = Vec::new();
         let mut named = BTreeMap::new();
@@ -422,7 +422,7 @@ impl PromptInvocation {
                 if key_trimmed.is_empty() {
                     positional.push(token);
                 } else {
-                    named.insert(key_trimmed.to_string(), value.to_string());
+                    named.insert(key_trimmed.to_owned(), value.to_owned());
                 }
             } else {
                 positional.push(token);
@@ -437,7 +437,7 @@ impl PromptInvocation {
 
         if !named.contains_key("TASK") {
             if let Some(all) = &all_arguments {
-                named.insert("TASK".to_string(), all.clone());
+                named.insert("TASK".to_owned(), all.clone());
             }
         }
 
@@ -702,7 +702,7 @@ mod tests {
         std::fs::write(prompts_dir.join("draft.md"), "Draft PR for $1").unwrap();
 
         let mut cfg = AgentCustomPromptsConfig::default();
-        cfg.directory = prompts_dir.to_string_lossy().to_string();
+        cfg.directory = prompts_dir.to_string_lossy().into_owned();
         let registry = CustomPromptRegistry::load(Some(&cfg), temp.path())
             .await
             .expect("load registry");
@@ -735,7 +735,7 @@ mod tests {
         std::fs::write(prompts_dir.join("vtcode.md"), "Workspace-specific kickoff").unwrap();
 
         let mut cfg = AgentCustomPromptsConfig::default();
-        cfg.directory = prompts_dir.to_string_lossy().to_string();
+        cfg.directory = prompts_dir.to_string_lossy().into_owned();
         let registry = CustomPromptRegistry::load(Some(&cfg), temp.path())
             .await
             .expect("load registry");

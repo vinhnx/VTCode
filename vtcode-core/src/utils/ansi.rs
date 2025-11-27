@@ -809,7 +809,7 @@ impl InlineSink {
             for (mut segments, plain) in converted_lines.into_iter().zip(plain_lines.into_iter()) {
                 if !combined_segments.is_empty() {
                     combined_segments.push(InlineSegment {
-                        text: "\n".to_string(),
+                        text: "\n".to_owned(),
                         style: fallback.clone(),
                     });
                     combined_plain.push('\n');
@@ -892,7 +892,7 @@ impl InlineSink {
                     self.handle.inline(
                         kind,
                         InlineSegment {
-                            text: "\n".to_string(),
+                            text: "\n".to_owned(),
                             style: fallback.clone(),
                         },
                     );
@@ -976,7 +976,7 @@ mod tests {
         let (converted, plain) =
             sink.convert_plain_lines("\u{1b}[31mred\u{1b}[0m plain", &fallback);
 
-        assert_eq!(plain, vec!["red plain".to_string()]);
+        assert_eq!(plain, vec!["red plain".to_owned()]);
         assert_eq!(converted.len(), 1);
         let segments = &converted[0];
         assert_eq!(segments.len(), 2);
@@ -997,7 +997,7 @@ mod tests {
 
         let (converted, plain) = sink.convert_plain_lines("hello\n", &fallback);
 
-        assert_eq!(plain, vec!["hello".to_string(), String::new()]);
+        assert_eq!(plain, vec!["hello".to_owned(), String::new()]);
         assert_eq!(converted.len(), 2);
         assert!(!converted[0].is_empty());
         assert!(converted[1].is_empty());

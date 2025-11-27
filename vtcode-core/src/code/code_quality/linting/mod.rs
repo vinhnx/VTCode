@@ -217,7 +217,7 @@ impl LintingOrchestrator {
                             severity,
                             rule,
                             message: msg,
-                            suggestion: m.get("fix").map(|_| "fix available".to_string()),
+                            suggestion: m.get("fix").map(|_| "fix available".to_owned()),
                         });
                     }
                 }

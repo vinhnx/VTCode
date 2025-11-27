@@ -49,7 +49,7 @@ impl Default for TokenBudgetConfig {
             max_context_tokens: 128_000,
             warning_threshold: 0.75,
             alert_threshold: 0.85,
-            model: "gpt-5".to_string(),
+            model: "gpt-5".to_owned(),
             tokenizer_id: None,
             detailed_tracking: false,
         }
@@ -463,7 +463,7 @@ impl TokenBudgetManager {
                 let applied = usage
                     .applied_max_tokens
                     .map(|n| n.to_string())
-                    .unwrap_or_else(|| "None".to_string());
+                    .unwrap_or_else(|| "None".to_owned());
                 let _ = write!(
                     report,
                     "  - Tool: {} | Applied max_tokens: {} | Context: {}\n",
@@ -517,7 +517,7 @@ impl TokenBudgetManager {
     pub async fn get_max_tokens_usage_summary(&self) -> String {
         let history = self.max_tokens_history.read().await;
         if history.is_empty() {
-            return "No max_tokens usage recorded.".to_string();
+            return "No max_tokens usage recorded.".to_owned();
         }
 
         let mut summary = String::from("Recent max_tokens Usage Summary:\n");

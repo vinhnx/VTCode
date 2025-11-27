@@ -352,7 +352,7 @@ mod tests {
         let canonical =
             |path: &PathBuf| std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
 
-        let patterns = vec!["docs/*.md".to_string()];
+        let patterns = vec!["docs/*.md".to_owned()];
         let sources = discover_instruction_sources(
             &nested,
             project_root,
@@ -429,7 +429,7 @@ mod tests {
             project_root,
             project_root,
             Some(home.path()),
-            &["~/notes.md".to_string()],
+            &["~/notes.md".to_owned()],
         )
         .await?;
         assert_eq!(sources.len(), 1);

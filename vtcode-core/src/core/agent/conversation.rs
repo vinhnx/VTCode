@@ -92,10 +92,10 @@ mod tests {
 
     fn sample_task() -> Task {
         Task {
-            id: "task-1".to_string(),
-            title: "Example".to_string(),
-            description: "Do something".to_string(),
-            instructions: Some("Follow steps".to_string()),
+            id: "task-1".to_owned(),
+            title: "Example".to_owned(),
+            description: "Do something".to_owned(),
+            instructions: Some("Follow steps".to_owned()),
         }
     }
 
@@ -103,8 +103,8 @@ mod tests {
     fn system_instruction_composes_context() {
         let task = sample_task();
         let contexts = vec![ContextItem {
-            id: "ctx1".to_string(),
-            content: "Details".to_string(),
+            id: "ctx1".to_owned(),
+            content: "Details".to_owned(),
         }];
 
         let instruction = compose_system_instruction("Base", &task, &contexts);

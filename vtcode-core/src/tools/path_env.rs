@@ -223,6 +223,6 @@ mod tests {
 
         let resolved =
             resolve_program_path_from_paths("fake-tool", [bin_dir.to_path_buf()].into_iter());
-        assert_eq!(resolved, Some(fake.to_string_lossy().to_string()))
+        assert_eq!(resolved, Some(fake.to_string_lossy().into_owned()))
     }
 }

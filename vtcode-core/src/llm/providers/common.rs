@@ -18,7 +18,7 @@ pub fn serialize_tools_openai_format(tools: &[ToolDefinition]) -> Option<Vec<Val
 pub fn resolve_model(model: Option<String>, default_model: &str) -> String {
     model
         .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| default_model.to_string())
+        .unwrap_or_else(|| default_model.to_owned())
 }
 
 /// Creates a default LLM request with a single user message.
@@ -26,10 +26,10 @@ pub fn resolve_model(model: Option<String>, default_model: &str) -> String {
 #[inline]
 pub fn make_default_request(prompt: &str, model: &str) -> LLMRequest {
     LLMRequest {
-        messages: vec![Message::user(prompt.to_string())],
+        messages: vec![Message::user(prompt.to_owned())],
         system_prompt: None,
         tools: None,
-        model: model.to_string(),
+        model: model.to_owned(),
         max_tokens: None,
         temperature: None,
         stream: false,
@@ -189,11 +189,11 @@ pub fn serialize_messages_openai_format(
 
         let mut message_map = Map::new();
         message_map.insert(
-            "role".to_string(),
-            Value::String(message.role.as_generic_str().to_string()),
+            "role".to_owned(),
+            Value::String(message.role.as_generic_str().to_owned()),
         );
         message_map.insert(
-            "content".to_string(),
+            "content".to_owned(),
             Value::String(message.content.as_text()),
         );
 
@@ -213,12 +213,12 @@ pub fn serialize_messages_openai_format(
                     })
                 })
                 .collect::<Vec<_>>();
-            message_map.insert("tool_calls".to_string(), Value::Array(serialized_calls));
+            message_map.insert("tool_calls".to_owned(), Value::Array(serialized_calls));
         }
 
         if let Some(tool_call_id) = &message.tool_call_id {
             message_map.insert(
-                "tool_call_id".to_string(),
+                "tool_call_id".to_owned(),
                 Value::String(tool_call_id.clone()),
             );
         }

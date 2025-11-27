@@ -2197,7 +2197,7 @@ mod paging_tests {
         // Test basic paging functionality: offset_lines=2, page_size_lines=3
         // Should return lines 3, 4, 5 (0-indexed: 2, 3, 4)
         let args = json!({
-            "path": test_file.to_string_lossy().to_string(),
+            "path": test_file.to_string_lossy().into_owned(),
             "offset_lines": 2,
             "page_size_lines": 3
         });
@@ -2221,7 +2221,7 @@ mod paging_tests {
 
         // Test byte-based paging: skip first 6 bytes ("line1\n") and read next 6 bytes
         let args = json!({
-            "path": test_file.to_string_lossy().to_string(),
+            "path": test_file.to_string_lossy().into_owned(),
             "offset_bytes": 6,
             "page_size_bytes": 6
         });
@@ -2245,7 +2245,7 @@ mod paging_tests {
 
         // Test when offset is beyond file size
         let args = json!({
-            "path": test_file.to_string_lossy().to_string(),
+            "path": test_file.to_string_lossy().into_owned(),
             "offset_lines": 100,
             "page_size_lines": 10
         });
@@ -2268,7 +2268,7 @@ mod paging_tests {
 
         // Test reading empty file with paging
         let args = json!({
-            "path": test_file.to_string_lossy().to_string(),
+            "path": test_file.to_string_lossy().into_owned(),
             "offset_lines": 0,
             "page_size_lines": 10
         });
@@ -2292,7 +2292,7 @@ mod paging_tests {
 
         // Test legacy functionality with max_bytes
         let args = json!({
-            "path": test_file.to_string_lossy().to_string(),
+            "path": test_file.to_string_lossy().into_owned(),
             "max_bytes": 10
         });
 
@@ -2324,7 +2324,7 @@ mod paging_tests {
         let max_tokens = 15 * 12; // ~12 lines worth using TOKENS_PER_LINE
 
         let args = json!({
-            "path": test_file.to_string_lossy().to_string(),
+            "path": test_file.to_string_lossy().into_owned(),
             "max_tokens": max_tokens
         });
 

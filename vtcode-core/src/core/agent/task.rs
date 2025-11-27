@@ -62,8 +62,8 @@ impl TaskOutcome {
 
     pub fn description(&self) -> String {
         match self {
-            Self::Success => "Task completed successfully".to_string(),
-            Self::StoppedNoAction => "Stopped after agent signaled no further actions".to_string(),
+            Self::Success => "Task completed successfully".to_owned(),
+            Self::StoppedNoAction => "Stopped after agent signaled no further actions".to_owned(),
             Self::TurnLimitReached {
                 max_turns,
                 actual_turns,
@@ -78,7 +78,7 @@ impl TaskOutcome {
                 "Stopped after reaching tool loop limit (max: {}, reached: {})",
                 max_tool_loops, actual_tool_loops
             ),
-            Self::Unknown => "Task outcome could not be determined".to_string(),
+            Self::Unknown => "Task outcome could not be determined".to_owned(),
         }
     }
 

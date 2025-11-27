@@ -141,7 +141,7 @@ mod tests {
     #[test]
     fn test_record_complete() {
         let mut metrics = ExecutionMetrics::new();
-        metrics.record_complete("python3".to_string(), 1000, 50, true);
+        metrics.record_complete("python3".to_owned(), 1000, 50, true);
 
         assert_eq!(metrics.total_executions, 1);
         assert_eq!(metrics.successful_executions, 1);
@@ -152,7 +152,7 @@ mod tests {
     #[test]
     fn test_record_failure() {
         let mut metrics = ExecutionMetrics::new();
-        metrics.record_failure("javascript".to_string(), 500);
+        metrics.record_failure("javascript".to_owned(), 500);
 
         assert_eq!(metrics.total_executions, 1);
         assert_eq!(metrics.failed_executions, 1);
@@ -162,7 +162,7 @@ mod tests {
     #[test]
     fn test_record_timeout() {
         let mut metrics = ExecutionMetrics::new();
-        metrics.record_timeout("python3".to_string(), 5000);
+        metrics.record_timeout("python3".to_owned(), 5000);
 
         assert_eq!(metrics.timeouts, 1);
         assert_eq!(metrics.timeout_rate(), 1.0);
@@ -171,9 +171,9 @@ mod tests {
     #[test]
     fn test_success_rate() {
         let mut metrics = ExecutionMetrics::new();
-        metrics.record_complete("python3".to_string(), 100, 40, true);
-        metrics.record_complete("python3".to_string(), 100, 42, true);
-        metrics.record_failure("python3".to_string(), 100);
+        metrics.record_complete("python3".to_owned(), 100, 40, true);
+        metrics.record_complete("python3".to_owned(), 100, 42, true);
+        metrics.record_failure("python3".to_owned(), 100);
 
         assert_eq!(metrics.total_executions, 3);
         assert_eq!(metrics.success_rate(), 2.0 / 3.0);
@@ -182,9 +182,9 @@ mod tests {
     #[test]
     fn test_language_distribution() {
         let mut metrics = ExecutionMetrics::new();
-        metrics.record_complete("python3".to_string(), 100, 40, true);
-        metrics.record_complete("javascript".to_string(), 150, 45, true);
-        metrics.record_complete("python3".to_string(), 120, 42, true);
+        metrics.record_complete("python3".to_owned(), 100, 40, true);
+        metrics.record_complete("javascript".to_owned(), 150, 45, true);
+        metrics.record_complete("python3".to_owned(), 120, 42, true);
 
         assert_eq!(metrics.language_distribution.get("python3"), Some(&2));
         assert_eq!(metrics.language_distribution.get("javascript"), Some(&1));
@@ -193,9 +193,9 @@ mod tests {
     #[test]
     fn test_memory_peak() {
         let mut metrics = ExecutionMetrics::new();
-        metrics.record_complete("python3".to_string(), 100, 40, true);
-        metrics.record_complete("python3".to_string(), 100, 60, true);
-        metrics.record_complete("python3".to_string(), 100, 30, true);
+        metrics.record_complete("python3".to_owned(), 100, 40, true);
+        metrics.record_complete("python3".to_owned(), 100, 60, true);
+        metrics.record_complete("python3".to_owned(), 100, 30, true);
 
         assert_eq!(metrics.memory_peak_mb, 60);
         assert_eq!(metrics.avg_memory_mb(), (40 + 60 + 30) / 3);
@@ -205,7 +205,7 @@ mod tests {
     fn test_recent_executions_limit() {
         let mut metrics = ExecutionMetrics::new();
         for _ in 0..150 {
-            metrics.record_complete("python3".to_string(), 100, 40, true);
+            metrics.record_complete("python3".to_owned(), 100, 40, true);
         }
 
         assert_eq!(metrics.total_executions, 150);

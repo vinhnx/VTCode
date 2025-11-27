@@ -53,7 +53,7 @@ async fn handle_history_command(
             let applied = usage
                 .applied_max_tokens
                 .map(|n| n.to_string())
-                .unwrap_or_else(|| "None".to_string());
+                .unwrap_or_else(|| "None".to_owned());
             let timestamp = chrono::DateTime::from_timestamp(usage.timestamp as i64, 0)
                 .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
                 .unwrap_or_else(|| usage.timestamp.to_string());

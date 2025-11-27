@@ -510,10 +510,10 @@ mod tests {
         let mut cache = PromptCache::new().await;
 
         let entry = CachedPrompt {
-            prompt_hash: "test_hash".to_string(),
-            original_prompt: "original".to_string(),
-            optimized_prompt: "optimized".to_string(),
-            model_used: crate::config::constants::models::GEMINI_2_5_FLASH.to_string(),
+            prompt_hash: "test_hash".to_owned(),
+            original_prompt: "original".to_owned(),
+            optimized_prompt: "optimized".to_owned(),
+            model_used: crate::config::constants::models::GEMINI_2_5_FLASH.to_owned(),
             tokens_saved: Some(100),
             quality_score: Some(0.9),
             created_at: 1000,
@@ -533,7 +533,7 @@ mod tests {
     async fn disabled_cache_config_is_no_op() {
         let settings = PromptCachingConfig {
             enabled: false,
-            cache_dir: "relative/cache".to_string(),
+            cache_dir: "relative/cache".to_owned(),
             ..PromptCachingConfig::default()
         };
         let cfg = PromptCacheConfig::from_settings(&settings, None);
@@ -544,10 +544,10 @@ mod tests {
         assert_eq!(cache.stats().total_entries, 0);
 
         let entry = CachedPrompt {
-            prompt_hash: "noop".to_string(),
-            original_prompt: "original".to_string(),
-            optimized_prompt: "optimized".to_string(),
-            model_used: crate::config::constants::models::GEMINI_2_5_FLASH.to_string(),
+            prompt_hash: "noop".to_owned(),
+            original_prompt: "original".to_owned(),
+            optimized_prompt: "optimized".to_owned(),
+            model_used: crate::config::constants::models::GEMINI_2_5_FLASH.to_owned(),
             tokens_saved: Some(10),
             quality_score: Some(0.9),
             created_at: 1,

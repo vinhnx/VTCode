@@ -95,29 +95,29 @@ impl DeepSeekProvider {
     fn convert_to_deepseek_format(&self, request: &LLMRequest) -> Result<Value, LLMError> {
         let mut payload = Map::new();
 
-        payload.insert("model".to_string(), Value::String(request.model.clone()));
+        payload.insert("model".to_owned(), Value::String(request.model.clone()));
         payload.insert(
-            "messages".to_string(),
+            "messages".to_owned(),
             Value::Array(self.serialize_messages(request)?),
         );
 
         if let Some(system_prompt) = &request.system_prompt {
             payload.insert(
-                "system".to_string(),
-                Value::String(system_prompt.trim().to_string()),
+                "system".to_owned(),
+                Value::String(system_prompt.trim().to_owned()),
             );
         }
 
         if let Some(max_tokens) = request.max_tokens {
             payload.insert(
-                "max_tokens".to_string(),
+                "max_tokens".to_owned(),
                 Value::Number(serde_json::Number::from(max_tokens as u64)),
             );
         }
 
         if let Some(temperature) = request.temperature {
             payload.insert(
-                "temperature".to_string(),
+                "temperature".to_owned(),
                 Value::Number(serde_json::Number::from_f64(temperature as f64).ok_or_else(
                     || LLMError::InvalidRequest("Invalid temperature value".to_string()),
                 )?),

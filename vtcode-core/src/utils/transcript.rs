@@ -268,7 +268,7 @@ mod tests {
         append("second");
         assert_eq!(len(), 2);
         let snap = snapshot();
-        assert_eq!(snap, vec!["first".to_string(), "second".to_string()]);
+        assert_eq!(snap, vec!["first".to_owned(), "second".to_owned()]);
         clear();
     }
 
@@ -284,7 +284,10 @@ mod tests {
         }
         assert_eq!(len(), MAX_LINES - (MAX_LINES / 5) + 10);
         let snap = snapshot();
-        assert_eq!(snap.first().unwrap(), &format!("line {}", MAX_LINES / 5));
+        assert_eq!(
+            snap.first().unwrap(),
+            &format!("line {}", MAX_LINES / 5).to_owned()
+        );
         clear();
     }
 
@@ -350,7 +353,7 @@ mod tests {
         });
         append("visible");
         let snap = snapshot();
-        assert_eq!(snap, vec!["visible".to_string()]);
+        assert_eq!(snap, vec!["visible".to_owned()]);
         clear();
     }
 }

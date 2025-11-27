@@ -94,7 +94,7 @@ impl Router {
                 Some(core.prompt_cache.clone()),
                 None,
             ) {
-                let sys = "You are a routing classifier. Output only one label: simple | standard | complex | codegen_heavy | retrieval_heavy. Choose the best class for the user's last message. No prose.".to_string();
+                let sys = "You are a routing classifier. Output only one label: simple | standard | complex | codegen_heavy | retrieval_heavy. Choose the best class for the user's last message. No prose.".to_owned();
                 let supports_effort =
                     provider.supports_reasoning_effort(&router_cfg.llm_router_model);
                 let reasoning_effort = if supports_effort {
@@ -103,7 +103,7 @@ impl Router {
                     None
                 };
                 let req = uni::LLMRequest {
-                    messages: vec![uni::Message::user(input.to_string())],
+                    messages: vec![uni::Message::user(input.to_owned())],
                     system_prompt: Some(sys),
                     tools: None,
                     model: router_cfg.llm_router_model.clone(),

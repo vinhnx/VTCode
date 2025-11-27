@@ -26,10 +26,10 @@ pub enum IntentFulfillment {
 impl IntentFulfillment {
     pub fn to_string(&self) -> String {
         match self {
-            Self::Fulfilled => "fulfilled".to_string(),
-            Self::PartiallyFulfilled => "partially_fulfilled".to_string(),
-            Self::Attempted => "attempted".to_string(),
-            Self::Failed => "failed".to_string(),
+            Self::Fulfilled => "fulfilled".to_owned(),
+            Self::PartiallyFulfilled => "partially_fulfilled".to_owned(),
+            Self::Attempted => "attempted".to_owned(),
+            Self::Failed => "failed".to_owned(),
         }
     }
 }
@@ -416,18 +416,18 @@ mod tests {
     #[test]
     fn test_message_correlation() {
         let mut corr = MessageToolCorrelation::new(
-            "msg-1".to_string(),
-            "Let me grep for errors".to_string(),
-            ToolIntent::Search("errors".to_string()),
+            "msg-1".to_owned(),
+            "Let me grep for errors".to_owned(),
+            ToolIntent::Search("errors".to_owned()),
         );
 
         let exec = ToolExecution {
-            tool_name: "grep_file".to_string(),
+            tool_name: "grep_file".to_owned(),
             args: Value::Null,
             result: EnhancedToolResult::new(
                 Value::Null,
                 ResultMetadata::success(0.9, 0.9),
-                "grep_file".to_string(),
+                "grep_file".to_owned(),
             ),
             duration_ms: 100,
             contributed_to_intent: true,
@@ -446,9 +446,9 @@ mod tests {
         let mut tracker = MessageCorrelationTracker::new();
 
         let corr = MessageToolCorrelation::new(
-            "msg-1".to_string(),
-            "test".to_string(),
-            ToolIntent::Search("test".to_string()),
+            "msg-1".to_owned(),
+            "test".to_owned(),
+            ToolIntent::Search("test".to_owned()),
         );
 
         tracker.add(corr);
@@ -461,11 +461,11 @@ mod tests {
     fn test_extract_quoted_string() {
         assert_eq!(
             extract_quoted_string("grep for \"error pattern\""),
-            Some("error pattern".to_string())
+            Some("error pattern".to_owned())
         );
         assert_eq!(
             extract_quoted_string("find 'test.rs'"),
-            Some("test.rs".to_string())
+            Some("test.rs".to_owned())
         );
     }
 }

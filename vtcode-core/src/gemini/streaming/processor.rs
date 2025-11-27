@@ -161,7 +161,7 @@ impl StreamingProcessor {
             }
             Ok(None) => {
                 return Err(StreamingError::StreamingError {
-                    message: "Empty streaming response".to_string(),
+                    message: "Empty streaming response".to_owned(),
                     partial_content: None,
                 });
             }
@@ -169,7 +169,7 @@ impl StreamingProcessor {
                 self.metrics.error_count += 1;
                 self.report_progress(first_chunk_start, request_start);
                 return Err(StreamingError::TimeoutError {
-                    operation: "first_chunk".to_string(),
+                    operation: "first_chunk".to_owned(),
                     duration: self.config.first_chunk_timeout,
                 });
             }
@@ -185,7 +185,7 @@ impl StreamingProcessor {
                     self.metrics.error_count += 1;
                     self.report_progress_at_timeout(elapsed);
                     return Err(StreamingError::TimeoutError {
-                        operation: "streaming".to_string(),
+                        operation: "streaming".to_owned(),
                         duration: elapsed,
                     });
                 }
@@ -242,7 +242,7 @@ impl StreamingProcessor {
 
         if !_has_valid_content {
             return Err(StreamingError::ContentError {
-                message: "No valid content received from streaming API".to_string(),
+                message: "No valid content received from streaming API".to_owned(),
             });
         }
 
@@ -278,7 +278,7 @@ impl StreamingProcessor {
         }
 
         if processed_chars > 0 {
-            *buffer = buffer[processed_chars..].to_string();
+            *buffer = buffer[processed_chars..].to_owned();
         }
 
         Ok(_has_valid_content)
@@ -453,7 +453,7 @@ impl StreamingProcessor {
 
                 Err(StreamingError::ParseError {
                     message: format!("Failed to parse streaming JSON: {}", parse_err),
-                    raw_response: trimmed.to_string(),
+                    raw_response: trimmed.to_owned(),
                 })
             }
         }
@@ -478,13 +478,13 @@ impl StreamingProcessor {
             Ok(parsed) => self.process_event_value(parsed, accumulated_response, on_chunk),
             Err(parse_err) => {
                 if parse_err.is_eof() {
-                    self.current_event_data = trimmed.to_string();
+                    self.current_event_data = trimmed.to_owned();
                     return Ok(false);
                 }
 
                 Err(StreamingError::ParseError {
                     message: format!("Failed to parse streaming JSON: {}", parse_err),
-                    raw_response: trimmed.to_string(),
+                    raw_response: trimmed.to_owned(),
                 })
             }
         }
@@ -499,7 +499,7 @@ impl StreamingProcessor {
             Self::merge_parts(
                 &mut last_candidate.content.parts,
                 vec![Part::Text {
-                    text: text.to_string(),
+                    text: text.to_owned(),
                     thought_signature: None,
                 }],
             );
@@ -510,9 +510,9 @@ impl StreamingProcessor {
 
         accumulated_response.candidates.push(StreamingCandidate {
             content: Content {
-                role: "model".to_string(),
+                role: "model".to_owned(),
                 parts: vec![Part::Text {
-                    text: text.to_string(),
+                    text: text.to_owned(),
                     thought_signature: None,
                 }],
             },
@@ -579,7 +579,7 @@ impl StreamingProcessor {
                         .get("message")
                         .and_then(Value::as_str)
                         .unwrap_or("Gemini streaming error")
-                        .to_string();
+                        .to_owned();
                     let code = error_value
                         .get("code")
                         .and_then(Value::as_i64)
@@ -725,7 +725,7 @@ impl StreamingProcessor {
             Value::Object(map) => {
                 if let Some(text) = map.get("text").and_then(Value::as_str) {
                     if !text.trim().is_empty() {
-                        return Some(text.to_string());
+                        return Some(text.to_owned());
                     }
                 }
 
@@ -853,7 +853,7 @@ mod tests {
 
         {
             let mut on_chunk = |chunk: &str| {
-                received_chunks.push(chunk.to_string());
+                received_chunks.push(chunk.to_owned());
                 Ok(())
             };
             let has_valid = processor

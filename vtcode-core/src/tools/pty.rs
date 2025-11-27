@@ -523,7 +523,7 @@ impl PtySessionHandle {
         }
 
         text.get(consumed..)
-            .map(|tail| tail.to_string())
+            .map(|tail| tail.to_owned())
             .unwrap_or_default()
     }
 }
@@ -611,7 +611,7 @@ impl PtyManager {
             let full_command = join(std::iter::once(program.clone()).chain(args.iter().cloned()));
             let (exec_program, exec_args, display_program, _use_shell_wrapper) = (
                 shell.clone(),
-                vec!["-lc".to_string(), full_command.clone()],
+                vec!["-lc".to_owned(), full_command.clone()],
                 program.clone(),
                 true,
             );
@@ -731,7 +731,7 @@ impl PtyManager {
                 .join()
                 .map_err(|panic| anyhow!("PTY command reader thread panicked: {:?}", panic))?
                 .context("failed to read PTY command output")?;
-            let mut output = String::from_utf8_lossy(&output_bytes).to_string();
+            let mut output = String::from_utf8_lossy(&output_bytes).into_owned();
             let exit_code = exit_status_code(status);
 
             // Apply max_tokens truncation if specified
@@ -860,7 +860,7 @@ impl PtyManager {
 
         let (exec_program, exec_args, display_program) = (
             shell.clone(),
-            vec!["-lc".to_string(), full_command.clone()],
+            vec!["-lc".to_owned(), full_command.clone()],
             program.clone(),
         );
 

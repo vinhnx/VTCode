@@ -235,7 +235,7 @@ impl PlanManager {
         let sanitized_explanation = update
             .explanation
             .as_ref()
-            .map(|text| text.trim().to_string())
+            .map(|text| text.trim().to_owned())
             .filter(|text| !text.is_empty());
 
         let mut in_progress_count = 0usize;

@@ -400,7 +400,7 @@ mod tests {
     #[test]
     fn test_discovery_metrics_recording() {
         let collector = MetricsCollector::new();
-        collector.record_discovery_query("file".to_string(), 5, 50);
+        collector.record_discovery_query("file".to_owned(), 5, 50);
 
         let metrics = collector.get_discovery_metrics();
         assert_eq!(metrics.total_queries, 1);
@@ -410,8 +410,8 @@ mod tests {
     #[test]
     fn test_execution_metrics_recording() {
         let collector = MetricsCollector::new();
-        collector.record_execution_start("python3".to_string());
-        collector.record_execution_complete("python3".to_string(), 1000, 50);
+        collector.record_execution_start("python3".to_owned());
+        collector.record_execution_complete("python3".to_owned(), 1000, 50);
 
         let metrics = collector.get_execution_metrics();
         assert_eq!(metrics.total_executions, 1);
@@ -422,8 +422,8 @@ mod tests {
     #[test]
     fn test_metrics_summary_export() {
         let collector = MetricsCollector::new();
-        collector.record_discovery_query("test".to_string(), 3, 30);
-        collector.record_pii_detection("email".to_string());
+        collector.record_discovery_query("test".to_owned(), 3, 30);
+        collector.record_pii_detection("email".to_owned());
 
         let summary = collector.get_summary();
         assert!(summary.session_duration_ms >= 0);
@@ -434,7 +434,7 @@ mod tests {
     #[test]
     fn test_prometheus_export() {
         let collector = MetricsCollector::new();
-        collector.record_execution_complete("python3".to_string(), 500, 40);
+        collector.record_execution_complete("python3".to_owned(), 500, 40);
 
         let prometheus = collector.export_prometheus();
         assert!(prometheus.contains("vtcode_execution_total"));
@@ -444,7 +444,7 @@ mod tests {
     #[test]
     fn test_json_export() {
         let collector = MetricsCollector::new();
-        collector.record_discovery_query("test".to_string(), 2, 25);
+        collector.record_discovery_query("test".to_owned(), 2, 25);
 
         let json = collector.export_json().unwrap();
         assert!(json.get("timestamp").is_some());

@@ -720,7 +720,7 @@ impl TreeSitterAnalyzer {
             for prev in converted_children.iter().rev() {
                 let k = prev.kind.to_lowercase();
                 if k.contains("comment") {
-                    leading_comments.push(prev.text.trim().to_string());
+                    leading_comments.push(prev.text.trim().to_owned());
                 } else {
                     break;
                 }

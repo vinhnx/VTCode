@@ -352,7 +352,7 @@ impl TimeoutDetector {
                 Err(_) => {
                     self.record_timeout(
                         &handle.operation_id,
-                        Some("Operation timed out".to_string()),
+                        Some("Operation timed out".to_owned()),
                     )
                     .await;
                     Err(anyhow::anyhow!(
@@ -466,7 +466,7 @@ mod tests {
 
         let result = detector
             .execute_with_timeout_retry(
-                "test_operation".to_string(),
+                "test_operation".to_owned(),
                 OperationType::ApiCall,
                 || async {
                     sleep(Duration::from_millis(20)).await;
@@ -497,7 +497,7 @@ mod tests {
         let call_count_clone = call_count.clone();
         let result = detector
             .execute_with_timeout_retry(
-                "test_retry".to_string(),
+                "test_retry".to_owned(),
                 OperationType::ApiCall,
                 move || {
                     let call_count = call_count_clone.clone();

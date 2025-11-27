@@ -260,7 +260,6 @@ impl SessionArchive {
 
         Ok(self.path.clone())
     }
-
     pub fn path(&self) -> &Path {
         &self.path
     }
@@ -375,7 +374,7 @@ async fn resolve_sessions_dir() -> Result<PathBuf> {
 
 fn truncate_preview(input: &str, max_chars: usize) -> String {
     if input.chars().count() <= max_chars {
-        return input.to_string();
+        return input.to_owned();
     }
 
     let mut truncated = String::new();
@@ -406,9 +405,9 @@ fn sanitize_component(value: &str) -> String {
 
     let trimmed = normalized.trim_matches(|c| c == '-' || c == '_');
     if trimmed.is_empty() {
-        "workspace".to_string()
+        "workspace".to_owned()
     } else {
-        trimmed.to_string()
+        trimmed.to_owned()
     }
 }
 
@@ -467,7 +466,7 @@ mod tests {
             "medium",
         );
         let archive = SessionArchive::new(metadata.clone()).await?;
-        let transcript = vec!["line one".to_string(), "line two".to_string()];
+        let transcript = vec!["line one".to_owned(), "line two".to_owned()];
         let messages = vec![
             SessionMessage::new(MessageRole::User, "Hello world"),
             SessionMessage::new(MessageRole::Assistant, "Hi there"),
@@ -475,7 +474,7 @@ mod tests {
         let path = archive.finalize(
             transcript.clone(),
             4,
-            vec!["tool_a".to_string()],
+            vec!["tool_a".to_owned()],
             messages.clone(),
         )?;
 
@@ -487,15 +486,17 @@ mod tests {
         assert_eq!(snapshot.metadata, metadata);
         assert_eq!(snapshot.transcript, transcript);
         assert_eq!(snapshot.total_messages, 4);
-        assert_eq!(snapshot.distinct_tools, vec!["tool_a".to_string()]);
+        assert_eq!(snapshot.distinct_tools, vec!["tool_a".to_owned()]);
         assert_eq!(snapshot.messages, messages);
         Ok(())
     }
 
     #[test]
     fn session_message_converts_back_and_forth() {
-        let mut original = Message::assistant("Test response".to_string());
-        original.reasoning = Some("Model thoughts".to_string());
+        let mut original = Message::assistant("Test response".to_owned());
+        let mut original = Message::assistant("Test response".to_owned());
+        original.reasoning = Some("Model thoughts".to_owned());
+        original.reasoning = Some("Model thoughts".to_owned());
         let stored = SessionMessage::from(&original);
         let restored = Message::from(&stored);
 
@@ -509,8 +510,11 @@ mod tests {
     #[test]
     fn session_message_preserves_parts() {
         let original = Message::assistant_with_parts(vec![
-            ContentPart::text("See attached image".to_string()),
-            ContentPart::image("encoded-image".to_string(), "image/png".to_string()),
+            ContentPart::text("See attached image".to_owned()),
+            ContentPart::text("See attached image".to_owned()),
+            ContentPart::image("encoded-image".to_owned(), "image/png".to_owned()),
+            ContentPart::image("encoded-image".to_owned(), "image/png".to_owned()),
+            ContentPart::image("encoded-image".to_owned(), "image/png".to_owned()),
         ]);
         let stored = SessionMessage::from(&original);
 
@@ -635,7 +639,7 @@ mod tests {
         );
         let first_archive = SessionArchive::new(first_metadata.clone()).await?;
         first_archive.finalize(
-            vec!["first".to_string()],
+            vec!["first".to_owned()],
             1,
             Vec::new(),
             vec![SessionMessage::new(MessageRole::User, "First")],
@@ -653,9 +657,9 @@ mod tests {
         );
         let second_archive = SessionArchive::new(second_metadata.clone()).await?;
         second_archive.finalize(
-            vec!["second".to_string()],
+            vec!["second".to_owned()],
             2,
-            vec!["tool_b".to_string()],
+            vec!["tool_b".to_owned()],
             vec![SessionMessage::new(MessageRole::User, "Second")],
         )?;
 
@@ -697,7 +701,7 @@ mod tests {
 
         assert_eq!(
             listing.first_prompt_preview(),
-            Some("prompt line".to_string())
+            Some("prompt line".to_owned())
         );
         let expected = super::truncate_preview(&long_response, 80);
         assert_eq!(listing.first_reply_preview(), Some(expected));

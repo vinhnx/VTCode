@@ -24,7 +24,7 @@ impl LanguageProvider for PythonProvider {
         // Add Python-specific keywords
         if context.prefix.is_empty() || "def".starts_with(&context.prefix) {
             suggestions.push(CompletionSuggestion::new(
-                "def".to_string(),
+                "def".to_owned(),
                 CompletionKind::Keyword,
                 context.clone(),
             ));
@@ -32,7 +32,7 @@ impl LanguageProvider for PythonProvider {
 
         if context.prefix.is_empty() || "class".starts_with(&context.prefix) {
             suggestions.push(CompletionSuggestion::new(
-                "class".to_string(),
+                "class".to_owned(),
                 CompletionKind::Keyword,
                 context.clone(),
             ));

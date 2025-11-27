@@ -28,7 +28,7 @@ impl ProjectDocBundle {
             let trimmed = line.trim();
             if trimmed.starts_with('-') {
                 let highlight = trimmed.trim_start_matches('-').trim();
-                    if !highlight.is_empty() {
+                if !highlight.is_empty() {
                     highlights.push(highlight.to_owned());
                 }
             }
@@ -212,7 +212,7 @@ mod tests {
             current_dir: repo.path(),
             project_root: repo.path(),
             home_dir: None,
-            extra_instruction_files: &["docs/*.md".to_string()],
+            extra_instruction_files: &["docs/*.md".to_owned()],
             max_bytes: 4096,
         })
         .await

@@ -309,7 +309,7 @@ mod tests {
     fn create_test_tool(name: &str, version: &str) -> ToolVersion {
         let (major, minor, patch) = ToolVersion::from_string(version).unwrap();
         ToolVersion {
-            name: name.to_string(),
+            name: name.to_owned(),
             major,
             minor,
             patch,
@@ -339,17 +339,17 @@ mod tests {
     fn test_exact_version_compatibility() {
         let mut tools = HashMap::new();
         tools.insert(
-            "read_file".to_string(),
+            "read_file".to_owned(),
             create_test_tool("read_file", "1.2.3"),
         );
 
         let deps = vec![ToolDependency {
-            name: "read_file".to_string(),
-            version: "1.2".to_string(),
-            usage: vec!["test".to_string()],
+            name: "read_file".to_owned(),
+            version: "1.2".to_owned(),
+            usage: vec!["test".to_owned()],
         }];
 
-        let checker = SkillCompatibilityChecker::new("test_skill".to_string(), deps, tools);
+        let checker = SkillCompatibilityChecker::new("test_skill".to_owned(), deps, tools);
         let report = checker.check_compatibility().unwrap();
 
         assert!(report.compatible);
@@ -361,12 +361,12 @@ mod tests {
         let tools = HashMap::new(); // No tools defined
 
         let deps = vec![ToolDependency {
-            name: "nonexistent_tool".to_string(),
-            version: "1.0".to_string(),
+            name: "nonexistent_tool".to_owned(),
+            version: "1.0".to_owned(),
             usage: vec![],
         }];
 
-        let checker = SkillCompatibilityChecker::new("test_skill".to_string(), deps, tools);
+        let checker = SkillCompatibilityChecker::new("test_skill".to_owned(), deps, tools);
         let report = checker.check_compatibility().unwrap();
 
         assert!(!report.compatible);
@@ -378,17 +378,17 @@ mod tests {
         let mut tools = HashMap::new();
         // Tool is at 1.3.0 but skill requires 1.2
         tools.insert(
-            "list_files".to_string(),
+            "list_files".to_owned(),
             create_test_tool("list_files", "1.3.0"),
         );
 
         let deps = vec![ToolDependency {
-            name: "list_files".to_string(),
-            version: "1.2".to_string(),
+            name: "list_files".to_owned(),
+            version: "1.2".to_owned(),
             usage: vec![],
         }];
 
-        let checker = SkillCompatibilityChecker::new("test_skill".to_string(), deps, tools);
+        let checker = SkillCompatibilityChecker::new("test_skill".to_owned(), deps, tools);
         let report = checker.check_compatibility().unwrap();
 
         assert!(report.compatible);
@@ -400,17 +400,17 @@ mod tests {
         let mut tools = HashMap::new();
         // Tool upgraded to 2.0.0, skill requires 1.2
         tools.insert(
-            "grep_file".to_string(),
+            "grep_file".to_owned(),
             create_test_tool("grep_file", "2.0.0"),
         );
 
         let deps = vec![ToolDependency {
-            name: "grep_file".to_string(),
-            version: "1.2".to_string(),
+            name: "grep_file".to_owned(),
+            version: "1.2".to_owned(),
             usage: vec![],
         }];
 
-        let checker = SkillCompatibilityChecker::new("test_skill".to_string(), deps, tools);
+        let checker = SkillCompatibilityChecker::new("test_skill".to_owned(), deps, tools);
         let report = checker.check_compatibility().unwrap();
 
         assert!(!report.compatible);
@@ -421,17 +421,17 @@ mod tests {
     fn test_detailed_report() {
         let mut tools = HashMap::new();
         tools.insert(
-            "read_file".to_string(),
+            "read_file".to_owned(),
             create_test_tool("read_file", "1.2.3"),
         );
 
         let deps = vec![ToolDependency {
-            name: "read_file".to_string(),
-            version: "1.2".to_string(),
-            usage: vec!["main".to_string()],
+            name: "read_file".to_owned(),
+            version: "1.2".to_owned(),
+            usage: vec!["main".to_owned()],
         }];
 
-        let checker = SkillCompatibilityChecker::new("filter_skill".to_string(), deps, tools);
+        let checker = SkillCompatibilityChecker::new("filter_skill".to_owned(), deps, tools);
         let report = checker.detailed_report().unwrap();
 
         assert!(report.contains("filter_skill"));
@@ -444,17 +444,17 @@ mod tests {
         // Should be compatible (patch version changes are backward compatible)
         let mut tools = HashMap::new();
         tools.insert(
-            "list_files".to_string(),
+            "list_files".to_owned(),
             create_test_tool("list_files", "1.2.5"),
         );
 
         let deps = vec![ToolDependency {
-            name: "list_files".to_string(),
-            version: "1.2".to_string(),
-            usage: vec!["main".to_string()],
+            name: "list_files".to_owned(),
+            version: "1.2".to_owned(),
+            usage: vec!["main".to_owned()],
         }];
 
-        let checker = SkillCompatibilityChecker::new("filter_skill".to_string(), deps, tools);
+        let checker = SkillCompatibilityChecker::new("filter_skill".to_owned(), deps, tools);
         let report = checker.check_compatibility().unwrap();
 
         assert!(
@@ -469,37 +469,37 @@ mod tests {
         // Skill depends on multiple tools with different version compatibility
         let mut tools = HashMap::new();
         tools.insert(
-            "read_file".to_string(),
+            "read_file".to_owned(),
             create_test_tool("read_file", "1.2.0"),
         );
         tools.insert(
-            "write_file".to_string(),
+            "write_file".to_owned(),
             create_test_tool("write_file", "2.0.0"),
         );
         tools.insert(
-            "list_files".to_string(),
+            "list_files".to_owned(),
             create_test_tool("list_files", "1.3.0"),
         );
 
         let deps = vec![
             ToolDependency {
-                name: "read_file".to_string(),
-                version: "1.2".to_string(),
-                usage: vec!["read_input".to_string()],
+                name: "read_file".to_owned(),
+                version: "1.2".to_owned(),
+                usage: vec!["read_input".to_owned()],
             },
             ToolDependency {
-                name: "write_file".to_string(),
-                version: "1.0".to_string(),
-                usage: vec!["write_output".to_string()],
+                name: "write_file".to_owned(),
+                version: "1.0".to_owned(),
+                usage: vec!["write_output".to_owned()],
             },
             ToolDependency {
-                name: "list_files".to_string(),
-                version: "1.2".to_string(),
-                usage: vec!["scan_directory".to_string()],
+                name: "list_files".to_owned(),
+                version: "1.2".to_owned(),
+                usage: vec!["scan_directory".to_owned()],
             },
         ];
 
-        let checker = SkillCompatibilityChecker::new("complex_skill".to_string(), deps, tools);
+        let checker = SkillCompatibilityChecker::new("complex_skill".to_owned(), deps, tools);
         let report = checker.check_compatibility().unwrap();
 
         // Should be compatible for read_file and list_files, but need migration for write_file

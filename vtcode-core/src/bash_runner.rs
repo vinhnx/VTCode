@@ -57,10 +57,10 @@ impl BashRunner {
 
         let output = cmd
             .output()
-            .with_context(|| "Failed to execute ls command".to_string())?;
+            .with_context(|| "Failed to execute ls command".to_owned())?;
 
         if output.status.success() {
-            Ok(String::from_utf8_lossy(&output.stdout).to_string())
+            Ok(String::from_utf8_lossy(&output.stdout).into_owned())
         } else {
             Err(anyhow::anyhow!(
                 "ls failed: {}",
@@ -86,7 +86,7 @@ impl BashRunner {
 
         let output = cmd
             .output()
-            .with_context(|| "Failed to execute mkdir command".to_string())?;
+            .with_context(|| "Failed to execute mkdir command".to_owned())?;
 
         if output.status.success() {
             Ok(())
@@ -113,7 +113,7 @@ impl BashRunner {
 
         let output = cmd
             .output()
-            .with_context(|| "Failed to execute rm command".to_string())?;
+            .with_context(|| "Failed to execute rm command".to_owned())?;
 
         if output.status.success() {
             Ok(())
@@ -138,7 +138,7 @@ impl BashRunner {
 
         let output = cmd
             .output()
-            .with_context(|| "Failed to execute cp command".to_string())?;
+            .with_context(|| "Failed to execute cp command".to_owned())?;
 
         if output.status.success() {
             Ok(())
@@ -159,7 +159,7 @@ impl BashRunner {
             .arg(&source_path)
             .arg(&dest_path)
             .output()
-            .with_context(|| "Failed to execute mv command".to_string())?;
+            .with_context(|| "Failed to execute mv command".to_owned())?;
 
         if output.status.success() {
             Ok(())
@@ -186,10 +186,10 @@ impl BashRunner {
 
         let output = cmd
             .output()
-            .with_context(|| "Failed to execute grep command".to_string())?;
+            .with_context(|| "Failed to execute grep command".to_owned())?;
 
         if output.status.success() {
-            Ok(String::from_utf8_lossy(&output.stdout).to_string())
+            Ok(String::from_utf8_lossy(&output.stdout).into_owned())
         } else {
             // grep returns non-zero when no matches found, which is not an error for us
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -225,10 +225,10 @@ impl BashRunner {
 
         let output = cmd
             .output()
-            .with_context(|| "Failed to execute find command".to_string())?;
+            .with_context(|| "Failed to execute find command".to_owned())?;
 
         if output.status.success() {
-            Ok(String::from_utf8_lossy(&output.stdout).to_string())
+            Ok(String::from_utf8_lossy(&output.stdout).into_owned())
         } else {
             Err(anyhow::anyhow!(
                 "find failed: {}",
@@ -254,7 +254,7 @@ impl BashRunner {
                 .arg(&range)
                 .arg(&file_path)
                 .output()
-                .with_context(|| "Failed to execute sed command".to_string())?;
+                .with_context(|| "Failed to execute sed command".to_owned())?;
 
             if output.status.success() {
                 Ok(String::from_utf8_lossy(&output.stdout).to_string())
@@ -269,7 +269,7 @@ impl BashRunner {
             let output = Command::new("cat")
                 .arg(&file_path)
                 .output()
-                .with_context(|| "Failed to execute cat command".to_string())?;
+                .with_context(|| "Failed to execute cat command".to_owned())?;
 
             if output.status.success() {
                 Ok(String::from_utf8_lossy(&output.stdout).to_string())
@@ -291,7 +291,7 @@ impl BashRunner {
             .arg(lines.to_string())
             .arg(&file_path)
             .output()
-            .with_context(|| "Failed to execute head command".to_string())?;
+            .with_context(|| "Failed to execute head command".to_owned())?;
 
         if output.status.success() {
             Ok(String::from_utf8_lossy(&output.stdout).to_string())
@@ -311,7 +311,7 @@ impl BashRunner {
             .arg(lines.to_string())
             .arg(&file_path)
             .output()
-            .with_context(|| "Failed to execute tail command".to_string())?;
+            .with_context(|| "Failed to execute tail command".to_owned())?;
 
         if output.status.success() {
             Ok(String::from_utf8_lossy(&output.stdout).to_string())
@@ -331,7 +331,7 @@ impl BashRunner {
             .arg("-la")
             .arg(&file_path)
             .output()
-            .with_context(|| "Failed to execute ls command".to_string())?;
+            .with_context(|| "Failed to execute ls command".to_owned())?;
 
         if output.status.success() {
             Ok(String::from_utf8_lossy(&output.stdout).to_string())

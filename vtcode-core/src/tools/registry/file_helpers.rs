@@ -64,7 +64,7 @@ impl ToolRegistry {
         let had_trailing_newline = current_content.ends_with('\n');
 
         let mut replacement_occurred = false;
-        let mut new_content = current_content.to_string();
+        let mut new_content = current_content.to_owned();
 
         if current_content.contains(&input.old_str) {
             new_content = current_content.replace(&input.old_str, &input.new_str);
@@ -139,7 +139,7 @@ impl ToolRegistry {
                     &current_content[current_content.len().saturating_sub(250)..]
                 )
             } else {
-                current_content.to_string()
+                current_content.to_owned()
             };
 
             return Err(anyhow!(

@@ -132,25 +132,25 @@ pub async fn aggregate_tool_output_for_model(
 
     // Common fields
     if let Some(s) = output.get("output").and_then(Value::as_str) {
-        parts.push(("output".to_string(), s.to_string()));
+        parts.push(("output".to_owned(), s.to_owned()));
     }
     if let Some(s) = output.get("stdout").and_then(Value::as_str) {
-        parts.push(("stdout".to_string(), s.to_string()));
+        parts.push(("stdout".to_owned(), s.to_owned()));
     }
     if let Some(s) = output.get("stderr").and_then(Value::as_str) {
-        parts.push(("stderr".to_string(), s.to_string()));
+        parts.push(("stderr".to_owned(), s.to_owned()));
     }
     if let Some(s) = output.get("content").and_then(Value::as_str) {
-        parts.push(("content".to_string(), s.to_string()));
+        parts.push(("content".to_owned(), s.to_owned()));
     }
     if let Some(s) = output.get("message").and_then(Value::as_str) {
-        parts.push(("message".to_string(), s.to_string()));
+        parts.push(("message".to_owned(), s.to_owned()));
     }
 
     // Fallback: if nothing obvious, serialize concisely
     if parts.is_empty() {
         let compact = if output.is_object() || output.is_array() {
-            serde_json::to_string(output).unwrap_or_else(|_| "{}".to_string())
+            serde_json::to_string(output).unwrap_or_else(|_| "{}".to_owned())
         } else {
             output.to_string()
         };

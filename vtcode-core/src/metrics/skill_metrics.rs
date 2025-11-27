@@ -151,7 +151,7 @@ mod tests {
     #[test]
     fn test_record_created() {
         let mut metrics = SkillMetrics::new();
-        metrics.record_created("filter_test_files".to_string(), "python3".to_string());
+        metrics.record_created("filter_test_files".to_owned(), "python3".to_owned());
 
         assert_eq!(metrics.total_skills, 1);
         assert_eq!(metrics.active_skills, 1);
@@ -161,8 +161,8 @@ mod tests {
     #[test]
     fn test_record_deleted() {
         let mut metrics = SkillMetrics::new();
-        metrics.record_created("skill1".to_string(), "python3".to_string());
-        metrics.record_deleted("skill1".to_string());
+        metrics.record_created("skill1".to_owned(), "python3".to_owned());
+        metrics.record_deleted("skill1".to_owned());
 
         assert_eq!(metrics.active_skills, 0);
         assert!(!metrics.skill_stats.contains_key("skill1"));
@@ -171,9 +171,9 @@ mod tests {
     #[test]
     fn test_record_execution() {
         let mut metrics = SkillMetrics::new();
-        metrics.record_created("analyze".to_string(), "python3".to_string());
-        metrics.record_execution("analyze".to_string(), 1000, true);
-        metrics.record_execution("analyze".to_string(), 950, true);
+        metrics.record_created("analyze".to_owned(), "python3".to_owned());
+        metrics.record_execution("analyze".to_owned(), 1000, true);
+        metrics.record_execution("analyze".to_owned(), 950, true);
 
         assert_eq!(metrics.total_executions, 2);
         let stats = metrics.skill_stats.get("analyze").unwrap();
@@ -185,11 +185,11 @@ mod tests {
     #[test]
     fn test_reuse_ratio() {
         let mut metrics = SkillMetrics::new();
-        metrics.record_created("skill1".to_string(), "python3".to_string());
-        metrics.record_created("skill2".to_string(), "javascript".to_string());
-        metrics.record_execution("skill1".to_string(), 100, true);
-        metrics.record_execution("skill1".to_string(), 100, true);
-        metrics.record_execution("skill2".to_string(), 200, true);
+        metrics.record_created("skill1".to_owned(), "python3".to_owned());
+        metrics.record_created("skill2".to_owned(), "javascript".to_owned());
+        metrics.record_execution("skill1".to_owned(), 100, true);
+        metrics.record_execution("skill1".to_owned(), 100, true);
+        metrics.record_execution("skill2".to_owned(), 200, true);
 
         assert_eq!(metrics.reuse_ratio(), 3.0 / 2.0);
     }
@@ -197,10 +197,10 @@ mod tests {
     #[test]
     fn test_success_rate() {
         let mut metrics = SkillMetrics::new();
-        metrics.record_created("test".to_string(), "python3".to_string());
-        metrics.record_execution("test".to_string(), 100, true);
-        metrics.record_execution("test".to_string(), 100, true);
-        metrics.record_execution("test".to_string(), 100, false);
+        metrics.record_created("test".to_owned(), "python3".to_owned());
+        metrics.record_execution("test".to_owned(), 100, true);
+        metrics.record_execution("test".to_owned(), 100, true);
+        metrics.record_execution("test".to_owned(), 100, false);
 
         let success_rate = metrics.get_skill_success_rate("test");
         assert!((success_rate - 2.0 / 3.0).abs() < 0.01);
@@ -209,10 +209,10 @@ mod tests {
     #[test]
     fn test_avg_duration() {
         let mut metrics = SkillMetrics::new();
-        metrics.record_created("perf".to_string(), "javascript".to_string());
-        metrics.record_execution("perf".to_string(), 500, true);
-        metrics.record_execution("perf".to_string(), 600, true);
-        metrics.record_execution("perf".to_string(), 400, true);
+        metrics.record_created("perf".to_owned(), "javascript".to_owned());
+        metrics.record_execution("perf".to_owned(), 500, true);
+        metrics.record_execution("perf".to_owned(), 600, true);
+        metrics.record_execution("perf".to_owned(), 400, true);
 
         let avg = metrics.get_skill_avg_duration("perf");
         assert_eq!(avg, 500);
@@ -221,15 +221,15 @@ mod tests {
     #[test]
     fn test_underutilized_skills() {
         let mut metrics = SkillMetrics::new();
-        metrics.record_created("popular".to_string(), "python3".to_string());
-        metrics.record_created("unpopular".to_string(), "python3".to_string());
+        metrics.record_created("popular".to_owned(), "python3".to_owned());
+        metrics.record_created("unpopular".to_owned(), "python3".to_owned());
 
         for _ in 0..10 {
-            metrics.record_execution("popular".to_string(), 100, true);
+            metrics.record_execution("popular".to_owned(), 100, true);
         }
-        metrics.record_execution("unpopular".to_string(), 100, true);
+        metrics.record_execution("unpopular".to_owned(), 100, true);
 
         let underutilized = metrics.get_underutilized_skills(0.5);
-        assert!(underutilized.contains(&"unpopular".to_string()));
+        assert!(underutilized.contains(&"unpopular".to_owned()));
     }
 }

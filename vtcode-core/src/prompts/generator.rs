@@ -27,25 +27,28 @@ impl<'a> SystemPromptGenerator<'a> {
                     out.push_str("\n\n");
                 }
                 out.push_str($s);
-                first = false;
             }};
         }
 
         // Base system prompt
         append!(PromptTemplates::base_system_prompt());
+        first = false;
 
         // Custom instruction if provided (borrowed, avoid clone)
         if let Some(custom) = self.config.custom_instruction.as_deref() {
             append!(custom);
+            first = false;
         }
 
         // Personality and response style (static &'static str from templates)
         append!(PromptTemplates::personality_prompt(
             &self.config.personality
         ));
+        first = false;
         append!(PromptTemplates::response_style_prompt(
             &self.config.response_style
         ));
+        first = false;
 
         // Tool usage if enabled
         if self.config.include_tools && !self.context.available_tools.is_empty() {

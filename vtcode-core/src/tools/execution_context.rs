@@ -264,12 +264,12 @@ mod tests {
 
     fn make_record(tool: &str, arg_val: i32) -> ToolExecutionRecord {
         ToolExecutionRecord::new(
-            tool.to_string(),
+            tool.to_owned(),
             Value::Number(arg_val.into()),
             EnhancedToolResult::new(
                 Value::Null,
                 ResultMetadata::success(0.8, 0.8),
-                tool.to_string(),
+                tool.to_owned(),
             ),
             100,
         )
@@ -277,7 +277,7 @@ mod tests {
 
     #[test]
     fn test_execution_context_creation() {
-        let ctx = ToolExecutionContext::new("session-1".to_string(), "find errors".to_string());
+        let ctx = ToolExecutionContext::new("session-1".to_owned(), "find errors".to_owned());
 
         assert_eq!(ctx.session_id, "session-1");
         assert_eq!(ctx.current_task, "find errors");
@@ -285,7 +285,7 @@ mod tests {
 
     #[test]
     fn test_add_record() {
-        let mut ctx = ToolExecutionContext::new("session-1".to_string(), "test".to_string());
+        let mut ctx = ToolExecutionContext::new("session-1".to_owned(), "test".to_owned());
 
         let record = make_record("grep", 1);
         ctx.add_record(record);
@@ -295,14 +295,14 @@ mod tests {
 
     #[test]
     fn test_is_redundant() {
-        let mut ctx = ToolExecutionContext::new("session-1".to_string(), "test".to_string());
+        let mut ctx = ToolExecutionContext::new("session-1".to_owned(), "test".to_owned());
 
-        let args = Value::String("pattern".to_string());
+        let args = Value::String("pattern".to_owned());
 
         ctx.add_record(ToolExecutionRecord::new(
             "grep".to_string(),
             args.clone(),
-            EnhancedToolResult::new(Value::Null, ResultMetadata::default(), "grep".to_string()),
+            EnhancedToolResult::new(Value::Null, ResultMetadata::default(), "grep".to_owned()),
             100,
         ));
 
@@ -311,7 +311,7 @@ mod tests {
 
     #[test]
     fn test_recent_tools() {
-        let mut ctx = ToolExecutionContext::new("session-1".to_string(), "test".to_string());
+        let mut ctx = ToolExecutionContext::new("session-1".to_owned(), "test".to_owned());
 
         ctx.add_record(make_record("grep", 1));
         ctx.add_record(make_record("find", 2));
@@ -324,8 +324,8 @@ mod tests {
 
     #[test]
     fn test_args_equivalent() {
-        let a = Value::String("pattern".to_string());
-        let b = Value::String("pattern".to_string());
+        let a = Value::String("pattern".to_owned());
+        let b = Value::String("pattern".to_owned());
         assert!(are_args_equivalent(&a, &b));
 
         let c = Value::String("different".to_string());

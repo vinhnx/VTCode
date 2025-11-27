@@ -65,7 +65,7 @@ impl SearchMetrics {
         let is_expensive = estimated_tokens > self.expensive_threshold;
 
         let metric = SearchMetric {
-            pattern: pattern.to_string(),
+            pattern: pattern.to_owned(),
             match_count,
             result_tokens: estimated_tokens,
             duration_ms,
@@ -75,7 +75,7 @@ impl SearchMetrics {
 
         self.total_tokens += estimated_tokens;
         self.total_searches += 1;
-        self.searches.insert(pattern.to_string(), metric);
+        self.searches.insert(pattern.to_owned(), metric);
     }
 
     /// Get metric for a specific pattern

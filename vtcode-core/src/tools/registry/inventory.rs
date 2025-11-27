@@ -78,7 +78,7 @@ impl ToolInventory {
     }
 
     pub fn register_tool(&mut self, registration: ToolRegistration) -> anyhow::Result<()> {
-        let name = registration.name().to_string();
+        let name = registration.name().to_owned();
 
         // Use entry API to check and insert in one operation
         use std::collections::hash_map::Entry;
@@ -109,7 +109,7 @@ impl ToolInventory {
     pub fn registration_for(&mut self, name: &str) -> Option<&mut ToolRegistration> {
         // Check if name exists directly or resolve via alias
         let resolved_name = if self.tools.contains_key(name) {
-            name.to_string()
+            name.to_owned()
         } else if let Some(aliased) = self.aliases.get(name) {
             aliased.clone()
         } else {

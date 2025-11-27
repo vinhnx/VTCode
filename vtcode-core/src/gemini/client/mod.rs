@@ -90,7 +90,7 @@ impl Client {
         } else if error_str.contains("rate limit") || error_str.contains("429") {
             StreamingError::ApiError {
                 status_code: 429,
-                message: "Rate limit exceeded".to_string(),
+                message: "Rate limit exceeded".to_owned(),
                 is_retryable: true,
             }
         } else {

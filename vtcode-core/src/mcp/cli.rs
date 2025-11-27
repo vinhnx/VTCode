@@ -258,20 +258,16 @@ async fn run_list(list_args: ListArgs) -> Result<()> {
         match &provider.transport {
             McpTransportConfig::Stdio(stdio) => {
                 let args_display = if stdio.args.is_empty() {
-                    "-".to_string()
+                    "-".to_owned()
                 } else {
                     stdio.args.join(" ")
                 };
                 let env_display = if provider.env.is_empty() {
-                    "-".to_string()
+                    "-".to_owned()
                 } else {
                     format_env_map(&provider.env)
                 };
-                let working_dir = stdio
-                    .working_directory
-                    .as_deref()
-                    .unwrap_or("-")
-                    .to_string();
+                let working_dir = stdio.working_directory.as_deref().unwrap_or("-").to_owned();
                 let status = if provider.enabled {
                     "enabled"
                 } else {
@@ -295,7 +291,7 @@ async fn run_list(list_args: ListArgs) -> Result<()> {
                 } else {
                     "disabled"
                 };
-                let api_key_env = http.api_key_env.clone().unwrap_or_else(|| "-".to_string());
+                let api_key_env = http.api_key_env.clone().unwrap_or_else(|| "-".to_owned());
                 let protocol = http.protocol_version.clone();
                 http_rows.push([
                     provider.name.clone(),
@@ -357,7 +353,7 @@ async fn run_get(get_args: GetArgs) -> Result<()> {
             println!("  transport: stdio");
             println!("  command: {}", stdio.command);
             let args_display = if stdio.args.is_empty() {
-                "-".to_string()
+                "-".to_owned()
             } else {
                 stdio.args.join(" ")
             };

@@ -251,7 +251,7 @@ fn parse_update_chunk(
     let (change_context, offset) = if first == EMPTY_CONTEXT_MARKER {
         (None, 1)
     } else if let Some(context) = first.strip_prefix(CONTEXT_MARKER_PREFIX) {
-        (Some(context.trim().to_string()), 1)
+        (Some(context.trim().to_owned()), 1)
     } else if allow_missing_context {
         (None, 0)
     } else {
