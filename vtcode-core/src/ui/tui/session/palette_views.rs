@@ -135,7 +135,7 @@ fn file_palette_instructions(palette: &FilePalette, theme: &InlineTheme) -> Vec<
 
     if palette.is_empty() {
         lines.push(Line::from(Span::styled(
-            "No files found matching filter".to_string(),
+            "No files found matching filter".to_owned(),
             default_style(theme).add_modifier(Modifier::DIM),
         )));
     } else {
@@ -146,7 +146,7 @@ fn file_palette_instructions(palette: &FilePalette, theme: &InlineTheme) -> Vec<
 
         let total = palette.total_items();
         let count_text = if total == 1 {
-            "1 file".to_string()
+            "1 file".to_owned()
         } else {
             format!("{} files", total)
         };
@@ -282,13 +282,13 @@ fn prompt_palette_instructions(palette: &PromptPalette, theme: &InlineTheme) -> 
 
     if palette.is_empty() {
         lines.push(Line::from(Span::styled(
-            "No prompts found matching filter".to_string(),
+            "No prompts found matching filter".to_owned(),
             default_style(theme).add_modifier(Modifier::DIM),
         )));
     } else {
         let total = palette.total_items();
         let count_text = if total == 1 {
-            "1 prompt".to_string()
+            "1 prompt".to_owned()
         } else {
             format!("{} prompts", total)
         };

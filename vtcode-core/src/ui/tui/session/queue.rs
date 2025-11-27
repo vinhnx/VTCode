@@ -85,7 +85,7 @@ impl Session {
         let message_style = self.styles.default_style();
 
         let header_text = if self.queued_inputs.len() == 1 {
-            "Queued message".to_string()
+            "Queued message".to_owned()
         } else {
             format!("Queued messages ({})", self.queued_inputs.len())
         };
@@ -141,7 +141,7 @@ impl Session {
         let label_width = UnicodeWidthStr::width(label);
         if max_width <= label_width {
             let mut wrapped_label = self.wrap_line(
-                Line::from(vec![Span::styled(label.to_string(), label_style)]),
+                Line::from(vec![Span::styled(label.to_owned(), label_style)]),
                 max_width,
             );
             if wrapped_label.is_empty() {
@@ -152,7 +152,7 @@ impl Session {
 
         let available = max_width - label_width;
         let mut wrapped = self.wrap_line(
-            Line::from(vec![Span::styled(message.to_string(), message_style)]),
+            Line::from(vec![Span::styled(message.to_owned(), message_style)]),
             available,
         );
         if wrapped.is_empty() {
@@ -162,7 +162,7 @@ impl Session {
         let mut lines = Vec::with_capacity(wrapped.len());
         for (line_index, mut line) in wrapped.into_iter().enumerate() {
             let prefix = if line_index == 0 {
-                label.to_string()
+                label.to_owned()
             } else {
                 " ".repeat(label_width)
             };

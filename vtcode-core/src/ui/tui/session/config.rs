@@ -10,16 +10,16 @@ use std::collections::HashMap;
 pub struct SessionConfig {
     /// UI appearance settings
     pub appearance: AppearanceConfig,
-    
+
     /// Key binding preferences
     pub key_bindings: KeyBindingConfig,
-    
+
     /// Behavior preferences
     pub behavior: BehaviorConfig,
-    
+
     /// Performance related settings
     pub performance: PerformanceConfig,
-    
+
     /// Customization settings
     pub customization: CustomizationConfig,
 }
@@ -29,22 +29,22 @@ pub struct SessionConfig {
 pub struct AppearanceConfig {
     /// Show timeline pane by default
     pub show_timeline_pane: bool,
-    
+
     /// Color theme to use
     pub theme: String,
-    
+
     /// Minimum width for content area
     pub min_content_width: u16,
-    
+
     /// Minimum width for navigation area
     pub min_navigation_width: u16,
-    
+
     /// Percentage of width for navigation area
     pub navigation_width_percent: u8,
-    
+
     /// Whether to show message dividers
     pub show_message_dividers: bool,
-    
+
     /// Transcript bottom padding
     pub transcript_bottom_padding: u16,
 }
@@ -53,7 +53,7 @@ impl Default for AppearanceConfig {
     fn default() -> Self {
         Self {
             show_timeline_pane: true,
-            theme: "default".to_string(),
+            theme: "default".to_owned(),
             min_content_width: 40,
             min_navigation_width: 20,
             navigation_width_percent: 25,
@@ -73,19 +73,19 @@ pub struct KeyBindingConfig {
 impl Default for KeyBindingConfig {
     fn default() -> Self {
         let mut bindings = HashMap::new();
-        
+
         // Navigation
-        bindings.insert("scroll_up".to_string(), vec!["up".to_string()]);
-        bindings.insert("scroll_down".to_string(), vec!["down".to_string()]);
-        bindings.insert("page_up".to_string(), vec!["pageup".to_string()]);
-        bindings.insert("page_down".to_string(), vec!["pagedown".to_string()]);
-        
+        bindings.insert("scroll_up".to_owned(), vec!["up".to_owned()]);
+        bindings.insert("scroll_down".to_owned(), vec!["down".to_owned()]);
+        bindings.insert("page_up".to_owned(), vec!["pageup".to_owned()]);
+        bindings.insert("page_down".to_owned(), vec!["pagedown".to_owned()]);
+
         // Input
-        bindings.insert("submit".to_string(), vec!["enter".to_string()]);
-        bindings.insert("submit_queue".to_string(), vec!["ctrl+enter".to_string()]);
-        bindings.insert("cancel".to_string(), vec!["esc".to_string()]);
-        bindings.insert("interrupt".to_string(), vec!["ctrl+c".to_string()]);
-        
+        bindings.insert("submit".to_owned(), vec!["enter".to_owned()]);
+        bindings.insert("submit_queue".to_owned(), vec!["ctrl+enter".to_owned()]);
+        bindings.insert("cancel".to_owned(), vec!["esc".to_owned()]);
+        bindings.insert("interrupt".to_owned(), vec!["ctrl+c".to_owned()]);
+
         Self { bindings }
     }
 }
@@ -95,22 +95,22 @@ impl Default for KeyBindingConfig {
 pub struct BehaviorConfig {
     /// Maximum lines for input area
     pub max_input_lines: usize,
-    
+
     /// Whether to enable command history
     pub enable_history: bool,
-    
+
     /// History size limit
     pub history_size: usize,
-    
+
     /// Whether to enable double-tap escape to clear input
     pub double_tap_escape_clears: bool,
-    
+
     /// Delay in milliseconds for double-tap detection
     pub double_tap_delay_ms: u64,
-    
+
     /// Whether to auto-scroll to bottom
     pub auto_scroll_to_bottom: bool,
-    
+
     /// Whether to show queued inputs
     pub show_queued_inputs: bool,
 }
@@ -134,16 +134,16 @@ impl Default for BehaviorConfig {
 pub struct PerformanceConfig {
     /// Cache size for rendered elements
     pub render_cache_size: usize,
-    
+
     /// Transcript cache size (number of messages to cache)
     pub transcript_cache_size: usize,
-    
+
     /// Whether to enable transcript reflow caching
     pub enable_transcript_caching: bool,
-    
+
     /// Size of LRU cache for expensive operations
     pub lru_cache_size: usize,
-    
+
     /// Whether to enable smooth scrolling
     pub enable_smooth_scrolling: bool,
 }
@@ -165,13 +165,13 @@ impl Default for PerformanceConfig {
 pub struct CustomizationConfig {
     /// Custom prompt commands
     pub custom_prompts: HashMap<String, String>,
-    
+
     /// User-defined UI labels
     pub ui_labels: HashMap<String, String>,
-    
+
     /// Custom styling options
     pub custom_styles: HashMap<String, String>,
-    
+
     /// Enabled UI features
     pub enabled_features: Vec<String>,
 }
@@ -183,10 +183,10 @@ impl Default for CustomizationConfig {
             ui_labels: HashMap::new(),
             custom_styles: HashMap::new(),
             enabled_features: vec![
-                "slash_commands".to_string(),
-                "file_palette".to_string(),
-                "prompt_palette".to_string(),
-                "modal_dialogs".to_string(),
+                "slash_commands".to_owned(),
+                "file_palette".to_owned(),
+                "prompt_palette".to_owned(),
+                "modal_dialogs".to_owned(),
             ],
         }
     }
@@ -197,21 +197,21 @@ impl SessionConfig {
     pub fn new() -> Self {
         Self::default()
     }
-    
+
     /// Loads configuration from a file
     pub fn load_from_file(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let content = std::fs::read_to_string(path)?;
         let config: SessionConfig = toml::from_str(&content)?;
         Ok(config)
     }
-    
+
     /// Saves configuration to a file
     pub fn save_to_file(&self, path: &str) -> Result<(), Box<dyn std::error::Error>> {
         let content = toml::to_string_pretty(self)?;
         std::fs::write(path, content)?;
         Ok(())
     }
-    
+
     /// Updates a specific configuration value by key
     pub fn set_value(&mut self, key: &str, value: &str) -> Result<(), String> {
         // This is a simplified version - in a real implementation, we'd have more sophisticated
@@ -233,36 +233,36 @@ impl SessionConfig {
         }
         Ok(())
     }
-    
+
     /// Gets a configuration value by key
     pub fn get_value(&self, key: &str) -> Option<String> {
         match key {
-            "appearance.show_timeline_pane" => 
+            "appearance.show_timeline_pane" =>
                 Some(self.appearance.show_timeline_pane.to_string()),
-            "behavior.max_input_lines" => 
+            "behavior.max_input_lines" =>
                 Some(self.behavior.max_input_lines.to_string()),
-            "performance.lru_cache_size" => 
+            "performance.lru_cache_size" =>
                 Some(self.performance.lru_cache_size.to_string()),
             _ => None,
         }
     }
-    
+
     /// Validates the configuration to ensure all values are within acceptable ranges
     pub fn validate(&self) -> Result<(), Vec<String>> {
         let mut errors = Vec::new();
-        
+
         if self.behavior.history_size == 0 {
-            errors.push("history_size must be greater than 0".to_string());
+            errors.push("history_size must be greater than 0".to_owned());
         }
-        
+
         if self.performance.lru_cache_size == 0 {
-            errors.push("lru_cache_size must be greater than 0".to_string());
+            errors.push("lru_cache_size must be greater than 0".to_owned());
         }
-        
+
         if self.appearance.navigation_width_percent > 100 {
-            errors.push("navigation_width_percent must be between 0 and 100".to_string());
+            errors.push("navigation_width_percent must be between 0 and 100".to_owned());
         }
-        
+
         if errors.is_empty() {
             Ok(())
         } else {
@@ -292,44 +292,44 @@ mod tests {
     #[test]
     fn test_config_value_setting() {
         let mut config = SessionConfig::new();
-        
+
         config.set_value("behavior.max_input_lines", "15").unwrap();
         assert_eq!(config.behavior.max_input_lines, 15);
-        
+
         assert!(config.set_value("behavior.max_input_lines", "not_a_number").is_err());
     }
 
     #[test]
     fn test_config_value_getting() {
         let config = SessionConfig::new();
-        assert_eq!(config.get_value("behavior.max_input_lines"), Some("10".to_string()));
+        assert_eq!(config.get_value("behavior.max_input_lines"), Some("10".to_owned()));
     }
-    
+
     #[test]
     fn test_config_validation() {
         let config = SessionConfig::new();
         assert!(config.validate().is_ok());
-        
+
         // Test invalid history size
         let mut invalid_config = config.clone();
         invalid_config.behavior.history_size = 0;
         assert!(invalid_config.validate().is_err());
-        
+
         // Test invalid cache size
         let mut invalid_config2 = config.clone();
         invalid_config2.performance.lru_cache_size = 0;
         assert!(invalid_config2.validate().is_err());
     }
-    
+
     #[test]
     fn test_config_with_custom_values() {
         let mut config = SessionConfig::new();
-        
+
         // Test setting custom values
         config.appearance.show_timeline_pane = false;
         config.behavior.max_input_lines = 20;
         config.performance.lru_cache_size = 256;
-        
+
         assert_eq!(config.appearance.show_timeline_pane, false);
         assert_eq!(config.behavior.max_input_lines, 20);
         assert_eq!(config.performance.lru_cache_size, 256);

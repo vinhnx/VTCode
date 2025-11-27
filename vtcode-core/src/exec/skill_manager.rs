@@ -132,12 +132,12 @@ impl SkillManager {
             .await
             .unwrap_or(false)
         {
-            (skill_dir.join("skill.py"), "python3".to_string())
+            (skill_dir.join("skill.py"), "python3".to_owned())
         } else if tokio::fs::try_exists(skill_dir.join("skill.js"))
             .await
             .unwrap_or(false)
         {
-            (skill_dir.join("skill.js"), "javascript".to_string())
+            (skill_dir.join("skill.js"), "javascript".to_owned())
         } else {
             return Err(anyhow!("skill '{}' not found", name));
         };
@@ -254,7 +254,9 @@ impl SkillManager {
 
     /// Generate Markdown documentation for a skill.
     fn generate_markdown(skill: &Skill) -> String {
-        let mut md = String::new();
+        // Reserve an estimated capacity to avoid multiple reallocations.
+        let mut md =
+            String::with_capacity(1024 + skill.code.len() + skill.metadata.description.len());
 
         let _ = writeln!(md, "# {}\n", skill.metadata.name);
         let _ = writeln!(md, "{}\n", skill.metadata.description);
@@ -321,20 +323,20 @@ mod tests {
     #[test]
     fn test_skill_metadata_serialization() {
         let metadata = SkillMetadata {
-            name: "filter_files".to_string(),
-            description: "Filter files by pattern".to_string(),
-            language: "python3".to_string(),
+            name: "filter_files".to_owned(),
+            description: "Filter files by pattern".to_owned(),
+            language: "python3".to_owned(),
             inputs: vec![ParameterDoc {
-                name: "pattern".to_string(),
-                r#type: "str".to_string(),
-                description: "File pattern to match".to_string(),
+                name: "pattern".to_owned(),
+                r#type: "str".to_owned(),
+                description: "File pattern to match".to_owned(),
                 required: true,
             }],
-            output: "List of matching filenames".to_string(),
-            examples: vec!["filter_files(pattern='*.rs')".to_string()],
-            tags: vec!["files".to_string(), "filtering".to_string()],
-            created_at: "2025-01-01T00:00:00Z".to_string(),
-            modified_at: "2025-01-01T00:00:00Z".to_string(),
+            output: "List of matching filenames".to_owned(),
+            examples: vec!["filter_files(pattern='*.rs')".to_owned()],
+            tags: vec!["files".to_owned(), "filtering".to_owned()],
+            created_at: "2025-01-01T00:00:00Z".to_owned(),
+            modified_at: "2025-01-01T00:00:00Z".to_owned(),
             tool_dependencies: vec![],
         };
 

@@ -91,11 +91,11 @@ impl ActionMatcher {
     /// Extract action from text using word boundary matching
     fn extract(&self, text: &str) -> Option<&'static str> {
         let lower = text.to_lowercase();
-        let words: Vec<&str> = lower.split_whitespace().collect();
 
         let mut best_match: Option<(&'static str, usize)> = None;
-
-        for (i, &word) in words.iter().enumerate() {
+        let mut _idx = 0usize;
+        let mut iter = lower.split_whitespace().peekable();
+        while let Some(word) = iter.next() {
             // Try exact word matches
             if let Some(&action) = self.verbs.get(word) {
                 let match_len = word.len();
@@ -104,9 +104,9 @@ impl ActionMatcher {
                 }
             }
 
-            // Try two-word phrases
-            if i + 1 < words.len() {
-                let phrase = format!("{} {}", word, words[i + 1]);
+            // Try two-word phrases using peek (avoids allocating a Vec of words)
+            if let Some(&next) = iter.peek() {
+                let phrase = format!("{} {}", word, next);
                 if let Some(&action) = self.verbs.get(phrase.as_str()) {
                     let match_len = phrase.len();
                     if best_match.is_none() || match_len > best_match.unwrap().1 {
@@ -114,6 +114,8 @@ impl ActionMatcher {
                     }
                 }
             }
+
+            _idx += 1;
         }
 
         best_match.map(|(action, _)| action)

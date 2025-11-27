@@ -103,7 +103,7 @@ mod tests {
     #[test]
     fn test_record_operation() {
         let mut metrics = FilteringMetrics::new();
-        metrics.record_operation("filter".to_string(), 1000, 500, 100);
+        metrics.record_operation("filter".to_owned(), 1000, 500, 100);
 
         assert_eq!(metrics.total_operations, 1);
         assert_eq!(metrics.total_input_bytes, 1000);
@@ -113,7 +113,7 @@ mod tests {
     #[test]
     fn test_reduction_ratio() {
         let mut metrics = FilteringMetrics::new();
-        metrics.record_operation("filter".to_string(), 1000, 500, 100);
+        metrics.record_operation("filter".to_owned(), 1000, 500, 100);
 
         let ratio = metrics.avg_reduction_ratio();
         assert!((ratio - 0.5).abs() < 0.01); // 50% reduction
@@ -122,7 +122,7 @@ mod tests {
     #[test]
     fn test_tokens_saved() {
         let mut metrics = FilteringMetrics::new();
-        metrics.record_operation("filter".to_string(), 1000, 500, 100);
+        metrics.record_operation("filter".to_owned(), 1000, 500, 100);
 
         let tokens = metrics.estimated_tokens_saved();
         assert_eq!(tokens, 125); // (1000 - 500) / 4
@@ -131,9 +131,9 @@ mod tests {
     #[test]
     fn test_operation_distribution() {
         let mut metrics = FilteringMetrics::new();
-        metrics.record_operation("filter".to_string(), 1000, 500, 100);
-        metrics.record_operation("map".to_string(), 500, 400, 50);
-        metrics.record_operation("filter".to_string(), 800, 400, 80);
+        metrics.record_operation("filter".to_owned(), 1000, 500, 100);
+        metrics.record_operation("map".to_owned(), 500, 400, 50);
+        metrics.record_operation("filter".to_owned(), 800, 400, 80);
 
         assert_eq!(metrics.operation_distribution.get("filter"), Some(&2));
         assert_eq!(metrics.operation_distribution.get("map"), Some(&1));

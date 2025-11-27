@@ -121,13 +121,17 @@ impl<V: Clone + Send + Sync> LruCache<V> {
         if let Some(entry) = entries.get(key) {
             if entry.is_expired(self.ttl) {
                 entries.remove(key);
-                let mut stats = self.stats.write().await;
-                stats.expirations += 1;
+
+                // Update stats once instead of locking twice.
+                {
+                    let mut stats = self.stats.write().await;
+                    stats.expirations += 1;
+                    stats.misses += 1;
+                }
+
                 self.observer.on_evict(key, EvictionReason::Expired).await;
                 let mut order = self.access_order.write().await;
                 order.retain(|k| k != key);
-                let mut stats = self.stats.write().await;
-                stats.misses += 1;
                 return None;
             }
         }
@@ -141,8 +145,10 @@ impl<V: Clone + Send + Sync> LruCache<V> {
             return Some(entry.value.clone());
         }
 
-        let mut stats = self.stats.write().await;
-        stats.misses += 1;
+        {
+            let mut stats = self.stats.write().await;
+            stats.misses += 1;
+        }
         self.observer.on_miss(key).await;
         None
     }
@@ -230,12 +236,17 @@ impl<V: Clone + Send + Sync> LruCache<V> {
             .map(|(k, _)| k.clone())
             .collect();
 
+        let mut expired_count = 0usize;
         for key in expired {
             entries.remove(&key);
             order.retain(|k| k != &key);
             self.observer.on_evict(&key, EvictionReason::Expired).await;
+            expired_count += 1;
+        }
+
+        if expired_count > 0 {
             let mut stats = self.stats.write().await;
-            stats.expirations += 1;
+            stats.expirations += expired_count as u64;
         }
     }
 }

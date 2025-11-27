@@ -1,6 +1,7 @@
 use super::config::SystemPromptConfig;
 use super::context::PromptContext;
 use super::templates::PromptTemplates;
+use std::fmt::Write as FmtWrite;
 
 /// System prompt generator
 pub struct SystemPromptGenerator<'a> {
@@ -15,56 +16,84 @@ impl<'a> SystemPromptGenerator<'a> {
 
     /// Generate complete system prompt
     pub fn generate(&self) -> String {
-        let mut prompt_parts = Vec::new();
+        // Build prompt in-place into a single String to avoid many intermediate allocations
+        let mut out = String::new();
+        let mut first = true;
 
-        // Base system prompt
-        prompt_parts.push(PromptTemplates::base_system_prompt().to_string());
-
-        // Custom instruction if provided
-        if let Some(custom) = &self.config.custom_instruction {
-            prompt_parts.push(custom.clone());
+        // helper macro to append sections with a blank line separator
+        macro_rules! append {
+            ($s:expr) => {{
+                if !first {
+                    out.push_str("\n\n");
+                }
+                out.push_str($s);
+                first = false;
+            }};
         }
 
-        // Personality
-        prompt_parts
-            .push(PromptTemplates::personality_prompt(&self.config.personality).to_string());
+        // Base system prompt
+        append!(PromptTemplates::base_system_prompt());
 
-        // Response style
-        prompt_parts
-            .push(PromptTemplates::response_style_prompt(&self.config.response_style).to_string());
+        // Custom instruction if provided (borrowed, avoid clone)
+        if let Some(custom) = self.config.custom_instruction.as_deref() {
+            append!(custom);
+        }
+
+        // Personality and response style (static &'static str from templates)
+        append!(PromptTemplates::personality_prompt(
+            &self.config.personality
+        ));
+        append!(PromptTemplates::response_style_prompt(
+            &self.config.response_style
+        ));
 
         // Tool usage if enabled
         if self.config.include_tools && !self.context.available_tools.is_empty() {
-            prompt_parts.push(PromptTemplates::tool_usage_prompt().to_string());
-            prompt_parts.push(format!(
-                "Available tools: {}",
-                self.context.available_tools.join(", ")
-            ));
+            append!(PromptTemplates::tool_usage_prompt());
+            let tools = self.context.available_tools.join(", ");
+            if !first {
+                out.push_str("\n\n");
+            }
+            let _ = out.write_str("Available tools: ");
+            let _ = out.write_str(&tools);
+            first = false;
         }
 
         // Workspace context if enabled
         if self.config.include_workspace {
             if let Some(workspace) = &self.context.workspace {
-                prompt_parts.push(PromptTemplates::workspace_context_prompt().to_string());
-                prompt_parts.push(format!("Current workspace: {}", workspace.display()));
+                append!(PromptTemplates::workspace_context_prompt());
+                if !first {
+                    out.push_str("\n\n");
+                }
+                let _ = write!(out, "Current workspace: {}", workspace.display());
+                first = false;
             }
 
             if !self.context.languages.is_empty() {
-                prompt_parts.push(format!(
-                    "Detected languages: {}",
-                    self.context.languages.join(", ")
-                ));
+                let langs = self.context.languages.join(", ");
+                if !first {
+                    out.push_str("\n\n");
+                }
+                let _ = out.write_str("Detected languages: ");
+                let _ = out.write_str(&langs);
+                first = false;
             }
 
             if let Some(project_type) = &self.context.project_type {
-                prompt_parts.push(format!("Project type: {}", project_type));
+                if !first {
+                    out.push_str("\n\n");
+                }
+                let _ = out.write_str("Project type: ");
+                let _ = out.write_str(project_type);
+                first = false;
             }
         }
 
         // Safety guidelines
-        prompt_parts.push(PromptTemplates::safety_guidelines_prompt().to_string());
+        append!(PromptTemplates::safety_guidelines_prompt());
 
-        prompt_parts.join("\n\n")
+        out
     }
 }
 

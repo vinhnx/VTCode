@@ -29,8 +29,7 @@ async fn main() -> Result<()> {
 
     // If user asked for help, augment the help output with dynamic model list
     // and print the help with the additional CLI details.
-    let raw_args: Vec<String> = std::env::args().collect();
-    if raw_args.iter().any(|a| a == "-h" || a == "--help") {
+    if std::env::args().any(|a| a == "-h" || a == "--help") {
         let mut cmd = Cli::command();
         let help_extra = vtcode_core::cli::help::openai_responses_models_help();
         let help_box: Box<str> = help_extra.into_boxed_str();

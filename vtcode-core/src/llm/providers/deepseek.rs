@@ -157,7 +157,7 @@ impl DeepSeekProvider {
 
     fn parse_response(&self, response_json: Value) -> Result<LLMResponse, LLMError> {
         let include_cache = self.prompt_cache_enabled && self.prompt_cache_settings.surface_metrics;
-        
+
         // Custom reasoning extractor for DeepSeek
         let reasoning_extractor = |message: &Value, choice: &Value| {
             message
@@ -170,7 +170,7 @@ impl DeepSeekProvider {
                         .and_then(extract_reasoning_trace)
                 })
         };
-        
+
         parse_response_openai_format(
             response_json,
             PROVIDER_NAME,
@@ -223,9 +223,7 @@ impl LLMProvider for DeepSeekProvider {
                 LLMError::Network(formatted_error)
             })?;
 
-
         let response = handle_http_error(response, PROVIDER_NAME, "DEEPSEEK_API_KEY").await?;
-
 
         let response_json: Value = response.json().await.map_err(|e| {
             let formatted_error = error_display::format_llm_error(

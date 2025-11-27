@@ -61,7 +61,7 @@ pub fn command_prefix(input: &str, cursor: usize) -> Option<String> {
     if end < start {
         return Some(String::new());
     }
-    Some(input[start..end].to_string())
+    Some(input[start..end].to_owned())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -375,7 +375,7 @@ impl SlashPalette {
                     command: Some(*command),
                     custom_prompt: None,
                     name_segments: self.highlight_name_segments_static(command.name),
-                    description: command.description.to_string(),
+                    description: command.description.to_owned(),
                 },
                 SlashPaletteSuggestion::Custom(prompt) => SlashPaletteItem {
                     command: None,
@@ -487,13 +487,13 @@ impl SlashPalette {
     #[cfg(test)]
     fn highlight_name_segments_static(&self, name: &str) -> Vec<SlashPaletteHighlightSegment> {
         let Some(query) = self.filter_query.as_ref().filter(|query| !query.is_empty()) else {
-            return vec![SlashPaletteHighlightSegment::plain(name.to_string())];
+            return vec![SlashPaletteHighlightSegment::plain(name.to_owned())];
         };
 
         // For static commands, only use the part after the prompt invocation prefix if applicable
         let lowercase = name.to_ascii_lowercase();
         if !lowercase.starts_with(query) {
-            return vec![SlashPaletteHighlightSegment::plain(name.to_string())];
+            return vec![SlashPaletteHighlightSegment::plain(name.to_owned())];
         }
 
         let query_len = query.chars().count();
@@ -524,7 +524,7 @@ impl SlashPalette {
     #[cfg(test)]
     fn highlight_name_segments_custom(&self, name: &str) -> Vec<SlashPaletteHighlightSegment> {
         let Some(query) = self.filter_query.as_ref().filter(|query| !query.is_empty()) else {
-            return vec![SlashPaletteHighlightSegment::plain(name.to_string())];
+            return vec![SlashPaletteHighlightSegment::plain(name.to_owned())];
         };
 
         // For custom prompts, use the query part from after the prompt invocation prefix
@@ -538,7 +538,7 @@ impl SlashPalette {
 
         let lowercase = name.to_ascii_lowercase();
         if !lowercase.starts_with(&search_term.to_ascii_lowercase()) {
-            return vec![SlashPaletteHighlightSegment::plain(name.to_string())];
+            return vec![SlashPaletteHighlightSegment::plain(name.to_owned())];
         }
 
         let query_len = search_term.chars().count();

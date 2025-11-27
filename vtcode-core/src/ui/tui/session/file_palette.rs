@@ -430,7 +430,7 @@ pub fn extract_file_reference(input: &str, cursor: usize) -> Option<(usize, usiz
     }
 
     let reference = &input[start + 1..end];
-    Some((start, end, reference.to_string()))
+    Some((start, end, reference.to_owned()))
 }
 
 #[cfg(test)]
@@ -448,21 +448,21 @@ mod tests {
     fn test_extract_file_reference_with_path() {
         let input = "@src/main.rs";
         let result = extract_file_reference(input, 12);
-        assert_eq!(result, Some((0, 12, "src/main.rs".to_string())));
+        assert_eq!(result, Some((0, 12, "src/main.rs".to_owned())));
     }
 
     #[test]
     fn test_extract_file_reference_mid_word() {
         let input = "@src/main.rs";
         let result = extract_file_reference(input, 5);
-        assert_eq!(result, Some((0, 12, "src/main.rs".to_string())));
+        assert_eq!(result, Some((0, 12, "src/main.rs".to_owned())));
     }
 
     #[test]
     fn test_extract_file_reference_with_text_before() {
         let input = "check @src/main.rs for errors";
         let result = extract_file_reference(input, 18);
-        assert_eq!(result, Some((6, 18, "src/main.rs".to_string())));
+        assert_eq!(result, Some((6, 18, "src/main.rs".to_owned())));
     }
 
     #[test]
@@ -512,19 +512,19 @@ mod tests {
     fn test_filtering() {
         let mut palette = FilePalette::new(PathBuf::from("/workspace"));
         let files = vec![
-            "src/main.rs".to_string(),
-            "src/lib.rs".to_string(),
-            "tests/test.rs".to_string(),
-            "README.md".to_string(),
+            "src/main.rs".to_owned(),
+            "src/lib.rs".to_owned(),
+            "tests/test.rs".to_owned(),
+            "README.md".to_owned(),
         ];
         palette.load_files(files);
 
         assert_eq!(palette.total_items(), 4);
 
-        palette.set_filter("src".to_string());
+        palette.set_filter("src".to_owned());
         assert_eq!(palette.total_items(), 2);
 
-        palette.set_filter("main".to_string());
+        palette.set_filter("main".to_owned());
         assert_eq!(palette.total_items(), 1);
     }
 
@@ -532,14 +532,14 @@ mod tests {
     fn test_smart_ranking() {
         let mut palette = FilePalette::new(PathBuf::from("/workspace"));
         let files = vec![
-            "src/main.rs".to_string(),
-            "src/domain/main_handler.rs".to_string(),
-            "tests/main_test.rs".to_string(),
-            "main.rs".to_string(),
+            "src/main.rs".to_owned(),
+            "src/domain/main_handler.rs".to_owned(),
+            "tests/main_test.rs".to_owned(),
+            "main.rs".to_owned(),
         ];
         palette.load_files(files);
 
-        palette.set_filter("main".to_string());
+        palette.set_filter("main".to_owned());
 
         // Exact filename match should rank highest
         let items = palette.current_page_items();
@@ -551,14 +551,14 @@ mod tests {
         let mut palette = FilePalette::new(PathBuf::from("/workspace"));
         assert!(!palette.has_files());
 
-        palette.load_files(vec!["file.rs".to_string()]);
+        palette.load_files(vec!["file.rs".to_owned()]);
         assert!(palette.has_files());
     }
 
     #[test]
     fn test_circular_navigation() {
         let mut palette = FilePalette::new(PathBuf::from("/workspace"));
-        let files = vec!["a.rs".to_string(), "b.rs".to_string(), "c.rs".to_string()];
+        let files = vec!["a.rs".to_owned(), "b.rs".to_owned(), "c.rs".to_owned()];
         palette.load_files(files);
 
         // At first item, up should wrap to last
@@ -577,15 +577,15 @@ mod tests {
 
         // Test with sensitive files that should be excluded
         let files = vec![
-            "/workspace/src/main.rs".to_string(),
-            "/workspace/.env".to_string(),       // MUST be excluded
-            "/workspace/.env.local".to_string(), // MUST be excluded
-            "/workspace/.env.production".to_string(), // MUST be excluded
-            "/workspace/.git/config".to_string(), // MUST be excluded
-            "/workspace/.gitignore".to_string(), // MUST be excluded
-            "/workspace/.DS_Store".to_string(),  // MUST be excluded
-            "/workspace/.hidden_file".to_string(), // MUST be excluded (hidden)
-            "/workspace/tests/test.rs".to_string(),
+            "/workspace/src/main.rs".to_owned(),
+            "/workspace/.env".to_owned(),            // MUST be excluded
+            "/workspace/.env.local".to_owned(),      // MUST be excluded
+            "/workspace/.env.production".to_owned(), // MUST be excluded
+            "/workspace/.git/config".to_owned(),     // MUST be excluded
+            "/workspace/.gitignore".to_owned(),      // MUST be excluded
+            "/workspace/.DS_Store".to_owned(),       // MUST be excluded
+            "/workspace/.hidden_file".to_owned(),    // MUST be excluded (hidden)
+            "/workspace/tests/test.rs".to_owned(),
         ];
 
         palette.load_files(files);
@@ -666,39 +666,39 @@ mod tests {
         // Create test entries directly (bypassing filesystem checks)
         palette.all_files = vec![
             FileEntry {
-                path: "/workspace/zebra.txt".to_string(),
-                display_name: "zebra.txt".to_string(),
-                relative_path: "zebra.txt".to_string(),
+                path: "/workspace/zebra.txt".to_owned(),
+                display_name: "zebra.txt".to_owned(),
+                relative_path: "zebra.txt".to_owned(),
                 is_dir: false,
             },
             FileEntry {
-                path: "/workspace/src".to_string(),
-                display_name: "src/".to_string(),
-                relative_path: "src".to_string(),
+                path: "/workspace/src".to_owned(),
+                display_name: "src/".to_owned(),
+                relative_path: "src".to_owned(),
                 is_dir: true,
             },
             FileEntry {
-                path: "/workspace/Apple.txt".to_string(),
-                display_name: "Apple.txt".to_string(),
-                relative_path: "Apple.txt".to_string(),
+                path: "/workspace/Apple.txt".to_owned(),
+                display_name: "Apple.txt".to_owned(),
+                relative_path: "Apple.txt".to_owned(),
                 is_dir: false,
             },
             FileEntry {
-                path: "/workspace/tests".to_string(),
-                display_name: "tests/".to_string(),
-                relative_path: "tests".to_string(),
+                path: "/workspace/tests".to_owned(),
+                display_name: "tests/".to_owned(),
+                relative_path: "tests".to_owned(),
                 is_dir: true,
             },
             FileEntry {
-                path: "/workspace/banana.txt".to_string(),
-                display_name: "banana.txt".to_string(),
-                relative_path: "banana.txt".to_string(),
+                path: "/workspace/banana.txt".to_owned(),
+                display_name: "banana.txt".to_owned(),
+                relative_path: "banana.txt".to_owned(),
                 is_dir: false,
             },
             FileEntry {
-                path: "/workspace/lib".to_string(),
-                display_name: "lib/".to_string(),
-                relative_path: "lib".to_string(),
+                path: "/workspace/lib".to_owned(),
+                display_name: "lib/".to_owned(),
+                relative_path: "lib".to_owned(),
                 is_dir: true,
             },
         ];
@@ -757,34 +757,34 @@ mod tests {
         // Create test entries with both directories and files
         palette.all_files = vec![
             FileEntry {
-                path: "/workspace/src".to_string(),
-                display_name: "src/".to_string(),
-                relative_path: "src".to_string(),
+                path: "/workspace/src".to_owned(),
+                display_name: "src/".to_owned(),
+                relative_path: "src".to_owned(),
                 is_dir: true,
             },
             FileEntry {
-                path: "/workspace/src_file.rs".to_string(),
-                display_name: "src_file.rs".to_string(),
-                relative_path: "src_file.rs".to_string(),
+                path: "/workspace/src_file.rs".to_owned(),
+                display_name: "src_file.rs".to_owned(),
+                relative_path: "src_file.rs".to_owned(),
                 is_dir: false,
             },
             FileEntry {
-                path: "/workspace/tests".to_string(),
-                display_name: "tests/".to_string(),
-                relative_path: "tests".to_string(),
+                path: "/workspace/tests".to_owned(),
+                display_name: "tests/".to_owned(),
+                relative_path: "tests".to_owned(),
                 is_dir: true,
             },
             FileEntry {
-                path: "/workspace/source.txt".to_string(),
-                display_name: "source.txt".to_string(),
-                relative_path: "source.txt".to_string(),
+                path: "/workspace/source.txt".to_owned(),
+                display_name: "source.txt".to_owned(),
+                relative_path: "source.txt".to_owned(),
                 is_dir: false,
             },
         ];
         palette.filtered_files = palette.all_files.clone();
 
         // Filter for "src" - should match directories and files
-        palette.set_filter("src".to_string());
+        palette.set_filter("src".to_owned());
 
         // Directories should still be first even after filtering
         let items = palette.current_page_items();
@@ -816,9 +816,9 @@ impl super::palette_renderer::PaletteItem for FileEntry {
 
     fn display_icon(&self) -> Option<String> {
         if self.is_dir {
-            Some("↳  ".to_string())
+            Some("↳  ".to_owned())
         } else {
-            Some("  · ".to_string())
+            Some("  · ".to_owned())
         }
     }
 

@@ -13,6 +13,7 @@ use anstyle::Style;
 /// let diff_style = config.diff_new;
 /// ```
 use anyhow::{Context, Result};
+use once_cell::sync::Lazy;
 use std::path::Path;
 
 /// Parsed Git configuration colors for diff, status, and branch visualization
@@ -153,14 +154,14 @@ impl GitColorConfig {
         let section_start = section_re.find(content)?.end();
 
         // Find the next section or end of file
-        let section_end = if let Some(next_section) = regex::Regex::new(r"\[")
-            .ok()
-            .and_then(|re| re.find(&content[section_start..]))
-        {
-            section_start + next_section.start()
-        } else {
-            content.len()
-        };
+        static OPEN_BRACKET_RE: Lazy<regex::Regex> =
+            Lazy::new(|| regex::Regex::new(r"\[").unwrap());
+        let section_end =
+            if let Some(next_section) = OPEN_BRACKET_RE.find(&content[section_start..]) {
+                section_start + next_section.start()
+            } else {
+                content.len()
+            };
 
         let section_content = &content[section_start..section_end];
 

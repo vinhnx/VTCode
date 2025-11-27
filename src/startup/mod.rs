@@ -14,7 +14,7 @@ fn truncate_error(msg: &str, max_len: usize) -> String {
     if msg.len() > max_len {
         format!("{}...", &msg[..max_len.saturating_sub(3)])
     } else {
-        msg.to_string()
+        msg.to_owned()
     }
 }
 use first_run::maybe_run_first_run_setup;
@@ -169,16 +169,18 @@ impl StartupContext {
         {
             None
         } else {
-            Some(cli_api_key_env.to_string())
+            Some(cli_api_key_env.to_owned())
         };
 
         let configured_api_key_env = config.agent.api_key_env.trim();
+        // Compute provider default env once and reuse
+        let provider_default_env = provider_enum.default_api_key_env();
         let resolved_api_key_env = if configured_api_key_env.is_empty()
             || configured_api_key_env.eq_ignore_ascii_case(defaults::DEFAULT_API_KEY_ENV)
         {
-            provider_enum.default_api_key_env().to_string()
+            provider_default_env.to_owned()
         } else {
-            configured_api_key_env.to_string()
+            configured_api_key_env.to_owned()
         };
 
         let api_key_env = api_key_env_override.unwrap_or(resolved_api_key_env);
@@ -287,7 +289,7 @@ fn parse_cli_config_entries(entries: &[String]) -> (Option<PathBuf>, Vec<(String
             if key.is_empty() {
                 continue;
             }
-            overrides.push((key.to_string(), value.trim().to_string()));
+            overrides.push((key.to_owned(), value.trim().to_owned()));
         } else if config_path.is_none() {
             config_path = Some(PathBuf::from(trimmed));
         }
@@ -354,8 +356,8 @@ fn parse_override_value(raw: &str) -> Result<TomlValue> {
     match toml::from_str::<TomlTable>(&candidate) {
         Ok(mut table) => Ok(table
             .remove("value")
-            .unwrap_or_else(|| TomlValue::String(trimmed.to_string()))),
-        Err(_) => Ok(TomlValue::String(trimmed.to_string())),
+            .unwrap_or_else(|| TomlValue::String(trimmed.to_owned()))),
+        Err(_) => Ok(TomlValue::String(trimmed.to_owned())),
     }
 }
 
@@ -381,7 +383,7 @@ fn apply_override_value(target: &mut TomlValue, key: &str, value: TomlValue) -> 
         })?;
 
         current = table
-            .entry(segment.to_string())
+            .entry(segment.to_owned())
             .or_insert_with(|| TomlValue::Table(TomlTable::new()));
     }
 
@@ -392,7 +394,7 @@ fn apply_override_value(target: &mut TomlValue, key: &str, value: TomlValue) -> 
         )
     })?;
 
-    let last_segment = segments.last().unwrap().to_string();
+    let last_segment = (*segments.last().unwrap()).to_owned();
     table.insert(last_segment, value);
     Ok(())
 }
@@ -403,7 +405,7 @@ async fn determine_theme(args: &Cli, config: &VTCodeConfig) -> Result<String> {
         if trimmed.is_empty() {
             None
         } else {
-            Some(trimmed.to_string())
+            Some(trimmed.to_owned())
         }
     });
 
@@ -412,7 +414,7 @@ async fn determine_theme(args: &Cli, config: &VTCodeConfig) -> Result<String> {
         .clone()
         .or(user_theme_pref)
         .or_else(|| Some(config.agent.theme.clone()))
-        .unwrap_or_else(|| DEFAULT_THEME_ID.to_string());
+        .unwrap_or_else(|| DEFAULT_THEME_ID.to_owned());
 
     if let Err(err) = ui_theme::set_active_theme(&theme_selection) {
         if args.theme.is_some() {
@@ -422,7 +424,7 @@ async fn determine_theme(args: &Cli, config: &VTCodeConfig) -> Result<String> {
             "Warning: {}. Falling back to default theme '{}'.",
             err, DEFAULT_THEME_ID
         );
-        theme_selection = DEFAULT_THEME_ID.to_string();
+        theme_selection = DEFAULT_THEME_ID.to_owned();
         ui_theme::set_active_theme(&theme_selection)
             .with_context(|| format!("Failed to activate theme '{}'", theme_selection))?;
     }
@@ -653,8 +655,8 @@ mod tests {
     #[test]
     fn parses_cli_config_entries_with_overrides() {
         let entries = vec![
-            "agent.provider=openai".to_string(),
-            "custom-config/vtcode.toml".to_string(),
+            "agent.provider=openai".to_owned(),
+            "custom-config/vtcode.toml".to_owned(),
         ];
 
         let (path, overrides) = parse_cli_config_entries(&entries);
@@ -662,14 +664,14 @@ mod tests {
         assert_eq!(path, Some(PathBuf::from("custom-config/vtcode.toml")));
         assert_eq!(
             overrides,
-            vec![("agent.provider".to_string(), "openai".to_string())]
+            vec![("agent.provider".to_owned(), "openai".to_owned())]
         );
     }
 
     #[test]
     fn applies_inline_overrides_to_config() -> Result<()> {
         let mut config = VTCodeConfig::default();
-        let overrides = vec![("agent.provider".to_string(), "\"openai\"".to_string())];
+        let overrides = vec![("agent.provider".to_owned(), "\"openai\"".to_owned())];
 
         apply_inline_config_overrides(&mut config, &overrides)?;
 
@@ -685,7 +687,7 @@ mod validation_tests {
     #[test]
     fn retention_warning_for_non_responses_model() {
         let mut cfg = VTCodeConfig::default();
-        cfg.prompt_cache.providers.openai.prompt_cache_retention = Some("24h".to_string());
+        cfg.prompt_cache.providers.openai.prompt_cache_retention = Some("24h".to_owned());
         let model = "codex-mini-latest"; // not in responses API list
         let provider = "openai";
         let msg = check_prompt_cache_retention_compat(&cfg, model, provider);
@@ -695,7 +697,7 @@ mod validation_tests {
     #[test]
     fn retention_ok_for_responses_model() {
         let mut cfg = VTCodeConfig::default();
-        cfg.prompt_cache.providers.openai.prompt_cache_retention = Some("24h".to_string());
+        cfg.prompt_cache.providers.openai.prompt_cache_retention = Some("24h".to_owned());
         let model = vtcode_core::config::constants::models::openai::GPT_5; // responses model
         let provider = "openai";
         let msg = check_prompt_cache_retention_compat(&cfg, model, provider);

@@ -309,12 +309,12 @@ impl Session {
         let left = self
             .input_status_left
             .as_ref()
-            .map(|value| value.trim().to_string())
+            .map(|value| value.trim().to_owned())
             .filter(|value| !value.is_empty());
         let right = self
             .input_status_right
             .as_ref()
-            .map(|value| value.trim().to_string())
+            .map(|value| value.trim().to_owned())
             .filter(|value| !value.is_empty());
 
         if left.is_none() && right.is_none() {
@@ -335,7 +335,7 @@ impl Session {
                 if padding > 0 {
                     spans.push(Span::raw(" ".repeat(padding as usize)));
                 } else {
-                    spans.push(Span::raw(" ".to_string()));
+                    spans.push(Span::raw(" ".to_owned()));
                 }
                 spans.push(Span::styled(right_value, style));
             }
@@ -361,7 +361,7 @@ impl Session {
             let mut spans = Vec::new();
             let branch_trim = branch_part.trim_end();
             if !branch_trim.is_empty() {
-                spans.push(Span::styled(branch_trim.to_string(), default_style));
+                spans.push(Span::styled(branch_trim.to_owned(), default_style));
             }
             spans.push(Span::raw(" "));
 
@@ -376,10 +376,10 @@ impl Session {
                 self.styles.accent_style().add_modifier(Modifier::BOLD)
             };
 
-            spans.push(Span::styled(indicator_trim.to_string(), indicator_style));
+            spans.push(Span::styled(indicator_trim.to_owned(), indicator_style));
             spans
         } else {
-            vec![Span::styled(text.to_string(), default_style)]
+            vec![Span::styled(text.to_owned(), default_style)]
         }
     }
 

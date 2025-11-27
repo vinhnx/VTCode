@@ -67,12 +67,16 @@ impl CommandBuilder {
 
     /// Execute the command
     pub fn execute(self) -> Result<CommandResult, String> {
-        let args: Vec<&str> = self.args.iter().map(|s| s.as_str()).collect();
+        // Convert `Vec<String>` into `Vec<&str>` with a single preallocated buffer.
+        let mut arg_refs: Vec<&str> = Vec::with_capacity(self.args.len());
+        for s in &self.args {
+            arg_refs.push(s.as_str());
+        }
 
         if let Some(timeout) = self.timeout {
-            execute_command_with_timeout(&self.command, &args, timeout)
+            execute_command_with_timeout(&self.command, &arg_refs, timeout)
         } else {
-            execute_command(&self.command, &args)
+            execute_command(&self.command, &arg_refs)
         }
     }
 

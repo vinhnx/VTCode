@@ -28,21 +28,21 @@ pub struct FunctionCallingConfig {
 impl FunctionCallingConfig {
     pub fn auto() -> Self {
         Self {
-            mode: "AUTO".to_string(),
+            mode: "AUTO".to_owned(),
             allowed_function_names: None,
         }
     }
 
     pub fn none() -> Self {
         Self {
-            mode: "NONE".to_string(),
+            mode: "NONE".to_owned(),
             allowed_function_names: None,
         }
     }
 
     pub fn any() -> Self {
         Self {
-            mode: "ANY".to_string(),
+            mode: "ANY".to_owned(),
             allowed_function_names: None,
         }
     }

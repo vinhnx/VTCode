@@ -102,7 +102,7 @@ impl PromptPalette {
 
                 if let Some(name) = path.file_stem().and_then(|n| n.to_str()) {
                     entries.push(PromptEntry {
-                        name: name.to_string(),
+                        name: name.to_owned(),
                         description: String::new(), // No description from direct load
                     });
                 }
@@ -396,7 +396,7 @@ pub fn extract_prompt_reference(input: &str, cursor: usize) -> Option<(usize, us
     }
 
     let reference = &input[start + 1..end];
-    Some((start, end, reference.to_string()))
+    Some((start, end, reference.to_owned()))
 }
 
 #[cfg(test)]
@@ -414,21 +414,21 @@ mod tests {
     fn test_extract_prompt_reference_with_name() {
         let input = "#vtcode";
         let result = extract_prompt_reference(input, 7);
-        assert_eq!(result, Some((0, 7, "vtcode".to_string())));
+        assert_eq!(result, Some((0, 7, "vtcode".to_owned())));
     }
 
     #[test]
     fn test_extract_prompt_reference_mid_word() {
         let input = "#vtcode";
         let result = extract_prompt_reference(input, 4);
-        assert_eq!(result, Some((0, 7, "vtcode".to_string())));
+        assert_eq!(result, Some((0, 7, "vtcode".to_owned())));
     }
 
     #[test]
     fn test_extract_prompt_reference_with_text_before() {
         let input = "use #vtcode for help";
         let result = extract_prompt_reference(input, 11);
-        assert_eq!(result, Some((4, 11, "vtcode".to_string())));
+        assert_eq!(result, Some((4, 11, "vtcode".to_owned())));
     }
 
     #[test]
@@ -473,26 +473,26 @@ mod tests {
         let mut palette = PromptPalette::new();
         palette.all_prompts = vec![
             PromptEntry {
-                name: "vtcode".to_string(),
-                description: "VTCode helper".to_string(),
+                name: "vtcode".to_owned(),
+                description: "VTCode helper".to_owned(),
             },
             PromptEntry {
-                name: "rust".to_string(),
-                description: "Rust coding assistant".to_string(),
+                name: "rust".to_owned(),
+                description: "Rust coding assistant".to_owned(),
             },
             PromptEntry {
-                name: "test".to_string(),
-                description: "Test helper".to_string(),
+                name: "test".to_owned(),
+                description: "Test helper".to_owned(),
             },
         ];
         palette.filtered_prompts = palette.all_prompts.clone();
 
         assert_eq!(palette.total_items(), 3);
 
-        palette.set_filter("rust".to_string());
+        palette.set_filter("rust".to_owned());
         assert_eq!(palette.total_items(), 1);
 
-        palette.set_filter("vt".to_string());
+        palette.set_filter("vt".to_owned());
         assert_eq!(palette.total_items(), 1);
     }
 
@@ -501,15 +501,15 @@ mod tests {
         let mut palette = PromptPalette::new();
         palette.all_prompts = vec![
             PromptEntry {
-                name: "a".to_string(),
+                name: "a".to_owned(),
                 description: String::new(),
             },
             PromptEntry {
-                name: "b".to_string(),
+                name: "b".to_owned(),
                 description: String::new(),
             },
             PromptEntry {
-                name: "c".to_string(),
+                name: "c".to_owned(),
                 description: String::new(),
             },
         ];
@@ -530,15 +530,15 @@ mod tests {
         let mut palette = PromptPalette::new();
         let test_entries = vec![
             PromptEntry {
-                name: "zebra".to_string(),
+                name: "zebra".to_owned(),
                 description: String::new(),
             },
             PromptEntry {
-                name: "apple".to_string(),
+                name: "apple".to_owned(),
                 description: String::new(),
             },
             PromptEntry {
-                name: "Banana".to_string(),
+                name: "Banana".to_owned(),
                 description: String::new(),
             },
         ];
@@ -563,6 +563,6 @@ impl super::palette_renderer::PaletteItem for PromptEntry {
     }
 
     fn display_icon(&self) -> Option<String> {
-        Some("  · ".to_string())
+        Some("  · ".to_owned())
     }
 }

@@ -10,6 +10,7 @@ use crate::llm::provider::{
 use async_stream::try_stream;
 use async_trait::async_trait;
 use futures::StreamExt;
+use once_cell::sync::Lazy;
 use regex::Regex;
 use serde_json::{Map, Value};
 use std::collections::HashMap;
@@ -162,21 +163,19 @@ fn post_process_response(
     response
 }
 
+// Compile patterns once for reuse to avoid repeated allocations
+static TOOL_CALL_BLOCK_RE: Lazy<Regex> = Lazy::new(|| Regex::new(TOOL_CALL_BLOCK_PATTERN).unwrap());
+static INVOKE_BLOCK_RE: Lazy<Regex> = Lazy::new(|| Regex::new(INVOKE_BLOCK_PATTERN).unwrap());
+static PARAMETER_BLOCK_RE: Lazy<Regex> = Lazy::new(|| Regex::new(PARAMETER_BLOCK_PATTERN).unwrap());
+
 fn parse_minimax_tool_calls(
     text: &str,
     tools: Option<&[ToolDefinition]>,
 ) -> (Vec<ToolCall>, String) {
-    let tool_call_regex = Regex::new(TOOL_CALL_BLOCK_PATTERN).ok();
-    let invoke_regex = Regex::new(INVOKE_BLOCK_PATTERN).ok();
-    let parameter_regex = Regex::new(PARAMETER_BLOCK_PATTERN).ok();
-
-    if tool_call_regex.is_none() || invoke_regex.is_none() || parameter_regex.is_none() {
-        return (Vec::new(), text.to_string());
-    }
-
-    let tool_call_regex = tool_call_regex.unwrap();
-    let invoke_regex = invoke_regex.unwrap();
-    let parameter_regex = parameter_regex.unwrap();
+    // Use precompiled static regexes
+    let tool_call_regex = &*TOOL_CALL_BLOCK_RE;
+    let invoke_regex = &*INVOKE_BLOCK_RE;
+    let parameter_regex = &*PARAMETER_BLOCK_RE;
 
     let mut tool_calls = Vec::new();
     let mut call_index = 1u32;

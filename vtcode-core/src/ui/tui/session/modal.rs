@@ -454,7 +454,7 @@ pub fn render_modal_list(
         list.list_state.select(None);
         *list.list_state.offset_mut() = 0;
         let message = Paragraph::new(Line::from(Span::styled(
-            ui::MODAL_LIST_NO_RESULTS_MESSAGE.to_string(),
+            ui::MODAL_LIST_NO_RESULTS_MESSAGE.to_owned(),
             styles.detail,
         )))
         .block(modal_list_block(list, styles))
@@ -502,7 +502,7 @@ fn modal_list_summary_line(
             styles.detail,
         ));
         spans.push(Span::raw(" "));
-        spans.push(Span::styled(query.to_string(), styles.selectable));
+        spans.push(Span::styled(query.to_owned(), styles.selectable));
     }
 
     let matches = list.visible_selectable_count();
@@ -510,12 +510,12 @@ fn modal_list_summary_line(
     if matches == 0 {
         if !spans.is_empty() {
             spans.push(Span::styled(
-                ui::MODAL_LIST_SUMMARY_SEPARATOR.to_string(),
+                ui::MODAL_LIST_SUMMARY_SEPARATOR.to_owned(),
                 styles.detail,
             ));
         }
         spans.push(Span::styled(
-            ui::MODAL_LIST_SUMMARY_NO_MATCHES.to_string(),
+            ui::MODAL_LIST_SUMMARY_NO_MATCHES.to_owned(),
             styles.search_match,
         ));
         if !ui::MODAL_LIST_SUMMARY_RESET_HINT.is_empty() {
@@ -531,7 +531,7 @@ fn modal_list_summary_line(
     } else {
         if !spans.is_empty() {
             spans.push(Span::styled(
-                ui::MODAL_LIST_SUMMARY_SEPARATOR.to_string(),
+                ui::MODAL_LIST_SUMMARY_SEPARATOR.to_owned(),
                 styles.detail,
             ));
         }
@@ -640,7 +640,7 @@ fn render_modal_instructions(
 ) {
     fn wrap_instruction_lines(text: &str, width: usize) -> Vec<String> {
         if width == 0 {
-            return vec![text.to_string()];
+            return vec![text.to_owned()];
         }
 
         let mut lines = Vec::new();
@@ -657,7 +657,7 @@ fn render_modal_instructions(
             let candidate_width = current_width.saturating_add(1).saturating_add(word_width);
             if candidate_width > width {
                 lines.push(current);
-                current = word.to_string();
+                current = word.to_owned();
             } else {
                 current.push(' ');
                 current.push_str(word);
@@ -669,7 +669,7 @@ fn render_modal_instructions(
         }
 
         if lines.is_empty() {
-            vec![text.to_string()]
+            vec![text.to_owned()]
         } else {
             lines
         }
@@ -735,7 +735,7 @@ fn render_modal_instructions(
 
     let block = Block::default()
         .title(Span::styled(
-            ui::MODAL_INSTRUCTIONS_TITLE.to_string(),
+            ui::MODAL_INSTRUCTIONS_TITLE.to_owned(),
             styles.instruction_title,
         ))
         .borders(Borders::ALL)
@@ -769,7 +769,7 @@ fn render_modal_search(
     } else {
         spans.push(Span::styled(search.query.clone(), styles.selectable));
     }
-    spans.push(Span::styled("▌".to_string(), styles.highlight));
+    spans.push(Span::styled("▌".to_owned(), styles.highlight));
 
     let block = Block::default()
         .title(Span::styled(search.label.clone(), styles.header))
@@ -818,7 +818,7 @@ fn highlight_segments(
     }
 
     if terms.is_empty() {
-        return vec![Span::styled(text.to_string(), normal_style)];
+        return vec![Span::styled(text.to_owned(), normal_style)];
     }
 
     let lower = text.to_ascii_lowercase();
@@ -826,7 +826,7 @@ fn highlight_segments(
     char_offsets.push(text.len());
     let char_count = char_offsets.len().saturating_sub(1);
     if char_count == 0 {
-        return vec![Span::styled(text.to_string(), normal_style)];
+        return vec![Span::styled(text.to_owned(), normal_style)];
     }
 
     let mut highlight_flags = vec![false; char_count];
@@ -1147,7 +1147,7 @@ impl ModalListState {
 
     pub fn apply_search(&mut self, query: &str) {
         let preferred = self.current_selection();
-        self.apply_search_with_preference(query, preferred);
+        self.apply_search_with_preference(query, preferred.clone());
     }
 
     pub fn apply_search_with_preference(
@@ -1168,7 +1168,7 @@ impl ModalListState {
         let terms = normalized_query
             .split_whitespace()
             .filter(|term| !term.is_empty())
-            .map(|term| term.to_string())
+            .map(|term| term.to_owned())
             .collect::<Vec<_>>();
         let mut indices = Vec::new();
         let mut pending_divider: Option<usize> = None;
@@ -1216,7 +1216,7 @@ impl ModalListState {
         }
         self.visible_indices = indices;
         self.filter_terms = terms;
-        self.filter_query = Some(trimmed.to_string());
+        self.filter_query = Some(trimmed.to_owned());
         self.select_initial(preferred);
     }
 
@@ -1286,7 +1286,7 @@ mod tests {
 
     fn base_item(title: &str) -> InlineListItem {
         InlineListItem {
-            title: title.to_string(),
+            title: title.to_owned(),
             subtitle: None,
             badge: None,
             indent: 0,
@@ -1298,27 +1298,27 @@ mod tests {
     fn sample_list_modal() -> ModalState {
         let items = vec![
             InlineListItem {
-                title: "First".to_string(),
+                title: "First".to_owned(),
                 selection: Some(InlineListSelection::Model(0)),
-                search_value: Some("general".to_string()),
+                search_value: Some("general".to_owned()),
                 ..base_item("First")
             },
             InlineListItem {
-                title: "Second".to_string(),
+                title: "Second".to_owned(),
                 selection: Some(InlineListSelection::Model(1)),
-                search_value: Some("other".to_string()),
+                search_value: Some("other".to_owned()),
                 ..base_item("Second")
             },
         ];
 
         let list_state = ModalListState::new(items, None);
         let search_state = ModalSearchState::from(InlineListSearchConfig {
-            label: "Search".to_string(),
+            label: "Search".to_owned(),
             placeholder: None,
         });
 
         let mut modal = ModalState {
-            title: "Test".to_string(),
+            title: "Test".to_owned(),
             lines: vec![],
             list: Some(list_state),
             secure_prompt: None,
@@ -1353,7 +1353,7 @@ mod tests {
             .collect::<Vec<_>>();
 
         ModalState {
-            title: "Test".to_string(),
+            title: "Test".to_owned(),
             lines: vec![],
             list: Some(ModalListState::new(items, None)),
             secure_prompt: None,
@@ -1371,18 +1371,18 @@ mod tests {
             ..base_item("")
         };
         let header = InlineListItem {
-            search_value: Some("General Models".to_string()),
+            search_value: Some("General Models".to_owned()),
             ..base_item("Models")
         };
         let matching = InlineListItem {
             indent: 1,
             selection: Some(InlineListSelection::Model(0)),
-            search_value: Some("general purpose".to_string()),
+            search_value: Some("general purpose".to_owned()),
             ..base_item("General Purpose")
         };
         let non_matching = InlineListItem {
             selection: Some(InlineListSelection::Model(1)),
-            search_value: Some("specialized".to_string()),
+            search_value: Some("specialized".to_owned()),
             ..base_item("Specialized")
         };
 
@@ -1401,9 +1401,9 @@ mod tests {
             visible_titles,
             vec![
                 expected_divider,
-                "Models".to_string(),
-                "General Purpose".to_string(),
-                "Specialized".to_string()
+                "Models".to_owned(),
+                "General Purpose".to_owned(),
+                "Specialized".to_owned()
             ]
         );
         assert_eq!(state.visible_selectable_count(), 2);
@@ -1420,7 +1420,7 @@ mod tests {
             "Hello",
             Style::default(),
             Style::default().add_modifier(Modifier::BOLD),
-            &["el".to_string()],
+            &["el".to_owned()],
         );
 
         assert_eq!(segments.len(), 3);
@@ -1468,7 +1468,7 @@ mod tests {
     fn list_modal_cancel_emits_event() {
         let mut modal = sample_list_modal();
         if let Some(search) = modal.search.as_mut() {
-            search.query = "value".to_string();
+            search.query = "value".to_owned();
         }
 
         let key = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);

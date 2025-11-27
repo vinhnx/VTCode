@@ -70,6 +70,10 @@ const MAX_LINE_LENGTH: usize = 150;
 const DEFAULT_SPOOL_THRESHOLD: usize = 200_000;
 /// Maximum number of lines to display in code fence blocks
 const MAX_CODE_LINES: usize = 500;
+/// Preview window lines used by large-output previewing (kept local)
+const PREVIEW_HEAD_LINES: usize = 15;
+/// Preview tail lines used by large-output previewing (kept local)
+const PREVIEW_TAIL_LINES: usize = 15;
 /// Size threshold (bytes) at which to show minimal preview instead of full output
 const LARGE_OUTPUT_THRESHOLD_MB: usize = 1_000_000;
 /// Size threshold (bytes) at which to show fewer preview lines
@@ -801,28 +805,36 @@ async fn truncate_content_by_tokens(
     };
 
     let head_tokens = (max_tokens * head_ratio) / 100;
-    let tail_tokens = max_tokens - head_tokens;
+    let _tail_tokens = max_tokens - head_tokens;
 
-    // Split content into lines to process token by token
-    let lines: Vec<&str> = content.lines().collect();
+    // Stream through lines once; capture head lines until head token budget
+    // and maintain a bounded tail buffer (VecDeque) to avoid allocating all lines.
+    use std::collections::VecDeque;
 
-    // For head: collect lines until we reach the token limit
-    // Use fast fallback estimation for most lines to avoid async overhead
-    let mut head_lines = Vec::new();
-    let mut current_tokens = 0;
+    let mut head_lines: Vec<&str> = Vec::with_capacity(PREVIEW_HEAD_LINES);
+    let mut head_tokens_acc = 0usize;
 
-    for line in &lines {
-        if current_tokens >= head_tokens {
-            break;
+    let mut tail_buf: VecDeque<(&str, usize)> = VecDeque::with_capacity(PREVIEW_TAIL_LINES);
+    let _tail_tokens_acc = 0usize;
+    let mut total_lines = 0usize;
+
+    for line in content.lines() {
+        total_lines += 1;
+
+        // Head accumulation
+        if head_tokens_acc < head_tokens {
+            let line_tokens = (line.len() as f64 / TOKENS_PER_CHARACTER).ceil() as usize;
+            if head_tokens_acc + line_tokens <= head_tokens || head_lines.is_empty() {
+                head_lines.push(line);
+                head_tokens_acc += line_tokens;
+            }
         }
 
-        // Fast path: estimate tokens using character count (avoids async call)
-        let line_tokens = (line.len() as f64 / TOKENS_PER_CHARACTER).ceil() as usize;
-        if current_tokens + line_tokens <= head_tokens || head_lines.is_empty() {
-            head_lines.push(line);
-            current_tokens += line_tokens;
-        } else {
-            break;
+        // Tail rolling buffer: keep last PREVIEW_TAIL_LINES lines
+        let est = line.len();
+        tail_buf.push_back((line, est));
+        if tail_buf.len() > PREVIEW_TAIL_LINES {
+            tail_buf.pop_front();
         }
     }
 
@@ -830,51 +842,31 @@ async fn truncate_content_by_tokens(
     let head_content = if head_lines.is_empty() {
         String::new()
     } else {
-        // Pre-allocate based on estimated content size
         let estimated_size = head_lines.iter().map(|l| l.len() + 1).sum::<usize>();
         let mut buf = String::with_capacity(estimated_size);
-        for line in head_lines {
+        for line in &head_lines {
             buf.push_str(line);
             buf.push('\n');
         }
         buf
     };
 
-    // For tail: collect lines from the end until we reach the token limit
-    // Use fast fallback estimation to avoid async overhead
-    let mut tail_lines = Vec::new();
-    let mut current_tokens = 0;
-    let mut tail_start_idx = lines.len();
-
-    for line in lines.iter().rev() {
-        if current_tokens >= tail_tokens {
-            break;
-        }
-
-        // Fast path: estimate tokens using character count (avoids async call)
-        let line_tokens = (line.len() as f64 / TOKENS_PER_CHARACTER).ceil() as usize;
-        if current_tokens + line_tokens <= tail_tokens || tail_lines.is_empty() {
-            tail_lines.push(*line);
-            current_tokens += line_tokens;
-            tail_start_idx -= 1;
-        } else {
-            break;
-        }
-    }
-
-    // Reverse tail_lines to restore original order
-    tail_lines.reverse();
-    let tail_content = if tail_lines.is_empty() {
+    let tail_start_idx = total_lines.saturating_sub(tail_buf.len());
+    let tail_content = if tail_buf.is_empty() {
         String::new()
     } else {
-        tail_lines.join("\n")
+        tail_buf
+            .iter()
+            .map(|(l, _)| *l)
+            .collect::<Vec<&str>>()
+            .join("\n")
     };
 
     // Combine head and tail
     if tail_start_idx > head_line_idx {
         // No overlap, safe to combine
         let truncated_lines = tail_start_idx - head_line_idx;
-        if tail_start_idx < lines.len() {
+        if tail_start_idx < total_lines {
             // Pre-calculate result size
             let truncation_msg = format!("[... {} lines truncated ...]\n", truncated_lines);
             let result_size = head_content.len() + 1 + truncation_msg.len() + tail_content.len();

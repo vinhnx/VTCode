@@ -2377,7 +2377,7 @@ fn snapshot_to_map(
         "args".to_string(),
         Value::Array(args.into_iter().map(Value::String).collect()),
     );
-    let working_directory = working_dir.unwrap_or_else(|| ".".to_string());
+    let working_directory = working_dir.unwrap_or_else(|| ".".into());
     response.insert(
         "working_directory".to_string(),
         Value::String(working_directory),

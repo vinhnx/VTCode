@@ -465,8 +465,10 @@ where
         .get("choices")
         .and_then(|value| value.as_array())
         .ok_or_else(|| {
-            let formatted_error =
-                error_display::format_llm_error(provider_name, "Invalid response format: missing choices");
+            let formatted_error = error_display::format_llm_error(
+                provider_name,
+                "Invalid response format: missing choices",
+            );
             LLMError::Provider(formatted_error)
         })?;
 
@@ -560,9 +562,7 @@ pub async fn handle_http_error(
         return Err(LLMError::RateLimit);
     }
 
-    let formatted_error = error_display::format_llm_error(
-        provider_name,
-        &format!("HTTP {}: {}", status, error_text),
-    );
+    let formatted_error =
+        error_display::format_llm_error(provider_name, &format!("HTTP {}: {}", status, error_text));
     Err(LLMError::Provider(formatted_error))
 }

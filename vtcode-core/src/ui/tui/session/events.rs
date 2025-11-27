@@ -177,7 +177,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 return None;
             }
 
-            let submitted = session.input_manager.content().to_string();
+            let submitted = session.input_manager.content().to_owned();
             session.input_manager.clear();
             session.scroll_manager.set_offset(0);
             crate::ui::tui::session::slash::update_slash_suggestions(session);

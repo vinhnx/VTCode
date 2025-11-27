@@ -48,7 +48,7 @@ impl FileColorizer {
             if let Some((key, value)) = pair.split_once('=') {
                 let parser = crate::utils::CachedStyleParser::default();
                 if let Ok(style) = parser.parse_ls_colors(value) {
-                    map.insert(key.to_string(), style);
+                    map.insert(key.to_owned(), style);
                 }
             }
         }

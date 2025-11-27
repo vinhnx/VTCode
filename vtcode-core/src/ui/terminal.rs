@@ -19,7 +19,7 @@ pub fn flush_stdout() {
 pub fn read_line() -> std::io::Result<String> {
     let mut buffer = String::new();
     std::io::stdin().read_line(&mut buffer)?;
-    Ok(buffer.trim().to_string())
+    Ok(buffer.trim().to_owned())
 }
 
 /// Check if output is being piped (not a terminal)

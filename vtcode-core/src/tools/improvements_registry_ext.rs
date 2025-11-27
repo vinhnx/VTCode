@@ -148,7 +148,7 @@ impl ToolRegistryImprovement {
     /// Cache result for tool execution
     pub fn cache_result(&self, tool: &str, args: &str, result: &str) {
         let key = format!("{}::{}", tool, args);
-        let _ = self.result_cache.put(key, result.to_string());
+        let _ = self.result_cache.put(key, result.to_owned());
     }
 
     /// Try to get cached result
@@ -193,13 +193,7 @@ mod tests {
         let obs = Arc::new(ObservabilityContext::noop());
         let ext = ToolRegistryImprovement::new(obs);
 
-        ext.record_execution(
-            "grep_file".to_string(),
-            "pattern".to_string(),
-            true,
-            0.8,
-            100,
-        );
+        ext.record_execution("grep_file".to_owned(), "pattern".to_owned(), true, 0.8, 100);
 
         let metrics = ext.get_tool_metrics("grep_file");
         assert!(metrics.is_some());
@@ -214,7 +208,7 @@ mod tests {
         ext.cache_result("grep_file", "pattern", "result");
         assert_eq!(
             ext.get_cached_result("grep_file", "pattern"),
-            Some("result".to_string())
+            Some("result".to_owned())
         );
     }
 
@@ -223,8 +217,8 @@ mod tests {
         let obs = Arc::new(ObservabilityContext::noop());
         let ext = ToolRegistryImprovement::new(obs);
 
-        ext.record_execution("tool1".to_string(), "arg".to_string(), true, 0.9, 100);
-        ext.record_execution("tool2".to_string(), "arg".to_string(), false, 0.3, 50);
+        ext.record_execution("tool1".to_owned(), "arg".to_owned(), true, 0.9, 100);
+        ext.record_execution("tool2".to_owned(), "arg".to_owned(), false, 0.3, 50);
 
         let ranked = ext.rank_tools();
         assert_eq!(ranked[0].0, "tool1"); // Higher success rate

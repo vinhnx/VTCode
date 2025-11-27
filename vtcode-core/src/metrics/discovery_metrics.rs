@@ -112,7 +112,7 @@ mod tests {
     #[test]
     fn test_record_query() {
         let mut metrics = DiscoveryMetrics::new();
-        metrics.record_query("file".to_string(), 5, 50);
+        metrics.record_query("file".to_owned(), 5, 50);
 
         assert_eq!(metrics.total_queries, 1);
         assert_eq!(metrics.successful_queries, 1);
@@ -123,7 +123,7 @@ mod tests {
     #[test]
     fn test_record_failure() {
         let mut metrics = DiscoveryMetrics::new();
-        metrics.record_failure("invalid".to_string());
+        metrics.record_failure("invalid".to_owned());
 
         assert_eq!(metrics.total_queries, 1);
         assert_eq!(metrics.failed_queries, 1);
@@ -133,9 +133,9 @@ mod tests {
     #[test]
     fn test_hit_rate() {
         let mut metrics = DiscoveryMetrics::new();
-        metrics.record_query("test".to_string(), 3, 30);
-        metrics.record_query("test2".to_string(), 2, 25);
-        metrics.record_failure("test3".to_string());
+        metrics.record_query("test".to_owned(), 3, 30);
+        metrics.record_query("test2".to_owned(), 2, 25);
+        metrics.record_failure("test3".to_owned());
 
         assert_eq!(metrics.total_queries, 3);
         assert_eq!(metrics.hit_rate(), 2.0 / 3.0);

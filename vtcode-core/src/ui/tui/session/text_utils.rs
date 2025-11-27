@@ -138,7 +138,7 @@ pub fn simplify_tool_display(text: &str) -> String {
         text.replacen("list ", "listing ", 1)
     } else {
         // Return original text if no simplification needed
-        text.to_string()
+        text.to_owned()
     };
 
     // Further simplify parameter displays
@@ -149,7 +149,7 @@ pub fn simplify_tool_display(text: &str) -> String {
 #[allow(dead_code)]
 pub fn format_tool_parameters(text: &str) -> String {
     // Convert common parameter patterns to more readable formats
-    let mut formatted = text.to_string();
+    let mut formatted = text.to_owned();
 
     // Convert "pattern: xyz" to "matching 'xyz'"
     if formatted.contains("pattern: ") {
@@ -196,7 +196,7 @@ pub fn wrap_line(line: Line<'static>, max_width: usize) -> Vec<Line<'static>> {
             return;
         }
 
-        spans.push(Span::styled(text.to_string(), *style));
+        spans.push(Span::styled(text.to_owned(), *style));
     }
 
     let mut rows = Vec::new();
