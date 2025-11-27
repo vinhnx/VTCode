@@ -33,7 +33,7 @@ mod e2e_tests {
             "max_bytes": 1000
         });
 
-        let result1 = registry.execute_tool("read_file", read_args.clone()).await;
+        let result1 = registry.execute_tool_ref("read_file", &read_args).await;
         assert!(result1.is_ok(), "First read should succeed");
 
         let content1 = result1.unwrap();
@@ -150,7 +150,7 @@ mod e2e_tests {
             "path": subdir.to_string_lossy()
         });
 
-        let result1 = registry.execute_tool("list_files", list_args.clone()).await;
+        let result1 = registry.execute_tool_ref("list_files", &list_args).await;
         assert!(result1.is_ok(), "First list should succeed");
 
         // Second list should use cache
@@ -177,7 +177,7 @@ mod e2e_tests {
             "path": test_file.to_string_lossy()
         });
 
-        let result1 = registry.execute_tool("read_file", read_args.clone()).await;
+        let result1 = registry.execute_tool_ref("read_file", &read_args).await;
         assert!(result1.is_ok());
         assert_eq!(result1.unwrap()["content"], "original");
 

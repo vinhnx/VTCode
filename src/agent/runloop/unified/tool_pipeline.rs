@@ -230,10 +230,10 @@ pub(crate) async fn run_tool_call(
         Some(&progress_reporter),
     );
 
-    let outcome = execute_tool_with_timeout(
+    let outcome = execute_tool_with_timeout_ref(
         ctx.tool_registry,
         &name,
-        args_val.clone(),
+        &args_val,
         ctrl_c_state,
         ctrl_c_notify,
         Some(&progress_reporter),
@@ -302,6 +302,18 @@ pub(crate) async fn execute_tool_with_timeout(
     ctrl_c_notify: &Arc<Notify>,
     progress_reporter: Option<&ProgressReporter>,
 ) -> ToolExecutionStatus {
+    execute_tool_with_timeout_ref(registry, name, &args, ctrl_c_state, ctrl_c_notify, progress_reporter).await
+}
+
+/// Execute a tool with a timeout and progress reporting (reference-based to avoid cloning args)
+pub(crate) async fn execute_tool_with_timeout_ref(
+    registry: &mut ToolRegistry,
+    name: &str,
+    args: &Value,
+    ctrl_c_state: &Arc<CtrlCState>,
+    ctrl_c_notify: &Arc<Notify>,
+    progress_reporter: Option<&ProgressReporter>,
+) -> ToolExecutionStatus {
     // Use provided progress reporter or create a new one
     let mut local_progress_reporter = None;
     let progress_reporter = if let Some(reporter) = progress_reporter {
@@ -341,7 +353,7 @@ pub(crate) async fn execute_tool_with_timeout(
 async fn execute_tool_with_progress(
     registry: &mut ToolRegistry,
     name: &str,
-    args: Value,
+    args: &Value,
     ctrl_c_state: &Arc<CtrlCState>,
     ctrl_c_notify: &Arc<Notify>,
     progress_reporter: &ProgressReporter,
@@ -376,9 +388,8 @@ async fn execute_tool_with_progress(
     progress_reporter.set_progress(20).await;
 
     let status = loop {
-        // Create a fresh clone of registry and args for each iteration
+        // Create a fresh clone of registry for each iteration
         let mut registry_clone = registry.clone();
-        let args_clone = args.clone();
 
         if ctrl_c_state.is_cancel_requested() || ctrl_c_state.is_exit_requested() {
             return ToolExecutionStatus::Cancelled;
@@ -404,6 +415,8 @@ async fn execute_tool_with_progress(
         progress_reporter.set_progress(estimated_progress).await;
 
         let token = CancellationToken::new();
+        // Clone args only once for the async move block
+        let args_for_exec = args.clone();
         let exec_future = {
             let name = name.to_string();
             let progress_reporter = progress_reporter.clone();
@@ -412,8 +425,8 @@ async fn execute_tool_with_progress(
                 // Tool execution in progress (already set above)
                 progress_reporter.set_progress(40).await;
 
-                // Execute the tool with the cloned registry and args
-                let result = registry_clone.execute_tool(&name, args_clone).await;
+                // Execute the tool with reference to avoid clone
+                let result = registry_clone.execute_tool_ref(&name, &args_for_exec).await;
 
                 // Phase 4: Processing results (85-95%)
                 progress_reporter

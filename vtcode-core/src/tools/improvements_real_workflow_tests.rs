@@ -179,7 +179,7 @@ mod real_workflow_tests {
         std::thread::sleep(Duration::from_millis(150));
 
         // Should be expired
-        assert_eq!(cache.get(&"key0".to_string()), None);
+        assert_eq!(cache.get_owned(&"key0".to_string()), None);
     }
 
     /// Test: LRU eviction when cache is full
@@ -188,20 +188,20 @@ mod real_workflow_tests {
         let cache = LruCache::new(3, Duration::from_secs(3600));
 
         // Fill cache
-        cache.put("key1", "value1").unwrap();
-        cache.put("key2", "value2").unwrap();
-        cache.put("key3", "value3").unwrap();
+        cache.put("key1".to_string(), "value1".to_string()).unwrap();
+        cache.put("key2".to_string(), "value2".to_string()).unwrap();
+        cache.put("key3".to_string(), "value3".to_string()).unwrap();
 
         // Access key1 to mark it recently used
-        cache.get(&"key1".to_string());
+        cache.get_arc(&"key1".to_string());
 
         // Add 4th item (should evict key2 as LRU)
-        cache.put("key4", "value4").unwrap();
+        cache.put("key4".to_string(), "value4".to_string()).unwrap();
 
-        assert_eq!(cache.get(&"key1".to_string()), Some("value1".to_string()));
-        assert_eq!(cache.get(&"key2".to_string()), None); // Evicted
-        assert_eq!(cache.get(&"key3".to_string()), Some("value3".to_string()));
-        assert_eq!(cache.get(&"key4".to_string()), Some("value4".to_string()));
+        assert_eq!(cache.get_owned(&"key1".to_string()), Some("value1".to_string()));
+        assert_eq!(cache.get_owned(&"key2".to_string()), None); // Evicted
+        assert_eq!(cache.get_owned(&"key3".to_string()), Some("value3".to_string()));
+        assert_eq!(cache.get_owned(&"key4".to_string()), Some("value4".to_string()));
     }
 
     /// Test: Tool ranking by effectiveness

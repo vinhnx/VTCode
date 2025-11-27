@@ -4,20 +4,22 @@
 //! Includes metrics collection and optional logging.
 
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
+use std::sync::Arc;
 
+// Arc brings shared ownership of cached values
 /// Cache entry with TTL tracking.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 struct CacheEntry<V> {
-    value: V,
+    value: Arc<V>,
     inserted_at: Instant,
     accessed_at: Instant,
     access_count: u64,
 }
 
-impl<V: Clone> CacheEntry<V> {
+impl<V> CacheEntry<V> {
     fn is_expired(&self, ttl: Duration) -> bool {
         self.inserted_at.elapsed() > ttl
     }
@@ -29,7 +31,7 @@ impl<V: Clone> CacheEntry<V> {
 }
 
 /// Statistics about cache performance.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct CacheStats {
     /// Total hit count across all entries.
     pub hits: u64,
@@ -80,7 +82,7 @@ impl CacheObserver for NoopObserver {
 }
 
 /// LRU cache with TTL, capacity limits, and observability.
-pub struct LruCache<V: Clone> {
+pub struct LruCache<V> {
     /// Maximum entries before LRU eviction.
     capacity: usize,
     /// TTL for all entries.
@@ -88,14 +90,14 @@ pub struct LruCache<V: Clone> {
     /// The actual cache.
     entries: Arc<RwLock<HashMap<String, CacheEntry<V>>>>,
     /// Access order for LRU tracking (stored separately for efficiency).
-    access_order: Arc<RwLock<Vec<String>>>,
+    access_order: Arc<RwLock<VecDeque<String>>>,
     /// Stats tracking.
     stats: Arc<RwLock<CacheStats>>,
     /// Observability hook.
     observer: Arc<dyn CacheObserver>,
 }
 
-impl<V: Clone + Send + Sync> LruCache<V> {
+impl<V: Send + Sync> LruCache<V> {
     /// Create a new cache with capacity and TTL.
     pub fn new(capacity: usize, ttl: Duration) -> Self {
         Self::with_observer(capacity, ttl, Arc::new(NoopObserver))
@@ -107,14 +109,14 @@ impl<V: Clone + Send + Sync> LruCache<V> {
             capacity,
             ttl,
             entries: Arc::new(RwLock::new(HashMap::new())),
-            access_order: Arc::new(RwLock::new(Vec::new())),
+            access_order: Arc::new(RwLock::new(VecDeque::new())),
             stats: Arc::new(RwLock::new(CacheStats::default())),
             observer,
         }
     }
 
     /// Get a value from the cache.
-    pub async fn get(&self, key: &str) -> Option<V> {
+    pub async fn get(&self, key: &str) -> Option<Arc<V>> {
         let mut entries = self.entries.write().await;
 
         // Check for expiration.
@@ -142,7 +144,7 @@ impl<V: Clone + Send + Sync> LruCache<V> {
             self.observer.on_hit(key, entry.access_count).await;
             let mut stats = self.stats.write().await;
             stats.hits += 1;
-            return Some(entry.value.clone());
+            return Some(Arc::clone(&entry.value));
         }
 
         {
@@ -153,6 +155,19 @@ impl<V: Clone + Send + Sync> LruCache<V> {
         None
     }
 
+    /// Get a value as an owned clone from the cache (compatibility helper).
+    pub async fn get_owned(&self, key: &str) -> Option<V>
+    where
+        V: Clone,
+    {
+        self.get(key).await.map(|arc| (*arc).clone())
+    }
+
+    /// Alias to return Arc<V> explicitly (clarifies intent)
+    pub async fn get_arc(&self, key: &str) -> Option<Arc<V>> {
+        self.get(key).await
+    }
+
     /// Insert a value into the cache.
     pub async fn insert(&self, key: String, value: V) {
         let mut entries = self.entries.write().await;
@@ -160,19 +175,19 @@ impl<V: Clone + Send + Sync> LruCache<V> {
         // If at capacity and key doesn't exist, evict LRU entry.
         if entries.len() >= self.capacity && !entries.contains_key(&key) {
             let mut order = self.access_order.write().await;
-            if let Some(lru_key) = order.first().cloned() {
+            if let Some(lru_key) = order.front().cloned() {
                 entries.remove(&lru_key);
                 self.observer
                     .on_evict(&lru_key, EvictionReason::Capacity)
                     .await;
                 let mut stats = self.stats.write().await;
                 stats.evictions += 1;
-                order.remove(0);
+                order.pop_front();
             }
         }
 
         let entry = CacheEntry {
-            value,
+            value: Arc::new(value),
             inserted_at: Instant::now(),
             accessed_at: Instant::now(),
             access_count: 0,
@@ -180,11 +195,11 @@ impl<V: Clone + Send + Sync> LruCache<V> {
 
         entries.insert(key.clone(), entry);
         let mut order = self.access_order.write().await;
-        order.push(key);
+        order.push_back(key);
     }
 
     /// Remove a specific key.
-    pub async fn remove(&self, key: &str) -> Option<V> {
+    pub async fn remove(&self, key: &str) -> Option<Arc<V>> {
         let mut entries = self.entries.write().await;
         let mut order = self.access_order.write().await;
         order.retain(|k| k != key);
@@ -262,8 +277,14 @@ mod tests {
         cache.insert("a".into(), "value_a".into()).await;
         cache.insert("b".into(), "value_b".into()).await;
 
-        assert_eq!(cache.get("a").await, Some("value_a".into()));
-        assert_eq!(cache.get("b").await, Some("value_b".into()));
+        assert_eq!(
+            cache.get("a").await.map(|v| (*v).clone()),
+            Some("value_a".into())
+        );
+        assert_eq!(
+            cache.get("b").await.map(|v| (*v).clone()),
+            Some("value_b".into())
+        );
         assert_eq!(cache.get("c").await, None);
     }
 
@@ -276,8 +297,8 @@ mod tests {
         cache.insert("c".into(), 3).await; // Should evict "a"
 
         assert_eq!(cache.get("a").await, None);
-        assert_eq!(cache.get("b").await, Some(2));
-        assert_eq!(cache.get("c").await, Some(3));
+        assert_eq!(cache.get("b").await.map(|v| *v), Some(2));
+        assert_eq!(cache.get("c").await.map(|v| *v), Some(3));
     }
 
     #[tokio::test]
@@ -285,7 +306,10 @@ mod tests {
         let cache: LruCache<String> = LruCache::new(10, Duration::from_millis(50));
 
         cache.insert("a".into(), "value".into()).await;
-        assert_eq!(cache.get("a").await, Some("value".into()));
+        assert_eq!(
+            cache.get("a").await.map(|v| (*v).clone()),
+            Some("value".into())
+        );
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert_eq!(cache.get("a").await, None);

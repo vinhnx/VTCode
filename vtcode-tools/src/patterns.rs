@@ -36,8 +36,8 @@ impl PatternDetector {
     /// Create new detector with sliding window size.
     pub fn new(sequence_length: usize) -> Self {
         Self {
-            events: Vec::new(),
-            patterns: HashMap::new(),
+            events: Vec::with_capacity(64),
+            patterns: HashMap::with_capacity(16),
             sequence_length,
         }
     }
@@ -54,12 +54,12 @@ impl PatternDetector {
             return;
         }
 
-        let mut sequence_map: HashMap<Vec<String>, Vec<&ToolEvent>> = HashMap::new();
+        let mut sequence_map: HashMap<Vec<&str>, Vec<&ToolEvent>> = HashMap::new();
 
         // Slide window and extract sequences.
         for i in 0..=(self.events.len() - self.sequence_length) {
             let window = &self.events[i..i + self.sequence_length];
-            let seq: Vec<String> = window.iter().map(|e| e.tool_name.clone()).collect();
+            let seq: Vec<&str> = window.iter().map(|e| e.tool_name.as_str()).collect();
 
             // Reserve or get the vector once, then push window events into it.
             let entry = sequence_map.entry(seq.clone()).or_insert_with(Vec::new);
@@ -81,13 +81,17 @@ impl PatternDetector {
                 // Confidence: based on frequency and consistency.
                 let confidence = (success_rate * (frequency as f64 / 10.0).min(1.0)).min(1.0);
 
-                let pattern_name = format!("pattern_{:x}", hash_sequence(&sequence));
+                let sequence_vec = sequence
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect::<Vec<String>>();
+                let pattern_name = format!("pattern_{:x}", hash_sequence(&sequence_vec));
 
                 self.patterns.insert(
                     pattern_name.clone(),
                     DetectedPattern {
                         name: pattern_name,
-                        sequence,
+                        sequence: sequence_vec,
                         frequency,
                         success_rate,
                         avg_duration_ms: avg_duration,
@@ -101,13 +105,17 @@ impl PatternDetector {
     /// Get detected patterns.
     pub fn patterns(&self) -> Vec<DetectedPattern> {
         let mut patterns: Vec<_> = self.patterns.values().cloned().collect();
-        patterns.sort_by(|a, b| b.confidence.partial_cmp(&a.confidence).unwrap());
+        patterns.sort_unstable_by(|a, b| {
+            b.confidence
+                .partial_cmp(&a.confidence)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         patterns
     }
 
     /// Extract normalized feature vector for ML.
     pub fn feature_vector(&self) -> Vec<f64> {
-        let mut features = Vec::new();
+        let mut features = Vec::with_capacity(5);
 
         // Feature 1: Event count.
         features.push(self.events.len() as f64);

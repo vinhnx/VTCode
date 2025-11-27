@@ -6,19 +6,20 @@
 use async_trait::async_trait;
 use serde_json::Value;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Request context flowing through middleware.
 #[derive(Clone, Debug)]
 pub struct ToolRequest {
     pub tool_name: String,
-    pub args: Value,
+    pub args: Arc<Value>,
     pub metadata: std::collections::HashMap<String, String>,
 }
 
 /// Response from tool execution.
 #[derive(Clone, Debug)]
 pub struct ToolResponse {
-    pub result: Value,
+    pub result: Arc<Value>,
     pub duration_ms: u64,
     pub cache_hit: bool,
 }
@@ -132,7 +133,7 @@ impl Middleware for LoggingMiddleware {
 }
 
 /// Metrics middleware.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct MetricsSnapshot {
     pub total_calls: u64,
     pub successful_calls: u64,
@@ -142,31 +143,31 @@ pub struct MetricsSnapshot {
 }
 
 pub struct MetricsMiddleware {
-    total_calls: Arc<tokio::sync::RwLock<u64>>,
-    successful_calls: Arc<tokio::sync::RwLock<u64>>,
-    failed_calls: Arc<tokio::sync::RwLock<u64>>,
-    total_duration_ms: Arc<tokio::sync::RwLock<u64>>,
-    cache_hits: Arc<tokio::sync::RwLock<u64>>,
+    total_calls: Arc<AtomicU64>,
+    successful_calls: Arc<AtomicU64>,
+    failed_calls: Arc<AtomicU64>,
+    total_duration_ms: Arc<AtomicU64>,
+    cache_hits: Arc<AtomicU64>,
 }
 
 impl MetricsMiddleware {
     pub fn new() -> Arc<Self> {
         Arc::new(Self {
-            total_calls: Arc::new(tokio::sync::RwLock::new(0)),
-            successful_calls: Arc::new(tokio::sync::RwLock::new(0)),
-            failed_calls: Arc::new(tokio::sync::RwLock::new(0)),
-            total_duration_ms: Arc::new(tokio::sync::RwLock::new(0)),
-            cache_hits: Arc::new(tokio::sync::RwLock::new(0)),
+            total_calls: Arc::new(AtomicU64::new(0)),
+            successful_calls: Arc::new(AtomicU64::new(0)),
+            failed_calls: Arc::new(AtomicU64::new(0)),
+            total_duration_ms: Arc::new(AtomicU64::new(0)),
+            cache_hits: Arc::new(AtomicU64::new(0)),
         })
     }
 
     pub async fn snapshot(&self) -> MetricsSnapshot {
         MetricsSnapshot {
-            total_calls: *self.total_calls.read().await,
-            successful_calls: *self.successful_calls.read().await,
-            failed_calls: *self.failed_calls.read().await,
-            total_duration_ms: *self.total_duration_ms.read().await,
-            cache_hits: *self.cache_hits.read().await,
+            total_calls: self.total_calls.load(Ordering::Relaxed),
+            successful_calls: self.successful_calls.load(Ordering::Relaxed),
+            failed_calls: self.failed_calls.load(Ordering::Relaxed),
+            total_duration_ms: self.total_duration_ms.load(Ordering::Relaxed),
+            cache_hits: self.cache_hits.load(Ordering::Relaxed),
         }
     }
 }
@@ -174,29 +175,24 @@ impl MetricsMiddleware {
 #[async_trait]
 impl Middleware for MetricsMiddleware {
     async fn before_execute(&self, _: &ToolRequest) -> anyhow::Result<()> {
-        let mut total = self.total_calls.write().await;
-        *total += 1;
+        self.total_calls.fetch_add(1, Ordering::Relaxed);
         Ok(())
     }
 
     async fn after_execute(&self, _: &ToolRequest, res: &ToolResponse) -> anyhow::Result<()> {
-        let mut successful = self.successful_calls.write().await;
-        *successful += 1;
-
-        let mut duration = self.total_duration_ms.write().await;
-        *duration += res.duration_ms;
+        self.successful_calls.fetch_add(1, Ordering::Relaxed);
+        self.total_duration_ms
+            .fetch_add(res.duration_ms, Ordering::Relaxed);
 
         if res.cache_hit {
-            let mut hits = self.cache_hits.write().await;
-            *hits += 1;
+            self.cache_hits.fetch_add(1, Ordering::Relaxed);
         }
 
         Ok(())
     }
 
     async fn on_error(&self, _: &ToolRequest, _: &anyhow::Error) -> anyhow::Result<()> {
-        let mut failed = self.failed_calls.write().await;
-        *failed += 1;
+        self.failed_calls.fetch_add(1, Ordering::Relaxed);
         Ok(())
     }
 }
@@ -204,11 +200,11 @@ impl Middleware for MetricsMiddleware {
 impl Default for MetricsMiddleware {
     fn default() -> Self {
         Self {
-            total_calls: Arc::new(tokio::sync::RwLock::new(0)),
-            successful_calls: Arc::new(tokio::sync::RwLock::new(0)),
-            failed_calls: Arc::new(tokio::sync::RwLock::new(0)),
-            total_duration_ms: Arc::new(tokio::sync::RwLock::new(0)),
-            cache_hits: Arc::new(tokio::sync::RwLock::new(0)),
+            total_calls: Arc::new(AtomicU64::new(0)),
+            successful_calls: Arc::new(AtomicU64::new(0)),
+            failed_calls: Arc::new(AtomicU64::new(0)),
+            total_duration_ms: Arc::new(AtomicU64::new(0)),
+            cache_hits: Arc::new(AtomicU64::new(0)),
         }
     }
 }
@@ -225,14 +221,14 @@ mod tests {
 
         let req = ToolRequest {
             tool_name: "test_tool".to_string(),
-            args: Value::Null,
+            args: Arc::new(Value::Null),
             metadata: Default::default(),
         };
 
         chain.before_execute(&req).await.unwrap();
 
         let res = ToolResponse {
-            result: Value::Null,
+            result: Arc::new(Value::Null),
             duration_ms: 100,
             cache_hit: false,
         };
@@ -247,14 +243,14 @@ mod tests {
 
         let req = ToolRequest {
             tool_name: "test".to_string(),
-            args: Value::Null,
+            args: Arc::new(Value::Null),
             metadata: Default::default(),
         };
 
         for _ in 0..5 {
             chain.before_execute(&req).await.unwrap();
             let res = ToolResponse {
-                result: Value::Null,
+                result: Arc::new(Value::Null),
                 duration_ms: 10,
                 cache_hit: true,
             };

@@ -240,7 +240,7 @@ impl CodeExecutor {
 
                     // Execute the tool
                     let result = match mcp_client
-                        .execute_mcp_tool(&request.tool_name, request.args.clone())
+                        .execute_mcp_tool(&request.tool_name, &request.args)
                         .await
                     {
                         Ok(result) => {

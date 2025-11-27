@@ -11,11 +11,12 @@ use serde_json::{Map, Value};
 
 use super::{
     common::{
-        convert_usage_to_llm_types, extract_prompt_cache_settings, handle_http_error,
+        convert_usage_to_llm_types, extract_prompt_cache_settings,
         override_base_url, parse_chat_request_openai_format, parse_client_prompt_common,
         parse_response_openai_format, resolve_model, serialize_messages_openai_format,
         serialize_tools_openai_format,
     },
+    error_handling::handle_openai_http_error,
     extract_reasoning_trace,
 };
 
@@ -223,7 +224,7 @@ impl LLMProvider for DeepSeekProvider {
                 LLMError::Network(formatted_error)
             })?;
 
-        let response = handle_http_error(response, PROVIDER_NAME, "DEEPSEEK_API_KEY").await?;
+        let response = handle_openai_http_error(response, PROVIDER_NAME, "DEEPSEEK_API_KEY").await?;
 
         let response_json: Value = response.json().await.map_err(|e| {
             let formatted_error = error_display::format_llm_error(

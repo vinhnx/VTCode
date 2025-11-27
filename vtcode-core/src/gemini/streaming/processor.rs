@@ -249,7 +249,6 @@ impl StreamingProcessor {
         Ok(accumulated_response)
     }
 
-    /// Process the buffer and extract complete SSE events
     fn process_buffer<F>(
         &mut self,
         buffer: &mut String,
@@ -277,8 +276,9 @@ impl StreamingProcessor {
             }
         }
 
+        // Optimize: Use drain to avoid allocation when removing processed content
         if processed_chars > 0 {
-            *buffer = buffer[processed_chars..].to_owned();
+            buffer.drain(..processed_chars);
         }
 
         Ok(_has_valid_content)

@@ -21,6 +21,7 @@ use super::{
         convert_usage_to_llm_types, extract_prompt_cache_settings, override_base_url,
         parse_client_prompt_common, resolve_model,
     },
+    error_handling::{format_network_error, format_parse_error, handle_anthropic_http_error},
     extract_reasoning_trace,
 };
 
@@ -956,51 +957,14 @@ impl LLMProvider for AnthropicProvider {
             .json(&anthropic_request)
             .send()
             .await
-            .map_err(|e| {
-                let formatted_error =
-                    error_display::format_llm_error("Anthropic", &format!("Network error: {}", e));
-                LLMError::Network(formatted_error)
-            })?;
+            .map_err(|e| format_network_error("Anthropic", &e))?;
 
-        if !response.status().is_success() {
-            let status = response.status();
-            let error_text = response.text().await.unwrap_or_default();
+        let response = handle_anthropic_http_error(response).await?;
 
-            // Handle specific HTTP status codes
-            if status.as_u16() == 429
-                || error_text.contains("insufficient_quota")
-                || error_text.contains("quota")
-                || error_text.contains("rate limit")
-            {
-                return Err(LLMError::RateLimit);
-            }
-
-            // Parse error response to extract friendly message
-            let (friendly_msg, error_type, _request_id) = Self::parse_error_response(&error_text);
-
-            // Build user-friendly error message with additional context if available
-            let error_message = if error_text.contains("cache_control") {
-                format!(
-                    "{}\n\nNote: Anthropic only supports cache_control with type='ephemeral' and ttl='5m' or '1h'.",
-                    friendly_msg
-                )
-            } else if let Some(etype) = error_type {
-                format!("{} (HTTP {} - {})", friendly_msg, status, etype)
-            } else {
-                format!("{} (HTTP {})", friendly_msg, status)
-            };
-
-            let formatted_error = error_display::format_llm_error("Anthropic", &error_message);
-            return Err(LLMError::Provider(formatted_error));
-        }
-
-        let anthropic_response: Value = response.json().await.map_err(|e| {
-            let formatted_error = error_display::format_llm_error(
-                "Anthropic",
-                &format!("Failed to parse response: {}", e),
-            );
-            LLMError::Provider(formatted_error)
-        })?;
+        let anthropic_response: Value = response
+            .json()
+            .await
+            .map_err(|e| format_parse_error("Anthropic", &e))?;
 
         self.parse_anthropic_response(anthropic_response)
     }
@@ -1376,36 +1340,6 @@ impl LLMClient for AnthropicProvider {
 
 // Helper impl block for error parsing and schema validation methods (not part of LLMProvider trait)
 impl AnthropicProvider {
-    /// Parse Anthropic error response JSON and extract friendly message
-    /// Returns (friendly_message, error_type, request_id)
-    fn parse_error_response(error_text: &str) -> (String, Option<String>, Option<String>) {
-        // Try to parse as JSON first
-        if let Ok(Value::Object(obj)) = serde_json::from_str::<Value>(error_text) {
-            // Try to extract the message from error.message
-            if let Some(Value::Object(error_obj)) = obj.get("error") {
-                let message = error_obj
-                    .get("message")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("");
-                let error_type = error_obj
-                    .get("type")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string());
-                let request_id = obj
-                    .get("request_id")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string());
-
-                if !message.is_empty() {
-                    return (message.to_string(), error_type, request_id);
-                }
-            }
-        }
-
-        // Fallback: return raw error text
-        (error_text.to_string(), None, None)
-    }
-
     /// Validates a JSON schema against Anthropic's structured output limitations
     /// Based on Anthropic documentation: https://docs.anthropic.com/claude/reference/structured-outputs
     fn validate_anthropic_schema(&self, schema: &Value) -> Result<(), LLMError> {

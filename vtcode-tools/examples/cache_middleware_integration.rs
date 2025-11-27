@@ -37,9 +37,10 @@ impl CachedToolExecutor {
         let cache_key = format!("{}:{}", tool_name, args.to_string());
         let start = std::time::Instant::now();
 
+        let args = Arc::new(args);
         let req = ToolRequest {
             tool_name: tool_name.to_string(),
-            args,
+            args: Arc::clone(&args),
             metadata: Default::default(),
         };
 
@@ -51,12 +52,12 @@ impl CachedToolExecutor {
             eprintln!("✓ Cache hit for {}", tool_name);
 
             let res = ToolResponse {
-                result: cached_result.clone(),
+                result: Arc::clone(&cached_result),
                 duration_ms: start.elapsed().as_millis() as u64,
                 cache_hit: true,
             };
             self.middleware.after_execute(&req, &res).await?;
-            return Ok(cached_result);
+            return Ok((*cached_result).clone());
         }
 
         // Simulate tool execution
@@ -66,7 +67,7 @@ impl CachedToolExecutor {
         self.cache.insert(cache_key, result.clone()).await;
 
         let res = ToolResponse {
-            result: result.clone(),
+            result: Arc::new(result.clone()),
             duration_ms: start.elapsed().as_millis() as u64,
             cache_hit: false,
         };

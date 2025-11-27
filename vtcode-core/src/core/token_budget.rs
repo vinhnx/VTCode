@@ -7,6 +7,7 @@
 /// Maximum tokens allowed per tool response (token-based truncation limit)
 pub const MAX_TOOL_RESPONSE_TOKENS: usize = 25_000;
 
+use crate::utils::current_timestamp;
 use anyhow::{Context, Result, anyhow};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -14,7 +15,6 @@ use std::collections::VecDeque;
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
 use tokenizers::Tokenizer;
 use tokio::sync::RwLock;
 use tokio::task;
@@ -89,10 +89,7 @@ impl TokenUsageStats {
             assistant_messages_tokens: 0,
             tool_results_tokens: 0,
             decision_ledger_tokens: 0,
-            timestamp: SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs(),
+            timestamp: current_timestamp(),
         }
     }
 
@@ -326,10 +323,7 @@ impl TokenBudgetManager {
             _ => {}
         }
 
-        stats.timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
+        stats.timestamp = current_timestamp();
     }
 
     /// Get current usage statistics
@@ -489,15 +483,11 @@ impl TokenBudgetManager {
         context: &str,
     ) {
         let mut history = self.max_tokens_history.write().await;
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
 
         history.push_front(MaxTokensUsage {
             tool_name: tool_name.to_string(),
             applied_max_tokens,
-            timestamp,
+            timestamp: current_timestamp(),
             context: context.to_string(),
         });
 

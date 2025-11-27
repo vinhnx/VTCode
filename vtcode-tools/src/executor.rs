@@ -46,7 +46,7 @@ impl CachedToolExecutor {
 
     /// Create executor with custom cache and pattern settings.
     pub fn with_config(cache_capacity: usize, cache_ttl: Duration, pattern_window: usize) -> Self {
-        let cache = Arc::new(LruCache::new(cache_capacity, cache_ttl));
+        let cache = Arc::new(LruCache::<Value>::new(cache_capacity, cache_ttl));
         let middleware = MiddlewareChain::new();
         let patterns = Arc::new(RwLock::new(PatternDetector::new(pattern_window)));
         let stats = Arc::new(RwLock::new(ExecutorStats {
@@ -75,6 +75,15 @@ impl CachedToolExecutor {
 
     /// Execute a tool with full caching and observability.
     pub async fn execute(&self, tool_name: &str, args: Value) -> anyhow::Result<Value> {
+        // Delegate to the shared-version and convert to an owned Value
+        let r = self.execute_shared_owned(tool_name, args).await?;
+        Ok((*r).clone())
+    }
+
+    /// Execute a tool but return a shared (Arc) response to avoid clones.
+    /// Accepts a shared Arc<Value> to avoid cloning arg contents when caller
+    /// already holds a shared reference.
+    pub async fn execute_shared(&self, tool_name: &str, args: Arc<Value>) -> anyhow::Result<Arc<Value>> {
         let start = std::time::Instant::now();
         let cache_key = format!("{}:{}", tool_name, args);
 
@@ -84,11 +93,11 @@ impl CachedToolExecutor {
             stats.total_calls += 1;
         }
 
-        // Create request — reuse the owned `args` (it was passed by value)
-        let owned_args = args;
+        // Create request — reuse the shared `args` (already an Arc)
+        let owned_args = Arc::clone(&args);
         let req = ToolRequest {
             tool_name: tool_name.to_string(),
-            args: owned_args.clone(),
+            args: Arc::clone(&owned_args),
             metadata: Default::default(),
         };
 
@@ -103,7 +112,7 @@ impl CachedToolExecutor {
             stats.cache_hits += 1;
 
             let res = ToolResponse {
-                result: result.clone(),
+                result: Arc::clone(&result),
                 duration_ms,
                 cache_hit: true,
             };
@@ -112,7 +121,7 @@ impl CachedToolExecutor {
             // Record pattern
             self.record_pattern(tool_name, true, duration_ms).await;
 
-            return Ok(result);
+            return Ok(Arc::clone(&result));
         }
 
         // Update stats: cache miss
@@ -123,12 +132,15 @@ impl CachedToolExecutor {
 
         // Execute tool (caller provides actual execution)
         // This is where your tool registry would call the actual tool
-        let result = self.execute_tool_internal(tool_name, &owned_args).await?;
+        let result = self.execute_tool_internal(tool_name, &*owned_args).await?;
 
         let duration_ms = start.elapsed().as_millis() as u64;
 
-        // Cache result
-        self.cache.insert(cache_key, result.clone()).await;
+        // Wrap result in Arc once, then clone Arc for cache and response
+        let arc_res = Arc::new(result);
+
+        // Cache result (Arc clone is cheap - just reference count increment)
+        self.cache.insert(cache_key, (*arc_res).clone()).await;
 
         // Update stats
         {
@@ -138,7 +150,7 @@ impl CachedToolExecutor {
         }
 
         let res = ToolResponse {
-            result: result.clone(),
+            result: Arc::clone(&arc_res),
             duration_ms,
             cache_hit: false,
         };
@@ -149,7 +161,13 @@ impl CachedToolExecutor {
         // Record pattern
         self.record_pattern(tool_name, true, duration_ms).await;
 
-        Ok(result)
+        Ok(arc_res)
+    }
+
+    /// Backwards-compatible wrapper for callers that still pass an owned Value.
+    pub async fn execute_shared_owned(&self, tool_name: &str, args: Value) -> anyhow::Result<Arc<Value>> {
+        let arg = Arc::new(args);
+        self.execute_shared(tool_name, arg).await
     }
 
     /// Execute tool (override this for real tool execution)

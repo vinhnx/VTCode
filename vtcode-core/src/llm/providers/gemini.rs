@@ -29,6 +29,7 @@ use tracing;
 use vtcode_config::types::ReasoningEffortLevel;
 
 use super::common::{extract_prompt_cache_settings, override_base_url, resolve_model};
+use super::error_handling::{format_network_error, format_parse_error, is_rate_limit_error};
 
 pub struct GeminiProvider {
     api_key: String,
@@ -106,6 +107,46 @@ impl GeminiProvider {
             timeouts,
         }
     }
+
+    /// Handle HTTP response errors and convert to appropriate LLMError.
+    /// Uses shared rate limit detection from error_handling module.
+    #[inline]
+    fn handle_http_error(status: reqwest::StatusCode, error_text: &str) -> LLMError {
+        let status_code = status.as_u16();
+
+        // Handle authentication errors
+        if status_code == 401 || status_code == 403 {
+            let formatted_error = error_display::format_llm_error(
+                "Gemini",
+                &format!(
+                    "Authentication failed: {}. Check your GOOGLE_API_KEY or GEMINI_API_KEY environment variable.",
+                    error_text
+                ),
+            );
+            return LLMError::Authentication(formatted_error);
+        }
+
+        // Handle rate limit and quota errors using shared detection
+        if is_rate_limit_error(status_code, error_text) {
+            return LLMError::RateLimit;
+        }
+
+        // Handle invalid request errors
+        if status_code == 400 {
+            let formatted_error = error_display::format_llm_error(
+                "Gemini",
+                &format!("Invalid request: {}", error_text),
+            );
+            return LLMError::InvalidRequest(formatted_error);
+        }
+
+        // Generic error for other cases
+        let formatted_error = error_display::format_llm_error(
+            "Gemini",
+            &format!("HTTP {}: {}", status, error_text),
+        );
+        LLMError::Provider(formatted_error)
+    }
 }
 
 #[async_trait]
@@ -138,63 +179,16 @@ impl LLMProvider for GeminiProvider {
             .json(&gemini_request)
             .send()
             .await
-            .map_err(|e| {
-                let formatted_error =
-                    error_display::format_llm_error("Gemini", &format!("Network error: {}", e));
-                LLMError::Network(formatted_error)
-            })?;
+            .map_err(|e| format_network_error("Gemini", &e))?;
 
         if !response.status().is_success() {
             let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
-
-            // Handle authentication errors
-            if status.as_u16() == 401 || status.as_u16() == 403 {
-                let formatted_error = error_display::format_llm_error(
-                    "Gemini",
-                    &format!(
-                        "Authentication failed: {}. Check your GOOGLE_API_KEY or GEMINI_API_KEY environment variable.",
-                        error_text
-                    ),
-                );
-                return Err(LLMError::Authentication(formatted_error));
-            }
-
-            // Handle rate limit and quota errors
-            if status.as_u16() == 429
-                || error_text.contains("insufficient_quota")
-                || error_text.contains("RESOURCE_EXHAUSTED")
-                || error_text.contains("quota")
-                || error_text.contains("rate limit")
-                || error_text.contains("rateLimitExceeded")
-            {
-                return Err(LLMError::RateLimit);
-            }
-
-            // Handle invalid request errors
-            if status.as_u16() == 400 {
-                let formatted_error = error_display::format_llm_error(
-                    "Gemini",
-                    &format!("Invalid request: {}", error_text),
-                );
-                return Err(LLMError::InvalidRequest(formatted_error));
-            }
-
-            // Generic error for other cases
-            let formatted_error = error_display::format_llm_error(
-                "Gemini",
-                &format!("HTTP {}: {}", status, error_text),
-            );
-            return Err(LLMError::Provider(formatted_error));
+            return Err(Self::handle_http_error(status, &error_text));
         }
 
-        let gemini_response: GenerateContentResponse = response.json().await.map_err(|e| {
-            let formatted_error = error_display::format_llm_error(
-                "Gemini",
-                &format!("Failed to parse response: {}", e),
-            );
-            LLMError::Provider(formatted_error)
-        })?;
+        let gemini_response: GenerateContentResponse =
+            response.json().await.map_err(|e| format_parse_error("Gemini", &e))?;
 
         Self::convert_from_gemini_response(gemini_response)
     }
@@ -213,54 +207,12 @@ impl LLMProvider for GeminiProvider {
             .json(&gemini_request)
             .send()
             .await
-            .map_err(|e| {
-                let formatted_error =
-                    error_display::format_llm_error("Gemini", &format!("Network error: {}", e));
-                LLMError::Network(formatted_error)
-            })?;
+            .map_err(|e| format_network_error("Gemini", &e))?;
 
         if !response.status().is_success() {
             let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
-
-            // Handle authentication errors
-            if status.as_u16() == 401 || status.as_u16() == 403 {
-                let formatted_error = error_display::format_llm_error(
-                    "Gemini",
-                    &format!(
-                        "Authentication failed: {}. Check your GOOGLE_API_KEY or GEMINI_API_KEY environment variable.",
-                        error_text
-                    ),
-                );
-                return Err(LLMError::Authentication(formatted_error));
-            }
-
-            // Handle rate limit and quota errors
-            if status.as_u16() == 429
-                || error_text.contains("insufficient_quota")
-                || error_text.contains("RESOURCE_EXHAUSTED")
-                || error_text.contains("quota")
-                || error_text.contains("rate limit")
-                || error_text.contains("rateLimitExceeded")
-            {
-                return Err(LLMError::RateLimit);
-            }
-
-            // Handle invalid request errors
-            if status.as_u16() == 400 {
-                let formatted_error = error_display::format_llm_error(
-                    "Gemini",
-                    &format!("Invalid request: {}", error_text),
-                );
-                return Err(LLMError::InvalidRequest(formatted_error));
-            }
-
-            // Generic error for other cases
-            let formatted_error = error_display::format_llm_error(
-                "Gemini",
-                &format!("HTTP {}: {}", status, error_text),
-            );
-            return Err(LLMError::Provider(formatted_error));
+            return Err(Self::handle_http_error(status, &error_text));
         }
 
         let (event_tx, event_rx) = mpsc::unbounded_channel::<Result<LLMStreamEvent, LLMError>>();
@@ -506,8 +458,8 @@ impl GeminiProvider {
             let mut parts: Vec<Part> = Vec::new();
             if message.role != MessageRole::Tool && !message.content.is_empty() {
                 parts.push(Part::Text {
-                    text: content_text.clone(),
-                    thought_signature: None, // User-generated text doesn't have thought signature
+                    text: content_text.into_owned(),
+                    thought_signature: None,
                 });
             }
 
@@ -541,9 +493,9 @@ impl GeminiProvider {
                     let response_text = serde_json::from_str::<Value>(&message.content.as_text())
                         .map(|value| {
                             serde_json::to_string_pretty(&value)
-                                .unwrap_or_else(|_| message.content.as_text())
+                                .unwrap_or_else(|_| message.content.as_text().into_owned())
                         })
-                        .unwrap_or_else(|_| message.content.as_text());
+                        .unwrap_or_else(|_| message.content.as_text().into_owned());
 
                     let response_payload = json!({
                         "name": func_name.clone(),
@@ -561,7 +513,7 @@ impl GeminiProvider {
                     });
                 } else if !message.content.is_empty() {
                     parts.push(Part::Text {
-                        text: message.content.as_text(),
+                        text: message.content.as_text().into_owned(),
                         thought_signature: None,
                     });
                 }

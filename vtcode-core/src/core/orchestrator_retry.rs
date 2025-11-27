@@ -227,23 +227,32 @@ pub fn is_empty_response(response: &serde_json::Value) -> bool {
     }
 }
 
-/// Detect if an error indicates a temporary failure that should be retried
+/// Detect if an error indicates a temporary failure that should be retried.
+/// Uses case-insensitive matching to avoid string allocation.
 pub fn is_retryable_error(error: &anyhow::Error) -> bool {
-    let error_msg = error.to_string().to_lowercase();
+    let error_msg = error.to_string();
+
+    // Helper for case-insensitive contains
+    let contains_ci = |pattern: &str| {
+        error_msg
+            .as_bytes()
+            .windows(pattern.len())
+            .any(|window| window.eq_ignore_ascii_case(pattern.as_bytes()))
+    };
 
     // Common temporary error patterns (exclude quota/429 errors)
-    (error_msg.contains("timeout")
-        || error_msg.contains("rate limit")
-        || error_msg.contains("503")
-        || error_msg.contains("502")
-        || error_msg.contains("500")
-        || error_msg.contains("connection")
-        || error_msg.contains("network")
-        || error_msg.contains("temporary")
-        || error_msg.contains("overloaded"))
-        && !error_msg.contains("quota")
-        && !error_msg.contains("insufficient")
-        && !error_msg.contains("429")
+    (contains_ci("timeout")
+        || contains_ci("rate limit")
+        || contains_ci("503")
+        || contains_ci("502")
+        || contains_ci("500")
+        || contains_ci("connection")
+        || contains_ci("network")
+        || contains_ci("temporary")
+        || contains_ci("overloaded"))
+        && !contains_ci("quota")
+        && !contains_ci("insufficient")
+        && !contains_ci("429")
 }
 
 #[cfg(test)]

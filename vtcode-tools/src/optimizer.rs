@@ -26,7 +26,7 @@ pub struct Optimization {
 }
 
 /// Type of optimization.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OptimizationType {
     /// Run these tools in parallel instead of sequence
     Parallelize,
@@ -77,8 +77,8 @@ impl WorkflowOptimizer {
         // Rule 4: Tool diversity suggests reordering
         self.detect_reordering();
 
-        // Sort by expected improvement (descending)
-        self.optimizations.sort_by(|a, b| {
+        // Sort by expected improvement (descending) - use sort_unstable for better perf
+        self.optimizations.sort_unstable_by(|a, b| {
             b.expected_improvement
                 .partial_cmp(&a.expected_improvement)
                 .unwrap_or(std::cmp::Ordering::Equal)
