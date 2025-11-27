@@ -176,12 +176,12 @@ impl CommandPolicyEvaluator {
 }
 
 fn merge_patterns(base: &[String], env_var: &str) -> Vec<String> {
-    let mut combined: Vec<String> = base.iter().map(|entry| entry.trim().to_string()).collect();
+    let mut combined: Vec<String> = base.iter().map(|entry| entry.trim().to_owned()).collect();
     if let Ok(extra) = env::var(env_var) {
         combined.extend(
             extra
                 .split(',')
-                .map(|item| item.trim().to_string())
+                .map(|item| item.trim().to_owned())
                 .filter(|item| !item.is_empty()),
         );
     }

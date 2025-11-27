@@ -308,7 +308,7 @@ impl DiffRenderer {
             }
             _ => {
                 if self.use_colors {
-                    output.push_str(&style.render().to_string());
+                    let _ = write!(output, "{}", style.render());
                 }
                 output.push_str(prefix);
                 if !line.content.is_empty() {
@@ -316,7 +316,7 @@ impl DiffRenderer {
                     output.push_str(&line.content);
                 }
                 if self.use_colors {
-                    output.push_str(&Reset.render().to_string());
+                    let _ = write!(output, "{}", Reset.render());
                 }
             }
         }
@@ -328,24 +328,30 @@ impl DiffRenderer {
             // This ensures Reset appears before any line terminators, preventing color bleed
             format!("{}{}{}", style.render(), text, Reset.render())
         } else {
-            text.to_string()
+            text.to_owned()
         }
     }
 
     /// Paint directly into buffer to avoid allocation
     fn paint_into(&self, output: &mut String, style: &Style, text: &str) {
         if self.use_colors {
-            output.push_str(&style.render().to_string());
+            let _ = write!(output, "{}", style.render());
             output.push_str(text);
-            output.push_str(&Reset.render().to_string());
+            let _ = write!(output, "{}", Reset.render());
         } else {
             output.push_str(text);
         }
     }
 
     pub fn generate_diff(&self, old_content: &str, new_content: &str, file_path: &str) -> FileDiff {
-        let old_lines: Vec<&str> = old_content.lines().collect();
-        let new_lines: Vec<&str> = new_content.lines().collect();
+        let mut old_lines: Vec<&str> = Vec::new();
+        for l in old_content.lines() {
+            old_lines.push(l);
+        }
+        let mut new_lines: Vec<&str> = Vec::new();
+        for l in new_content.lines() {
+            new_lines.push(l);
+        }
 
         // Pre-allocate with estimated capacity
         let estimated_lines = old_lines.len().max(new_lines.len());
@@ -363,7 +369,7 @@ impl DiffRenderer {
                     // Same line - context
                     lines.push(DiffLine {
                         line_type: DiffLineType::Context,
-                        content: old_lines[old_idx].to_string(),
+                        content: old_lines[old_idx].to_owned(),
                         line_number_old: Some(old_idx + 1),
                         line_number_new: Some(new_idx + 1),
                     });
@@ -378,7 +384,7 @@ impl DiffRenderer {
                     for i in old_idx..old_end {
                         lines.push(DiffLine {
                             line_type: DiffLineType::Removed,
-                            content: old_lines[i].to_string(),
+                            content: old_lines[i].to_owned(),
                             line_number_old: Some(i + 1),
                             line_number_new: None,
                         });
@@ -389,7 +395,7 @@ impl DiffRenderer {
                     for i in new_idx..new_end {
                         lines.push(DiffLine {
                             line_type: DiffLineType::Added,
-                            content: new_lines[i].to_string(),
+                            content: new_lines[i].to_owned(),
                             line_number_old: None,
                             line_number_new: Some(i + 1),
                         });
@@ -403,7 +409,7 @@ impl DiffRenderer {
                 // Remaining old lines are deletions
                 lines.push(DiffLine {
                     line_type: DiffLineType::Removed,
-                    content: old_lines[old_idx].to_string(),
+                    content: old_lines[old_idx].to_owned(),
                     line_number_old: Some(old_idx + 1),
                     line_number_new: None,
                 });
@@ -413,7 +419,7 @@ impl DiffRenderer {
                 // Remaining new lines are additions
                 lines.push(DiffLine {
                     line_type: DiffLineType::Added,
-                    content: new_lines[new_idx].to_string(),
+                    content: new_lines[new_idx].to_owned(),
                     line_number_old: None,
                     line_number_new: Some(new_idx + 1),
                 });
@@ -425,7 +431,7 @@ impl DiffRenderer {
         let changes = additions + deletions;
 
         FileDiff {
-            file_path: file_path.to_string(),
+            file_path: file_path.to_owned(),
             lines,
             stats: DiffStats {
                 additions,
@@ -756,8 +762,14 @@ impl DiffChatRenderer {
 }
 
 pub fn generate_unified_diff(old_content: &str, new_content: &str, filename: &str) -> String {
-    let old_lines: Vec<&str> = old_content.lines().collect();
-    let new_lines: Vec<&str> = new_content.lines().collect();
+    let mut old_lines: Vec<&str> = Vec::new();
+    for l in old_content.lines() {
+        old_lines.push(l);
+    }
+    let mut new_lines: Vec<&str> = Vec::new();
+    for l in new_content.lines() {
+        new_lines.push(l);
+    }
 
     // Pre-allocate buffer: header + estimated hunk size
     let estimated_size = 100 + (old_lines.len() + new_lines.len()) * 40;

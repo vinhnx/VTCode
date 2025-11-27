@@ -11,6 +11,7 @@
 //! - Audit trail of tokenized data
 
 use anyhow::{Context, Result};
+use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -47,6 +48,19 @@ impl PiiType {
     }
 }
 
+// Compile default PII patterns once to avoid repeated regex compilation overhead.
+static DEFAULT_PII_PATTERNS: Lazy<Vec<(PiiType, Regex)>> = Lazy::new(|| {
+    vec![
+        (PiiType::Email, Regex::new(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}").unwrap()),
+        (PiiType::PhoneNumber, Regex::new(r"(?:\+?1[-.\s]?)?\(?[0-9]{3}\)?[-.\s]?[0-9]{3}[-.\s]?[0-9]{4}").unwrap()),
+        (PiiType::SocialSecurityNumber, Regex::new(r"[0-9]{3}-[0-9]{2}-[0-9]{4}").unwrap()),
+        (PiiType::CreditCard, Regex::new(r"[0-9]{4}[\s-]?[0-9]{4}[\s-]?[0-9]{4}[\s-]?[0-9]{4}").unwrap()),
+        (PiiType::IpAddress, Regex::new(r"(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)").unwrap()),
+        (PiiType::ApiKey, Regex::new(r#"(?:api[_-]?key|apikey|API[_-]?KEY)\s*[:=]\s*['"]?[a-zA-Z0-9_-]{32,}['"]?"#).unwrap()),
+        (PiiType::AuthToken, Regex::new(r"(?:bearer|token|authorization)\s+[a-zA-Z0-9._-]+").unwrap()),
+    ]
+});
+
 /// Detected PII instance with location and type.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DetectedPii {
@@ -75,53 +89,11 @@ pub struct PiiTokenizer {
 impl PiiTokenizer {
     /// Create a new PII tokenizer with default patterns.
     pub fn new() -> Self {
+        // Build patterns from static defaults (compiled once)
         let mut patterns = HashMap::new();
-
-        // Email pattern
-        patterns.insert(
-            PiiType::Email,
-            Regex::new(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}").unwrap(),
-        );
-
-        // Phone pattern (US format and variations)
-        patterns.insert(
-            PiiType::PhoneNumber,
-            Regex::new(r"(?:\+?1[-.\s]?)?\(?[0-9]{3}\)?[-.\s]?[0-9]{3}[-.\s]?[0-9]{4}").unwrap(),
-        );
-
-        // SSN pattern
-        patterns.insert(
-            PiiType::SocialSecurityNumber,
-            Regex::new(r"[0-9]{3}-[0-9]{2}-[0-9]{4}").unwrap(),
-        );
-
-        // Credit card pattern (basic)
-        patterns.insert(
-            PiiType::CreditCard,
-            Regex::new(r"[0-9]{4}[\s-]?[0-9]{4}[\s-]?[0-9]{4}[\s-]?[0-9]{4}").unwrap(),
-        );
-
-        // IPv4 pattern
-        patterns.insert(
-            PiiType::IpAddress,
-            Regex::new(r"(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)")
-                .unwrap(),
-        );
-
-        // API key pattern (common format)
-        patterns.insert(
-            PiiType::ApiKey,
-            Regex::new(
-                r#"(?:api[_-]?key|apikey|API[_-]?KEY)\s*[:=]\s*['"]?[a-zA-Z0-9_-]{32,}['"]?"#,
-            )
-            .unwrap(),
-        );
-
-        // Bearer token pattern
-        patterns.insert(
-            PiiType::AuthToken,
-            Regex::new(r"(?:bearer|token|authorization)\s+[a-zA-Z0-9._-]+").unwrap(),
-        );
+        for (pii_type, regex) in DEFAULT_PII_PATTERNS.iter() {
+            patterns.insert(*pii_type, regex.clone());
+        }
 
         Self {
             patterns,

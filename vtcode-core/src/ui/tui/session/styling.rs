@@ -37,13 +37,13 @@ impl SessionStyles {
     pub fn normalize_tool_name(&self, tool_name: &str) -> String {
         match tool_name.to_lowercase().as_str() {
             "grep" | "rg" | "ripgrep" | "grep_file" | "search" | "find" | "ag" => {
-                "search".to_string()
+                "search".to_owned()
             }
-            "list" | "ls" | "dir" | "list_files" => "list".to_string(),
-            "read" | "cat" | "file" | "read_file" => "read".to_string(),
-            "write" | "edit" | "save" | "insert" | "edit_file" => "write".to_string(),
-            "run" | "command" | "bash" | "sh" => "run".to_string(),
-            _ => tool_name.to_string(),
+            "list" | "ls" | "dir" | "list_files" => "list".to_owned(),
+            "read" | "cat" | "file" | "read_file" => "read".to_owned(),
+            "write" | "edit" | "save" | "insert" | "edit_file" => "write".to_owned(),
+            "run" | "command" | "bash" | "sh" => "run".to_owned(),
+            _ => tool_name.to_owned(),
         }
     }
 

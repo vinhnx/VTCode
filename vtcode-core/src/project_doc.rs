@@ -20,21 +20,21 @@ impl ProjectDocBundle {
         if limit == 0 {
             return Vec::new();
         }
-
-        self.contents
-            .lines()
-            .filter_map(|line| {
-                let trimmed = line.trim();
-                if trimmed.starts_with('-') {
-                    let highlight = trimmed.trim_start_matches('-').trim();
+        let mut highlights = Vec::with_capacity(limit);
+        for line in self.contents.lines() {
+            if highlights.len() >= limit {
+                break;
+            }
+            let trimmed = line.trim();
+            if trimmed.starts_with('-') {
+                let highlight = trimmed.trim_start_matches('-').trim();
                     if !highlight.is_empty() {
-                        return Some(highlight.to_string());
-                    }
+                    highlights.push(highlight.to_owned());
                 }
-                None
-            })
-            .take(limit)
-            .collect()
+            }
+        }
+
+        highlights
     }
 }
 
@@ -87,11 +87,10 @@ pub async fn read_project_doc(cwd: &Path, max_bytes: usize) -> Result<Option<Pro
 
 fn convert_bundle(bundle: InstructionBundle) -> ProjectDocBundle {
     let contents = bundle.combined_text();
-    let sources = bundle
-        .segments
-        .iter()
-        .map(|segment| segment.source.path.clone())
-        .collect();
+    let mut sources = Vec::with_capacity(bundle.segments.len());
+    for segment in &bundle.segments {
+        sources.push(segment.source.path.clone());
+    }
 
     ProjectDocBundle {
         contents,
@@ -228,12 +227,12 @@ mod tests {
     #[test]
     fn highlights_extract_bullets() {
         let bundle = ProjectDocBundle {
-            contents: "- First\n- Second\n".to_string(),
+            contents: "- First\n- Second\n".to_owned(),
             sources: Vec::new(),
             truncated: false,
             bytes_read: 0,
         };
         let highlights = bundle.highlights(1);
-        assert_eq!(highlights, vec!["First".to_string()]);
+        assert_eq!(highlights, vec!["First".to_owned()]);
     }
 }

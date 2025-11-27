@@ -150,14 +150,15 @@ fn should_accept_refinement(raw: &str, refined: &str) -> bool {
         return true;
     }
 
-    let raw_words: Vec<&str> = raw.split_whitespace().collect();
-    if raw_words.len() < MIN_PROMPT_WORDS_FOR_REFINEMENT {
+    // Avoid allocating Vecs when we only need word counts for early checks.
+    let raw_word_count = raw.split_whitespace().count();
+    if raw_word_count < MIN_PROMPT_WORDS_FOR_REFINEMENT {
         return false;
     }
 
-    let refined_words: Vec<&str> = trimmed.split_whitespace().collect();
-    if raw_words.len() <= SHORT_PROMPT_WORD_THRESHOLD
-        && refined_words.len() > raw_words.len() * MAX_REFINED_WORD_MULTIPLIER
+    let refined_word_count = trimmed.split_whitespace().count();
+    if raw_word_count <= SHORT_PROMPT_WORD_THRESHOLD
+        && refined_word_count > raw_word_count * MAX_REFINED_WORD_MULTIPLIER
     {
         return false;
     }

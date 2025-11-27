@@ -132,7 +132,7 @@ async fn run_first_run_setup(
 
             let provider = resolve_initial_provider(config);
             let default_model = default_model_for_provider(provider);
-            let model = default_model.to_string();
+            let model = default_model.to_owned();
             let trust = if full_auto {
                 WorkspaceTrustLevel::FullAuto
             } else {
@@ -159,7 +159,11 @@ async fn run_first_run_setup(
         "Saving your configuration to vtcode.toml ...",
     )?;
 
-    apply_selection(config, provider, &model);
+    // Compute provider key once to avoid repeated allocations from `to_string()`.
+    let provider_key = provider.to_string();
+    // Set API key environment name from provider defaults; do this once to avoid recomputing.
+    config.agent.api_key_env = provider.default_api_key_env().to_owned();
+    apply_selection(config, &provider_key, &model);
 
     let config_path = workspace.join("vtcode.toml");
     ConfigManager::save_config_to_path(&config_path, config).with_context(|| {
@@ -169,9 +173,7 @@ async fn run_first_run_setup(
         )
     })?;
 
-    update_model_preference(&provider.to_string(), &model)
-        .await
-        .ok();
+    update_model_preference(&provider_key, &model).await.ok();
 
     persist_workspace_trust(workspace, trust)
         .await
@@ -275,13 +277,13 @@ fn select_provider_with_ratatui(providers: &[Provider], default: Provider) -> Re
         return Err(anyhow!("No providers available for selection"));
     }
 
-    let entries: Vec<SelectionEntry> = providers
-        .iter()
-        .enumerate()
-        .map(|(index, provider)| {
-            SelectionEntry::new(format!("{:>2}. {}", index + 1, provider.label()), None)
-        })
-        .collect();
+    let mut entries: Vec<SelectionEntry> = Vec::with_capacity(providers.len());
+    for (index, provider) in providers.iter().enumerate() {
+        entries.push(SelectionEntry::new(
+            format!("{:>2}. {}", index + 1, provider.label()),
+            None,
+        ));
+    }
 
     let default_index = providers
         .iter()
@@ -397,15 +399,15 @@ fn prompt_with_placeholder(prompt: &str) -> Result<String> {
 
 fn model_options(provider: Provider, default_model: &'static str) -> Vec<String> {
     let mut options: Vec<String> = model_helpers::supported_for(&provider.to_string())
-        .map(|list| list.iter().map(|model| (*model).to_string()).collect())
+        .map(|list| list.iter().map(|model| (*model).to_owned()).collect())
         .unwrap_or_default();
 
     if options.is_empty() {
-        options.push(default_model.to_string());
+        options.push(default_model.to_owned());
     }
 
     if !options.iter().any(|model| model == default_model) {
-        options.insert(0, default_model.to_string());
+        options.insert(0, default_model.to_owned());
     }
 
     let mut seen = HashSet::new();
@@ -471,17 +473,17 @@ fn prompt_model_text(
     let input = prompt_with_placeholder(&format!("Model [{}]", default_model))?;
     let trimmed = input.trim();
     if trimmed.is_empty() {
-        return Ok(default_model.to_string());
+        return Ok(default_model.to_owned());
     }
 
     match trimmed.parse::<ModelId>() {
-        Ok(id) => Ok(id.as_str().to_string()),
+        Ok(id) => Ok(id.as_str().to_owned()),
         Err(_) => {
             renderer.line(
                 MessageStyle::Info,
                 "Unrecognized model identifier. It will be saved as entered.",
             )?;
-            Ok(trimmed.to_string())
+            Ok(trimmed.to_owned())
         }
     }
 }
@@ -521,18 +523,18 @@ fn select_trust_with_ratatui(default: WorkspaceTrustLevel) -> Result<WorkspaceTr
             WorkspaceTrustLevel::ToolsPolicy,
             SelectionEntry::new(
                 " 1. Tools policy – prompts before running elevated actions (recommended)"
-                    .to_string(),
+                    .to_owned(),
                 Some(
                     "Tools policy – prompts before running elevated actions (recommended)"
-                        .to_string(),
+                        .to_owned(),
                 ),
             ),
         ),
         (
             WorkspaceTrustLevel::FullAuto,
             SelectionEntry::new(
-                " 2. Full auto – allow unattended execution without prompts".to_string(),
-                Some("Full auto – allow unattended execution without prompts".to_string()),
+                " 2. Full auto – allow unattended execution without prompts".to_owned(),
+                Some("Full auto – allow unattended execution without prompts".to_owned()),
             ),
         ),
     ]);
@@ -542,8 +544,10 @@ fn select_trust_with_ratatui(default: WorkspaceTrustLevel) -> Result<WorkspaceTr
         WorkspaceTrustLevel::FullAuto => 1,
     };
 
-    let selection_entries: Vec<SelectionEntry> =
-        entries.iter().map(|(_, entry)| entry).cloned().collect();
+    let mut selection_entries: Vec<SelectionEntry> = Vec::with_capacity(entries.len());
+    for (_lvl, entry) in entries.iter() {
+        selection_entries.push(entry.clone());
+    }
     let default_entry = &selection_entries[default_index];
     let default_summary = default_entry
         .description
@@ -589,16 +593,16 @@ fn default_model_for_provider(provider: Provider) -> &'static str {
     }
 }
 
-fn apply_selection(config: &mut VTCodeConfig, provider: Provider, model: &str) {
-    let provider_key = provider.to_string();
-    config.agent.provider = provider_key.clone();
-    config.agent.api_key_env = provider.default_api_key_env().to_string();
-    config.agent.default_model = model.to_string();
-    config.router.models.simple = model.to_string();
-    config.router.models.standard = model.to_string();
-    config.router.models.complex = model.to_string();
-    config.router.models.codegen_heavy = model.to_string();
-    config.router.models.retrieval_heavy = model.to_string();
+fn apply_selection(config: &mut VTCodeConfig, provider_key: &str, model: &str) {
+    config.agent.provider = provider_key.to_owned();
+    // Create the model String once and reuse to avoid repeated allocations
+    let model_s = model.to_owned();
+    config.agent.default_model = model_s.clone();
+    config.router.models.simple = model_s.clone();
+    config.router.models.standard = model_s.clone();
+    config.router.models.complex = model_s.clone();
+    config.router.models.codegen_heavy = model_s.clone();
+    config.router.models.retrieval_heavy = model_s;
 }
 
 fn trust_label(level: WorkspaceTrustLevel) -> &'static str {

@@ -98,7 +98,7 @@ impl CommandTool {
             if program.contains(std::path::MAIN_SEPARATOR) || program.contains('/') {
                 // Program provided as absolute/relative path: run directly
                 CommandInvocation {
-                    program: program.to_string(),
+                    program: program.to_owned(),
                     args: command[1..].to_vec(),
                     display: input
                         .raw_command
@@ -119,9 +119,9 @@ impl CommandTool {
                     program: shell,
                     args: vec![
                         if use_login {
-                            "-lc".to_string()
+                            "-lc".to_owned()
                         } else {
-                            "-c".to_string()
+                            "-c".to_owned()
                         },
                         full_command.clone(),
                     ],
@@ -203,14 +203,14 @@ fn log_audit_for_command(_command: &str, _reason: &str) {
 #[allow(dead_code)]
 fn quote_argument_posix(arg: &str) -> String {
     if arg.is_empty() {
-        return "''".to_string();
+        return "''".to_owned();
     }
 
     if arg
         .chars()
         .all(|ch| ch.is_ascii_alphanumeric() || "-_./:@".contains(ch))
     {
-        return arg.to_string();
+        return arg.to_owned();
     }
 
     let mut quoted = String::from("'");
@@ -263,7 +263,7 @@ mod tests {
         let invocation = tool.prepare_invocation(&input).await.expect("invocation");
         let shell = resolve_fallback_shell();
         assert_eq!(invocation.program, shell);
-        assert_eq!(invocation.args, vec!["-lc".to_string(), "ls".to_string()]);
+        assert_eq!(invocation.args, vec!["-lc".to_owned(), "ls".to_owned()]);
         assert_eq!(invocation.display, "ls");
     }
 
@@ -279,7 +279,7 @@ mod tests {
         assert_eq!(invocation.program, shell);
         assert_eq!(
             invocation.args,
-            vec!["-lc".to_string(), "cargo check".to_string()]
+            vec!["-lc".to_owned(), "cargo check".to_owned()]
         );
         assert_eq!(invocation.display, "cargo check");
     }
@@ -327,7 +327,7 @@ mod tests {
     async fn prepare_invocation_respects_custom_allow_list() {
         let cwd = std::env::current_dir().expect("current dir");
         let mut config = CommandsConfig::default();
-        config.allow_list.push("my-build".to_string());
+        config.allow_list.push("my-build".to_owned());
         let tool = CommandTool::with_commands_config(cwd, config);
         let input = make_input(vec!["my-build"]);
         let invocation = tool
@@ -338,7 +338,7 @@ mod tests {
         assert_eq!(invocation.program, shell);
         assert_eq!(
             invocation.args,
-            vec!["-lc".to_string(), "my-build".to_string()]
+            vec!["-lc".to_owned(), "my-build".to_owned()]
         );
     }
 
@@ -350,10 +350,10 @@ mod tests {
         input.shell = Some("/bin/sh".to_string());
         input.login = Some(false);
         let invocation = tool.prepare_invocation(&input).await.expect("invocation");
-        assert_eq!(invocation.program, "/bin/sh".to_string());
+        assert_eq!(invocation.program, "/bin/sh".to_owned());
         assert_eq!(
             invocation.args,
-            vec!["-c".to_string(), "my-build".to_string()]
+            vec!["-c".to_owned(), "my-build".to_owned()]
         );
     }
 
@@ -407,7 +407,7 @@ mod tests {
         assert_eq!(invocation.program, shell);
         assert_eq!(
             invocation.args,
-            vec!["-lc".to_string(), "srt run".to_string()]
+            vec!["-lc".to_owned(), "srt run".to_owned()]
         );
         assert_eq!(invocation.display, "srt run");
     }
@@ -429,13 +429,13 @@ mod tests {
         }
 
         let mut config = CommandsConfig::default();
-        config.allow_list.push("fake-extra".to_string());
+        config.allow_list.push("fake-extra".to_owned());
         config.extra_path_entries = vec![
             binary_path
                 .parent()
                 .expect("parent")
                 .to_string_lossy()
-                .to_string(),
+                .to_owned(),
         ];
 
         let tool = CommandTool::with_commands_config(cwd, config);
@@ -444,10 +444,7 @@ mod tests {
             .prepare_invocation(&input)
             .await
             .expect("extra path should allow command");
-        assert_eq!(
-            invocation.program,
-            binary_path.to_string_lossy().to_string()
-        );
+        assert_eq!(invocation.program, binary_path.to_string_lossy().to_owned());
         assert!(invocation.args.is_empty());
     }
 

@@ -51,9 +51,9 @@ mod tests {
 
         // Repeated identical execution (loop)
         let history = vec![
-            ("grep_file".to_string(), "pattern:test".to_string(), 0.8),
-            ("grep_file".to_string(), "pattern:test".to_string(), 0.8),
-            ("grep_file".to_string(), "pattern:test".to_string(), 0.8),
+            ("grep_file".to_owned(), "pattern:test".to_owned(), 0.8),
+            ("grep_file".to_owned(), "pattern:test".to_owned(), 0.8),
+            ("grep_file".to_owned(), "pattern:test".to_owned(), 0.8),
         ];
 
         assert_eq!(detector.detect(&history), PatternState::Loop);
@@ -66,9 +66,9 @@ mod tests {
 
         // Improving quality over iterations
         let history = vec![
-            ("grep_file".to_string(), "pat1".to_string(), 0.2),
-            ("grep_file".to_string(), "pat2".to_string(), 0.5),
-            ("grep_file".to_string(), "pat3".to_string(), 0.8),
+            ("grep_file".to_owned(), "pat1".to_owned(), 0.2),
+            ("grep_file".to_owned(), "pat2".to_owned(), 0.5),
+            ("grep_file".to_owned(), "pat3".to_owned(), 0.8),
         ];
 
         assert_eq!(detector.detect(&history), PatternState::RefinementChain);
@@ -81,9 +81,9 @@ mod tests {
 
         // Declining quality
         let history = vec![
-            ("command".to_string(), "args1".to_string(), 0.9),
-            ("command".to_string(), "args2".to_string(), 0.6),
-            ("command".to_string(), "args3".to_string(), 0.3),
+            ("command".to_owned(), "args1".to_owned(), 0.9),
+            ("command".to_owned(), "args2".to_owned(), 0.6),
+            ("command".to_owned(), "args3".to_owned(), 0.3),
         ];
 
         assert_eq!(detector.detect(&history), PatternState::Degradation);
@@ -96,9 +96,9 @@ mod tests {
 
         // Different tools, same quality
         let history = vec![
-            ("grep_file".to_string(), "args1".to_string(), 0.75),
-            ("read_file".to_string(), "args2".to_string(), 0.76),
-            ("find_file".to_string(), "args3".to_string(), 0.74),
+            ("grep_file".to_owned(), "args1".to_owned(), 0.75),
+            ("read_file".to_owned(), "args2".to_owned(), 0.76),
+            ("find_file".to_owned(), "args3".to_owned(), 0.74),
         ];
 
         assert_eq!(detector.detect(&history), PatternState::Convergence);
@@ -109,15 +109,15 @@ mod tests {
     fn test_middleware_logging() {
         let middleware = LoggingMiddleware::new(tracing::Level::DEBUG);
         let request = ToolRequest {
-            tool_name: "test_tool".to_string(),
-            arguments: "test_arg".to_string(),
-            context: "test_context".to_string(),
+            tool_name: "test_tool".to_owned(),
+            arguments: "test_arg".to_owned(),
+            context: "test_context".to_owned(),
             metadata: RequestMetadata::default(),
         };
 
         let executor = Box::new(|_req: ToolRequest| MiddlewareResult {
             success: true,
-            result: Some("test_result".to_string()),
+            result: Some("test_result".to_owned()),
             error: None,
             metadata: Default::default(),
         });
@@ -128,7 +128,7 @@ mod tests {
             result
                 .metadata
                 .layers_executed
-                .contains(&"logging".to_string())
+                .contains(&"logging".to_owned())
         );
     }
 
@@ -137,16 +137,16 @@ mod tests {
     fn test_middleware_caching() {
         let middleware = CachingMiddleware::new();
         let request = ToolRequest {
-            tool_name: "cached_tool".to_string(),
-            arguments: "arg1".to_string(),
-            context: "ctx".to_string(),
+            tool_name: "cached_tool".to_owned(),
+            arguments: "arg1".to_owned(),
+            context: "ctx".to_owned(),
             metadata: RequestMetadata::default(),
         };
 
         // First execution - cache miss
         let executor = Box::new(|_req: ToolRequest| MiddlewareResult {
             success: true,
-            result: Some("result1".to_string()),
+            result: Some("result1".to_owned()),
             error: None,
             metadata: Default::default(),
         });
@@ -157,14 +157,14 @@ mod tests {
         // Second execution - cache hit
         let executor = Box::new(|_req: ToolRequest| MiddlewareResult {
             success: true,
-            result: Some("result2".to_string()),
+            result: Some("result2".to_owned()),
             error: None,
             metadata: Default::default(),
         });
 
         let result2 = middleware.execute(request, executor);
         assert!(result2.metadata.from_cache);
-        assert_eq!(result2.result, Some("result1".to_string())); // Returns cached value
+        assert_eq!(result2.result, Some("result1".to_owned())); // Returns cached value
     }
 
     /// Test 9: Middleware - Validation
@@ -175,15 +175,15 @@ mod tests {
 
         // Invalid request (empty tool name)
         let invalid_request = ToolRequest {
-            tool_name: "".to_string(),
-            arguments: "arg".to_string(),
-            context: "ctx".to_string(),
+            tool_name: "".to_owned(),
+            arguments: "arg".to_owned(),
+            context: "ctx".to_owned(),
             metadata: RequestMetadata::default(),
         };
 
         let executor = Box::new(|_req: ToolRequest| MiddlewareResult {
             success: true,
-            result: Some("result".to_string()),
+            result: Some("result".to_owned()),
             error: None,
             metadata: Default::default(),
         });
@@ -199,9 +199,9 @@ mod tests {
 
         let mut attempt_count = 0;
         let request = ToolRequest {
-            tool_name: "retry_tool".to_string(),
-            arguments: "arg".to_string(),
-            context: "ctx".to_string(),
+            tool_name: "retry_tool".to_owned(),
+            arguments: "arg".to_owned(),
+            context: "ctx".to_owned(),
             metadata: RequestMetadata::default(),
         };
 
@@ -209,7 +209,7 @@ mod tests {
             // Simulate failing first attempt, then succeeding
             MiddlewareResult {
                 success: true,
-                result: Some("success".to_string()),
+                result: Some("success".to_owned()),
                 error: None,
                 metadata: Default::default(),
             }
@@ -227,15 +227,15 @@ mod tests {
             .add(Arc::new(CachingMiddleware::new()));
 
         let request = ToolRequest {
-            tool_name: "chain_test".to_string(),
-            arguments: "arg".to_string(),
-            context: "ctx".to_string(),
+            tool_name: "chain_test".to_owned(),
+            arguments: "arg".to_owned(),
+            context: "ctx".to_owned(),
             metadata: RequestMetadata::default(),
         };
 
         let result = chain.execute_sync(request, |_req: ToolRequest| MiddlewareResult {
             success: true,
-            result: Some("result".to_string()),
+            result: Some("result".to_owned()),
             error: None,
             metadata: Default::default(),
         });
@@ -259,11 +259,11 @@ mod tests {
         // Pattern detection would identify the refinement
         let detector = PatternDetector::new(10);
         let history = vec![
-            ("grep_file".to_string(), "pattern:error".to_string(), 0.3),
-            ("grep_file".to_string(), "pattern:ERROR".to_string(), 0.6),
+            ("grep_file".to_owned(), "pattern:error".to_owned(), 0.3),
+            ("grep_file".to_owned(), "pattern:ERROR".to_owned(), 0.6),
             (
-                "grep_file".to_string(),
-                "pattern:\\[ERROR\\]".to_string(),
+                "grep_file".to_owned(),
+                "pattern:\\[ERROR\\]".to_owned(),
                 0.9,
             ),
         ];
@@ -303,7 +303,7 @@ mod tests {
     #[test]
     fn test_edge_case_single_entry() {
         let detector = PatternDetector::new(10);
-        let history = vec![("tool".to_string(), "args".to_string(), 0.5)];
+        let history = vec![("tool".to_owned(), "args".to_owned(), 0.5)];
 
         assert_eq!(detector.detect(&history), PatternState::Single);
     }
@@ -372,15 +372,15 @@ mod tests {
             .add(Arc::new(CachingMiddleware::new()));
 
         let request = ToolRequest {
-            tool_name: "test".to_string(),
-            arguments: "args".to_string(),
-            context: "ctx".to_string(),
+            tool_name: "test".to_owned(),
+            arguments: "args".to_owned(),
+            context: "ctx".to_owned(),
             metadata: RequestMetadata::default(),
         };
 
         let result = chain.execute_sync(request, |_req: ToolRequest| MiddlewareResult {
             success: true,
-            result: Some("result".to_string()),
+            result: Some("result".to_owned()),
             error: None,
             metadata: Default::default(),
         });
@@ -395,9 +395,9 @@ mod tests {
 
         // Similar but not identical arguments
         let history = vec![
-            ("grep_file".to_string(), "pattern_test_1".to_string(), 0.7),
-            ("grep_file".to_string(), "pattern_test_2".to_string(), 0.7),
-            ("grep_file".to_string(), "pattern_test_3".to_string(), 0.7),
+            ("grep_file".to_owned(), "pattern_test_1".to_owned(), 0.7),
+            ("grep_file".to_owned(), "pattern_test_2".to_owned(), 0.7),
+            ("grep_file".to_owned(), "pattern_test_3".to_owned(), 0.7),
         ];
 
         assert_eq!(detector.detect(&history), PatternState::NearLoop);

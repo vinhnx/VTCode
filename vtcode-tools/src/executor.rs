@@ -78,16 +78,17 @@ impl CachedToolExecutor {
         let start = std::time::Instant::now();
         let cache_key = format!("{}:{}", tool_name, args);
 
-        // Update stats
+        // Update stats (single write)
         {
             let mut stats = self.stats.write().await;
             stats.total_calls += 1;
         }
 
-        // Create request
+        // Create request — reuse the owned `args` (it was passed by value)
+        let owned_args = args;
         let req = ToolRequest {
             tool_name: tool_name.to_string(),
-            args: args.clone(),
+            args: owned_args.clone(),
             metadata: Default::default(),
         };
 
@@ -122,7 +123,7 @@ impl CachedToolExecutor {
 
         // Execute tool (caller provides actual execution)
         // This is where your tool registry would call the actual tool
-        let result = self.execute_tool_internal(tool_name, &args).await?;
+        let result = self.execute_tool_internal(tool_name, &owned_args).await?;
 
         let duration_ms = start.elapsed().as_millis() as u64;
 

@@ -2032,13 +2032,14 @@ impl AgentRunner {
             if let Ok(extra) = std::env::var(format!("{}DENY_REGEX", agent_prefix)) {
                 deny_regex.extend(extra.split(',').map(|s| s.trim().to_string()));
             }
-            for pat in &deny_regex {
-                if regex::Regex::new(pat)
-                    .ok()
-                    .map(|re| re.is_match(&cmd_text))
-                    .unwrap_or(false)
-                {
-                    return Err(anyhow!("Shell command denied by regex: {}", pat));
+            // Compile deny regexes once to avoid recompiling for each pattern match
+            let compiled_deny: Vec<regex::Regex> = deny_regex
+                .iter()
+                .filter_map(|pat| regex::Regex::new(pat).ok())
+                .collect();
+            for re in &compiled_deny {
+                if re.is_match(&cmd_text) {
+                    return Err(anyhow!("Shell command denied by regex: {}", re.as_str()));
                 }
             }
 
@@ -2046,13 +2047,16 @@ impl AgentRunner {
             if let Ok(extra) = std::env::var(format!("{}DENY_GLOB", agent_prefix)) {
                 deny_glob.extend(extra.split(',').map(|s| s.trim().to_string()));
             }
-            for pat in &deny_glob {
-                let re = format!("^{}$", regex::escape(pat).replace(r"\*", ".*"));
-                if regex::Regex::new(&re)
-                    .ok()
-                    .map(|re| re.is_match(&cmd_text))
-                    .unwrap_or(false)
-                {
+            // Compile glob-derived regexes once
+            let compiled_globs: Vec<(String, regex::Regex)> = deny_glob
+                .iter()
+                .filter_map(|pat| {
+                    let re = format!("^{}$", regex::escape(pat).replace(r"\*", ".*"));
+                    regex::Regex::new(&re).ok().map(|r| (pat.clone(), r))
+                })
+                .collect();
+            for (pat, re) in &compiled_globs {
+                if re.is_match(&cmd_text) {
                     return Err(anyhow!("Shell command denied by glob: {}", pat));
                 }
             }

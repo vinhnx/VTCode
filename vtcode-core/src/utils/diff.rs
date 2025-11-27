@@ -315,8 +315,14 @@ pub fn compute_diff(old: &str, new: &str, options: DiffOptions<'_>) -> DiffBundl
     let old_lines_owned = split_lines_with_terminator(old);
     let new_lines_owned = split_lines_with_terminator(new);
 
-    let old_refs: Vec<&str> = old_lines_owned.iter().map(String::as_str).collect();
-    let new_refs: Vec<&str> = new_lines_owned.iter().map(String::as_str).collect();
+    let mut old_refs: Vec<&str> = Vec::with_capacity(old_lines_owned.len());
+    for s in &old_lines_owned {
+        old_refs.push(s.as_str());
+    }
+    let mut new_refs: Vec<&str> = Vec::with_capacity(new_lines_owned.len());
+    for s in &new_lines_owned {
+        new_refs.push(s.as_str());
+    }
 
     let records = collect_line_records(&old_refs, &new_refs);
     let has_changes = records

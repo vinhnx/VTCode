@@ -122,20 +122,24 @@ where
     fn enrich_prompt_cache(&self, prompt_cache: &mut PromptCachingConfig) {
         let resolved = prompt_cache.resolve_cache_dir(Some(self.workspace_paths.workspace_root()));
         let scope = self.scope_for_path(&resolved);
+        // Check absoluteness before moving `resolved` so we can report a meaningful error.
+        let is_abs = resolved.is_absolute();
+        let resolved_display = resolved.display().to_string();
+
+        // Set the prompt cache dir (borrows from `resolved`) then move `resolved` into the event
+        prompt_cache.cache_dir = resolved.to_string_lossy().into_owned();
         self.record_event(AdapterEvent::PromptCacheResolved {
             scope,
-            cache_dir: resolved.clone(),
+            cache_dir: resolved,
         });
 
-        if !resolved.is_absolute() {
+        if !is_abs {
             let error = Error::msg(format!(
                 "Prompt cache directory `{}` could not be resolved to an absolute path",
-                resolved.display()
+                resolved_display
             ));
             self.report_error(error);
         }
-
-        prompt_cache.cache_dir = resolved.to_string_lossy().into_owned();
     }
 
     fn scope_for_path(&self, path: &Path) -> PathScope {

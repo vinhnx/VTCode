@@ -35,42 +35,44 @@ pub async fn truncate_content_by_tokens(
     let head_tokens = (max_tokens * head_ratio) / 100;
     let tail_tokens = max_tokens - head_tokens;
 
-    let lines: Vec<&str> = content.lines().collect();
+    // Stream lines once: collect head lines until head token budget,
+    // and maintain a bounded tail buffer based on token estimate to avoid allocating all lines.
+    use std::collections::VecDeque;
 
-    // Head
-    let mut head_lines = Vec::new();
+    let mut head_lines: Vec<&str> = Vec::new();
     let mut acc = 0usize;
-    for line in &lines {
-        if acc >= head_tokens {
-            break;
+
+    let mut tail_buf: VecDeque<(&str, usize)> = VecDeque::new();
+    let mut acc_tail = 0usize;
+    let mut total_lines = 0usize;
+
+    for line in content.lines() {
+        total_lines += 1;
+
+        // Head accumulation (stop when head token budget reached)
+        if acc < head_tokens {
+            let line_tokens = (line.len() as f64 / TOKENS_PER_CHARACTER).ceil() as usize;
+            if acc + line_tokens <= head_tokens || head_lines.is_empty() {
+                head_lines.push(line);
+                acc += line_tokens;
+            }
         }
+
+        // Tail rolling buffer based on token estimates
         let line_tokens = (line.len() as f64 / TOKENS_PER_CHARACTER).ceil() as usize;
-        if acc + line_tokens <= head_tokens || head_lines.is_empty() {
-            head_lines.push(*line);
-            acc += line_tokens;
-        } else {
-            break;
+        tail_buf.push_back((line, line_tokens));
+        acc_tail += line_tokens;
+        // Trim from front until within tail token budget
+        while acc_tail > tail_tokens && tail_buf.len() > 1 {
+            if let Some((_, t)) = tail_buf.pop_front() {
+                acc_tail = acc_tail.saturating_sub(t);
+            }
         }
     }
 
-    // Tail
-    let mut tail_lines = Vec::new();
-    let mut acc_tail = 0usize;
-    let mut tail_start_idx = lines.len();
-    for line in lines.iter().rev() {
-        if acc_tail >= tail_tokens {
-            break;
-        }
-        let line_tokens = (line.len() as f64 / TOKENS_PER_CHARACTER).ceil() as usize;
-        if acc_tail + line_tokens <= tail_tokens || tail_lines.is_empty() {
-            tail_lines.push(*line);
-            acc_tail += line_tokens;
-            tail_start_idx -= 1;
-        } else {
-            break;
-        }
-    }
-    tail_lines.reverse();
+    // Convert tail buffer into a Vec<&str> in proper order
+    let tail_lines: Vec<&str> = tail_buf.iter().map(|(l, _)| *l).collect();
+    let tail_start_idx = total_lines.saturating_sub(tail_lines.len());
 
     let head_content = if head_lines.is_empty() {
         String::new()

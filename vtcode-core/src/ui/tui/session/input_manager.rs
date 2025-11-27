@@ -273,22 +273,22 @@ mod tests {
     #[test]
     fn history_navigation() {
         let mut manager = InputManager::new();
-        manager.add_to_history("first".to_string());
-        manager.add_to_history("second".to_string());
+        manager.add_to_history("first".to_owned());
+        manager.add_to_history("second".to_owned());
 
-        assert_eq!(manager.go_to_previous_history(), Some("second".to_string()));
-        assert_eq!(manager.go_to_previous_history(), Some("first".to_string()));
+        assert_eq!(manager.go_to_previous_history(), Some("second".to_owned()));
+        assert_eq!(manager.go_to_previous_history(), Some("first".to_owned()));
         assert_eq!(manager.go_to_previous_history(), None);
     }
 
     #[test]
     fn history_navigation_saves_draft() {
         let mut manager = InputManager::new();
-        manager.set_content("current".to_string());
-        manager.add_to_history("previous".to_string());
+        manager.set_content("current".to_owned());
+        manager.add_to_history("previous".to_owned());
 
         manager.go_to_previous_history();
-        assert_eq!(manager.go_to_next_history(), Some("current".to_string()));
+        assert_eq!(manager.go_to_next_history(), Some("current".to_owned()));
     }
 
     #[test]

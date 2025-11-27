@@ -176,10 +176,10 @@ impl Session {
         let content_width = max_width.saturating_sub(consumed_width);
 
         if max_width == usize::MAX {
-            let mut spans = vec![Span::styled(first_prefix.to_string(), border_style)];
+            let mut spans = vec![Span::styled(first_prefix.to_owned(), border_style)];
             spans.extend(content);
             if show_right_border {
-                spans.push(Span::styled(right_border.to_string(), border_style));
+                spans.push(Span::styled(right_border.to_owned(), border_style));
             }
             return vec![Line::from(spans)];
         }
@@ -198,13 +198,13 @@ impl Session {
                 0
             };
 
-            let mut new_spans = vec![Span::styled(first_prefix.to_string(), border_style)];
+            let mut new_spans = vec![Span::styled(first_prefix.to_owned(), border_style)];
             new_spans.append(&mut line.spans);
             if padding > 0 {
                 new_spans.push(Span::styled(" ".repeat(padding), Style::default()));
             }
             if show_right_border {
-                new_spans.push(Span::styled(right_border.to_string(), border_style));
+                new_spans.push(Span::styled(right_border.to_owned(), border_style));
             }
             line.spans = new_spans;
         }

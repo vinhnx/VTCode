@@ -1114,7 +1114,7 @@ impl PtyManager {
 
     fn format_working_dir(&self, path: &Path) -> String {
         match path.strip_prefix(&self.workspace_root) {
-            Ok(relative) if relative.as_os_str().is_empty() => ".".to_string(),
+            Ok(relative) if relative.as_os_str().is_empty() => ".".into(),
             Ok(relative) => relative.to_string_lossy().replace("\\", "/"),
             Err(_) => path.to_string_lossy().into_owned(),
         }

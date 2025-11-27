@@ -454,7 +454,10 @@ impl McpClient {
     pub async fn shutdown(&self) -> Result<()> {
         let providers: Vec<Arc<McpProvider>> = {
             let mut guard = self.providers.write();
-            let values = guard.values().cloned().collect();
+            let mut values = Vec::with_capacity(guard.len());
+            for v in guard.values() {
+                values.push(v.clone());
+            }
             guard.clear();
             values
         };
@@ -483,16 +486,27 @@ impl McpClient {
     /// Current status snapshot for UI/debugging purposes.
     pub fn get_status(&self) -> McpClientStatus {
         let providers = self.providers.read();
+        let mut configured_providers = Vec::with_capacity(providers.len());
+        for k in providers.keys() {
+            configured_providers.push(k.clone());
+        }
         McpClientStatus {
             enabled: self.config.enabled,
             provider_count: providers.len(),
             active_connections: providers.len(),
-            configured_providers: providers.keys().cloned().collect(),
+            configured_providers,
         }
     }
 
     async fn collect_tools(&self, force_refresh: bool) -> Result<Vec<McpToolInfo>> {
-        let providers: Vec<Arc<McpProvider>> = self.providers.read().values().cloned().collect();
+        let providers: Vec<Arc<McpProvider>> = {
+            let guard = self.providers.read();
+            let mut v = Vec::with_capacity(guard.len());
+            for p in guard.values() {
+                v.push(p.clone());
+            }
+            v
+        };
 
         if providers.is_empty() {
             return Ok(Vec::new());
@@ -537,7 +551,14 @@ impl McpClient {
     }
 
     async fn collect_resources(&self, force_refresh: bool) -> Result<Vec<McpResourceInfo>> {
-        let providers: Vec<Arc<McpProvider>> = self.providers.read().values().cloned().collect();
+        let providers: Vec<Arc<McpProvider>> = {
+            let guard = self.providers.read();
+            let mut v = Vec::with_capacity(guard.len());
+            for p in guard.values() {
+                v.push(p.clone());
+            }
+            v
+        };
 
         if providers.is_empty() {
             self.resource_provider_index.write().clear();
@@ -578,7 +599,14 @@ impl McpClient {
     }
 
     async fn collect_prompts(&self, force_refresh: bool) -> Result<Vec<McpPromptInfo>> {
-        let providers: Vec<Arc<McpProvider>> = self.providers.read().values().cloned().collect();
+        let providers: Vec<Arc<McpProvider>> = {
+            let guard = self.providers.read();
+            let mut v = Vec::with_capacity(guard.len());
+            for p in guard.values() {
+                v.push(p.clone());
+            }
+            v
+        };
 
         if providers.is_empty() {
             self.prompt_provider_index.write().clear();
@@ -633,7 +661,14 @@ impl McpClient {
 
         let allowlist = self.allowlist.read().clone();
         let timeout = self.tool_timeout();
-        let providers: Vec<Arc<McpProvider>> = self.providers.read().values().cloned().collect();
+        let providers: Vec<Arc<McpProvider>> = {
+            let guard = self.providers.read();
+            let mut v = Vec::with_capacity(guard.len());
+            for p in guard.values() {
+                v.push(p.clone());
+            }
+            v
+        };
 
         if providers.is_empty() {
             if self.config.providers.is_empty() {
@@ -696,7 +731,14 @@ impl McpClient {
 
         let allowlist = self.allowlist.read().clone();
         let timeout = self.request_timeout();
-        let providers: Vec<Arc<McpProvider>> = self.providers.read().values().cloned().collect();
+        let providers: Vec<Arc<McpProvider>> = {
+            let guard = self.providers.read();
+            let mut v = Vec::with_capacity(guard.len());
+            for p in guard.values() {
+                v.push(p.clone());
+            }
+            v
+        };
 
         for provider in providers {
             match provider.has_resource(uri, &allowlist, timeout).await {

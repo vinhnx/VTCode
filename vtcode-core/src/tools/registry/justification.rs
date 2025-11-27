@@ -51,22 +51,22 @@ impl ToolJustification {
         let mut lines = vec![];
 
         lines.push(String::new());
-        lines.push("Agent Reasoning:".to_string());
+        lines.push("Agent Reasoning:".to_owned());
 
         // Wrap reason text if needed - iterate directly without collecting
         for line in self.reason.lines() {
             let wrapped = textwrap::fill(&format!("  {line}"), 78);
             for wrapped_line in wrapped.lines() {
-                lines.push(wrapped_line.to_string());
+                lines.push(wrapped_line.to_owned());
             }
         }
 
         if let Some(outcome) = &self.expected_outcome {
             lines.push(String::new());
-            lines.push("Expected Outcome:".to_string());
+            lines.push("Expected Outcome:".to_owned());
             let wrapped = textwrap::fill(&format!("  {outcome}"), 78);
             for wrapped_line in wrapped.lines() {
-                lines.push(wrapped_line.to_string());
+                lines.push(wrapped_line.to_owned());
             }
         }
 
@@ -166,16 +166,15 @@ impl JustificationManager {
     /// Record user approval decision
     pub fn record_decision(&self, tool_name: &str, approved: bool, reason: Option<String>) {
         if let Ok(mut patterns) = self.patterns.lock() {
-            let pattern =
-                patterns
-                    .entry(tool_name.to_string())
-                    .or_insert_with(|| ApprovalPattern {
-                        tool_name: tool_name.to_string(),
-                        approve_count: 0,
-                        deny_count: 0,
-                        last_decision: None,
-                        recent_reason: None,
-                    });
+            let pattern = patterns
+                .entry(tool_name.to_owned())
+                .or_insert_with(|| ApprovalPattern {
+                    tool_name: tool_name.to_owned(),
+                    approve_count: 0,
+                    deny_count: 0,
+                    last_decision: None,
+                    recent_reason: None,
+                });
 
             if approved {
                 pattern.approve_count += 1;
@@ -257,7 +256,7 @@ mod tests {
     #[test]
     fn test_approval_pattern_calculation() {
         let mut pattern = ApprovalPattern {
-            tool_name: "read_file".to_string(),
+            tool_name: "read_file".to_owned(),
             approve_count: 8,
             deny_count: 2,
             last_decision: Some(true),

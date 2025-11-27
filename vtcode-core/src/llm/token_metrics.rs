@@ -60,9 +60,9 @@ impl TokenMetrics {
 
         let entry = self
             .by_type
-            .entry(content_type.to_string())
+            .entry(content_type.to_owned())
             .or_insert(TokenTypeMetrics {
-                name: content_type.to_string(),
+                name: content_type.to_owned(),
                 tokens: 0,
                 chars: 0,
                 count: 0,
@@ -232,8 +232,8 @@ mod tests {
     fn test_batch_counting() {
         let mut counter = TokenCounter::new();
         let items = vec![
-            ("code".to_string(), "fn test() {}".to_string()),
-            ("docs".to_string(), "Documentation text".to_string()),
+            ("code".to_owned(), "fn test() {}".to_owned()),
+            ("docs".to_owned(), "Documentation text".to_owned()),
         ];
 
         let results = counter.count_batch(items);

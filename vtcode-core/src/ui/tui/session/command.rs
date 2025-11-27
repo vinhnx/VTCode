@@ -323,7 +323,7 @@ pub fn insert_file_reference(session: &mut Session, file_path: &str) {
         session.input_manager.cursor(),
     ) {
         let replacement = format!("@{}", file_path);
-        let content = session.input_manager.content().to_string();
+        let content = session.input_manager.content().to_owned();
         let mut new_content = String::new();
         new_content.push_str(&content[..start]);
         new_content.push_str(&replacement);
@@ -527,7 +527,7 @@ pub(super) fn delete_word_backward(session: &mut Session) {
 
     // Delete from delete_start to cursor
     if delete_start < session.input_manager.cursor() {
-        let content = session.input_manager.content().to_string();
+        let content = session.input_manager.content().to_owned();
         let mut new_content = String::new();
         new_content.push_str(&content[..delete_start]);
         new_content.push_str(&content[session.input_manager.cursor()..]);
@@ -592,7 +592,7 @@ pub(super) fn delete_sentence_backward(session: &mut Session) {
 
     // Delete from delete_start to cursor
     if delete_start < session.input_manager.cursor() {
-        let content = session.input_manager.content().to_string();
+        let content = session.input_manager.content().to_owned();
         let mut new_content = String::new();
         new_content.push_str(&content[..delete_start]);
         new_content.push_str(&content[session.input_manager.cursor()..]);
@@ -604,7 +604,7 @@ pub(super) fn delete_sentence_backward(session: &mut Session) {
 
 #[allow(dead_code)]
 pub(super) fn remember_submitted_input(session: &mut Session, submitted: &str) {
-    session.input_manager.add_to_history(submitted.to_string());
+    session.input_manager.add_to_history(submitted.to_owned());
 }
 
 #[allow(dead_code)]
@@ -748,7 +748,7 @@ fn append_text(
                 }
                 if !appended {
                     line.segments.push(crate::ui::tui::types::InlineSegment {
-                        text: text.to_string(),
+                        text: text.to_owned(),
                         style: style.clone(),
                     });
                     appended = true;
@@ -781,7 +781,7 @@ fn append_text(
         let revision = session.next_revision();
         if let Some(line) = session.lines.last_mut() {
             line.segments.push(crate::ui::tui::types::InlineSegment {
-                text: text.to_string(),
+                text: text.to_owned(),
                 style: style.clone(),
             });
             line.revision = revision;
@@ -794,7 +794,7 @@ fn append_text(
     session.lines.push(super::message::MessageLine {
         kind,
         segments: vec![crate::ui::tui::types::InlineSegment {
-            text: text.to_string(),
+            text: text.to_owned(),
             style: style.clone(),
         }],
         revision,

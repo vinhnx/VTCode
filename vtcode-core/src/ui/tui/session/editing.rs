@@ -320,7 +320,7 @@ impl Session {
 
     /// Remember submitted input in history
     pub(super) fn remember_submitted_input(&mut self, submitted: &str) {
-        self.input_manager.add_to_history(submitted.to_string());
+        self.input_manager.add_to_history(submitted.to_owned());
     }
 
     /// Navigate to previous history entry (disabled to prevent cursor flickering)

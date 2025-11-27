@@ -98,11 +98,11 @@ pub(super) fn render_slash_palette(session: &mut Session, frame: &mut Frame<'_>,
 fn slash_palette_instructions(session: &Session) -> Vec<Line<'static>> {
     vec![
         Line::from(Span::styled(
-            ui::SLASH_PALETTE_HINT_PRIMARY.to_string(),
+            ui::SLASH_PALETTE_HINT_PRIMARY.to_owned(),
             session.styles.default_style(),
         )),
         Line::from(Span::styled(
-            ui::SLASH_PALETTE_HINT_SECONDARY.to_string(),
+            ui::SLASH_PALETTE_HINT_SECONDARY.to_owned(),
             session.styles.default_style().add_modifier(Modifier::DIM),
         )),
     ]
@@ -226,7 +226,7 @@ fn preview_selected_slash_suggestion(session: &mut Session) {
         return;
     };
 
-    let current_input = session.input_manager.content().to_string();
+    let current_input = session.input_manager.content().to_owned();
     let prefix = &current_input[..range.start];
     let suffix = &current_input[range.end..];
 
@@ -284,7 +284,7 @@ pub(super) fn apply_selected_slash_suggestion(session: &mut Session) -> bool {
         return false;
     };
 
-    let command_name = command.name.to_string();
+    let command_name = command.name.to_owned();
 
     let input_content = session.input_manager.content();
     let cursor_pos = session.input_manager.cursor();
@@ -292,7 +292,7 @@ pub(super) fn apply_selected_slash_suggestion(session: &mut Session) -> bool {
         return false;
     };
 
-    let suffix = input_content[range.end..].to_string();
+    let suffix = input_content[range.end..].to_owned();
     let mut new_input = format!("/{}", command_name);
 
     let cursor_position = if suffix.is_empty() {
@@ -378,7 +378,7 @@ fn slash_list_items(session: &Session) -> Vec<ListItem<'static>> {
                     Span::styled(format!("/{}", command.name), slash_name_style(session)),
                     Span::raw(" "),
                     Span::styled(
-                        command.description.to_string(),
+                        command.description.to_owned(),
                         slash_description_style(session),
                     ),
                 ]))

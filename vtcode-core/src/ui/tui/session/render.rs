@@ -390,7 +390,7 @@ fn render_file_palette_loading(session: &Session, frame: &mut Frame<'_>, viewpor
 
     if inner.height > 0 && inner.width > 0 {
         let loading_text = vec![Line::from(Span::styled(
-            "Loading workspace files...".to_string(),
+            "Loading workspace files...".to_owned(),
             default_style(session).add_modifier(Modifier::DIM),
         ))];
         let paragraph = Paragraph::new(loading_text).wrap(Wrap { trim: true });
@@ -403,13 +403,13 @@ fn file_palette_instructions(session: &Session, palette: &FilePalette) -> Vec<Li
 
     if palette.is_empty() {
         lines.push(Line::from(Span::styled(
-            "No files found matching filter".to_string(),
+            "No files found matching filter".to_owned(),
             default_style(session).add_modifier(Modifier::DIM),
         )));
     } else {
         let total = palette.total_items();
         let count_text = if total == 1 {
-            "1 file".to_string()
+            "1 file".to_owned()
         } else {
             format!("{} files", total)
         };
@@ -553,7 +553,7 @@ fn render_prompt_palette_loading(session: &Session, frame: &mut Frame<'_>, viewp
 
     if inner.height > 0 && inner.width > 0 {
         let loading_text = vec![Line::from(Span::styled(
-            "Loading custom prompts...".to_string(),
+            "Loading custom prompts...".to_owned(),
             default_style(session).add_modifier(Modifier::DIM),
         ))];
         let paragraph = Paragraph::new(loading_text).wrap(Wrap { trim: true });
@@ -566,13 +566,13 @@ fn prompt_palette_instructions(session: &Session, palette: &PromptPalette) -> Ve
 
     if palette.is_empty() {
         lines.push(Line::from(Span::styled(
-            "No prompts found matching filter".to_string(),
+            "No prompts found matching filter".to_owned(),
             default_style(session).add_modifier(Modifier::DIM),
         )));
     } else {
         let total = palette.total_items();
         let count_text = if total == 1 {
-            "1 prompt".to_string()
+            "1 prompt".to_owned()
         } else {
             format!("{} prompts", total)
         };
@@ -683,7 +683,7 @@ fn agent_prefix_spans(session: &Session, line: &MessageLine) -> Vec<Span<'static
         ratatui_style_from_inline(&prefix_style_inline, session.theme.foreground);
     if !ui::INLINE_AGENT_QUOTE_PREFIX.is_empty() {
         spans.push(Span::styled(
-            ui::INLINE_AGENT_QUOTE_PREFIX.to_string(),
+            ui::INLINE_AGENT_QUOTE_PREFIX.to_owned(),
             prefix_style_ratatui,
         ));
     }
@@ -764,7 +764,7 @@ fn prefix_text(session: &Session, kind: InlineMessageKind) -> Option<String> {
                 .labels
                 .user
                 .clone()
-                .unwrap_or_else(|| USER_PREFIX.to_string()),
+                .unwrap_or_else(|| USER_PREFIX.to_owned()),
         ),
         InlineMessageKind::Agent => None,
         InlineMessageKind::Policy => session.labels.agent.clone(),
@@ -1051,10 +1051,10 @@ fn wrap_block_lines_with_options(
     let content_width = max_width.saturating_sub(consumed_width);
 
     if max_width == usize::MAX {
-        let mut spans = vec![Span::styled(first_prefix.to_string(), border_style)];
+        let mut spans = vec![Span::styled(first_prefix.to_owned(), border_style)];
         spans.extend(content);
         if show_right_border {
-            spans.push(Span::styled(right_border.to_string(), border_style));
+            spans.push(Span::styled(right_border.to_owned(), border_style));
         }
         return vec![Line::from(spans)];
     }
@@ -1073,13 +1073,13 @@ fn wrap_block_lines_with_options(
             0
         };
 
-        let mut new_spans = vec![Span::styled(first_prefix.to_string(), border_style)];
+        let mut new_spans = vec![Span::styled(first_prefix.to_owned(), border_style)];
         new_spans.extend(line.spans.drain(..));
         if padding > 0 {
             new_spans.push(Span::styled(" ".repeat(padding), Style::default()));
         }
         if show_right_border {
-            new_spans.push(Span::styled(right_border.to_string(), border_style));
+            new_spans.push(Span::styled(right_border.to_owned(), border_style));
         }
         line.spans = new_spans;
     }

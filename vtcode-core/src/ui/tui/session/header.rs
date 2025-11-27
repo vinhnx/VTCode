@@ -204,25 +204,25 @@ impl Session {
         let full = self.header_mode_label();
         let value = full.trim();
         if value.eq_ignore_ascii_case(ui::HEADER_MODE_AUTO) {
-            return "Auto".to_string();
+            return "Auto".to_owned();
         }
         if value.eq_ignore_ascii_case(ui::HEADER_MODE_INLINE) {
-            return "Inline".to_string();
+            return "Inline".to_owned();
         }
         if value.eq_ignore_ascii_case(ui::HEADER_MODE_ALTERNATE) {
-            return "Alternate".to_string();
+            return "Alternate".to_owned();
         }
 
         // Handle common abbreviations with more descriptive names
         if value.to_lowercase() == "std" {
-            return "Session: Standard".to_string();
+            return "Session: Standard".to_owned();
         }
 
         let compact = value
             .strip_suffix(ui::HEADER_MODE_FULL_AUTO_SUFFIX)
             .unwrap_or(value)
             .trim();
-        compact.to_string()
+        compact.to_owned()
     }
 
     fn header_reasoning_value(&self) -> Option<String> {
@@ -243,21 +243,21 @@ impl Session {
         let value = self.header_provider_value();
         Self::strip_prefix(&value, ui::HEADER_PROVIDER_PREFIX)
             .trim()
-            .to_string()
+            .to_owned()
     }
 
     pub fn header_model_short_value(&self) -> String {
         let value = self.header_model_value();
         Self::strip_prefix(&value, ui::HEADER_MODEL_PREFIX)
             .trim()
-            .to_string()
+            .to_owned()
     }
 
     pub fn header_reasoning_short_value(&self) -> String {
         let value = self.header_reasoning_value().unwrap_or_default();
         Self::strip_prefix(&value, ui::HEADER_REASONING_PREFIX)
             .trim()
-            .to_string()
+            .to_owned()
     }
 
     pub fn header_chain_values(&self) -> Vec<String> {
@@ -304,7 +304,7 @@ impl Session {
                     if body.is_empty() {
                         return None;
                     }
-                    selected = body.to_string();
+                    selected = body.to_owned();
                     return Some(selected);
                 }
 
@@ -329,7 +329,7 @@ impl Session {
         for value in self.header_chain_values() {
             if !first_section {
                 spans.push(Span::styled(
-                    ui::HEADER_MODE_SECONDARY_SEPARATOR.to_string(),
+                    ui::HEADER_MODE_SECONDARY_SEPARATOR.to_owned(),
                     self.header_secondary_style(),
                 ));
             }
@@ -358,7 +358,7 @@ impl Session {
 
             if !first_section {
                 spans.push(Span::styled(
-                    ui::HEADER_META_SEPARATOR.to_string(),
+                    ui::HEADER_META_SEPARATOR.to_owned(),
                     self.header_secondary_style(),
                 ));
             }
@@ -366,13 +366,13 @@ impl Session {
             if !title.is_empty() {
                 let mut title_style = self.header_secondary_style();
                 title_style = title_style.add_modifier(Modifier::BOLD);
-                let mut title_text = title.to_string();
+                let mut title_text = title.to_owned();
                 if summary.is_some() {
                     title_text.push(':');
                 }
                 spans.push(Span::styled(title_text, title_style));
                 if summary.is_some() {
-                    spans.push(Span::styled(" ".to_string(), self.header_secondary_style()));
+                    spans.push(Span::styled(" ".to_owned(), self.header_secondary_style()));
                 }
             }
 
@@ -401,7 +401,7 @@ impl Session {
                     .strip_prefix("- ")
                     .or_else(|| line.strip_prefix("• "))
                     .unwrap_or(line);
-                stripped.trim().to_string()
+                stripped.trim().to_owned()
             })
             .collect();
 
@@ -434,7 +434,7 @@ impl Session {
 
         let grapheme_count = text.graphemes(true).count();
         if grapheme_count <= max {
-            return text.to_string();
+            return text.to_owned();
         }
 
         let mut truncated = String::new();
@@ -519,7 +519,7 @@ impl Session {
 
     pub(super) fn suggestion_block_title(&self) -> Line<'static> {
         Line::from(vec![Span::styled(
-            ui::SUGGESTION_BLOCK_TITLE.to_string(),
+            ui::SUGGESTION_BLOCK_TITLE.to_owned(),
             self.section_title_style(),
         )])
     }

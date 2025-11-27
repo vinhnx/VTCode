@@ -136,16 +136,29 @@ impl SpoolResult {
     /// Useful for the agent to read specific sections without loading everything.
     pub fn read_lines(&self, start: usize, end: usize) -> Result<String> {
         let content = self.read_full_content()?;
-        let lines: Vec<&str> = content.lines().collect();
-
-        let start_idx = start.saturating_sub(1).min(lines.len());
-        let end_idx = end.min(lines.len());
-
-        if start_idx >= end_idx {
+        // Avoid allocating a full Vec of lines; iterate and collect only the requested range.
+        if start == 0 || end == 0 || start > end {
             return Ok(String::new());
         }
 
-        Ok(lines[start_idx..end_idx].join("\n"))
+        let mut out = String::new();
+        let mut idx = 0usize;
+        let start_idx = start.saturating_sub(1);
+        let end_idx = end;
+        for line in content.lines() {
+            if idx >= start_idx && idx < end_idx {
+                if !out.is_empty() {
+                    out.push('\n');
+                }
+                out.push_str(line);
+            }
+            idx += 1;
+            if idx >= end_idx {
+                break;
+            }
+        }
+
+        Ok(out)
     }
 
     /// Get a preview with head and tail lines for immediate context
@@ -154,27 +167,50 @@ impl SpoolResult {
     /// with clear markers showing what was truncated.
     pub fn get_preview(&self) -> Result<String> {
         let content = self.read_full_content()?;
-        let lines: Vec<&str> = content.lines().collect();
-        let total = lines.len();
+        // Avoid allocating all lines; stream to collect only head and a bounded tail buffer.
+        use std::collections::VecDeque;
+
+        let mut total = 0usize;
+        let mut head_lines: Vec<&str> = Vec::with_capacity(PREVIEW_HEAD_LINES);
+
+        let mut tail_buf: VecDeque<(&str, usize)> = VecDeque::with_capacity(PREVIEW_TAIL_LINES);
+        let _tail_tokens_acc = 0usize; // reserved for future token-aware logic
+
+        for line in content.lines() {
+            // head capture
+            if head_lines.len() < PREVIEW_HEAD_LINES {
+                head_lines.push(line);
+            }
+
+            // tail rolling buffer
+            // store (line, estimated_len) so we can pop_front efficiently
+            tail_buf.push_back((line, line.len()));
+            if tail_buf.len() > PREVIEW_TAIL_LINES {
+                tail_buf.pop_front();
+            }
+
+            total += 1;
+        }
 
         if total <= PREVIEW_HEAD_LINES + PREVIEW_TAIL_LINES {
             return Ok(content);
         }
 
-        let head: Vec<&str> = lines.iter().take(PREVIEW_HEAD_LINES).copied().collect();
-        let tail: Vec<&str> = lines
-            .iter()
-            .skip(total - PREVIEW_TAIL_LINES)
-            .copied()
-            .collect();
         let hidden = total - PREVIEW_HEAD_LINES - PREVIEW_TAIL_LINES;
+
+        let head_join = head_lines.join("\n");
+        let tail_join = tail_buf
+            .iter()
+            .map(|(l, _)| *l)
+            .collect::<Vec<&str>>()
+            .join("\n");
 
         Ok(format!(
             "{}\n\n[... {} lines omitted - full output in: {} ...]\n\n{}",
-            head.join("\n"),
+            head_join,
             hidden,
             self.file_path.display(),
-            tail.join("\n")
+            tail_join
         ))
     }
 

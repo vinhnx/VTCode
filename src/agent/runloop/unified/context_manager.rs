@@ -11,7 +11,9 @@ use crate::agent::runloop::context::{
 use vtcode_core::constants::context as context_constants;
 use vtcode_core::core::pruning_decisions::{PruningDecisionLedger, RetentionChoice};
 use vtcode_core::core::token_budget::{ContextComponent, TokenBudgetManager};
-use vtcode_core::core::{ContextEfficiency, ContextPruner, MessageMetrics, MessageType, RetentionDecision};
+use vtcode_core::core::{
+    ContextEfficiency, ContextPruner, MessageMetrics, MessageType, RetentionDecision,
+};
 use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::tree_sitter::TreeSitterAnalyzer;
 

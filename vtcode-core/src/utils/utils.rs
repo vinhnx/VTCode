@@ -174,7 +174,7 @@ pub fn extract_toml_str(content: &str, key: &str) -> Option<String> {
     let pattern = format!(r#"(?m)^\s*{}\s*=\s*"([^"]+)"\s*$"#, regex::escape(key));
     let re = Regex::new(&pattern).ok()?;
     re.captures(pkg_section)
-        .and_then(|caps| caps.get(1).map(|m| m.as_str().to_string()))
+        .and_then(|caps| caps.get(1).map(|m| m.as_str().to_owned()))
 }
 
 /// Get the first meaningful section of the README/markdown as an excerpt

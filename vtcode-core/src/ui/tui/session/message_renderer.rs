@@ -91,7 +91,7 @@ fn agent_prefix_spans(
     let prefix_style = ratatui_style_from_inline(&prefix_style_fn(line), theme.foreground);
     if !ui::INLINE_AGENT_QUOTE_PREFIX.is_empty() {
         spans.push(Span::styled(
-            ui::INLINE_AGENT_QUOTE_PREFIX.to_string(),
+            ui::INLINE_AGENT_QUOTE_PREFIX.to_owned(),
             prefix_style,
         ));
     }
@@ -135,7 +135,7 @@ fn render_styled_action_text(
                 .with_color(Some(anstyle::AnsiColor::Cyan.into()))
                 .italic();
             spans.push(Span::styled(
-                word.to_string(),
+                word.to_owned(),
                 ratatui_style_from_inline(&in_style, theme.foreground),
             ));
         } else if i < 2
@@ -154,12 +154,12 @@ fn render_styled_action_text(
                 )
                 .bold();
             spans.push(Span::styled(
-                word.to_string(),
+                word.to_owned(),
                 ratatui_style_from_inline(&action_style, theme.foreground),
             ));
         } else {
             spans.push(Span::styled(
-                word.to_string(),
+                word.to_owned(),
                 ratatui_style_from_inline(body_style, theme.foreground),
             ));
         }

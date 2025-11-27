@@ -73,7 +73,7 @@ echo "Setup complete"
                 matcher: None,
                 hooks: vec![HookCommandConfig {
                     kind: Default::default(),
-                    command: "echo 'test'".to_string(),
+                    command: "echo 'test'".into(),
                     timeout_seconds: None,
                 }],
             }],
@@ -110,7 +110,7 @@ echo "Setup complete"
                 hooks: vec![HookCommandConfig {
                     kind: Default::default(),
                     command: "printf '{\"additional_context\": \"Session started successfully\"}'"
-                        .to_string(),
+                        .into(),
                     timeout_seconds: None,
                 }],
             }],
@@ -157,7 +157,7 @@ echo "Setup complete"
                 matcher: None, // Match all
                 hooks: vec![HookCommandConfig {
                     kind: Default::default(),
-                    command: "printf 'Plain text context'".to_string(),
+                    command: "printf 'Plain text context'".into(),
                     timeout_seconds: None,
                 }],
             }],
@@ -197,7 +197,7 @@ echo "Setup complete"
                 matcher: None, // Match all
                 hooks: vec![HookCommandConfig {
                     kind: Default::default(),
-                    command: "echo 'Cleanup complete'".to_string(),
+                    command: "echo 'Cleanup complete'".into(),
                     timeout_seconds: None,
                 }],
             }],
@@ -241,7 +241,7 @@ echo "Setup complete"
                 matcher: None, // Match all prompts
                 hooks: vec![HookCommandConfig {
                     kind: Default::default(),
-                    command: "printf 'Processing prompt...'".to_string(),
+                    command: "printf 'Processing prompt...'".into(),
                     timeout_seconds: None,
                 }],
             }],
@@ -283,7 +283,7 @@ echo "Setup complete"
                 matcher: None, // Match all prompts
                 hooks: vec![HookCommandConfig {
                     kind: Default::default(),
-                    command: "echo 'Prompt blocked' >&2; exit 2".to_string(),
+                    command: "echo 'Prompt blocked' >&2; exit 2".into(),
                     timeout_seconds: None,
                 }],
             }],
@@ -321,10 +321,10 @@ echo "Setup complete"
         // Create a pre-tool hook that doesn't block
         let hooks_config = LifecycleHooksConfig {
             pre_tool_use: vec![HookGroupConfig {
-                matcher: Some(".*".to_string()), // Match all tools using regex
+                matcher: Some(".*".into()), // Match all tools using regex
                 hooks: vec![HookCommandConfig {
                     kind: Default::default(),
-                    command: "echo 'Pre-tool processing'".to_string(),
+                    command: "echo 'Pre-tool processing'".into(),
                     timeout_seconds: None,
                 }],
             }],
@@ -374,10 +374,10 @@ echo "Setup complete"
         // Create a pre-tool hook that blocks with exit code 2
         let hooks_config = LifecycleHooksConfig {
             pre_tool_use: vec![HookGroupConfig {
-                matcher: Some("TestTool".to_string()), // Match specific tool
+                matcher: Some("TestTool".into()), // Match specific tool
                 hooks: vec![HookCommandConfig {
                     kind: Default::default(),
-                    command: "printf 'Tool blocked' >&2; exit 2".to_string(),
+                    command: "printf 'Tool blocked' >&2; exit 2".into(),
                     timeout_seconds: None,
                 }],
             }],
@@ -419,10 +419,10 @@ echo "Setup complete"
         // Create a pre-tool hook that allows with JSON response
         let hooks_config = LifecycleHooksConfig {
             pre_tool_use: vec![HookGroupConfig {
-                matcher: Some("TestTool".to_string()), // Match specific tool
+                matcher: Some("TestTool".into()), // Match specific tool
                 hooks: vec![HookCommandConfig {
                     kind: Default::default(),
-                    command: r#"printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow"}}\n'"#.to_string(),
+                    command: r#"printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow"}}\n'"#.into(),
                     timeout_seconds: None,
                 }],
             }],
@@ -458,10 +458,10 @@ echo "Setup complete"
         // Create a post-tool hook
         let hooks_config = LifecycleHooksConfig {
             post_tool_use: vec![HookGroupConfig {
-                matcher: Some("TestTool".to_string()), // Match specific tool
+                matcher: Some("TestTool".into()), // Match specific tool
                 hooks: vec![HookCommandConfig {
                     kind: Default::default(),
-                    command: "echo 'Post-tool processing complete'".to_string(),
+                    command: "echo 'Post-tool processing complete'".into(),
                     timeout_seconds: None,
                 }],
             }],
@@ -511,8 +511,8 @@ echo "Setup complete"
                 matcher: None,
                 hooks: vec![HookCommandConfig {
                     kind: Default::default(),
-                    command: "sleep 2".to_string(), // Sleep longer than timeout
-                    timeout_seconds: Some(1),       // 1 second timeout
+                    command: "sleep 2".into(), // Sleep longer than timeout
+                    timeout_seconds: Some(1),  // 1 second timeout
                 }],
             }],
             ..Default::default()
@@ -553,18 +553,18 @@ echo "Setup complete"
         let hooks_config = LifecycleHooksConfig {
             pre_tool_use: vec![
                 HookGroupConfig {
-                    matcher: Some("Write".to_string()), // Match Write tool
+                    matcher: Some("Write".into()), // Match Write tool
                     hooks: vec![HookCommandConfig {
                         kind: Default::default(),
-                        command: "echo 'Write tool matched'".to_string(),
+                        command: "echo 'Write tool matched'".into(),
                         timeout_seconds: None,
                     }],
                 },
                 HookGroupConfig {
-                    matcher: Some("Bash".to_string()), // Match Bash tool
+                    matcher: Some("Bash".into()), // Match Bash tool
                     hooks: vec![HookCommandConfig {
                         kind: Default::default(),
-                        command: "echo 'Bash tool matched'".to_string(),
+                        command: "echo 'Bash tool matched'".into(),
                         timeout_seconds: None,
                     }],
                 },
@@ -621,10 +621,10 @@ echo "Setup complete"
         // Create hooks with regex matchers
         let hooks_config = LifecycleHooksConfig {
             user_prompt_submit: vec![HookGroupConfig {
-                matcher: Some(".*security.*".to_string()), // Match prompts containing "security"
+                matcher: Some(".*security.*".into()), // Match prompts containing "security"
                 hooks: vec![HookCommandConfig {
                     kind: Default::default(),
-                    command: "echo 'Security prompt detected'".to_string(),
+                    command: "echo 'Security prompt detected'".into(),
                     timeout_seconds: None,
                 }],
             }],
@@ -711,7 +711,7 @@ impl LifecycleHookEngine {
             });
         }
 
-        let trigger_value = self.inner.trigger.as_str().to_string();
+        let trigger_value = self.inner.trigger.as_str().to_owned();
         let payload = self.build_session_start_payload().await?;
 
         for group in &self.inner.hooks.session_start {
@@ -752,7 +752,7 @@ impl LifecycleHookEngine {
         }
 
         let payload = self.build_session_end_payload(reason).await?;
-        let reason_value = reason.as_str().to_string();
+        let reason_value = reason.as_str().to_owned();
 
         for group in &self.inner.hooks.session_end {
             if !group.matcher.matches(&reason_value) {
@@ -1052,8 +1052,8 @@ impl LifecycleHookEngine {
 
         Ok(HookCommandResult {
             exit_code,
-            stdout: String::from_utf8_lossy(&stdout_bytes).to_string(),
-            stderr: String::from_utf8_lossy(&stderr_bytes).to_string(),
+            stdout: String::from_utf8_lossy(&stdout_bytes).into_owned(),
+            stderr: String::from_utf8_lossy(&stderr_bytes).into_owned(),
             timed_out,
             timeout_seconds: timeout_secs,
         })
@@ -1324,14 +1324,14 @@ fn extract_common_fields(json: &Value, messages: &mut Vec<HookMessage>) -> Commo
         .map(str::trim)
         .filter(|value| !value.is_empty())
     {
-        messages.push(HookMessage::info(system_message.to_string()));
+        messages.push(HookMessage::info(system_message.to_owned()));
     }
 
     let continue_decision = json.get("continue").and_then(|value| value.as_bool());
     let stop_reason = json
         .get("stopReason")
         .and_then(|value| value.as_str())
-        .map(|value| value.to_string());
+        .map(|value| value.to_owned());
     let suppress_stdout = json
         .get("suppressOutput")
         .and_then(|value| value.as_bool())
@@ -1339,11 +1339,11 @@ fn extract_common_fields(json: &Value, messages: &mut Vec<HookMessage>) -> Commo
     let decision = json
         .get("decision")
         .and_then(|value| value.as_str())
-        .map(|value| value.to_string());
+        .map(|value| value.to_owned());
     let decision_reason = json
         .get("reason")
         .and_then(|value| value.as_str())
-        .map(|value| value.to_string());
+        .map(|value| value.to_owned());
     let hook_specific = json.get("hookSpecificOutput").cloned();
 
     CommonJsonFields {
@@ -1405,9 +1405,9 @@ fn handle_non_zero_exit(
 fn select_message<'a>(stderr: &'a str, fallback: &'a str) -> String {
     let trimmed = stderr.trim();
     if trimmed.is_empty() {
-        fallback.to_string()
+        fallback.to_owned()
     } else {
-        trimmed.to_string()
+        trimmed.to_owned()
     }
 }
 
@@ -1445,7 +1445,7 @@ fn interpret_session_start(
                 .and_then(|value| value.as_str())
             && !additional.trim().is_empty()
         {
-            additional_context.push(additional.trim().to_string());
+            additional_context.push(additional.trim().to_owned());
         }
 
         if !common.suppress_stdout
@@ -1454,10 +1454,10 @@ fn interpret_session_start(
                 .and_then(|value| value.as_str())
             && !text.trim().is_empty()
         {
-            additional_context.push(text.trim().to_string());
+            additional_context.push(text.trim().to_owned());
         }
     } else if !result.stdout.trim().is_empty() {
-        additional_context.push(result.stdout.trim().to_string());
+        additional_context.push(result.stdout.trim().to_owned());
     }
 }
 
@@ -1488,7 +1488,7 @@ fn interpret_session_end(
     if let Some(json) = parse_json_output(&result.stdout) {
         let _ = extract_common_fields(&json, messages);
     } else if !result.stdout.trim().is_empty() {
-        messages.push(HookMessage::info(result.stdout.trim().to_string()));
+        messages.push(HookMessage::info(result.stdout.trim().to_owned()));
     }
 }
 
@@ -1530,7 +1530,7 @@ fn interpret_user_prompt(
                 .stop_reason
                 .clone()
                 .or(common.decision_reason.clone())
-                .or_else(|| Some("Prompt blocked by lifecycle hook.".to_string()));
+                .or_else(|| Some("Prompt blocked by lifecycle hook.".to_owned()));
         }
 
         if let Some(decision) = common.decision.as_deref()
@@ -1540,7 +1540,7 @@ fn interpret_user_prompt(
             outcome.block_reason = common
                 .decision_reason
                 .clone()
-                .or_else(|| Some("Prompt blocked by lifecycle hook.".to_string()));
+                .or_else(|| Some("Prompt blocked by lifecycle hook.".to_owned()));
         }
 
         if let Some(Value::Object(spec)) = common.hook_specific
@@ -1552,7 +1552,7 @@ fn interpret_user_prompt(
         {
             outcome
                 .additional_context
-                .push(additional.trim().to_string());
+                .push(additional.trim().to_owned());
         }
 
         if !common.suppress_stdout
@@ -1561,7 +1561,7 @@ fn interpret_user_prompt(
                 .and_then(|value| value.as_str())
             && !text.trim().is_empty()
         {
-            outcome.additional_context.push(text.trim().to_string());
+            outcome.additional_context.push(text.trim().to_owned());
         }
 
         if !outcome.allow_prompt
@@ -1572,7 +1572,7 @@ fn interpret_user_prompt(
     } else if !result.stdout.trim().is_empty() {
         outcome
             .additional_context
-            .push(result.stdout.trim().to_string());
+            .push(result.stdout.trim().to_owned());
     }
 }
 
@@ -1649,19 +1649,19 @@ fn interpret_pre_tool(
             {
                 outcome
                     .messages
-                    .push(HookMessage::info(reason.trim().to_string()));
+                    .push(HookMessage::info(reason.trim().to_owned()));
             }
         }
 
         if !common.suppress_stdout && !result.stdout.trim().is_empty() {
             outcome
                 .messages
-                .push(HookMessage::info(result.stdout.trim().to_string()));
+                .push(HookMessage::info(result.stdout.trim().to_owned()));
         }
     } else if !result.stdout.trim().is_empty() {
         outcome
             .messages
-            .push(HookMessage::info(result.stdout.trim().to_string()));
+            .push(HookMessage::info(result.stdout.trim().to_owned()));
     }
 }
 
@@ -1697,7 +1697,7 @@ fn interpret_post_tool(
             outcome.block_reason = common
                 .decision_reason
                 .clone()
-                .or_else(|| Some("Tool execution requires attention.".to_string()));
+                .or_else(|| Some("Tool execution requires attention.".to_owned()));
         }
 
         if let Some(Value::Object(spec)) = common.hook_specific
@@ -1709,7 +1709,7 @@ fn interpret_post_tool(
         {
             outcome
                 .additional_context
-                .push(additional.trim().to_string());
+                .push(additional.trim().to_owned());
         }
 
         if !common.suppress_stdout
@@ -1718,11 +1718,11 @@ fn interpret_post_tool(
                 .and_then(|value| value.as_str())
             && !text.trim().is_empty()
         {
-            outcome.additional_context.push(text.trim().to_string());
+            outcome.additional_context.push(text.trim().to_owned());
         }
     } else if !result.stdout.trim().is_empty() {
         outcome
             .messages
-            .push(HookMessage::info(result.stdout.trim().to_string()));
+            .push(HookMessage::info(result.stdout.trim().to_owned()));
     }
 }

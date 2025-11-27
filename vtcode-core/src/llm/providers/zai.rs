@@ -13,9 +13,9 @@ use serde_json::{Value, json};
 use std::collections::HashSet;
 
 use super::common::{
-    convert_usage_to_llm_types, override_base_url,
-    parse_chat_request_openai_format_with_extractor, parse_client_prompt_common,
-    resolve_model, serialize_tools_openai_format, validate_request_common,
+    convert_usage_to_llm_types, override_base_url, parse_chat_request_openai_format_with_extractor,
+    parse_client_prompt_common, resolve_model, serialize_tools_openai_format,
+    validate_request_common,
 };
 
 const PROVIDER_NAME: &str = "Z.AI";
@@ -92,8 +92,6 @@ impl ZAIProvider {
 
         Some(request)
     }
-
-
 
     fn convert_to_zai_format(&self, request: &LLMRequest) -> Result<Value, LLMError> {
         let mut messages = Vec::new();
@@ -250,8 +248,6 @@ impl ZAIProvider {
 
         Ok(response)
     }
-
-
 
     fn available_models() -> Vec<String> {
         models::zai::SUPPORTED_MODELS

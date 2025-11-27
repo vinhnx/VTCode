@@ -22,7 +22,7 @@
 ///
 /// // Use the generic renderer
 /// let renderer = PaletteRenderer::new(
-///     "My Palette".to_string(),
+///     "My Palette".to_owned(),
 ///     items,
 ///     selected_index,
 /// );
@@ -92,7 +92,7 @@ pub fn render_palette_loading(
 
     if inner.height > 0 && inner.width > 0 {
         let loading_text = vec![Line::from(Span::styled(
-            loading_message.to_string(),
+            loading_message.to_owned(),
             default_style.add_modifier(Modifier::DIM),
         ))];
         let paragraph = Paragraph::new(loading_text).wrap(Wrap { trim: true });

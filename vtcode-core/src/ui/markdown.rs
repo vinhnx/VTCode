@@ -583,7 +583,7 @@ fn handle_start_tag(
                     .split_whitespace()
                     .next()
                     .filter(|lang| !lang.is_empty())
-                    .map(|lang| lang.to_string()),
+                    .map(|lang| lang.to_owned()),
                 CodeBlockKind::Indented => None,
             };
             *code_block = Some(CodeBlockState {
@@ -979,7 +979,7 @@ fn try_highlight(
             if part.is_empty() {
                 continue;
             }
-            segments.push((to_anstyle(style), part.to_string()));
+            segments.push((to_anstyle(style), part.to_owned()));
         }
         rendered.push(segments);
     }
@@ -1011,7 +1011,7 @@ fn load_theme(theme_name: &str, cache: bool) -> Theme {
                     guard.remove(&first_key);
                 }
             }
-            guard.insert(theme_name.to_string(), theme.clone());
+            guard.insert(theme_name.to_owned(), theme.clone());
         }
         theme
     } else {

@@ -226,9 +226,7 @@ impl LLMProvider for MoonshotProvider {
                 LLMError::Network(formatted_error)
             })?;
 
-
         let response = handle_http_error(response, PROVIDER_NAME, "MOONSHOT_API_KEY").await?;
-
 
         let response_json: Value = response.json().await.map_err(|e| {
             let formatted_error = error_display::format_llm_error(

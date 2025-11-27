@@ -22,7 +22,7 @@ impl Session {
                 self.labels
                     .user
                     .clone()
-                    .unwrap_or_else(|| USER_PREFIX.to_string()),
+                    .unwrap_or_else(|| USER_PREFIX.to_owned()),
             ),
             InlineMessageKind::Agent => None,
             InlineMessageKind::Policy => self.labels.agent.clone(),
@@ -168,7 +168,7 @@ impl Session {
                     }
                     if !appended {
                         line.segments.push(InlineSegment {
-                            text: text.to_string(),
+                            text: text.to_owned(),
                             style: style.clone(),
                         });
                         appended = true;
@@ -201,7 +201,7 @@ impl Session {
             let revision = self.next_revision();
             if let Some(line) = self.lines.last_mut() {
                 line.segments.push(InlineSegment {
-                    text: text.to_string(),
+                    text: text.to_owned(),
                     style: style.clone(),
                 });
                 line.revision = revision;
@@ -214,7 +214,7 @@ impl Session {
         self.lines.push(MessageLine {
             kind,
             segments: vec![InlineSegment {
-                text: text.to_string(),
+                text: text.to_owned(),
                 style: style.clone(),
             }],
             revision,

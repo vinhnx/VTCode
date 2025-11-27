@@ -6,7 +6,7 @@
 //! - Tool sequence reordering
 //! - Redundancy elimination
 
-use crate::patterns::{DetectedPattern, PatternDetector};
+use crate::patterns::DetectedPattern;
 use serde_json::json;
 use std::collections::HashMap;
 
@@ -54,7 +54,7 @@ impl WorkflowOptimizer {
     /// Create optimizer from detector output.
     pub fn from_detector(patterns: Vec<DetectedPattern>, features: Vec<f64>) -> Self {
         let mut optimizer = Self {
-            patterns: patterns.clone(),
+            patterns: patterns,
             features,
             optimizations: Vec::new(),
         };

@@ -139,7 +139,7 @@ pub fn run_interactive_selection(
                         .map(|(idx, entry)| {
                             let mut lines = vec![Line::from(vec![
                                 Span::styled(format!("{:2}. ", idx + 1), styles::ITEM_NUMBER),
-                                Span::raw(entry.title.clone()),
+                                Span::raw(entry.title.as_str()),
                             ])];
                             if let Some(description) = entry.description.as_ref()
                                 && !description.is_empty()
@@ -180,7 +180,7 @@ pub fn run_interactive_selection(
                     let mut summary_lines = vec![];
 
                     summary_lines.push(Line::from(Span::styled(
-                        current.title.to_string(),
+                        current.title.as_str(),
                         Style::default().add_modifier(Modifier::BOLD),
                     )));
 

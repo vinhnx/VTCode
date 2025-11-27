@@ -75,7 +75,7 @@ impl Session {
 
         let mut spans = Vec::new();
         spans.push(Span::styled(
-            ui::NAVIGATION_BLOCK_TITLE.to_string(),
+            ui::NAVIGATION_BLOCK_TITLE.to_owned(),
             self.section_title_style(),
         ));
         spans.push(Span::styled(
@@ -89,7 +89,7 @@ impl Session {
     pub(super) fn plan_block_title(&self) -> Line<'static> {
         let mut spans = Vec::new();
         spans.push(Span::styled(
-            ui::PLAN_BLOCK_TITLE.to_string(),
+            ui::PLAN_BLOCK_TITLE.to_owned(),
             self.section_title_style(),
         ));
 
@@ -130,7 +130,7 @@ impl Session {
     fn timeline_navigation_items(&self) -> Vec<ListItem<'static>> {
         if self.lines.is_empty() {
             return vec![ListItem::new(Line::from(vec![Span::styled(
-                ui::NAVIGATION_EMPTY_LABEL.to_string(),
+                ui::NAVIGATION_EMPTY_LABEL.to_owned(),
                 self.navigation_placeholder_style(),
             )]))];
         }
@@ -157,7 +157,7 @@ impl Session {
         spans.push(Span::styled(sequence, self.navigation_index_style()));
         spans.push(Span::raw(" "));
         spans.push(Span::styled(
-            step.status.checkbox().to_string(),
+            step.status.checkbox().to_owned(),
             self.plan_checkbox_style(step.status.clone()),
         ));
         spans.push(Span::raw(" "));
@@ -181,7 +181,7 @@ impl Session {
         spans.push(Span::styled(sequence, self.navigation_index_style()));
         spans.push(Span::raw(" "));
         spans.push(Span::styled(
-            self.navigation_label(line.kind).to_string(),
+            self.navigation_label(line.kind).to_owned(),
             self.navigation_label_style(line.kind),
         ));
         let preview = self.navigation_preview_text(line);

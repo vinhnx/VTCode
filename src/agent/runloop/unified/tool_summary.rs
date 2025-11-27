@@ -59,13 +59,14 @@ pub(crate) fn render_tool_call_summary_with_status(
     } else {
         // Even if no specific highlights were extracted, show all parameters if available
         if let Some(map) = args.as_object() {
-            let all_params: Vec<String> = map
-                .iter()
-                .filter_map(|(key, value)| match value {
+            // Build a compact string directly to avoid allocating an intermediate Vec
+            let mut all_params_buf = String::new();
+            for (key, value) in map.iter() {
+                if let Some(part) = match value {
                     Value::String(s) if !s.is_empty() => {
-                        Some(format!("{}: {}", humanize_key(key), truncate_middle(s, 40))) // Shorter truncation
+                        Some(format!("{}: {}", humanize_key(key), truncate_middle(s, 40)))
                     }
-                    Value::Bool(true) => Some(humanize_key(key)),
+                    Value::Bool(true) => Some(humanize_key(key).to_string()),
                     Value::Array(items) => {
                         let strings: Vec<String> = items
                             .iter()
@@ -75,7 +76,7 @@ pub(crate) fn render_tool_call_summary_with_status(
                             Some(format!(
                                 "{}: {}",
                                 humanize_key(key),
-                                summarize_list(&strings, 1, 30) // Shorter list
+                                summarize_list(&strings, 1, 30)
                             ))
                         } else {
                             None
@@ -83,13 +84,18 @@ pub(crate) fn render_tool_call_summary_with_status(
                     }
                     Value::Number(num) => Some(format!("{}: {}", humanize_key(key), num)),
                     _ => None,
-                })
-                .collect();
+                } {
+                    if !all_params_buf.is_empty() {
+                        all_params_buf.push_str(" · ");
+                    }
+                    all_params_buf.push_str(&part);
+                }
+            }
 
-            if !all_params.is_empty() {
+            if !all_params_buf.is_empty() {
                 line.push(' ');
                 line.push_str(&render_styled(
-                    &format!("· {}", all_params.join(" · ")),
+                    &format!("· {}", all_params_buf),
                     palette.muted,
                     None,
                 ));
@@ -414,8 +420,8 @@ fn truncate_middle(text: &str, max_len: usize) -> String {
     if max_len == 0 {
         return String::new();
     }
-    let chars: Vec<char> = text.chars().collect();
-    if chars.len() <= max_len {
+    let char_count = text.chars().count();
+    if char_count <= max_len {
         return text.to_string();
     }
     if max_len <= 1 {
@@ -423,18 +429,17 @@ fn truncate_middle(text: &str, max_len: usize) -> String {
     }
     let head_len = max_len / 2;
     let tail_len = max_len.saturating_sub(head_len + 1);
-    let mut result: String = chars.iter().take(head_len).collect();
+
+    // Collect only head and tail characters to avoid allocating the full char vector.
+    let head: String = text.chars().take(head_len).collect();
+    let mut result = String::with_capacity(head.len() + tail_len + 1);
+    result.push_str(&head);
     result.push('…');
     if tail_len > 0 {
-        let tail: String = chars
-            .iter()
-            .rev()
-            .take(tail_len)
-            .cloned()
-            .collect::<Vec<char>>()
-            .into_iter()
-            .rev()
-            .collect();
+        // Collect tail in reverse then reverse to restore order.
+        let mut tail_rev: Vec<char> = text.chars().rev().take(tail_len).collect();
+        tail_rev.reverse();
+        let tail: String = tail_rev.into_iter().collect();
         result.push_str(&tail);
     }
     result

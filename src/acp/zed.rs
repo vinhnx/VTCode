@@ -1366,7 +1366,7 @@ impl ZedAgent {
 
         let resolved_path = self
             .resolve_list_files_path(args)?
-            .unwrap_or_else(|| ".".to_string());
+            .unwrap_or_else(|| ".".into());
 
         let mut normalized_args = match args.clone() {
             Value::Object(map) => map,
@@ -1414,12 +1414,12 @@ impl ZedAgent {
             let normalized = resolved.clean();
 
             if normalized == workspace_root {
-                return Ok(Some(".".to_string()));
+                return Ok(Some(".".into()));
             }
 
             if let Ok(relative) = normalized.strip_prefix(&workspace_root) {
                 if relative.as_os_str().is_empty() {
-                    return Ok(Some(".".to_string()));
+                    return Ok(Some(".".into()));
                 }
                 return Ok(Some(relative.to_string_lossy().into()));
             }

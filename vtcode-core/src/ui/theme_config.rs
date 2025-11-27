@@ -448,11 +448,11 @@ executable = "bold cyan"
         assert_eq!(config.diff.new, "green");
         assert_eq!(
             config.files.extensions.get("rs"),
-            Some(&"bright cyan".to_string())
+            Some(&"bright cyan".to_owned())
         );
         assert_eq!(
             config.files.extensions.get("py"),
-            Some(&"bright yellow".to_string())
+            Some(&"bright yellow".to_owned())
         );
     }
 
@@ -484,9 +484,9 @@ executable = "bold cyan"
     #[test]
     fn test_parse_custom_styles() {
         let mut config = ThemeConfig::default();
-        config.cli.success = "bold red ul".to_string();
-        config.diff.new = "#00ff00".to_string(); // RGB green
-        config.files.symlink = "01;35".to_string(); // ANSI code for bold magenta
+        config.cli.success = "bold red ul".to_owned();
+        config.diff.new = "#00ff00".to_owned(); // RGB green
+        config.files.symlink = "01;35".to_owned(); // ANSI code for bold magenta
 
         let cli_styles = config
             .parse_cli_styles()
