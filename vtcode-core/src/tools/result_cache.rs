@@ -7,6 +7,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, VecDeque};
 use std::hash::{Hash, Hasher};
 use std::time::{SystemTime, UNIX_EPOCH};
+use std::sync::Arc;
 
 /// Identifies a cached tool result
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -38,7 +39,7 @@ impl CacheKey {
 #[derive(Debug, Clone)]
 pub struct CachedResult {
     /// The actual result
-    pub output: String,
+    pub output: Arc<String>,
     /// When it was cached (Unix timestamp)
     pub cached_at: u64,
     /// How many times this result was used
@@ -54,7 +55,7 @@ impl CachedResult {
             .unwrap_or(0);
 
         CachedResult {
-            output,
+            output: Arc::new(output),
             cached_at: now,
             access_count: 0,
         }
@@ -133,7 +134,29 @@ impl ToolResultCache {
                     self.lru_order.remove(pos);
                     self.lru_order.push_front(key.clone());
                 }
-                return Some(result.output.clone());
+                // Return an owned String for compatibility
+                return Some((*result.output).clone());
+            } else {
+                // Expired, remove it
+                self.results.remove(key);
+                if let Some(pos) = self.lru_order.iter().position(|k| k == key) {
+                    self.lru_order.remove(pos);
+                }
+            }
+        }
+        None
+    }
+
+    /// Return an Arc reference to the cached output to avoid cloning.
+    pub fn get_arc(&mut self, key: &CacheKey) -> Option<Arc<String>> {
+        if let Some(result) = self.results.get_mut(key) {
+            if result.is_fresh(self.ttl_secs) {
+                result.access_count += 1;
+                if let Some(pos) = self.lru_order.iter().position(|k| k == key) {
+                    self.lru_order.remove(pos);
+                    self.lru_order.push_front(key.clone());
+                }
+                return Some(Arc::clone(&result.output));
             } else {
                 // Expired, remove it
                 self.results.remove(key);

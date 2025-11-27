@@ -95,7 +95,7 @@ pub enum RetentionDecision {
 }
 
 /// Token-aware context pruning strategy
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)] // Added Copy since all fields are Copy
 pub struct ContextPruner {
     /// Maximum tokens to keep in context
     pub max_tokens: usize,
@@ -109,7 +109,8 @@ pub struct ContextPruner {
 
 impl ContextPruner {
     /// Create new context pruner
-    pub fn new(max_tokens: usize) -> Self {
+    #[inline]
+    pub const fn new(max_tokens: usize) -> Self {
         Self {
             max_tokens,
             semantic_threshold: 300,
@@ -120,10 +121,11 @@ impl ContextPruner {
 
     /// Decide which messages to keep based on token budget and semantic value
     pub fn prune_messages(&self, messages: &[MessageMetrics]) -> HashMap<usize, RetentionDecision> {
-        let mut decisions = HashMap::new();
+        // Pre-allocate HashMap with expected capacity
+        let mut decisions = HashMap::with_capacity(messages.len());
         let mut total_tokens = 0;
 
-        // Calculate adjusted semantic scores with recency bonus
+        // Calculate adjusted semantic scores with recency bonus - avoid intermediate collect
         let mut scored_messages: Vec<_> = messages
             .iter()
             .enumerate()
@@ -135,9 +137,9 @@ impl ContextPruner {
             .collect();
 
         // Always keep system and very recent important messages
-        for (i, msg, score) in &scored_messages {
-            if msg.message_type.is_system() || *score >= self.min_keep_semantic {
-                decisions.insert(*i, RetentionDecision::Keep);
+        for &(i, msg, score) in &scored_messages {
+            if msg.message_type.is_system() || score >= self.min_keep_semantic {
+                decisions.insert(i, RetentionDecision::Keep);
                 total_tokens += msg.token_count;
             }
         }
@@ -147,30 +149,26 @@ impl ContextPruner {
         }
 
         // Sort remaining by score (descending) for greedy selection
-        scored_messages.sort_by(|a, b| {
-            let a_score = a.2;
-            let b_score = b.2;
-            b_score.cmp(&a_score)
-        });
+        scored_messages.sort_unstable_by(|a, b| b.2.cmp(&a.2)); // Use sort_unstable for better performance
 
         // Greedily add messages by semantic value
-        for (i, msg, _score) in &scored_messages {
-            if decisions.contains_key(i) {
+        for &(i, msg, _score) in &scored_messages {
+            if decisions.contains_key(&i) {
                 continue; // Already decided
             }
 
             if total_tokens + msg.token_count <= self.max_tokens {
-                decisions.insert(*i, RetentionDecision::Keep);
+                decisions.insert(i, RetentionDecision::Keep);
                 total_tokens += msg.token_count;
             } else {
-                decisions.insert(*i, RetentionDecision::Remove);
+                decisions.insert(i, RetentionDecision::Remove);
             }
         }
 
         // Fill any remaining space with low-value messages (for context)
-        for (i, msg, _score) in &scored_messages {
-            if !decisions.contains_key(i) && total_tokens + msg.token_count <= self.max_tokens {
-                decisions.insert(*i, RetentionDecision::Summarizable);
+        for &(i, msg, _score) in &scored_messages {
+            if !decisions.contains_key(&i) && total_tokens + msg.token_count <= self.max_tokens {
+                decisions.insert(i, RetentionDecision::Summarizable);
                 total_tokens += msg.token_count;
             }
         }

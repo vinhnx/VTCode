@@ -673,6 +673,12 @@ impl ToolRegistry {
     }
 
     pub async fn execute_tool(&mut self, name: &str, args: Value) -> Result<Value> {
+        self.execute_tool_ref(name, &args).await
+    }
+
+    /// Reference-taking version of execute_tool to avoid cloning by callers
+    /// that already have access to an existing `Value`.
+    pub async fn execute_tool_ref(&mut self, name: &str, args: &Value) -> Result<Value> {
         let canonical_name = canonical_tool_name(name);
         let tool_name = canonical_name.as_ref();
         // Cache tool_name as owned String once for all record usage
@@ -683,11 +689,11 @@ impl ToolRegistry {
             format!("{} (alias for {})", name, tool_name)
         };
 
-        // Clone args once at the start for error recording paths
+        // Clone args once at the start for error recording paths (clone only here)
         let args_for_recording = args.clone();
 
         // LOOP DETECTION: Check if we're calling the same tool repeatedly with identical params
-        let (is_loop, repeat_count, _) = self.execution_history.detect_loop(tool_name, &args);
+        let (is_loop, repeat_count, _) = self.execution_history.detect_loop(tool_name, args);
         if is_loop {
             warn!(
                 tool = %tool_name,
@@ -1011,7 +1017,7 @@ impl ToolRegistry {
     /// Execute an MCP tool
     pub async fn execute_mcp_tool(&self, tool_name: &str, args: Value) -> Result<Value> {
         if let Some(mcp_client) = &self.mcp_client {
-            mcp_client.execute_mcp_tool(tool_name, args).await
+            mcp_client.execute_mcp_tool(tool_name, &args).await
         } else {
             Err(anyhow::anyhow!("MCP client not available"))
         }

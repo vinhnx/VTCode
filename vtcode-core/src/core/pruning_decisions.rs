@@ -1,6 +1,6 @@
+use crate::utils::current_timestamp;
 use serde::{Deserialize, Serialize};
 use std::fmt::Write;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Represents a single context pruning decision
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -65,15 +65,10 @@ pub struct PruningDecisionLedger {
 
 impl PruningDecisionLedger {
     pub fn new() -> Self {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-
         Self {
             decisions: Vec::new(),
             statistics: PruningStatistics::default(),
-            session_start: now,
+            session_start: current_timestamp(),
         }
     }
 
@@ -92,10 +87,7 @@ impl PruningDecisionLedger {
 
         let decision_record = PruningDecision {
             id: decision_id.clone(),
-            timestamp: SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
+            timestamp: current_timestamp(),
             turn_number,
             message_index,
             reason: reason.to_string(),
@@ -126,12 +118,7 @@ impl PruningDecisionLedger {
     /// Record completion of a pruning round and update aggregate statistics
     pub fn record_pruning_round(&mut self) {
         self.statistics.pruning_rounds += 1;
-        self.statistics.most_recent_pruning_time = Some(
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
-        );
+        self.statistics.most_recent_pruning_time = Some(current_timestamp());
 
         // Recompute averages
         if self.statistics.messages_kept > 0 {
@@ -211,11 +198,7 @@ impl PruningDecisionLedger {
             statistics: self.statistics.clone(),
             message_retention_ratio,
             semantic_efficiency,
-            session_duration: SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_secs()
-                - self.session_start,
+            session_duration: current_timestamp().saturating_sub(self.session_start),
             recent_decisions: self
                 .decisions
                 .iter()

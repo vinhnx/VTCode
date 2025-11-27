@@ -292,7 +292,8 @@ impl TimeoutDetector {
         delay
     }
 
-    /// Determine if an error should trigger a retry
+    /// Determine if an error should trigger a retry.
+    /// Uses case-insensitive matching to avoid extra string allocations.
     pub async fn should_retry(
         &self,
         operation_type: &OperationType,
@@ -305,19 +306,25 @@ impl TimeoutDetector {
             return false;
         }
 
-        let error_str = error.to_string().to_lowercase();
+        let error_str = error.to_string();
+
+        // Helper for case-insensitive contains
+        let contains_ci = |pattern: &str| {
+            error_str
+                .as_bytes()
+                .windows(pattern.len())
+                .any(|window| window.eq_ignore_ascii_case(pattern.as_bytes()))
+        };
 
         // Check if error matches retryable patterns
         for retry_error in &config.retry_on_errors {
-            if error_str.contains(retry_error) {
+            if contains_ci(retry_error) {
                 return true;
             }
         }
 
         // Check for timeout-specific retry
-        if config.retry_on_timeout
-            && (error_str.contains("timeout") || error_str.contains("timed out"))
-        {
+        if config.retry_on_timeout && (contains_ci("timeout") || contains_ci("timed out")) {
             return true;
         }
 

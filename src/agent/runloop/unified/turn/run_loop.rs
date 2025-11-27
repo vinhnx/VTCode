@@ -75,7 +75,7 @@ use crate::agent::runloop::unified::status_line::{
     InputStatusState, update_context_efficiency, update_input_status_if_changed,
 };
 use crate::agent::runloop::unified::tool_pipeline::{
-    ToolExecutionStatus, execute_tool_with_timeout,
+    ToolExecutionStatus, execute_tool_with_timeout_ref,
 };
 use crate::agent::runloop::unified::tool_routing::{ToolPermissionFlow, ensure_tool_permission};
 use crate::agent::runloop::unified::tool_summary::{
@@ -308,10 +308,10 @@ pub(crate) async fn run_turn_execute_tool(
         // Force TUI refresh to ensure display stability before executing
         safe_force_redraw(handle, last_forced_redraw);
 
-        let result = execute_tool_with_timeout(
+        let result = execute_tool_with_timeout_ref(
             tool_registry,
             name,
-            args_val.clone(),
+            &args_val,
             ctrl_c_state,
             ctrl_c_notify,
             progress_reporter,
@@ -331,10 +331,10 @@ pub(crate) async fn run_turn_execute_tool(
     // Non-cached path for write tools
     safe_force_redraw(handle, last_forced_redraw);
 
-    execute_tool_with_timeout(
+    execute_tool_with_timeout_ref(
         tool_registry,
         name,
-        args_val.clone(),
+        &args_val,
         ctrl_c_state,
         ctrl_c_notify,
         progress_reporter,
@@ -1574,7 +1574,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                 // Execute the tool directly via tool registry
                 let tool_call_id = format!("explicit_run_{}", conversation_history.len());
                 match tool_registry
-                    .execute_tool(&tool_name, tool_args.clone())
+                    .execute_tool_ref(&tool_name, &tool_args)
                     .await
                 {
                     Ok(result) => {
@@ -1830,7 +1830,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                         working_history.len(),
                         working_history
                             .last()
-                            .map(|message| message.content.as_text()),
+                            .map(|message| message.content.as_text().into_owned()),
                     );
                     let tool_names: Vec<String> = {
                         let snapshot = tools.read().await;

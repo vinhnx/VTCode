@@ -197,7 +197,7 @@ pub async fn run_turn_loop(
 ) -> Result<TurnLoopOutcome> {
     use crate::agent::runloop::mcp_events;
     use crate::agent::runloop::unified::tool_pipeline::{
-        ToolExecutionStatus, execute_tool_with_timeout,
+        ToolExecutionStatus, execute_tool_with_timeout_ref,
     };
     use crate::agent::runloop::unified::tool_routing::ensure_tool_permission;
     use crate::agent::runloop::unified::turn::turn_processing::{
@@ -330,10 +330,10 @@ pub async fn run_turn_loop(
                     ).await {
                         Ok(crate::agent::runloop::unified::tool_routing::ToolPermissionFlow::Approved) => {
                             // Execute the tool
-                            let tool_result = execute_tool_with_timeout(
+                            let tool_result = execute_tool_with_timeout_ref(
                                 ctx.tool_registry,
                                 tool_name,
-                                args_val.clone(),
+                                &args_val,
                                 ctx.ctrl_c_state,
                                 ctx.ctrl_c_notify,
                                 None, // progress_reporter
@@ -621,10 +621,10 @@ pub async fn run_turn_loop(
                     ).await {
                         Ok(crate::agent::runloop::unified::tool_routing::ToolPermissionFlow::Approved) => {
                             // Execute the detected tool
-                            let tool_result = crate::agent::runloop::unified::tool_pipeline::execute_tool_with_timeout(
+                            let tool_result = crate::agent::runloop::unified::tool_pipeline::execute_tool_with_timeout_ref(
                                 ctx.tool_registry,
                                 call_tool_name,
-                                call_args_val.clone(),
+                                &call_args_val,
                                 ctx.ctrl_c_state,
                                 ctx.ctrl_c_notify,
                                 None, // progress_reporter

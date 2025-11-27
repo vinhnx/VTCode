@@ -27,7 +27,7 @@ mod tests {
 
         // Second call - hit
         assert_eq!(
-            cache.get(&cache_key).await,
+            cache.get_owned(&cache_key).await,
             Some("file1.txt\nfile2.txt".to_string())
         );
 
@@ -45,7 +45,7 @@ mod tests {
 
         let req = ToolRequest {
             tool_name: "test_tool".to_string(),
-            args: serde_json::json!({}),
+            args: Arc::new(serde_json::json!({})),
             metadata: Default::default(),
         };
 
@@ -54,7 +54,7 @@ mod tests {
             chain.before_execute(&req).await?;
 
             let res = ToolResponse {
-                result: serde_json::json!({"result": i}),
+                result: Arc::new(serde_json::json!({"result": i})),
                 duration_ms: 10 + i as u64,
                 cache_hit: i % 2 == 0, // Alternate cache hits
             };
@@ -146,13 +146,13 @@ mod tests {
             // Update metrics
             let req = ToolRequest {
                 tool_name: tool.to_string(),
-                args: serde_json::json!(args),
+                args: Arc::new(serde_json::json!(args)),
                 metadata: Default::default(),
             };
 
             chain.before_execute(&req).await?;
             let res = ToolResponse {
-                result: serde_json::json!({"status": "ok"}),
+                result: Arc::new(serde_json::json!({"status": "ok"})),
                 duration_ms: 50,
                 cache_hit: is_cached,
             };
@@ -180,7 +180,7 @@ mod tests {
         let cache: LruCache<String> = LruCache::new(10, Duration::from_millis(100));
 
         cache.insert("key".into(), "value".into()).await;
-        assert_eq!(cache.get("key").await, Some("value".to_string()));
+        assert_eq!(cache.get_owned("key").await, Some("value".to_string()));
 
         // Wait for expiration
         tokio::time::sleep(Duration::from_millis(150)).await;
@@ -209,10 +209,10 @@ mod tests {
         // Insert new item - should evict 'b' (least recently used)
         cache.insert("d".into(), 4).await;
 
-        assert_eq!(cache.get("a").await, Some(1));
+        assert_eq!(cache.get("a").await.map(|v| *v), Some(1));
         assert_eq!(cache.get("b").await, None); // Evicted
-        assert_eq!(cache.get("c").await, Some(3));
-        assert_eq!(cache.get("d").await, Some(4));
+        assert_eq!(cache.get("c").await.map(|v| *v), Some(3));
+        assert_eq!(cache.get("d").await.map(|v| *v), Some(4));
 
         Ok(())
     }

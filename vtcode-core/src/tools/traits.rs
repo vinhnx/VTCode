@@ -3,6 +3,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use serde_json::Value;
+use std::sync::Arc;
 use std::path::PathBuf;
 
 /// Core trait for all agent tools
@@ -66,6 +67,19 @@ pub trait CacheableTool: Tool {
 pub trait ToolExecutor: Send + Sync {
     /// Execute a tool by name
     async fn execute_tool(&self, name: &str, args: Value) -> Result<Value>;
+
+    /// Execute a tool with a reference to arguments to avoid cloning when caller
+    /// already holds a reference.
+    async fn execute_tool_ref(&self, name: &str, args: &Value) -> Result<Value> {
+        self.execute_tool(name, args.clone()).await
+    }
+
+    /// Execute a tool and return a shared result (Arc) to avoid cloning results
+    /// for callers that want to keep a shared reference.
+    async fn execute_shared(&self, name: &str, args: Arc<Value>) -> Result<Arc<Value>> {
+        let res = self.execute_tool(name, (*args).clone()).await?;
+        Ok(Arc::new(res))
+    }
 
     /// List available tools
     fn available_tools(&self) -> Vec<String>;

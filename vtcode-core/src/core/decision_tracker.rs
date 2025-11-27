@@ -2,7 +2,6 @@ use crate::utils::current_timestamp;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Represents a single decision made by the agent
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -103,22 +102,26 @@ impl DecisionTracker {
     }
 
     /// Start tracking a new conversation turn
+    #[inline]
     pub fn start_turn(&mut self, turn_number: usize, user_input: Option<String>) {
         self.current_context.conversation_turn = turn_number;
         self.current_context.user_input = user_input;
     }
 
     /// Update the current context with available tools
+    #[inline]
     pub fn update_available_tools(&mut self, tools: Vec<String>) {
         self.current_context.available_tools = tools;
     }
 
     /// Update the current state
+    #[inline]
     pub fn update_state(&mut self, key: &str, value: Value) {
         self.current_context.current_state.insert(key.into(), value);
     }
 
     /// Record a decision
+    /// Note: Takes ownership of action to avoid cloning when possible
     pub fn record_decision(
         &mut self,
         reasoning: String,
@@ -127,15 +130,19 @@ impl DecisionTracker {
     ) -> String {
         let decision_id = format!("decision_{}_{}", self.session_start, self.decisions.len());
 
+        // Generate action summary before moving action into decision
+        let action_summary: String = match &action {
+            Action::ToolCall { name, .. } => format!("tool_call:{name}"),
+            Action::Response { response_type, .. } => format!("response:{response_type:?}"),
+            Action::ErrorRecovery { .. } => "error_recovery".into(),
+        };
+
         let decision = Decision {
             id: decision_id.clone(),
-            timestamp: SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
+            timestamp: current_timestamp(),
             context: self.current_context.clone(),
             reasoning,
-            action: action.clone(),
+            action, // Move instead of clone
             outcome: None,
             confidence_score,
         };
@@ -143,17 +150,13 @@ impl DecisionTracker {
         self.decisions.push(decision);
 
         // Update previous actions for next decision
-        let action_summary: String = match &action {
-            Action::ToolCall { name, .. } => format!("tool_call:{name}"),
-            Action::Response { response_type, .. } => format!("response:{response_type:?}"),
-            Action::ErrorRecovery { .. } => "error_recovery".into(),
-        };
         self.current_context.previous_actions.push(action_summary);
 
         decision_id
     }
 
     /// Record the outcome of a decision
+    #[inline]
     pub fn record_outcome(&mut self, decision_id: &str, outcome: DecisionOutcome) {
         if let Some(decision) = self.decisions.iter_mut().find(|d| d.id == decision_id) {
             decision.outcome = Some(outcome);
@@ -161,6 +164,7 @@ impl DecisionTracker {
     }
 
     /// Get all decisions for transparency reporting
+    #[inline]
     pub fn get_decisions(&self) -> &[Decision] {
         &self.decisions
     }
@@ -198,11 +202,7 @@ impl DecisionTracker {
         };
 
         TransparencyReport {
-            session_duration: SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_secs()
-                - self.session_start,
+            session_duration: current_timestamp().saturating_sub(self.session_start),
             total_decisions,
             successful_decisions,
             failed_decisions,

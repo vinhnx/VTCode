@@ -161,7 +161,7 @@ pub trait McpElicitationHandler: Send + Sync {
 /// Trait abstraction used by the tool registry to talk to the MCP client.
 #[async_trait]
 pub trait McpToolExecutor: Send + Sync {
-    async fn execute_mcp_tool(&self, tool_name: &str, args: Value) -> Result<Value>;
+    async fn execute_mcp_tool(&self, tool_name: &str, args: &Value) -> Result<Value>;
     async fn list_mcp_tools(&self) -> Result<Vec<McpToolInfo>>;
     async fn has_mcp_tool(&self, tool_name: &str) -> Result<bool>;
     fn get_status(&self) -> McpClientStatus;
@@ -328,11 +328,24 @@ impl McpClient {
         Ok(())
     }
 
-    /// Execute a tool call after validating arguments
+    /// Execute a tool call after validating arguments.
+    ///
+    /// Public-facing version that takes ownership of `args` for compatibility
+    /// with existing callers. Delegates to the reference-taking implementation
+    /// to avoid unnecessary cloning when the caller already has a reference.
     pub async fn execute_tool_with_validation(
         &self,
         tool_name: &str,
         args: Value,
+    ) -> Result<Value> {
+        self.execute_tool_with_validation_ref(tool_name, &args).await
+    }
+
+    // Internal reference-taking implementation to avoid cloning when not necessary.
+    async fn execute_tool_with_validation_ref(
+        &self,
+        tool_name: &str,
+        args: &Value,
     ) -> Result<Value> {
         if !self.config.enabled {
             return Err(anyhow!(
@@ -340,7 +353,7 @@ impl McpClient {
             ));
         }
 
-        self.validate_tool_arguments(tool_name, &args)?;
+        self.validate_tool_arguments(tool_name, args)?;
 
         let provider = self.resolve_provider_for_tool(tool_name).await?;
         let allowlist_snapshot = self.allowlist.read().clone();
@@ -867,13 +880,13 @@ impl McpClient {
         }
     }
 
-    fn normalize_arguments(args: Value) -> Map<String, Value> {
+    fn normalize_arguments(args: &Value) -> Map<String, Value> {
         match args {
             Value::Null => Map::new(),
-            Value::Object(map) => map,
+            Value::Object(map) => map.clone(),
             other => {
                 let mut map = Map::new();
-                map.insert("value".to_owned(), other);
+                map.insert("value".to_owned(), other.clone());
                 map
             }
         }
@@ -925,8 +938,8 @@ impl McpClient {
 
 #[async_trait]
 impl McpToolExecutor for McpClient {
-    async fn execute_mcp_tool(&self, tool_name: &str, args: Value) -> Result<Value> {
-        self.execute_tool_with_validation(tool_name, args).await
+    async fn execute_mcp_tool(&self, tool_name: &str, args: &Value) -> Result<Value> {
+        self.execute_tool_with_validation_ref(tool_name, args).await
     }
 
     async fn list_mcp_tools(&self) -> Result<Vec<McpToolInfo>> {
@@ -1122,7 +1135,7 @@ impl McpProvider {
     async fn call_tool(
         &self,
         tool_name: &str,
-        args: Value,
+        args: &Value,
         timeout: Option<Duration>,
         allowlist: &McpAllowListConfig,
     ) -> Result<CallToolResult> {

@@ -103,7 +103,7 @@ pub async fn handle_outcome(
                     .mark_tool_preapproved(tools_consts::DEBUG_AGENT);
                 match ctx
                     .tool_registry
-                    .execute_tool(tools_consts::DEBUG_AGENT, serde_json::json!({}))
+                    .execute_tool_ref(tools_consts::DEBUG_AGENT, &serde_json::json!({}))
                     .await
                 {
                     Ok(value) => {
@@ -169,9 +169,9 @@ pub async fn handle_outcome(
                     .mark_tool_preapproved(tools_consts::GET_ERRORS);
                 match ctx
                     .tool_registry
-                    .execute_tool(
+                    .execute_tool_ref(
                         tools_consts::GET_ERRORS,
-                        serde_json::json!({ "scope": "archive", "limit": 3 }),
+                        &serde_json::json!({ "scope": "archive", "limit": 3 }),
                     )
                     .await
                 {
@@ -202,7 +202,7 @@ pub async fn handle_outcome(
                     .mark_tool_preapproved(tools_consts::ANALYZE_AGENT);
                 match ctx
                     .tool_registry
-                    .execute_tool(tools_consts::ANALYZE_AGENT, serde_json::json!({}))
+                    .execute_tool_ref(tools_consts::ANALYZE_AGENT, &serde_json::json!({}))
                     .await
                 {
                     Ok(value) => {
@@ -283,9 +283,9 @@ pub async fn handle_outcome(
                     .mark_tool_preapproved(tools_consts::GET_ERRORS);
                 match ctx
                     .tool_registry
-                    .execute_tool(
+                    .execute_tool_ref(
                         tools_consts::GET_ERRORS,
-                        serde_json::json!({ "scope": "archive", "limit": 5 }),
+                        &serde_json::json!({ "scope": "archive", "limit": 5 }),
                     )
                     .await
                 {

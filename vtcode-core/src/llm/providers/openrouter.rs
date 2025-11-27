@@ -776,7 +776,7 @@ impl OpenRouterProvider {
                         continue;
                     }
 
-                    let mut converted = Message::user(content_text);
+                    let mut converted = Message::user(content_text.into_owned());
                     converted.reasoning = message.reasoning.clone();
                     normalized_messages.push(converted);
                 }

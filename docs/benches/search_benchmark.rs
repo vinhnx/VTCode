@@ -27,7 +27,7 @@ fn benchmark_search_performance(c: &mut Criterion) {
                 "pattern": "fn main",
                 "path": "."
             });
-            let _ = futures::executor::block_on(registry.execute_tool(tools::GREP_FILE, args));
+            let _ = futures::executor::block_on(registry.execute_tool_ref(tools::GREP_FILE, &args));
         });
     });
 
@@ -38,7 +38,7 @@ fn benchmark_search_performance(c: &mut Criterion) {
                 "pattern": "\\bfunction\\b",
                 "path": "."
             });
-            let _ = futures::executor::block_on(registry.execute_tool(tools::GREP_FILE, args));
+            let _ = futures::executor::block_on(registry.execute_tool_ref(tools::GREP_FILE, &args));
         });
     });
 
@@ -50,7 +50,7 @@ fn benchmark_search_performance(c: &mut Criterion) {
                 "path": ".",
                 "case_sensitive": false
             });
-            let _ = futures::executor::block_on(registry.execute_tool(tools::GREP_FILE, args));
+            let _ = futures::executor::block_on(registry.execute_tool_ref(tools::GREP_FILE, &args));
         });
     });
 
@@ -62,7 +62,7 @@ fn benchmark_search_performance(c: &mut Criterion) {
                 "path": ".",
                 "context_lines": 3
             });
-            let _ = futures::executor::block_on(registry.execute_tool(tools::GREP_FILE, args));
+            let _ = futures::executor::block_on(registry.execute_tool_ref(tools::GREP_FILE, &args));
         });
     });
 
@@ -74,7 +74,7 @@ fn benchmark_search_performance(c: &mut Criterion) {
                 "path": ".",
                 "glob_pattern": "**/*.rs"
             });
-            let _ = futures::executor::block_on(registry.execute_tool(tools::GREP_FILE, args));
+            let _ = futures::executor::block_on(registry.execute_tool_ref(tools::GREP_FILE, &args));
         });
     });
 
@@ -103,7 +103,7 @@ fn benchmark_file_operations(c: &mut Criterion) {
             let args = json!({
                 "path": "large_file.txt"
             });
-            let _ = futures::executor::block_on(registry.execute_tool(tools::READ_FILE, args));
+            let _ = futures::executor::block_on(registry.execute_tool_ref(tools::READ_FILE, &args));
         });
     });
 
@@ -113,7 +113,7 @@ fn benchmark_file_operations(c: &mut Criterion) {
             let args = json!({
                 "path": "."
             });
-            let _ = futures::executor::block_on(registry.execute_tool(tools::LIST_FILES, args));
+            let _ = futures::executor::block_on(registry.execute_tool_ref(tools::LIST_FILES, &args));
         });
     });
 
@@ -125,7 +125,7 @@ fn benchmark_file_operations(c: &mut Criterion) {
                 "content": "benchmark content",
                 "overwrite": true
             });
-            let _ = futures::executor::block_on(registry.execute_tool(tools::WRITE_FILE, args));
+            let _ = futures::executor::block_on(registry.execute_tool_ref(tools::WRITE_FILE, &args));
         });
     });
 

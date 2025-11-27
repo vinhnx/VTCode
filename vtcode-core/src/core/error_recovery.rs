@@ -18,7 +18,7 @@ pub struct ExecutionError {
 }
 
 /// Type of error that can occur
-#[derive(Debug, Clone, Serialize, Deserialize, Eq, Hash, PartialEq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Eq, Hash, PartialEq)]
 pub enum ErrorType {
     ToolExecution,
     ApiCall,
@@ -86,8 +86,9 @@ impl Default for ErrorRecoveryManager {
 
 impl ErrorRecoveryManager {
     pub fn new() -> Self {
-        let mut recovery_strategies = IndexMap::new();
-        let mut operation_type_mapping = IndexMap::new();
+        // Pre-allocate with known capacity
+        let mut recovery_strategies = IndexMap::with_capacity(2);
+        let mut operation_type_mapping = IndexMap::with_capacity(6);
 
         // Define recovery strategies for different error types
         recovery_strategies.insert(
@@ -126,7 +127,7 @@ impl ErrorRecoveryManager {
         operation_type_mapping.insert(ErrorType::Unknown, OperationType::Processing);
 
         Self {
-            errors: Vec::new(),
+            errors: Vec::with_capacity(16), // Pre-allocate for typical session
             recovery_strategies,
             operation_type_mapping,
         }
@@ -144,7 +145,7 @@ impl ErrorRecoveryManager {
         let error = ExecutionError {
             id: error_id.clone(),
             timestamp: current_timestamp(),
-            error_type: error_type.clone(),
+            error_type,  // ErrorType is Copy now, no need to clone
             message,
             context,
             recovery_attempts: Vec::new(),
@@ -156,6 +157,7 @@ impl ErrorRecoveryManager {
     }
 
     /// Record a recovery attempt
+    #[inline]
     pub fn record_recovery_attempt(
         &mut self,
         error_id: &str,
@@ -181,6 +183,7 @@ impl ErrorRecoveryManager {
     }
 
     /// Get recovery strategies for a specific error type
+    #[inline]
     pub fn get_recovery_strategies(&self, error_type: &ErrorType) -> &[RecoveryStrategy] {
         self.recovery_strategies
             .get(error_type)

@@ -7,33 +7,39 @@ pub trait TokenEstimator: Send + Sync {
 }
 
 /// A simple estimator that divides characters by a fixed ratio.
-#[derive(Debug, Clone)]
+/// Uses byte length for efficiency (avoiding UTF-8 char iteration).
+#[derive(Debug, Clone, Copy)] // Changed to Copy for zero-cost clones
 pub struct CharacterRatioTokenEstimator {
     chars_per_token: usize,
 }
 
 impl CharacterRatioTokenEstimator {
     /// Create a new estimator that assumes the provided number of characters per token.
-    pub fn new(chars_per_token: usize) -> Self {
-        let normalized = chars_per_token.max(1);
+    #[inline]
+    pub const fn new(chars_per_token: usize) -> Self {
+        // Use const fn for compile-time evaluation when possible
+        let normalized = if chars_per_token == 0 { 1 } else { chars_per_token };
         Self {
             chars_per_token: normalized,
         }
     }
 
     /// Access the configured character-per-token ratio.
-    pub fn chars_per_token(&self) -> usize {
+    #[inline]
+    pub const fn chars_per_token(&self) -> usize {
         self.chars_per_token
     }
 }
 
 impl Default for CharacterRatioTokenEstimator {
+    #[inline]
     fn default() -> Self {
         Self::new(4)
     }
 }
 
 impl TokenEstimator for CharacterRatioTokenEstimator {
+    #[inline]
     fn estimate_tokens(&self, text: &str) -> usize {
         if text.is_empty() {
             return 0;

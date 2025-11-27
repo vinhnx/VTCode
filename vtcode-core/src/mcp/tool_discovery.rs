@@ -301,7 +301,7 @@ mod tests {
 
     #[async_trait::async_trait]
     impl crate::mcp::McpToolExecutor for MockMcpClient {
-        async fn execute_mcp_tool(&self, _tool_name: &str, _args: Value) -> Result<Value> {
+        async fn execute_mcp_tool(&self, _tool_name: &str, _args: &Value) -> Result<Value> {
             Ok(Value::Null)
         }
 

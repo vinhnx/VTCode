@@ -124,14 +124,14 @@ fn benchmark_tool_execution(c: &mut Criterion) {
     group.bench_function("list_files", |b| {
         b.iter(|| {
             let args = json!({"path": "."});
-            let _ = futures::executor::block_on(registry.execute_tool(tools::LIST_FILES, args));
+            let _ = futures::executor::block_on(registry.execute_tool_ref(tools::LIST_FILES, &args));
         });
     });
 
     group.bench_function("read_file", |b| {
         b.iter(|| {
             let args = json!({"path": &file_path});
-            let _ = futures::executor::block_on(registry.execute_tool(tools::READ_FILE, args));
+            let _ = futures::executor::block_on(registry.execute_tool_ref(tools::READ_FILE, &args));
         });
     });
 

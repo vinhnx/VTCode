@@ -35,7 +35,7 @@ mod integration_tests {
             "path": "."
         });
 
-        let result = registry.execute_tool("list_files", args).await;
+        let result = registry.execute_tool_ref("list_files", &args).await;
         assert!(result.is_ok());
 
         let response: serde_json::Value = result.unwrap();
@@ -58,7 +58,7 @@ mod integration_tests {
             "path": "read_test.txt"
         });
 
-        let result = registry.execute_tool("read_file", args).await;
+        let result = registry.execute_tool_ref("read_file", &args).await;
         assert!(result.is_ok());
 
         let response: serde_json::Value = result.unwrap();
@@ -97,8 +97,9 @@ read_file = "allow"
             RuntimeToolPolicy::Allow
         );
 
+        let args = json!({ "path": "sample.txt" });
         let result = registry
-            .execute_tool(tools::READ_FILE, json!({ "path": "sample.txt" }))
+            .execute_tool_ref(tools::READ_FILE, &args)
             .await
             .unwrap();
         assert!(result["success"].as_bool().unwrap_or(false));
@@ -119,7 +120,7 @@ read_file = "allow"
             "create_dirs": false
         });
 
-        let result = registry.execute_tool("write_file", args).await;
+        let result = registry.execute_tool_ref("write_file", &args).await;
         assert!(result.is_ok());
 
         let _response: serde_json::Value = result.unwrap();
@@ -155,7 +156,7 @@ fn calculate_sum(a: i32, b: i32) -> i32 {
             "type": "regex"
         });
 
-        let result = registry.execute_tool("grep_file", args).await;
+        let result = registry.execute_tool_ref("grep_file", &args).await;
         assert!(result.is_ok());
 
         let response: serde_json::Value = result.unwrap();

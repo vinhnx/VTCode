@@ -454,7 +454,7 @@ fn compute_semantic_score(
     {
         code_blocks.push(CodeBlock {
             language_hint: None,
-            content: message_text.clone(),
+            content: message_text.into_owned(),
         });
     }
 

@@ -287,7 +287,7 @@ impl OllamaProvider {
                         .and_then(|id| tool_names.get(id).cloned());
                     messages.push(OllamaChatMessage {
                         role: "tool".to_string(),
-                        content: Some(content_text.clone()),
+                        content: Some(content_text.into_owned()),
                         tool_calls: None,
                         tool_call_id: message.tool_call_id.clone(),
                         tool_name,
@@ -296,7 +296,7 @@ impl OllamaProvider {
                 _ => {
                     let mut payload_message = OllamaChatMessage {
                         role: message.role.as_generic_str().to_string(),
-                        content: Some(content_text.clone()),
+                        content: Some(content_text.into_owned()),
                         tool_calls: None,
                         tool_call_id: None,
                         tool_name: None,

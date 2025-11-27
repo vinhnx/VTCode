@@ -1,5 +1,6 @@
 pub mod anthropic;
 pub mod deepseek;
+pub mod error_handling;
 pub mod gemini;
 pub mod lmstudio;
 pub mod minimax;

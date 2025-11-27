@@ -13,11 +13,11 @@ pub(crate) async fn execute_single_tool_call(
     ctrl_c_notify: &Arc<Notify>,
     progress_reporter: Option<&crate::agent::runloop::unified::progress::ProgressReporter>,
 ) -> crate::agent::runloop::unified::tool_pipeline::ToolExecutionStatus {
-    // Execute the tool using the pipeline
-    crate::agent::runloop::unified::tool_pipeline::execute_tool_with_timeout(
+    // Execute the tool using the pipeline (ref variant avoids cloning args)
+    crate::agent::runloop::unified::tool_pipeline::execute_tool_with_timeout_ref(
         tool_registry,
         name,
-        args_val.clone(),
+        args_val,
         ctrl_c_state,
         ctrl_c_notify,
         progress_reporter,

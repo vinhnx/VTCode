@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 /// Cache entry with TTL and LRU metadata
 #[derive(Clone)]
 struct CacheEntry<V> {
-    value: V,
+    value: Arc<V>,
     created_at: Instant,
     last_accessed: Instant,
     ttl: Duration,
@@ -24,7 +24,7 @@ impl<V> CacheEntry<V> {
     fn new(value: V, ttl: Duration) -> Self {
         let now = Instant::now();
         Self {
-            value,
+            value: Arc::new(value),
             created_at: now,
             last_accessed: now,
             ttl,
@@ -68,7 +68,8 @@ impl<K: Clone + Eq + std::hash::Hash + std::fmt::Debug, V: Clone + std::fmt::Deb
     }
 
     /// Get value from cache (updates LRU metadata)
-    pub fn get(&self, key: &K) -> Option<V> {
+    /// Return a shared Arc<V> to avoid deep copies if caller wants to reuse it.
+    pub fn get_arc(&self, key: &K) -> Option<Arc<V>> {
         let mut entries = self.entries.write().unwrap();
 
         // Use get directly instead of contains_key + get
@@ -87,7 +88,7 @@ impl<K: Clone + Eq + std::hash::Hash + std::fmt::Debug, V: Clone + std::fmt::Deb
             }
 
             // Get value and update LRU
-            let value = entry.value.clone();
+            let value = Arc::clone(&entry.value);
             if let Some(entry) = entries.get_mut(key) {
                 entry.last_accessed = Instant::now();
             }
@@ -123,6 +124,14 @@ impl<K: Clone + Eq + std::hash::Hash + std::fmt::Debug, V: Clone + std::fmt::Deb
 
         entries.insert(key, CacheEntry::new(value, self.default_ttl));
         Ok(())
+    }
+
+    /// Compatibility helper: returns an owned V by cloning the Arc inside.
+    pub fn get_owned(&self, key: &K) -> Option<V>
+    where
+        V: Clone,
+    {
+        self.get_arc(key).map(|arc| (*arc).clone())
     }
 
     /// Get cache size
@@ -186,20 +195,20 @@ mod tests {
     fn test_cache_basic_get_put() {
         let cache = LruCache::new(10, Duration::from_secs(60));
 
-        cache.put("key1", "value1").unwrap();
-        assert_eq!(cache.get(&"key1"), Some("value1"));
+        cache.put("key1".to_string(), "value1".to_string()).unwrap();
+        assert_eq!(cache.get_owned(&"key1"), Some("value1"));
     }
 
     #[test]
     fn test_cache_ttl_expiration() {
         let cache = LruCache::new(10, Duration::from_millis(100));
 
-        cache.put("key1", "value1").unwrap();
-        assert_eq!(cache.get(&"key1"), Some("value1"));
+        cache.put("key1".to_string(), "value1".to_string()).unwrap();
+        assert_eq!(cache.get_owned(&"key1"), Some("value1"));
 
         // Wait for expiration
         std::thread::sleep(Duration::from_millis(150));
-        assert_eq!(cache.get(&"key1"), None);
+        assert_eq!(cache.get_owned(&"key1"), None);
     }
 
     #[test]
@@ -207,28 +216,28 @@ mod tests {
         let cache = LruCache::new(3, Duration::from_secs(60));
 
         // Fill cache
-        cache.put("key1", "value1").unwrap();
-        cache.put("key2", "value2").unwrap();
-        cache.put("key3", "value3").unwrap();
+        cache.put("key1".to_string(), "value1".to_string()).unwrap();
+        cache.put("key2".to_string(), "value2".to_string()).unwrap();
+        cache.put("key3".to_string(), "value3".to_string()).unwrap();
 
         // Access key1 to mark it recently used
-        cache.get(&"key1");
+        cache.get_arc(&"key1");
 
         // Add new entry (should evict key2 as LRU)
-        cache.put("key4", "value4").unwrap();
+        cache.put("key4".to_string(), "value4".to_string()).unwrap();
 
-        assert_eq!(cache.get(&"key1"), Some("value1"));
-        assert_eq!(cache.get(&"key2"), None); // Evicted
-        assert_eq!(cache.get(&"key3"), Some("value3"));
-        assert_eq!(cache.get(&"key4"), Some("value4"));
+        assert_eq!(cache.get_owned(&"key1"), Some("value1"));
+        assert_eq!(cache.get_owned(&"key2"), None); // Evicted
+        assert_eq!(cache.get_owned(&"key3"), Some("value3"));
+        assert_eq!(cache.get_owned(&"key4"), Some("value4"));
     }
 
     #[test]
     fn test_cache_stats() {
         let cache = LruCache::new(10, Duration::from_secs(60));
 
-        cache.put("key1", "value1").unwrap();
-        cache.put("key2", "value2").unwrap();
+        cache.put("key1".to_string(), "value1".to_string()).unwrap();
+        cache.put("key2".to_string(), "value2".to_string()).unwrap();
 
         let stats = cache.stats();
         assert_eq!(stats.total_entries, 2);
@@ -240,7 +249,7 @@ mod tests {
     fn test_cache_clear() {
         let cache = LruCache::new(10, Duration::from_secs(60));
 
-        cache.put("key1", "value1").unwrap();
+        cache.put("key1".to_string(), "value1".to_string()).unwrap();
         assert_eq!(cache.size(), 1);
 
         cache.clear();
@@ -251,8 +260,8 @@ mod tests {
     fn test_cache_evict_expired() {
         let cache = LruCache::new(10, Duration::from_millis(100));
 
-        cache.put("key1", "value1").unwrap();
-        cache.put("key2", "value2").unwrap();
+        cache.put("key1".to_string(), "value1".to_string()).unwrap();
+        cache.put("key2".to_string(), "value2".to_string()).unwrap();
 
         std::thread::sleep(Duration::from_millis(150));
 

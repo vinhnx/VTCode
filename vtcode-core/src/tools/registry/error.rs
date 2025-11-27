@@ -1,6 +1,7 @@
 use anyhow::Error;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use std::borrow::Cow;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolExecutionError {
@@ -8,11 +9,11 @@ pub struct ToolExecutionError {
     pub error_type: ToolErrorType,
     pub message: String,
     pub is_recoverable: bool,
-    pub recovery_suggestions: Vec<String>,
+    pub recovery_suggestions: Vec<Cow<'static, str>>,
     pub original_error: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)] // Added Copy since it's a simple enum
 pub enum ToolErrorType {
     InvalidParameters,
     ToolNotFound,
@@ -25,8 +26,9 @@ pub enum ToolErrorType {
 }
 
 impl ToolExecutionError {
+    #[inline]
     pub fn new(tool_name: String, error_type: ToolErrorType, message: String) -> Self {
-        let (is_recoverable, recovery_suggestions) = generate_recovery_info(&error_type);
+        let (is_recoverable, recovery_suggestions) = generate_recovery_info(error_type);
 
         Self {
             tool_name,
@@ -38,6 +40,7 @@ impl ToolExecutionError {
         }
     }
 
+    #[inline]
     pub fn with_original_error(
         tool_name: String,
         error_type: ToolErrorType,
@@ -83,70 +86,72 @@ pub fn classify_error(error: &Error) -> ToolErrorType {
     }
 }
 
-fn generate_recovery_info(error_type: &ToolErrorType) -> (bool, Vec<String>) {
+// Use static string slices to avoid allocations for recovery suggestions
+#[inline]
+fn generate_recovery_info(error_type: ToolErrorType) -> (bool, Vec<Cow<'static, str>>) {
     match error_type {
         ToolErrorType::InvalidParameters => (
             true,
             vec![
-                "Check parameter names and types against the tool schema".to_owned(),
-                "Ensure required parameters are provided".to_owned(),
-                "Verify parameter values are within acceptable ranges".to_owned(),
+                Cow::Borrowed("Check parameter names and types against the tool schema"),
+                Cow::Borrowed("Ensure required parameters are provided"),
+                Cow::Borrowed("Verify parameter values are within acceptable ranges"),
             ],
         ),
         ToolErrorType::ToolNotFound => (
             false,
             vec![
-                "Verify the tool name is spelled correctly".to_owned(),
-                "Check if the tool is available in the current context".to_owned(),
-                "Contact administrator if tool should be available".to_owned(),
+                Cow::Borrowed("Verify the tool name is spelled correctly"),
+                Cow::Borrowed("Check if the tool is available in the current context"),
+                Cow::Borrowed("Contact administrator if tool should be available"),
             ],
         ),
         ToolErrorType::PermissionDenied => (
             true,
             vec![
-                "Check file permissions and access rights".to_owned(),
-                "Ensure workspace boundaries are respected".to_owned(),
-                "Try running with appropriate permissions".to_owned(),
+                Cow::Borrowed("Check file permissions and access rights"),
+                Cow::Borrowed("Ensure workspace boundaries are respected"),
+                Cow::Borrowed("Try running with appropriate permissions"),
             ],
         ),
         ToolErrorType::ResourceNotFound => (
             true,
             vec![
-                "Verify file paths and resource locations".to_owned(),
-                "Check if files exist and are accessible".to_owned(),
-                "Use list_dir to explore available resources".to_owned(),
+                Cow::Borrowed("Verify file paths and resource locations"),
+                Cow::Borrowed("Check if files exist and are accessible"),
+                Cow::Borrowed("Use list_dir to explore available resources"),
             ],
         ),
         ToolErrorType::NetworkError => (
             true,
             vec![
-                "Check network connectivity".to_owned(),
-                "Retry the operation after a brief delay".to_owned(),
-                "Verify external service availability".to_owned(),
+                Cow::Borrowed("Check network connectivity"),
+                Cow::Borrowed("Retry the operation after a brief delay"),
+                Cow::Borrowed("Verify external service availability"),
             ],
         ),
         ToolErrorType::Timeout => (
             true,
             vec![
-                "Increase timeout values if appropriate".to_owned(),
-                "Break large operations into smaller chunks".to_owned(),
-                "Check system resources and performance".to_owned(),
+                Cow::Borrowed("Increase timeout values if appropriate"),
+                Cow::Borrowed("Break large operations into smaller chunks"),
+                Cow::Borrowed("Check system resources and performance"),
             ],
         ),
         ToolErrorType::ExecutionError => (
             false,
             vec![
-                "Review error details for specific issues".to_owned(),
-                "Check tool documentation for known limitations".to_owned(),
-                "Report the issue if it appears to be a bug".to_owned(),
+                Cow::Borrowed("Review error details for specific issues"),
+                Cow::Borrowed("Check tool documentation for known limitations"),
+                Cow::Borrowed("Report the issue if it appears to be a bug"),
             ],
         ),
         ToolErrorType::PolicyViolation => (
             false,
             vec![
-                "Review workspace policies and restrictions".to_owned(),
-                "Contact administrator for policy changes".to_owned(),
-                "Use alternative tools that comply with policies".to_owned(),
+                Cow::Borrowed("Review workspace policies and restrictions"),
+                Cow::Borrowed("Contact administrator for policy changes"),
+                Cow::Borrowed("Use alternative tools that comply with policies"),
             ],
         ),
     }

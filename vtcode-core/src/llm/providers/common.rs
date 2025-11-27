@@ -172,6 +172,12 @@ pub fn map_finish_reason_common(reason: &str) -> FinishReason {
     }
 }
 
+// Pre-allocated keys to avoid repeated allocations
+const KEY_ROLE: &str = "role";
+const KEY_CONTENT: &str = "content";
+const KEY_TOOL_CALLS: &str = "tool_calls";
+const KEY_TOOL_CALL_ID: &str = "tool_call_id";
+
 /// Serializes messages to OpenAI-compatible JSON format.
 /// Used by DeepSeek, Moonshot, and other OpenAI-compatible providers.
 pub fn serialize_messages_openai_format(
@@ -187,38 +193,39 @@ pub fn serialize_messages_openai_format(
             .validate_for_provider(provider_key)
             .map_err(LLMError::InvalidRequest)?;
 
-        let mut message_map = Map::new();
+        let mut message_map = Map::with_capacity(4); // Pre-allocate for role, content, tool_calls, tool_call_id
         message_map.insert(
-            "role".to_owned(),
+            KEY_ROLE.to_owned(),
             Value::String(message.role.as_generic_str().to_owned()),
         );
         message_map.insert(
-            "content".to_owned(),
-            Value::String(message.content.as_text()),
+            KEY_CONTENT.to_owned(),
+            Value::String(message.content.as_text().into_owned()),
         );
 
         if let Some(tool_calls) = &message.tool_calls {
+            // Optimize: Use references to avoid cloning
             let serialized_calls = tool_calls
                 .iter()
                 .filter_map(|call| {
                     call.function.as_ref().map(|func| {
                         json!({
-                            "id": call.id.clone(),
+                            "id": &call.id,
                             "type": "function",
                             "function": {
-                                "name": func.name.clone(),
-                                "arguments": func.arguments.clone()
+                                "name": &func.name,
+                                "arguments": &func.arguments
                             }
                         })
                     })
                 })
                 .collect::<Vec<_>>();
-            message_map.insert("tool_calls".to_owned(), Value::Array(serialized_calls));
+            message_map.insert(KEY_TOOL_CALLS.to_owned(), Value::Array(serialized_calls));
         }
 
         if let Some(tool_call_id) = &message.tool_call_id {
             message_map.insert(
-                "tool_call_id".to_owned(),
+                KEY_TOOL_CALL_ID.to_owned(),
                 Value::String(tool_call_id.clone()),
             );
         }
@@ -527,42 +534,4 @@ where
         reasoning,
         reasoning_details: None,
     })
-}
-
-/// Handles HTTP errors consistently across OpenAI-compatible providers.
-///
-/// # Arguments
-/// * `response` - The HTTP response to check
-/// * `provider_name` - Provider name for error messages
-/// * `api_key_env_var` - Environment variable name for API key (for auth error messages)
-///
-/// # Returns
-/// Ok(()) if response is successful, Err(LLMError) otherwise
-pub async fn handle_http_error(
-    response: reqwest::Response,
-    provider_name: &str,
-    api_key_env_var: &str,
-) -> Result<reqwest::Response, LLMError> {
-    if response.status().is_success() {
-        return Ok(response);
-    }
-
-    let status = response.status();
-    let error_text = response.text().await.unwrap_or_default();
-
-    if status.as_u16() == 401 {
-        let formatted_error = error_display::format_llm_error(
-            provider_name,
-            &format!("Authentication failed (check {})", api_key_env_var),
-        );
-        return Err(LLMError::Authentication(formatted_error));
-    }
-
-    if status.as_u16() == 429 || error_text.contains("quota") {
-        return Err(LLMError::RateLimit);
-    }
-
-    let formatted_error =
-        error_display::format_llm_error(provider_name, &format!("HTTP {}: {}", status, error_text));
-    Err(LLMError::Provider(formatted_error))
 }

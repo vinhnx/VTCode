@@ -46,9 +46,10 @@ impl ToolExecutor {
             .add(LoggingMiddleware::new("workflow"))
             .add(self.metrics.clone());
 
+        let args_json = Arc::new(serde_json::json!({"query": args}));
         let req = ToolRequest {
             tool_name: tool_name.to_string(),
-            args: serde_json::json!({"query": args}),
+            args: Arc::clone(&args_json),
             metadata: Default::default(),
         };
 
@@ -56,7 +57,7 @@ impl ToolExecutor {
 
         // Check cache first
         let result = if let Some(cached) = self.cache.get(&cache_key).await {
-            cached
+            (*cached).clone()
         } else {
             // Simulate tool execution
             let result = match tool_name {
@@ -74,7 +75,7 @@ impl ToolExecutor {
         let duration = start.elapsed().as_millis() as u64;
         let was_cached = self.cache.get(&cache_key).await.is_some();
         let res = ToolResponse {
-            result: json!({"files": result}),
+            result: Arc::new(json!({"files": result})),
             duration_ms: duration,
             cache_hit: was_cached,
         };

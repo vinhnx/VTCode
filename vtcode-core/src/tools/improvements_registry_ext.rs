@@ -154,7 +154,7 @@ impl ToolRegistryImprovement {
     /// Try to get cached result
     pub fn get_cached_result(&self, tool: &str, args: &str) -> Option<String> {
         let key = format!("{}::{}", tool, args);
-        self.result_cache.get(&key)
+        self.result_cache.get_owned(&key)
     }
 
     /// Clear cache

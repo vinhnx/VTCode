@@ -56,7 +56,8 @@ impl ToolPolicyGateway {
         }
     }
 
-    pub fn apply_policy_constraints(&self, name: &str, mut args: Value) -> Result<Value> {
+    pub fn apply_policy_constraints(&self, name: &str, args: &Value) -> Result<Value> {
+        let mut args = args.clone();
         let canonical = canonical_tool_name(name);
         let normalized = canonical.as_ref();
 

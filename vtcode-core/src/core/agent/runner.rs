@@ -2069,7 +2069,7 @@ impl AgentRunner {
         // Try with simple adaptive retry (up to 2 retries)
         let mut delay = std::time::Duration::from_millis(200);
         for attempt in 0..3 {
-            match registry.execute_tool(tool_name, args.clone()).await {
+            match registry.execute_tool_ref(tool_name, &args).await {
                 Ok(result) => return Ok(result),
                 Err(_e) if attempt < 2 => {
                     tokio::time::sleep(delay).await;

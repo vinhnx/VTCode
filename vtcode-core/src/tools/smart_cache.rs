@@ -2,11 +2,12 @@
 //!
 //! Caches tool results with fuzzy matching to prevent redundant tool calls.
 
+use crate::utils::current_timestamp;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
-use std::time::SystemTime;
+use std::sync::Arc;
 
 use crate::tools::result_metadata::EnhancedToolResult;
 
@@ -88,7 +89,7 @@ impl ResultSignature {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CachedResult {
     pub signature: String,
-    pub result: EnhancedToolResult,
+    pub result: Arc<EnhancedToolResult>,
     pub cached_at: u64,
     pub hits: usize,
 }
@@ -97,23 +98,15 @@ impl CachedResult {
     pub fn new(signature: String, result: EnhancedToolResult) -> Self {
         Self {
             signature,
-            result,
-            cached_at: SystemTime::now()
-                .duration_since(SystemTime::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs(),
+            result: Arc::new(result),
+            cached_at: current_timestamp(),
             hits: 0,
         }
     }
 
     /// Check if cache is still fresh (within 5 minutes)
     pub fn is_fresh(&self) -> bool {
-        let now = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
-
-        now.saturating_sub(self.cached_at) < 300 // 5 minutes
+        current_timestamp().saturating_sub(self.cached_at) < 300 // 5 minutes
     }
 }
 
@@ -143,7 +136,7 @@ impl SmartResultCache {
         if let Some(cached) = self.cache.get(&sig.canonical_args).cloned() {
             if cached.is_fresh() {
                 self.record_hit(tool);
-                let mut result = cached.result.clone();
+                let mut result = (*cached.result).clone();
                 result.from_cache = true;
 
                 return Some((result, true));
@@ -154,10 +147,35 @@ impl SmartResultCache {
         if let Some((_, cached)) = self.find_similar(&sig).map(|(s, c)| (s, c.clone())) {
             if cached.is_fresh() {
                 self.record_hit(tool);
-                let mut result = cached.result.clone();
+                let mut result = (*cached.result).clone();
                 result.from_cache = true;
 
                 return Some((result, true));
+            }
+        }
+
+        None
+    }
+
+    /// Get a shared Arc to the cached result to avoid cloning the entire result.
+    pub fn get_arc(&mut self, tool: &str, args: &Value) -> Option<(Arc<EnhancedToolResult>, bool)> {
+        let sig = ResultSignature::from_tool_call(tool, args);
+
+        // Try exact match first
+        if let Some(cached) = self.cache.get(&sig.canonical_args).cloned() {
+            if cached.is_fresh() {
+                self.record_hit(tool);
+                let arc_res = Arc::clone(&cached.result);
+                return Some((arc_res, true));
+            }
+        }
+
+        // Try fuzzy match
+        if let Some((_, cached)) = self.find_similar(&sig).map(|(s, c)| (s, c.clone())) {
+            if cached.is_fresh() {
+                self.record_hit(tool);
+                let arc_res = Arc::clone(&cached.result);
+                return Some((arc_res, true));
             }
         }
 

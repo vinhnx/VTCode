@@ -366,18 +366,26 @@ impl MessageContent {
         }
     }
 
-    /// Returns the text content, cloning if necessary.
+    /// Returns the text content, avoiding allocation if possible.
     /// For Parts variant, joins all text parts with spaces.
-    pub fn as_text(&self) -> String {
+    pub fn as_text(&self) -> std::borrow::Cow<'_, str> {
         match self {
-            MessageContent::Text(text) => text.clone(),
+            MessageContent::Text(text) => std::borrow::Cow::Borrowed(text),
             MessageContent::Parts(parts) => {
-                // Pre-calculate capacity to avoid reallocations
+                // Optimize: Filter and collect text parts first
                 let text_parts: Vec<&str> =
                     parts.iter().filter_map(|part| part.as_text()).collect();
+
                 if text_parts.is_empty() {
-                    return String::new();
+                    return std::borrow::Cow::Borrowed("");
                 }
+
+                // Single part optimization - avoid allocation
+                if text_parts.len() == 1 {
+                    return std::borrow::Cow::Borrowed(text_parts[0]);
+                }
+
+                // Pre-calculate capacity to avoid reallocations
                 let total_len = text_parts.iter().map(|s| s.len()).sum::<usize>()
                     + text_parts.len().saturating_sub(1); // spaces between parts
                 let mut result = String::with_capacity(total_len);
@@ -387,7 +395,7 @@ impl MessageContent {
                     }
                     result.push_str(part);
                 }
-                result
+                std::borrow::Cow::Owned(result)
             }
         }
     }
@@ -395,8 +403,29 @@ impl MessageContent {
     /// Returns trimmed text content. Avoids allocation when possible.
     pub fn trim(&self) -> std::borrow::Cow<'_, str> {
         match self {
-            MessageContent::Text(text) => std::borrow::Cow::Borrowed(text.trim()),
-            MessageContent::Parts(_) => std::borrow::Cow::Owned(self.as_text().trim().to_owned()),
+            MessageContent::Text(text) => {
+                let trimmed = text.trim();
+                // Optimization: Only allocate if trim actually changed the string
+                if trimmed.len() == text.len() {
+                    std::borrow::Cow::Borrowed(text)
+                } else {
+                    std::borrow::Cow::Borrowed(trimmed)
+                }
+            }
+            MessageContent::Parts(_) => {
+                // For Parts, we need to get text first, then trim
+                match self.as_text() {
+                    std::borrow::Cow::Borrowed(s) => std::borrow::Cow::Borrowed(s.trim()),
+                    std::borrow::Cow::Owned(s) => {
+                        let trimmed = s.trim();
+                        if trimmed.len() == s.len() {
+                            std::borrow::Cow::Owned(s)
+                        } else {
+                            std::borrow::Cow::Owned(trimmed.to_owned())
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -573,7 +602,7 @@ impl Message {
         }
     }
 
-    /// Create a user message with an image from a local file
+    /// Create a user message with image from a local file
     pub async fn user_with_local_image<P: AsRef<std::path::Path>>(
         file_path: P,
     ) -> Result<Self, anyhow::Error> {
@@ -681,7 +710,7 @@ impl Message {
     }
 
     /// Get the text content of the message (for backward compatibility)
-    pub fn get_text_content(&self) -> String {
+    pub fn get_text_content(&self) -> std::borrow::Cow<'_, str> {
         self.content.as_text()
     }
 
@@ -887,12 +916,16 @@ pub struct FunctionDefinition {
 }
 
 fn sanitize_tool_description(description: &str) -> String {
-    let normalized = description
-        .lines()
-        .map(|line| line.trim_end())
-        .collect::<Vec<_>>()
-        .join("\n");
-    normalized.trim().to_owned()
+    let mut result = String::with_capacity(description.len());
+    let mut first = true;
+    for line in description.lines() {
+        if !first {
+            result.push('\n');
+        }
+        result.push_str(line.trim_end());
+        first = false;
+    }
+    result.trim().to_owned()
 }
 
 impl ToolDefinition {

@@ -200,7 +200,7 @@ impl AsyncMiddleware for AsyncCachingMiddleware {
         let key = Self::cache_key(&request.tool_name, &request.arguments);
 
         // Check cache
-        if let Some(cached) = self.cache.get(&key) {
+        if let Some(cached) = self.cache.get_owned(&key) {
             self.obs_context.event(
                 crate::tools::EventType::CacheHit,
                 "cache",
