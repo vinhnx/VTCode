@@ -24,7 +24,7 @@ impl LanguageProvider for TypeScriptProvider {
         // Add TypeScript-specific keywords
         if context.prefix.is_empty() || "function".starts_with(&context.prefix) {
             suggestions.push(CompletionSuggestion::new(
-                "function".to_string(),
+                "function".to_owned(),
                 CompletionKind::Keyword,
                 context.clone(),
             ));
@@ -32,7 +32,7 @@ impl LanguageProvider for TypeScriptProvider {
 
         if context.prefix.is_empty() || "interface".starts_with(&context.prefix) {
             suggestions.push(CompletionSuggestion::new(
-                "interface".to_string(),
+                "interface".to_owned(),
                 CompletionKind::Keyword,
                 context.clone(),
             ));

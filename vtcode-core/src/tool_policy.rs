@@ -259,7 +259,7 @@ fn parse_mcp_policy_key(tool_name: &str) -> Option<(String, String)> {
     let mut parts = tool_name.splitn(3, "::");
     match (parts.next()?, parts.next(), parts.next()) {
         ("mcp", Some(provider), Some(tool)) if !provider.is_empty() && !tool.is_empty() => {
-            Some((provider.to_string(), tool.to_string()))
+            Some((provider.to_owned(), tool.to_owned()))
         }
         _ => None,
     }
@@ -451,11 +451,11 @@ impl ToolPolicyManager {
         for tool in AUTO_ALLOW_TOOLS {
             config
                 .policies
-                .entry((*tool).to_string())
+                .entry((*tool).to_owned())
                 .and_modify(|policy| *policy = ToolPolicy::Allow)
                 .or_insert(ToolPolicy::Allow);
-            if !config.available_tools.contains(&tool.to_string()) {
-                config.available_tools.push(tool.to_string());
+            if !config.available_tools.contains(&(*tool).to_owned()) {
+                config.available_tools.push((*tool).to_owned());
             }
         }
         Self::ensure_network_constraints(config);
@@ -753,9 +753,9 @@ impl ToolPolicyManager {
             .config
             .mcp
             .providers
-            .entry(provider.to_string())
+            .entry(provider.to_owned())
             .or_default();
-        entry.tools.insert(tool.to_string(), policy);
+        entry.tools.insert(tool.to_owned(), policy);
         self.save_config().await
     }
 
@@ -919,13 +919,13 @@ impl ToolPolicyManager {
 
         let mut dialog_theme = ColorfulTheme::default();
         dialog_theme.prompt_style = tinted_style;
-        dialog_theme.prompt_prefix = style("—".to_string()).for_stderr().fg(dialog_color);
-        dialog_theme.prompt_suffix = style("—".to_string()).for_stderr().fg(dialog_color);
+        dialog_theme.prompt_prefix = style("—".to_owned()).for_stderr().fg(dialog_color);
+        dialog_theme.prompt_suffix = style("—".to_owned()).for_stderr().fg(dialog_color);
         dialog_theme.hint_style = ConsoleStyle::new().for_stderr().fg(dialog_color);
         dialog_theme.defaults_style = dialog_theme.hint_style.clone();
-        dialog_theme.success_prefix = style("✓".to_string()).for_stderr().fg(dialog_color);
-        dialog_theme.success_suffix = style("·".to_string()).for_stderr().fg(dialog_color);
-        dialog_theme.error_prefix = style("✗".to_string()).for_stderr().fg(dialog_color);
+        dialog_theme.success_prefix = style("✓".to_owned()).for_stderr().fg(dialog_color);
+        dialog_theme.success_suffix = style("·".to_owned()).for_stderr().fg(dialog_color);
+        dialog_theme.error_prefix = style("✗".to_owned()).for_stderr().fg(dialog_color);
         dialog_theme.error_style = ConsoleStyle::new().for_stderr().fg(dialog_color);
         dialog_theme.values_style = ConsoleStyle::new().for_stderr().fg(dialog_color);
 
@@ -1126,13 +1126,13 @@ mod tests {
     #[test]
     fn test_tool_policy_config_serialization() {
         let mut config = ToolPolicyConfig::default();
-        config.available_tools = vec![tools::READ_FILE.to_string(), tools::WRITE_FILE.to_string()];
+        config.available_tools = vec![tools::READ_FILE.to_owned(), tools::WRITE_FILE.to_owned()];
         config
             .policies
-            .insert(tools::READ_FILE.to_string(), ToolPolicy::Allow);
+            .insert(tools::READ_FILE.to_owned(), ToolPolicy::Allow);
         config
             .policies
-            .insert(tools::WRITE_FILE.to_string(), ToolPolicy::Prompt);
+            .insert(tools::WRITE_FILE.to_owned(), ToolPolicy::Prompt);
 
         let json = serde_json::to_string_pretty(&config).unwrap();
         let deserialized: ToolPolicyConfig = serde_json::from_str(&json).unwrap();
@@ -1147,10 +1147,10 @@ mod tests {
         let config_path = dir.path().join("tool-policy.json");
 
         let mut config = ToolPolicyConfig::default();
-        config.available_tools = vec!["tool1".to_string()];
+        config.available_tools = vec!["tool1".to_owned()];
         config
             .policies
-            .insert("tool1".to_string(), ToolPolicy::Prompt);
+            .insert("tool1".to_owned(), ToolPolicy::Prompt);
 
         // Save initial config
         let content = serde_json::to_string_pretty(&config).unwrap();
@@ -1162,7 +1162,7 @@ mod tests {
             .unwrap();
 
         // Add new tool
-        let new_tools = vec!["tool1".to_string(), "tool2".to_string()];
+        let new_tools = vec!["tool1".to_owned(), "tool2".to_owned()];
         let current_tools: std::collections::HashSet<_> =
             loaded_config.available_tools.iter().collect();
 

@@ -95,9 +95,9 @@ mod tests {
     #[test]
     fn test_record_detection() {
         let mut metrics = SecurityMetrics::new();
-        metrics.record_detection("email".to_string());
-        metrics.record_detection("ssn".to_string());
-        metrics.record_detection("email".to_string());
+        metrics.record_detection("email".to_owned());
+        metrics.record_detection("ssn".to_owned());
+        metrics.record_detection("email".to_owned());
 
         assert_eq!(metrics.pii_detections, 3);
         assert_eq!(metrics.get_pattern_count("email"), 2);
@@ -116,8 +116,8 @@ mod tests {
     #[test]
     fn test_record_audit_event() {
         let mut metrics = SecurityMetrics::new();
-        metrics.record_audit_event("pii_detected".to_string(), "info".to_string());
-        metrics.record_audit_event("tokenized".to_string(), "info".to_string());
+        metrics.record_audit_event("pii_detected".to_owned(), "info".to_owned());
+        metrics.record_audit_event("tokenized".to_owned(), "info".to_owned());
 
         assert_eq!(metrics.audit_events.len(), 2);
     }
@@ -125,9 +125,9 @@ mod tests {
     #[test]
     fn test_detection_rate() {
         let mut metrics = SecurityMetrics::new();
-        metrics.record_detection("email".to_string());
-        metrics.record_detection("email".to_string());
-        metrics.record_audit_event("test".to_string(), "info".to_string());
+        metrics.record_detection("email".to_owned());
+        metrics.record_detection("email".to_owned());
+        metrics.record_audit_event("test".to_owned(), "info".to_owned());
 
         let rate = metrics.detection_rate();
         assert!(rate > 0.0);
@@ -136,24 +136,24 @@ mod tests {
     #[test]
     fn test_most_detected_pattern() {
         let mut metrics = SecurityMetrics::new();
-        metrics.record_detection("email".to_string());
-        metrics.record_detection("email".to_string());
-        metrics.record_detection("email".to_string());
-        metrics.record_detection("ssn".to_string());
+        metrics.record_detection("email".to_owned());
+        metrics.record_detection("email".to_owned());
+        metrics.record_detection("email".to_owned());
+        metrics.record_detection("ssn".to_owned());
 
         assert_eq!(
             metrics.get_most_detected_pattern(),
-            Some("email".to_string())
+            Some("email".to_owned())
         );
     }
 
     #[test]
     fn test_high_severity_events() {
         let mut metrics = SecurityMetrics::new();
-        metrics.record_audit_event("event1".to_string(), "low".to_string());
-        metrics.record_audit_event("event2".to_string(), "high".to_string());
-        metrics.record_audit_event("event3".to_string(), "critical".to_string());
-        metrics.record_audit_event("event4".to_string(), "info".to_string());
+        metrics.record_audit_event("event1".to_owned(), "low".to_owned());
+        metrics.record_audit_event("event2".to_owned(), "high".to_owned());
+        metrics.record_audit_event("event3".to_owned(), "critical".to_owned());
+        metrics.record_audit_event("event4".to_owned(), "info".to_owned());
 
         let high_severity = metrics.get_high_severity_events();
         assert_eq!(high_severity.len(), 2);
@@ -163,7 +163,7 @@ mod tests {
     fn test_audit_events_limit() {
         let mut metrics = SecurityMetrics::new();
         for i in 0..150 {
-            metrics.record_audit_event(format!("event_{}", i), "info".to_string());
+            metrics.record_audit_event(format!("event_{}", i), "info".to_owned());
         }
 
         assert_eq!(metrics.audit_events.len(), 100);

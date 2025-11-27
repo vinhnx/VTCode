@@ -161,7 +161,7 @@ impl AgentBehaviorAnalyzer {
             recommendations = by_usage
                 .iter()
                 .take(limit)
-                .map(|(tool, _)| tool.to_string())
+                .map(|pair| pair.0.clone())
                 .collect();
         }
 
@@ -202,7 +202,7 @@ impl AgentBehaviorAnalyzer {
         *self
             .tool_stats
             .usage_frequency
-            .entry(tool_name.to_string())
+            .entry(tool_name.to_owned())
             .or_insert(0) += 1;
     }
 
@@ -220,7 +220,7 @@ impl AgentBehaviorAnalyzer {
         } else {
             self.skill_stats
                 .most_effective_skills
-                .insert(0, skill_name.to_string());
+                .insert(0, skill_name.to_owned());
         }
         self.skill_stats.reused_skills += 1;
     }
@@ -238,7 +238,7 @@ impl AgentBehaviorAnalyzer {
         } else {
             self.failure_patterns
                 .common_errors
-                .push((error_msg.to_string(), 1));
+                .push((error_msg.to_owned(), 1));
         }
 
         // Update high failure tools - find count
@@ -261,7 +261,7 @@ impl AgentBehaviorAnalyzer {
         } else {
             self.failure_patterns
                 .high_failure_tools
-                .push((tool_name.to_string(), failure_rate));
+                .push((tool_name.to_owned(), failure_rate));
         }
 
         debug!(
@@ -329,7 +329,7 @@ mod tests {
         analyzer.record_tool_usage("list_files");
 
         let recommendations = analyzer.recommend_tools("read", 1);
-        assert!(recommendations.contains(&"read_file".to_string()));
+        assert!(recommendations.contains(&"read_file".to_owned()));
     }
 
     #[test]
@@ -344,7 +344,7 @@ mod tests {
             analyzer
                 .skill_stats
                 .most_effective_skills
-                .contains(&"filter_skill".to_string())
+                .contains(&"filter_skill".to_owned())
         );
     }
 
@@ -377,11 +377,11 @@ mod tests {
         analyzer
             .failure_patterns
             .high_failure_tools
-            .push(("risky_tool".to_string(), 0.8));
+            .push(("risky_tool".to_owned(), 0.8));
         analyzer
             .failure_patterns
             .high_failure_tools
-            .push(("safe_tool".to_string(), 0.1));
+            .push(("safe_tool".to_owned(), 0.1));
 
         let risky = analyzer.identify_risky_tools(0.5);
         assert_eq!(risky.len(), 1);
@@ -395,8 +395,8 @@ mod tests {
             .failure_patterns
             .recovery_patterns
             .push(RecoveryPattern {
-                error_type: "timeout".to_string(),
-                recovery_action: "retry with increased timeout".to_string(),
+                error_type: "timeout".to_owned(),
+                recovery_action: "retry with increased timeout".to_owned(),
                 success_rate: 0.85,
                 attempts: 20,
             });

@@ -145,7 +145,7 @@ impl ToolChoice {
     /// Create specific function tool choice
     pub fn function(name: String) -> Self {
         Self::Specific(SpecificToolChoice {
-            tool_type: "function".to_string(),
+            tool_type: "function".to_owned(),
             function: SpecificFunctionChoice { name },
         })
     }
@@ -303,7 +303,7 @@ impl ContentPart {
         ContentPart::Image {
             data,
             mime_type,
-            content_type: "image".to_string(),
+            content_type: "image".to_owned(),
         }
     }
 
@@ -396,7 +396,7 @@ impl MessageContent {
     pub fn trim(&self) -> std::borrow::Cow<'_, str> {
         match self {
             MessageContent::Text(text) => std::borrow::Cow::Borrowed(text.trim()),
-            MessageContent::Parts(_) => std::borrow::Cow::Owned(self.as_text().trim().to_string()),
+            MessageContent::Parts(_) => std::borrow::Cow::Owned(self.as_text().trim().to_owned()),
         }
     }
 
@@ -442,7 +442,7 @@ impl From<String> for MessageContent {
 
 impl From<&str> for MessageContent {
     fn from(value: &str) -> Self {
-        MessageContent::Text(value.to_string())
+        MessageContent::Text(value.to_owned())
     }
 }
 
@@ -622,7 +622,7 @@ impl Message {
             }
 
             if tool_calls.is_empty() {
-                return Err("Tool calls array should not be empty".to_string());
+                return Err("Tool calls array should not be empty".to_owned());
             }
 
             // Validate each tool call
@@ -645,7 +645,7 @@ impl Message {
                 if self.role == MessageRole::Tool && self.tool_call_id.is_none() {
                     return Err(
                         "Gemini tool responses need tool_call_id for function name mapping"
-                            .to_string(),
+                            .to_owned(),
                     );
                 }
                 // Gemini has additional constraints on content structure
@@ -785,7 +785,7 @@ impl MessageRole {
                 Err(format!("{} tool messages must have tool_call_id", provider))
             }
             (MessageRole::Tool, "gemini") if !has_tool_call_id => {
-                Err("Gemini tool messages need tool_call_id for function mapping".to_string())
+                Err("Gemini tool messages need tool_call_id for function mapping".to_owned())
             }
             _ => Ok(()),
         }
@@ -892,7 +892,7 @@ fn sanitize_tool_description(description: &str) -> String {
         .map(|line| line.trim_end())
         .collect::<Vec<_>>()
         .join("\n");
-    normalized.trim().to_string()
+    normalized.trim().to_owned()
 }
 
 impl ToolDefinition {
@@ -900,7 +900,7 @@ impl ToolDefinition {
     pub fn function(name: String, description: String, parameters: Value) -> Self {
         let sanitized_description = sanitize_tool_description(&description);
         Self {
-            tool_type: "function".to_string(),
+            tool_type: "function".to_owned(),
             function: Some(FunctionDefinition {
                 name,
                 description: sanitized_description,
@@ -923,9 +923,9 @@ impl ToolDefinition {
     pub fn apply_patch(description: String) -> Self {
         let sanitized_description = sanitize_tool_description(&description);
         Self {
-            tool_type: "apply_patch".to_string(),
+            tool_type: "apply_patch".to_owned(),
             function: Some(FunctionDefinition {
-                name: "apply_patch".to_string(),
+                name: "apply_patch".to_owned(),
                 description: sanitized_description,
                 parameters: json!({
                     "type": "object",
@@ -953,7 +953,7 @@ impl ToolDefinition {
     pub fn custom(name: String, description: String) -> Self {
         let sanitized_description = sanitize_tool_description(&description);
         Self {
-            tool_type: "custom".to_string(),
+            tool_type: "custom".to_owned(),
             function: Some(FunctionDefinition {
                 name,
                 description: sanitized_description,
@@ -969,7 +969,7 @@ impl ToolDefinition {
     /// Ensures model output matches predefined syntax
     pub fn grammar(syntax: String, definition: String) -> Self {
         Self {
-            tool_type: "grammar".to_string(),
+            tool_type: "grammar".to_owned(),
             function: None,
             shell: None,
             grammar: Some(GrammarDefinition { syntax, definition }),
@@ -1004,17 +1004,17 @@ impl ToolDefinition {
     fn validate_function(&self) -> Result<(), String> {
         if let Some(func) = &self.function {
             if func.name.is_empty() {
-                return Err("Function name cannot be empty".to_string());
+                return Err("Function name cannot be empty".to_owned());
             }
             if func.description.is_empty() {
-                return Err("Function description cannot be empty".to_string());
+                return Err("Function description cannot be empty".to_owned());
             }
             if !func.parameters.is_object() {
-                return Err("Function parameters must be a JSON object".to_string());
+                return Err("Function parameters must be a JSON object".to_owned());
             }
             Ok(())
         } else {
-            Err("Function tool missing function definition".to_string())
+            Err("Function tool missing function definition".to_owned())
         }
     }
 
@@ -1027,53 +1027,53 @@ impl ToolDefinition {
                 ));
             }
             if func.description.is_empty() {
-                return Err("apply_patch description cannot be empty".to_string());
+                return Err("apply_patch description cannot be empty".to_owned());
             }
             Ok(())
         } else {
-            Err("apply_patch tool missing function definition".to_string())
+            Err("apply_patch tool missing function definition".to_owned())
         }
     }
 
     fn validate_shell(&self) -> Result<(), String> {
         if let Some(shell) = &self.shell {
             if shell.description.is_empty() {
-                return Err("Shell tool description cannot be empty".to_string());
+                return Err("Shell tool description cannot be empty".to_owned());
             }
             if shell.timeout_seconds == 0 {
-                return Err("Shell tool timeout must be greater than 0".to_string());
+                return Err("Shell tool timeout must be greater than 0".to_owned());
             }
             Ok(())
         } else {
-            Err("Shell tool missing shell definition".to_string())
+            Err("Shell tool missing shell definition".to_owned())
         }
     }
 
     fn validate_custom(&self) -> Result<(), String> {
         if let Some(func) = &self.function {
             if func.name.is_empty() {
-                return Err("Custom tool name cannot be empty".to_string());
+                return Err("Custom tool name cannot be empty".to_owned());
             }
             if func.description.is_empty() {
-                return Err("Custom tool description cannot be empty".to_string());
+                return Err("Custom tool description cannot be empty".to_owned());
             }
             Ok(())
         } else {
-            Err("Custom tool missing function definition".to_string())
+            Err("Custom tool missing function definition".to_owned())
         }
     }
 
     fn validate_grammar(&self) -> Result<(), String> {
         if let Some(grammar) = &self.grammar {
             if !["lark", "regex"].contains(&grammar.syntax.as_str()) {
-                return Err("Grammar syntax must be 'lark' or 'regex'".to_string());
+                return Err("Grammar syntax must be 'lark' or 'regex'".to_owned());
             }
             if grammar.definition.is_empty() {
-                return Err("Grammar definition cannot be empty".to_string());
+                return Err("Grammar definition cannot be empty".to_owned());
             }
             Ok(())
         } else {
-            Err("Grammar tool missing grammar definition".to_string())
+            Err("Grammar tool missing grammar definition".to_owned())
         }
     }
 }
@@ -1119,7 +1119,7 @@ impl ToolCall {
     pub fn function(id: String, name: String, arguments: String) -> Self {
         Self {
             id,
-            call_type: "function".to_string(),
+            call_type: "function".to_owned(),
             function: Some(FunctionCall { name, arguments }),
             text: None,
             thought_signature: None,
@@ -1130,7 +1130,7 @@ impl ToolCall {
     pub fn custom(id: String, name: String, text: String) -> Self {
         Self {
             id,
-            call_type: "custom".to_string(),
+            call_type: "custom".to_owned(),
             function: Some(FunctionCall {
                 name,
                 arguments: text.clone(), // For custom tools, we treat the text as arguments
@@ -1153,31 +1153,31 @@ impl ToolCall {
     /// Validate that this tool call is properly formed
     pub fn validate(&self) -> Result<(), String> {
         if self.id.is_empty() {
-            return Err("Tool call ID cannot be empty".to_string());
+            return Err("Tool call ID cannot be empty".to_owned());
         }
 
         match self.call_type.as_str() {
             "function" => {
                 if let Some(func) = &self.function {
                     if func.name.is_empty() {
-                        return Err("Function name cannot be empty".to_string());
+                        return Err("Function name cannot be empty".to_owned());
                     }
                     // Validate that arguments is valid JSON for function tools
                     if let Err(e) = self.parsed_arguments() {
                         return Err(format!("Invalid JSON in function arguments: {}", e));
                     }
                 } else {
-                    return Err("Function tool call missing function details".to_string());
+                    return Err("Function tool call missing function details".to_owned());
                 }
             }
             "custom" => {
                 // For custom tools, we allow raw text payload without JSON validation
                 if let Some(func) = &self.function {
                     if func.name.is_empty() {
-                        return Err("Custom tool name cannot be empty".to_string());
+                        return Err("Custom tool name cannot be empty".to_owned());
                     }
                 } else {
-                    return Err("Custom tool call missing function details".to_string());
+                    return Err("Custom tool call missing function details".to_owned());
                 }
             }
             _ => return Err(format!("Unsupported tool call type: {}", self.call_type)),
@@ -1340,8 +1340,8 @@ mod tests {
     #[test]
     fn tool_definition_function_uses_sanitized_description() {
         let tool = ToolDefinition::function(
-            "demo".to_string(),
-            "  Line 1  \n".to_string(),
+            "demo".to_owned(),
+            "  Line 1  \n".to_owned(),
             json!({"type": "object", "properties": {}}),
         );
         assert_eq!(tool.function.as_ref().unwrap().description, "Line 1");

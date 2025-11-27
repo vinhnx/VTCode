@@ -804,19 +804,19 @@ impl Default for Cli {
             },
             workspace_path: None,
             model: Some(ModelId::default().to_string()),
-            provider: Some("gemini".to_string()),
-            api_key_env: "GEMINI_API_KEY".to_string(),
+            provider: Some("gemini".to_owned()),
+            api_key_env: "GEMINI_API_KEY".to_owned(),
             workspace: None,
             enable_tree_sitter: false,
             research_preview: false,
-            security_level: "moderate".to_string(),
+            security_level: "moderate".to_owned(),
             show_file_diffs: false,
             max_concurrent_ops: 5,
             api_rate_limit: 30,
             max_tool_calls: 10,
             verbose: false,
             config: Vec::new(),
-            log_level: "info".to_string(),
+            log_level: "info".to_owned(),
             no_color: false,
             theme: None,
             skip_confirmations: false,
@@ -936,9 +936,9 @@ impl Cli {
                 if (s.starts_with('"') && s.ends_with('"'))
                     || (s.starts_with('\'') && s.ends_with('\''))
                 {
-                    s[1..s.len() - 1].to_string()
+                    s[1..s.len() - 1].to_owned()
                 } else {
-                    s.to_string()
+                    s.to_owned()
                 }
             };
 
@@ -993,15 +993,15 @@ impl Cli {
             let provider_key = provider.to_ascii_lowercase();
 
             match provider_key.as_str() {
-                "openai" => "OPENAI_API_KEY".to_string(),
-                "anthropic" => "ANTHROPIC_API_KEY".to_string(),
-                "gemini" => "GEMINI_API_KEY".to_string(),
-                "deepseek" => "DEEPSEEK_API_KEY".to_string(),
-                "openrouter" => "OPENROUTER_API_KEY".to_string(),
-                "xai" => "XAI_API_KEY".to_string(),
-                "zai" => "ZAI_API_KEY".to_string(),
-                "minimax" => "ANTHROPIC_API_KEY".to_string(),
-                _ => crate::config::constants::defaults::DEFAULT_API_KEY_ENV.to_string(),
+                "openai" => "OPENAI_API_KEY".to_owned(),
+                "anthropic" => "ANTHROPIC_API_KEY".to_owned(),
+                "gemini" => "GEMINI_API_KEY".to_owned(),
+                "deepseek" => "DEEPSEEK_API_KEY".to_owned(),
+                "openrouter" => "OPENROUTER_API_KEY".to_owned(),
+                "xai" => "XAI_API_KEY".to_owned(),
+                "zai" => "ZAI_API_KEY".to_owned(),
+                "minimax" => "ANTHROPIC_API_KEY".to_owned(),
+                _ => crate::config::constants::defaults::DEFAULT_API_KEY_ENV.to_owned(),
             }
         } else {
             self.api_key_env.clone()

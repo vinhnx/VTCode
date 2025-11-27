@@ -59,7 +59,7 @@ async fn handle_list_models(_cli: &Cli) -> Result<()> {
 
         if let Ok(provider) = create_provider_with_config(
             provider_name,
-            Some("dummy".to_string()),
+            Some("dummy".to_owned()),
             None,
             None,
             None,
@@ -281,13 +281,13 @@ fn configure_standard_provider(
     };
 
     if let Some(key) = api_key {
-        provider_config.api_key = Some(key.to_string());
+        provider_config.api_key = Some(key.to_owned());
     }
     if let Some(url) = base_url {
-        provider_config.base_url = Some(url.to_string());
+        provider_config.base_url = Some(url.to_owned());
     }
     if let Some(m) = model {
-        provider_config.model = Some(m.to_string());
+        provider_config.model = Some(m.to_owned());
     }
     provider_config.enabled = if provider == "ollama" || provider == "lmstudio" {
         true
@@ -309,10 +309,10 @@ async fn handle_test_provider(_cli: &Cli, provider: &str) -> Result<()> {
         create_provider_with_config(provider, api_key, base_url, model.clone(), None, None)?;
 
     let test_request = crate::llm::provider::LLMRequest {
-        messages: vec![crate::llm::provider::Message::user("test".to_string())],
+        messages: vec![crate::llm::provider::Message::user("test".to_owned())],
         system_prompt: None,
         tools: None,
-        model: model.clone().unwrap_or_else(|| "test".to_string()),
+        model: model.clone().unwrap_or_else(|| "test".to_owned()),
         max_tokens: Some(10),
         temperature: Some(0.0),
         stream: false,

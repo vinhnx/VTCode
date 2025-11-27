@@ -198,7 +198,7 @@ impl AnthropicProvider {
         if let Some(pc) = self.prompt_cache_beta_header_value() {
             for p in pc
                 .split(',')
-                .map(|s| s.trim().to_string())
+                .map(|s| s.trim().to_owned())
                 .filter(|s| !s.is_empty())
             {
                 pieces.push(p);
@@ -206,7 +206,7 @@ impl AnthropicProvider {
         }
         if include_structured {
             // Use the correct beta header for structured outputs
-            pieces.push("structured-outputs-2025-11-13".to_string());
+            pieces.push("structured-outputs-2025-11-13".to_owned());
         }
         if pieces.is_empty() {
             None

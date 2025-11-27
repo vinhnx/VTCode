@@ -854,13 +854,13 @@ impl McpClient {
             // Use experimental field for elicitation support until it's in the stable published version
             capabilities
                 .experimental
-                .insert("elicitation".to_string(), elicitation_capability);
+                .insert("elicitation".to_owned(), elicitation_capability);
         }
 
         InitializeRequestParams {
             capabilities,
             client_info: Implementation {
-                name: "vtcode".to_string(),
+                name: "vtcode".to_owned(),
                 version: env!("CARGO_PKG_VERSION").to_string(),
             },
             protocol_version: provider.protocol_version.clone(),
@@ -873,7 +873,7 @@ impl McpClient {
             Value::Object(map) => map,
             other => {
                 let mut map = Map::new();
-                map.insert("value".to_string(), other);
+                map.insert("value".to_owned(), other);
                 map
             }
         }
@@ -898,7 +898,7 @@ impl McpClient {
                 });
             }
 
-            let message = message.unwrap_or_else(|| "Unknown MCP tool error".to_string());
+            let message = message.unwrap_or_else(|| "Unknown MCP tool error".to_owned());
             return Err(anyhow!(
                 "MCP tool '{}' on provider '{}' reported an error: {}",
                 tool_name,
@@ -1996,7 +1996,7 @@ impl ClientHandler for LoggingClientHandler {
                 Ok(dir) => {
                     if let Some(uri) = directory_to_file_uri(&dir) {
                         roots.push(Root {
-                            name: Some("workspace".to_string()),
+                            name: Some("workspace".to_owned()),
                             uri,
                         });
                     } else {
@@ -2198,7 +2198,7 @@ fn convert_call_tool_result(result: rmcp::model::CallToolResult) -> Result<CallT
     if let Some(obj) = value.as_object_mut() {
         let missing_or_null = obj.get("content").is_none_or(Value::is_null);
         if missing_or_null {
-            obj.insert("content".to_string(), Value::Array(Vec::new()));
+            obj.insert("content".to_owned(), Value::Array(Vec::new()));
         }
     }
     serde_json::from_value(value).context("Failed to convert call tool result")
@@ -2416,7 +2416,7 @@ mod tests {
         let mut arguments = Map::new();
         arguments.insert(
             TIMEZONE_ARGUMENT.to_string(),
-            Value::String("America/New_York".to_string()),
+            Value::String("America/New_York".to_owned()),
         );
 
         ensure_timezone_argument(&mut arguments, true).unwrap();
@@ -2437,8 +2437,8 @@ mod tests {
                 ..Default::default()
             },
             client_info: Implementation {
-                name: "vtcode".to_string(),
-                version: "1.0".to_string(),
+                name: "vtcode".to_owned(),
+                version: "1.0".to_owned(),
             },
             protocol_version: mcp_types::LATEST_PROTOCOL_VERSION.to_string(),
         };

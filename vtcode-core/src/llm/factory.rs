@@ -102,30 +102,30 @@ impl LLMFactory {
         }
 
         if trimmed.contains(':') && !trimmed.contains('/') && !trimmed.contains('@') {
-            return Some("ollama".to_string());
+            return Some("ollama".to_owned());
         }
 
         let m = trimmed.to_lowercase();
         if m.starts_with("gpt-oss-") {
-            Some("openai".to_string())
+            Some("openai".to_owned())
         } else if m.starts_with("gpt-") || m.starts_with("o1") {
-            Some("openai".to_string())
+            Some("openai".to_owned())
         } else if m.starts_with("claude-") {
-            Some("anthropic".to_string())
+            Some("anthropic".to_owned())
         } else if m.starts_with("deepseek-") {
-            Some("deepseek".to_string())
+            Some("deepseek".to_owned())
         } else if m.contains("gemini") || m.starts_with("palm") {
-            Some("gemini".to_string())
+            Some("gemini".to_owned())
         } else if m.starts_with("grok-") || m.starts_with("xai-") {
-            Some("xai".to_string())
+            Some("xai".to_owned())
         } else if m.starts_with("glm-") {
-            Some("zai".to_string())
+            Some("zai".to_owned())
         } else if m.starts_with("lmstudio-community/") {
-            Some("lmstudio".to_string())
+            Some("lmstudio".to_owned())
         } else if m.starts_with("moonshot-") || m.starts_with("kimi-") {
-            Some("moonshot".to_string())
+            Some("moonshot".to_owned())
         } else if m.contains('/') || m.contains('@') {
-            Some("openrouter".to_string())
+            Some("openrouter".to_owned())
         } else {
             None
         }

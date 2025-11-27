@@ -304,7 +304,7 @@ mod tests {
                 "test_operation",
                 &ModelId::Gemini25FlashPreview,
                 Some(&ModelId::Gemini25Pro),
-                |_model| async { Ok::<String, anyhow::Error>("success".to_string()) },
+                |_model| async { Ok::<String, anyhow::Error>("success".to_owned()) },
             )
             .await;
 
@@ -339,7 +339,7 @@ mod tests {
                         if *count < 2 {
                             Err(anyhow!("Temporary failure"))
                         } else {
-                            Ok::<String, anyhow::Error>("success".to_string())
+                            Ok::<String, anyhow::Error>("success".to_owned())
                         }
                     }
                 },

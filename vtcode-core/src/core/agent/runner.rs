@@ -50,7 +50,7 @@ pub fn format_tool_result_for_display(tool_name: &str, result: &Value) -> String
                     tool_name,
                     obj.get("error")
                         .map(|v| v.to_string())
-                        .unwrap_or_else(|| "unknown error".to_string())
+                        .unwrap_or_else(|| "unknown error".to_owned())
                 )
             } else {
                 // Success case - show status info without the full content
@@ -267,22 +267,22 @@ mod tests {
         state.turn_durations_ms = vec![100, 200, 300];
         state.turns_executed = 3;
         state.completion_outcome = TaskOutcome::Success;
-        state.modified_files = vec!["file.rs".to_string()];
-        state.executed_commands = vec!["write_file".to_string()];
-        state.warnings = vec!["warning".to_string()];
+        state.modified_files = vec!["file.rs".to_owned()];
+        state.executed_commands = vec!["write_file".to_owned()];
+        state.warnings = vec!["warning".to_owned()];
 
         let total_duration_ms = 1_000u128;
-        let results = state.into_results("summary".to_string(), Vec::new(), total_duration_ms);
+        let results = state.into_results("summary".to_owned(), Vec::new(), total_duration_ms);
 
         assert_eq!(results.outcome, TaskOutcome::Success);
         assert_eq!(results.turns_executed, 3);
         assert_eq!(results.total_duration_ms, total_duration_ms);
         assert_eq!(results.max_turn_duration_ms, Some(300));
         assert_eq!(results.average_turn_duration_ms, Some(200.0));
-        assert_eq!(results.modified_files, vec!["file.rs".to_string()]);
-        assert_eq!(results.executed_commands, vec!["write_file".to_string()]);
+        assert_eq!(results.modified_files, vec!["file.rs".to_owned()]);
+        assert_eq!(results.executed_commands, vec!["write_file".to_owned()]);
         assert_eq!(results.summary, "summary");
-        assert_eq!(results.warnings, vec!["warning".to_string()]);
+        assert_eq!(results.warnings, vec!["warning".to_owned()]);
     }
 }
 
@@ -362,34 +362,34 @@ impl AgentRunner {
     /// Create informative progress message based on operation type
     fn create_progress_message(&self, operation: &str, details: Option<&str>) -> String {
         match operation {
-            "thinking" => "Analyzing request and planning approach...".to_string(),
+            "thinking" => "Analyzing request and planning approach...".to_owned(),
             "processing" => format!("Processing turn with {} model", self.client.model_id()),
             "tool_call" => {
                 if let Some(tool) = details {
                     format!("Executing {} tool for task completion", tool)
                 } else {
-                    "Executing tool to gather information".to_string()
+                    "Executing tool to gather information".to_owned()
                 }
             }
             "file_read" => {
                 if let Some(file) = details {
                     format!("Reading {} to understand structure", file)
                 } else {
-                    "Reading file to analyze content".to_string()
+                    "Reading file to analyze content".to_owned()
                 }
             }
             "file_write" => {
                 if let Some(file) = details {
                     format!("Writing changes to {}", file)
                 } else {
-                    "Writing file with requested changes".to_string()
+                    "Writing file with requested changes".to_owned()
                 }
             }
             "search" => {
                 if let Some(pattern) = details {
                     format!("Searching codebase for '{}'", pattern)
                 } else {
-                    "Searching codebase for relevant information".to_string()
+                    "Searching codebase for relevant information".to_owned()
                 }
             }
             "terminal" => {
@@ -399,15 +399,15 @@ impl AgentRunner {
                         cmd.split(' ').next().unwrap_or(cmd)
                     )
                 } else {
-                    "Executing terminal command".to_string()
+                    "Executing terminal command".to_owned()
                 }
             }
-            "completed" => "Task completed successfully!".to_string(),
+            "completed" => "Task completed successfully!".to_owned(),
             "error" => {
                 if let Some(err) = details {
                     format!("Error encountered: {}", err)
                 } else {
-                    "An error occurred during execution".to_string()
+                    "An error occurred during execution".to_owned()
                 }
             }
             _ => format!("{}...", operation),
@@ -732,7 +732,7 @@ impl AgentRunner {
             .into_iter()
             .flat_map(|tool| tool.function_declarations)
             .map(|decl| ToolDefinition {
-                tool_type: "function".to_string(),
+                tool_type: "function".to_owned(),
                 function: Some(FunctionDefinition {
                     name: decl.name,
                     description: decl.description,
@@ -897,7 +897,7 @@ impl AgentRunner {
                             event_recorder.agent_message(&response_text);
                         }
                         task_state.conversation.push(Content {
-                            role: "model".to_string(),
+                            role: "model".to_owned(),
                             parts: vec![Part::Text {
                                 text: response_text.clone(),
                                 thought_signature: None,
@@ -917,7 +917,7 @@ impl AgentRunner {
                         agent_prefix,
                         format!("{} {}", style("(WARN)").yellow().bold(), warning_message)
                     );
-                    task_state.warnings.push(warning_message.to_string());
+                    task_state.warnings.push(warning_message.to_owned());
                     event_recorder.warning(warning_message);
                     task_state.mark_tool_loop_limit_hit();
                     task_state.record_turn(&turn_started_at, &mut turn_recorded);
@@ -942,7 +942,7 @@ impl AgentRunner {
                     let args_json = serde_json::to_string(&args_value)?;
                     effective_tool_calls = Some(vec![ToolCall::function(
                         call_id,
-                        tools::RUN_PTY_CMD.to_string(),
+                        tools::RUN_PTY_CMD.to_owned(),
                         args_json,
                     )]);
                 }
@@ -1000,7 +1000,7 @@ impl AgentRunner {
                                     let display_text =
                                         format_tool_result_for_display(&name, &result);
                                     task_state.conversation.push(Content {
-                                        role: "user".to_string(),
+                                        role: "user".to_owned(),
                                         parts: vec![Part::Text {
                                             text: display_text,
                                             thought_signature: None,
@@ -1014,7 +1014,7 @@ impl AgentRunner {
                                             tool_result.clone(),
                                         ));
 
-                                    task_state.executed_commands.push(name.to_string());
+                                    task_state.executed_commands.push(name.clone());
                                     event_recorder.command_finished(
                                         &command_event,
                                         CommandExecutionStatus::Completed,
@@ -1026,7 +1026,7 @@ impl AgentRunner {
                                         && let Some(filepath) =
                                             args.get("path").and_then(|p| p.as_str())
                                     {
-                                        task_state.modified_files.push(filepath.to_string());
+                                        task_state.modified_files.push(filepath.to_owned());
                                         event_recorder.file_change_completed(filepath);
                                     }
                                 }
@@ -1052,7 +1052,7 @@ impl AgentRunner {
                                     );
                                     event_recorder.warning(&warning_message);
                                     task_state.conversation.push(Content {
-                                        role: "user".to_string(),
+                                        role: "user".to_owned(),
                                         parts: vec![Part::Text {
                                             text: format!("Tool {} failed: {}", name, e),
                                             thought_signature: None,
@@ -1083,7 +1083,7 @@ impl AgentRunner {
                             event_recorder.agent_message(&response_text);
                         }
                         task_state.conversation.push(Content {
-                            role: "model".to_string(),
+                            role: "model".to_owned(),
                             parts: vec![Part::Text {
                                 text: response_text.clone(),
                                 thought_signature: None,
@@ -1301,7 +1301,7 @@ impl AgentRunner {
                                             let display_text =
                                                 format_tool_result_for_display(name, &result);
                                             task_state.conversation.push(Content {
-                                                role: "user".to_string(), // Gemini API only accepts "user" and "model"
+                                                role: "user".to_owned(), // Gemini API only accepts "user" and "model"
                                                 parts: vec![Part::Text {
                                                     text: display_text,
                                                     thought_signature: None,
@@ -1309,7 +1309,7 @@ impl AgentRunner {
                                             });
 
                                             // Track what the agent did
-                                            task_state.executed_commands.push(name.to_string());
+                                            task_state.executed_commands.push(name.to_owned());
                                             event_recorder.command_finished(
                                                 &command_event,
                                                 CommandExecutionStatus::Completed,
@@ -1324,7 +1324,7 @@ impl AgentRunner {
                                                 {
                                                     task_state
                                                         .modified_files
-                                                        .push(filepath.to_string());
+                                                        .push(filepath.to_owned());
                                                     event_recorder.file_change_completed(filepath);
                                                 }
                                             }
@@ -1352,7 +1352,7 @@ impl AgentRunner {
                                             );
                                             event_recorder.warning(&warning_message);
                                             task_state.conversation.push(Content {
-                                                role: "user".to_string(), // Gemini API only accepts "user" and "model"
+                                                role: "user".to_owned(), // Gemini API only accepts "user" and "model"
                                                 parts: vec![Part::Text {
                                                     text: format!("Tool {} failed: {}", name, e),
                                                     thought_signature: None,
@@ -1400,7 +1400,7 @@ impl AgentRunner {
                                     let display_text =
                                         format_tool_result_for_display(name, &result);
                                     task_state.conversation.push(Content {
-                                        role: "user".to_string(), // Gemini API only accepts "user" and "model"
+                                        role: "user".to_owned(), // Gemini API only accepts "user" and "model"
                                         parts: vec![Part::Text {
                                             text: display_text,
                                             thought_signature: None,
@@ -1408,7 +1408,7 @@ impl AgentRunner {
                                     });
 
                                     // Track what the agent did
-                                    task_state.executed_commands.push(name.to_string());
+                                    task_state.executed_commands.push(name.to_owned());
                                     event_recorder.command_finished(
                                         &command_event,
                                         CommandExecutionStatus::Completed,
@@ -1421,7 +1421,7 @@ impl AgentRunner {
                                         if let Some(filepath) =
                                             args.get("path").and_then(|p| p.as_str())
                                         {
-                                            task_state.modified_files.push(filepath.to_string());
+                                            task_state.modified_files.push(filepath.to_owned());
                                             event_recorder.file_change_completed(filepath);
                                         }
                                     }
@@ -1448,7 +1448,7 @@ impl AgentRunner {
                                     );
                                     event_recorder.warning(&warning_message);
                                     task_state.conversation.push(Content {
-                                        role: "user".to_string(), // Gemini API only accepts "user" and "model"
+                                        role: "user".to_owned(), // Gemini API only accepts "user" and "model"
                                         parts: vec![Part::Text {
                                             text: format!("Tool {} failed: {}", name, e),
                                             thought_signature: None,
@@ -1508,7 +1508,7 @@ impl AgentRunner {
                                             let display_text =
                                                 format_tool_result_for_display(&func_name, &result);
                                             task_state.conversation.push(Content {
-                                                role: "user".to_string(), // Gemini API only accepts "user" and "model"
+                                                role: "user".to_owned(), // Gemini API only accepts "user" and "model"
                                                 parts: vec![Part::Text {
                                                     text: display_text,
                                                     thought_signature: None,
@@ -1516,9 +1516,7 @@ impl AgentRunner {
                                             });
 
                                             // Track what the agent did
-                                            task_state
-                                                .executed_commands
-                                                .push(func_name.to_string());
+                                            task_state.executed_commands.push(func_name.to_owned());
                                             event_recorder.command_finished(
                                                 &command_event,
                                                 CommandExecutionStatus::Completed,
@@ -1533,7 +1531,7 @@ impl AgentRunner {
                                                 {
                                                     task_state
                                                         .modified_files
-                                                        .push(filepath.to_string());
+                                                        .push(filepath.to_owned());
                                                     event_recorder.file_change_completed(filepath);
                                                 }
                                             }
@@ -1561,7 +1559,7 @@ impl AgentRunner {
                                             );
                                             event_recorder.warning(&warning_message);
                                             task_state.conversation.push(Content {
-                                                role: "user".to_string(), // Gemini API only accepts "user" and "model"
+                                                role: "user".to_owned(), // Gemini API only accepts "user" and "model"
                                                 parts: vec![Part::Text {
                                                     text: format!(
                                                         "Tool {} failed: {}",
@@ -1581,7 +1579,7 @@ impl AgentRunner {
                                     event_recorder.warning(&error_msg);
                                     task_state.warnings.push(error_msg.clone());
                                     task_state.conversation.push(Content {
-                                        role: "user".to_string(), // Gemini API only accepts "user" and "model"
+                                        role: "user".to_owned(), // Gemini API only accepts "user" and "model"
                                         parts: vec![Part::Text {
                                             text: error_msg,
                                             thought_signature: None,
@@ -1594,7 +1592,7 @@ impl AgentRunner {
                             event_recorder.warning(&error_msg);
                             task_state.warnings.push(error_msg.clone());
                             task_state.conversation.push(Content {
-                                role: "user".to_string(), // Gemini API only accepts "user" and "model"
+                                role: "user".to_owned(), // Gemini API only accepts "user" and "model"
                                 parts: vec![Part::Text {
                                     text: error_msg,
                                     thought_signature: None,
@@ -1638,7 +1636,7 @@ impl AgentRunner {
                                     let display_text =
                                         format_tool_result_for_display(tool_name, &result);
                                     task_state.conversation.push(Content {
-                                        role: "user".to_string(), // Gemini API only accepts "user" and "model"
+                                        role: "user".to_owned(), // Gemini API only accepts "user" and "model"
                                         parts: vec![Part::Text {
                                             text: display_text,
                                             thought_signature: None,
@@ -1646,7 +1644,7 @@ impl AgentRunner {
                                     });
 
                                     // Track what the agent did
-                                    task_state.executed_commands.push(tool_name.to_string());
+                                    task_state.executed_commands.push(tool_name.to_owned());
                                     event_recorder.command_finished(
                                         &command_event,
                                         CommandExecutionStatus::Completed,
@@ -1659,7 +1657,7 @@ impl AgentRunner {
                                         if let Some(filepath) =
                                             parameters.get("path").and_then(|p| p.as_str())
                                         {
-                                            task_state.modified_files.push(filepath.to_string());
+                                            task_state.modified_files.push(filepath.to_owned());
                                             event_recorder.file_change_completed(filepath);
                                         }
                                     }
@@ -1687,7 +1685,7 @@ impl AgentRunner {
                                     );
                                     event_recorder.warning(&warning_message);
                                     task_state.conversation.push(Content {
-                                        role: "user".to_string(), // Gemini API only accepts "user" and "model"
+                                        role: "user".to_owned(), // Gemini API only accepts "user" and "model"
                                         parts: vec![Part::Text {
                                             text: format!("Tool {} failed: {}", tool_name, e),
                                             thought_signature: None,
@@ -1705,7 +1703,7 @@ impl AgentRunner {
                         );
                         event_recorder.agent_message(response.content.trim());
                         task_state.conversation.push(Content {
-                            role: "model".to_string(),
+                            role: "model".to_owned(),
                             parts: vec![Part::Text {
                                 text: response.content.clone(),
                                 thought_signature: None,
@@ -1721,7 +1719,7 @@ impl AgentRunner {
                     );
                     event_recorder.agent_message(response.content.trim());
                     task_state.conversation.push(Content {
-                        role: "model".to_string(),
+                        role: "model".to_owned(),
                         parts: vec![Part::Text {
                             text: response.content.clone(),
                             thought_signature: None,
@@ -2017,7 +2015,7 @@ impl AgentRunner {
                         })
                         .unwrap_or_default()
                 } else {
-                    cmd_val.as_str().unwrap_or("").to_string()
+                    cmd_val.as_str().unwrap_or("").to_owned()
                 }
             } else {
                 String::new()
@@ -2030,7 +2028,7 @@ impl AgentRunner {
 
             let mut deny_regex = cfg.commands.deny_regex.clone();
             if let Ok(extra) = std::env::var(format!("{}DENY_REGEX", agent_prefix)) {
-                deny_regex.extend(extra.split(',').map(|s| s.trim().to_string()));
+                deny_regex.extend(extra.split(',').map(|s| s.trim().to_owned()));
             }
             // Compile deny regexes once to avoid recompiling for each pattern match
             let compiled_deny: Vec<regex::Regex> = deny_regex
@@ -2045,7 +2043,7 @@ impl AgentRunner {
 
             let mut deny_glob = cfg.commands.deny_glob.clone();
             if let Ok(extra) = std::env::var(format!("{}DENY_GLOB", agent_prefix)) {
-                deny_glob.extend(extra.split(',').map(|s| s.trim().to_string()));
+                deny_glob.extend(extra.split(',').map(|s| s.trim().to_owned()));
             }
             // Compile glob-derived regexes once
             let compiled_globs: Vec<(String, regex::Regex)> = deny_glob
@@ -2118,7 +2116,7 @@ impl AgentRunner {
         let reasoning_label = self
             .reasoning_effort
             .map(|effort| effort.to_string())
-            .unwrap_or_else(|| "default".to_string());
+            .unwrap_or_else(|| "default".to_owned());
 
         summary.push(format!(
             "Model: {} (provider: {}, reasoning: {})",
@@ -2170,21 +2168,21 @@ impl AgentRunner {
         summary.push(format!("Outcome Code: {}", resolved_outcome.code()));
 
         if !executed_commands.is_empty() {
-            summary.push("Executed Commands:".to_string());
+            summary.push("Executed Commands:".to_owned());
             for command in executed_commands {
                 summary.push(format!(" - {}", command));
             }
         }
 
         if !modified_files.is_empty() {
-            summary.push("Modified Files:".to_string());
+            summary.push("Modified Files:".to_owned());
             for file in modified_files {
                 summary.push(format!(" - {}", file));
             }
         }
 
         if !warnings.is_empty() {
-            summary.push("Warnings:".to_string());
+            summary.push("Warnings:".to_owned());
             for warning in warnings {
                 summary.push(format!(" - {}", warning));
             }
@@ -2209,7 +2207,7 @@ fn parse_tool_code(tool_code: &str) -> Option<(String, String)> {
     // Try to match function call pattern: name(args)
     if let Some(open_paren) = code.find('(') {
         if let Some(close_paren) = code.rfind(')') {
-            let func_name = code[..open_paren].trim().to_string();
+            let func_name = code[..open_paren].trim().to_owned();
             let args_str = &code[open_paren + 1..close_paren];
 
             // Convert Python-style arguments to JSON
@@ -2224,7 +2222,7 @@ fn parse_tool_code(tool_code: &str) -> Option<(String, String)> {
 /// Convert Python-style function arguments to JSON
 fn convert_python_args_to_json(args_str: &str) -> Option<String> {
     if args_str.trim().is_empty() {
-        return Some("{}".to_string());
+        return Some("{}".to_owned());
     }
 
     let mut json_parts = Vec::new();
@@ -2251,11 +2249,11 @@ fn convert_python_args_to_json(args_str: &str) -> Option<String> {
                     format!("\"{}\"", value[1..value.len() - 1].replace('"', "\\\""))
                 })
             } else if value == "True" || value == "true" {
-                "true".to_string()
+                "true".to_owned()
             } else if value == "False" || value == "false" {
-                "false".to_string()
+                "false".to_owned()
             } else if value == "None" || value == "null" {
-                "null".to_string()
+                "null".to_owned()
             } else if let Ok(num) = value.parse::<f64>() {
                 num.to_string()
             } else {

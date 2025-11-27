@@ -200,8 +200,8 @@ mod tests {
     #[test]
     fn serialize_tool_request() {
         let request = ToolRequest {
-            id: "test-id".to_string(),
-            tool_name: "read_file".to_string(),
+            id: "test-id".to_owned(),
+            tool_name: "read_file".to_owned(),
             args: json!({"path": "/test"}),
         };
 
@@ -213,7 +213,7 @@ mod tests {
     #[test]
     fn serialize_success_response() {
         let response = ToolResponse {
-            id: "test-id".to_string(),
+            id: "test-id".to_owned(),
             success: true,
             result: Some(json!({"data": "test"})),
             error: None,
@@ -228,10 +228,10 @@ mod tests {
     #[test]
     fn serialize_error_response() {
         let response = ToolResponse {
-            id: "test-id".to_string(),
+            id: "test-id".to_owned(),
             success: false,
             result: None,
-            error: Some("File not found".to_string()),
+            error: Some("File not found".to_owned()),
         };
 
         let json = serde_json::to_string(&response).unwrap();

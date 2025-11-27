@@ -31,25 +31,25 @@ impl ContextAnalyzer {
         // Try to detect language from content
         if let Some(language) = self.tree_sitter.detect_language_from_content(source) {
             return match language {
-                crate::tools::tree_sitter::LanguageSupport::Rust => "rust".to_string(),
-                crate::tools::tree_sitter::LanguageSupport::Python => "python".to_string(),
-                crate::tools::tree_sitter::LanguageSupport::JavaScript => "javascript".to_string(),
-                crate::tools::tree_sitter::LanguageSupport::TypeScript => "typescript".to_string(),
-                crate::tools::tree_sitter::LanguageSupport::Go => "go".to_string(),
-                crate::tools::tree_sitter::LanguageSupport::Java => "java".to_string(),
-                crate::tools::tree_sitter::LanguageSupport::Bash => "bash".to_string(),
-                crate::tools::tree_sitter::LanguageSupport::Swift => "swift".to_string(),
+                crate::tools::tree_sitter::LanguageSupport::Rust => "rust".to_owned(),
+                crate::tools::tree_sitter::LanguageSupport::Python => "python".to_owned(),
+                crate::tools::tree_sitter::LanguageSupport::JavaScript => "javascript".to_owned(),
+                crate::tools::tree_sitter::LanguageSupport::TypeScript => "typescript".to_owned(),
+                crate::tools::tree_sitter::LanguageSupport::Go => "go".to_owned(),
+                crate::tools::tree_sitter::LanguageSupport::Java => "java".to_owned(),
+                crate::tools::tree_sitter::LanguageSupport::Bash => "bash".to_owned(),
+                crate::tools::tree_sitter::LanguageSupport::Swift => "swift".to_owned(),
             };
         }
 
         // Default to rust if no language detected
-        "rust".to_string()
+        "rust".to_owned()
     }
 
     fn extract_prefix(&self, source: &str, line: usize, column: usize) -> String {
         let lines: Vec<&str> = source.lines().collect();
         if line < lines.len() && column <= lines[line].len() {
-            lines[line][..column].to_string()
+            lines[line][..column].to_owned()
         } else {
             String::new()
         }
@@ -144,20 +144,20 @@ impl ContextAnalyzer {
             crate::tools::tree_sitter::LanguageSupport::Rust => {
                 if kind == "use_declaration" {
                     let import_text = &source[node.start_byte()..node.end_byte()];
-                    imports.push(import_text.to_string());
+                    imports.push(import_text.to_owned());
                 }
             }
             crate::tools::tree_sitter::LanguageSupport::Python => {
                 if kind == "import_statement" || kind == "import_from_statement" {
                     let import_text = &source[node.start_byte()..node.end_byte()];
-                    imports.push(import_text.to_string());
+                    imports.push(import_text.to_owned());
                 }
             }
             crate::tools::tree_sitter::LanguageSupport::JavaScript
             | crate::tools::tree_sitter::LanguageSupport::TypeScript => {
                 if kind == "import_statement" {
                     let import_text = &source[node.start_byte()..node.end_byte()];
-                    imports.push(import_text.to_string());
+                    imports.push(import_text.to_owned());
                 }
             }
             crate::tools::tree_sitter::LanguageSupport::Bash => {
@@ -165,7 +165,7 @@ impl ContextAnalyzer {
                     let import_text = &source[node.start_byte()..node.end_byte()];
                     let trimmed = import_text.trim_start();
                     if trimmed.starts_with("source ") || trimmed.starts_with(". ") {
-                        imports.push(import_text.to_string());
+                        imports.push(import_text.to_owned());
                     }
                 }
             }
@@ -173,7 +173,7 @@ impl ContextAnalyzer {
                 // Generic approach for other languages
                 if kind.contains("import") || kind.contains("require") {
                     let import_text = &source[node.start_byte()..node.end_byte()];
-                    imports.push(import_text.to_string());
+                    imports.push(import_text.to_owned());
                 }
             }
         }

@@ -26,7 +26,7 @@ pub async fn handle_create_project_command(
     let features: Vec<String> = if features.is_empty() {
         vec![]
     } else {
-        features.split(',').map(|s| s.trim().to_string()).collect()
+        features.split(',').map(|s| s.trim().to_owned()).collect()
     };
 
     let mut registry = ToolRegistry::new(config.workspace.clone()).await;
@@ -110,7 +110,7 @@ fn main() {
     println!("Hello, {}!", env!("CARGO_PKG_NAME"));
 
     let person = Person {
-        name: "Alice".to_string(),
+        name: "Alice".to_owned(),
         age: 30,
     };
 

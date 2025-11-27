@@ -148,7 +148,7 @@ impl PermissionAuditLog {
             decision,
             reason: reason.to_string(),
             resolved_path,
-            requested_by: "CommandPolicyEvaluator".to_string(),
+            requested_by: "CommandPolicyEvaluator".to_owned(),
         };
 
         self.record(event)

@@ -256,8 +256,8 @@ mod tests {
         let engine = PatternEngine::new(100, 10);
 
         engine.record(ExecutionEvent {
-            tool_name: "grep".to_string(),
-            arguments: "pattern:test".to_string(),
+            tool_name: "grep".to_owned(),
+            arguments: "pattern:test".to_owned(),
             success: true,
             quality_score: 0.8,
             duration_ms: 100,
@@ -273,8 +273,8 @@ mod tests {
 
         for _ in 0..3 {
             engine.record(ExecutionEvent {
-                tool_name: "grep".to_string(),
-                arguments: "pattern:test".to_string(),
+                tool_name: "grep".to_owned(),
+                arguments: "pattern:test".to_owned(),
                 success: true,
                 quality_score: 0.5,
                 duration_ms: 100,
@@ -291,7 +291,7 @@ mod tests {
 
         for (i, quality) in [0.3, 0.5, 0.8].iter().enumerate() {
             engine.record(ExecutionEvent {
-                tool_name: "grep".to_string(),
+                tool_name: "grep".to_owned(),
                 arguments: format!("pattern:{}", i),
                 success: true,
                 quality_score: *quality,
@@ -309,7 +309,7 @@ mod tests {
 
         for (i, quality) in [0.9, 0.6, 0.2].iter().enumerate() {
             engine.record(ExecutionEvent {
-                tool_name: "grep".to_string(),
+                tool_name: "grep".to_owned(),
                 arguments: format!("pattern:{}", i),
                 success: true,
                 quality_score: *quality,
@@ -329,8 +329,8 @@ mod tests {
         let tools = vec!["grep", "read", "grep", "read"];
         for (i, tool) in tools.iter().enumerate() {
             engine.record(ExecutionEvent {
-                tool_name: tool.to_string(),
-                arguments: "arg".to_string(),
+                tool_name: (*tool).to_owned(),
+                arguments: "arg".to_owned(),
                 success: true,
                 quality_score: 0.8,
                 duration_ms: 100,
@@ -340,7 +340,7 @@ mod tests {
 
         // Last tool is "read", so should predict "grep"
         let predicted = engine.predict_next_tool();
-        assert_eq!(predicted, Some("grep".to_string()));
+        assert_eq!(predicted, Some("grep".to_owned()));
     }
 
     #[test]
@@ -349,8 +349,8 @@ mod tests {
 
         for i in 0..5 {
             engine.record(ExecutionEvent {
-                tool_name: "grep".to_string(),
-                arguments: "arg".to_string(),
+                tool_name: "grep".to_owned(),
+                arguments: "arg".to_owned(),
                 success: i != 2, // One failure
                 quality_score: 0.8,
                 duration_ms: 100,

@@ -97,18 +97,18 @@ result = {"test": double_value(21)}
         // Step 3: Save the code as a reusable skill for later use
         let skill = Skill {
             metadata: SkillMetadata {
-                name: "double_value".to_string(),
-                description: "Double a number".to_string(),
-                language: "python3".to_string(),
+                name: "double_value".to_owned(),
+                description: "Double a number".to_owned(),
+                language: "python3".to_owned(),
                 inputs: vec![],
-                output: "integer".to_string(),
+                output: "integer".to_owned(),
                 examples: vec![],
-                tags: vec!["math".to_string()],
+                tags: vec!["math".to_owned()],
                 created_at: chrono::Utc::now().to_rfc3339(),
                 modified_at: chrono::Utc::now().to_rfc3339(),
                 tool_dependencies: vec![],
             },
-            code: code.to_string(),
+            code: code.to_owned(),
         };
 
         skill_manager.save_skill(skill).await.unwrap();
@@ -270,7 +270,7 @@ try:
 
         // Get recommendations
         let tool_recs = analyzer.recommend_tools("list", 1);
-        assert!(tool_recs.contains(&"list_files".to_string()));
+        assert!(tool_recs.contains(&"list_files".to_owned()));
 
         // Identify risky tools
         let risky = analyzer.identify_risky_tools(0.3);

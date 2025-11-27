@@ -165,7 +165,7 @@ impl ToolSelector for AdaptiveToolSelector {
         let mut scored: Vec<(String, f32)> = candidates
             .iter()
             .map(|tool| {
-                let name = tool.to_string();
+                let name = (*tool).to_owned();
                 let score = score_tool(&name, context);
                 (name, score)
             })
@@ -222,8 +222,8 @@ impl ToolEffectivenessTracker {
     /// Get or create effectiveness tracker for tool
     fn get_or_create(&mut self, tool_name: &str) -> &mut ToolEffectiveness {
         self.effectiveness
-            .entry(tool_name.to_string())
-            .or_insert_with(|| ToolEffectiveness::new(tool_name.to_string()))
+            .entry(tool_name.to_owned())
+            .or_insert_with(|| ToolEffectiveness::new(tool_name.to_owned()))
     }
 
     /// Record successful tool execution
@@ -292,7 +292,7 @@ mod tests {
 
     #[test]
     fn test_tool_effectiveness_success() {
-        let mut eff = ToolEffectiveness::new("grep".to_string());
+        let mut eff = ToolEffectiveness::new("grep".to_owned());
         eff.record_success(0.9, 100.0);
         eff.record_success(0.85, 110.0);
 
@@ -304,7 +304,7 @@ mod tests {
 
     #[test]
     fn test_tool_effectiveness_failure() {
-        let mut eff = ToolEffectiveness::new("find".to_string());
+        let mut eff = ToolEffectiveness::new("find".to_owned());
         eff.record_failure(ToolFailureMode::Timeout, 5000.0);
 
         assert_eq!(eff.success_count, 0);
@@ -318,23 +318,23 @@ mod tests {
         let selector = AdaptiveToolSelector;
         let mut effectiveness = HashMap::new();
 
-        let mut grep_eff = ToolEffectiveness::new("grep".to_string());
+        let mut grep_eff = ToolEffectiveness::new("grep".to_owned());
         grep_eff.record_success(0.9, 100.0);
-        effectiveness.insert("grep".to_string(), grep_eff);
+        effectiveness.insert("grep".to_owned(), grep_eff);
 
-        let mut find_eff = ToolEffectiveness::new("find".to_string());
+        let mut find_eff = ToolEffectiveness::new("find".to_owned());
         find_eff.record_failure(ToolFailureMode::Timeout, 5000.0);
-        effectiveness.insert("find".to_string(), find_eff);
+        effectiveness.insert("find".to_owned(), find_eff);
 
         let context = ToolSelectionContext {
-            task_description: "find error patterns".to_string(),
+            task_description: "find error patterns".to_owned(),
             prior_tools_used: vec![],
             prior_result_qualities: vec![],
             tool_effectiveness: effectiveness,
         };
 
         let selected = selector.select_tool(&context, &["grep", "find"]);
-        assert_eq!(selected, Some("grep".to_string()));
+        assert_eq!(selected, Some("grep".to_owned()));
     }
 
     #[test]
@@ -343,15 +343,15 @@ mod tests {
         let effectiveness = HashMap::new();
 
         let context = ToolSelectionContext {
-            task_description: "find files".to_string(),
-            prior_tools_used: vec!["grep".to_string()],
+            task_description: "find files".to_owned(),
+            prior_tools_used: vec!["grep".to_owned()],
             prior_result_qualities: vec![],
             tool_effectiveness: effectiveness,
         };
 
         let selected = selector.select_tool(&context, &["grep", "find"]);
         // Should prefer find over grep since grep was recently used
-        assert_eq!(selected, Some("find".to_string()));
+        assert_eq!(selected, Some("find".to_owned()));
     }
 
     #[test]

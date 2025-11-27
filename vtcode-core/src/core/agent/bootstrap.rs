@@ -181,12 +181,12 @@ mod tests {
         let temp_dir = tempfile::tempdir().expect("temp dir");
         let agent_config = AgentConfig {
             model: models::GEMINI_2_5_FLASH_PREVIEW.to_string(),
-            api_key: "test-api-key".to_string(),
+            api_key: "test-api-key".to_owned(),
             provider: Provider::Gemini.to_string(),
             api_key_env: Provider::Gemini.default_api_key_env().to_string(),
             workspace: temp_dir.path().to_path_buf(),
             verbose: false,
-            theme: "default".to_string(),
+            theme: "default".to_owned(),
             reasoning_effort: ReasoningEffortLevel::default(),
             ui_surface: UiSurfacePreference::Inline,
             prompt_cache: PromptCachingConfig::default(),
@@ -213,12 +213,12 @@ mod tests {
         let temp_dir = tempfile::tempdir().expect("temp dir");
         let agent_config = AgentConfig {
             model: models::GEMINI_2_5_FLASH_PREVIEW.to_string(),
-            api_key: "test-api-key".to_string(),
+            api_key: "test-api-key".to_owned(),
             provider: Provider::Gemini.to_string(),
             api_key_env: Provider::Gemini.default_api_key_env().to_string(),
             workspace: temp_dir.path().to_path_buf(),
             verbose: true,
-            theme: "custom".to_string(),
+            theme: "custom".to_owned(),
             reasoning_effort: ReasoningEffortLevel::High,
             ui_surface: UiSurfacePreference::Alternate,
             prompt_cache: PromptCachingConfig::default(),
@@ -231,7 +231,7 @@ mod tests {
         };
 
         let custom_session = SessionInfo {
-            session_id: "session_custom".to_string(),
+            session_id: "session_custom".to_owned(),
             start_time: 42,
             total_turns: 1,
             total_decisions: 2,

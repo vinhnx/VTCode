@@ -308,7 +308,7 @@ impl Middleware for RetryMiddleware {
         let mut result = MiddlewareResult {
             success: false,
             result: None,
-            error: Some(MiddlewareError::ExecutionFailed("not executed".to_string())),
+            error: Some(MiddlewareError::ExecutionFailed("not executed".to_owned())),
             metadata: ExecutionMetadata::default(),
         };
 
@@ -326,10 +326,7 @@ impl Middleware for RetryMiddleware {
             }
         }
 
-        result
-            .metadata
-            .layers_executed
-            .push(self.name().to_string());
+        result.metadata.layers_executed.push(self.name().to_owned());
         result
     }
 }
@@ -347,7 +344,7 @@ impl ValidationMiddleware {
     fn validate_request(&self, request: &ToolRequest) -> Result<(), MiddlewareError> {
         if request.tool_name.is_empty() {
             return Err(MiddlewareError::ValidationFailed(
-                "tool_name is empty".to_string(),
+                "tool_name is empty".to_owned(),
             ));
         }
 

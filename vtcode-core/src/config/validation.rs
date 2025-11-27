@@ -257,7 +257,7 @@ fn validate_full_auto_config(
             }
         } else {
             result.add_error(
-                "Full-auto profile_path is required when require_profile_ack = true".to_string(),
+                "Full-auto profile_path is required when require_profile_ack = true".to_owned(),
             );
         }
     }
@@ -327,17 +327,17 @@ mod tests {
         let mut result = ValidationResult::new();
         assert!(result.is_valid);
 
-        result.add_error("Error 1".to_string());
+        result.add_error("Error 1".to_owned());
         assert!(!result.is_valid);
 
-        result.add_error("Error 2".to_string());
+        result.add_error("Error 2".to_owned());
         assert_eq!(result.errors.len(), 2);
     }
 
     #[test]
     fn validation_result_collects_warnings() {
         let mut result = ValidationResult::new();
-        result.add_warning("Warning 1".to_string());
+        result.add_warning("Warning 1".to_owned());
         assert_eq!(result.warnings.len(), 1);
         assert!(result.is_valid); // Warnings don't invalidate
     }

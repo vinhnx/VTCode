@@ -154,7 +154,7 @@ impl ConfigValidator {
             if !cwd.exists() {
                 result
                     .warnings
-                    .push("Current working directory does not exist".to_string());
+                    .push("Current working directory does not exist".to_owned());
             }
         }
 
@@ -299,8 +299,8 @@ mod tests {
         let dir = create_test_models_db();
         let validator = ConfigValidator::new(&dir.path().join("models.json")).unwrap();
         let mut config = VTCodeConfig::default();
-        config.agent.provider = "google".to_string();
-        config.agent.default_model = "gemini-2.5-flash".to_string();
+        config.agent.provider = "google".to_owned();
+        config.agent.default_model = "gemini-2.5-flash".to_owned();
 
         let result = validator.validate(&config).unwrap();
         // Model exists, so no error about model
@@ -312,8 +312,8 @@ mod tests {
         let dir = create_test_models_db();
         let validator = ConfigValidator::new(&dir.path().join("models.json")).unwrap();
         let mut config = VTCodeConfig::default();
-        config.agent.provider = "google".to_string();
-        config.agent.default_model = "nonexistent-model".to_string();
+        config.agent.provider = "google".to_owned();
+        config.agent.default_model = "nonexistent-model".to_owned();
 
         let result = validator.validate(&config).unwrap();
         assert!(result.errors.iter().any(|e| e.contains("not found")));
@@ -324,8 +324,8 @@ mod tests {
         let dir = create_test_models_db();
         let validator = ConfigValidator::new(&dir.path().join("models.json")).unwrap();
         let mut config = VTCodeConfig::default();
-        config.agent.provider = "google".to_string();
-        config.agent.default_model = "gemini-2.5-flash".to_string();
+        config.agent.provider = "google".to_owned();
+        config.agent.default_model = "gemini-2.5-flash".to_owned();
         config.context.max_context_tokens = 2000000; // Exceeds 1000000 limit
 
         let result = validator.validate(&config).unwrap();

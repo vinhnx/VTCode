@@ -16,10 +16,10 @@ impl FormatConfig {
     pub fn rustfmt() -> Self {
         Self {
             language: LanguageSupport::Rust,
-            tool_name: "rustfmt".to_string(),
-            command: vec!["rustfmt".to_string()],
-            args: vec!["--edition".to_string(), "2021".to_string()],
-            file_extensions: vec![".rs".to_string()],
+            tool_name: "rustfmt".to_owned(),
+            command: vec!["rustfmt".to_owned()],
+            args: vec!["--edition".to_owned(), "2021".to_owned()],
+            file_extensions: vec![".rs".to_owned()],
             enabled: true,
         }
     }
@@ -28,10 +28,10 @@ impl FormatConfig {
     pub fn prettier() -> Self {
         Self {
             language: LanguageSupport::TypeScript,
-            tool_name: "prettier".to_string(),
-            command: vec!["prettier".to_string()],
-            args: vec!["--write".to_string()],
-            file_extensions: vec![".ts".to_string(), ".js".to_string(), ".json".to_string()],
+            tool_name: "prettier".to_owned(),
+            command: vec!["prettier".to_owned()],
+            args: vec!["--write".to_owned()],
+            file_extensions: vec![".ts".to_owned(), ".js".to_owned(), ".json".to_owned()],
             enabled: true,
         }
     }
@@ -40,10 +40,10 @@ impl FormatConfig {
     pub fn black() -> Self {
         Self {
             language: LanguageSupport::Python,
-            tool_name: "black".to_string(),
-            command: vec!["black".to_string()],
+            tool_name: "black".to_owned(),
+            command: vec!["black".to_owned()],
             args: vec![],
-            file_extensions: vec![".py".to_string()],
+            file_extensions: vec![".py".to_owned()],
             enabled: true,
         }
     }

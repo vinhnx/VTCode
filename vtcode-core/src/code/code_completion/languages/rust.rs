@@ -24,7 +24,7 @@ impl LanguageProvider for RustProvider {
         // Add Rust-specific keywords
         if context.prefix.is_empty() || "fn".starts_with(&context.prefix) {
             suggestions.push(CompletionSuggestion::new(
-                "fn".to_string(),
+                "fn".to_owned(),
                 CompletionKind::Keyword,
                 context.clone(),
             ));
@@ -32,7 +32,7 @@ impl LanguageProvider for RustProvider {
 
         if context.prefix.is_empty() || "struct".starts_with(&context.prefix) {
             suggestions.push(CompletionSuggestion::new(
-                "struct".to_string(),
+                "struct".to_owned(),
                 CompletionKind::Keyword,
                 context.clone(),
             ));
@@ -40,7 +40,7 @@ impl LanguageProvider for RustProvider {
 
         if context.prefix.is_empty() || "impl".starts_with(&context.prefix) {
             suggestions.push(CompletionSuggestion::new(
-                "impl".to_string(),
+                "impl".to_owned(),
                 CompletionKind::Keyword,
                 context.clone(),
             ));

@@ -26,9 +26,9 @@ impl LintConfig {
     pub fn clippy() -> Self {
         Self {
             language: LanguageSupport::Rust,
-            tool_name: "clippy".to_string(),
-            command: vec!["cargo".to_string(), "clippy".to_string()],
-            args: vec!["--".to_string(), "-D".to_string(), "warnings".to_string()],
+            tool_name: "clippy".to_owned(),
+            command: vec!["cargo".to_owned(), "clippy".to_owned()],
+            args: vec!["--".to_owned(), "-D".to_owned(), "warnings".to_owned()],
             severity_levels: HashMap::new(),
             enabled: true,
         }
@@ -38,9 +38,9 @@ impl LintConfig {
     pub fn eslint() -> Self {
         Self {
             language: LanguageSupport::TypeScript,
-            tool_name: "eslint".to_string(),
-            command: vec!["eslint".to_string()],
-            args: vec!["--format".to_string(), "json".to_string()],
+            tool_name: "eslint".to_owned(),
+            command: vec!["eslint".to_owned()],
+            args: vec!["--format".to_owned(), "json".to_owned()],
             severity_levels: HashMap::new(),
             enabled: true,
         }
@@ -50,9 +50,9 @@ impl LintConfig {
     pub fn pylint() -> Self {
         Self {
             language: LanguageSupport::Python,
-            tool_name: "pylint".to_string(),
-            command: vec!["pylint".to_string()],
-            args: vec!["--output-format".to_string(), "json".to_string()],
+            tool_name: "pylint".to_owned(),
+            command: vec!["pylint".to_owned()],
+            args: vec!["--output-format".to_owned(), "json".to_owned()],
             severity_levels: HashMap::new(),
             enabled: true,
         }

@@ -40,7 +40,7 @@ impl ProviderCapabilities {
     /// Detect capabilities for a given provider and model
     pub fn detect(provider: &dyn LLMProvider, model: &str) -> Self {
         Self {
-            provider_name: provider.name().to_string(),
+            provider_name: provider.name().to_owned(),
             streaming: provider.supports_streaming(),
             advanced_reasoning: provider.supports_reasoning(model),
             reasoning_effort: provider.supports_reasoning_effort(model),
@@ -48,7 +48,7 @@ impl ProviderCapabilities {
             parallel_tools: provider.supports_parallel_tool_config(model),
             structured_output: provider.supports_structured_output(model),
             context_caching: provider.supports_context_caching(model),
-            model: model.to_string(),
+            model: model.to_owned(),
             context_size: provider.effective_context_size(model),
         }
     }
@@ -89,7 +89,7 @@ impl ProviderCapabilities {
             self.model,
             self.context_size,
             if features.is_empty() {
-                "basic".to_string()
+                "basic".to_owned()
             } else {
                 features.join(", ")
             }
@@ -104,7 +104,7 @@ mod tests {
     #[test]
     fn test_capability_summary() {
         let caps = ProviderCapabilities {
-            provider_name: "gemini".to_string(),
+            provider_name: "gemini".to_owned(),
             streaming: true,
             advanced_reasoning: false,
             reasoning_effort: false,
@@ -112,7 +112,7 @@ mod tests {
             parallel_tools: false,
             structured_output: true,
             context_caching: true,
-            model: "gemini-2.0-pro".to_string(),
+            model: "gemini-2.0-pro".to_owned(),
             context_size: 2_000_000,
         };
 
@@ -126,7 +126,7 @@ mod tests {
     #[test]
     fn test_advanced_features() {
         let basic = ProviderCapabilities {
-            provider_name: "basic".to_string(),
+            provider_name: "basic".to_owned(),
             streaming: false,
             advanced_reasoning: false,
             reasoning_effort: false,
@@ -134,7 +134,7 @@ mod tests {
             parallel_tools: false,
             structured_output: false,
             context_caching: false,
-            model: "basic-model".to_string(),
+            model: "basic-model".to_owned(),
             context_size: 128_000,
         };
 

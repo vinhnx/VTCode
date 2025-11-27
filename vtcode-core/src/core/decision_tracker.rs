@@ -237,7 +237,7 @@ impl DecisionTracker {
     /// Convenience: record a user goal/intention for this turn
     pub fn record_goal(&mut self, content: String) -> String {
         self.record_decision(
-            "User goal provided".to_string(),
+            "User goal provided".to_owned(),
             Action::Response {
                 content,
                 response_type: ResponseType::ContextSummary,

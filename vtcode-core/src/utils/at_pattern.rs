@@ -82,7 +82,7 @@ pub async fn parse_at_patterns(input: &str, base_dir: &Path) -> Result<MessageCo
                 parts.push(ContentPart::Image {
                     data: image_data.base64_data,
                     mime_type: image_data.mime_type,
-                    content_type: "image".to_string(),
+                    content_type: "image".to_owned(),
                 });
             }
             Err(_) => {

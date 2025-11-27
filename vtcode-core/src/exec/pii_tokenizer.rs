@@ -107,7 +107,7 @@ impl PiiTokenizer {
 
         for (pii_type, pattern) in &self.patterns {
             for mat in pattern.find_iter(text) {
-                let value = text[mat.start()..mat.end()].to_string();
+                let value = text[mat.start()..mat.end()].to_owned();
                 let context_start = mat.start().saturating_sub(20);
                 let context_end = (mat.end() + 20).min(text.len());
                 let context = text[context_start..context_end]
@@ -138,10 +138,10 @@ impl PiiTokenizer {
         let detected = self.detect_pii(text)?;
 
         if detected.is_empty() {
-            return Ok((text.to_string(), HashMap::new()));
+            return Ok((text.to_owned(), HashMap::new()));
         }
 
-        let mut result = text.to_string();
+        let mut result = text.to_owned();
         let mut new_tokens = HashMap::new();
 
         // Process detections in reverse order to maintain offsets
@@ -206,7 +206,7 @@ impl PiiTokenizer {
 
         Ok(PiiToken {
             token,
-            original_value: value.to_string(),
+            original_value: value.to_owned(),
             pii_type,
             created_at: chrono::Utc::now().to_rfc3339(),
         })

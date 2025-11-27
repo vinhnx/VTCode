@@ -188,8 +188,8 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
         // SEARCH & DISCOVERY TOOLS
         // ============================================================
         FunctionDeclaration {
-            name: tools::GREP_FILE.to_string(),
-            description: "Fast regex-based code search using ripgrep (replaces ast-grep). Find patterns, functions, definitions, TODOs, errors, imports, and API calls across files. Respects .gitignore/.ignore by default. Supports glob patterns, file-type filtering, context lines, and regex/literal matching. Essential for code navigation and analysis.".to_string(),
+            name: tools::GREP_FILE.to_owned(),
+            description: "Fast regex-based code search using ripgrep (replaces ast-grep). Find patterns, functions, definitions, TODOs, errors, imports, and API calls across files. Respects .gitignore/.ignore by default. Supports glob patterns, file-type filtering, context lines, and regex/literal matching. Essential for code navigation and analysis.".to_owned(),
             parameters: json!({
                 "type": "object",
                 "properties": {

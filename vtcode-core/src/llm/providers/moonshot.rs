@@ -87,7 +87,7 @@ impl MoonshotProvider {
         let mut payload = Map::new();
 
         // Basic parameters
-        payload.insert("model".to_string(), Value::String(request.model.clone()));
+        payload.insert("model".to_owned(), Value::String(request.model.clone()));
 
         payload.insert(
             "messages".to_string(),

@@ -572,7 +572,7 @@ mod tests {
         manager.initialize().await.unwrap();
 
         let mut config = DotConfig::default();
-        config.preferences.default_model = "test-model".to_string();
+        config.preferences.default_model = "test-model".to_owned();
 
         manager.save_config(&config).await.unwrap();
         let loaded_config = manager.load_config().await.unwrap();

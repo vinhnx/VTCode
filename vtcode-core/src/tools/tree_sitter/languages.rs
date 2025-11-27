@@ -44,7 +44,7 @@ impl LanguageQueries {
                     name: (type_identifier) @trait.name
                     body: (declaration_list) @trait.body)
             "#
-            .to_string(),
+            .to_owned(),
 
             classes_query: r#"
                 (struct_item
@@ -55,7 +55,7 @@ impl LanguageQueries {
                     name: (type_identifier) @enum.name
                     body: (enum_variant_list) @enum.variants) @enum.def
             "#
-            .to_string(),
+            .to_owned(),
 
             imports_query: r#"
                 (use_declaration
@@ -64,7 +64,7 @@ impl LanguageQueries {
                 (mod_item
                     name: (identifier) @module.name) @module.def
             "#
-            .to_string(),
+            .to_owned(),
 
             variables_query: r#"
                 (let_declaration
@@ -82,13 +82,13 @@ impl LanguageQueries {
                     type: (type_annotation)? @static.type
                     value: (expression)? @static.value) @static.def
             "#
-            .to_string(),
+            .to_owned(),
 
             comments_query: r#"
                 (line_comment) @comment.line
                 (block_comment) @comment.block
             "#
-            .to_string(),
+            .to_owned(),
         }
     }
 
@@ -104,7 +104,7 @@ impl LanguageQueries {
                     name: (identifier) @class.name
                     body: (block) @class.body) @class.def
             "#
-            .to_string(),
+            .to_owned(),
 
             classes_query: r#"
                 (class_definition
@@ -112,7 +112,7 @@ impl LanguageQueries {
                     superclasses: (argument_list)? @class.superclasses
                     body: (block) @class.body) @class.def
             "#
-            .to_string(),
+            .to_owned(),
 
             imports_query: r#"
                 (import_statement
@@ -122,19 +122,19 @@ impl LanguageQueries {
                     module: (dotted_name) @import.module
                     name: (dotted_name) @import.name) @import.def
             "#
-            .to_string(),
+            .to_owned(),
 
             variables_query: r#"
                 (assignment
                     left: (identifier) @variable.name
                     right: (expression) @variable.value) @variable.def
             "#
-            .to_string(),
+            .to_owned(),
 
             comments_query: r#"
                 (comment) @comment
             "#
-            .to_string(),
+            .to_owned(),
         }
     }
 
@@ -155,14 +155,14 @@ impl LanguageQueries {
                     parameters: (formal_parameters) @arrow.parameters
                     body: (statement_block) @arrow.body) @arrow.def
             "#
-            .to_string(),
+            .to_owned(),
 
             classes_query: r#"
                 (class_declaration
                     name: (identifier) @class.name
                     body: (class_body) @class.body) @class.def
             "#
-            .to_string(),
+            .to_owned(),
 
             imports_query: r#"
                 (import_statement
@@ -172,7 +172,7 @@ impl LanguageQueries {
                 (export_statement
                     declaration: (function_declaration) @export.function) @export.def
             "#
-            .to_string(),
+            .to_owned(),
 
             variables_query: r#"
                 (variable_declaration
@@ -185,12 +185,12 @@ impl LanguageQueries {
                         name: (identifier) @variable.name
                         value: (expression)? @variable.value)) @variable.def
             "#
-            .to_string(),
+            .to_owned(),
 
             comments_query: r#"
                 (comment) @comment
             "#
-            .to_string(),
+            .to_owned(),
         }
     }
 
@@ -238,7 +238,7 @@ impl LanguageQueries {
                     result: (parameter_list)? @method.result
                     body: (block) @method.body) @method.def
             "#
-            .to_string(),
+            .to_owned(),
 
             classes_query: r#"
                 (type_declaration
@@ -250,7 +250,7 @@ impl LanguageQueries {
                 (interface_type
                     method_spec: (method_spec) @interface.method) @interface.def
             "#
-            .to_string(),
+            .to_owned(),
 
             imports_query: r#"
                 (import_declaration
@@ -258,7 +258,7 @@ impl LanguageQueries {
                         path: (interpreted_string_literal) @import.path
                         name: (identifier)? @import.name)) @import.def
             "#
-            .to_string(),
+            .to_owned(),
 
             variables_query: r#"
                 (var_declaration
@@ -271,12 +271,12 @@ impl LanguageQueries {
                     left: (expression_list) @var.names
                     right: (expression_list) @var.values) @short.var
             "#
-            .to_string(),
+            .to_owned(),
 
             comments_query: r#"
                 (comment) @comment
             "#
-            .to_string(),
+            .to_owned(),
         }
     }
 
@@ -294,7 +294,7 @@ impl LanguageQueries {
                     parameters: (formal_parameters) @constructor.parameters
                     body: (block) @constructor.body) @constructor.def
             "#
-            .to_string(),
+            .to_owned(),
 
             classes_query: r#"
                 (class_declaration
@@ -305,7 +305,7 @@ impl LanguageQueries {
                     name: (identifier) @interface.name
                     body: (interface_body) @interface.body) @interface.def
             "#
-            .to_string(),
+            .to_owned(),
 
             imports_query: r#"
                 (import_declaration
@@ -314,7 +314,7 @@ impl LanguageQueries {
                 (package_declaration
                     qualified_name: (qualified_name) @package.name) @package.def
             "#
-            .to_string(),
+            .to_owned(),
 
             variables_query: r#"
                 (field_declaration
@@ -328,13 +328,13 @@ impl LanguageQueries {
                         name: (identifier) @variable.name)
                     type: (type_identifier) @variable.type) @variable.def
             "#
-            .to_string(),
+            .to_owned(),
 
             comments_query: r#"
                 (line_comment) @comment.line
                 (block_comment) @comment.block
             "#
-            .to_string(),
+            .to_owned(),
         }
     }
 
@@ -349,7 +349,7 @@ impl LanguageQueries {
                     name: (name) @function.name
                     body: (compound_statement) @function.body) @function.def
             "#
-            .to_string(),
+            .to_owned(),
 
             classes_query: String::new(),
 
@@ -361,19 +361,19 @@ impl LanguageQueries {
                 ) @import.def
                 (#match? @import.name "^(source|\.)$")
             "#
-            .to_string(),
+            .to_owned(),
 
             variables_query: r#"
                 (variable_assignment
                     name: (word) @variable.name
                     value: (_)? @variable.value) @variable.def
             "#
-            .to_string(),
+            .to_owned(),
 
             comments_query: r#"
                 (comment) @comment.line
             "#
-            .to_string(),
+            .to_owned(),
         }
     }
 
@@ -400,7 +400,7 @@ impl LanguageQueries {
                 (deinitializer_declaration
                     body: (function_body) @deinitializer.body) @deinitializer.def
             "#
-            .to_string(),
+            .to_owned(),
 
             classes_query: r#"
                 (class_declaration
@@ -428,14 +428,14 @@ impl LanguageQueries {
                     inheritance: (inheritance_clause)? @extension.inheritance
                     body: (extension_body) @extension.body) @extension.def
             "#
-            .to_string(),
+            .to_owned(),
 
             imports_query: r#"
                 (import_declaration
                     import_kind: (import_kind)? @import.kind
                     path: (import_path) @import.path) @import.def
             "#
-            .to_string(),
+            .to_owned(),
 
             variables_query: r#"
                 (property_declaration
@@ -457,13 +457,13 @@ impl LanguageQueries {
                     name: (simple_identifier) @parameter.name
                     type_annotation: (type_annotation) @parameter.type) @parameter.def
             "#
-            .to_string(),
+            .to_owned(),
 
             comments_query: r#"
                 (comment) @comment
                 (multiline_comment) @comment.multiline
             "#
-            .to_string(),
+            .to_owned(),
         }
     }
 }
@@ -562,7 +562,7 @@ impl LanguageAnalyzer {
                         } else {
                             "function"
                         }
-                        .to_string(),
+                        .to_owned(),
                     ),
                     signature: self.extract_signature(node),
                     documentation: self.extract_documentation(node),
@@ -601,7 +601,7 @@ impl LanguageAnalyzer {
                     name: name_node.text.clone(),
                     kind,
                     position: name_node.start_position.clone(),
-                    scope: Some("class".to_string()),
+                    scope: Some("class".to_owned()),
                     signature: None,
                     documentation: self.extract_documentation(node),
                 };
@@ -636,7 +636,7 @@ impl LanguageAnalyzer {
                             SymbolKind::Variable
                         },
                         position: child.start_position.clone(),
-                        scope: Some("variable".to_string()),
+                        scope: Some("variable".to_owned()),
                         signature: None,
                         documentation: None,
                     };
@@ -665,7 +665,7 @@ impl LanguageAnalyzer {
                         name: child.text.clone(),
                         kind: SymbolKind::Import,
                         position: child.start_position.clone(),
-                        scope: Some("import".to_string()),
+                        scope: Some("import".to_owned()),
                         signature: None,
                         documentation: None,
                     };
@@ -722,7 +722,7 @@ impl LanguageAnalyzer {
             if kind.contains("comment") {
                 let t = child.text.trim();
                 if !t.is_empty() {
-                    docs.push(t.to_string());
+                    docs.push(t.to_owned());
                 }
             }
         }

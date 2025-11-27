@@ -173,7 +173,7 @@ async fn analyze_project(registry: &mut ToolRegistry, workspace: &Path) -> Resul
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or("project")
-        .to_string();
+        .to_owned();
 
     let mut analysis = ProjectAnalysis {
         project_name,
@@ -211,7 +211,7 @@ async fn analyze_project(registry: &mut ToolRegistry, workspace: &Path) -> Resul
     let common_src_dirs = vec!["src", "lib", "pkg", "internal", "cmd", "app", "core"];
     for dir in common_src_dirs {
         if workspace.join(dir).exists() {
-            analysis.source_dirs.push(dir.to_string());
+            analysis.source_dirs.push(dir.to_owned());
         }
     }
 
@@ -233,8 +233,8 @@ async fn analyze_file(
     match path {
         // Rust project files
         "Cargo.toml" => {
-            analysis.languages.push("Rust".to_string());
-            analysis.build_systems.push("Cargo".to_string());
+            analysis.languages.push("Rust".to_owned());
+            analysis.build_systems.push("Cargo".to_owned());
 
             // Read Cargo.toml to extract dependencies
             let cargo_content = registry
@@ -249,16 +249,16 @@ async fn analyze_file(
             }
         }
         "Cargo.lock" => {
-            analysis.config_files.push("Cargo.lock".to_string());
+            analysis.config_files.push("Cargo.lock".to_owned());
         }
         "run.sh" | "run-debug.sh" | "run-dev.sh" | "run-prod.sh" => {
-            analysis.scripts.push(path.to_string());
+            analysis.scripts.push(path.to_owned());
         }
 
         // Node.js project files
         "package.json" => {
-            analysis.languages.push("JavaScript/TypeScript".to_string());
-            analysis.build_systems.push("npm/yarn/pnpm".to_string());
+            analysis.languages.push("JavaScript/TypeScript".to_owned());
+            analysis.build_systems.push("npm/yarn/pnpm".to_owned());
 
             // Read package.json to extract dependencies
             let package_content = registry
@@ -273,62 +273,62 @@ async fn analyze_file(
             }
         }
         "yarn.lock" | "package-lock.json" | "pnpm-lock.yaml" => {
-            analysis.config_files.push(path.to_string());
+            analysis.config_files.push(path.to_owned());
         }
 
         // Python project files
         "requirements.txt" | "pyproject.toml" | "setup.py" | "Pipfile" => {
             if !analysis.languages.iter().any(|s| s == "Python") {
-                analysis.languages.push("Python".to_string());
+                analysis.languages.push("Python".to_owned());
             }
-            analysis.build_systems.push("pip/poetry".to_string());
-            analysis.config_files.push(path.to_string());
+            analysis.build_systems.push("pip/poetry".to_owned());
+            analysis.config_files.push(path.to_owned());
         }
 
         // Go project files
         "go.mod" | "go.sum" => {
-            analysis.languages.push("Go".to_string());
-            analysis.build_systems.push("Go Modules".to_string());
-            analysis.config_files.push(path.to_string());
+            analysis.languages.push("Go".to_owned());
+            analysis.build_systems.push("Go Modules".to_owned());
+            analysis.config_files.push(path.to_owned());
         }
 
         // Java project files
         "pom.xml" | "build.gradle" | "build.gradle.kts" => {
-            analysis.languages.push("Java/Kotlin".to_string());
-            analysis.build_systems.push("Maven/Gradle".to_string());
-            analysis.config_files.push(path.to_string());
+            analysis.languages.push("Java/Kotlin".to_owned());
+            analysis.build_systems.push("Maven/Gradle".to_owned());
+            analysis.config_files.push(path.to_owned());
         }
 
         // Documentation files
         "README.md" | "CHANGELOG.md" | "CONTRIBUTING.md" | "LICENSE" | "LICENSE.md"
         | "AGENTS.md" | "AGENT.md" => {
-            analysis.documentation_files.push(path.to_string());
+            analysis.documentation_files.push(path.to_owned());
         }
 
         // Configuration files
         ".gitignore" | ".editorconfig" | ".prettierrc" | ".eslintrc" | ".eslintrc.js"
         | ".eslintrc.json" => {
-            analysis.config_files.push(path.to_string());
+            analysis.config_files.push(path.to_owned());
         }
 
         // Docker files
         "Dockerfile" | "docker-compose.yml" | "docker-compose.yaml" | ".dockerignore" => {
-            analysis.config_files.push(path.to_string());
+            analysis.config_files.push(path.to_owned());
         }
 
         // CI/CD files
         "Jenkinsfile" | ".travis.yml" | "azure-pipelines.yml" | ".circleci/config.yml" => {
-            analysis.config_files.push(path.to_string());
+            analysis.config_files.push(path.to_owned());
         }
 
         // GitHub workflows (would be detected via directory listing)
         path if path.starts_with(".github/workflows/") => {
-            analysis.config_files.push(path.to_string());
+            analysis.config_files.push(path.to_owned());
         }
 
         // Source directories
         "src" | "lib" | "pkg" | "internal" | "cmd" | "app" | "core" => {
-            analysis.source_dirs.push(path.to_string());
+            analysis.source_dirs.push(path.to_owned());
         }
 
         _ => {}
@@ -348,14 +348,14 @@ fn extract_cargo_dependencies(analysis: &mut ProjectAnalysis, content: &str) {
             && line.contains(" = ")
             && let Some(dep_name) = line.split('"').nth(1)
         {
-            deps.push(dep_name.to_string());
+            deps.push(dep_name.to_owned());
         }
     }
 
     if !deps.is_empty() {
         analysis
             .dependencies
-            .insert("Rust (Cargo)".to_string(), deps);
+            .insert("Rust (Cargo)".to_owned(), deps);
     }
 }
 
@@ -377,7 +377,7 @@ fn extract_package_dependencies(analysis: &mut ProjectAnalysis, content: &str) {
                     && dep_name != "dependencies"
                     && dep_name != "devDependencies"
                 {
-                    deps.push(dep_name.to_string());
+                    deps.push(dep_name.to_owned());
                 }
             }
         }
@@ -386,7 +386,7 @@ fn extract_package_dependencies(analysis: &mut ProjectAnalysis, content: &str) {
     if !deps.is_empty() {
         analysis
             .dependencies
-            .insert("JavaScript/TypeScript (npm)".to_string(), deps);
+            .insert("JavaScript/TypeScript (npm)".to_owned(), deps);
     }
 }
 
@@ -440,25 +440,25 @@ async fn analyze_git_history(
                 if total_commits > 0 && (conventional_count * 100 / total_commits) > 50 {
                     analysis
                         .commit_patterns
-                        .push("Conventional Commits".to_string());
+                        .push("Conventional Commits".to_owned());
                 } else {
                     analysis
                         .commit_patterns
-                        .push("Standard commit messages".to_string());
+                        .push("Standard commit messages".to_owned());
                 }
             }
         } else {
             // Fallback if git command fails - assume standard commits
             analysis
                 .commit_patterns
-                .push("Standard commit messages".to_string());
+                .push("Standard commit messages".to_owned());
         }
     } else {
         // No git repository found
         analysis.has_git_history = false;
         analysis
             .commit_patterns
-            .push("No version control detected".to_string());
+            .push("No version control detected".to_owned());
     }
 
     Ok(())
@@ -526,34 +526,34 @@ fn build_quick_start_section(analysis: &ProjectAnalysis) -> String {
     let systems = unique_preserving_order(&analysis.build_systems);
 
     if systems.iter().any(|system| system == "Cargo") {
-        lines.push("Build with `cargo check` (preferred) or `cargo build --release`.".to_string());
+        lines.push("Build with `cargo check` (preferred) or `cargo build --release`.".to_owned());
         lines.push(
-            "Format via `cargo fmt` and lint with `cargo clippy` before committing.".to_string(),
+            "Format via `cargo fmt` and lint with `cargo clippy` before committing.".to_owned(),
         );
         lines.push(
             "Run full tests using `cargo nextest run` (fallback `cargo test`); focus with `cargo nextest run <name>` or `cargo test <name>`."
-                .to_string(),
+                .to_owned(),
         );
-        lines.push("Headless prompts: `cargo run -- ask \"<prompt>\"`.".to_string());
+        lines.push("Headless prompts: `cargo run -- ask \"<prompt>\"`.".to_owned());
     }
 
     if systems.iter().any(|system| system == "npm/yarn/pnpm") {
         lines.push(
             "Install Node dependencies with the workspace package manager (`pnpm install`, etc.)."
-                .to_string(),
+                .to_owned(),
         );
-        lines.push("Run the JavaScript/TypeScript checks with the configured script (for example, `pnpm test`).".to_string());
+        lines.push("Run the JavaScript/TypeScript checks with the configured script (for example, `pnpm test`).".to_owned());
     }
 
     if systems.iter().any(|system| system == "pip/poetry") {
         lines.push(
             "Create a virtual environment and install requirements (`pip install -r requirements.txt` or `poetry install`)."
-                .to_string(),
+                .to_owned(),
         );
     }
 
     if systems.iter().any(|system| system == "Go Modules") {
-        lines.push("Synchronize modules via `go mod download` before running builds.".to_string());
+        lines.push("Synchronize modules via `go mod download` before running builds.".to_owned());
     }
 
     if analysis.scripts.iter().any(|script| script == "run.sh") {
@@ -563,18 +563,18 @@ fn build_quick_start_section(analysis: &ProjectAnalysis) -> String {
             .any(|script| script == "run-debug.sh")
         {
             lines.push(
-                "TUI entrypoints: `./run.sh` (release) and `./run-debug.sh` (debug).".to_string(),
+                "TUI entrypoints: `./run.sh` (release) and `./run-debug.sh` (debug).".to_owned(),
             );
         } else {
             lines.push(
-                "Start the bundled script with `./run.sh` for interactive sessions.".to_string(),
+                "Start the bundled script with `./run.sh` for interactive sessions.".to_owned(),
             );
         }
     }
 
     if lines.is_empty() {
         lines.push(
-            "Install dependencies and run the standard build before starting new work.".to_string(),
+            "Install dependencies and run the standard build before starting new work.".to_owned(),
         );
     }
 
@@ -602,10 +602,9 @@ fn build_architecture_section(analysis: &ProjectAnalysis) -> String {
     }
 
     if analysis.is_library && !analysis.is_application {
-        lines.push("Library-style project; expect reusable crates and packages.".to_string());
+        lines.push("Library-style project; expect reusable crates and packages.".to_owned());
     } else if analysis.is_application {
-        lines
-            .push("Application entrypoints live under the primary source directories.".to_string());
+        lines.push("Application entrypoints live under the primary source directories.".to_owned());
     }
 
     if !analysis.config_files.is_empty() {
@@ -622,21 +621,21 @@ fn build_architecture_section(analysis: &ProjectAnalysis) -> String {
     if analysis.has_ci_cd {
         lines.push(
             "CI workflows detected (check `.github/workflows/`); match their expectations locally."
-                .to_string(),
+                .to_owned(),
         );
     }
 
     if analysis.has_docker {
         lines.push(
             "Docker assets found; container workflows may be required for integration tests."
-                .to_string(),
+                .to_owned(),
         );
     }
 
     if lines.is_empty() {
         lines.push(
             "Review the repository layout to understand module boundaries before editing."
-                .to_string(),
+                .to_owned(),
         );
     }
 
@@ -649,20 +648,20 @@ fn build_code_style_section(analysis: &ProjectAnalysis) -> String {
     for language in unique_preserving_order(&analysis.languages) {
         match language.as_str() {
             "Rust" => {
-                lines.push("Rust code uses 4-space indentation, snake_case functions, PascalCase types, and `anyhow::Result<T>` with `.with_context()` for fallible paths.".to_string());
-                lines.push("Run `cargo fmt` before committing and avoid hardcoded config—read from `vtcode.toml` or constants.".to_string());
+                lines.push("Rust code uses 4-space indentation, snake_case functions, PascalCase types, and `anyhow::Result<T>` with `.with_context()` for fallible paths.".to_owned());
+                lines.push("Run `cargo fmt` before committing and avoid hardcoded config—read from `vtcode.toml` or constants.".to_owned());
             }
-            "JavaScript/TypeScript" => lines.push("Use the repository formatter (Prettier) and ESLint configuration; prefer composable, functional patterns.".to_string()),
-            "Python" => lines.push("Follow PEP 8 with Black formatting and include type hints where practical.".to_string()),
-            "Go" => lines.push("Use `gofmt`/`go vet` and keep packages minimal without unused exports.".to_string()),
-            "Java/Kotlin" => lines.push("Follow the existing Gradle or Maven style (e.g., Spotless) and match package naming conventions.".to_string()),
+            "JavaScript/TypeScript" => lines.push("Use the repository formatter (Prettier) and ESLint configuration; prefer composable, functional patterns.".to_owned()),
+            "Python" => lines.push("Follow PEP 8 with Black formatting and include type hints where practical.".to_owned()),
+            "Go" => lines.push("Use `gofmt`/`go vet` and keep packages minimal without unused exports.".to_owned()),
+            "Java/Kotlin" => lines.push("Follow the existing Gradle or Maven style (e.g., Spotless) and match package naming conventions.".to_owned()),
             other => lines.push(format!("Match the existing {other} conventions and run the project's formatter before pushing.")),
         }
     }
 
     if lines.is_empty() {
         lines.push(
-            "Match the surrounding style and keep commits free of formatting noise.".to_string(),
+            "Match the surrounding style and keep commits free of formatting noise.".to_owned(),
         );
     }
 
@@ -674,40 +673,39 @@ fn build_testing_section(analysis: &ProjectAnalysis) -> String {
     let systems = unique_preserving_order(&analysis.build_systems);
 
     if systems.iter().any(|system| system == "Cargo") {
-        lines.push("Full suite: `cargo nextest run` (or `cargo test`). Single test: `cargo nextest run <name>` / `cargo test <name>`.".to_string());
-        lines
-            .push("Lint before commit with `cargo clippy` and fix issues proactively.".to_string());
+        lines.push("Full suite: `cargo nextest run` (or `cargo test`). Single test: `cargo nextest run <name>` / `cargo test <name>`.".to_owned());
+        lines.push("Lint before commit with `cargo clippy` and fix issues proactively.".to_owned());
     }
 
     if systems.iter().any(|system| system == "npm/yarn/pnpm") {
         lines.push(
             "Run workspace checks via `pnpm test` (or equivalent) and address lint failures."
-                .to_string(),
+                .to_owned(),
         );
     }
 
     if systems.iter().any(|system| system == "pip/poetry") {
         lines.push(
             "Execute Python suites with `pytest`; include coverage or linting if configured."
-                .to_string(),
+                .to_owned(),
         );
     }
 
     if systems.iter().any(|system| system == "Go Modules") {
         lines.push(
             "Run `go test ./...` and consider the `-race` flag for concurrency-sensitive changes."
-                .to_string(),
+                .to_owned(),
         );
     }
 
     if analysis.has_ci_cd {
         lines.push(
-            "Keep CI green—mirror `.github/workflows` steps locally before pushing.".to_string(),
+            "Keep CI green—mirror `.github/workflows` steps locally before pushing.".to_owned(),
         );
     }
 
     if lines.is_empty() {
-        lines.push("Run the project's automated checks before submitting changes.".to_string());
+        lines.push("Run the project's automated checks before submitting changes.".to_owned());
     }
 
     render_section("Testing", lines).unwrap()
@@ -723,18 +721,18 @@ fn build_pr_guidelines_section(analysis: &ProjectAnalysis) -> Option<String> {
     {
         lines.push(
             "Use Conventional Commits (`type(scope): subject`) with summaries under 72 characters."
-                .to_string(),
+                .to_owned(),
         );
     } else {
         lines.push(
             "Write descriptive, imperative commit messages and group related changes together."
-                .to_string(),
+                .to_owned(),
         );
     }
 
-    lines.push("Reference issues with `Fixes #123` / `Closes #123` when applicable.".to_string());
+    lines.push("Reference issues with `Fixes #123` / `Closes #123` when applicable.".to_owned());
     lines.push(
-        "Open focused pull requests and include test evidence for non-trivial changes.".to_string(),
+        "Open focused pull requests and include test evidence for non-trivial changes.".to_owned(),
     );
 
     render_section("PR guidelines", lines)
@@ -778,8 +776,7 @@ fn build_additional_guidance_section(analysis: &ProjectAnalysis) -> Option<Strin
             .any(|script| script == "run-debug.sh")
     {
         lines.push(
-            "Use `./run.sh` for release builds and `./run-debug.sh` for debug sessions."
-                .to_string(),
+            "Use `./run.sh` for release builds and `./run-debug.sh` for debug sessions.".to_owned(),
         );
     }
 
@@ -900,7 +897,7 @@ impl ProjectAnalyzer {
         Self {
             name,
             path,
-            analysis_depth: "standard".to_string(),
+            analysis_depth: "standard".to_owned(),
         }
     }
 
@@ -924,7 +921,7 @@ mod tests {
 
     fn base_analysis() -> ProjectAnalysis {
         ProjectAnalysis {
-            project_name: "demo".to_string(),
+            project_name: "demo".to_owned(),
             languages: Vec::new(),
             build_systems: Vec::new(),
             scripts: Vec::new(),
@@ -944,15 +941,15 @@ mod tests {
     #[test]
     fn generates_agents_sections_from_analysis() {
         let mut analysis = base_analysis();
-        analysis.languages = vec!["Rust".to_string()];
-        analysis.build_systems = vec!["Cargo".to_string()];
-        analysis.source_dirs = vec!["src".to_string(), "tests".to_string()];
-        analysis.documentation_files = vec!["README.md".to_string()];
-        analysis.commit_patterns = vec!["Conventional Commits".to_string()];
+        analysis.languages = vec!["Rust".to_owned()];
+        analysis.build_systems = vec!["Cargo".to_owned()];
+        analysis.source_dirs = vec!["src".to_owned(), "tests".to_owned()];
+        analysis.documentation_files = vec!["README.md".to_owned()];
+        analysis.commit_patterns = vec!["Conventional Commits".to_owned()];
         analysis.has_ci_cd = true;
         analysis.dependencies.insert(
-            "Rust (Cargo)".to_string(),
-            vec!["anyhow".to_string(), "serde".to_string()],
+            "Rust (Cargo)".to_owned(),
+            vec!["anyhow".to_owned(), "serde".to_owned()],
         );
 
         let output = generate_agents_md(&analysis).expect("expected agents.md output");

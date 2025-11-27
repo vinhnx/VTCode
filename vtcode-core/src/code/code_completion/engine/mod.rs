@@ -95,8 +95,8 @@ impl CompletionEngine {
                     confidence: 0.7,
                     context: context.clone(),
                     metadata: HashMap::from([
-                        ("label".to_string(), snippet.label),
-                        ("description".to_string(), snippet.description),
+                        ("label".to_owned(), snippet.label),
+                        ("description".to_owned(), snippet.description),
                     ]),
                     acceptance_rate: 0.0,
                     learning_data: CompletionLearningData::default(),
@@ -106,7 +106,6 @@ impl CompletionEngine {
             }
         }
 
-        // Cache the results
         {
             let mut cache = self.suggestion_cache.write().await;
             cache.insert(cache_key, suggestions.clone());
@@ -194,38 +193,38 @@ impl CompletionEngine {
         match language {
             "rust" => vec![
                 CodeSnippet {
-                    label: "fn".to_string(),
-                    template: "fn ${1:name}(${2:params}) -> ${3:ReturnType} {\n\t${0:// body}\n}".to_string(),
-                    description: "Function declaration".to_string(),
+                    label: "fn".to_owned(),
+                    template: "fn ${1:name}(${2:params}) -> ${3:ReturnType} {\n\t${0:// body}\n}".to_owned(),
+                    description: "Function declaration".to_owned(),
                 },
                 CodeSnippet {
-                    label: "impl".to_string(),
-                    template: "impl ${1:Trait} for ${2:Type} {\n\t${0:// implementation}\n}".to_string(),
-                    description: "Implementation block".to_string(),
+                    label: "impl".to_owned(),
+                    template: "impl ${1:Trait} for ${2:Type} {\n\t${0:// implementation}\n}".to_owned(),
+                    description: "Implementation block".to_owned(),
                 },
             ],
             "python" => vec![
                 CodeSnippet {
-                    label: "def".to_string(),
-                    template: "def ${1:name}(${2:params}):\n\t${0:# body}".to_string(),
-                    description: "Function definition".to_string(),
+                    label: "def".to_owned(),
+                    template: "def ${1:name}(${2:params}):\n\t${0:# body}".to_owned(),
+                    description: "Function definition".to_owned(),
                 },
                 CodeSnippet {
-                    label: "class".to_string(),
-                    template: "class ${1:Name}:\n\tdef __init__(self${2:params}):\n\t\t${0:# initialization}".to_string(),
-                    description: "Class definition".to_string(),
+                    label: "class".to_owned(),
+                    template: "class ${1:Name}:\n\tdef __init__(self${2:params}):\n\t\t${0:# initialization}".to_owned(),
+                    description: "Class definition".to_owned(),
                 },
             ],
             "javascript" => vec![
                 CodeSnippet {
-                    label: "func".to_string(),
-                    template: "function ${1:name}(${2:params}) {\n\t${0:// body}\n}".to_string(),
-                    description: "Function declaration".to_string(),
+                    label: "func".to_owned(),
+                    template: "function ${1:name}(${2:params}) {\n\t${0:// body}\n}".to_owned(),
+                    description: "Function declaration".to_owned(),
                 },
                 CodeSnippet {
-                    label: "class".to_string(),
-                    template: "class ${1:Name} {\n\tconstructor(${2:params}) {\n\t\t${0:// initialization}\n\t}\n}".to_string(),
-                    description: "Class declaration".to_string(),
+                    label: "class".to_owned(),
+                    template: "class ${1:Name} {\n\tconstructor(${2:params}) {\n\t\t${0:// initialization}\n\t}\n}".to_owned(),
+                    description: "Class declaration".to_owned(),
                 },
             ],
             _ => vec![],

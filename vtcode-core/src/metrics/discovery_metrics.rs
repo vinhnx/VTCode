@@ -144,7 +144,7 @@ mod tests {
     #[test]
     fn test_cache_hit_rate() {
         let mut metrics = DiscoveryMetrics::new();
-        metrics.record_query("test".to_string(), 3, 30);
+        metrics.record_query("test".to_owned(), 3, 30);
         metrics.record_cache_hit();
         metrics.record_cache_hit();
 

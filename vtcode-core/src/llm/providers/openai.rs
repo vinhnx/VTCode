@@ -186,7 +186,7 @@ fn parse_responses_payload(
                                 .get("id")
                                 .and_then(|value| value.as_str())
                                 .unwrap_or_else(|| "");
-                            let serialized = arguments_value.map_or("{}".to_string(), |value| {
+                            let serialized = arguments_value.map_or("{}".to_owned(), |value| {
                                 if value.is_string() {
                                     value.as_str().unwrap_or("").to_string()
                                 } else {
@@ -640,7 +640,7 @@ impl OpenAIProvider {
                                     let function = call.get("function")?;
                                     let name = function.get("name").and_then(|v| v.as_str())?;
                                     let arguments = function.get("arguments");
-                                    let serialized = arguments.map_or("{}".to_string(), |value| {
+                                    let serialized = arguments.map_or("{}".to_owned(), |value| {
                                         if value.is_string() {
                                             value.as_str().unwrap_or("").to_string()
                                         } else {
@@ -1347,7 +1347,7 @@ impl OpenAIProvider {
                                             .unwrap_or(recipient);
                                         let arguments = extract_text_content(&message.content)
                                             .map(normalize_json_arguments)
-                                            .unwrap_or_else(|| "{}".to_string());
+                                            .unwrap_or_else(|| "{}".to_owned());
 
                                         tool_calls.push(ToolCall::function(
                                             format!("call_{}", tool_calls.len()),
@@ -1456,7 +1456,7 @@ impl OpenAIProvider {
         // Get harmony inference server URL from environment variable
         // Default to localhost vLLM server if not configured
         let server_url = std::env::var("HARMONY_INFERENCE_SERVER_URL")
-            .unwrap_or_else(|_| "http://localhost:8000".to_string());
+            .unwrap_or_else(|_| "http://localhost:8000".to_owned());
 
         // Load harmony encoding to get stop tokens
         let encoding = load_harmony_encoding(HarmonyEncodingName::HarmonyGptOss).map_err(|e| {
@@ -1637,8 +1637,8 @@ mod tests {
 
     fn sample_tool() -> ToolDefinition {
         ToolDefinition::function(
-            "search_workspace".to_string(),
-            "Search project files".to_string(),
+            "search_workspace".to_owned(),
+            "Search project files".to_owned(),
             json!({
                 "type": "object",
                 "properties": {
@@ -1652,7 +1652,7 @@ mod tests {
 
     fn sample_request(model: &str) -> LLMRequest {
         LLMRequest {
-            messages: vec![Message::user("Hello".to_string())],
+            messages: vec![Message::user("Hello".to_owned())],
             system_prompt: None,
             tools: Some(vec![sample_tool()]),
             model: model.to_string(),
@@ -1763,7 +1763,7 @@ mod tests {
     fn responses_payload_sets_instructions_from_system_prompt() {
         let provider = OpenAIProvider::with_model(String::new(), models::openai::GPT_5.to_string());
         let mut request = sample_request(models::openai::GPT_5);
-        request.system_prompt = Some("You are a helpful assistant.".to_string());
+        request.system_prompt = Some("You are a helpful assistant.".to_owned());
 
         let payload = provider
             .convert_to_openai_responses_format(&request)
@@ -1803,10 +1803,10 @@ mod tests {
     #[test]
     fn responses_payload_includes_prompt_cache_retention() {
         let mut pc = PromptCachingConfig::default();
-        pc.providers.openai.prompt_cache_retention = Some("24h".to_string());
+        pc.providers.openai.prompt_cache_retention = Some("24h".to_owned());
 
         let provider = OpenAIProvider::from_config(
-            Some("key".to_string()),
+            Some("key".to_owned()),
             Some(models::openai::GPT_5_1.to_string()),
             None,
             Some(pc),
@@ -1851,7 +1851,7 @@ mod tests {
     #[test]
     fn responses_payload_includes_prompt_cache_retention_streaming() {
         let mut pc = PromptCachingConfig::default();
-        pc.providers.openai.prompt_cache_retention = Some("12h".to_string());
+        pc.providers.openai.prompt_cache_retention = Some("12h".to_owned());
 
         let provider = OpenAIProvider::from_config(
             Some("key".to_string()),
@@ -1899,7 +1899,7 @@ mod tests {
     #[test]
     fn provider_from_config_respects_prompt_cache_retention() {
         let mut pc = PromptCachingConfig::default();
-        pc.providers.openai.prompt_cache_retention = Some("72h".to_string());
+        pc.providers.openai.prompt_cache_retention = Some("72h".to_owned());
         let provider = OpenAIProvider::from_config(
             Some("key".to_string()),
             Some(models::openai::GPT_5_1.to_string()),
@@ -1910,7 +1910,7 @@ mod tests {
 
         assert_eq!(
             provider.prompt_cache_settings.prompt_cache_retention,
-            Some("72h".to_string())
+            Some("72h".to_owned())
         );
     }
 
@@ -2114,7 +2114,7 @@ fn build_standard_responses_payload(
 
                 if !tool_content.is_empty() {
                     if let Value::Object(ref mut map) = tool_result {
-                        map.insert("content".to_string(), json!(tool_content));
+                        map.insert("content".to_owned(), json!(tool_content));
                     }
                 }
 
@@ -2144,7 +2144,7 @@ fn build_codex_responses_payload(request: &LLMRequest) -> Result<OpenAIResponses
     if let Some(system_prompt) = &request.system_prompt {
         let trimmed = system_prompt.trim();
         if !trimmed.is_empty() {
-            additional_guidance.push(trimmed.to_string());
+            additional_guidance.push(trimmed.to_owned());
         }
     }
 
@@ -2157,7 +2157,7 @@ fn build_codex_responses_payload(request: &LLMRequest) -> Result<OpenAIResponses
                 let content_text = msg.content.as_text();
                 let trimmed = content_text.trim();
                 if !trimmed.is_empty() {
-                    additional_guidance.push(trimmed.to_string());
+                    additional_guidance.push(trimmed.to_owned());
                 }
             }
             MessageRole::User => {
@@ -2916,7 +2916,7 @@ mod streaming_tests {
         ];
 
         for model in &test_models {
-            let provider = OpenAIProvider::with_model("test-key".to_string(), model.to_string());
+            let provider = OpenAIProvider::with_model("test-key".to_owned(), model.to_owned());
             assert_eq!(
                 provider.supports_streaming(),
                 false,
