@@ -334,7 +334,7 @@ mod tests {
         let key = CacheKey::new("read_file", "{}", "/tmp/foo.txt");
         {
             let mut c = cache.write().await;
-            c.insert(key.clone(), "{}".to_string());
+            c.insert_arc(key.clone(), Arc::new("{}".to_string()));
             assert!(c.get(&key).is_some());
         }
 
@@ -439,7 +439,7 @@ mod tests {
         let key = CacheKey::new("read_file", "{}", "/tmp/foo.txt");
         {
             let mut c = cache.write().await;
-            c.insert(key.clone(), "{}".to_string());
+            c.insert_arc(key.clone(), Arc::new("{}".to_string()));
             assert!(c.get(&key).is_some());
         }
 

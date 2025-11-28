@@ -194,8 +194,7 @@ pub(crate) async fn run_tool_call(
     // Attempt cache retrieval for read-only tools
     if is_read_only_tool {
         let mut cache = ctx.tool_result_cache.write().await;
-        let params_str = serde_json::to_string(&args_val).unwrap_or_default();
-        let cache_key = vtcode_core::tools::result_cache::CacheKey::new(&name, &params_str, "");
+        let cache_key = vtcode_core::tools::result_cache::CacheKey::from_json(&name, &args_val, "");
         if let Some(cached_output) = cache.get(&cache_key) {
             let cached_json: serde_json::Value =
                 serde_json::from_str(&cached_output).unwrap_or(serde_json::json!({}));
@@ -253,9 +252,9 @@ pub(crate) async fn run_tool_call(
         if is_read_only_tool && *command_success {
             let mut cache = ctx.tool_result_cache.write().await;
             let output_json = serde_json::to_string(&output).unwrap_or_else(|_| "{}".to_string());
-            let params_str = serde_json::to_string(&args_val).unwrap_or_default();
-            let cache_key = vtcode_core::tools::result_cache::CacheKey::new(&name, &params_str, "");
-            cache.insert(cache_key, output_json);
+            let cache_key =
+                vtcode_core::tools::result_cache::CacheKey::from_json(&name, &args_val, "");
+            cache.insert_arc(cache_key, Arc::new(output_json));
         }
     }
 
@@ -302,7 +301,15 @@ pub(crate) async fn execute_tool_with_timeout(
     ctrl_c_notify: &Arc<Notify>,
     progress_reporter: Option<&ProgressReporter>,
 ) -> ToolExecutionStatus {
-    execute_tool_with_timeout_ref(registry, name, &args, ctrl_c_state, ctrl_c_notify, progress_reporter).await
+    execute_tool_with_timeout_ref(
+        registry,
+        name,
+        &args,
+        ctrl_c_state,
+        ctrl_c_notify,
+        progress_reporter,
+    )
+    .await
 }
 
 /// Execute a tool with a timeout and progress reporting (reference-based to avoid cloning args)

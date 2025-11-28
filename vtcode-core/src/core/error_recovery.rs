@@ -145,7 +145,7 @@ impl ErrorRecoveryManager {
         let error = ExecutionError {
             id: error_id.clone(),
             timestamp: current_timestamp(),
-            error_type,  // ErrorType is Copy now, no need to clone
+            error_type, // ErrorType is Copy now, no need to clone
             message,
             context,
             recovery_attempts: Vec::new(),

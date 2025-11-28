@@ -4,6 +4,7 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::fmt;
 
 use crate::tools::result_metadata::EnhancedToolResult;
 
@@ -23,14 +24,15 @@ pub enum IntentFulfillment {
     Failed,
 }
 
-impl IntentFulfillment {
-    pub fn to_string(&self) -> String {
-        match self {
-            Self::Fulfilled => "fulfilled".to_owned(),
-            Self::PartiallyFulfilled => "partially_fulfilled".to_owned(),
-            Self::Attempted => "attempted".to_owned(),
-            Self::Failed => "failed".to_owned(),
-        }
+impl fmt::Display for IntentFulfillment {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            Self::Fulfilled => "fulfilled",
+            Self::PartiallyFulfilled => "partially_fulfilled",
+            Self::Attempted => "attempted",
+            Self::Failed => "failed",
+        };
+        f.write_str(s)
     }
 }
 
@@ -55,13 +57,13 @@ pub enum ToolIntent {
     Modify(String),
 }
 
-impl ToolIntent {
-    pub fn to_string(&self) -> String {
+impl fmt::Display for ToolIntent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Search(s) => format!("search: {}", s),
-            Self::Execute(s) => format!("execute: {}", s),
-            Self::Analyze(s) => format!("analyze: {}", s),
-            Self::Modify(s) => format!("modify: {}", s),
+            Self::Search(s) => write!(f, "search: {}", s),
+            Self::Execute(s) => write!(f, "execute: {}", s),
+            Self::Analyze(s) => write!(f, "analyze: {}", s),
+            Self::Modify(s) => write!(f, "modify: {}", s),
         }
     }
 }

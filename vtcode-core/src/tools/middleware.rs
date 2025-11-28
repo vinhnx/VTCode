@@ -203,7 +203,7 @@ impl Middleware for LoggingMiddleware {
 /// Caching middleware
 pub struct CachingMiddleware {
     // In production, this would be a proper cache implementation
-    cache: Arc<std::sync::RwLock<std::collections::HashMap<String, String>>>,
+    cache: Arc<std::sync::RwLock<std::collections::HashMap<String, Arc<String>>>>,
 }
 
 impl CachingMiddleware {
@@ -214,7 +214,12 @@ impl CachingMiddleware {
     }
 
     fn cache_key(tool: &str, args: &str) -> String {
-        format!("{}:{}", tool, args)
+        // Use a fast 64-bit hash instead of storing potentially large `args` strings directly
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::Hasher;
+        let mut hasher = DefaultHasher::new();
+        hasher.write(args.as_bytes());
+        format!("{}:{}", tool, hasher.finish())
     }
 }
 
@@ -241,7 +246,8 @@ impl Middleware for CachingMiddleware {
             if let Some(cached) = cache.get(&key) {
                 let mut result = MiddlewareResult {
                     success: true,
-                    result: Some(cached.clone()),
+                    // Return an owned String; callers expect owned Strings
+                    result: Some(cached.as_ref().clone()),
                     error: None,
                     metadata: ExecutionMetadata::default(),
                 };
@@ -260,7 +266,7 @@ impl Middleware for CachingMiddleware {
         if result.success {
             if let Some(ref output) = result.result {
                 if let Ok(mut cache) = self.cache.write() {
-                    cache.insert(key, output.clone());
+                    cache.insert(key, Arc::new(output.clone()));
                 }
             }
         }

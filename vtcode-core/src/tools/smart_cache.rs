@@ -104,6 +104,16 @@ impl CachedResult {
         }
     }
 
+    /// Create from an existing Arc result without cloning the value
+    pub fn from_arc(signature: String, result: Arc<EnhancedToolResult>) -> Self {
+        Self {
+            signature,
+            result,
+            cached_at: current_timestamp(),
+            hits: 0,
+        }
+    }
+
     /// Check if cache is still fresh (within 5 minutes)
     pub fn is_fresh(&self) -> bool {
         current_timestamp().saturating_sub(self.cached_at) < 300 // 5 minutes
@@ -186,6 +196,20 @@ impl SmartResultCache {
     pub fn put(&mut self, tool: &str, args: &Value, result: EnhancedToolResult) {
         let sig = ResultSignature::from_tool_call(tool, args);
         let cached = CachedResult::new(sig.canonical_args.clone(), result);
+
+        // Evict if needed
+        if self.cache.len() >= self.max_entries {
+            self.evict_lru();
+        }
+
+        self.cache.insert(sig.canonical_args, cached);
+    }
+
+    /// Put an Arc-wrapped result into the cache to avoid cloning where callers already
+    /// have an Arc<EnhancedToolResult> reference.
+    pub fn put_arc(&mut self, tool: &str, args: &Value, result: Arc<EnhancedToolResult>) {
+        let sig = ResultSignature::from_tool_call(tool, args);
+        let cached = CachedResult::from_arc(sig.canonical_args.clone(), result);
 
         // Evict if needed
         if self.cache.len() >= self.max_entries {
@@ -312,6 +336,7 @@ impl CacheStats {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tools::ResultMetadata;
 
     #[test]
     fn test_result_signature_creation() {
@@ -341,7 +366,7 @@ mod tests {
             "grep".to_string(),
         );
 
-        cache.put("grep", &args, result.clone());
+        cache.put_arc("grep", &args, Arc::new(result.clone()));
 
         let cached = cache.get("grep", &args);
         assert!(cached.is_some());
@@ -358,7 +383,7 @@ mod tests {
             "grep".to_string(),
         );
 
-        cache.put("grep", &args, result);
+        cache.put_arc("grep", &args, Arc::new(result));
         cache.get("grep", &args);
 
         let stats = cache.stats();
@@ -388,11 +413,29 @@ mod tests {
             "shell".to_string(),
         );
 
-        cache.put("grep", &Value::String("a".to_string()), result1);
-        cache.put("find", &Value::String("b".to_string()), result2);
-        cache.put("shell", &Value::String("c".to_string()), result3);
+        cache.put_arc("grep", &Value::String("a".to_string()), Arc::new(result1));
+        cache.put_arc("find", &Value::String("b".to_string()), Arc::new(result2));
+        cache.put_arc("shell", &Value::String("c".to_string()), Arc::new(result3));
 
         // Should have evicted one
         assert!(cache.size() <= 2);
+    }
+
+    #[test]
+    fn test_put_arc_get_arc() {
+        let mut cache = SmartResultCache::new(0.85, 100);
+        let args = Value::String("test".to_string());
+        let result = EnhancedToolResult::new(
+            Value::String("result".to_string()),
+            crate::tools::ResultMetadata::success(0.8, 0.8),
+            "grep".to_string(),
+        );
+
+        let arc_res = Arc::new(result.clone());
+        cache.put_arc("grep", &args, Arc::clone(&arc_res));
+
+        let cached = cache.get_arc("grep", &args);
+        assert!(cached.is_some());
+        assert_eq!(Arc::ptr_eq(&cached.unwrap().0, &arc_res), true);
     }
 }

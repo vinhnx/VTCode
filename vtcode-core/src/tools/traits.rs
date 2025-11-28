@@ -3,8 +3,8 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use serde_json::Value;
-use std::sync::Arc;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 /// Core trait for all agent tools
 #[async_trait]

@@ -4,6 +4,8 @@
 
 #[cfg(test)]
 mod tests {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::Hasher;
     use std::sync::Arc;
     use std::time::Duration;
     use vtcode_tools::{cache::LruCache, middleware::*, patterns::PatternDetector};
@@ -17,12 +19,16 @@ mod tests {
         let args_json = r#"{"path": "/tmp"}"#;
 
         // First call - miss
-        let cache_key = format!("{}:{}", tool_name, args_json);
+        let cache_key = {
+            let mut hasher = DefaultHasher::new();
+            hasher.write(args_json.as_bytes());
+            format!("{}:{}", tool_name, hasher.finish())
+        };
         assert_eq!(cache.get(&cache_key).await, None);
 
         // Cache result
         cache
-            .insert(cache_key.clone(), "file1.txt\nfile2.txt".into())
+            .insert_arc(cache_key.clone(), Arc::new("file1.txt\nfile2.txt".into()))
             .await;
 
         // Second call - hit
@@ -123,7 +129,11 @@ mod tests {
         ];
 
         for (tool, args, _success) in workflows {
-            let cache_key = format!("{}:{}", tool, args);
+            let cache_key = {
+                let mut hasher = DefaultHasher::new();
+                hasher.write(args.as_bytes());
+                format!("{}:{}", tool, hasher.finish())
+            };
 
             // Try cache
             let is_cached = cache.get(&cache_key).await.is_some();
@@ -131,7 +141,7 @@ mod tests {
             if !is_cached {
                 // Simulate execution and cache
                 cache
-                    .insert(cache_key, format!("result from {}", tool))
+                    .insert_arc(cache_key, Arc::new(format!("result from {}", tool)))
                     .await;
             }
 
@@ -179,7 +189,9 @@ mod tests {
     async fn test_cache_ttl_enforcement() -> anyhow::Result<()> {
         let cache: LruCache<String> = LruCache::new(10, Duration::from_millis(100));
 
-        cache.insert("key".into(), "value".into()).await;
+        cache
+            .insert_arc("key".into(), Arc::new("value".into()))
+            .await;
         assert_eq!(cache.get_owned("key").await, Some("value".to_string()));
 
         // Wait for expiration

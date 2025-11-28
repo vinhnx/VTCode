@@ -84,15 +84,15 @@ impl ProviderCapabilities {
             features.push("parallel-tools");
         }
 
+        let features_str = if features.is_empty() {
+            "basic".to_string()
+        } else {
+            features.join(", ")
+        };
+
         format!(
             "{} ({} tokens): {}",
-            self.model,
-            self.context_size,
-            if features.is_empty() {
-                "basic".to_owned()
-            } else {
-                features.join(", ")
-            }
+            self.model, self.context_size, features_str
         )
     }
 }

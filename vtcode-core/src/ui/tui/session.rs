@@ -729,6 +729,7 @@ mod tests {
     use super::prompt_palette;
     use super::*;
     use crate::tools::{PlanStep, StepStatus};
+    use crate::ui::tui::{InlineSegment, InlineTextStyle, InlineTheme};
     use chrono::Utc;
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     use ratatui::{

@@ -3,82 +3,47 @@
 //! This module provides enhanced error display capabilities for LLM providers
 //! using standard console styling for consistent terminal output.
 
-use crate::ui::styled::*;
+use crate::ui::styled::Styles;
+use anstyle::Style;
 
-/// Get a styled error message with enhanced coloring
-pub fn style_llm_error(message: &str) -> String {
-    // Use a rich red color for LLM errors
+/// Internal helper to wrap text with style codes - reduces duplication
+#[inline]
+fn style_text(style: Style, text: &str) -> String {
     format!(
         "{}{}{}",
-        Styles::render(&Styles::error()),
-        message,
+        Styles::render(&style),
+        text,
         Styles::render_reset()
     )
+}
+
+/// Get a styled error message with enhanced coloring
+#[inline]
+pub fn style_llm_error(message: &str) -> String {
+    style_text(Styles::error(), message)
 }
 
 /// Get a styled warning message with enhanced coloring
+#[inline]
 pub fn style_llm_warning(message: &str) -> String {
-    // Use an amber color for LLM warnings
-    format!(
-        "{}{}{}",
-        Styles::render(&Styles::warning()),
-        message,
-        Styles::render_reset()
-    )
+    style_text(Styles::warning(), message)
 }
 
 /// Get a styled success message with enhanced coloring
+#[inline]
 pub fn style_llm_success(message: &str) -> String {
-    // Use a vibrant green color for LLM success messages
-    format!(
-        "{}{}{}",
-        Styles::render(&Styles::success()),
-        message,
-        Styles::render_reset()
-    )
+    style_text(Styles::success(), message)
 }
 
 /// Get a styled provider name with enhanced coloring based on provider type
 pub fn style_provider_name(provider: &str) -> String {
-    let styled_name = match provider.to_lowercase().as_str() {
-        "gemini" => {
-            // Deep blue for Gemini
-            format!(
-                "{}{}{}",
-                Styles::render(&Styles::info()),
-                provider,
-                Styles::render_reset()
-            )
-        }
-        "openai" => {
-            // Bright orange for OpenAI (using yellow as approximation)
-            format!(
-                "{}{}{}",
-                Styles::render(&Styles::warning()),
-                provider,
-                Styles::render_reset()
-            )
-        }
-        "anthropic" => {
-            // Anthropic's brand purple (using magenta as approximation)
-            format!(
-                "{}{}{}",
-                Styles::render(&Styles::code()),
-                provider,
-                Styles::render_reset()
-            )
-        }
-        _ => {
-            // Default styling for other providers
-            format!(
-                "{}{}{}",
-                Styles::render(&Styles::debug()),
-                provider,
-                Styles::render_reset()
-            )
-        }
+    let style = match provider.to_lowercase().as_str() {
+        "gemini" => Styles::info(),    // Deep blue for Gemini
+        "openai" => Styles::warning(), // Bright orange for OpenAI
+        "anthropic" => Styles::code(), // Anthropic's brand purple
+        _ => Styles::debug(),          // Default styling for other providers
     };
-    styled_name
+    style_text(style, provider)
 }
 
 /// Format an LLM error for display with enhanced coloring

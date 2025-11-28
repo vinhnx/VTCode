@@ -6,8 +6,8 @@
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, VecDeque};
 use std::hash::{Hash, Hasher};
-use std::time::{SystemTime, UNIX_EPOCH};
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Identifies a cached tool result
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -27,6 +27,26 @@ impl CacheKey {
         params.hash(&mut hasher);
         let params_hash = hasher.finish();
 
+        CacheKey {
+            tool: tool.to_string(),
+            params_hash,
+            target_path: target_path.to_string(),
+        }
+    }
+
+    /// Create a cache key directly from a JSON `serde_json::Value` to avoid
+    /// serializing into an owned `String` when building a key for caches.
+    pub fn from_json(tool: &str, params: &serde_json::Value, target_path: &str) -> Self {
+        use std::hash::Hash;
+        let mut hasher = DefaultHasher::new();
+        // Try serializing to a stable byte representation, falling back to
+        // `to_string()` when serialization fails (unlikely).
+        if let Ok(bytes) = serde_json::to_vec(params) {
+            bytes.hash(&mut hasher);
+        } else {
+            params.to_string().hash(&mut hasher);
+        }
+        let params_hash = hasher.finish();
         CacheKey {
             tool: tool.to_string(),
             params_hash,
@@ -102,14 +122,26 @@ impl ToolResultCache {
         cache
     }
 
+    /// Remove key from LRU order - internal helper to avoid duplication
+    #[inline]
+    fn remove_from_lru(&mut self, key: &CacheKey) {
+        if let Some(pos) = self.lru_order.iter().position(|k| k == key) {
+            self.lru_order.remove(pos);
+        }
+    }
+
+    /// Move key to front of LRU - internal helper to avoid duplication
+    #[inline]
+    fn touch_lru(&mut self, key: CacheKey) {
+        self.remove_from_lru(&key);
+        self.lru_order.push_front(key);
+    }
+
     /// Insert a result into the cache
     pub fn insert(&mut self, key: CacheKey, output: String) {
         // Remove old entry if exists
         if self.results.remove(&key).is_some() {
-            // Keep position in LRU for quick update
-            if let Some(pos) = self.lru_order.iter().position(|k| k == &key) {
-                self.lru_order.remove(pos);
-            }
+            self.remove_from_lru(&key);
         }
 
         // Add to cache
@@ -124,48 +156,81 @@ impl ToolResultCache {
         }
     }
 
-    /// Retrieve a result if cached and fresh
-    pub fn get(&mut self, key: &CacheKey) -> Option<String> {
-        if let Some(result) = self.results.get_mut(key) {
-            if result.is_fresh(self.ttl_secs) {
-                // Update LRU order
-                result.access_count += 1;
-                if let Some(pos) = self.lru_order.iter().position(|k| k == key) {
-                    self.lru_order.remove(pos);
-                    self.lru_order.push_front(key.clone());
-                }
-                // Return an owned String for compatibility
-                return Some((*result.output).clone());
-            } else {
-                // Expired, remove it
-                self.results.remove(key);
-                if let Some(pos) = self.lru_order.iter().position(|k| k == key) {
-                    self.lru_order.remove(pos);
-                }
+    /// Insert an Arc-wrapped result into the cache to avoid cloning when the caller
+    /// already has an Arc<String> available.
+    pub fn insert_arc(&mut self, key: CacheKey, output: Arc<String>) {
+        // Remove old entry if exists
+        if self.results.remove(&key).is_some() {
+            self.remove_from_lru(&key);
+        }
+
+        // Add to cache
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+
+        let cached = CachedResult {
+            output,
+            cached_at: now,
+            access_count: 0,
+        };
+
+        self.results.insert(key.clone(), cached);
+        self.lru_order.push_front(key);
+
+        // Evict if over capacity
+        while self.results.len() > self.capacity {
+            if let Some(evicted) = self.lru_order.pop_back() {
+                self.results.remove(&evicted);
             }
         }
-        None
+    }
+
+    /// Retrieve a result if cached and fresh
+    pub fn get(&mut self, key: &CacheKey) -> Option<String> {
+        // First check freshness and get output, then update LRU order
+        let (is_fresh, output) = match self.results.get_mut(key) {
+            Some(result) if result.is_fresh(self.ttl_secs) => {
+                result.access_count += 1;
+                (true, Some((*result.output).clone()))
+            }
+            Some(_) => (false, None), // Expired
+            None => return None,
+        };
+
+        if is_fresh {
+            self.touch_lru(key.clone());
+            output
+        } else {
+            // Expired, remove it
+            self.results.remove(key);
+            self.remove_from_lru(key);
+            None
+        }
     }
 
     /// Return an Arc reference to the cached output to avoid cloning.
     pub fn get_arc(&mut self, key: &CacheKey) -> Option<Arc<String>> {
-        if let Some(result) = self.results.get_mut(key) {
-            if result.is_fresh(self.ttl_secs) {
+        // First check freshness and get output, then update LRU order
+        let (is_fresh, output) = match self.results.get_mut(key) {
+            Some(result) if result.is_fresh(self.ttl_secs) => {
                 result.access_count += 1;
-                if let Some(pos) = self.lru_order.iter().position(|k| k == key) {
-                    self.lru_order.remove(pos);
-                    self.lru_order.push_front(key.clone());
-                }
-                return Some(Arc::clone(&result.output));
-            } else {
-                // Expired, remove it
-                self.results.remove(key);
-                if let Some(pos) = self.lru_order.iter().position(|k| k == key) {
-                    self.lru_order.remove(pos);
-                }
+                (true, Some(Arc::clone(&result.output)))
             }
+            Some(_) => (false, None), // Expired
+            None => return None,
+        };
+
+        if is_fresh {
+            self.touch_lru(key.clone());
+            output
+        } else {
+            // Expired, remove it
+            self.results.remove(key);
+            self.remove_from_lru(key);
+            None
         }
-        None
     }
 
     /// Clear cache entries for a specific file
@@ -223,12 +288,21 @@ mod tests {
     }
 
     #[test]
+    fn from_json_and_new_equivalence() {
+        let params = serde_json::json!({"a": 1, "b": [1,2,3]});
+        let params_str = serde_json::to_string(&params).unwrap();
+        let k1 = CacheKey::new("tool", &params_str, "/workspace");
+        let k2 = CacheKey::from_json("tool", &params, "/workspace");
+        assert_eq!(k1, k2);
+    }
+
+    #[test]
     fn caches_and_retrieves_result() {
         let mut cache = ToolResultCache::new(10);
         let key = CacheKey::new("grep_file", "pattern=test", "/workspace");
         let output = "line 1\nline 2".to_string();
 
-        cache.insert(key.clone(), output.clone());
+        cache.insert_arc(key.clone(), Arc::new(output.clone()));
         assert_eq!(cache.get(&key).as_ref(), Some(&output));
     }
 
@@ -324,5 +398,14 @@ mod tests {
         assert_eq!(stats.capacity, 10);
         assert_eq!(stats.utilization, 20);
         assert_eq!(stats.total_accesses, 3);
+    }
+
+    #[test]
+    fn insert_arc_and_get_arc() {
+        let mut cache = ToolResultCache::new(10);
+        let key = CacheKey::new("tool", "p1", "/a");
+        let arc = Arc::new("output".to_string());
+        cache.insert_arc(key.clone(), Arc::clone(&arc));
+        assert_eq!(cache.get_arc(&key).unwrap(), arc);
     }
 }

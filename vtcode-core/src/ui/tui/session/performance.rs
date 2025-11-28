@@ -1,76 +1,19 @@
 //! Performance optimization utilities for the TUI session
-//! 
+//!
 //! Contains optimized algorithms and data structures for performance-critical operations.
 
 use std::collections::HashMap;
 use std::hash::Hash;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-/// A simple LRU cache for expensive computations
-pub struct LruCache<K, V> {
-    capacity: usize,
-    map: HashMap<K, (V, Instant)>,
-}
-
-impl<K, V> LruCache<K, V>
-where
-    K: Eq + Hash + Clone,
-    V: Clone,
-{
-    /// Creates a new LRU cache with the specified capacity
-    pub fn new(capacity: usize) -> Self {
-        Self {
-            capacity,
-            map: HashMap::with_capacity(capacity),
-        }
-    }
-
-    /// Gets a value from the cache, returning None if it's not present or expired
-    pub fn get(&mut self, key: &K) -> Option<&V> {
-        if let Some((value, timestamp)) = self.map.get(key) {
-            // Check if entry has expired (keeping it simple with 5 minute expiry for now)
-            if timestamp.elapsed() < Duration::from_secs(300) {
-                return Some(value);
-            } else {
-                self.map.remove(key);
-            }
-        }
-        None
-    }
-
-    /// Inserts a value into the cache
-    pub fn insert(&mut self, key: K, value: V) {
-        if self.map.len() >= self.capacity {
-            // Simple eviction: remove a random entry when at capacity
-            if let Some(key_to_remove) = self.map.keys().next().cloned() {
-                self.map.remove(&key_to_remove);
-            }
-        }
-        self.map.insert(key, (value, Instant::now()));
-    }
-
-    /// Clears expired entries from the cache
-    pub fn clear_expired(&mut self) {
-        let now = Instant::now();
-        self.map.retain(|_, (_, timestamp)| now.duration_since(*timestamp) < Duration::from_secs(300));
-    }
-
-    /// Returns the current number of entries in the cache
-    pub fn len(&self) -> usize {
-        self.map.len()
-    }
-
-    /// Returns true if the cache is empty
-    pub fn is_empty(&self) -> bool {
-        self.map.is_empty()
-    }
-}
+// Reuse the centralized LRU cache implementation from tools to avoid duplicate code.
+use crate::tools::improvements_cache::LruCache as CentralLruCache;
 
 // Thread-safe version using RwLock if needed for concurrent access
-use std::sync::RwLock;
 
 pub struct ThreadSafeLruCache<K, V> {
-    inner: RwLock<LruCache<K, V>>,
+    inner: Arc<CentralLruCache<K, V>>,
 }
 
 impl<K, V> ThreadSafeLruCache<K, V>
@@ -79,19 +22,27 @@ where
     V: Clone,
 {
     pub fn new(capacity: usize) -> Self {
-        Self {
-            inner: RwLock::new(LruCache::new(capacity)),
-        }
+        let cache = CentralLruCache::new(capacity, Duration::from_secs(300));
+        Self { inner: Arc::new(cache) }
     }
 
+    /// Returns a cloned owned V value for compatibility.
     pub fn get(&self, key: &K) -> Option<V> {
-        let mut cache = self.inner.write().unwrap();
-        cache.get(key).cloned()
+        self.inner.get_owned(key)
     }
 
     pub fn insert(&self, key: K, value: V) {
-        let mut cache = self.inner.write().unwrap();
-        cache.insert(key, value);
+        let _ = self.inner.put(key, value);
+    }
+
+    /// Efficient insert with Arc to avoid cloning large values
+    pub fn insert_arc(&self, key: K, value: Arc<V>) {
+        let _ = self.inner.put_arc(key, value);
+    }
+
+    /// Gets the shared Arc<V> if present.
+    pub fn get_arc(&self, key: &K) -> Option<Arc<V>> {
+        self.inner.get_arc(key)
     }
 }
 
@@ -127,7 +78,7 @@ mod tests {
     #[test]
     fn test_lru_cache_empty() {
         let cache = LruCache::<String, String>::new(2);
-        
+
         assert!(cache.is_empty());
         assert_eq!(cache.len(), 0);
     }
@@ -136,19 +87,19 @@ mod tests {
     fn test_lru_cache_clear_expired() {
         let mut cache = LruCache::new(2);
         cache.insert("key1", "value1");
-        
+
         // Sleep to ensure expiration
         std::thread::sleep(Duration::from_secs(1));
         cache.clear_expired();
-        
+
         // This test is a bit tricky since we need to adjust the expiration time
         // Test that the method properly handles expired entries
-        let initial_size = cache.size();
+        let initial_size = cache.len();
         cache.clear_expired();
-        
+
         // Verify the method doesn't crash and returns the cache to a valid state
-        assert!(cache.size() <= initial_size);
-        
+        assert!(cache.len() <= initial_size);
+
         // Test that we can still use the cache after clearing expired items
         assert!(cache.get(&"key1").is_none()); // Should be expired and cleared
     }

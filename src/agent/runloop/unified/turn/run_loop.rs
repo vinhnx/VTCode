@@ -286,7 +286,7 @@ pub(crate) async fn run_turn_execute_tool(
     // Try to get from cache first for read-only tools
     if is_read_only_tool {
         let params_str = serde_json::to_string(args_val).unwrap_or_default();
-        let cache_key = CacheKey::new(name, &params_str, "");
+        let cache_key = CacheKey::from_json(name, &args_val, "");
         {
             let mut tool_cache = tool_result_cache.write().await;
             if let Some(cached_output) = tool_cache.get(&cache_key) {
@@ -322,7 +322,7 @@ pub(crate) async fn run_turn_execute_tool(
         if let ToolExecutionStatus::Success { ref output, .. } = result {
             let output_json = serde_json::to_string(output).unwrap_or_else(|_| "{}".to_string());
             let mut cache = tool_result_cache.write().await;
-            cache.insert(cache_key, output_json);
+            cache.insert_arc(cache_key, Arc::new(output_json));
         }
 
         return result;
@@ -1573,10 +1573,7 @@ pub(crate) async fn run_single_agent_loop_unified(
 
                 // Execute the tool directly via tool registry
                 let tool_call_id = format!("explicit_run_{}", conversation_history.len());
-                match tool_registry
-                    .execute_tool_ref(&tool_name, &tool_args)
-                    .await
-                {
+                match tool_registry.execute_tool_ref(&tool_name, &tool_args).await {
                     Ok(result) => {
                         // Render the command output using the standard tool output renderer
                         crate::agent::runloop::tool_output::render_tool_output(

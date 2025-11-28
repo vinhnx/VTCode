@@ -141,10 +141,8 @@ impl GeminiProvider {
         }
 
         // Generic error for other cases
-        let formatted_error = error_display::format_llm_error(
-            "Gemini",
-            &format!("HTTP {}: {}", status, error_text),
-        );
+        let formatted_error =
+            error_display::format_llm_error("Gemini", &format!("HTTP {}: {}", status, error_text));
         LLMError::Provider(formatted_error)
     }
 }
@@ -187,8 +185,10 @@ impl LLMProvider for GeminiProvider {
             return Err(Self::handle_http_error(status, &error_text));
         }
 
-        let gemini_response: GenerateContentResponse =
-            response.json().await.map_err(|e| format_parse_error("Gemini", &e))?;
+        let gemini_response: GenerateContentResponse = response
+            .json()
+            .await
+            .map_err(|e| format_parse_error("Gemini", &e))?;
 
         Self::convert_from_gemini_response(gemini_response)
     }

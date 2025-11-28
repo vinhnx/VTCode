@@ -338,7 +338,8 @@ impl McpClient {
         tool_name: &str,
         args: Value,
     ) -> Result<Value> {
-        self.execute_tool_with_validation_ref(tool_name, &args).await
+        self.execute_tool_with_validation_ref(tool_name, &args)
+            .await
     }
 
     // Internal reference-taking implementation to avoid cloning when not necessary.

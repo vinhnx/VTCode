@@ -173,13 +173,13 @@ mod real_workflow_tests {
         }
 
         // Should get them
-        assert_eq!(cache.get(&"key0".to_string()), Some("value0".to_string()));
+        assert_eq!(cache.get("key0"), Some("value0".to_string()));
 
         // Wait for expiration
         std::thread::sleep(Duration::from_millis(150));
 
         // Should be expired
-        assert_eq!(cache.get_owned(&"key0".to_string()), None);
+        assert_eq!(cache.get_owned("key0"), None);
     }
 
     /// Test: LRU eviction when cache is full
@@ -188,20 +188,28 @@ mod real_workflow_tests {
         let cache = LruCache::new(3, Duration::from_secs(3600));
 
         // Fill cache
-        cache.put("key1".to_string(), "value1".to_string()).unwrap();
-        cache.put("key2".to_string(), "value2".to_string()).unwrap();
-        cache.put("key3".to_string(), "value3".to_string()).unwrap();
+        cache
+            .put_arc("key1".to_string(), Arc::new("value1".to_string()))
+            .unwrap();
+        cache
+            .put_arc("key2".to_string(), Arc::new("value2".to_string()))
+            .unwrap();
+        cache
+            .put_arc("key3".to_string(), Arc::new("value3".to_string()))
+            .unwrap();
 
         // Access key1 to mark it recently used
-        cache.get_arc(&"key1".to_string());
+        cache.get_arc("key1");
 
         // Add 4th item (should evict key2 as LRU)
-        cache.put("key4".to_string(), "value4".to_string()).unwrap();
+        cache
+            .put_arc("key4".to_string(), Arc::new("value4".to_string()))
+            .unwrap();
 
-        assert_eq!(cache.get_owned(&"key1".to_string()), Some("value1".to_string()));
-        assert_eq!(cache.get_owned(&"key2".to_string()), None); // Evicted
-        assert_eq!(cache.get_owned(&"key3".to_string()), Some("value3".to_string()));
-        assert_eq!(cache.get_owned(&"key4".to_string()), Some("value4".to_string()));
+        assert_eq!(cache.get_owned("key1"), Some("value1".to_string()));
+        assert_eq!(cache.get_owned("key2"), None); // Evicted
+        assert_eq!(cache.get_owned("key3"), Some("value3".to_string()));
+        assert_eq!(cache.get_owned("key4"), Some("value4".to_string()));
     }
 
     /// Test: Tool ranking by effectiveness
@@ -240,9 +248,15 @@ mod real_workflow_tests {
     fn test_workflow_cache_statistics() {
         let cache = LruCache::new(10, Duration::from_secs(3600));
 
-        cache.put("key1", "value1").unwrap();
-        cache.put("key2", "value2").unwrap();
-        cache.put("key3", "value3").unwrap();
+        cache
+            .put_arc("key1", Arc::new("value1".to_string()))
+            .unwrap();
+        cache
+            .put_arc("key2", Arc::new("value2".to_string()))
+            .unwrap();
+        cache
+            .put_arc("key3", Arc::new("value3".to_string()))
+            .unwrap();
 
         let stats = cache.stats();
         assert_eq!(stats.total_entries, 3);

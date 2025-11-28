@@ -5,9 +5,9 @@
 
 use std::collections::HashMap;
 use std::collections::VecDeque;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
-use std::sync::Arc;
 
 // Arc brings shared ownership of cached values
 /// Cache entry with TTL tracking.
@@ -170,6 +170,11 @@ impl<V: Send + Sync> LruCache<V> {
 
     /// Insert a value into the cache.
     pub async fn insert(&self, key: String, value: V) {
+        self.insert_arc(key, Arc::new(value)).await;
+    }
+
+    /// Insert an Arc-wrapped value into the cache to avoid extra cloning.
+    pub async fn insert_arc(&self, key: String, value: Arc<V>) {
         let mut entries = self.entries.write().await;
 
         // If at capacity and key doesn't exist, evict LRU entry.
@@ -187,7 +192,7 @@ impl<V: Send + Sync> LruCache<V> {
         }
 
         let entry = CacheEntry {
-            value: Arc::new(value),
+            value: value.clone(),
             inserted_at: Instant::now(),
             accessed_at: Instant::now(),
             access_count: 0,
@@ -213,6 +218,8 @@ impl<V: Send + Sync> LruCache<V> {
         let mut order = self.access_order.write().await;
         entries.clear();
         order.clear();
+        let mut stats = self.stats.write().await;
+        *stats = CacheStats::default();
     }
 
     /// Get current cache statistics.
@@ -274,8 +281,12 @@ mod tests {
     async fn test_basic_operations() {
         let cache: LruCache<String> = LruCache::new(3, Duration::from_secs(60));
 
-        cache.insert("a".into(), "value_a".into()).await;
-        cache.insert("b".into(), "value_b".into()).await;
+        cache
+            .insert_arc("a".into(), Arc::new("value_a".into()))
+            .await;
+        cache
+            .insert_arc("b".into(), Arc::new("value_b".into()))
+            .await;
 
         assert_eq!(
             cache.get("a").await.map(|v| (*v).clone()),
@@ -305,7 +316,7 @@ mod tests {
     async fn test_ttl_expiration() {
         let cache: LruCache<String> = LruCache::new(10, Duration::from_millis(50));
 
-        cache.insert("a".into(), "value".into()).await;
+        cache.insert_arc("a".into(), Arc::new("value".into())).await;
         assert_eq!(
             cache.get("a").await.map(|v| (*v).clone()),
             Some("value".into())
@@ -319,7 +330,7 @@ mod tests {
     async fn test_stats() {
         let cache: LruCache<String> = LruCache::new(10, Duration::from_secs(60));
 
-        cache.insert("a".into(), "value".into()).await;
+        cache.insert_arc("a".into(), Arc::new("value".into())).await;
         cache.get("a").await; // hit
         cache.get("b").await; // miss
 
@@ -338,5 +349,14 @@ mod tests {
         cache.prune_expired().await;
 
         assert_eq!(cache.len().await, 0);
+    }
+
+    #[tokio::test]
+    async fn insert_arc_avoids_clone() {
+        let cache = LruCache::new(2, Duration::from_secs(60));
+        let v = Arc::new(42);
+        cache.insert_arc("k1".to_string(), Arc::clone(&v)).await;
+        let got = cache.get("k1").await;
+        assert_eq!(got.unwrap().as_ref(), &42);
     }
 }

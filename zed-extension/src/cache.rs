@@ -3,14 +3,15 @@
 /// Implements intelligent caching for workspace analysis, file content, and command results.
 /// Provides cache invalidation strategies and memory-efficient storage.
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Cache entry with metadata
 #[derive(Debug, Clone)]
 pub struct CacheEntry<T: Clone> {
-    /// Cached value
-    pub value: T,
+    /// Cached value (Arc to avoid cloning heavy values)
+    pub value: Arc<T>,
     /// Timestamp when cached
     pub created_at: u64,
     /// Last accessed timestamp
@@ -26,7 +27,7 @@ impl<T: Clone> CacheEntry<T> {
     pub fn new(value: T) -> Self {
         let now = now_timestamp();
         Self {
-            value,
+            value: Arc::new(value),
             created_at: now,
             accessed_at: now,
             ttl_seconds: 3600,
@@ -36,6 +37,30 @@ impl<T: Clone> CacheEntry<T> {
 
     /// Create a cache entry with custom TTL
     pub fn with_ttl(value: T, ttl_seconds: u64) -> Self {
+        let now = now_timestamp();
+        Self {
+            value: Arc::new(value),
+            created_at: now,
+            accessed_at: now,
+            ttl_seconds,
+            access_count: 0,
+        }
+    }
+
+    /// Construct from an existing Arc<T> without cloning the underlying value
+    pub fn from_arc(value: Arc<T>) -> Self {
+        let now = now_timestamp();
+        Self {
+            value,
+            created_at: now,
+            accessed_at: now,
+            ttl_seconds: 3600,
+            access_count: 0,
+        }
+    }
+
+    /// Construct from an existing Arc<T> with a specific TTL
+    pub fn from_arc_with_ttl(value: Arc<T>, ttl_seconds: u64) -> Self {
         let now = now_timestamp();
         Self {
             value,
@@ -125,14 +150,33 @@ impl WorkspaceAnalysisCache {
         self.cache.insert(workspace, entry);
     }
 
+    /// Insert an Arc-wrapped analysis entry to avoid cloning large analysis structs
+    pub fn cache_analysis_arc(&mut self, workspace: PathBuf, data: Arc<WorkspaceAnalysisData>) {
+        let entry = CacheEntry::from_arc_with_ttl(data, 1800);
+        self.cache.insert(workspace, entry);
+    }
+
     /// Get cached analysis
     pub fn get_analysis(&mut self, workspace: &PathBuf) -> Option<WorkspaceAnalysisData> {
         if let Some(entry) = self.cache.get_mut(workspace) {
             if !entry.is_expired() {
                 entry.touch();
-                return Some(entry.value.clone());
+                return Some((*entry.value).clone());
             } else {
                 // Remove expired entry
+                self.cache.remove(workspace);
+            }
+        }
+        None
+    }
+
+    /// Return an Arc reference to the cached analysis to avoid cloning.
+    pub fn get_analysis_shared(&mut self, workspace: &PathBuf) -> Option<Arc<WorkspaceAnalysisData>> {
+        if let Some(entry) = self.cache.get_mut(workspace) {
+            if !entry.is_expired() {
+                entry.touch();
+                return Some(Arc::clone(&entry.value));
+            } else {
                 self.cache.remove(workspace);
             }
         }
@@ -215,12 +259,36 @@ impl FileContentCache {
         self.current_size_mb += content_size;
     }
 
+    /// Insert an Arc-wrapped content value to avoid cloning the String value
+    pub fn cache_content_arc(&mut self, path: PathBuf, content: Arc<String>) {
+        let content_size = (content.len() as f32 / 1024.0 / 1024.0).ceil() as usize;
+        if self.current_size_mb + content_size > self.max_size_mb {
+            self._evict_lru();
+        }
+        let entry = CacheEntry::from_arc_with_ttl(content, 600);
+        self.cache.insert(path, entry);
+        self.current_size_mb += content_size;
+    }
+
     /// Get cached content
     pub fn get_content(&mut self, path: &PathBuf) -> Option<String> {
         if let Some(entry) = self.cache.get_mut(path) {
             if !entry.is_expired() {
                 entry.touch();
-                return Some(entry.value.clone());
+                return Some((*entry.value).clone());
+            } else {
+                self.cache.remove(path);
+            }
+        }
+        None
+    }
+
+    /// Return a shared Arc<String> reference to cached content to avoid copies.
+    pub fn get_content_shared(&mut self, path: &PathBuf) -> Option<Arc<String>> {
+        if let Some(entry) = self.cache.get_mut(path) {
+            if !entry.is_expired() {
+                entry.touch();
+                return Some(Arc::clone(&entry.value));
             } else {
                 self.cache.remove(path);
             }
@@ -318,12 +386,41 @@ impl CommandResultCache {
         self.cache.insert(key, entry);
     }
 
+    /// Insert an Arc-wrapped command result to avoid cloning
+    pub fn cache_result_arc(&mut self, key: String, result: Arc<String>) {
+        if self.cache.len() >= self.max_entries {
+            if let Some((oldest_key, _)) = self
+                .cache
+                .iter()
+                .min_by_key(|(_, entry)| entry.created_at)
+                .map(|(k, v)| (k.clone(), v.clone()))
+            {
+                self.cache.remove(&oldest_key);
+            }
+        }
+        let entry = CacheEntry::from_arc_with_ttl(result, 3600);
+        self.cache.insert(key, entry);
+    }
+
     /// Get cached result
     pub fn get_result(&mut self, key: &str) -> Option<String> {
         if let Some(entry) = self.cache.get_mut(key) {
             if !entry.is_expired() {
                 entry.touch();
-                return Some(entry.value.clone());
+                return Some((*entry.value).clone());
+            } else {
+                self.cache.remove(key);
+            }
+        }
+        None
+    }
+
+    /// Get a shared Arc<String> reference to the cached result to avoid clones.
+    pub fn get_result_shared(&mut self, key: &str) -> Option<Arc<String>> {
+        if let Some(entry) = self.cache.get_mut(key) {
+            if !entry.is_expired() {
+                entry.touch();
+                return Some(Arc::clone(&entry.value));
             } else {
                 self.cache.remove(key);
             }
@@ -435,11 +532,30 @@ mod tests {
             config_files: vec![],
         };
 
-        cache.cache_analysis(path.clone(), data.clone());
+        cache.cache_analysis_arc(path.clone(), Arc::new(data.clone()));
         let retrieved = cache.get_analysis(&path);
 
         assert!(retrieved.is_some());
         assert_eq!(retrieved.unwrap().file_count, 100);
+    }
+
+    #[test]
+    fn test_workspace_cache_store_and_retrieve_arc() {
+        let mut cache = WorkspaceAnalysisCache::new();
+        let path = PathBuf::from("/test/workspace");
+        let data = Arc::new(WorkspaceAnalysisData {
+            file_count: 200,
+            dir_count: 20,
+            languages: vec!["rust".to_string()],
+            total_size: 2048,
+            config_files: vec![],
+        });
+
+        cache.cache_analysis_arc(path.clone(), Arc::clone(&data));
+        let retrieved = cache.get_analysis_shared(&path);
+
+        assert!(retrieved.is_some());
+        assert_eq!(Arc::strong_count(&retrieved.unwrap()), 2);
     }
 
     #[test]
@@ -454,7 +570,7 @@ mod tests {
             config_files: vec![],
         };
 
-        cache.cache_analysis(path, data);
+        cache.cache_analysis_arc(path, Arc::new(data));
         assert_eq!(cache.cache.len(), 1);
 
         cache.clear();
@@ -473,10 +589,23 @@ mod tests {
         let path = PathBuf::from("/test/file.rs");
         let content = "fn main() {}".to_string();
 
-        cache.cache_content(path.clone(), content.clone());
+        cache.cache_content_arc(path.clone(), Arc::new(content.clone()));
         let retrieved = cache.get_content(&path);
 
         assert_eq!(retrieved, Some(content));
+    }
+
+    #[test]
+    fn test_file_content_cache_store_and_retrieve_arc() {
+        let mut cache = FileContentCache::new();
+        let path = PathBuf::from("/test/file.rs");
+        let content = Arc::new("fn main() {}".to_string());
+
+        cache.cache_content_arc(path.clone(), Arc::clone(&content));
+        let retrieved = cache.get_content_shared(&path);
+
+        assert!(retrieved.is_some());
+        assert_eq!(Arc::strong_count(&retrieved.unwrap()), 2);
     }
 
     #[test]
@@ -491,10 +620,23 @@ mod tests {
         let key = "command_hash".to_string();
         let result = "result".to_string();
 
-        cache.cache_result(key.clone(), result.clone());
+        cache.cache_result_arc(key.clone(), Arc::new(result.clone()));
         let retrieved = cache.get_result(&key);
 
         assert_eq!(retrieved, Some(result));
+    }
+
+    #[test]
+    fn test_command_result_cache_store_and_retrieve_arc() {
+        let mut cache = CommandResultCache::new();
+        let key = "command_hash".to_string();
+        let result = Arc::new("result".to_string());
+
+        cache.cache_result_arc(key.clone(), Arc::clone(&result));
+        let retrieved = cache.get_result_shared(&key);
+
+        assert!(retrieved.is_some());
+        assert_eq!(Arc::strong_count(&retrieved.unwrap()), 2);
     }
 
     #[test]

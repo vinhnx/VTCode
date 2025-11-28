@@ -7,6 +7,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
+use std::fmt;
 use std::time::SystemTime;
 
 /// Result completeness level
@@ -23,13 +24,21 @@ pub enum ResultCompleteness {
 }
 
 impl ResultCompleteness {
-    pub fn to_string(&self) -> String {
+    /// Deprecated: prefer using the `Display` impl; `ToString` is derived from Display.
+    #[allow(dead_code)]
+    pub fn to_static_str(&self) -> &'static str {
         match self {
-            Self::Complete => "complete".to_string(),
-            Self::Partial => "partial".to_string(),
-            Self::Truncated => "truncated".to_string(),
-            Self::Empty => "empty".to_string(),
+            Self::Complete => "complete",
+            Self::Partial => "partial",
+            Self::Truncated => "truncated",
+            Self::Empty => "empty",
         }
+    }
+}
+
+impl fmt::Display for ResultCompleteness {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.to_static_str())
     }
 }
 
@@ -493,6 +502,7 @@ impl Default for ScorerRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     #[test]
     fn test_result_completeness() {

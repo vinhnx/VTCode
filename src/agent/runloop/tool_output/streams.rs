@@ -161,7 +161,7 @@ pub(crate) async fn render_stream_section(
 
     if let Some(tool) = tool_name
         && let Ok(Some(log_path)) =
-            spool_output_if_needed(effective_normalized_content.as_ref(), tool, config)
+            spool_output_if_needed(effective_normalized_content.as_ref(), tool, config).await
     {
         // For very large output, show minimal preview to avoid TUI hang
         let preview_lines = calculate_preview_lines(effective_normalized_content.len());
@@ -422,7 +422,7 @@ pub(crate) fn resolve_stdout_tail_limit(config: Option<&VTCodeConfig>) -> usize 
 /// and returns the path. The session hash groups related outputs together for easier cleanup.
 ///
 /// This function also supports the legacy spool directory for backwards compatibility.
-pub(crate) fn spool_output_if_needed(
+pub(crate) async fn spool_output_if_needed(
     content: &str,
     tool_name: &str,
     config: Option<&VTCodeConfig>,
@@ -456,10 +456,8 @@ pub(crate) fn spool_output_if_needed(
     let tool_name_owned = tool_name.to_string();
     let spool_dir_clone = spool_dir.clone();
 
-    // Use std::thread::spawn for file I/O since this function is synchronous.
-    // This is called from tool output processing, not from the async event loop.
-    // If called from async context, caller should wrap in tokio::task::spawn_blocking.
-    let result = std::thread::spawn(move || -> Result<PathBuf> {
+    // Run blocking write in the tokio blocking pool since callers are usually async.
+    let join_result = tokio::task::spawn_blocking(move || -> Result<PathBuf> {
         std::fs::create_dir_all(&spool_dir_clone).with_context(|| {
             format!(
                 "Failed to create spool directory: {}",
@@ -481,10 +479,12 @@ pub(crate) fn spool_output_if_needed(
 
         Ok(log_path)
     })
-    .join()
+    .await
     .map_err(|_| anyhow::anyhow!("Spool thread panicked"))?;
 
-    result.map(Some)
+    // join_result is inner Result<PathBuf, anyhow::Error>
+    let path = join_result?;
+    Ok(Some(path))
 }
 
 /// Spool large output with full SpoolResult for agent access
