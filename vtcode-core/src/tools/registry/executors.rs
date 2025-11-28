@@ -2514,6 +2514,40 @@ mod tests {
     }
 
     #[test]
+    fn tokenizer_strips_markdown_single_backticks() {
+        // LLMs sometimes wrap commands in backticks from markdown formatting
+        let tokens = tokenize_command_string("`cargo clippy`", None).expect("tokens");
+        assert_eq!(tokens, vec!["cargo", "clippy"]);
+    }
+
+    #[test]
+    fn tokenizer_strips_markdown_triple_backticks() {
+        let tokens = tokenize_command_string("```\ncargo test\n```", None).expect("tokens");
+        assert_eq!(tokens, vec!["cargo", "test"]);
+    }
+
+    #[test]
+    fn tokenizer_strips_markdown_triple_backticks_with_language() {
+        let tokens = tokenize_command_string("```bash\ncargo build\n```", None).expect("tokens");
+        assert_eq!(tokens, vec!["cargo", "build"]);
+    }
+
+    #[test]
+    fn tokenizer_handles_plain_commands() {
+        // Plain commands without backticks should work as before
+        let tokens = tokenize_command_string("cargo fmt", None).expect("tokens");
+        assert_eq!(tokens, vec!["cargo", "fmt"]);
+    }
+
+    #[test]
+    fn strip_markdown_preserves_backticks_in_shell_commands() {
+        // Backticks used for command substitution should be preserved
+        // This case: `echo $(date)` - inner backticks are command substitution
+        let result = strip_markdown_code_formatting("echo `date`");
+        assert_eq!(result, "echo `date`");
+    }
+
+    #[test]
     fn detects_windows_shell_name_variants() {
         assert!(should_use_windows_command_tokenizer(Some(
             "C:/Windows/System32/cmd.exe"
@@ -3147,7 +3181,52 @@ fn quote_windows_argument(arg: &str) -> String {
 }
 
 fn tokenize_command_string(command: &str, _shell_hint: Option<&str>) -> Result<Vec<String>> {
-    split(command).map_err(|err| anyhow!(err))
+    // Sanitize markdown formatting (backticks) that LLMs sometimes include
+    let sanitized = strip_markdown_code_formatting(command);
+    split(&sanitized).map_err(|err| anyhow!(err))
+}
+
+/// Strip common markdown code formatting from command strings.
+/// LLMs sometimes include backticks when generating tool calls from user prompts.
+fn strip_markdown_code_formatting(input: &str) -> String {
+    let trimmed = input.trim();
+
+    // Handle triple backticks with optional language identifier (```bash, ```sh, etc.)
+    if trimmed.starts_with("```") {
+        let without_opening = trimmed.strip_prefix("```").unwrap_or(trimmed);
+        // Skip language identifier on first line if present
+        let content = if let Some(newline_pos) = without_opening.find('\n') {
+            &without_opening[newline_pos + 1..]
+        } else {
+            without_opening
+        };
+        // Remove closing backticks
+        let result = content.trim_end().strip_suffix("```").unwrap_or(content);
+        return result.trim().to_string();
+    }
+
+    // Handle single backticks wrapping the entire command
+    if trimmed.starts_with('`') && trimmed.ends_with('`') && trimmed.len() > 2 {
+        // Check if it's not just backticks at start and end of different words
+        let inner = &trimmed[1..trimmed.len() - 1];
+        // Only strip if there are no internal backticks (it's a single wrapped command)
+        if !inner.contains('`') {
+            return inner.to_string();
+        }
+    }
+
+    // Strip leading/trailing backticks that might be attached to the command
+    let mut result = trimmed.to_string();
+
+    // Handle case like "`cargo clippy`" -> "cargo clippy"
+    if result.starts_with('`') {
+        result = result[1..].to_string();
+    }
+    if result.ends_with('`') {
+        result = result[..result.len() - 1].to_string();
+    }
+
+    result
 }
 
 fn should_use_windows_command_tokenizer(shell_hint: Option<&str>) -> bool {
