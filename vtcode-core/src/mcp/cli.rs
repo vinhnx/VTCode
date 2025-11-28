@@ -510,12 +510,12 @@ fn parse_env_pair(raw: &str) -> Result<(String, String), String> {
         .next()
         .map(str::trim)
         .filter(|s| !s.is_empty())
-        .ok_or_else(|| "entries must be in KEY=VALUE form".to_string())?;
+        .ok_or_else(|| "entries must be in KEY=VALUE form".to_owned())?;
     let value = parts
         .next()
-        .map(str::to_string)
-        .ok_or_else(|| "entries must be in KEY=VALUE form".to_string())?;
-    Ok((key.to_string(), value))
+        .map(str::to_owned)
+        .ok_or_else(|| "entries must be in KEY=VALUE form".to_owned())?;
+    Ok((key.to_owned(), value))
 }
 
 fn validate_provider_name(name: &str) -> Result<()> {

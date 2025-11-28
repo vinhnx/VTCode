@@ -21,6 +21,7 @@ pub struct ResultSignature {
 
 impl ResultSignature {
     /// Create signature from tool call
+    #[inline]
     pub fn from_tool_call(tool: &str, args: &Value) -> Self {
         let canonical = Self::canonicalize_args(args);
         let hash = Self::hash_args(&canonical);
@@ -55,6 +56,7 @@ impl ResultSignature {
     }
 
     /// Hash args for fast lookup
+    #[inline]
     fn hash_args(canonical: &str) -> u64 {
         use std::collections::hash_map::DefaultHasher;
         let mut hasher = DefaultHasher::new();
@@ -115,6 +117,7 @@ impl CachedResult {
     }
 
     /// Check if cache is still fresh (within 5 minutes)
+    #[inline]
     pub fn is_fresh(&self) -> bool {
         current_timestamp().saturating_sub(self.cached_at) < 300 // 5 minutes
     }

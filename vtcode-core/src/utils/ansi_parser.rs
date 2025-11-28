@@ -148,6 +148,92 @@ pub fn parse_ansi_sequence(text: &str) -> Option<usize> {
     }
 }
 
+/// Fast ASCII-only ANSI stripping for performance-critical paths
+///
+/// This function assumes the input contains only ASCII characters (no unicode)
+/// and provides a faster path for ANSI removal in such cases.
+pub fn strip_ansi_ascii_only(text: &str) -> String {
+    let mut output = String::with_capacity(text.len());
+    let bytes = text.as_bytes();
+    let mut i = 0;
+    let mut last_valid = 0;
+
+    while i < bytes.len() {
+        if bytes[i] == 0x1b {
+            // Copy any valid characters before this escape sequence
+            if last_valid < i {
+                output.push_str(&text[last_valid..i]);
+            }
+            
+            // Start of escape sequence
+            if i + 1 < bytes.len() {
+                match bytes[i + 1] {
+                    b'[' => {
+                        // CSI sequence - ends with a letter in range 0x40-0x7E
+                        i += 2;
+                        while i < bytes.len() && !(0x40..=0x7e).contains(&bytes[i]) {
+                            i += 1;
+                        }
+                        if i < bytes.len() {
+                            i += 1; // Include the final letter
+                        }
+                    }
+                    b']' => {
+                        // OSC sequence - ends with BEL (0x07) or ST (ESC \)
+                        i += 2;
+                        while i < bytes.len() {
+                            if bytes[i] == 0x07 {
+                                i += 1;
+                                break;
+                            }
+                            if bytes[i] == 0x1b && i + 1 < bytes.len() && bytes[i + 1] == b'\\' {
+                                i += 2;
+                                break;
+                            }
+                            i += 1;
+                        }
+                    }
+                    b'P' | b'^' | b'_' => {
+                        // DCS/PM/APC sequence - ends with ST (ESC \)
+                        i += 2;
+                        while i < bytes.len() {
+                            if bytes[i] == 0x1b && i + 1 < bytes.len() && bytes[i + 1] == b'\\' {
+                                i += 2;
+                                break;
+                            }
+                            i += 1;
+                        }
+                    }
+                    _ => {
+                        // Other 2-character escape sequences
+                        i += 2;
+                    }
+                }
+            } else {
+                i += 1;
+            }
+            last_valid = i;
+        } else {
+            // Regular ASCII character - continue scanning
+            i += 1;
+        }
+    }
+
+    // Copy any remaining valid characters
+    if last_valid < text.len() {
+        output.push_str(&text[last_valid..]);
+    }
+
+    output
+}
+
+/// Detect if text contains unicode characters that need special handling
+///
+/// Returns true if the text contains non-ASCII characters (bytes >= 0x80)
+pub fn contains_unicode(text: &str) -> bool {
+    text.bytes().any(|b| b >= 0x80)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

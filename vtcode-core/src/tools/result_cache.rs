@@ -3,11 +3,11 @@
 //! Caches results from read-only tools (grep, list_files, ast analysis) within a session
 //! to avoid re-running identical queries.
 
+use crate::utils::current_timestamp;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, VecDeque};
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Identifies a cached tool result
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -22,6 +22,7 @@ pub struct CacheKey {
 
 impl CacheKey {
     /// Create a new cache key from tool name, parameters, and target path
+    #[inline]
     pub fn new(tool: &str, params: &str, target_path: &str) -> Self {
         let mut hasher = DefaultHasher::new();
         params.hash(&mut hasher);
@@ -36,8 +37,8 @@ impl CacheKey {
 
     /// Create a cache key directly from a JSON `serde_json::Value` to avoid
     /// serializing into an owned `String` when building a key for caches.
+    #[inline]
     pub fn from_json(tool: &str, params: &serde_json::Value, target_path: &str) -> Self {
-        use std::hash::Hash;
         let mut hasher = DefaultHasher::new();
         // Try serializing to a stable byte representation, falling back to
         // `to_string()` when serialization fails (unlikely).
@@ -68,27 +69,19 @@ pub struct CachedResult {
 
 impl CachedResult {
     /// Create a new cached result
+    #[inline]
     pub fn new(output: String) -> Self {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
-
         CachedResult {
             output: Arc::new(output),
-            cached_at: now,
+            cached_at: current_timestamp(),
             access_count: 0,
         }
     }
 
     /// Check if result is fresh (not older than max_age_secs)
+    #[inline]
     pub fn is_fresh(&self, max_age_secs: u64) -> bool {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
-
-        now.saturating_sub(self.cached_at) <= max_age_secs
+        current_timestamp().saturating_sub(self.cached_at) <= max_age_secs
     }
 }
 
@@ -165,14 +158,9 @@ impl ToolResultCache {
         }
 
         // Add to cache
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
-
         let cached = CachedResult {
             output,
-            cached_at: now,
+            cached_at: current_timestamp(),
             access_count: 0,
         };
 

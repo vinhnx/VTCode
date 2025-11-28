@@ -7,6 +7,7 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::str::FromStr;
+use itertools::Itertools;
 
 #[derive(Clone, Copy)]
 pub struct OpenRouterMetadata {
@@ -163,7 +164,7 @@ impl FromStr for Provider {
             "xai" => Ok(Provider::XAI),
             "zai" => Ok(Provider::ZAI),
             "minimax" => Ok(Provider::Minimax),
-            _ => Err(ModelParseError::InvalidProvider(s.to_string())),
+            _ => Err(ModelParseError::InvalidProvider(s.into())),
         }
     }
 }
@@ -1565,7 +1566,7 @@ impl FromStr for ModelId {
                 if let Some(model) = Self::parse_openrouter_model(s) {
                     Ok(model)
                 } else {
-                    Err(ModelParseError::InvalidModel(s.to_string()))
+                    Err(ModelParseError::InvalidModel(s.into()))
                 }
             }
         }
@@ -1590,7 +1591,6 @@ impl fmt::Display for ModelParseError {
                     ModelId::all_models()
                         .iter()
                         .map(|m| m.as_str())
-                        .collect::<Vec<_>>()
                         .join(", ")
                 )
             }
@@ -1601,8 +1601,7 @@ impl fmt::Display for ModelParseError {
                     provider,
                     Provider::all_providers()
                         .iter()
-                        .map(|p| p.to_string())
-                        .collect::<Vec<_>>()
+                        .map(|p| p.to_owned())
                         .join(", ")
                 )
             }

@@ -3,9 +3,9 @@
 //! Tracks which tools are effective for given contexts and helps the agent
 //! select the best tool based on prior success rates and result quality.
 
+use crate::utils::current_timestamp;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::tools::result_metadata::ResultMetadata;
 
@@ -276,14 +276,6 @@ impl Default for ToolEffectivenessTracker {
     fn default() -> Self {
         Self::new()
     }
-}
-
-/// Get current timestamp in seconds
-fn current_timestamp() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs()
 }
 
 #[cfg(test)]

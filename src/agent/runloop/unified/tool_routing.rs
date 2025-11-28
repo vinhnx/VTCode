@@ -433,7 +433,7 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
             // Cache permission grant for this session
             if let Some(cache) = tool_permission_cache {
                 let mut perm_cache = cache.write().await;
-                perm_cache.cache_grant(tool_name, PermissionGrant::Once);
+                perm_cache.cache_grant(tool_name.to_string(), PermissionGrant::Once);
             }
 
             // Record approval decision for pattern learning
@@ -450,7 +450,7 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
             // Cache permission grant for this session
             if let Some(cache) = tool_permission_cache {
                 let mut perm_cache = cache.write().await;
-                perm_cache.cache_grant(tool_name, PermissionGrant::Session);
+                perm_cache.cache_grant(tool_name.to_string(), PermissionGrant::Session);
             }
 
             // Record approval decision for pattern learning
@@ -467,7 +467,7 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
             // Cache permission grant permanently
             if let Some(cache) = tool_permission_cache {
                 let mut perm_cache = cache.write().await;
-                perm_cache.cache_grant(tool_name, PermissionGrant::Permanent);
+                perm_cache.cache_grant(tool_name.to_string(), PermissionGrant::Permanent);
             }
 
             // Try to persist to policy manager first

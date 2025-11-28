@@ -20,10 +20,12 @@ struct CacheEntry<V> {
 }
 
 impl<V> CacheEntry<V> {
+    #[inline]
     fn is_expired(&self, ttl: Duration) -> bool {
         self.inserted_at.elapsed() > ttl
     }
 
+    #[inline]
     fn update_access(&mut self) {
         self.accessed_at = Instant::now();
         self.access_count += 1;
@@ -45,6 +47,7 @@ pub struct CacheStats {
 
 impl CacheStats {
     /// Hit rate as percentage (0.0 to 100.0).
+    #[inline]
     pub fn hit_rate(&self) -> f64 {
         let total = self.hits + self.misses;
         if total == 0 {
@@ -117,48 +120,75 @@ impl<V: Send + Sync> LruCache<V> {
 
     /// Get a value from the cache.
     pub async fn get(&self, key: &str) -> Option<Arc<V>> {
-        let mut entries = self.entries.write().await;
+        // Perform all state mutations under a single logical operation,
+        // minimizing lock re-acquisition overhead.
+        enum GetOutcome<V> {
+            Hit { value: Arc<V>, access_count: u64 },
+            Miss,
+            Expired,
+        }
 
-        // Check for expiration.
-        if let Some(entry) = entries.get(key) {
-            if entry.is_expired(self.ttl) {
-                entries.remove(key);
+        let outcome = {
+            let mut entries = self.entries.write().await;
 
-                // Update stats once instead of locking twice.
+            // Check for expiration first.
+            if let Some(entry) = entries.get(key) {
+                if entry.is_expired(self.ttl) {
+                    entries.remove(key);
+                    GetOutcome::Expired
+                } else {
+                    // Valid hit - update access and return value.
+                    let entry = entries.get_mut(key).unwrap();
+                    entry.update_access();
+                    GetOutcome::Hit {
+                        value: Arc::clone(&entry.value),
+                        access_count: entry.access_count,
+                    }
+                }
+            } else {
+                GetOutcome::Miss
+            }
+        };
+
+        // Now handle outcomes with appropriate stats/order updates.
+        match outcome {
+            GetOutcome::Hit { value, access_count } => {
+                // Batch stats and order updates together.
+                {
+                    let mut stats = self.stats.write().await;
+                    stats.hits += 1;
+                }
+                {
+                    let mut order = self.access_order.write().await;
+                    order.retain(|k| k != key);
+                    order.push_back(key.to_string());
+                }
+                self.observer.on_hit(key, access_count).await;
+                Some(value)
+            }
+            GetOutcome::Expired => {
+                // Update stats and order for expiration.
                 {
                     let mut stats = self.stats.write().await;
                     stats.expirations += 1;
                     stats.misses += 1;
                 }
-
+                {
+                    let mut order = self.access_order.write().await;
+                    order.retain(|k| k != key);
+                }
                 self.observer.on_evict(key, EvictionReason::Expired).await;
-                let mut order = self.access_order.write().await;
-                order.retain(|k| k != key);
-                return None;
+                None
+            }
+            GetOutcome::Miss => {
+                {
+                    let mut stats = self.stats.write().await;
+                    stats.misses += 1;
+                }
+                self.observer.on_miss(key).await;
+                None
             }
         }
-
-        // Return value if exists and not expired.
-        if let Some(entry) = entries.get_mut(key) {
-            entry.update_access();
-            self.observer.on_hit(key, entry.access_count).await;
-            let mut stats = self.stats.write().await;
-            stats.hits += 1;
-
-            // Update LRU order: move accessed key to back (most recently used)
-            let mut order = self.access_order.write().await;
-            order.retain(|k| k != key);
-            order.push_back(key.to_string());
-
-            return Some(Arc::clone(&entry.value));
-        }
-
-        {
-            let mut stats = self.stats.write().await;
-            stats.misses += 1;
-        }
-        self.observer.on_miss(key).await;
-        None
     }
 
     /// Get a value as an owned clone from the cache (compatibility helper).

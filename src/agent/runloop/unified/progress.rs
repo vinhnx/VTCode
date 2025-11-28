@@ -137,7 +137,7 @@ impl ProgressReporter {
 
     /// Get a reference to the underlying ProgressState
     pub fn get_state(&self) -> Arc<ProgressState> {
-        self.state.clone()
+        Arc::clone(&self.state)
     }
 
     /// Set the total number of work units
