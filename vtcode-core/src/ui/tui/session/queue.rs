@@ -29,9 +29,10 @@ impl Session {
         }
 
         let version = self.queue_overlay_version;
-        let needs_rebuild = self.queue_overlay_cache.as_ref().map_or(true, |cache| {
-            cache.width != width || cache.version != version
-        });
+        let needs_rebuild = match &self.queue_overlay_cache {
+            Some(cache) => cache.width != width || cache.version != version,
+            None => true,
+        };
 
         if needs_rebuild {
             let lines = self.reflow_queue_lines(width);
@@ -168,7 +169,7 @@ impl Session {
             };
             let mut spans = Vec::new();
             spans.push(Span::styled(prefix, label_style));
-            spans.extend(line.spans.drain(..));
+            spans.append(&mut line.spans);
             lines.push(Line::from(spans));
         }
 

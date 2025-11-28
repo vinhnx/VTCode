@@ -104,57 +104,20 @@ async fn handle_list_models(_cli: &Cli) -> Result<()> {
 
 /// Check if provider is configured
 fn is_provider_configured(config: &DotConfig, provider: &str) -> bool {
-    match provider {
-        "openai" => config
-            .providers
-            .openai
-            .as_ref()
-            .map(|p| p.enabled)
-            .unwrap_or(false),
-        "anthropic" => config
-            .providers
-            .anthropic
-            .as_ref()
-            .map(|p| p.enabled)
-            .unwrap_or(false),
-        "gemini" => config
-            .providers
-            .gemini
-            .as_ref()
-            .map(|p| p.enabled)
-            .unwrap_or(false),
-        "deepseek" => config
-            .providers
-            .deepseek
-            .as_ref()
-            .map(|p| p.enabled)
-            .unwrap_or(false),
-        "openrouter" => config
-            .providers
-            .openrouter
-            .as_ref()
-            .map(|p| p.enabled)
-            .unwrap_or(false),
-        "xai" => config
-            .providers
-            .xai
-            .as_ref()
-            .map(|p| p.enabled)
-            .unwrap_or(false),
-        "ollama" => config
-            .providers
-            .ollama
-            .as_ref()
-            .map(|p| p.enabled)
-            .unwrap_or(true),
-        "lmstudio" => config
-            .providers
-            .lmstudio
-            .as_ref()
-            .map(|p| p.enabled)
-            .unwrap_or(true),
-        _ => false,
-    }
+    let (provider_config, default_enabled) = match provider {
+        "openai" => (config.providers.openai.as_ref(), false),
+        "anthropic" => (config.providers.anthropic.as_ref(), false),
+        "gemini" => (config.providers.gemini.as_ref(), false),
+        "deepseek" => (config.providers.deepseek.as_ref(), false),
+        "openrouter" => (config.providers.openrouter.as_ref(), false),
+        "xai" => (config.providers.xai.as_ref(), false),
+        "ollama" => (config.providers.ollama.as_ref(), true),
+        "lmstudio" => (config.providers.lmstudio.as_ref(), true),
+        _ => return false,
+    };
+    provider_config
+        .map(|p| p.enabled)
+        .unwrap_or(default_enabled)
 }
 
 /// Set default provider
@@ -164,7 +127,7 @@ async fn handle_set_provider(_cli: &Cli, provider: &str) -> Result<()> {
         factory.list_providers()
     }; // Lock is released here when factory guard goes out of scope
 
-    if !available.contains(&provider.to_string()) {
+    if !available.iter().any(|p| p == provider) {
         return Err(anyhow!(
             "Unknown provider '{}'. Available: {}",
             provider,
@@ -219,11 +182,12 @@ async fn handle_config_provider(
     base_url: Option<&str>,
     model: Option<&str>,
 ) -> Result<()> {
-    // First, load the config
+    // Clone manager once and reuse for both operations
     let manager = {
         let guard = get_dot_manager().lock().unwrap();
         guard.clone()
-    }; // Lock is released here when guard goes out of scope
+    };
+
     let mut config = manager.load_config().await?;
 
     match provider {
@@ -234,11 +198,7 @@ async fn handle_config_provider(
         _ => return Err(anyhow!("Unsupported provider: {}", provider)),
     }
 
-    // Then save the config
-    let manager = {
-        let guard = get_dot_manager().lock().unwrap();
-        guard.clone()
-    }; // Lock is released here when guard goes out of scope
+    // Reuse the same manager instance
     manager.save_config(&config).await?;
 
     Ok(())
@@ -252,31 +212,23 @@ fn configure_standard_provider(
     base_url: Option<&str>,
     model: Option<&str>,
 ) -> Result<()> {
+    // Helper macro to reduce boilerplate
+    macro_rules! get_provider_config {
+        ($field:ident) => {
+            config.providers.$field.get_or_insert_with(Default::default)
+        };
+    }
+
     let provider_config = match provider {
-        "openai" => config.providers.openai.get_or_insert_with(Default::default),
-        "anthropic" => config
-            .providers
-            .anthropic
-            .get_or_insert_with(Default::default),
-        "gemini" => config.providers.gemini.get_or_insert_with(Default::default),
-        "deepseek" => config
-            .providers
-            .deepseek
-            .get_or_insert_with(Default::default),
-        "openrouter" => config
-            .providers
-            .openrouter
-            .get_or_insert_with(Default::default),
-        "xai" => config.providers.xai.get_or_insert_with(Default::default),
-        "ollama" => config.providers.ollama.get_or_insert_with(Default::default),
-        "lmstudio" => config
-            .providers
-            .lmstudio
-            .get_or_insert_with(Default::default),
-        "minimax" => config
-            .providers
-            .anthropic
-            .get_or_insert_with(Default::default),
+        "openai" => get_provider_config!(openai),
+        "anthropic" => get_provider_config!(anthropic),
+        "gemini" => get_provider_config!(gemini),
+        "deepseek" => get_provider_config!(deepseek),
+        "openrouter" => get_provider_config!(openrouter),
+        "xai" => get_provider_config!(xai),
+        "ollama" => get_provider_config!(ollama),
+        "lmstudio" => get_provider_config!(lmstudio),
+        "minimax" => get_provider_config!(anthropic), // Note: maps to anthropic
         _ => return Err(anyhow!("Unknown provider: {}", provider)),
     };
 
@@ -289,11 +241,11 @@ fn configure_standard_provider(
     if let Some(m) = model {
         provider_config.model = Some(m.to_owned());
     }
-    provider_config.enabled = if provider == "ollama" || provider == "lmstudio" {
-        true
-    } else {
-        api_key.is_some() || provider_config.api_key.is_some()
-    };
+
+    // Local providers are enabled by default; others require an API key
+    provider_config.enabled = matches!(provider, "ollama" | "lmstudio")
+        || api_key.is_some()
+        || provider_config.api_key.is_some();
 
     Ok(())
 }
@@ -350,22 +302,21 @@ fn get_provider_credentials(
     config: &DotConfig,
     provider: &str,
 ) -> Result<(Option<String>, Option<String>, Option<String>)> {
-    let get_config = |p: Option<&crate::utils::dot_config::ProviderConfig>| {
-        p.map(|c| (c.api_key.clone(), c.base_url.clone(), c.model.clone()))
-            .unwrap_or((None, None, None))
+    let provider_config = match provider {
+        "openai" => config.providers.openai.as_ref(),
+        "anthropic" => config.providers.anthropic.as_ref(),
+        "gemini" => config.providers.gemini.as_ref(),
+        "deepseek" => config.providers.deepseek.as_ref(),
+        "openrouter" => config.providers.openrouter.as_ref(),
+        "xai" => config.providers.xai.as_ref(),
+        "ollama" => config.providers.ollama.as_ref(),
+        "lmstudio" => config.providers.lmstudio.as_ref(),
+        _ => return Err(anyhow!("Unknown provider: {}", provider)),
     };
 
-    match provider {
-        "openai" => Ok(get_config(config.providers.openai.as_ref())),
-        "anthropic" => Ok(get_config(config.providers.anthropic.as_ref())),
-        "gemini" => Ok(get_config(config.providers.gemini.as_ref())),
-        "deepseek" => Ok(get_config(config.providers.deepseek.as_ref())),
-        "openrouter" => Ok(get_config(config.providers.openrouter.as_ref())),
-        "xai" => Ok(get_config(config.providers.xai.as_ref())),
-        "ollama" => Ok(get_config(config.providers.ollama.as_ref())),
-        "lmstudio" => Ok(get_config(config.providers.lmstudio.as_ref())),
-        _ => Err(anyhow!("Unknown provider: {}", provider)),
-    }
+    Ok(provider_config
+        .map(|c| (c.api_key.clone(), c.base_url.clone(), c.model.clone()))
+        .unwrap_or((None, None, None)))
 }
 
 /// Compare model performance (placeholder)

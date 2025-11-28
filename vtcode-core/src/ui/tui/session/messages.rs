@@ -157,33 +157,33 @@ impl Session {
 
         let mut mark_revision = false;
         {
-            if let Some(line) = self.lines.last_mut() {
-                if line.kind == kind {
-                    if let Some(last) = line.segments.last_mut() {
-                        if last.style == *style {
-                            last.text.push_str(text);
-                            appended = true;
-                            mark_revision = true;
-                        }
-                    }
-                    if !appended {
-                        line.segments.push(InlineSegment {
-                            text: text.to_owned(),
-                            style: style.clone(),
-                        });
-                        appended = true;
-                        mark_revision = true;
-                    }
+            if let Some(line) = self.lines.last_mut()
+                && line.kind == kind
+            {
+                if let Some(last) = line.segments.last_mut()
+                    && last.style == *style
+                {
+                    last.text.push_str(text);
+                    appended = true;
+                    mark_revision = true;
+                }
+                if !appended {
+                    line.segments.push(InlineSegment {
+                        text: text.to_owned(),
+                        style: style.clone(),
+                    });
+                    appended = true;
+                    mark_revision = true;
                 }
             }
         }
 
         if mark_revision {
             let revision = self.next_revision();
-            if let Some(line) = self.lines.last_mut() {
-                if line.kind == kind {
-                    line.revision = revision;
-                }
+            if let Some(line) = self.lines.last_mut()
+                && line.kind == kind
+            {
+                line.revision = revision;
             }
         }
 
@@ -232,19 +232,19 @@ impl Session {
     pub(super) fn reset_line(&mut self, kind: InlineMessageKind) {
         let mut cleared = false;
         {
-            if let Some(line) = self.lines.last_mut() {
-                if line.kind == kind {
-                    line.segments.clear();
-                    cleared = true;
-                }
+            if let Some(line) = self.lines.last_mut()
+                && line.kind == kind
+            {
+                line.segments.clear();
+                cleared = true;
             }
         }
         if cleared {
             let revision = self.next_revision();
-            if let Some(line) = self.lines.last_mut() {
-                if line.kind == kind {
-                    line.revision = revision;
-                }
+            if let Some(line) = self.lines.last_mut()
+                && line.kind == kind
+            {
+                line.revision = revision;
             }
             self.invalidate_scroll_metrics();
             return;

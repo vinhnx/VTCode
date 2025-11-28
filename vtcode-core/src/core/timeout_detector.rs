@@ -208,12 +208,10 @@ impl TimeoutDetector {
     /// Check if an operation has timed out
     pub async fn check_timeout(&self, operation_id: &str) -> Option<TimeoutEvent> {
         let active_ops = self.active_operations.read().await;
-        if let Some(event) = active_ops.get(operation_id) {
-            if event.start_time.elapsed() >= event.timeout_duration {
-                return Some(event.clone());
-            }
-        }
-        None
+        active_ops
+            .get(operation_id)
+            .filter(|event| event.start_time.elapsed() >= event.timeout_duration)
+            .cloned()
     }
 
     /// Record a timeout event

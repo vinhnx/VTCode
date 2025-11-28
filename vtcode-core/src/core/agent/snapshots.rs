@@ -168,10 +168,10 @@ impl SnapshotManager {
                 return sanitize_relative_path(stripped);
             }
 
-            return None;
+            None
+        } else {
+            sanitize_relative_path(path)
         }
-
-        sanitize_relative_path(path)
     }
 
     fn read_snapshot_files(&self) -> Result<Vec<(usize, PathBuf)>> {

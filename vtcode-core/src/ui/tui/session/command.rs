@@ -25,10 +25,10 @@ pub fn handle_command(session: &mut Session, command: InlineCommand) {
         InlineCommand::AppendLine { kind, segments } => {
             // Remove spinner message when agent response arrives
             if kind == InlineMessageKind::Agent && session.thinking_spinner.is_active {
-                if let Some(spinner_idx) = session.thinking_spinner.spinner_line_index {
-                    if spinner_idx < session.lines.len() {
-                        session.lines.remove(spinner_idx);
-                    }
+                if let Some(spinner_idx) = session.thinking_spinner.spinner_line_index
+                    && spinner_idx < session.lines.len()
+                {
+                    session.lines.remove(spinner_idx);
                 }
                 session.thinking_spinner.stop();
             }
@@ -38,10 +38,10 @@ pub fn handle_command(session: &mut Session, command: InlineCommand) {
         InlineCommand::Inline { kind, segment } => {
             // Remove spinner message when agent response arrives
             if kind == InlineMessageKind::Agent && session.thinking_spinner.is_active {
-                if let Some(spinner_idx) = session.thinking_spinner.spinner_line_index {
-                    if spinner_idx < session.lines.len() {
-                        session.lines.remove(spinner_idx);
-                    }
+                if let Some(spinner_idx) = session.thinking_spinner.spinner_line_index
+                    && spinner_idx < session.lines.len()
+                {
+                    session.lines.remove(spinner_idx);
                 }
                 session.thinking_spinner.stop();
             }
@@ -737,33 +737,33 @@ fn append_text(
 
     let mut mark_revision = false;
     {
-        if let Some(line) = session.lines.last_mut() {
-            if line.kind == kind {
-                if let Some(last) = line.segments.last_mut() {
-                    if last.style == *style {
-                        last.text.push_str(text);
-                        appended = true;
-                        mark_revision = true;
-                    }
-                }
-                if !appended {
-                    line.segments.push(crate::ui::tui::types::InlineSegment {
-                        text: text.to_owned(),
-                        style: style.clone(),
-                    });
-                    appended = true;
-                    mark_revision = true;
-                }
+        if let Some(line) = session.lines.last_mut()
+            && line.kind == kind
+        {
+            if let Some(last) = line.segments.last_mut()
+                && last.style == *style
+            {
+                last.text.push_str(text);
+                appended = true;
+                mark_revision = true;
+            }
+            if !appended {
+                line.segments.push(crate::ui::tui::types::InlineSegment {
+                    text: text.to_owned(),
+                    style: style.clone(),
+                });
+                appended = true;
+                mark_revision = true;
             }
         }
     }
 
     if mark_revision {
         let revision = session.next_revision();
-        if let Some(line) = session.lines.last_mut() {
-            if line.kind == kind {
-                line.revision = revision;
-            }
+        if let Some(line) = session.lines.last_mut()
+            && line.kind == kind
+        {
+            line.revision = revision;
         }
     }
 
@@ -812,19 +812,19 @@ fn start_line(session: &mut Session, kind: InlineMessageKind) {
 fn reset_line(session: &mut Session, kind: InlineMessageKind) {
     let mut cleared = false;
     {
-        if let Some(line) = session.lines.last_mut() {
-            if line.kind == kind {
-                line.segments.clear();
-                cleared = true;
-            }
+        if let Some(line) = session.lines.last_mut()
+            && line.kind == kind
+        {
+            line.segments.clear();
+            cleared = true;
         }
     }
     if cleared {
         let revision = session.next_revision();
-        if let Some(line) = session.lines.last_mut() {
-            if line.kind == kind {
-                line.revision = revision;
-            }
+        if let Some(line) = session.lines.last_mut()
+            && line.kind == kind
+        {
+            line.revision = revision;
         }
         super::render::invalidate_scroll_metrics(session);
         return;

@@ -224,14 +224,14 @@ fn validate_checkpointing_dir(storage_dir: &str, workspace: &Path, result: &mut 
     };
 
     // Check if parent directory exists
-    if let Some(parent) = path.parent() {
-        if !parent.exists() {
-            result.add_warning(format!(
-                "Checkpointing storage directory parent '{}' does not exist. \
-                 It will be created when checkpointing is first used.",
-                parent.display()
-            ));
-        }
+    if let Some(parent) = path.parent()
+        && !parent.exists()
+    {
+        result.add_warning(format!(
+            "Checkpointing storage directory parent '{}' does not exist. \
+             It will be created when checkpointing is first used.",
+            parent.display()
+        ));
     }
 }
 

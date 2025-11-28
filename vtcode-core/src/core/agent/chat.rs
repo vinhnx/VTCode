@@ -10,16 +10,9 @@ pub struct ChatMessage {
 }
 
 /// Chat session for managing conversation state
+#[derive(Default)]
 pub struct ChatSession {
     messages: Vec<ChatMessage>,
-}
-
-impl Default for ChatSession {
-    fn default() -> Self {
-        Self {
-            messages: Vec::new(),
-        }
-    }
 }
 
 impl ChatSession {

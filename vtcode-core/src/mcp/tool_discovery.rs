@@ -107,7 +107,8 @@ impl ToolDiscovery {
             "Searching tools for keyword"
         );
 
-        let mut results = Vec::new();
+        // Pre-allocate with estimated capacity
+        let mut results = Vec::with_capacity(tools.len() / 4);
 
         for tool in tools {
             let relevance_score = self.calculate_relevance(&tool, keyword);
@@ -117,19 +118,19 @@ impl ToolDiscovery {
                 continue;
             }
 
-            let result = ToolDiscoveryResult {
+            // Only clone input_schema when needed (Full detail level)
+            let input_schema = match detail_level {
+                DetailLevel::Full => Some(tool.input_schema.clone()),
+                _ => None,
+            };
+
+            results.push(ToolDiscoveryResult {
                 name: tool.name.clone(),
                 provider: tool.provider.clone(),
                 description: tool.description.clone(),
                 relevance_score,
-                input_schema: match detail_level {
-                    DetailLevel::NameOnly => None,
-                    DetailLevel::NameAndDescription => None,
-                    DetailLevel::Full => Some(tool.input_schema.clone()),
-                },
-            };
-
-            results.push(result);
+                input_schema,
+            });
         }
 
         // Sort by relevance score (highest first)

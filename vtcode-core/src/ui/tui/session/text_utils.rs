@@ -9,10 +9,16 @@ use ratatui::{
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
+use std::borrow::Cow;
+
 /// Strips ANSI escape codes from text to ensure plain text output
-pub fn strip_ansi_codes(text: &str) -> String {
+pub fn strip_ansi_codes(text: &str) -> Cow<'_, str> {
+    if !text.contains('\x1b') {
+        return Cow::Borrowed(text);
+    }
+
     // Comprehensive ANSI code stripping by looking for various escape sequences
-    let mut result = String::new();
+    let mut result = String::with_capacity(text.len());
     let mut chars = text.chars().peekable();
 
     while let Some(ch) = chars.next() {
@@ -111,7 +117,7 @@ pub fn strip_ansi_codes(text: &str) -> String {
         }
     }
 
-    result
+    Cow::Owned(result)
 }
 
 /// Simplify tool call display text for better human readability

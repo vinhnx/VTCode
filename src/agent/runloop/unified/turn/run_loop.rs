@@ -285,7 +285,7 @@ pub(crate) async fn run_turn_execute_tool(
 
     // Try to get from cache first for read-only tools
     if is_read_only_tool {
-        let params_str = serde_json::to_string(args_val).unwrap_or_default();
+        let _params_str = serde_json::to_string(args_val).unwrap_or_default();
         let cache_key = CacheKey::from_json(name, &args_val, "");
         {
             let mut tool_cache = tool_result_cache.write().await;

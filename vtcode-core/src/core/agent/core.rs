@@ -77,7 +77,7 @@ impl Agent {
             .as_secs();
 
         if self.config.verbose {
-            println!("{} {}", style("[INIT]").cyan().bold(), "Agent initialized");
+            println!("{} Agent initialized", style("[INIT]").cyan().bold());
             println!("  {} Model: {}", style("").dim(), self.config.model);
             println!(
                 "  {} Workspace: {}",
@@ -258,9 +258,8 @@ impl Agent {
 
         if detailed && self.config.verbose {
             println!(
-                "{} {}",
-                style("[TRANSPARENCY]").magenta().bold(),
-                "Session Transparency Summary:"
+                "{} Session Transparency Summary:",
+                style("[TRANSPARENCY]").magenta().bold()
             );
             println!(
                 "  {} total decisions made",
@@ -293,9 +292,8 @@ impl Agent {
 
             // Error recovery statistics
             println!(
-                "\n{} {}",
-                style("[ERROR RECOVERY]").red().bold(),
-                "Error Statistics:"
+                "\n{} Error Statistics:",
+                style("[ERROR RECOVERY]").red().bold()
             );
             println!(
                 "  {} total errors occurred",

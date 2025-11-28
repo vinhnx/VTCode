@@ -352,8 +352,10 @@ impl Session {
             return Vec::new();
         }
 
-        let mut border_inline = super::super::types::InlineTextStyle::default();
-        border_inline.color = self.theme.secondary.or(self.theme.foreground);
+        let border_inline = super::super::types::InlineTextStyle {
+            color: self.theme.secondary.or(self.theme.foreground),
+            ..Default::default()
+        };
         let mut border_style = ratatui_style_from_inline(&border_inline, self.theme.foreground);
         border_style = border_style.add_modifier(Modifier::DIM);
 
@@ -383,7 +385,7 @@ impl Session {
         for segment in &line.segments {
             let stripped_text = render::strip_ansi_codes(&segment.text);
             let style = ratatui_style_from_inline(&segment.style, fallback);
-            body_spans.push(Span::styled(stripped_text, style));
+            body_spans.push(Span::styled(stripped_text.into_owned(), style));
         }
 
         if is_start {

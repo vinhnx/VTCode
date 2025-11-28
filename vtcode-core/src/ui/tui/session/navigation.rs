@@ -209,7 +209,11 @@ impl Session {
         let mut char_count = 0usize;
         let mut truncated = false;
         for segment in &line.segments {
-            let sanitized = segment.text.replace('\n', " ").replace('\r', " ");
+            let sanitized: String = segment
+                .text
+                .chars()
+                .map(|ch| if ch == '\n' || ch == '\r' { ' ' } else { ch })
+                .collect();
             let trimmed = sanitized.trim();
             if trimmed.is_empty() {
                 continue;

@@ -792,15 +792,13 @@ impl AgentRunner {
                 .unwrap_or(ModelProvider::Gemini);
 
             // Optimize: Only rebuild messages for Gemini if conversation has changed
-            if matches!(provider_kind, ModelProvider::Gemini) {
-                if task_state.conversation.len() != task_state.last_conversation_len {
-                    let rebuilt = build_messages_from_conversation(
-                        &system_instruction,
-                        &task_state.conversation,
-                    );
-                    task_state.conversation_messages = rebuilt;
-                    task_state.last_conversation_len = task_state.conversation.len();
-                }
+            if matches!(provider_kind, ModelProvider::Gemini)
+                && task_state.conversation.len() != task_state.last_conversation_len
+            {
+                let rebuilt =
+                    build_messages_from_conversation(&system_instruction, &task_state.conversation);
+                task_state.conversation_messages = rebuilt;
+                task_state.last_conversation_len = task_state.conversation.len();
             }
 
             let request_messages = task_state.conversation_messages.clone();
@@ -947,126 +945,116 @@ impl AgentRunner {
                     )]);
                 }
 
-                if let Some(tool_calls) = effective_tool_calls.as_ref() {
-                    if !tool_calls.is_empty() {
-                        had_tool_call = true;
-                        let tool_calls_vec = tool_calls.clone();
+                if let Some(tool_calls) = effective_tool_calls.as_ref().filter(|tc| !tc.is_empty())
+                {
+                    had_tool_call = true;
+                    let tool_calls_vec = tool_calls.clone();
 
-                        task_state.conversation_messages.push(
-                            Message::assistant_with_tools(
-                                response_text.clone(),
-                                tool_calls_vec.clone(),
-                            )
-                            .with_reasoning(reasoning.clone()),
+                    task_state.conversation_messages.push(
+                        Message::assistant_with_tools(
+                            response_text.clone(),
+                            tool_calls_vec.clone(),
+                        )
+                        .with_reasoning(reasoning.clone()),
+                    );
+
+                    for call in tool_calls_vec {
+                        let name = call
+                            .function
+                            .as_ref()
+                            .expect("Tool call must have function")
+                            .name
+                            .clone();
+
+                        runner_println!(
+                            self,
+                            "{} [{}] Calling tool: {}",
+                            style("[TOOL_CALL]").blue().bold(),
+                            self.agent_type,
+                            name
                         );
 
-                        for call in tool_calls_vec {
-                            let name = call
-                                .function
-                                .as_ref()
-                                .expect("Tool call must have function")
-                                .name
-                                .clone();
+                        let args = call
+                            .parsed_arguments()
+                            .unwrap_or_else(|_| serde_json::json!({}));
 
-                            runner_println!(
-                                self,
-                                "{} [{}] Calling tool: {}",
-                                style("[TOOL_CALL]").blue().bold(),
-                                self.agent_type,
-                                name
-                            );
+                        let command_event = event_recorder.command_started(&name);
 
-                            let args = call
-                                .parsed_arguments()
-                                .unwrap_or_else(|_| serde_json::json!({}));
+                        match self.execute_tool(&name, &args).await {
+                            Ok(result) => {
+                                runner_println!(
+                                    self,
+                                    "{} {}",
+                                    agent_prefix,
+                                    format!(
+                                        "{} {} tool executed successfully",
+                                        style("(OK)").green(),
+                                        name
+                                    )
+                                );
 
-                            let command_event = event_recorder.command_started(&name);
+                                let tool_result = serde_json::to_string(&result)?;
+                                // For display: use limited version to avoid overwhelming TUI
+                                let display_text = format_tool_result_for_display(&name, &result);
+                                task_state.conversation.push(Content {
+                                    role: "user".to_owned(),
+                                    parts: vec![Part::Text {
+                                        text: display_text,
+                                        thought_signature: None,
+                                    }],
+                                });
+                                // For LLM: use full result
+                                task_state
+                                    .conversation_messages
+                                    .push(Message::tool_response(
+                                        call.id.clone(),
+                                        tool_result.clone(),
+                                    ));
 
-                            match self.execute_tool(&name, &args).await {
-                                Ok(result) => {
-                                    runner_println!(
-                                        self,
-                                        "{} {}",
-                                        agent_prefix,
-                                        format!(
-                                            "{} {} tool executed successfully",
-                                            style("(OK)").green(),
-                                            name
-                                        )
-                                    );
+                                task_state.executed_commands.push(name.clone());
+                                event_recorder.command_finished(
+                                    &command_event,
+                                    CommandExecutionStatus::Completed,
+                                    None,
+                                    "",
+                                );
 
-                                    let tool_result = serde_json::to_string(&result)?;
-                                    // For display: use limited version to avoid overwhelming TUI
-                                    let display_text =
-                                        format_tool_result_for_display(&name, &result);
-                                    task_state.conversation.push(Content {
-                                        role: "user".to_owned(),
-                                        parts: vec![Part::Text {
-                                            text: display_text,
-                                            thought_signature: None,
-                                        }],
-                                    });
-                                    // For LLM: use full result
-                                    task_state
-                                        .conversation_messages
-                                        .push(Message::tool_response(
-                                            call.id.clone(),
-                                            tool_result.clone(),
-                                        ));
-
-                                    task_state.executed_commands.push(name.clone());
-                                    event_recorder.command_finished(
-                                        &command_event,
-                                        CommandExecutionStatus::Completed,
-                                        None,
-                                        "",
-                                    );
-
-                                    if name == tools::WRITE_FILE
-                                        && let Some(filepath) =
-                                            args.get("path").and_then(|p| p.as_str())
-                                    {
-                                        task_state.modified_files.push(filepath.to_owned());
-                                        event_recorder.file_change_completed(filepath);
-                                    }
+                                if name == tools::WRITE_FILE
+                                    && let Some(filepath) =
+                                        args.get("path").and_then(|p| p.as_str())
+                                {
+                                    task_state.modified_files.push(filepath.to_owned());
+                                    event_recorder.file_change_completed(filepath);
                                 }
-                                Err(e) => {
-                                    runner_println!(
-                                        self,
-                                        "{} {}",
-                                        agent_prefix,
-                                        format!(
-                                            "{} {} tool failed: {}",
-                                            style("(ERR)").red(),
-                                            name,
-                                            e
-                                        )
-                                    );
-                                    let warning_message = format!("Tool {} failed: {}", name, e);
-                                    task_state.warnings.push(warning_message.clone());
-                                    event_recorder.command_finished(
-                                        &command_event,
-                                        CommandExecutionStatus::Failed,
-                                        None,
-                                        &warning_message,
-                                    );
-                                    event_recorder.warning(&warning_message);
-                                    task_state.conversation.push(Content {
-                                        role: "user".to_owned(),
-                                        parts: vec![Part::Text {
-                                            text: format!("Tool {} failed: {}", name, e),
-                                            thought_signature: None,
-                                        }],
-                                    });
-                                    let error_payload =
-                                        serde_json::json!({ "error": e.to_string() }).to_string();
-                                    task_state
-                                        .conversation_messages
-                                        .push(Message::tool_response(
-                                            call.id.clone(),
-                                            error_payload,
-                                        ));
-                                }
+                            }
+                            Err(e) => {
+                                runner_println!(
+                                    self,
+                                    "{} {}",
+                                    agent_prefix,
+                                    format!("{} {} tool failed: {}", style("(ERR)").red(), name, e)
+                                );
+                                let warning_message = format!("Tool {} failed: {}", name, e);
+                                task_state.warnings.push(warning_message.clone());
+                                event_recorder.command_finished(
+                                    &command_event,
+                                    CommandExecutionStatus::Failed,
+                                    None,
+                                    &warning_message,
+                                );
+                                event_recorder.warning(&warning_message);
+                                task_state.conversation.push(Content {
+                                    role: "user".to_owned(),
+                                    parts: vec![Part::Text {
+                                        text: format!("Tool {} failed: {}", name, e),
+                                        thought_signature: None,
+                                    }],
+                                });
+                                let error_payload =
+                                    serde_json::json!({ "error": e.to_string() }).to_string();
+                                task_state
+                                    .conversation_messages
+                                    .push(Message::tool_response(call.id.clone(), error_payload));
                             }
                         }
                     }
@@ -1318,15 +1306,12 @@ impl AgentRunner {
                                             );
 
                                             // Special handling for certain tools
-                                            if name == tools::WRITE_FILE {
-                                                if let Some(filepath) =
+                                            if name == tools::WRITE_FILE
+                                                && let Some(filepath) =
                                                     arguments.get("path").and_then(|p| p.as_str())
-                                                {
-                                                    task_state
-                                                        .modified_files
-                                                        .push(filepath.to_owned());
-                                                    event_recorder.file_change_completed(filepath);
-                                                }
+                                            {
+                                                task_state.modified_files.push(filepath.to_owned());
+                                                event_recorder.file_change_completed(filepath);
                                             }
                                         }
                                         Err(e) => {
@@ -1417,13 +1402,12 @@ impl AgentRunner {
                                     );
 
                                     // Special handling for certain tools
-                                    if name == tools::WRITE_FILE {
-                                        if let Some(filepath) =
+                                    if name == tools::WRITE_FILE
+                                        && let Some(filepath) =
                                             args.get("path").and_then(|p| p.as_str())
-                                        {
-                                            task_state.modified_files.push(filepath.to_owned());
-                                            event_recorder.file_change_completed(filepath);
-                                        }
+                                    {
+                                        task_state.modified_files.push(filepath.to_owned());
+                                        event_recorder.file_change_completed(filepath);
                                     }
                                 }
                                 Err(e) => {
@@ -1525,15 +1509,12 @@ impl AgentRunner {
                                             );
 
                                             // Special handling for certain tools
-                                            if func_name == tools::WRITE_FILE {
-                                                if let Some(filepath) =
+                                            if func_name == tools::WRITE_FILE
+                                                && let Some(filepath) =
                                                     arguments.get("path").and_then(|p| p.as_str())
-                                                {
-                                                    task_state
-                                                        .modified_files
-                                                        .push(filepath.to_owned());
-                                                    event_recorder.file_change_completed(filepath);
-                                                }
+                                            {
+                                                task_state.modified_files.push(filepath.to_owned());
+                                                event_recorder.file_change_completed(filepath);
                                             }
                                         }
                                         Err(e) => {
@@ -1653,13 +1634,12 @@ impl AgentRunner {
                                     );
 
                                     // Special handling for certain tools
-                                    if tool_name == tools::WRITE_FILE {
-                                        if let Some(filepath) =
+                                    if tool_name == tools::WRITE_FILE
+                                        && let Some(filepath) =
                                             parameters.get("path").and_then(|p| p.as_str())
-                                        {
-                                            task_state.modified_files.push(filepath.to_owned());
-                                            event_recorder.file_change_completed(filepath);
-                                        }
+                                    {
+                                        task_state.modified_files.push(filepath.to_owned());
+                                        event_recorder.file_change_completed(filepath);
                                     }
                                 }
                                 Err(e) => {
@@ -2026,7 +2006,7 @@ impl AgentRunner {
                 self.agent_type.to_string().to_uppercase()
             );
 
-            let mut deny_regex = cfg.commands.deny_regex.clone();
+            let mut deny_regex = cfg.commands.deny_regex;
             if let Ok(extra) = std::env::var(format!("{}DENY_REGEX", agent_prefix)) {
                 deny_regex.extend(extra.split(',').map(|s| s.trim().to_owned()));
             }
@@ -2041,7 +2021,7 @@ impl AgentRunner {
                 }
             }
 
-            let mut deny_glob = cfg.commands.deny_glob.clone();
+            let mut deny_glob = cfg.commands.deny_glob;
             if let Ok(extra) = std::env::var(format!("{}DENY_GLOB", agent_prefix)) {
                 deny_glob.extend(extra.split(',').map(|s| s.trim().to_owned()));
             }
@@ -2147,17 +2127,17 @@ impl AgentRunner {
         summary.push(duration_line);
 
         let mut resolved_outcome = outcome;
-        if matches!(resolved_outcome, TaskOutcome::Unknown) {
-            if conversation.last().is_some_and(|c| {
+        if matches!(resolved_outcome, TaskOutcome::Unknown)
+            && conversation.last().is_some_and(|c| {
                 c.role == "model"
                     && c.parts.iter().any(|p| {
                         p.as_text().is_some_and(|t| {
                             t.contains("completed") || t.contains("done") || t.contains("finished")
                         })
                     })
-            }) {
-                resolved_outcome = TaskOutcome::Success;
-            }
+            })
+        {
+            resolved_outcome = TaskOutcome::Success;
         }
 
         let mut status_line = format!("Final Status: {}", resolved_outcome.description());

@@ -1037,11 +1037,11 @@ impl ModalListState {
                     continue;
                 }
             };
-            if let Some(item) = self.items.get(item_index) {
-                if item.selection.is_some() {
-                    self.list_state.select(Some(index));
-                    return;
-                }
+            if let Some(item) = self.items.get(item_index)
+                && item.selection.is_some()
+            {
+                self.list_state.select(Some(index));
+                return;
             }
         }
 

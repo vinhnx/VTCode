@@ -372,13 +372,11 @@ fn extract_package_dependencies(analysis: &mut ProjectAnalysis, content: &str) {
                 && !line.contains("{")
                 && !line.contains("}")
                 && let Some(dep_name) = line.split('"').nth(1)
+                && !dep_name.is_empty()
+                && dep_name != "dependencies"
+                && dep_name != "devDependencies"
             {
-                if !dep_name.is_empty()
-                    && dep_name != "dependencies"
-                    && dep_name != "devDependencies"
-                {
-                    deps.push(dep_name.to_owned());
-                }
+                deps.push(dep_name.to_owned());
             }
         }
     }
