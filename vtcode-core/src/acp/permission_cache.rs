@@ -2,7 +2,12 @@
 ///
 /// Caches file-level permission grants so the agent doesn't repeatedly
 /// ask the user for access to the same file during a single session.
+///
+/// This module uses a generic `PermissionCache<K>` to eliminate duplicate code
+/// between file-based and tool-based permission caching.
+use std::borrow::Borrow;
 use std::collections::HashMap;
+use std::hash::Hash;
 use std::path::PathBuf;
 
 /// Permission grant decision
@@ -21,20 +26,47 @@ pub enum PermissionGrant {
     TemporaryDenial,
 }
 
-/// Session-scoped permission cache for ACP hosts (Zed, VS Code, etc.)
+/// Cache statistics (shared between all permission cache types)
+#[derive(Debug, Clone, Default)]
+pub struct PermissionCacheStats {
+    pub cached_entries: usize,
+    pub hits: usize,
+    pub misses: usize,
+    pub total_requests: usize,
+    pub hit_rate: f64,
+}
+
+impl PermissionCacheStats {
+    #[inline]
+    fn compute(entries: usize, hits: usize, misses: usize) -> Self {
+        let total_requests = hits + misses;
+        let hit_rate = if total_requests > 0 {
+            (hits as f64) / (total_requests as f64)
+        } else {
+            0.0
+        };
+        Self {
+            cached_entries: entries,
+            hits,
+            misses,
+            total_requests,
+            hit_rate,
+        }
+    }
+}
+
+/// Generic permission cache that works for any hashable key type.
+/// Eliminates duplication between file-based and tool-based caches.
 #[derive(Debug)]
-pub struct AcpPermissionCache {
-    /// Map of file path → permission grant
-    /// Keyed by canonical path to avoid duplicates
-    grants: HashMap<PathBuf, PermissionGrant>,
-    /// Track total cache hits for metrics
+pub struct PermissionCache<K: Eq + Hash> {
+    grants: HashMap<K, PermissionGrant>,
     hits: usize,
-    /// Track total cache misses for metrics
     misses: usize,
 }
 
-impl AcpPermissionCache {
-    /// Create new permission cache for session
+impl<K: Eq + Hash> PermissionCache<K> {
+    /// Create new permission cache
+    #[inline]
     pub fn new() -> Self {
         Self {
             grants: HashMap::new(),
@@ -43,9 +75,14 @@ impl AcpPermissionCache {
         }
     }
 
-    /// Check if we have a cached permission for this file
-    pub fn get_permission(&mut self, path: &PathBuf) -> Option<PermissionGrant> {
-        if let Some(grant) = self.grants.get(path) {
+    /// Check if we have a cached permission for this key
+    #[inline]
+    pub fn get_permission<Q>(&mut self, key: &Q) -> Option<PermissionGrant>
+    where
+        K: Borrow<Q>,
+        Q: Hash + Eq + ?Sized,
+    {
+        if let Some(grant) = self.grants.get(key) {
             self.hits += 1;
             Some(*grant)
         } else {
@@ -55,13 +92,19 @@ impl AcpPermissionCache {
     }
 
     /// Cache a permission grant
-    pub fn cache_grant(&mut self, path: PathBuf, grant: PermissionGrant) {
-        self.grants.insert(path, grant);
+    #[inline]
+    pub fn cache_grant(&mut self, key: K, grant: PermissionGrant) {
+        self.grants.insert(key, grant);
     }
 
-    /// Invalidate permission for a file (e.g., when workspace trust changes)
-    pub fn invalidate(&mut self, path: &PathBuf) {
-        self.grants.remove(path);
+    /// Invalidate permission for a key
+    #[inline]
+    pub fn invalidate<Q>(&mut self, key: &Q)
+    where
+        K: Borrow<Q>,
+        Q: Hash + Eq + ?Sized,
+    {
+        self.grants.remove(key);
     }
 
     /// Clear only temporary denials (for retries)
@@ -78,177 +121,68 @@ impl AcpPermissionCache {
     }
 
     /// Get cache statistics
+    #[inline]
     pub fn stats(&self) -> PermissionCacheStats {
-        let total_requests = self.hits + self.misses;
-        let hit_rate = if total_requests > 0 {
-            (self.hits as f64) / (total_requests as f64)
-        } else {
-            0.0
-        };
-
-        PermissionCacheStats {
-            cached_entries: self.grants.len(),
-            hits: self.hits,
-            misses: self.misses,
-            total_requests,
-            hit_rate,
-        }
+        PermissionCacheStats::compute(self.grants.len(), self.hits, self.misses)
     }
 
-    /// Check if path is denied by policy (not execution failure)
-    pub fn is_denied(&self, path: &PathBuf) -> bool {
-        self.grants
-            .get(path)
-            .map(|g| *g == PermissionGrant::Denied)
-            .unwrap_or(false)
+    /// Check if key is denied by policy (not execution failure)
+    #[inline]
+    pub fn is_denied<Q>(&self, key: &Q) -> bool
+    where
+        K: Borrow<Q>,
+        Q: Hash + Eq + ?Sized,
+    {
+        matches!(self.grants.get(key), Some(PermissionGrant::Denied))
     }
 
-    /// Check if path has a temporary denial (execution failure, not policy)
-    pub fn is_temporarily_denied(&self, path: &PathBuf) -> bool {
-        self.grants
-            .get(path)
-            .map(|g| *g == PermissionGrant::TemporaryDenial)
-            .unwrap_or(false)
+    /// Check if key has a temporary denial (execution failure, not policy)
+    #[inline]
+    pub fn is_temporarily_denied<Q>(&self, key: &Q) -> bool
+    where
+        K: Borrow<Q>,
+        Q: Hash + Eq + ?Sized,
+    {
+        matches!(self.grants.get(key), Some(PermissionGrant::TemporaryDenial))
     }
 
     /// Check if we can use cached permission without prompting
-    pub fn can_use_cached(&self, path: &PathBuf) -> bool {
+    #[inline]
+    pub fn can_use_cached<Q>(&self, key: &Q) -> bool
+    where
+        K: Borrow<Q>,
+        Q: Hash + Eq + ?Sized,
+    {
         matches!(
-            self.grants.get(path),
+            self.grants.get(key),
             Some(PermissionGrant::Session | PermissionGrant::Permanent | PermissionGrant::Denied)
         )
     }
 }
 
-impl Default for AcpPermissionCache {
+impl<K: Eq + Hash> Default for PermissionCache<K> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-/// Cache statistics
-#[derive(Debug, Clone)]
-pub struct PermissionCacheStats {
-    pub cached_entries: usize,
-    pub hits: usize,
-    pub misses: usize,
-    pub total_requests: usize,
-    pub hit_rate: f64,
-}
+// Type aliases for backwards compatibility
+/// Session-scoped permission cache for ACP hosts (Zed, VS Code, etc.)
+pub type AcpPermissionCache = PermissionCache<PathBuf>;
 
 /// Tool-level permission cache - caches approvals for tool execution
-/// (different from file-level ACP permissions)
-#[derive(Debug)]
-pub struct ToolPermissionCache {
-    /// Map of tool name → permission grant
-    grants: HashMap<String, PermissionGrant>,
-    /// Track total cache hits for metrics
-    hits: usize,
-    /// Track total cache misses for metrics
-    misses: usize,
-}
+pub type ToolPermissionCache = PermissionCache<String>;
 
+/// Alias for ToolPermissionCacheStats (same struct)
+pub type ToolPermissionCacheStats = PermissionCacheStats;
+
+/// Extension methods for ToolPermissionCache to maintain API compatibility
 impl ToolPermissionCache {
-    /// Create new tool permission cache for session
-    pub fn new() -> Self {
-        Self {
-            grants: HashMap::new(),
-            hits: 0,
-            misses: 0,
-        }
+    /// Cache a permission grant for a tool (accepts impl Into<String>)
+    #[inline]
+    pub fn cache_grant_tool(&mut self, tool_name: impl Into<String>, grant: PermissionGrant) {
+        self.cache_grant(tool_name.into(), grant);
     }
-
-    /// Check if we have a cached permission for this tool
-    pub fn get_permission(&mut self, tool_name: &str) -> Option<PermissionGrant> {
-        if let Some(grant) = self.grants.get(tool_name) {
-            self.hits += 1;
-            Some(*grant)
-        } else {
-            self.misses += 1;
-            None
-        }
-    }
-
-    /// Cache a permission grant for a tool
-    pub fn cache_grant(&mut self, tool_name: impl Into<String>, grant: PermissionGrant) {
-        self.grants.insert(tool_name.into(), grant);
-    }
-
-    /// Invalidate permission for a tool
-    pub fn invalidate(&mut self, tool_name: &str) {
-        self.grants.remove(tool_name);
-    }
-
-    /// Clear only temporary denials (for retries)
-    pub fn clear_temporary_denials(&mut self) {
-        self.grants
-            .retain(|_, grant| *grant != PermissionGrant::TemporaryDenial);
-    }
-
-    /// Clear all cached permissions
-    pub fn clear(&mut self) {
-        self.grants.clear();
-        self.hits = 0;
-        self.misses = 0;
-    }
-
-    /// Check if tool execution is denied by policy (not execution failure)
-    pub fn is_denied(&self, tool_name: &str) -> bool {
-        self.grants
-            .get(tool_name)
-            .map(|g| *g == PermissionGrant::Denied)
-            .unwrap_or(false)
-    }
-
-    /// Check if tool has a temporary denial (execution failure, not policy)
-    pub fn is_temporarily_denied(&self, tool_name: &str) -> bool {
-        self.grants
-            .get(tool_name)
-            .map(|g| *g == PermissionGrant::TemporaryDenial)
-            .unwrap_or(false)
-    }
-
-    /// Check if we can use cached permission without prompting
-    pub fn can_use_cached(&self, tool_name: &str) -> bool {
-        matches!(
-            self.grants.get(tool_name),
-            Some(PermissionGrant::Session | PermissionGrant::Permanent | PermissionGrant::Denied)
-        )
-    }
-
-    /// Get cache statistics
-    pub fn stats(&self) -> ToolPermissionCacheStats {
-        let total_requests = self.hits + self.misses;
-        let hit_rate = if total_requests > 0 {
-            (self.hits as f64) / (total_requests as f64)
-        } else {
-            0.0
-        };
-
-        ToolPermissionCacheStats {
-            cached_entries: self.grants.len(),
-            hits: self.hits,
-            misses: self.misses,
-            total_requests,
-            hit_rate,
-        }
-    }
-}
-
-impl Default for ToolPermissionCache {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// Tool permission cache statistics
-#[derive(Debug, Clone)]
-pub struct ToolPermissionCacheStats {
-    pub cached_entries: usize,
-    pub hits: usize,
-    pub misses: usize,
-    pub total_requests: usize,
-    pub hit_rate: f64,
 }
 
 #[cfg(test)]
@@ -273,7 +207,7 @@ mod tests {
         let mut cache = AcpPermissionCache::new();
         let path = test_path("file.rs");
 
-        cache.cache_grant(path.clone(), PermissionGrant::Session);
+        cache.cache_grant(&path, PermissionGrant::Session);
         assert_eq!(cache.get_permission(&path), Some(PermissionGrant::Session));
     }
 
@@ -282,7 +216,7 @@ mod tests {
         let mut cache = AcpPermissionCache::new();
         let path = test_path("file.rs");
 
-        cache.cache_grant(path.clone(), PermissionGrant::Session);
+        cache.cache_grant(&path, PermissionGrant::Session);
 
         // Hit
         let _ = cache.get_permission(&path);
@@ -299,7 +233,7 @@ mod tests {
         let path1 = test_path("file1.rs");
         let path2 = test_path("file2.rs");
 
-        cache.cache_grant(path1.clone(), PermissionGrant::Session);
+        cache.cache_grant(&path1, PermissionGrant::Session);
 
         // 3 hits
         cache.get_permission(&path1);
@@ -321,7 +255,7 @@ mod tests {
         let mut cache = AcpPermissionCache::new();
         let path = test_path("file.rs");
 
-        cache.cache_grant(path.clone(), PermissionGrant::Session);
+        cache.cache_grant(&path, PermissionGrant::Session);
         assert!(cache.get_permission(&path).is_some());
 
         cache.invalidate(&path);
@@ -349,8 +283,8 @@ mod tests {
         let denied_path = test_path("secret.txt");
         let allowed_path = test_path("public.txt");
 
-        cache.cache_grant(denied_path.clone(), PermissionGrant::Denied);
-        cache.cache_grant(allowed_path.clone(), PermissionGrant::Session);
+        cache.cache_grant(&denied_path, PermissionGrant::Denied);
+        cache.cache_grant(&allowed_path, PermissionGrant::Session);
 
         assert!(cache.is_denied(&denied_path));
         assert!(!cache.is_denied(&allowed_path));
@@ -365,10 +299,10 @@ mod tests {
         let denied_path = test_path("denied.rs");
         let temp_denied_path = test_path("temp_denied.rs");
 
-        cache.cache_grant(once_path.clone(), PermissionGrant::Once);
-        cache.cache_grant(session_path.clone(), PermissionGrant::Session);
-        cache.cache_grant(denied_path.clone(), PermissionGrant::Denied);
-        cache.cache_grant(temp_denied_path.clone(), PermissionGrant::TemporaryDenial);
+        cache.cache_grant(&once_path, PermissionGrant::Once);
+        cache.cache_grant(&session_path, PermissionGrant::Session);
+        cache.cache_grant(&denied_path, PermissionGrant::Denied);
+        cache.cache_grant(&temp_denied_path, PermissionGrant::TemporaryDenial);
 
         // "Once" and "TemporaryDenial" grants can't be reused
         assert!(!cache.can_use_cached(&once_path));
@@ -406,8 +340,8 @@ mod tests {
         let denied_path = test_path("denied.rs");
         let temp_denied_path = test_path("temp_denied.rs");
 
-        cache.cache_grant(denied_path.clone(), PermissionGrant::Denied);
-        cache.cache_grant(temp_denied_path.clone(), PermissionGrant::TemporaryDenial);
+        cache.cache_grant(&denied_path, PermissionGrant::Denied);
+        cache.cache_grant(&temp_denied_path, PermissionGrant::TemporaryDenial);
 
         // Both should be identified correctly
         assert!(cache.is_denied(&denied_path));
@@ -424,9 +358,9 @@ mod tests {
         let temp_denied = test_path("temp_denied.rs");
         let allowed = test_path("allowed.rs");
 
-        cache.cache_grant(policy_denied.clone(), PermissionGrant::Denied);
-        cache.cache_grant(temp_denied.clone(), PermissionGrant::TemporaryDenial);
-        cache.cache_grant(allowed.clone(), PermissionGrant::Session);
+        cache.cache_grant(&policy_denied, PermissionGrant::Denied);
+        cache.cache_grant(&temp_denied, PermissionGrant::TemporaryDenial);
+        cache.cache_grant(&allowed, PermissionGrant::Session);
 
         cache.clear_temporary_denials();
 

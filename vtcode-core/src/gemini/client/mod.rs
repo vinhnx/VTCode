@@ -77,7 +77,7 @@ impl Client {
 
     /// Classify error to determine if it's retryable
     fn classify_error(&self, error: &anyhow::Error) -> StreamingError {
-        let error_str = error.to_string().to_lowercase();
+        let error_str = error.to_string().to_ascii_lowercase();
 
         if error_str.contains("timeout")
             || error_str.contains("connection")
@@ -90,7 +90,7 @@ impl Client {
         } else if error_str.contains("rate limit") || error_str.contains("429") {
             StreamingError::ApiError {
                 status_code: 429,
-                message: "Rate limit exceeded".to_owned(),
+                message: "Rate limit exceeded".into(),
                 is_retryable: true,
             }
         } else {

@@ -143,12 +143,12 @@ impl PermissionAuditLog {
     ) -> Result<()> {
         let event = PermissionEvent {
             timestamp: Local::now(),
-            subject: command.to_string(),
+            subject: command.to_owned(),
             event_type: PermissionEventType::CommandExecution,
             decision,
-            reason: reason.to_string(),
+            reason: reason.to_owned(),
             resolved_path,
-            requested_by: "CommandPolicyEvaluator".to_owned(),
+            requested_by: "CommandPolicyEvaluator".into(),
         };
 
         self.record(event)

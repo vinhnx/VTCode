@@ -48,6 +48,7 @@ impl TokenMetrics {
     }
 
     /// Update metrics with a new measurement
+    #[inline]
     pub fn record(&mut self, content_type: &str, tokens: usize, chars: usize, elapsed: Duration) {
         self.total_tokens += tokens;
         self.total_chars += chars;
@@ -58,16 +59,16 @@ impl TokenMetrics {
             self.avg_chars_per_token = (self.total_chars as f64) / (self.total_tokens as f64);
         }
 
-        let entry = self
-            .by_type
-            .entry(content_type.to_owned())
-            .or_insert(TokenTypeMetrics {
+        // Use entry API with deferred allocation - only allocate string if key is new.
+        let entry = self.by_type.entry(content_type.to_owned()).or_insert_with(|| {
+            TokenTypeMetrics {
                 name: content_type.to_owned(),
                 tokens: 0,
                 chars: 0,
                 count: 0,
                 time_ms: 0,
-            });
+            }
+        });
 
         entry.tokens += tokens;
         entry.chars += chars;

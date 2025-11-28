@@ -1,4 +1,239 @@
 use std::collections::{HashMap, VecDeque};
+
+#[cfg(test)]
+mod unicode_optimization_tests {
+    use super::*;
+
+    #[test]
+    fn test_unicode_metrics_tracking() {
+        let mut scrollback = PtyScrollback::new(100, 1024 * 1024);
+        
+        // Test ASCII-only text
+        scrollback.push_text("Hello World");
+        assert_eq!(scrollback.total_unicode_chars, 0);
+        assert_eq!(scrollback.unicode_sessions, 0);
+        
+        // Test unicode text
+        scrollback.push_text("Hello 世界");
+        assert!(scrollback.total_unicode_chars > 0);
+        assert_eq!(scrollback.unicode_sessions, 1);
+        
+        // Test emoji
+        scrollback.push_text("🌍🚀✨");
+        assert!(scrollback.total_unicode_chars > 2);
+        assert_eq!(scrollback.unicode_sessions, 2);
+    }
+
+    #[test]
+    fn test_unicode_buffer_cleanup() {
+        let mut scrollback = PtyScrollback::new(100, 1024 * 1024);
+        
+        // Add unicode content
+        scrollback.push_utf8(&mut "Hello 世界".as_bytes().to_vec(), false);
+        assert_eq!(scrollback.utf8_buffer_remainder.len(), 0);
+        
+        // Test incomplete sequence
+        scrollback.push_utf8(&mut vec![0xF0, 0x9F], false);
+        assert_eq!(scrollback.utf8_buffer_remainder.len(), 2);
+        
+        // Complete the sequence
+        scrollback.push_utf8(&mut vec![0x8C, 0x8D], false);
+        assert_eq!(scrollback.utf8_buffer_remainder.len(), 0);
+    }
+
+    #[test]
+    fn test_large_unicode_content() {
+        let mut scrollback = PtyScrollback::new(100, 1024 * 1024);
+        
+        // Create large unicode content
+        let large_unicode: String = "你好世界".repeat(1000);
+        scrollback.push_text(&large_unicode);
+        
+        let metrics = scrollback.metrics();
+        assert!(metrics.total_unicode_chars > 0);
+        assert!(metrics.unicode_sessions > 0);
+        assert_eq!(metrics.utf8_buffer_size, 0);
+    }
+
+    #[test]
+    fn test_mixed_ascii_unicode_performance() {
+        let mut scrollback = PtyScrollback::new(100, 1024 * 1024);
+        
+        // Mix of ASCII and unicode
+        let mixed_content = "Hello World! 你好世界 🌍🚀✨ café naïve résumé";
+        scrollback.push_text(mixed_content);
+        
+        assert!(scrollback.total_unicode_chars > 0);
+        assert_eq!(scrollback.unicode_sessions, 1);
+        assert_eq!(scrollback.snapshot(), mixed_content);
+    }
+
+    #[test]
+    fn test_unicode_error_recovery() {
+        let mut scrollback = PtyScrollback::new(100, 1024 * 1024);
+        
+        // Valid content first
+        scrollback.push_text("Hello World");
+        assert_eq!(scrollback.unicode_errors, 0);
+        
+        // Invalid UTF-8 through push_utf8
+        scrollback.push_utf8(&mut vec![0xFF, 0xFE], false);
+        assert_eq!(scrollback.unicode_errors, 1);
+        
+        // Should continue working after error
+        scrollback.push_text("Still working");
+        assert_eq!(scrollback.unicode_errors, 1); // Error count unchanged
+        assert!(scrollback.snapshot().contains("Still working"));
+    }
+}
+
+#[cfg(test)]
+mod unicode_tests {
+    use super::*;
+
+    #[test]
+    fn test_push_utf8_valid_ascii() {
+        let mut scrollback = PtyScrollback::new(100, 1024 * 1024);
+        let mut buffer = b"Hello World".to_vec();
+        scrollback.push_utf8(&mut buffer, false);
+        
+        assert_eq!(scrollback.snapshot(), "Hello World");
+        assert_eq!(scrollback.unicode_errors, 0);
+        assert_eq!(scrollback.utf8_buffer_remainder.len(), 0);
+    }
+
+    #[test]
+    fn test_push_utf8_valid_unicode() {
+        let mut scrollback = PtyScrollback::new(100, 1024 * 1024);
+        let mut buffer = "Hello 世界".as_bytes().to_vec();
+        scrollback.push_utf8(&mut buffer, false);
+        
+        assert_eq!(scrollback.snapshot(), "Hello 世界");
+        assert_eq!(scrollback.unicode_errors, 0);
+        assert_eq!(scrollback.utf8_buffer_remainder.len(), 0);
+    }
+
+    #[test]
+    fn test_push_utf8_valid_emoji() {
+        let mut scrollback = PtyScrollback::new(100, 1024 * 1024);
+        let mut buffer = "🌍🚀✨".as_bytes().to_vec();
+        scrollback.push_utf8(&mut buffer, false);
+        
+        assert_eq!(scrollback.snapshot(), "🌍🚀✨");
+        assert_eq!(scrollback.unicode_errors, 0);
+        assert_eq!(scrollback.utf8_buffer_remainder.len(), 0);
+    }
+
+    #[test]
+    fn test_push_utf8_invalid_sequence() {
+        let mut scrollback = PtyScrollback::new(100, 1024 * 1024);
+        let mut buffer = vec![0xFF, 0xFE, 0xFD]; // Invalid UTF-8
+        scrollback.push_utf8(&mut buffer, false);
+        
+        assert_eq!(scrollback.snapshot(), "\u{FFFD}");
+        assert_eq!(scrollback.unicode_errors, 1);
+        assert_eq!(buffer.len(), 0);
+    }
+
+    #[test]
+    fn test_push_utf8_incomplete_sequence() {
+        let mut scrollback = PtyScrollback::new(100, 1024 * 1024);
+        let mut buffer = vec![0xF0, 0x9F]; // Incomplete emoji (first 2 bytes)
+        scrollback.push_utf8(&mut buffer, false);
+        
+        // Should save incomplete sequence for next call
+        assert_eq!(scrollback.snapshot(), "");
+        assert_eq!(scrollback.unicode_errors, 0);
+        assert_eq!(scrollback.utf8_buffer_remainder, vec![0xF0, 0x9F]);
+    }
+
+    #[test]
+    fn test_push_utf8_incomplete_sequence_completed() {
+        let mut scrollback = PtyScrollback::new(100, 1024 * 1024);
+        
+        // First call with incomplete sequence
+        let mut buffer1 = vec![0xF0, 0x9F]; // Incomplete emoji
+        scrollback.push_utf8(&mut buffer1, false);
+        
+        // Second call with remaining bytes
+        let mut buffer2 = vec![0x8C, 0x8D]; // Remaining emoji bytes
+        scrollback.push_utf8(&mut buffer2, false);
+        
+        assert_eq!(scrollback.snapshot(), "🌍");
+        assert_eq!(scrollback.unicode_errors, 0);
+        assert_eq!(scrollback.utf8_buffer_remainder.len(), 0);
+    }
+
+    #[test]
+    fn test_push_utf8_incomplete_at_eof() {
+        let mut scrollback = PtyScrollback::new(100, 1024 * 1024);
+        let mut buffer = vec![0xF0, 0x9F]; // Incomplete emoji
+        scrollback.push_utf8(&mut buffer, true); // EOF = true
+        
+        assert_eq!(scrollback.snapshot(), "\u{FFFD}");
+        assert_eq!(scrollback.unicode_errors, 1);
+        assert_eq!(buffer.len(), 0);
+    }
+
+    #[test]
+    fn test_push_utf8_buffer_overflow() {
+        let mut scrollback = PtyScrollback::new(100, 1024 * 1024);
+        let mut buffer = vec![0xF0; 20 * 1024]; // 20KB of invalid data
+        scrollback.push_utf8(&mut buffer, false);
+        
+        assert_eq!(scrollback.snapshot(), "\u{FFFD}");
+        assert_eq!(scrollback.unicode_errors, 1);
+        assert_eq!(buffer.len(), 0);
+    }
+
+    #[test]
+    fn test_push_utf8_mixed_valid_invalid() {
+        let mut scrollback = PtyScrollback::new(100, 1024 * 1024);
+        let mut buffer = Vec::new();
+        buffer.extend_from_slice("Hello ".as_bytes());
+        buffer.push(0xFF); // Invalid byte
+        buffer.extend_from_slice(" World".as_bytes());
+        
+        scrollback.push_utf8(&mut buffer, false);
+        
+        assert_eq!(scrollback.snapshot(), "Hello \u{FFFD} World");
+        assert_eq!(scrollback.unicode_errors, 1);
+        assert_eq!(buffer.len(), 0);
+    }
+
+    #[test]
+    fn test_push_utf8_cjk_characters() {
+        let mut scrollback = PtyScrollback::new(100, 1024 * 1024);
+        let mut buffer = "你好世界こんにちは안녕하세요".as_bytes().to_vec();
+        scrollback.push_utf8(&mut buffer, false);
+        
+        assert_eq!(scrollback.snapshot(), "你好世界こんにちは안녕하세요");
+        assert_eq!(scrollback.unicode_errors, 0);
+        assert_eq!(scrollback.utf8_buffer_remainder.len(), 0);
+    }
+
+    #[test]
+    fn test_push_utf8_european_accents() {
+        let mut scrollback = PtyScrollback::new(100, 1024 * 1024);
+        let mut buffer = "café naïve résumé".as_bytes().to_vec();
+        scrollback.push_utf8(&mut buffer, false);
+        
+        assert_eq!(scrollback.snapshot(), "café naïve résumé");
+        assert_eq!(scrollback.unicode_errors, 0);
+        assert_eq!(scrollback.utf8_buffer_remainder.len(), 0);
+    }
+
+    #[test]
+    fn test_push_utf8_metrics_tracking() {
+        let mut scrollback = PtyScrollback::new(100, 1024 * 1024);
+        let mut buffer = vec![0xFF, 0xFE]; // Invalid UTF-8
+        scrollback.push_utf8(&mut buffer, false);
+        
+        let metrics = scrollback.metrics();
+        assert_eq!(metrics.unicode_errors, 1);
+        assert_eq!(metrics.utf8_buffer_size, 0);
+    }
+}
 use std::ffi::OsString;
 use std::io::{Read, Write};
 use std::path::{Component, Path, PathBuf};
@@ -12,7 +247,7 @@ use parking_lot::Mutex;
 use portable_pty::{Child, CommandBuilder, MasterPty, PtySize, native_pty_system};
 use shell_words::join;
 use tokio::sync::Mutex as TokioMutex;
-use tracing::{debug, warn};
+use tracing::{debug, warn, info};
 use vt100::Parser;
 
 use crate::audit::PermissionAuditLog;
@@ -20,6 +255,7 @@ use crate::config::{CommandsConfig, PtyConfig};
 use crate::tools::path_env;
 use crate::tools::shell::resolve_fallback_shell;
 use crate::tools::types::VTCodePtySession;
+use crate::utils::unicode_monitor::{UnicodeValidationContext, UNICODE_MONITOR};
 
 #[derive(Clone)]
 pub struct PtyManager {
@@ -181,9 +417,14 @@ struct PtyScrollback {
     max_bytes: usize,
     current_bytes: usize,
     overflow_detected: bool,
-    warning_shown: bool,  // NEW: Track if 80% warning shown
-    bytes_dropped: usize, // NEW: Track dropped bytes for metrics
-    lines_dropped: usize, // NEW: Track dropped lines for metrics
+    warning_shown: bool,  // Track if 80% warning shown
+    bytes_dropped: usize, // Track dropped bytes for metrics
+    lines_dropped: usize, // Track dropped lines for metrics
+    unicode_errors: usize, // Count UTF-8 decoding errors
+    utf8_buffer_remainder: Vec<u8>, // Store incomplete UTF-8 sequences between calls
+    total_unicode_chars: usize, // NEW: Total unicode characters processed
+    unicode_sessions: usize,    // NEW: Number of sessions with unicode content
+    last_unicode_check: bool,   // NEW: Cache last unicode detection result
 }
 
 impl PtyScrollback {
@@ -200,12 +441,33 @@ impl PtyScrollback {
             warning_shown: false,
             bytes_dropped: 0,
             lines_dropped: 0,
+            unicode_errors: 0,
+            utf8_buffer_remainder: Vec::new(),
+            total_unicode_chars: 0,
+            unicode_sessions: 0,
+            last_unicode_check: false,
         }
     }
 
     fn push_text(&mut self, text: &str) {
-        // Strip ANSI codes from the text to prevent ANSI styling in output
-        let cleaned_text = crate::utils::ansi_parser::strip_ansi(text);
+        // Unicode-aware ANSI stripping with fast path for ASCII-only text
+        let has_unicode = crate::utils::ansi_parser::contains_unicode(text);
+        self.last_unicode_check = has_unicode;
+        
+        if has_unicode {
+            self.unicode_sessions += 1;
+            // Count unicode characters for metrics
+            self.total_unicode_chars += text.chars().filter(|&ch| ch as u32 > 127).count();
+        }
+        
+        let cleaned_text = if has_unicode {
+            // Text contains unicode, use full ANSI stripping
+            crate::utils::ansi_parser::strip_ansi(text)
+        } else {
+            // Fast path: ASCII-only text, use simple escape sequence removal
+            crate::utils::ansi_parser::strip_ansi_ascii_only(text)
+        };
+        
         let text_bytes = cleaned_text.len();
 
         // Early warning at 80% threshold
@@ -245,32 +507,101 @@ impl PtyScrollback {
             return; // DROP further output to prevent hang
         }
 
-        for part in cleaned_text.split_inclusive('\n') {
-            self.partial.push_str(part);
-            self.pending_partial.push_str(part);
-            if part.ends_with('\n') {
-                let complete = std::mem::take(&mut self.partial);
-                let _ = std::mem::take(&mut self.pending_partial);
+        // Unicode-aware line splitting with optimization for ASCII-only text
+        if crate::utils::ansi_parser::contains_unicode(&cleaned_text) {
+            // Text contains unicode, use standard line splitting
+            for part in cleaned_text.split_inclusive('\n') {
+                self.partial.push_str(part);
+                self.pending_partial.push_str(part);
+                if part.ends_with('\n') {
+                    let complete = std::mem::take(&mut self.partial);
+                    let _ = std::mem::take(&mut self.pending_partial);
 
-                self.current_bytes += complete.len();
-                // Push clone to pending_lines first, then move original to lines
-                self.pending_lines.push_back(complete.clone());
-                self.lines.push_back(complete);
+                    self.current_bytes += complete.len();
+                    // Push clone to pending_lines first, then move original to lines
+                    self.pending_lines.push_back(complete.clone());
+                    self.lines.push_back(complete);
 
-                // Circular buffer: drop oldest lines when line capacity exceeded
-                while self.lines.len() > self.capacity_lines {
-                    if let Some(oldest) = self.lines.pop_front() {
-                        self.current_bytes = self.current_bytes.saturating_sub(oldest.len());
+                    // Circular buffer: drop oldest lines when line capacity exceeded
+                    while self.lines.len() > self.capacity_lines {
+                        if let Some(oldest) = self.lines.pop_front() {
+                            self.current_bytes = self.current_bytes.saturating_sub(oldest.len());
+                        }
+                    }
+                    while self.pending_lines.len() > self.capacity_lines {
+                        self.pending_lines.pop_front();
                     }
                 }
-                while self.pending_lines.len() > self.capacity_lines {
-                    self.pending_lines.pop_front();
+            }
+        } else {
+            // Fast path: ASCII-only text, use byte-based splitting
+            let bytes = cleaned_text.as_bytes();
+            let mut start = 0;
+            
+            for (i, &byte) in bytes.iter().enumerate() {
+                if byte == b'\n' {
+                    let line = std::str::from_utf8(&bytes[start..=i]).unwrap_or("");
+                    self.partial.push_str(line);
+                    self.pending_partial.push_str(line);
+                    
+                    let complete = std::mem::take(&mut self.partial);
+                    let _ = std::mem::take(&mut self.pending_partial);
+
+                    self.current_bytes += complete.len();
+                    self.pending_lines.push_back(complete.clone());
+                    self.lines.push_back(complete);
+
+                    // Circular buffer management
+                    while self.lines.len() > self.capacity_lines {
+                        if let Some(oldest) = self.lines.pop_front() {
+                            self.current_bytes = self.current_bytes.saturating_sub(oldest.len());
+                        }
+                    }
+                    while self.pending_lines.len() > self.capacity_lines {
+                        self.pending_lines.pop_front();
+                    }
+                    
+                    start = i + 1;
                 }
+            }
+            
+            // Handle remaining partial line
+            if start < bytes.len() {
+                let remaining = std::str::from_utf8(&bytes[start..]).unwrap_or("");
+                self.partial.push_str(remaining);
+                self.pending_partial.push_str(remaining);
             }
         }
     }
 
     fn push_utf8(&mut self, buffer: &mut Vec<u8>, eof: bool) {
+        const MAX_UTF8_BUFFER_SIZE: usize = 16 * 1024; // 16KB limit for incomplete UTF-8
+        const MAX_UNICODE_ERRORS: usize = 100; // Prevent excessive error logging
+        
+        // Start unicode validation context
+        let validation_context = UnicodeValidationContext::new(buffer.len());
+        
+        // Prepend any remainder from previous calls
+        if !self.utf8_buffer_remainder.is_empty() {
+            let mut combined = std::mem::take(&mut self.utf8_buffer_remainder);
+            combined.append(buffer);
+            *buffer = combined;
+        }
+        
+        // Prevent buffer overflow from accumulated incomplete sequences
+        if buffer.len() > MAX_UTF8_BUFFER_SIZE {
+            // If buffer is too large, treat remaining content as invalid
+            if !buffer.is_empty() {
+                self.push_text("\u{FFFD}");
+                self.unicode_errors += 1;
+                if self.unicode_errors <= MAX_UNICODE_ERRORS {
+                    tracing::warn!("UTF-8 buffer overflow: {} bytes, treating as invalid", buffer.len());
+                }
+                buffer.clear();
+            }
+            return;
+        }
+
         loop {
             match std::str::from_utf8(buffer) {
                 Ok(valid) => {
@@ -283,23 +614,61 @@ impl PtyScrollback {
                 Err(error) => {
                     let valid_up_to = error.valid_up_to();
                     if valid_up_to > 0 {
+                        // Process valid portion
                         if let Ok(valid) = std::str::from_utf8(&buffer[..valid_up_to]) {
                             if !valid.is_empty() {
                                 self.push_text(valid);
                             }
                         }
                         buffer.drain(..valid_up_to);
+                        
+                        // Check buffer size again after draining
+                        if buffer.len() > MAX_UTF8_BUFFER_SIZE {
+                            self.push_text("\u{FFFD}");
+                            self.unicode_errors += 1;
+                            if self.unicode_errors <= MAX_UNICODE_ERRORS {
+                                tracing::warn!("UTF-8 buffer overflow after processing: {} bytes", buffer.len());
+                            }
+                            buffer.clear();
+                            break;
+                        }
                         continue;
                     }
 
                     if let Some(error_len) = error.error_len() {
+                        // Invalid UTF-8 sequence - replace with replacement character
                         self.push_text("\u{FFFD}");
+                        self.unicode_errors += 1;
+                        if self.unicode_errors <= MAX_UNICODE_ERRORS {
+                            tracing::debug!("Invalid UTF-8 sequence detected, replacing with U+FFFD");
+                        }
                         buffer.drain(..error_len);
+                        
+                        // Check buffer size after draining
+                        if buffer.len() > MAX_UTF8_BUFFER_SIZE {
+                            self.push_text("\u{FFFD}");
+                            self.unicode_errors += 1;
+                            if self.unicode_errors <= MAX_UNICODE_ERRORS {
+                                tracing::warn!("UTF-8 buffer overflow after error: {} bytes", buffer.len());
+                            }
+                            buffer.clear();
+                            break;
+                        }
                         continue;
                     }
 
+                    // Incomplete UTF-8 sequence at end
                     if eof && !buffer.is_empty() {
+                        // At EOF, treat incomplete sequences as invalid
                         self.push_text("\u{FFFD}");
+                        self.unicode_errors += 1;
+                        if self.unicode_errors <= MAX_UNICODE_ERRORS {
+                            tracing::debug!("Incomplete UTF-8 sequence at EOF, replacing with U+FFFD");
+                        }
+                        buffer.clear();
+                    } else if !buffer.is_empty() && !eof {
+                        // Save incomplete sequence for next call
+                        self.utf8_buffer_remainder = buffer.clone();
                         buffer.clear();
                     }
 
@@ -307,6 +676,10 @@ impl PtyScrollback {
                 }
             }
         }
+        
+        // Complete unicode validation context
+        let processed_bytes = if buffer.is_empty() { 0 } else { buffer.len() };
+        validation_context.complete(processed_bytes);
     }
 
     fn snapshot(&self) -> String {
@@ -365,6 +738,10 @@ impl PtyScrollback {
             lines_dropped: self.lines_dropped,
             current_lines: self.lines.len(),
             capacity_lines: self.capacity_lines,
+            unicode_errors: self.unicode_errors,
+            utf8_buffer_size: self.utf8_buffer_remainder.len(),
+            total_unicode_chars: self.total_unicode_chars,
+            unicode_sessions: self.unicode_sessions,
         }
     }
 }
@@ -380,6 +757,10 @@ struct ScrollbackMetrics {
     lines_dropped: usize,
     current_lines: usize,
     capacity_lines: usize,
+    unicode_errors: usize,      // Count of UTF-8 decoding errors
+    utf8_buffer_size: usize,    // Current size of UTF-8 incomplete buffer
+    total_unicode_chars: usize, // Total unicode characters processed
+    unicode_sessions: usize,    // Number of sessions with unicode content
 }
 
 /// PTY session handle with exclusive access to all PTY resources.
@@ -907,11 +1288,17 @@ impl PtyManager {
         let parser_clone = Arc::clone(&parser);
         let scrollback_clone = Arc::clone(&scrollback);
         let session_name = session_id.clone();
+        // Start unicode monitoring for this session
+        UNICODE_MONITOR.start_session();
+        
         let reader_thread = thread::Builder::new()
             .name(format!("vtcode-pty-reader-{session_name}"))
             .spawn(move || {
-                let mut buffer = [0u8; 4096];
-                let mut utf8_buffer: Vec<u8> = Vec::new();
+                let mut buffer = [0u8; 8192]; // Increased buffer size for better performance
+                let mut utf8_buffer: Vec<u8> = Vec::with_capacity(8192); // Pre-allocate buffer
+                let mut total_bytes = 0usize;
+                let mut unicode_detection_hits = 0usize;
+                
                 loop {
                     match reader.read(&mut buffer) {
                         Ok(0) => {
@@ -919,11 +1306,21 @@ impl PtyManager {
                                 let mut scrollback = scrollback_clone.lock();
                                 scrollback.push_utf8(&mut utf8_buffer, true);
                             }
-                            debug!("PTY session '{}' reader reached EOF", session_name);
+                            debug!("PTY session '{}' reader reached EOF (processed {} bytes, {} unicode detections)", 
+                                   session_name, total_bytes, unicode_detection_hits);
                             break;
                         }
                         Ok(bytes_read) => {
                             let chunk = &buffer[..bytes_read];
+                            total_bytes += bytes_read;
+
+                            // Quick unicode detection heuristic
+                            let likely_unicode = chunk.iter().any(|&b| b >= 0x80);
+                            if likely_unicode {
+                                unicode_detection_hits += 1;
+                            }
+
+                            // Process chunk through VT100 parser for screen updates
                             {
                                 let mut parser = parser_clone.lock();
                                 parser.process(chunk);
@@ -934,11 +1331,36 @@ impl PtyManager {
                                 let mut scrollback = scrollback_clone.lock();
                                 scrollback.push_utf8(&mut utf8_buffer, false);
                             }
+                            
+                            // Periodic buffer cleanup to prevent excessive memory usage
+                            if utf8_buffer.capacity() > 32768 && utf8_buffer.len() < 1024 {
+                                utf8_buffer.shrink_to_fit();
+                            }
                         }
                         Err(error) => {
-                            warn!("PTY session '{}' reader error: {}", session_name, error);
+                            warn!("PTY session '{}' reader error: {} (processed {} bytes)", 
+                                  session_name, error, total_bytes);
                             break;
                         }
+                    }
+                }
+                debug!("PTY session '{}' reader thread finished (total: {} bytes, unicode detections: {})", 
+                       session_name, total_bytes, unicode_detection_hits);
+                
+                // End unicode monitoring for this session
+                UNICODE_MONITOR.end_session();
+                
+                // Log unicode statistics if any unicode was detected
+                if unicode_detection_hits > 0 {
+                    let scrollback = scrollback_clone.lock();
+                    let metrics = scrollback.metrics();
+                    if metrics.unicode_errors > 0 {
+                        warn!("PTY session '{}' had {} unicode errors during processing", 
+                              session_name, metrics.unicode_errors);
+                    }
+                    if metrics.total_unicode_chars > 0 {
+                        info!("PTY session '{}' processed {} unicode characters across {} sessions with {} buffer remainder", 
+                              session_name, metrics.total_unicode_chars, metrics.unicode_sessions, metrics.utf8_buffer_size);
                     }
                 }
             })

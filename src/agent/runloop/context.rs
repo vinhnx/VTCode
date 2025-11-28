@@ -43,6 +43,20 @@ pub(crate) struct ContextTrimConfig {
     pub(crate) preserve_recent_tools: usize,
 }
 
+impl Default for ContextTrimConfig {
+    fn default() -> Self {
+        Self {
+            max_tokens: 16000,
+            trim_to_percent: 80,
+            preserve_recent_turns: 5,
+            semantic_compression: true,
+            tool_aware_retention: true,
+            max_structural_depth: 10,
+            preserve_recent_tools: 3,
+        }
+    }
+}
+
 impl ContextTrimConfig {
     #[allow(dead_code)]
     pub(crate) fn target_tokens(&self) -> usize {

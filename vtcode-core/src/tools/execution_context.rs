@@ -3,10 +3,10 @@
 //! Tracks the context of tool executions within a session to detect patterns,
 //! prevent redundancy, and suggest better alternatives.
 
+use crate::utils::current_timestamp;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::VecDeque;
-use std::time::SystemTime;
 
 use crate::tools::result_metadata::EnhancedToolResult;
 use crate::tools::tool_effectiveness::ToolEffectiveness;
@@ -23,22 +23,18 @@ pub struct ToolExecutionRecord {
 }
 
 impl ToolExecutionRecord {
+    #[inline]
     pub fn new(
         tool_name: String,
         args: Value,
         result: EnhancedToolResult,
         execution_time_ms: u64,
     ) -> Self {
-        let timestamp = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
-
         Self {
             tool_name,
             args,
             result,
-            timestamp,
+            timestamp: current_timestamp(),
             execution_time_ms,
         }
     }

@@ -3,8 +3,8 @@
 //! Implements proven algorithms: Jaro-Winkler similarity, time-decay effectiveness,
 //! sophisticated pattern detection, and ML-ready scoring.
 
+use crate::utils::current_timestamp;
 use serde::{Deserialize, Serialize};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Jaro-Winkler string similarity (0.0-1.0)
 ///
@@ -111,10 +111,7 @@ impl TimeDecayedScore {
     /// Formula: score * exp(-lambda * age_hours)
     /// Default lambda = 0.1 (5% decay per 24 hours)
     pub fn calculate(base_score: f32, timestamp: u64) -> Self {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
+        let now = current_timestamp();
 
         let age_seconds = now.saturating_sub(timestamp);
         let age_hours = age_seconds as f32 / 3600.0;
@@ -289,13 +286,11 @@ impl MLScoreComponents {
 
     /// Apply time decay
     pub fn with_time_decay(mut self) -> Self {
-        let _decayed = TimeDecayedScore::calculate(self.raw_score(), {
-            let now = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs();
-            now.saturating_sub((self.age_hours * 3600.0) as u64)
-        });
+        let now = current_timestamp();
+        let _decayed = TimeDecayedScore::calculate(
+            self.raw_score(),
+            now.saturating_sub((self.age_hours * 3600.0) as u64),
+        );
 
         // Adjust for age (older measurements less confident)
         self.confidence = (self.confidence * (-self.age_hours / 168.0).exp()).max(0.1); // 1-week half-life
@@ -342,10 +337,7 @@ mod tests {
 
     #[test]
     fn test_time_decay() {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+        let now = current_timestamp();
 
         let recent = TimeDecayedScore::calculate(0.9, now);
         let old = TimeDecayedScore::calculate(0.9, now - 7 * 24 * 3600);

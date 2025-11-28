@@ -261,7 +261,7 @@ mod tests {
     async fn test_pty_basic_command() {
         let temp_dir = TempDir::new().unwrap();
         let workspace = temp_dir.path().to_path_buf();
-        let mut registry = ToolRegistry::new(workspace.clone()).await;
+        let mut registry = ToolRegistry::new(&workspace).await;
         registry.initialize_async().await.unwrap();
 
         // Test a simple PTY command
@@ -282,7 +282,7 @@ mod tests {
     async fn test_pty_session_management() {
         let temp_dir = TempDir::new().unwrap();
         let workspace = temp_dir.path().to_path_buf();
-        let mut registry = ToolRegistry::new(workspace.clone()).await;
+        let mut registry = ToolRegistry::new(&workspace).await;
         registry.initialize_async().await.unwrap();
 
         // Test creating a PTY session

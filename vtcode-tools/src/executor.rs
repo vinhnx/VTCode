@@ -276,13 +276,18 @@ impl CachedToolExecutor {
 // Helper for stable cache key generation — uses a small 64-bit hash of the
 // serialized JSON arguments to avoid storing large argument strings as cache
 // keys while still differentiating distinct argument payloads.
+#[inline]
 fn make_cache_key(tool_name: &str, args: &Value) -> String {
+    use std::hash::Hash;
     let mut hasher = DefaultHasher::new();
+    // Hash the tool name first for better distribution.
+    tool_name.hash(&mut hasher);
+    // Use compact JSON serialization for hashing.
     if let Ok(bytes) = serde_json::to_vec(args) {
         hasher.write(&bytes);
     }
     let h = hasher.finish();
-    format!("{}:{}", tool_name, h)
+    format!("{}:{:x}", tool_name, h)
 }
 
 // test above added to the test module further below

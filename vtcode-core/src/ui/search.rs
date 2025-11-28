@@ -23,7 +23,7 @@ pub fn normalize_query(query: &str) -> String {
         }
     }
 
-    normalized.trim_end().to_string()
+    normalized.trim_end().to_owned()
 }
 
 /// Returns true when every term in the query appears as a fuzzy match

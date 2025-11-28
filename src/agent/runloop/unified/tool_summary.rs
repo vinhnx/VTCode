@@ -66,7 +66,7 @@ pub(crate) fn render_tool_call_summary_with_status(
                     Value::String(s) if !s.is_empty() => {
                         Some(format!("{}: {}", humanize_key(key), truncate_middle(s, 40)))
                     }
-                    Value::Bool(true) => Some(humanize_key(key).to_string()),
+                    Value::Bool(true) => Some(humanize_key(key)),
                     Value::Array(items) => {
                         let strings: Vec<String> = items
                             .iter()
@@ -289,7 +289,7 @@ pub(crate) fn humanize_tool_name(name: &str) -> String {
 fn describe_fetch_action(_args: &Value) -> (String, HashSet<String>) {
     // Return simple description without parameters to avoid duplication
     // Parameters will be shown in the details section by render_tool_call_summary_with_status
-    ("Use Fetch".to_string(), HashSet::new())
+    ("Use Fetch".into(), HashSet::new())
 }
 
 fn describe_shell_command(args: &Value) -> Option<(String, HashSet<String>)> {
@@ -308,7 +308,7 @@ fn describe_shell_command(args: &Value) -> Option<(String, HashSet<String>)> {
         used.insert("command".to_string());
         let joined = parts.join(" ");
         let summary = truncate_middle(&joined, 70);
-        return Some((summary.to_string(), used));
+        return Some((summary, used));
     }
 
     if let Some(cmd) = args
@@ -318,7 +318,7 @@ fn describe_shell_command(args: &Value) -> Option<(String, HashSet<String>)> {
     {
         used.insert("bash_command".to_string());
         let summary = truncate_middle(cmd, 70);
-        return Some((summary.to_string(), used));
+        return Some((summary, used));
     }
 
     None
