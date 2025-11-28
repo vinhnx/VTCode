@@ -185,25 +185,21 @@ pub struct TurnLoopContext<'a> {
 
 #[allow(clippy::too_many_arguments)]
 pub async fn run_turn_loop(
-    input: &str,
+    _input: &str,
     mut working_history: Vec<uni::Message>,
     mut ctx: TurnLoopContext<'_>,
     config: &AgentConfig,
     vt_cfg: Option<&VTCodeConfig>,
     provider_client: &mut Box<dyn uni::LLMProvider>,
-    _traj: &TrajectoryLogger,
+    traj: &TrajectoryLogger,
     _skip_confirmations: bool,
     session_end_reason: &mut crate::hooks::lifecycle::SessionEndReason,
 ) -> Result<TurnLoopOutcome> {
-    use crate::agent::runloop::mcp_events;
-    use crate::agent::runloop::unified::tool_pipeline::{
-        ToolExecutionStatus, execute_tool_with_timeout_ref,
-    };
+    use crate::agent::runloop::unified::tool_pipeline::execute_tool_with_timeout_ref;
     use crate::agent::runloop::unified::tool_routing::ensure_tool_permission;
     use crate::agent::runloop::unified::turn::turn_processing::{
         TurnProcessingResult, execute_llm_request, process_llm_response,
     };
-    use crate::agent::runloop::unified::turn::utils::render_hook_messages;
     use vtcode_core::llm::provider as uni;
     use vtcode_core::tools::registry::{ToolErrorType, ToolExecutionError};
 
@@ -339,193 +335,20 @@ pub async fn run_turn_loop(
                                 None, // progress_reporter
                             ).await;
 
-                            match &tool_result {
-                                ToolExecutionStatus::Success { output, stdout: _, modified_files, command_success, has_more } => {
-                                    // Add successful tool result to history (token-aware aggregation)
-                                    // Determine per-call token budget (from args) or fall back to config
-                                    let mut call_max_tokens = None;
-                                    if let Some(mt) = args_val.get("max_tokens").and_then(|v| v.as_u64()) {
-                                        call_max_tokens = Some(mt as usize);
-                                    } else if let Some(ml) = args_val.get("max_lines").and_then(|v| v.as_u64()) {
-                                        // Map legacy max_lines to tokens
-                                        let est = (ml as usize).saturating_mul(vtcode_core::core::token_constants::TOKENS_PER_LINE);
-                                        tracing::warn!("`max_lines` is deprecated at tool call; mapping {} lines -> ~{} tokens for backward compatibility", ml, est);
-                                        call_max_tokens = Some(est);
-                                    }
-
-                                    let (max_tokens, byte_fuse) = if let Some(cfg) = vt_cfg {
-                                        (cfg.context.model_input_token_budget, cfg.context.model_input_byte_fuse)
-                                    } else {
-                                        (
-                                            vtcode_core::config::constants::context::DEFAULT_MODEL_INPUT_TOKEN_BUDGET,
-                                            vtcode_core::config::constants::context::DEFAULT_MODEL_INPUT_BYTE_FUSE,
-                                        )
-                                    };
-
-                                    // If call supplied a per-call max_tokens, prefer that (but clamp to config max)
-                                    let applied_max_tokens = call_max_tokens.map(|call| std::cmp::min(call, max_tokens));
-
-                                    let content_for_model = crate::agent::runloop::token_trunc::aggregate_tool_output_for_model(
-                                        tool_name,
-                                        output,
-                                        applied_max_tokens.unwrap_or(max_tokens),
-                                        byte_fuse,
-                                        &local_token_budget,
-                                    ).await;
-
-                                    working_history.push(uni::Message::tool_response_with_origin(
-                                        tool_call.id.clone(),
-                                        content_for_model,
-                                        tool_name.clone(),
-                                    ));
-
-                                    // Build a ToolPipelineOutcome to leverage centralized handling
-                                    let pipeline_outcome = crate::agent::runloop::unified::tool_pipeline::ToolPipelineOutcome::from_status(
-                                        crate::agent::runloop::unified::tool_pipeline::ToolExecutionStatus::Success {
-                                            output: output.clone(),
-                                            stdout: None,
-                                            modified_files: modified_files.clone(),
-                                            command_success: *command_success,
-                                            has_more: *has_more,
-                                        }
-                                    );
-                                    // Build a small RunLoopContext to reuse the generic `handle_pipeline_output`
-                                    let (any_write, mod_files, last_stdout) = crate::agent::runloop::unified::tool_output_handler::handle_pipeline_output_from_turn_ctx(
-                                        &mut ctx,
-                                        tool_name,
-                                        &args_val,
-                                        &pipeline_outcome,
-                                        vt_cfg,
-                                        &local_token_budget,
-                                        _traj,
-                                    )
-                                    .await?;
-                                    if any_write { any_write_effect = true; }
-                                    for f in mod_files { turn_modified_files.insert(f); }
-                                    let _ = last_stdout;
-                                        if let Some(hooks) = ctx.lifecycle_hooks {
-                                            match hooks.run_post_tool_use(tool_name, Some(&args_val), output).await {
-                                            Ok(outcome) => {
-                                                render_hook_messages(ctx.renderer, &outcome.messages)?;
-                                                for context in outcome.additional_context {
-                                                    if !context.trim().is_empty() {
-                                                        working_history.push(uni::Message::system(context));
-                                                    }
-                                                }
-                                            }
-                                            Err(err) => {
-                                                ctx.renderer.line(
-                                                    MessageStyle::Error,
-                                                    &format!("Failed to run post-tool hooks: {}", err),
-                                                )?;
-                                            }
-                                        }
-                                    }
-
-                                    if matches!(tool_name.as_str(), "write_file" | "edit_file" | "create_file" | "delete_file") {
-                                        any_write_effect = true;
-                                    }
-
-                                    // Check if we should short-circuit for shell commands
-                                    if !has_more && *command_success {
-                                        use crate::agent::runloop::unified::shell::{should_short_circuit_shell, derive_recent_tool_output};
-                                        if should_short_circuit_shell(input, tool_name, output) {
-                                            let reply = derive_recent_tool_output(&working_history)
-                                                .unwrap_or_else(|| "Command completed successfully.".to_string());
-                                            ctx.renderer.line(MessageStyle::Response, &reply)?;
-                                            working_history.push(uni::Message::assistant(reply));
-                                            break;
-                                        }
-                                    }
-                                }
-                                ToolExecutionStatus::Failure { error, .. } => {
-                                    // Add error result to history
-                                    let error_msg = format!("Tool '{}' execution failed: {}", tool_name, error);
-                                    ctx.renderer.line(MessageStyle::Error, &error_msg)?;
-
-                                    let error_content = serde_json::json!({"error": error_msg});
-                                    working_history.push(uni::Message::tool_response_with_origin(
-                                        tool_call.id.clone(),
-                                        error_content.to_string(),
-                                        tool_name.clone(),
-                                    ));
-                                }
-                                ToolExecutionStatus::Timeout { error, .. } => {
-                                    // Add timeout result to history
-                                    let error_msg = format!("Tool '{}' timed out: {}", tool_name, error.message);
-                                    ctx.renderer.line(MessageStyle::Error, &error_msg)?;
-
-                                    let error_content = serde_json::json!({"error": error_msg});
-                                    working_history.push(uni::Message::tool_response_with_origin(
-                                        tool_call.id.clone(),
-                                        error_content.to_string(),
-                                        tool_name.clone(),
-                                    ));
-                                }
-                                ToolExecutionStatus::Cancelled => {
-                                    // Add cancellation result to history
-                                    let error_msg = format!("Tool '{}' execution cancelled", tool_name);
-                                    ctx.renderer.line(MessageStyle::Info, &error_msg)?;
-
-                                    let error_content = serde_json::json!({"error": error_msg});
-                                    working_history.push(uni::Message::tool_response_with_origin(
-                                        tool_call.id.clone(),
-                                        error_content.to_string(),
-                                        tool_name.clone(),
-                                    ));
-                                }
-                                ToolExecutionStatus::Progress(_) => {
-                                    // Progress events are handled internally by the tool execution system
-                                    // Just continue without adding to the conversation history
-                                    continue;
-                                }
-                            }
-
-                            // Handle MCP events
-                            if tool_name.starts_with("mcp_") {
-                                match &tool_result {
-                                    ToolExecutionStatus::Success { output, .. } => {
-                                        let mut mcp_event = mcp_events::McpEvent::new(
-                                            "mcp".to_string(),
-                                            tool_name.to_string(),
-                                            Some(serde_json::to_string(output).unwrap_or_else(|_| "{}".to_string())),
-                                        );
-                                        mcp_event.success(None);
-                                        ctx.mcp_panel_state.add_event(mcp_event);
-                                    }
-                                    ToolExecutionStatus::Failure { error, .. } => {
-                                        let mut mcp_event = mcp_events::McpEvent::new(
-                                            "mcp".to_string(),
-                                            tool_name.to_string(),
-                                            Some(serde_json::json!({"error": error.to_string()}).to_string()),
-                                        );
-                                        mcp_event.failure(Some(error.to_string()));
-                                        ctx.mcp_panel_state.add_event(mcp_event);
-                                    }
-                                    ToolExecutionStatus::Timeout { error, .. } => {
-                                        let error_str = &error.message;
-                                        let mut mcp_event = mcp_events::McpEvent::new(
-                                            "mcp".to_string(),
-                                            tool_name.to_string(),
-                                            Some(serde_json::json!({"error": error_str}).to_string()),
-                                        );
-                                        mcp_event.failure(Some(error_str.clone()));
-                                        ctx.mcp_panel_state.add_event(mcp_event);
-                                    }
-                                    ToolExecutionStatus::Cancelled => {
-                                        let mut mcp_event = mcp_events::McpEvent::new(
-                                            "mcp".to_string(),
-                                            tool_name.to_string(),
-                                            Some(serde_json::json!({"error": "Cancelled"}).to_string()),
-                                        );
-                                        mcp_event.failure(Some("Cancelled".to_string()));
-                                        ctx.mcp_panel_state.add_event(mcp_event);
-                                    }
-                                    ToolExecutionStatus::Progress(_) => {
-                                        // Progress events are handled internally, no MCP event needed
-                                    }
-                                }
-                            }
+                            // Handle tool execution result using shared logic
+                            crate::agent::runloop::unified::turn::tool_handling::handle_tool_execution_result(
+                                &mut ctx,
+                                tool_call.id.clone(),
+                                tool_name,
+                                &args_val,
+                                &tool_result,
+                                &mut working_history,
+                                &mut turn_modified_files,
+                                &mut any_write_effect,
+                                vt_cfg,
+                                &local_token_budget,
+                                traj,
+                            ).await?;
                         }
                         Ok(crate::agent::runloop::unified::tool_routing::ToolPermissionFlow::Denied) => {
                             // Tool permission denied - add denial result to history
@@ -630,150 +453,20 @@ pub async fn run_turn_loop(
                                 None, // progress_reporter
                             ).await;
 
-                            match &tool_result {
-                                crate::agent::runloop::unified::tool_pipeline::ToolExecutionStatus::Success { output, stdout: _, modified_files, command_success: _, has_more: _ } => {
-                                    // Add successful tool result to history
-                                    let content = serde_json::to_string(&output).unwrap_or_else(|_| "{}".to_string());
-                                    working_history.push(uni::Message::tool_response_with_origin(
-                                        tool_call.id.clone(),
-                                        content,
-                                        call_tool_name.clone(),
-                                    ));
-
-                                    let pipeline_outcome = crate::agent::runloop::unified::tool_pipeline::ToolPipelineOutcome::from_status(
-                                        crate::agent::runloop::unified::tool_pipeline::ToolExecutionStatus::Success {
-                                            output: output.clone(),
-                                            stdout: None,
-                                            modified_files: modified_files.clone(),
-                                            command_success: true,
-                                            has_more: false,
-                                        }
-                                    );
-                                    let (any_write, mod_files, last_stdout) = crate::agent::runloop::unified::tool_output_handler::handle_pipeline_output_from_turn_ctx(
-                                        &mut ctx,
-                                        call_tool_name,
-                                        &call_args_val,
-                                        &pipeline_outcome,
-                                        vt_cfg,
-                                        &local_token_budget,
-                                        _traj,
-                                    )
-                                    .await?;
-                                    if any_write { any_write_effect = true; }
-                                    for f in mod_files { turn_modified_files.insert(f); }
-                                    let _ = last_stdout;
-
-                                    // Handle lifecycle hooks for post-tool use
-                                    if let Some(hooks) = ctx.lifecycle_hooks {
-                                        match hooks.run_post_tool_use(call_tool_name, Some(&call_args_val), output).await {
-                                            Ok(outcome) => {
-                                                crate::agent::runloop::unified::turn::utils::render_hook_messages(ctx.renderer, &outcome.messages)?;
-                                                for context in outcome.additional_context {
-                                                    if !context.trim().is_empty() {
-                                                        working_history.push(uni::Message::system(context));
-                                                    }
-                                                }
-                                            }
-                                            Err(err) => {
-                                                ctx.renderer.line(
-                                                    MessageStyle::Error,
-                                                    &format!("Failed to run post-tool hooks: {}", err),
-                                                )?;
-                                            }
-                                        }
-                                    }
-
-                                    if matches!(call_tool_name.as_str(), "write_file" | "edit_file" | "create_file" | "delete_file") {
-                                        any_write_effect = true;
-                                    }
-                                }
-                                crate::agent::runloop::unified::tool_pipeline::ToolExecutionStatus::Failure { error, .. } => {
-                                    // Add error result to history
-                                    let error_msg = format!("Detected tool '{}' execution failed: {}", call_tool_name, error);
-                                    ctx.renderer.line(MessageStyle::Error, &error_msg)?;
-
-                                    let error_content = serde_json::json!({"error": error_msg});
-                                    working_history.push(uni::Message::tool_response_with_origin(
-                                        tool_call.id.clone(),
-                                        error_content.to_string(),
-                                        call_tool_name.clone(),
-                                    ));
-                                }
-                                crate::agent::runloop::unified::tool_pipeline::ToolExecutionStatus::Timeout { error, .. } => {
-                                    // Add timeout result to history
-                                    let error_msg = format!("Detected tool '{}' timed out: {}", call_tool_name, error.message);
-                                    ctx.renderer.line(MessageStyle::Error, &error_msg)?;
-
-                                    let error_content = serde_json::json!({"error": error_msg});
-                                    working_history.push(uni::Message::tool_response_with_origin(
-                                        tool_call.id.clone(),
-                                        error_content.to_string(),
-                                        call_tool_name.clone(),
-                                    ));
-                                }
-                                crate::agent::runloop::unified::tool_pipeline::ToolExecutionStatus::Cancelled => {
-                                    // Add cancellation result to history
-                                    let error_msg = format!("Detected tool '{}' execution cancelled", call_tool_name);
-                                    ctx.renderer.line(MessageStyle::Info, &error_msg)?;
-
-                                    let error_content = serde_json::json!({"error": error_msg});
-                                    working_history.push(uni::Message::tool_response_with_origin(
-                                        tool_call.id.clone(),
-                                        error_content.to_string(),
-                                        call_tool_name.clone(),
-                                    ));
-                                }
-                                crate::agent::runloop::unified::tool_pipeline::ToolExecutionStatus::Progress(_) => {
-                                    // Progress events are handled internally by the tool execution system
-                                    continue;
-                                }
-                            }
-
-                            // Handle MCP events for detected tools
-                            if call_tool_name.starts_with("mcp_") {
-                                match &tool_result {
-                                    crate::agent::runloop::unified::tool_pipeline::ToolExecutionStatus::Success { output, .. } => {
-                                        let mut mcp_event = crate::agent::runloop::mcp_events::McpEvent::new(
-                                            "mcp".to_string(),
-                                            call_tool_name.to_string(),
-                                            Some(serde_json::to_string(output).unwrap_or_else(|_| "{}".to_string())),
-                                        );
-                                        mcp_event.success(None);
-                                        ctx.mcp_panel_state.add_event(mcp_event);
-                                    }
-                                    crate::agent::runloop::unified::tool_pipeline::ToolExecutionStatus::Failure { error, .. } => {
-                                        let mut mcp_event = crate::agent::runloop::mcp_events::McpEvent::new(
-                                            "mcp".to_string(),
-                                            call_tool_name.to_string(),
-                                            Some(serde_json::json!({"error": error.to_string()}).to_string()),
-                                        );
-                                        mcp_event.failure(Some(error.to_string()));
-                                        ctx.mcp_panel_state.add_event(mcp_event);
-                                    }
-                                    crate::agent::runloop::unified::tool_pipeline::ToolExecutionStatus::Timeout { error, .. } => {
-                                        let error_str = &error.message;
-                                        let mut mcp_event = crate::agent::runloop::mcp_events::McpEvent::new(
-                                            "mcp".to_string(),
-                                            call_tool_name.to_string(),
-                                            Some(serde_json::json!({"error": error_str}).to_string()),
-                                        );
-                                        mcp_event.failure(Some(error_str.clone()));
-                                        ctx.mcp_panel_state.add_event(mcp_event);
-                                    }
-                                    crate::agent::runloop::unified::tool_pipeline::ToolExecutionStatus::Cancelled => {
-                                        let mut mcp_event = crate::agent::runloop::mcp_events::McpEvent::new(
-                                            "mcp".to_string(),
-                                            call_tool_name.to_string(),
-                                            Some(serde_json::json!({"error": "Cancelled"}).to_string()),
-                                        );
-                                        mcp_event.failure(Some("Cancelled".to_string()));
-                                        ctx.mcp_panel_state.add_event(mcp_event);
-                                    }
-                                    crate::agent::runloop::unified::tool_pipeline::ToolExecutionStatus::Progress(_) => {
-                                        // Progress events are handled internally, no MCP event needed
-                                    }
-                                }
-                            }
+                            // Handle tool execution result using shared logic
+                            crate::agent::runloop::unified::turn::tool_handling::handle_tool_execution_result(
+                                &mut ctx,
+                                tool_call.id.clone(),
+                                call_tool_name,
+                                &call_args_val,
+                                &tool_result,
+                                &mut working_history,
+                                &mut turn_modified_files,
+                                &mut any_write_effect,
+                                vt_cfg,
+                                &local_token_budget,
+                                traj,
+                            ).await?;
                         }
                         Ok(crate::agent::runloop::unified::tool_routing::ToolPermissionFlow::Denied) => {
                             // Tool permission denied - add denial result to history

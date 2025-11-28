@@ -603,10 +603,8 @@ fn approximate_token_count(text: &str) -> usize {
 }
 
 fn load_tokenizer_for_model(model: &str, tokenizer_id: Option<&str>) -> Result<Tokenizer> {
-    if let Some(identifier) = tokenizer_id {
-        if let Some(spec) = resolve_tokenizer_spec(identifier) {
-            return load_tokenizer_from_spec(&spec);
-        }
+    if let Some(spec) = tokenizer_id.and_then(resolve_tokenizer_spec) {
+        return load_tokenizer_from_spec(&spec);
     }
 
     if let Some(spec) = resolve_tokenizer_spec(model) {

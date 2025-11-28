@@ -218,7 +218,7 @@ impl SkillCompatibilityChecker {
         // available format: "1.2.3" (current version)
 
         let req_parts: Vec<&str> = required.split('.').collect();
-        if req_parts.len() < 1 || req_parts.len() > 2 {
+        if req_parts.is_empty() || req_parts.len() > 2 {
             return Err(anyhow!("Invalid required version format: {}", required));
         }
 

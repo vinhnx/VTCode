@@ -37,7 +37,7 @@ impl TrajectoryLogger {
                 .append(true)
                 .open(&self.path)
             {
-                let _ = writeln!(f, "{}", line);
+                let _ = writeln!(f, "{line}");
             }
         }
     }

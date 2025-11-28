@@ -232,7 +232,7 @@ impl ErrorRecoveryManager {
         let unresolved_errors = total_errors - resolved_errors;
 
         let errors_by_type = self.errors.iter().fold(IndexMap::new(), |mut acc, error| {
-            *acc.entry(error.error_type.clone()).or_insert(0) += 1;
+            *acc.entry(error.error_type).or_insert(0) += 1;
             acc
         });
 

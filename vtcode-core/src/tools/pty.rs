@@ -216,10 +216,11 @@ impl PtyScrollback {
                 self.current_bytes as f64 / 1_000_000.0,
                 self.max_bytes / 1_000_000
             );
-            // Add warning to both buffers - use Arc<str> pattern to avoid clone
+            // Add warning to both buffers
             self.current_bytes += warning.len();
-            self.lines.push_back(warning.clone());
-            self.pending_lines.push_back(warning);
+            // Use String::clone_from pattern - push to pending first, then move to lines
+            self.pending_lines.push_back(warning.clone());
+            self.lines.push_back(warning);
         }
 
         // Check byte limit BEFORE processing to prevent memory explosion
@@ -231,10 +232,10 @@ impl PtyScrollback {
                      [💡 Tip: Full output can be retrieved with output spooling enabled]\n",
                     self.max_bytes / 1_000_000
                 );
-                // Add warning to both buffers
+                // Add warning to both buffers - push clone first, then move original
                 self.current_bytes += warning.len();
-                self.lines.push_back(warning.clone());
-                self.pending_lines.push_back(warning);
+                self.pending_lines.push_back(warning.clone());
+                self.lines.push_back(warning);
             }
 
             // Track metrics for dropped data
@@ -252,7 +253,7 @@ impl PtyScrollback {
                 let _ = std::mem::take(&mut self.pending_partial);
 
                 self.current_bytes += complete.len();
-                // Clone to pending_lines, then move complete to lines
+                // Push clone to pending_lines first, then move original to lines
                 self.pending_lines.push_back(complete.clone());
                 self.lines.push_back(complete);
 

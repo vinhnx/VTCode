@@ -5,6 +5,7 @@ mod run_loop;
 pub mod session;
 mod session_loop;
 mod tool_execution;
+mod tool_handling;
 mod turn_loop;
 mod turn_processing;
 pub(crate) mod utils;

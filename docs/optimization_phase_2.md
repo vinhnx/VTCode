@@ -200,40 +200,13 @@ Warnings: 1 (unrelated dead code in tool_pipeline.rs)
 5. `vtcode-core/src/llm/providers/moonshot.rs`
    - Updated to use `handle_openai_http_error`
 
-## Metrics
-
-### Before Optimization
-- Duplicate error handling: 4 implementations
-- String allocations in hot paths: ~15 per request
-- Buffer reallocations: ~5 per streaming chunk
-- Lines of duplicate code: 39+
-
-### After Optimization ✅
-- Duplicate error handling: 1 centralized implementation (75% reduction)
-- String allocations: ~10 per request (33% reduction)
-- Buffer reallocations: ~1 per streaming chunk (80% reduction)
-- Lines of duplicate code: 0 (100% reduction)
-
 ## Next Steps
 
-### Immediate
-1. ✅ Apply Phase 1 fixes to critical components
-2. ✅ Run `cargo check` and verify
-3. ⏳ Run `cargo nextest run` for full test suite
-4. ⏳ Benchmark performance improvements
-
-### Future Optimization Targets
-1. **Turn Loop** (`src/agent/runloop/unified/turn/turn_loop.rs`)
-   - Large file (856 lines) - needs review for optimization opportunities
-   
-2. **Tool System** (`vtcode-core/src/tools/`)
-   - Check for duplicate tool execution patterns
-   
-3. **UI Components** (`vtcode-core/src/ui/`)
-   - Review TUI session management for allocations
-   
-4. **Context Management** (`src/agent/runloop/unified/context_manager.rs`)
-   - Optimize message history handling
+1. ✅ Complete Phase 3 optimizations
+2. Run comprehensive tests to verify all changes
+3. Review and optimize remaining large files (turn_loop.rs, context_manager.rs)
+4. Document optimization patterns for future development
+5. Create performance benchmarks to measure impact
 
 ## Status Legend
 - ✅ Completed

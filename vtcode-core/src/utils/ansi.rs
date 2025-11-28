@@ -311,6 +311,16 @@ impl AnsiRenderer {
         let styles = theme::active_styles();
         let base_style = style.style();
         let indent = style.indent();
+
+        // Strip ANSI codes from agent response to prevent interference with markdown rendering
+        let text_storage;
+        let text = if matches!(style, MessageStyle::Response) {
+            text_storage = crate::utils::ansi_parser::strip_ansi(text);
+            &text_storage
+        } else {
+            text
+        };
+
         if let Some(sink) = &mut self.sink {
             let last_empty =
                 sink.write_markdown(text, indent, base_style, Self::message_kind(style))?;
@@ -337,6 +347,10 @@ impl AnsiRenderer {
         text: &str,
         previous_line_count: usize,
     ) -> Result<usize> {
+        // Strip ANSI codes from agent response to prevent interference with markdown rendering
+        let text = crate::utils::ansi_parser::strip_ansi(text);
+        let text = &text;
+
         let styles = theme::active_styles();
         let style = MessageStyle::Response;
         let base_style = style.style();
@@ -790,6 +804,14 @@ impl InlineSink {
         text: &str,
         kind: InlineMessageKind,
     ) -> Result<()> {
+        let text_storage;
+        let text = if kind == InlineMessageKind::Agent {
+            text_storage = crate::utils::ansi_parser::strip_ansi(text);
+            &text_storage
+        } else {
+            text
+        };
+
         if text.is_empty() {
             self.handle.append_line(kind, Vec::new());
             crate::utils::transcript::append("");

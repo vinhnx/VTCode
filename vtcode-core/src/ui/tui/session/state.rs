@@ -317,10 +317,11 @@ impl Session {
         max_rows: usize,
     ) -> Vec<Line<'static>> {
         // Check cache
-        if let Some((cached_offset, cached_width, cached_lines)) = &self.visible_lines_cache {
-            if *cached_offset == start_row && *cached_width == width {
-                return (**cached_lines).clone();
-            }
+        if let Some((cached_offset, cached_width, cached_lines)) = &self.visible_lines_cache
+            && *cached_offset == start_row
+            && *cached_width == width
+        {
+            return (**cached_lines).clone();
         }
 
         // Not in cache, fetch from transcript

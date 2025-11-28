@@ -133,11 +133,7 @@ impl TranscriptReflowCache {
                 break;
             }
 
-            let skip_lines = if msg_start_row < current_row {
-                current_row - msg_start_row
-            } else {
-                0
-            };
+            let skip_lines = current_row.saturating_sub(msg_start_row);
 
             // Optimize: avoid enumerate(), just use skip()
             let target_count = remaining_rows - result.len();

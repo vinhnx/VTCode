@@ -293,6 +293,11 @@ pub(crate) async fn run_tool_call(
 }
 
 /// Execute a tool with a timeout and progress reporting
+///
+/// This is a convenience wrapper around `execute_tool_with_timeout_ref` that takes
+/// ownership of the args Value. Primarily used in tests and legacy code.
+/// Production code should prefer `execute_tool_with_timeout_ref` to avoid cloning.
+#[allow(dead_code)]
 pub(crate) async fn execute_tool_with_timeout(
     registry: &mut ToolRegistry,
     name: &str,

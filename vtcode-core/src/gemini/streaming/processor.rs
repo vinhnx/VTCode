@@ -573,7 +573,7 @@ impl StreamingProcessor {
                 }
                 Ok(has_valid)
             }
-            Value::Object(map) => {
+            Value::Object(mut map) => {
                 if let Some(error_value) = map.get("error") {
                     let message = error_value
                         .get("message")
@@ -591,16 +591,16 @@ impl StreamingProcessor {
                     });
                 }
 
-                if let Some(usage) = map.get("usageMetadata") {
-                    accumulated_response.usage_metadata = Some(usage.clone());
+                if let Some(usage) = map.remove("usageMetadata") {
+                    accumulated_response.usage_metadata = Some(usage);
                 }
 
                 let mut has_valid = false;
 
-                if let Some(candidates_value) = map.get("candidates") {
+                if let Some(candidates_value) = map.remove("candidates") {
                     let candidate_values: Vec<Value> = match candidates_value {
-                        Value::Array(items) => items.clone(),
-                        Value::Object(_) => vec![candidates_value.clone()],
+                        Value::Array(items) => items,
+                        Value::Object(_) => vec![candidates_value],
                         _ => Vec::new(),
                     };
 
@@ -632,10 +632,13 @@ impl StreamingProcessor {
                     }
                 }
 
-                if let Some(text_value) = map.get("text").and_then(Value::as_str) {
+                if let Some(text_value) = map
+                    .remove("text")
+                    .and_then(|v| v.as_str().map(|s| s.to_owned()))
+                {
                     if !text_value.trim().is_empty() {
-                        on_chunk(text_value)?;
-                        self.append_text_candidate(accumulated_response, text_value);
+                        on_chunk(&text_value)?;
+                        self.append_text_candidate(accumulated_response, &text_value);
                         has_valid = true;
                     }
                 }

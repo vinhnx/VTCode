@@ -122,10 +122,11 @@ impl PromptCache {
             return Ok(());
         }
         // Check quality threshold
-        if let Some(quality) = entry.quality_score {
-            if quality < self.config.min_quality_threshold {
-                return Ok(()); // Don't cache low-quality entries
-            }
+        if entry
+            .quality_score
+            .is_some_and(|quality| quality < self.config.min_quality_threshold)
+        {
+            return Ok(()); // Don't cache low-quality entries
         }
 
         // Check cache size limit

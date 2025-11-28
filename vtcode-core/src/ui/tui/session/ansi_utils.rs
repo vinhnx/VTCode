@@ -9,19 +9,13 @@ pub(super) fn strip_ansi_codes(text: &str) -> String {
             match chars.peek() {
                 Some('[') => {
                     chars.next();
-                    let mut param_length = 0;
+                    // Skip CSI sequence parameters and final byte
                     while let Some(&next_ch) = chars.peek() {
                         chars.next();
-                        param_length += 1;
                         if next_ch.is_ascii_digit() || next_ch == ';' || next_ch == ':' {
                             continue;
-                        } else if ('@'..='~').contains(&next_ch) {
-                            break;
-                        } else if param_length > 20 {
-                            break;
-                        } else {
-                            break;
                         }
+                        break;
                     }
                 }
                 Some(']') => {

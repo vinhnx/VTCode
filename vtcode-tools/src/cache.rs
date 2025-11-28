@@ -144,6 +144,12 @@ impl<V: Send + Sync> LruCache<V> {
             self.observer.on_hit(key, entry.access_count).await;
             let mut stats = self.stats.write().await;
             stats.hits += 1;
+
+            // Update LRU order: move accessed key to back (most recently used)
+            let mut order = self.access_order.write().await;
+            order.retain(|k| k != key);
+            order.push_back(key.to_string());
+
             return Some(Arc::clone(&entry.value));
         }
 

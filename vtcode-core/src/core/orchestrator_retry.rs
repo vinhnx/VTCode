@@ -50,6 +50,12 @@ pub struct RetryManager {
     stats: RetryStats,
 }
 
+impl Default for RetryManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RetryManager {
     /// Create a new retry manager with default configuration
     pub fn new() -> Self {

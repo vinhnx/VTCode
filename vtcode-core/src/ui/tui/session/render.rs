@@ -41,16 +41,16 @@ pub fn render(session: &mut Session, frame: &mut Frame<'_>) {
         // Request continuous redraws while thinking
         session.needs_redraw = true;
         // Update spinner message with current frame
-        if let Some(spinner_idx) = session.thinking_spinner.spinner_line_index {
-            if spinner_idx < session.lines.len() {
-                let frame = session.thinking_spinner.current_frame();
-                let revision = session.next_revision();
-                if let Some(line) = session.lines.get_mut(spinner_idx) {
-                    if !line.segments.is_empty() {
-                        line.segments[0].text = format!("{} Thinking...", frame);
-                        line.revision = revision;
-                    }
-                }
+        if let Some(spinner_idx) = session.thinking_spinner.spinner_line_index
+            && spinner_idx < session.lines.len()
+        {
+            let frame = session.thinking_spinner.current_frame();
+            let revision = session.next_revision();
+            if let Some(line) = session.lines.get_mut(spinner_idx)
+                && !line.segments.is_empty()
+            {
+                line.segments[0].text = format!("{} Thinking...", frame);
+                line.revision = revision;
             }
         }
     }
@@ -688,19 +688,18 @@ fn agent_prefix_spans(session: &Session, line: &MessageLine) -> Vec<Span<'static
         ));
     }
 
-    if let Some(label) = &session.labels.agent {
-        if !label.is_empty() {
-            let label_style =
-                ratatui_style_from_inline(&prefix_style_inline, session.theme.foreground);
-            spans.push(Span::styled(label.clone(), label_style));
-        }
+    if let Some(label) = &session.labels.agent
+        && !label.is_empty()
+    {
+        let label_style = ratatui_style_from_inline(&prefix_style_inline, session.theme.foreground);
+        spans.push(Span::styled(label.clone(), label_style));
     }
 
     spans
 }
 
 /// Strips ANSI escape codes from text to ensure plain text output
-pub(super) fn strip_ansi_codes(text: &str) -> String {
+pub(super) fn strip_ansi_codes(text: &str) -> std::borrow::Cow<'_, str> {
     text_utils::strip_ansi_codes(text)
 }
 
@@ -817,11 +816,12 @@ fn collect_transcript_window_cached(
     max_rows: usize,
 ) -> Vec<Line<'static>> {
     // Check if we have cached visible lines for this exact position and width
-    if let Some((cached_offset, cached_width, cached_lines)) = &session.visible_lines_cache {
-        if *cached_offset == start_row && *cached_width == width {
-            // Reuse cached lines from Arc (zero-copy, no allocation)
-            return (**cached_lines).clone();
-        }
+    if let Some((cached_offset, cached_width, cached_lines)) = &session.visible_lines_cache
+        && *cached_offset == start_row
+        && *cached_width == width
+    {
+        // Reuse cached lines from Arc (zero-copy, no allocation)
+        return (**cached_lines).clone();
     }
 
     // Not in cache, fetch from transcript
@@ -1074,7 +1074,7 @@ fn wrap_block_lines_with_options(
         };
 
         let mut new_spans = vec![Span::styled(first_prefix.to_owned(), border_style)];
-        new_spans.extend(line.spans.drain(..));
+        new_spans.append(&mut line.spans);
         if padding > 0 {
             new_spans.push(Span::styled(" ".repeat(padding), Style::default()));
         }
@@ -1262,8 +1262,10 @@ fn reflow_pty_lines(session: &Session, index: usize, width: u16) -> Vec<Line<'st
         return Vec::new();
     }
 
-    let mut border_inline = InlineTextStyle::default();
-    border_inline.color = session.theme.secondary.or(session.theme.foreground);
+    let border_inline = InlineTextStyle {
+        color: session.theme.secondary.or(session.theme.foreground),
+        ..Default::default()
+    };
     let mut border_style = ratatui_style_from_inline(&border_inline, session.theme.foreground);
     border_style = border_style.add_modifier(Modifier::DIM);
 
@@ -1291,7 +1293,7 @@ fn reflow_pty_lines(session: &Session, index: usize, width: u16) -> Vec<Line<'st
     for segment in &line.segments {
         let stripped_text = strip_ansi_codes(&segment.text);
         let style = ratatui_style_from_inline(&segment.style, fallback);
-        body_spans.push(Span::styled(stripped_text, style));
+        body_spans.push(Span::styled(stripped_text.into_owned(), style));
     }
 
     // Check if this is a thinking spinner line (skip border rendering)
@@ -1435,7 +1437,7 @@ fn should_justify_message_line(
         return false;
     }
     let trimmed = text.trim();
-    if trimmed.starts_with(|ch: char| matches!(ch, '-' | '*' | '`' | '>' | '#')) {
+    if trimmed.starts_with(|ch: char| ['-', '*', '`', '>', '#'].contains(&ch)) {
         return false;
     }
     if trimmed.contains("```") {
@@ -1560,7 +1562,7 @@ pub(super) fn render_modal(session: &mut Session, frame: &mut Frame<'_>, viewpor
         modal.secure_prompt.as_ref(),
         modal.search.as_ref(),
     );
-    let prompt_lines = modal.secure_prompt.is_some().then_some(2).unwrap_or(0);
+    let prompt_lines = if modal.secure_prompt.is_some() { 2 } else { 0 };
     let search_lines = modal.search.as_ref().map(|_| 3).unwrap_or(0);
     let area = compute_modal_area(
         viewport,
