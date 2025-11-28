@@ -152,11 +152,7 @@ pub fn is_rate_limit_error(status_code: u16, error_text: &str) -> bool {
     // Optimize: Use case-insensitive search without allocating lowercase copy
     RATE_LIMIT_PATTERNS
         .iter()
-        .any(|pattern| {
-            error_text
-                .to_lowercase()
-                .contains(&pattern.to_lowercase())
-        })
+        .any(|pattern| error_text.to_lowercase().contains(&pattern.to_lowercase()))
 }
 
 /// Handle network errors with consistent formatting
@@ -177,11 +173,7 @@ pub fn format_parse_error(provider: &str, error: &impl std::fmt::Display) -> LLM
 
 /// Format HTTP error with status code and message
 #[inline]
-pub fn format_http_error(
-    provider: &str,
-    status: reqwest::StatusCode,
-    error_text: &str,
-) -> String {
+pub fn format_http_error(provider: &str, status: reqwest::StatusCode, error_text: &str) -> String {
     error_display::format_llm_error(provider, &format!("HTTP {}: {}", status, error_text))
 }
 

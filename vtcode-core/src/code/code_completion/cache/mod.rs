@@ -1,5 +1,6 @@
 use super::engine::CompletionSuggestion;
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 /// Completion cache for performance optimization
@@ -11,7 +12,7 @@ pub struct CompletionCache {
 
 #[derive(Debug, Clone)]
 struct CacheEntry {
-    suggestions: Vec<CompletionSuggestion>,
+    suggestions: Arc<Vec<CompletionSuggestion>>,
     created_at: Instant,
     access_count: usize,
 }
@@ -30,7 +31,20 @@ impl CompletionCache {
         if let Some(entry) = self.cache.get_mut(context_key) {
             if entry.created_at.elapsed() < self.ttl {
                 entry.access_count += 1;
-                return Some(entry.suggestions.clone());
+                return Some((*entry.suggestions).clone());
+            } else {
+                self.cache.remove(context_key);
+            }
+        }
+        None
+    }
+
+    /// Get a shared Arc reference to the suggestions, avoiding a Vec clone.
+    pub fn get_shared(&mut self, context_key: &str) -> Option<Arc<Vec<CompletionSuggestion>>> {
+        if let Some(entry) = self.cache.get_mut(context_key) {
+            if entry.created_at.elapsed() < self.ttl {
+                entry.access_count += 1;
+                return Some(Arc::clone(&entry.suggestions));
             } else {
                 self.cache.remove(context_key);
             }
@@ -49,7 +63,7 @@ impl CompletionCache {
         }
 
         let entry = CacheEntry {
-            suggestions,
+            suggestions: Arc::new(suggestions),
             created_at: Instant::now(),
             access_count: 1,
         };

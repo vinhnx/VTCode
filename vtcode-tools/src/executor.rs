@@ -6,6 +6,8 @@ use crate::cache::LruCache;
 use crate::middleware::{MiddlewareChain, ToolRequest, ToolResponse};
 use crate::patterns::{PatternDetector, ToolEvent};
 use serde_json::Value;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::Hasher;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
@@ -83,9 +85,13 @@ impl CachedToolExecutor {
     /// Execute a tool but return a shared (Arc) response to avoid clones.
     /// Accepts a shared Arc<Value> to avoid cloning arg contents when caller
     /// already holds a shared reference.
-    pub async fn execute_shared(&self, tool_name: &str, args: Arc<Value>) -> anyhow::Result<Arc<Value>> {
+    pub async fn execute_shared(
+        &self,
+        tool_name: &str,
+        args: Arc<Value>,
+    ) -> anyhow::Result<Arc<Value>> {
         let start = std::time::Instant::now();
-        let cache_key = format!("{}:{}", tool_name, args);
+        let cache_key = make_cache_key(tool_name, &*args);
 
         // Update stats (single write)
         {
@@ -139,8 +145,8 @@ impl CachedToolExecutor {
         // Wrap result in Arc once, then clone Arc for cache and response
         let arc_res = Arc::new(result);
 
-        // Cache result (Arc clone is cheap - just reference count increment)
-        self.cache.insert(cache_key, (*arc_res).clone()).await;
+        // Cache result (Arc clone is cheap - pass Arc directly into cache)
+        self.cache.insert_arc(cache_key, Arc::clone(&arc_res)).await;
 
         // Update stats
         {
@@ -165,7 +171,11 @@ impl CachedToolExecutor {
     }
 
     /// Backwards-compatible wrapper for callers that still pass an owned Value.
-    pub async fn execute_shared_owned(&self, tool_name: &str, args: Value) -> anyhow::Result<Arc<Value>> {
+    pub async fn execute_shared_owned(
+        &self,
+        tool_name: &str,
+        args: Value,
+    ) -> anyhow::Result<Arc<Value>> {
         let arg = Arc::new(args);
         self.execute_shared(tool_name, arg).await
     }
@@ -263,6 +273,20 @@ impl CachedToolExecutor {
     }
 }
 
+// Helper for stable cache key generation — uses a small 64-bit hash of the
+// serialized JSON arguments to avoid storing large argument strings as cache
+// keys while still differentiating distinct argument payloads.
+fn make_cache_key(tool_name: &str, args: &Value) -> String {
+    let mut hasher = DefaultHasher::new();
+    if let Ok(bytes) = serde_json::to_vec(args) {
+        hasher.write(&bytes);
+    }
+    let h = hasher.finish();
+    format!("{}:{}", tool_name, h)
+}
+
+// test above added to the test module further below
+
 impl Default for CachedToolExecutor {
     fn default() -> Self {
         Self::new()
@@ -310,6 +334,23 @@ mod tests {
         assert_eq!(stats.cache_misses, 1);
 
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn cache_hit_after_repeat_call() {
+        let exec = CachedToolExecutor::with_config(10, Duration::from_secs(60), 3);
+        let args = serde_json::json!({"x": 1});
+
+        // First call -> cache miss
+        let _first = exec.execute("test_tool", args.clone()).await.unwrap();
+
+        // Second call with same args -> should use cache
+        let _second = exec.execute("test_tool", args.clone()).await.unwrap();
+
+        // Check stats for cache hit/miss
+        let stats = exec.stats().await;
+        assert!(stats.cache_hits >= 1);
+        assert!(stats.cache_misses >= 1);
     }
 
     #[tokio::test]

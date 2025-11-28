@@ -69,7 +69,11 @@ impl<K: Clone + Eq + std::hash::Hash + std::fmt::Debug, V: Clone + std::fmt::Deb
 
     /// Get value from cache (updates LRU metadata)
     /// Return a shared Arc<V> to avoid deep copies if caller wants to reuse it.
-    pub fn get_arc(&self, key: &K) -> Option<Arc<V>> {
+    pub fn get_arc<Q>(&self, key: &Q) -> Option<Arc<V>>
+    where
+        K: std::borrow::Borrow<Q>,
+        Q: std::hash::Hash + Eq + ?Sized,
+    {
         let mut entries = self.entries.write().unwrap();
 
         // Use get directly instead of contains_key + get
@@ -126,12 +130,53 @@ impl<K: Clone + Eq + std::hash::Hash + std::fmt::Debug, V: Clone + std::fmt::Deb
         Ok(())
     }
 
+    /// Insert an Arc<V> directly into the cache without cloning the value.
+    pub fn put_arc(&self, key: K, value: Arc<V>) -> Result<(), String> {
+        let mut entries = self.entries.write().unwrap();
+
+        // Evict if at capacity
+        if entries.len() >= self.max_size && !entries.contains_key(&key) {
+            if let Some(lru_key) = entries
+                .iter()
+                .min_by_key(|(_, entry)| entry.last_accessed)
+                .map(|(k, _)| k.clone())
+            {
+                entries.remove(&lru_key);
+                self.obs_context
+                    .event(EventType::CacheEvicted, "cache", "evicted LRU entry", None);
+            }
+        }
+
+        let now = Instant::now();
+        entries.insert(
+            key,
+            CacheEntry {
+                value: Arc::clone(&value),
+                created_at: now,
+                last_accessed: now,
+                ttl: self.default_ttl,
+            },
+        );
+
+        Ok(())
+    }
+
     /// Compatibility helper: returns an owned V by cloning the Arc inside.
-    pub fn get_owned(&self, key: &K) -> Option<V>
+    pub fn get_owned<Q>(&self, key: &Q) -> Option<V>
     where
-        V: Clone,
+        K: std::borrow::Borrow<Q>,
+        Q: std::hash::Hash + Eq + ?Sized,
     {
         self.get_arc(key).map(|arc| (*arc).clone())
+    }
+
+    /// Compatibility alias: returns an owned value (cloned) similar to older cache API
+    pub fn get<Q>(&self, key: &Q) -> Option<V>
+    where
+        K: std::borrow::Borrow<Q>,
+        Q: std::hash::Hash + Eq + ?Sized,
+    {
+        self.get_owned(key)
     }
 
     /// Get cache size
@@ -195,20 +240,24 @@ mod tests {
     fn test_cache_basic_get_put() {
         let cache = LruCache::new(10, Duration::from_secs(60));
 
-        cache.put("key1".to_string(), "value1".to_string()).unwrap();
-        assert_eq!(cache.get_owned(&"key1"), Some("value1"));
+        cache
+            .put_arc("key1".to_string(), Arc::new("value1".to_string()))
+            .unwrap();
+        assert_eq!(cache.get_owned("key1"), Some("value1".to_string()));
     }
 
     #[test]
     fn test_cache_ttl_expiration() {
         let cache = LruCache::new(10, Duration::from_millis(100));
 
-        cache.put("key1".to_string(), "value1".to_string()).unwrap();
-        assert_eq!(cache.get_owned(&"key1"), Some("value1"));
+        cache
+            .put_arc("key1".to_string(), Arc::new("value1".to_string()))
+            .unwrap();
+        assert_eq!(cache.get_owned("key1"), Some("value1".to_string()));
 
         // Wait for expiration
         std::thread::sleep(Duration::from_millis(150));
-        assert_eq!(cache.get_owned(&"key1"), None);
+        assert_eq!(cache.get_owned("key1"), None);
     }
 
     #[test]
@@ -216,28 +265,40 @@ mod tests {
         let cache = LruCache::new(3, Duration::from_secs(60));
 
         // Fill cache
-        cache.put("key1".to_string(), "value1".to_string()).unwrap();
-        cache.put("key2".to_string(), "value2".to_string()).unwrap();
-        cache.put("key3".to_string(), "value3".to_string()).unwrap();
+        cache
+            .put_arc("key1".to_string(), Arc::new("value1".to_string()))
+            .unwrap();
+        cache
+            .put_arc("key2".to_string(), Arc::new("value2".to_string()))
+            .unwrap();
+        cache
+            .put_arc("key3".to_string(), Arc::new("value3".to_string()))
+            .unwrap();
 
         // Access key1 to mark it recently used
-        cache.get_arc(&"key1");
+        cache.get_arc("key1");
 
         // Add new entry (should evict key2 as LRU)
-        cache.put("key4".to_string(), "value4".to_string()).unwrap();
+        cache
+            .put_arc("key4".to_string(), Arc::new("value4".to_string()))
+            .unwrap();
 
-        assert_eq!(cache.get_owned(&"key1"), Some("value1"));
-        assert_eq!(cache.get_owned(&"key2"), None); // Evicted
-        assert_eq!(cache.get_owned(&"key3"), Some("value3"));
-        assert_eq!(cache.get_owned(&"key4"), Some("value4"));
+        assert_eq!(cache.get_owned("key1"), Some("value1".to_string()));
+        assert_eq!(cache.get_owned("key2"), None); // Evicted
+        assert_eq!(cache.get_owned("key3"), Some("value3".to_string()));
+        assert_eq!(cache.get_owned("key4"), Some("value4".to_string()));
     }
 
     #[test]
     fn test_cache_stats() {
         let cache = LruCache::new(10, Duration::from_secs(60));
 
-        cache.put("key1".to_string(), "value1".to_string()).unwrap();
-        cache.put("key2".to_string(), "value2".to_string()).unwrap();
+        cache
+            .put_arc("key1".to_string(), Arc::new("value1".to_string()))
+            .unwrap();
+        cache
+            .put_arc("key2".to_string(), Arc::new("value2".to_string()))
+            .unwrap();
 
         let stats = cache.stats();
         assert_eq!(stats.total_entries, 2);
@@ -249,7 +310,9 @@ mod tests {
     fn test_cache_clear() {
         let cache = LruCache::new(10, Duration::from_secs(60));
 
-        cache.put("key1".to_string(), "value1".to_string()).unwrap();
+        cache
+            .put_arc("key1".to_string(), Arc::new("value1".to_string()))
+            .unwrap();
         assert_eq!(cache.size(), 1);
 
         cache.clear();
@@ -260,8 +323,12 @@ mod tests {
     fn test_cache_evict_expired() {
         let cache = LruCache::new(10, Duration::from_millis(100));
 
-        cache.put("key1".to_string(), "value1".to_string()).unwrap();
-        cache.put("key2".to_string(), "value2".to_string()).unwrap();
+        cache
+            .put_arc("key1".to_string(), Arc::new("value1".to_string()))
+            .unwrap();
+        cache
+            .put_arc("key2".to_string(), Arc::new("value2".to_string()))
+            .unwrap();
 
         std::thread::sleep(Duration::from_millis(150));
 

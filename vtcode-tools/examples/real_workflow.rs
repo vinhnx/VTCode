@@ -7,6 +7,8 @@
 //! 4. Track metrics and detect workflow patterns
 
 use serde_json::json;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::Hasher;
 use std::sync::Arc;
 use std::time::Duration;
 use vtcode_tools::{
@@ -40,7 +42,12 @@ impl ToolExecutor {
     /// Execute a tool call with full observability.
     async fn execute(&self, tool_name: &str, args: &str) -> Vec<String> {
         let start = std::time::Instant::now();
-        let cache_key = format!("{}:{}", tool_name, args);
+        // Small deterministic hashed key to avoid large, repeated string allocations
+        let cache_key = {
+            let mut hasher = DefaultHasher::new();
+            hasher.write(args.as_bytes());
+            format!("{}:{}", tool_name, hasher.finish())
+        };
 
         let middleware = MiddlewareChain::new()
             .add(LoggingMiddleware::new("workflow"))
@@ -55,7 +62,7 @@ impl ToolExecutor {
 
         let _ = middleware.before_execute(&req).await;
 
-        // Check cache first
+        // Check cache first (get returns Arc<Vec<String>>)
         let result = if let Some(cached) = self.cache.get(&cache_key).await {
             (*cached).clone()
         } else {
@@ -67,8 +74,10 @@ impl ToolExecutor {
                 _ => vec!["unknown_tool".into()],
             };
 
-            // Cache the result
-            self.cache.insert(cache_key.clone(), result.clone()).await;
+            // Cache the result using insert_arc to avoid cloning the vector for cache
+            self.cache
+                .insert_arc(cache_key.clone(), Arc::new(result.clone()))
+                .await;
             result
         };
 

@@ -148,13 +148,13 @@ impl ToolRegistryImprovement {
     /// Cache result for tool execution
     pub fn cache_result(&self, tool: &str, args: &str, result: &str) {
         let key = format!("{}::{}", tool, args);
-        let _ = self.result_cache.put(key, result.to_owned());
+        let _ = self.result_cache.put_arc(key, Arc::new(result.to_owned()));
     }
 
     /// Try to get cached result
     pub fn get_cached_result(&self, tool: &str, args: &str) -> Option<String> {
         let key = format!("{}::{}", tool, args);
-        self.result_cache.get_owned(&key)
+        self.result_cache.get_owned(key.as_str())
     }
 
     /// Clear cache

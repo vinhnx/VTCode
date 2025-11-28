@@ -6,10 +6,9 @@ use crate::llm::client::LLMClient;
 use crate::llm::error_display;
 use crate::llm::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse};
 use crate::llm::providers::common::{
-    convert_usage_to_llm_types, forward_prompt_cache_with_state,
-    make_default_request, override_base_url,
-    parse_response_openai_format, resolve_model, serialize_messages_openai_format,
-    serialize_tools_openai_format, validate_request_common,
+    convert_usage_to_llm_types, forward_prompt_cache_with_state, make_default_request,
+    override_base_url, parse_response_openai_format, resolve_model,
+    serialize_messages_openai_format, serialize_tools_openai_format, validate_request_common,
 };
 use crate::llm::providers::error_handling::handle_openai_http_error;
 use crate::llm::rig_adapter::reasoning_parameters_for;
@@ -228,7 +227,8 @@ impl LLMProvider for MoonshotProvider {
                 LLMError::Network(formatted_error)
             })?;
 
-        let response = handle_openai_http_error(response, PROVIDER_NAME, "MOONSHOT_API_KEY").await?;
+        let response =
+            handle_openai_http_error(response, PROVIDER_NAME, "MOONSHOT_API_KEY").await?;
 
         let response_json: Value = response.json().await.map_err(|e| {
             let formatted_error = error_display::format_llm_error(

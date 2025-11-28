@@ -7,6 +7,12 @@ use crate::tools::command_policy::CommandPolicyEvaluator;
 use crate::tools::path_env;
 use crate::tools::shell::resolve_fallback_shell;
 use anyhow::{Result, anyhow};
+#[cfg(test)]
+use serde_json::json;
+#[cfg(test)]
+use std::collections::HashMap;
+#[cfg(test)]
+use std::ffi::OsString;
 use std::path::PathBuf;
 
 /// Command execution tool for non-PTY process handling with policy enforcement

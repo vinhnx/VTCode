@@ -174,7 +174,12 @@ impl AsyncCachingMiddleware {
     }
 
     fn cache_key(tool: &str, args: &str) -> String {
-        format!("{}::{}", tool, args)
+        // Use a hashed key to avoid creating large string cache keys while still uniquely identifying args
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::Hasher;
+        let mut hasher = DefaultHasher::new();
+        hasher.write(args.as_bytes());
+        format!("{}::{}", tool, hasher.finish())
     }
 }
 
@@ -200,7 +205,7 @@ impl AsyncMiddleware for AsyncCachingMiddleware {
         let key = Self::cache_key(&request.tool_name, &request.arguments);
 
         // Check cache
-        if let Some(cached) = self.cache.get_owned(&key) {
+        if let Some(cached) = self.cache.get_owned(key.as_str()) {
             self.obs_context.event(
                 crate::tools::EventType::CacheHit,
                 "cache",
@@ -223,7 +228,7 @@ impl AsyncMiddleware for AsyncCachingMiddleware {
         // Cache successful result
         if result.success {
             if let Some(ref output) = result.output {
-                let _ = self.cache.put(key, output.clone());
+                let _ = self.cache.put_arc(key, Arc::new(output.clone()));
             }
         }
 

@@ -7,6 +7,8 @@
 //! - Real tool execution pattern
 
 use serde_json::json;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::Hasher;
 use std::sync::Arc;
 use std::time::Duration;
 use vtcode_tools::{ToolEvent, cache::LruCache, middleware::*, patterns::PatternDetector};
@@ -34,7 +36,14 @@ impl CachedToolExecutor {
         tool_name: &str,
         args: serde_json::Value,
     ) -> anyhow::Result<serde_json::Value> {
-        let cache_key = format!("{}:{}", tool_name, args.to_string());
+        // Use a stable, hashed key that avoids creating a large string for the args
+        let cache_key = {
+            let mut hasher = DefaultHasher::new();
+            if let Ok(bytes) = serde_json::to_vec(&args) {
+                hasher.write(&bytes);
+            }
+            format!("{}:{}", tool_name, hasher.finish())
+        };
         let start = std::time::Instant::now();
 
         let args = Arc::new(args);
@@ -63,8 +72,10 @@ impl CachedToolExecutor {
         // Simulate tool execution
         let result = simulate_tool_execution(tool_name, &req.args).await?;
 
-        // Cache result
-        self.cache.insert(cache_key, result.clone()).await;
+        // Cache result using an Arc to avoid extra clone costs
+        self.cache
+            .insert_arc(cache_key, Arc::new(result.clone()))
+            .await;
 
         let res = ToolResponse {
             result: Arc::new(result.clone()),

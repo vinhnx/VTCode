@@ -1212,7 +1212,7 @@ impl ZedAgent {
             );
         }
 
-            let result = {
+        let result = {
             let mut registry = self.local_tool_registry.borrow_mut();
             registry.execute_tool_ref(tool_name, &args).await
         };

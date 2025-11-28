@@ -30,7 +30,7 @@ pub enum CompletionKind {
 
 /// Code completion engine
 pub struct CompletionEngine {
-    suggestion_cache: Arc<RwLock<HashMap<String, Vec<CompletionSuggestion>>>>,
+    suggestion_cache: Arc<RwLock<HashMap<String, Arc<Vec<CompletionSuggestion>>>>>,
     learning_data: Arc<RwLock<CompletionLearningData>>,
     performance_stats: Arc<RwLock<CompletionStats>>,
 }
@@ -55,19 +55,27 @@ impl CompletionEngine {
 
     /// Generate completion suggestions for the given context
     pub async fn complete(&self, context: &CompletionContext) -> Vec<CompletionSuggestion> {
-        // Check cache first
+        let arc = self.complete_shared(context).await;
+        (*arc).clone()
+    }
+
+    /// Return a shared `Arc<Vec<CompletionSuggestion>>` to avoid cloning large collections
+    /// when the caller can accept shared ownership.
+    pub async fn complete_shared(
+        &self,
+        context: &CompletionContext,
+    ) -> Arc<Vec<CompletionSuggestion>> {
         let cache_key = format!("{}:{}:{}", context.language, context.line, context.column);
+
         {
             let cache = self.suggestion_cache.read().await;
             if let Some(cached) = cache.get(&cache_key) {
-                return cached.clone();
+                return Arc::clone(cached);
             }
         }
 
-        // Generate new suggestions based on context
+        // Generate new suggestions
         let mut suggestions = Vec::new();
-
-        // Add keyword suggestions
         let keywords = self.get_language_keywords(&context.language);
         for keyword in keywords {
             if keyword.starts_with(&context.prefix) {
@@ -85,7 +93,6 @@ impl CompletionEngine {
             }
         }
 
-        // Add snippet suggestions
         let snippets = self.get_language_snippets(&context.language);
         for snippet in snippets {
             if snippet.label.starts_with(&context.prefix) {
@@ -106,12 +113,14 @@ impl CompletionEngine {
             }
         }
 
+        // Insert into cache as Arc
+        let arc = Arc::new(suggestions);
         {
             let mut cache = self.suggestion_cache.write().await;
-            cache.insert(cache_key, suggestions.clone());
+            cache.insert(cache_key, Arc::clone(&arc));
         }
 
-        suggestions
+        arc
     }
 
     /// Record user feedback on a suggestion

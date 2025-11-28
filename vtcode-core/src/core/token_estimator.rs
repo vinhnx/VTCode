@@ -18,7 +18,11 @@ impl CharacterRatioTokenEstimator {
     #[inline]
     pub const fn new(chars_per_token: usize) -> Self {
         // Use const fn for compile-time evaluation when possible
-        let normalized = if chars_per_token == 0 { 1 } else { chars_per_token };
+        let normalized = if chars_per_token == 0 {
+            1
+        } else {
+            chars_per_token
+        };
         Self {
             chars_per_token: normalized,
         }

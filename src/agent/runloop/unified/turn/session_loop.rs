@@ -852,10 +852,7 @@ pub(crate) async fn run_single_agent_loop_unified(
 
                 // Execute the tool directly via tool registry
                 let tool_call_id = format!("explicit_run_{}", conversation_history.len());
-                match tool_registry
-                    .execute_tool_ref(&tool_name, &tool_args)
-                    .await
-                {
+                match tool_registry.execute_tool_ref(&tool_name, &tool_args).await {
                     Ok(result) => {
                         // Render the command output using the standard tool output renderer
                         crate::agent::runloop::tool_output::render_tool_output(
