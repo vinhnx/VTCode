@@ -3,11 +3,12 @@ use ratatui::{
     layout::Rect,
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, BorderType, Borders, Clear, List, ListItem},
+    widgets::{Block, Borders, Clear, List, ListItem},
 };
 
 use super::super::style::ratatui_color_from_ansi;
 use super::super::types::InlineTheme;
+use super::terminal_capabilities;
 use super::file_palette::FilePalette;
 use super::modal::{ModalListLayout, compute_modal_area};
 use super::prompt_palette::PromptPalette;
@@ -47,7 +48,7 @@ pub(super) fn render_file_palette(
     let block = Block::default()
         .title(title)
         .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
+        .border_type(terminal_capabilities::get_border_type())
         .border_style(border_style(theme));
     let inner = block.inner(area);
     frame.render_widget(block, area);
@@ -114,7 +115,7 @@ fn render_file_palette_loading(frame: &mut Frame<'_>, viewport: Rect, theme: &In
     let block = Block::default()
         .title(" 📁 File Browser ")
         .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
+        .border_type(terminal_capabilities::get_border_type())
         .border_style(border_style(theme));
     let inner = block.inner(area);
     frame.render_widget(block, area);
@@ -205,7 +206,7 @@ pub(super) fn render_prompt_palette(
     let block = Block::default()
         .title(title)
         .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
+        .border_type(terminal_capabilities::get_border_type())
         .border_style(border_style(theme));
     let inner = block.inner(area);
     frame.render_widget(block, area);
@@ -261,7 +262,7 @@ fn render_prompt_palette_loading(frame: &mut Frame<'_>, viewport: Rect, theme: &
     let block = Block::default()
         .title(" 💬 Custom Prompts ")
         .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
+        .border_type(terminal_capabilities::get_border_type())
         .border_style(border_style(theme));
     let inner = block.inner(area);
     frame.render_widget(block, area);

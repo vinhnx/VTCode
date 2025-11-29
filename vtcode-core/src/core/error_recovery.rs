@@ -148,7 +148,7 @@ impl ErrorRecoveryManager {
             error_type, // ErrorType is Copy now, no need to clone
             message,
             context,
-            recovery_attempts: Vec::new(),
+            recovery_attempts: Vec::with_capacity(4), // Most errors have 1-4 recovery attempts
             resolved: false,
         };
 

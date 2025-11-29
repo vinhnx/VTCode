@@ -98,6 +98,28 @@ pub fn override_base_url(
     default_base_url.to_string()
 }
 
+/// Get or create HTTP client with custom timeouts
+pub fn get_http_client_for_timeouts(
+    connect_timeout: std::time::Duration,
+    read_timeout: std::time::Duration,
+) -> reqwest::Client {
+    reqwest::Client::builder()
+        .connect_timeout(connect_timeout)
+        .timeout(read_timeout)
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new())
+}
+
+pub fn extract_prompt_cache_settings_default(
+    prompt_cache: Option<PromptCachingConfig>,
+    provider_key: &str,
+) -> (bool, bool) {
+    match prompt_cache {
+        Some(cfg) if cfg.enabled => (true, cfg.enabled),
+        _ => (false, false),
+    }
+}
+
 pub fn extract_prompt_cache_settings<T, SelectFn, EnabledFn>(
     prompt_cache: Option<PromptCachingConfig>,
     select_settings: SelectFn,

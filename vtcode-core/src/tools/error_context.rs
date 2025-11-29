@@ -82,7 +82,8 @@ impl ToolErrorContext {
 
     /// Format error for user display
     pub fn format_for_user(&self) -> String {
-        let mut output = String::new();
+        // Pre-allocate with reasonable estimate for error formatting
+        let mut output = String::with_capacity(1024);
 
         let _ = writeln!(output, "{} failed", self.tool_name);
         let _ = writeln!(output, "   Error: {}", self.message);

@@ -18,7 +18,10 @@ pub mod cache;
 pub mod highlighting;
 pub mod languages;
 pub mod navigation;
+// TODO: parse_cache and unified_extractor have incompatible types - disabled for now
+// pub mod parse_cache;
 pub mod refactoring;
+// pub mod unified_extractor;
 
 pub use analysis::*;
 pub use analyzer::*;
@@ -26,4 +29,6 @@ pub use cache::*;
 pub use highlighting::*;
 pub use languages::*;
 pub use navigation::*;
+// pub use parse_cache::*;
 pub use refactoring::*;
+// pub use unified_extractor::*;

@@ -133,6 +133,7 @@ pub mod error_context;
 pub mod execution_context;
 pub mod fallback_chains;
 pub mod file_ops;
+pub mod grep_cache;
 pub mod grep_file;
 pub mod names;
 pub(crate) mod path_env;

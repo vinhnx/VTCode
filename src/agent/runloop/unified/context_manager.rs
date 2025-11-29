@@ -8,6 +8,7 @@ use crate::agent::runloop::context::{
     ContextTrimConfig, ContextTrimOutcome, apply_aggressive_trim_unified,
     enforce_unified_context_window, prune_unified_tool_responses,
 };
+use crate::agent::runloop::unified::incremental_system_prompt::{IncrementalSystemPrompt, SystemPromptConfig, SystemPromptContext};
 use vtcode_core::constants::context as context_constants;
 use vtcode_core::core::pruning_decisions::{PruningDecisionLedger, RetentionChoice};
 use vtcode_core::core::token_budget::{ContextComponent, TokenBudgetManager};
@@ -22,6 +23,7 @@ pub(crate) struct ContextManager {
     token_budget: Arc<TokenBudgetManager>,
     token_budget_enabled: bool,
     base_system_prompt: String,
+    incremental_prompt_builder: IncrementalSystemPrompt,
     #[allow(dead_code)]
     semantic_analyzer: Option<TreeSitterAnalyzer>,
     semantic_score_cache: Option<HashMap<u64, u8>>,
@@ -57,7 +59,8 @@ impl ContextManager {
             trim_config,
             token_budget,
             token_budget_enabled,
-            base_system_prompt,
+            base_system_prompt: base_system_prompt.clone(),
+            incremental_prompt_builder: IncrementalSystemPrompt::new(),
             semantic_analyzer,
             semantic_score_cache,
             context_pruner,
@@ -220,10 +223,43 @@ impl ContextManager {
 
     pub(crate) async fn build_system_prompt(
         &mut self,
-        _attempt_history: &[uni::Message],
+        attempt_history: &[uni::Message],
         retry_attempts: usize,
     ) -> Result<String> {
-        let system_prompt = self.base_system_prompt.clone();
+        // Create configuration and context hashes for cache invalidation
+        let config = SystemPromptConfig {
+            base_prompt: self.base_system_prompt.clone(),
+            enable_retry_context: retry_attempts > 0,
+            enable_token_tracking: self.token_budget_enabled,
+            max_retry_attempts: 3, // This could be configurable
+        };
+        
+        let context = SystemPromptContext {
+            conversation_length: attempt_history.len(),
+            tool_usage_count: attempt_history.iter().filter(|msg| {
+                msg.tool_calls.is_some() || msg.tool_call_id.is_some()
+            }).count(),
+            error_count: attempt_history.iter().filter(|msg| {
+                msg.content.as_text().contains("error") || 
+                msg.content.as_text().contains("failed")
+            }).count(),
+            token_usage_ratio: if self.token_budget_enabled {
+                self.token_budget.usage_ratio().await.unwrap_or(0.0)
+            } else {
+                0.0
+            },
+        };
+        
+        // Use incremental builder to avoid redundant cloning and processing
+        let system_prompt = self.incremental_prompt_builder
+            .get_system_prompt(
+                &self.base_system_prompt,
+                config.hash(),
+                context.hash(),
+                retry_attempts,
+            )
+            .await;
+            
         if self.token_budget_enabled {
             self.token_budget
                 .count_tokens_for_component(

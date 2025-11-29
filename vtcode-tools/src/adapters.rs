@@ -120,7 +120,7 @@ where
                     .clone()
                     .unwrap_or_else(|| self.workspace_paths.resolve_config("tool-policy.json"));
                 self.record_event(RegistryEvent::PolicyPathResolved {
-                    scope: self.scope_for_path(&config_path),
+                    scope: self.workspace_paths.scope_for_path(&config_path),
                     config_path: config_path.clone(),
                 });
 
@@ -145,31 +145,6 @@ where
             self.todo_planning_enabled,
             policy_manager,
         ))
-    }
-
-    fn scope_for_path(&self, path: &Path) -> PathScope {
-        if path.starts_with(self.workspace_paths.workspace_root()) {
-            return PathScope::Workspace;
-        }
-
-        let config_dir = self.workspace_paths.config_dir();
-        if path.starts_with(&config_dir) {
-            return PathScope::Config;
-        }
-
-        if let Some(cache_dir) = self.workspace_paths.cache_dir() {
-            if path.starts_with(&cache_dir) {
-                return PathScope::Cache;
-            }
-        }
-
-        if let Some(telemetry_dir) = self.workspace_paths.telemetry_dir() {
-            if path.starts_with(&telemetry_dir) {
-                return PathScope::Telemetry;
-            }
-        }
-
-        PathScope::Cache
     }
 
     fn record_event(&self, event: RegistryEvent) {

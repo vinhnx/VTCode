@@ -48,6 +48,7 @@ use crate::agent::runloop::unified::ui_interaction::{
 
 use super::finalization::finalize_session;
 use super::harmony::strip_harmony_syntax;
+use super::ui_sync::{redraw_with_sync, wait_for_redraw_complete};
 use super::utils::{render_hook_messages, safe_force_redraw};
 use super::workspace::{load_workspace_files, refresh_vt_config};
 use crate::agent::runloop::mcp_events;
@@ -157,7 +158,7 @@ pub(crate) async fn run_turn_prepare_tool_call<
         Ok(ToolPermissionFlow::Denied) => {
             // Force redraw after modal closes
             safe_force_redraw(handle, last_forced_redraw);
-            tokio::time::sleep(Duration::from_millis(50)).await;
+            redraw_with_sync(handle).await?;
 
             session_stats.record_tool(name);
             let denial = ToolExecutionError::new(
@@ -230,7 +231,7 @@ pub(crate) async fn run_turn_prepare_tool_call<
         Err(err) => {
             // Force redraw after modal closes
             safe_force_redraw(handle, last_forced_redraw);
-            tokio::time::sleep(Duration::from_millis(50)).await;
+            redraw_with_sync(handle).await?;
 
             traj.log_tool_call(
                 working_history.len(),
@@ -377,7 +378,7 @@ pub(crate) async fn run_turn_handle_tool_success(
 ) -> Result<Option<TurnLoopResult>> {
     // Mirror original success handling but return Some(TurnLoopResult) when we need to break the outer loop.
     safe_force_redraw(handle, last_forced_redraw);
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    redraw_with_sync(handle).await?;
 
     session_stats.record_tool(name);
     // repeated_tool_attempts is mutated by caller; remove signature elsewhere as original code did before calling helper
@@ -609,7 +610,7 @@ pub(crate) async fn run_turn_handle_tool_failure(
 ) -> Result<()> {
     // Finish spinner / ensure redraw is caller's responsibility
     safe_force_redraw(handle, &mut Instant::now());
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    redraw_with_sync(handle).await?;
 
     session_stats.record_tool(name);
 
@@ -629,7 +630,7 @@ pub(crate) async fn run_turn_handle_tool_failure(
             &format!("MCP tool {} failed: {}", tool_name, error_message),
         )?;
         handle.force_redraw();
-        tokio::time::sleep(Duration::from_millis(10)).await;
+        wait_for_redraw_complete().await?;
 
         let mut mcp_event = mcp_events::McpEvent::new(
             "mcp".to_string(),
@@ -711,7 +712,7 @@ pub(crate) async fn run_turn_handle_tool_timeout(
 ) -> Result<()> {
     // Timeout handling mirrors original behavior
     handle.force_redraw();
-    tokio::time::sleep(Duration::from_millis(10)).await;
+    wait_for_redraw_complete().await?;
 
     session_stats.record_tool(name);
     renderer.line_if_not_empty(MessageStyle::Output)?;
@@ -766,7 +767,7 @@ pub(crate) async fn run_turn_handle_tool_cancelled(
     >,
 ) -> Result<TurnLoopResult> {
     safe_force_redraw(handle, &mut Instant::now());
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    redraw_with_sync(handle).await?;
 
     session_stats.record_tool(name);
 
@@ -1670,7 +1671,8 @@ pub(crate) async fn run_single_agent_loop_unified(
             // Removed: Tool response pruning
             // Removed: Context window enforcement to respect token limits
 
-            let mut working_history = conversation_history.clone();
+            // Use copy-on-write pattern to avoid cloning entire history
+            let working_history = &mut conversation_history;
             let max_tool_loops = vt_cfg
                 .as_ref()
                 .map(|cfg| cfg.tools.max_tool_loops)
@@ -1875,20 +1877,19 @@ pub(crate) async fn run_single_agent_loop_unified(
 
                 async fn run_turn_build_system_prompt(
                     context_manager: &mut ContextManager,
-                    request_history: Vec<uni::Message>,
+                    request_history: &[uni::Message],
                     step_count: usize,
                 ) -> Result<String> {
                     context_manager.reset_token_budget().await;
                     let system_prompt = context_manager
-                        .build_system_prompt(&request_history, step_count)
+                        .build_system_prompt(request_history, step_count)
                         .await?;
                     Ok(system_prompt)
                 }
 
-                let request_history = working_history.clone();
                 let system_prompt = run_turn_build_system_prompt(
                     &mut context_manager,
-                    request_history.clone(),
+                    &working_history,
                     step_count,
                 )
                 .await?;
@@ -1903,7 +1904,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                 });
                 let current_tools = tools.read().await.clone();
                 let request = uni::LLMRequest {
-                    messages: request_history.clone(),
+                    messages: working_history.clone(),
                     system_prompt: Some(system_prompt),
                     tools: Some(current_tools),
                     model: active_model.clone(),
@@ -2228,7 +2229,7 @@ pub(crate) async fn run_single_agent_loop_unified(
 
                             // Force immediate TUI refresh to ensure proper layout
                             handle.force_redraw();
-                            tokio::time::sleep(Duration::from_millis(10)).await;
+                            wait_for_redraw_complete().await?;
 
                             // Also capture for logging
                             {
@@ -2287,8 +2288,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                             Ok(PrepareToolCallResult::Approved) => {
                                 // Force redraw immediately after modal closes to clear artifacts
                                 safe_force_redraw(&handle, &mut last_forced_redraw);
-                                // Longer delay to ensure modal is fully cleared before spinner starts
-                                tokio::time::sleep(Duration::from_millis(100)).await;
+                                // Wait for redraw completion to ensure modal is fully cleared before spinner starts
+                                redraw_with_sync(&handle).await?;
 
                                 if ctrl_c_state.is_cancel_requested() {
                                     renderer.line_if_not_empty(MessageStyle::Output)?;
@@ -2483,7 +2484,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                             Ok(PrepareToolCallResult::Exit) => {
                                 // Force redraw after modal closes
                                 safe_force_redraw(&handle, &mut last_forced_redraw);
-                                tokio::time::sleep(Duration::from_millis(50)).await;
+                                redraw_with_sync(&handle).await?;
 
                                 renderer.line(MessageStyle::Info, "Goodbye!")?;
                                 session_end_reason = SessionEndReason::Exit;
@@ -2492,14 +2493,14 @@ pub(crate) async fn run_single_agent_loop_unified(
                             Ok(PrepareToolCallResult::Interrupted) => {
                                 // Force redraw after modal closes
                                 safe_force_redraw(&handle, &mut last_forced_redraw);
-                                tokio::time::sleep(Duration::from_millis(50)).await;
+                                redraw_with_sync(&handle).await?;
 
                                 break 'outer TurnLoopResult::Cancelled;
                             }
                             Err(err) => {
                                 // Force redraw after modal closes
                                 safe_force_redraw(&handle, &mut last_forced_redraw);
-                                tokio::time::sleep(Duration::from_millis(50)).await;
+                                redraw_with_sync(&handle).await?;
 
                                 traj.log_tool_call(working_history.len(), name, &args_val, false);
                                 renderer.line(

@@ -1,4 +1,5 @@
 use super::{PLACEHOLDER_COLOR, Session, measure_text_width, ratatui_style_from_inline};
+use super::terminal_capabilities;
 use crate::config::constants::ui;
 use crate::ui::tui::types::InlineTextStyle;
 use anstyle::{Color as AnsiColorEnum, Effects};
@@ -7,7 +8,7 @@ use ratatui::{
     layout::Rect,
     style::{Color, Modifier, Style},
     text::{Line, Span, Text},
-    widgets::{Block, BorderType, Borders, Clear, Paragraph, Wrap},
+    widgets::{Block, Borders, Clear, Paragraph, Wrap},
 };
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
@@ -81,7 +82,7 @@ impl Session {
 
         let block = Block::default()
             .borders(Borders::TOP | Borders::BOTTOM)
-            .border_type(BorderType::Rounded)
+            .border_type(terminal_capabilities::get_border_type())
             .style(self.styles.default_style())
             .border_style(border_style)
             .title(trust_title);

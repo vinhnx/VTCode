@@ -1,5 +1,6 @@
 use crate::config::constants::prompt_cache;
 use crate::config::core::PromptCachingConfig;
+use crate::core::token_estimator::CharacterRatioTokenEstimator;
 use crate::llm::provider::{Message, MessageContent, MessageRole};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -7,6 +8,9 @@ use std::fmt::Write;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::fs;
+
+/// Shared token estimator for prompt caching (reuses core implementation)
+static TOKEN_ESTIMATOR: CharacterRatioTokenEstimator = CharacterRatioTokenEstimator::new(4);
 
 /// Cached prompt entry
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -466,10 +470,11 @@ impl PromptOptimizer {
             .unwrap_or_else(|| original_prompt.to_string()))
     }
 
-    /// Estimate token count (rough approximation)
+    /// Estimate token count using shared estimator
+    #[inline]
     fn estimate_tokens(text: &str) -> u32 {
-        // Rough approximation: 1 token ≈ 4 characters for English text
-        (text.len() / 4) as u32
+        use crate::core::token_estimator::TokenEstimator;
+        TOKEN_ESTIMATOR.estimate_tokens(text) as u32
     }
 
     /// Get cache statistics

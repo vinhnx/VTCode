@@ -50,6 +50,18 @@ pub struct McpClientConfig {
     #[serde(default = "default_experimental_use_rmcp_client")]
     pub experimental_use_rmcp_client: bool,
 
+    /// Enable connection pooling for better performance
+    #[serde(default = "default_connection_pooling_enabled")]
+    pub connection_pooling_enabled: bool,
+
+    /// Cache capacity for tool discovery results
+    #[serde(default = "default_tool_cache_capacity")]
+    pub tool_cache_capacity: usize,
+
+    /// Connection timeout in seconds
+    #[serde(default = "default_connection_timeout_seconds")]
+    pub connection_timeout_seconds: u64,
+
     /// Security configuration for MCP
     #[serde(default)]
     pub security: McpSecurityConfig,
@@ -151,6 +163,9 @@ impl Default for McpClientConfig {
             tool_timeout_seconds: None,
             experimental_use_rmcp_client: default_experimental_use_rmcp_client(),
             security: McpSecurityConfig::default(),
+            connection_pooling_enabled: default_connection_pooling_enabled(),
+            connection_timeout_seconds: default_connection_timeout_seconds(),
+            tool_cache_capacity: default_tool_cache_capacity(),
         }
     }
 }
@@ -664,6 +679,18 @@ fn default_mcp_protocol_version() -> String {
 
 fn default_mcp_server_enabled() -> bool {
     false
+}
+
+fn default_connection_pooling_enabled() -> bool {
+    true
+}
+
+fn default_tool_cache_capacity() -> usize {
+    100
+}
+
+fn default_connection_timeout_seconds() -> u64 {
+    30
 }
 
 fn default_mcp_server_bind() -> String {

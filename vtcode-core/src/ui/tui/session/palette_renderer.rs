@@ -33,10 +33,11 @@ use ratatui::{
     layout::Rect,
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, BorderType, Borders, Clear, Paragraph, Wrap},
+    widgets::{Block, Borders, Clear, Paragraph, Wrap},
 };
 
 use super::modal::compute_modal_area;
+use super::terminal_capabilities;
 
 /// Trait for items that can be displayed in a palette
 #[allow(dead_code)]
@@ -83,7 +84,7 @@ pub fn render_palette_loading(
     let block = Block::default()
         .title(title)
         .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
+        .border_type(terminal_capabilities::get_border_type())
         .style(default_style)
         .border_style(border_style);
 

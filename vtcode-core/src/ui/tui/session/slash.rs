@@ -4,9 +4,10 @@ use ratatui::{
     layout::Rect,
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, BorderType, Borders, Clear, List, ListItem, Paragraph, Wrap},
+    widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
 };
 
+use super::terminal_capabilities;
 use crate::config::constants::ui;
 
 use super::super::types::InlineTextStyle;
@@ -61,7 +62,7 @@ pub(super) fn render_slash_palette(session: &mut Session, frame: &mut Frame<'_>,
     let block = Block::default()
         .title(session.suggestion_block_title())
         .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
+        .border_type(terminal_capabilities::get_border_type())
         .style(session.styles.default_style())
         .border_style(session.styles.border_style());
     let inner = block.inner(area);

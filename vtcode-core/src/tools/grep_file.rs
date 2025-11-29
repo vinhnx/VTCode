@@ -11,6 +11,7 @@
 //! 4. If there is an in-flight search that is not a prefix of the latest thing
 //!    the user typed, it is cancelled.
 
+use super::grep_cache::GrepSearchCache;
 use anyhow::{Context, Error as AnyhowError, Result};
 use glob::Pattern;
 use regex::escape;
@@ -143,6 +144,9 @@ pub struct GrepSearchManager {
     state: Arc<Mutex<SearchState>>,
 
     search_dir: PathBuf,
+
+    /// LRU cache for search results to avoid redundant searches
+    cache: Arc<GrepSearchCache>,
 }
 
 struct SearchState {
@@ -172,6 +176,7 @@ impl GrepSearchManager {
                 last_result: None,
             })),
             search_dir,
+            cache: Arc::new(GrepSearchCache::new(100)), // Cache up to 100 recent searches
         }
     }
 
@@ -213,6 +218,7 @@ impl GrepSearchManager {
         // debounce timer.
         let state = self.state.clone();
         let search_dir = self.search_dir.clone();
+        let cache = self.cache.clone();
         // Run debounce and search spawn on a blocking thread to avoid
         // blocking the async runtime or reader threads.
         tokio::task::spawn_blocking(move || {
@@ -243,7 +249,7 @@ impl GrepSearchManager {
                 query
             };
 
-            GrepSearchManager::spawn_grep_file(query, search_dir, cancellation_token, state);
+            GrepSearchManager::spawn_grep_file(query, search_dir, cancellation_token, state, Some(cache));
         });
     }
 
@@ -428,7 +434,8 @@ impl GrepSearchManager {
             String::from("never"),
         );
 
-        let mut output_buffer = Vec::new();
+        // Pre-allocate output buffer with reasonable estimate for search results
+        let mut output_buffer = Vec::with_capacity(8192); // 8KB initial capacity
         let search_targets = vec![input.path.clone()];
 
         // Execute the search
@@ -468,7 +475,8 @@ impl GrepSearchManager {
             };
 
             let mut prefix_end = prefix.len();
-            let mut numeric_segments = Vec::new();
+            // Pre-allocate numeric_segments - typically 2-3 segments (file:line:column)
+            let mut numeric_segments = Vec::with_capacity(3);
 
             while let Some(pos) = prefix[..prefix_end].rfind(':') {
                 let segment = &prefix[pos + 1..prefix_end];
@@ -547,6 +555,7 @@ impl GrepSearchManager {
         search_dir: PathBuf,
         cancellation_token: Arc<AtomicBool>,
         search_state: Arc<Mutex<SearchState>>,
+        cache: Option<Arc<GrepSearchCache>>,
     ) {
         // Spawn grep worker on a blocking thread — searching and ripgrep are blocking.
         tokio::task::spawn_blocking(move || {
@@ -570,6 +579,19 @@ impl GrepSearchManager {
                 search_dir.to_string_lossy().into_owned(),
             );
 
+            // Check cache first if available
+            if let Some(ref cache) = cache {
+                if let Some(cached_result) = cache.get(&input) {
+                    #[expect(clippy::unwrap_used)]
+                    let mut st = search_state.lock().unwrap();
+                    st.last_result = Some(GrepSearchResult {
+                        query: cached_result.query.clone(),
+                        matches: (*cached_result.matches).clone(),
+                    });
+                    return;
+                }
+            }
+
             let search_result = GrepSearchManager::execute_with_backends(&input);
 
             let is_cancelled = cancellation_token.load(Ordering::Relaxed);
@@ -580,6 +602,14 @@ impl GrepSearchManager {
                             query: query.clone(),
                             matches,
                         };
+
+                        // Cache the result if cache is available
+                        if let Some(ref cache) = cache {
+                            if GrepSearchCache::should_cache(&result) {
+                                cache.put(&input, result.clone());
+                            }
+                        }
+
                         #[expect(clippy::unwrap_used)]
                         let mut st = search_state.lock().unwrap();
                         st.last_result = Some(result);
@@ -602,6 +632,14 @@ impl GrepSearchManager {
 
     /// Perform an actual ripgrep search with the given input parameters
     pub async fn perform_search(&self, input: GrepSearchInput) -> Result<GrepSearchResult> {
+        // Check cache first
+        if let Some(cached_result) = self.cache.get(&input) {
+            return Ok(GrepSearchResult {
+                query: cached_result.query.clone(),
+                matches: cached_result.matches.clone(),
+            });
+        }
+
         let query = input.pattern.clone();
         let input_clone = input.clone();
 
@@ -610,6 +648,13 @@ impl GrepSearchManager {
                 .await
                 .context("ripgrep search worker panicked")??;
 
-        Ok(GrepSearchResult { query, matches })
+        let result = GrepSearchResult { query, matches };
+
+        // Cache the result if it's worth caching (non-empty, successful)
+        if GrepSearchCache::should_cache(&result) {
+            self.cache.put(&input, result.clone());
+        }
+
+        Ok(result)
     }
 }

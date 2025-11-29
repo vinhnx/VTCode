@@ -17,11 +17,15 @@ use crate::config::mcp::{
 };
 
 pub mod cli;
+// TODO: connection_pool module disabled - needs McpProvider and elicitation types
+// pub mod connection_pool;
 pub mod enhanced_config;
 pub mod errors;
 pub mod rmcp_transport;
 pub mod schema;
 pub mod tool_discovery;
+// TODO: tool_discovery_cache module has incompatible types - disabled for now
+// pub mod tool_discovery_cache;
 
 pub use errors::{
     ErrorCode, McpResult, configuration_error, initialization_timeout, provider_not_found,
@@ -217,6 +221,12 @@ impl McpClient {
             self.config.providers.len()
         );
 
+        // Sequential initialization
+        self.initialize_sequential().await
+    }
+
+    /// Initialize providers sequentially (fallback method)
+    async fn initialize_sequential(&mut self) -> Result<()> {
         let tool_timeout = self.tool_timeout();
         let allowlist_snapshot = self.allowlist.read().clone();
 

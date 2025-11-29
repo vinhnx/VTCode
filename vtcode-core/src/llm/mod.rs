@@ -168,6 +168,9 @@ pub mod client;
 pub mod error_display;
 pub mod factory;
 pub mod provider;
+// TODO: provider_builder and provider_config are incomplete - disabled for now
+// pub mod provider_builder;
+// pub mod provider_config;
 pub mod providers;
 pub mod rig_adapter;
 pub mod tool_bridge;

@@ -3,13 +3,14 @@ use crate::ui::search::{fuzzy_match, normalize_query};
 use crate::ui::tui::types::{
     InlineEvent, InlineListItem, InlineListSearchConfig, InlineListSelection, SecurePromptConfig,
 };
+use super::terminal_capabilities;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     Frame,
     layout::{Constraint, Layout, Rect},
     style::Style,
     text::{Line, Span},
-    widgets::{Block, BorderType, Borders, List, ListItem, ListState, Paragraph, Wrap},
+    widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wrap},
 };
 use terminal_size::{Height, Width, terminal_size};
 use tui_popup::PopupState;
@@ -478,7 +479,7 @@ pub fn render_modal_list(
 fn modal_list_block(list: &ModalListState, styles: &ModalRenderStyles) -> Block<'static> {
     let mut block = Block::default()
         .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
+        .border_type(terminal_capabilities::get_border_type())
         .border_style(styles.border);
     if let Some(summary) = modal_list_summary_line(list, styles) {
         block = block.title_bottom(summary);
@@ -739,7 +740,7 @@ fn render_modal_instructions(
             styles.instruction_title,
         ))
         .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
+        .border_type(terminal_capabilities::get_border_type())
         .border_style(styles.instruction_border);
 
     let widget = List::new(items)
@@ -774,7 +775,7 @@ fn render_modal_search(
     let block = Block::default()
         .title(Span::styled(search.label.clone(), styles.header))
         .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
+        .border_type(terminal_capabilities::get_border_type())
         .border_style(styles.border);
 
     let paragraph = Paragraph::new(Line::from(spans))

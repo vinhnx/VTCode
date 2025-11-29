@@ -335,40 +335,60 @@ impl TokenBudgetManager {
     pub async fn get_component_breakdown(&self) -> HashMap<String, usize> {
         self.component_tokens.read().await.clone()
     }
+}
 
+/// Threshold type for checking different alert levels
+#[derive(Debug, Clone, Copy)]
+pub enum ThresholdType {
+    Warning,
+    Alert,
+}
+
+impl TokenBudgetManager {
     /// Check if warning threshold is exceeded
     pub async fn is_warning_threshold_exceeded(&self) -> bool {
-        let stats = self.stats.read().await;
-        let config = self.config.read().await;
-        stats.exceeds_alert_threshold(config.max_context_tokens, config.warning_threshold)
+        self.exceeds_threshold(ThresholdType::Warning).await
     }
 
     /// Check if alert threshold is exceeded
     pub async fn is_alert_threshold_exceeded(&self) -> bool {
+        self.exceeds_threshold(ThresholdType::Alert).await
+    }
+
+    /// Generic threshold check to eliminate duplicate code
+    async fn exceeds_threshold(&self, threshold_type: ThresholdType) -> bool {
         let stats = self.stats.read().await;
         let config = self.config.read().await;
-        stats.exceeds_alert_threshold(config.max_context_tokens, config.alert_threshold)
+        let threshold = match threshold_type {
+            ThresholdType::Warning => config.warning_threshold,
+            ThresholdType::Alert => config.alert_threshold,
+        };
+        stats.exceeds_alert_threshold(config.max_context_tokens, threshold)
     }
 
     /// Get current usage percentage
     pub async fn usage_percentage(&self) -> f64 {
-        let stats = self.stats.read().await;
-        let config = self.config.read().await;
-        stats.usage_percentage(config.max_context_tokens)
+        self.get_usage_stats(|stats, max_tokens| stats.usage_percentage(max_tokens)).await
     }
 
     /// Get current usage ratio (0.0-1.0)
     pub async fn usage_ratio(&self) -> f64 {
-        let stats = self.stats.read().await;
-        let config = self.config.read().await;
-        stats.usage_ratio(config.max_context_tokens)
+        self.get_usage_stats(|stats, max_tokens| stats.usage_ratio(max_tokens)).await
     }
 
     /// Get remaining tokens in budget
     pub async fn remaining_tokens(&self) -> usize {
+        self.get_usage_stats(|stats, max_tokens| max_tokens.saturating_sub(stats.total_tokens)).await
+    }
+
+    /// Generic method to get usage statistics without duplicate locking
+    async fn get_usage_stats<R, F>(&self, calc_fn: F) -> R
+    where
+        F: FnOnce(&TokenUsageStats, usize) -> R,
+    {
         let stats = self.stats.read().await;
         let config = self.config.read().await;
-        config.max_context_tokens.saturating_sub(stats.total_tokens)
+        calc_fn(&stats, config.max_context_tokens)
     }
 
     /// Reset token counts (e.g., after cleanup)

@@ -17,6 +17,39 @@ pub trait WorkspacePaths: Send + Sync {
     fn telemetry_dir(&self) -> Option<PathBuf> {
         None
     }
+
+    /// Determine the [`PathScope`] for a given path based on workspace directories.
+    ///
+    /// Returns the most specific scope matching the path:
+    /// - `Workspace` if under `workspace_root()`
+    /// - `Config` if under `config_dir()`
+    /// - `Cache` if under `cache_dir()`
+    /// - `Telemetry` if under `telemetry_dir()`
+    /// - Falls back to `Cache` if no match
+    fn scope_for_path(&self, path: &Path) -> PathScope {
+        if path.starts_with(self.workspace_root()) {
+            return PathScope::Workspace;
+        }
+
+        let config_dir = self.config_dir();
+        if path.starts_with(&config_dir) {
+            return PathScope::Config;
+        }
+
+        if let Some(cache_dir) = self.cache_dir() {
+            if path.starts_with(&cache_dir) {
+                return PathScope::Cache;
+            }
+        }
+
+        if let Some(telemetry_dir) = self.telemetry_dir() {
+            if path.starts_with(&telemetry_dir) {
+                return PathScope::Telemetry;
+            }
+        }
+
+        PathScope::Cache
+    }
 }
 
 /// Helper trait that adds path resolution helpers on top of [`WorkspacePaths`].

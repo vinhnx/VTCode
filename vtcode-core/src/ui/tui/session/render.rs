@@ -6,12 +6,13 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, BorderType, Borders, Clear, List, ListItem, Paragraph, Wrap},
+    widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
 };
 use unicode_width::UnicodeWidthStr;
 
 use super::super::style::{measure_text_width, ratatui_style_from_inline};
 use super::super::types::{InlineMessageKind, InlineTextStyle};
+use super::terminal_capabilities;
 use super::{
     Session,
     file_palette::FilePalette,
@@ -127,7 +128,7 @@ pub fn render(session: &mut Session, frame: &mut Frame<'_>) {
         let timeline_block = Block::default()
             .title("Timeline")
             .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
+            .border_type(terminal_capabilities::get_border_type())
             .style(default_style(session))
             .border_style(border_style(session));
         frame.render_widget(timeline_block, timeline_chunks[1]);
@@ -176,7 +177,7 @@ fn render_transcript(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
     }
     let block = Block::default()
         .borders(Borders::NONE)
-        .border_type(BorderType::Rounded)
+        .border_type(terminal_capabilities::get_border_type())
         .style(default_style(session))
         .border_style(border_style(session));
     let inner = block.inner(area);
@@ -288,7 +289,7 @@ fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, viewport: R
     let block = Block::default()
         .title(title)
         .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
+        .border_type(terminal_capabilities::get_border_type())
         .style(default_style(session))
         .border_style(border_style(session));
     let inner = block.inner(area);
@@ -382,7 +383,7 @@ fn render_file_palette_loading(session: &Session, frame: &mut Frame<'_>, viewpor
     let block = Block::default()
         .title("File Browser")
         .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
+        .border_type(terminal_capabilities::get_border_type())
         .style(default_style(session))
         .border_style(border_style(session));
     let inner = block.inner(area);
@@ -486,7 +487,7 @@ fn render_prompt_palette(session: &mut Session, frame: &mut Frame<'_>, viewport:
     let block = Block::default()
         .title(title)
         .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
+        .border_type(terminal_capabilities::get_border_type())
         .style(default_style(session))
         .border_style(border_style(session));
     let inner = block.inner(area);
@@ -545,7 +546,7 @@ fn render_prompt_palette_loading(session: &Session, frame: &mut Frame<'_>, viewp
     let block = Block::default()
         .title("Custom Prompts")
         .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
+        .border_type(terminal_capabilities::get_border_type())
         .style(default_style(session))
         .border_style(border_style(session));
     let inner = block.inner(area);
@@ -1576,7 +1577,7 @@ pub(super) fn render_modal(session: &mut Session, frame: &mut Frame<'_>, viewpor
     let block = Block::default()
         .title(Line::styled(modal.title.clone(), styles.title))
         .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
+        .border_type(terminal_capabilities::get_border_type())
         .border_style(styles.border);
 
     frame.render_widget(Clear, area);
