@@ -187,14 +187,17 @@ pub fn create_provider_for_model(
     let provider_name = factory.provider_from_model(model).ok_or_else(|| {
         LLMError::InvalidRequest(format!("Cannot determine provider for model: {}", model))
     })?;
-    
-    factory.create_provider(&provider_name, ProviderConfig {
-        api_key: Some(api_key),
-        base_url: None,
-        model: Some(model.to_string()),
-        prompt_cache,
-        timeouts: None,
-    })
+
+    factory.create_provider(
+        &provider_name,
+        ProviderConfig {
+            api_key: Some(api_key),
+            base_url: None,
+            model: Some(model.to_string()),
+            prompt_cache,
+            timeouts: None,
+        },
+    )
 }
 
 /// Create provider with full configuration
@@ -207,13 +210,16 @@ pub fn create_provider_with_config(
     timeouts: Option<TimeoutsConfig>,
 ) -> Result<Box<dyn LLMProvider>, LLMError> {
     let factory = get_factory().lock().unwrap();
-    factory.create_provider(provider_name, ProviderConfig {
-        api_key,
-        base_url,
-        model,
-        prompt_cache,
-        timeouts,
-    })
+    factory.create_provider(
+        provider_name,
+        ProviderConfig {
+            api_key,
+            base_url,
+            model,
+            prompt_cache,
+            timeouts,
+        },
+    )
 }
 
 /// Macro to implement BuiltinProvider for providers with standard from_config signature

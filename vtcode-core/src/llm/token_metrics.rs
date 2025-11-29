@@ -60,15 +60,16 @@ impl TokenMetrics {
         }
 
         // Use entry API with deferred allocation - only allocate string if key is new.
-        let entry = self.by_type.entry(content_type.to_owned()).or_insert_with(|| {
-            TokenTypeMetrics {
+        let entry = self
+            .by_type
+            .entry(content_type.to_owned())
+            .or_insert_with(|| TokenTypeMetrics {
                 name: content_type.to_owned(),
                 tokens: 0,
                 chars: 0,
                 count: 0,
                 time_ms: 0,
-            }
-        });
+            });
 
         entry.tokens += tokens;
         entry.chars += chars;

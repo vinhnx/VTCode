@@ -386,7 +386,7 @@ pub fn create_provider_unified(
     timeouts: Option<TimeoutsConfig>,
 ) -> Result<Box<dyn LLMProvider>, crate::llm::provider::LLMError> {
     use crate::config::models::Provider;
-    
+
     let provider = Provider::from_str(provider_name)
         .map_err(|_| crate::llm::provider::LLMError::InvalidRequest(
             format!("Unknown provider: {}", provider_name)

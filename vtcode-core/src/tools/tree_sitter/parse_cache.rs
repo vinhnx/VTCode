@@ -55,7 +55,7 @@ struct CacheStats {
 impl ParseCache {
     pub fn new(capacity: usize, max_age_seconds: u64, max_source_size: usize) -> Self {
         let cache_size = NonZeroUsize::new(capacity).unwrap_or(NonZeroUsize::new(100).unwrap());
-        
+
         Self {
             cache: Arc::new(RwLock::new(LruCache::new(cache_size))),
             max_age: Duration::from_secs(max_age_seconds),
@@ -82,7 +82,7 @@ impl ParseCache {
         };
 
         let mut cache = self.cache.write().unwrap();
-        
+
         if let Some(cached) = cache.get(&key) {
             // Check if the cached entry is still fresh
             if cached.timestamp.elapsed() < self.max_age {
@@ -91,7 +91,7 @@ impl ParseCache {
                     stats.hits += 1;
                     stats.total_parse_time_saved += Duration::from_millis(50); // Estimated parse time
                 }
-                
+
                 return Some(cached.tree.clone());
             } else {
                 // Entry is stale, remove it
@@ -148,7 +148,7 @@ impl ParseCache {
     pub fn stats(&self) -> CacheStatistics {
         let cache = self.cache.read().unwrap();
         let stats = self.stats.read().unwrap();
-        
+
         CacheStatistics {
             hits: stats.hits,
             misses: stats.misses,
@@ -168,7 +168,7 @@ impl ParseCache {
     fn hash_source(&self, source_code: &str) -> u64 {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
-        
+
         let mut hasher = DefaultHasher::new();
         source_code.hash(&mut hasher);
         hasher.finish()
@@ -198,7 +198,7 @@ pub struct CachedTreeSitterAnalyzer {
 impl CachedTreeSitterAnalyzer {
     pub fn new(cache_capacity: usize) -> Result<Self, TreeSitterError> {
         let mut parsers = HashMap::new();
-        
+
         // Initialize parsers for each language
         let languages = vec![
             LanguageSupport::Rust,
@@ -211,7 +211,7 @@ impl CachedTreeSitterAnalyzer {
             #[cfg(feature = "swift")]
             LanguageSupport::Swift,
         ];
-        
+
         for language in languages {
             let mut parser = Parser::new();
             let ts_language = get_language(language)?;
@@ -219,9 +219,9 @@ impl CachedTreeSitterAnalyzer {
                 .map_err(|e| TreeSitterError::LanguageSetupError(format!("{:?}", e)))?;
             parsers.insert(language, parser);
         }
-        
+
         let cache = Arc::new(ParseCache::new(cache_capacity, 300, 1024 * 1024)); // 5min TTL, 1MB max file size
-        
+
         Ok(Self { parsers, cache })
     }
 
@@ -278,15 +278,15 @@ mod tests {
     #[test]
     fn test_cache_key_hashing() {
         let cache = ParseCache::new(10, 300, 1024 * 1024);
-        
+
         let source1 = "fn main() {}";
         let source2 = "fn main() {}";
         let source3 = "fn different() {}";
-        
+
         let hash1 = cache.hash_source(source1);
         let hash2 = cache.hash_source(source2);
         let hash3 = cache.hash_source(source3);
-        
+
         assert_eq!(hash1, hash2); // Same content should have same hash
         assert_ne!(hash1, hash3); // Different content should have different hash
     }
@@ -294,17 +294,17 @@ mod tests {
     #[test]
     fn test_cache_operations() {
         let cache = ParseCache::new(2, 300, 1024 * 1024);
-        
+
         let source = "fn main() {}";
         let language = LanguageSupport::Rust;
-        
+
         // Cache miss
         assert!(cache.get_cached_parse(source, language).is_none());
-        
+
         // Cache a parse (this would normally be a real tree)
         // For testing, we'll just verify the cache accepts the call
         // cache.cache_parse(source, language, mock_tree);
-        
+
         // Check stats
         let stats = cache.stats();
         assert_eq!(stats.misses, 1);
@@ -315,16 +315,16 @@ mod tests {
     #[tokio::test]
     async fn test_cache_expiration() {
         let cache = ParseCache::new(10, 1, 1024 * 1024); // 1 second TTL
-        
+
         let source = "fn main() {}";
         let language = LanguageSupport::Rust;
-        
+
         // Cache a parse
         // cache.cache_parse(source, language, mock_tree);
-        
+
         // Wait for expiration
         tokio::time::sleep(Duration::from_secs(2)).await;
-        
+
         // Should be expired
         assert!(cache.get_cached_parse(source, language).is_none());
     }

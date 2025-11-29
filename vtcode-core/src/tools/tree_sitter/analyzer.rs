@@ -12,7 +12,6 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::Arc;
 use tree_sitter::{Language, Parser, Tree};
 
 /// Tree-sitter analysis error
@@ -206,13 +205,8 @@ impl TreeSitterAnalyzer {
         }
     }
 
-    /// Parse source code into a syntax tree with enhanced caching
+    /// Parse source code into a syntax tree
     pub fn parse(&mut self, source_code: &str, language: LanguageSupport) -> Result<Tree> {
-        // Try to get from parse cache first (much faster than parsing)
-        if let Some(cached_tree) = self.parse_cache.get_cached_parse(source_code, language) {
-            return Ok(cached_tree);
-        }
-
         let parser = self
             .parsers
             .get_mut(&language)
@@ -222,9 +216,6 @@ impl TreeSitterAnalyzer {
             TreeSitterError::ParseError("Failed to parse source code".to_string())
         })?;
 
-        // Cache the parse result for future use
-        self.parse_cache.cache_parse(source_code, language, tree.clone());
-
         // Record the parse in AST cache if enabled (for statistics and future cache lookups)
         if let Some(cache) = &mut self.cache {
             cache.record_parse(source_code, language);
@@ -233,16 +224,35 @@ impl TreeSitterAnalyzer {
         Ok(tree)
     }
 
-    /// Extract symbols from a syntax tree using unified extractor
+    /// Extract symbols from a syntax tree
     pub fn extract_symbols(
         &mut self,
         syntax_tree: &Tree,
         source_code: &str,
         language: LanguageSupport,
     ) -> Result<Vec<SymbolInfo>> {
-        // Use the unified symbol extractor to eliminate code duplication
-        let symbols = self.symbol_extractor.extract_symbols(syntax_tree, source_code, language);
+        // Use legacy extraction for now (unified_extractor is disabled)
+        let symbols = self.extract_symbols_legacy(syntax_tree, source_code, language);
         Ok(symbols)
+    }
+
+    /// Legacy symbol extraction method
+    fn extract_symbols_legacy(
+        &self,
+        syntax_tree: &Tree,
+        source_code: &str,
+        language: LanguageSupport,
+    ) -> Vec<SymbolInfo> {
+        let mut symbols = Vec::new();
+        // Use the existing recursive extraction
+        let _ = self.extract_symbols_recursive(
+            syntax_tree.root_node(),
+            source_code,
+            language,
+            &mut symbols,
+            None,
+        );
+        symbols
     }
 
     /// Recursively extract symbols from a node

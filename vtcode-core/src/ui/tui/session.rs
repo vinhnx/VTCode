@@ -54,8 +54,8 @@ mod palette_views;
 mod reflow;
 mod spinner;
 mod state;
-mod tool_renderer;
 mod terminal_capabilities;
+mod tool_renderer;
 
 use self::file_palette::FilePalette;
 use self::input_manager::InputManager;

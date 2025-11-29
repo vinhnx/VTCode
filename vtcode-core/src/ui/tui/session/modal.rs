@@ -1,9 +1,9 @@
+use super::terminal_capabilities;
 use crate::config::constants::ui;
 use crate::ui::search::{fuzzy_match, normalize_query};
 use crate::ui::tui::types::{
     InlineEvent, InlineListItem, InlineListSearchConfig, InlineListSelection, SecurePromptConfig,
 };
-use super::terminal_capabilities;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     Frame,

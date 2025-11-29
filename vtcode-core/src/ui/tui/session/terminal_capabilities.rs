@@ -20,9 +20,9 @@ pub fn supports_unicode_box_drawing() -> bool {
     // Check terminal type - many terminals support Unicode
     if let Ok(term) = env::var("TERM") {
         let term_lower = term.to_lowercase();
-        
+
         // Modern terminals that definitely support Unicode
-        if term_lower.contains("unicode") 
+        if term_lower.contains("unicode")
             || term_lower.contains("utf")
             || term_lower.contains("xterm-256color")
             || term_lower.contains("screen-256color")
@@ -35,9 +35,9 @@ pub fn supports_unicode_box_drawing() -> bool {
         {
             return true;
         }
-        
+
         // Older or basic terminal types that likely don't support Unicode well
-        if term_lower.contains("dumb") 
+        if term_lower.contains("dumb")
             || term_lower.contains("basic")
             || term_lower == "xterm"
             || term_lower == "screen"
@@ -85,7 +85,7 @@ mod tests {
     #[test]
     fn test_supports_unicode_box_drawing() {
         // Test with different environment variable combinations
-        
+
         // Save original values
         let original_term = env::var("TERM").ok();
         let original_lang = env::var("LANG").ok();

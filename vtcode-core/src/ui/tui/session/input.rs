@@ -1,5 +1,5 @@
-use super::{PLACEHOLDER_COLOR, Session, measure_text_width, ratatui_style_from_inline};
 use super::terminal_capabilities;
+use super::{PLACEHOLDER_COLOR, Session, measure_text_width, ratatui_style_from_inline};
 use crate::config::constants::ui;
 use crate::ui::tui::types::InlineTextStyle;
 use anstyle::{Color as AnsiColorEnum, Effects};

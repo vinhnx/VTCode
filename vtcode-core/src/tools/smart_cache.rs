@@ -145,26 +145,29 @@ impl SmartResultCache {
     pub fn get(&mut self, tool: &str, args: &Value) -> Option<(EnhancedToolResult, bool)> {
         let sig = ResultSignature::from_tool_call(tool, args);
 
-        // Try exact match first
-        if let Some(cached) = self.cache.get(&sig.canonical_args).cloned() {
-            if cached.is_fresh() {
-                self.record_hit(tool);
-                let mut result = (*cached.result).clone();
-                result.from_cache = true;
-
-                return Some((result, true));
-            }
+        // Try exact match first - clone Arc to avoid holding borrow across record_hit
+        if let Some(arc_result) = self
+            .cache
+            .get(&sig.canonical_args)
+            .filter(|c| c.is_fresh())
+            .map(|c| Arc::clone(&c.result))
+        {
+            self.record_hit(tool);
+            let mut result = (*arc_result).clone();
+            result.from_cache = true;
+            return Some((result, true));
         }
 
-        // Try fuzzy match
-        if let Some((_, cached)) = self.find_similar(&sig).map(|(s, c)| (s, c.clone())) {
-            if cached.is_fresh() {
-                self.record_hit(tool);
-                let mut result = (*cached.result).clone();
-                result.from_cache = true;
-
-                return Some((result, true));
-            }
+        // Try fuzzy match - clone Arc to avoid holding borrow across record_hit
+        if let Some(arc_result) = self
+            .find_similar(&sig)
+            .filter(|(_, c)| c.is_fresh())
+            .map(|(_, c)| Arc::clone(&c.result))
+        {
+            self.record_hit(tool);
+            let mut result = (*arc_result).clone();
+            result.from_cache = true;
+            return Some((result, true));
         }
 
         None
@@ -174,22 +177,25 @@ impl SmartResultCache {
     pub fn get_arc(&mut self, tool: &str, args: &Value) -> Option<(Arc<EnhancedToolResult>, bool)> {
         let sig = ResultSignature::from_tool_call(tool, args);
 
-        // Try exact match first
-        if let Some(cached) = self.cache.get(&sig.canonical_args).cloned() {
-            if cached.is_fresh() {
-                self.record_hit(tool);
-                let arc_res = Arc::clone(&cached.result);
-                return Some((arc_res, true));
-            }
+        // Try exact match first - clone Arc to avoid holding borrow across record_hit
+        if let Some(arc_result) = self
+            .cache
+            .get(&sig.canonical_args)
+            .filter(|c| c.is_fresh())
+            .map(|c| Arc::clone(&c.result))
+        {
+            self.record_hit(tool);
+            return Some((arc_result, true));
         }
 
-        // Try fuzzy match
-        if let Some((_, cached)) = self.find_similar(&sig).map(|(s, c)| (s, c.clone())) {
-            if cached.is_fresh() {
-                self.record_hit(tool);
-                let arc_res = Arc::clone(&cached.result);
-                return Some((arc_res, true));
-            }
+        // Try fuzzy match - clone Arc to avoid holding borrow across record_hit
+        if let Some(arc_result) = self
+            .find_similar(&sig)
+            .filter(|(_, c)| c.is_fresh())
+            .map(|(_, c)| Arc::clone(&c.result))
+        {
+            self.record_hit(tool);
+            return Some((arc_result, true));
         }
 
         None

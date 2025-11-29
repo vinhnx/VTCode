@@ -72,7 +72,8 @@ pub async fn handle_tool_outcome_unified<C: ToolOutputContext>(
                     &mut any_write_effect,
                     &mut turn_modified_files,
                     &mut last_tool_stdout,
-                ).await?;
+                )
+                .await?;
             }
         }
         ToolExecutionStatus::Failure {
@@ -102,21 +103,15 @@ pub async fn handle_tool_outcome_unified<C: ToolOutputContext>(
                     &mut any_write_effect,
                     &mut turn_modified_files,
                     &mut last_tool_stdout,
-                ).await?;
+                )
+                .await?;
             }
         }
         ToolExecutionStatus::Blocked { reason } => {
             // Record tool usage (session stats)
             ctx.session_stats().record_tool(name);
 
-            handle_tool_blocked(
-                ctx,
-                name,
-                args_val,
-                reason,
-                vt_config,
-                token_budget,
-            ).await?;
+            handle_tool_blocked(ctx, name, args_val, reason, vt_config, token_budget).await?;
         }
     }
 
@@ -222,12 +217,9 @@ async fn handle_mcp_tool_failure<C: ToolOutputContext>(
     let error_json = serde_json::json!({ "error": error });
     mcp_event.failure(Some(error.to_string()));
 
-    if let Ok(rendered) = render_tool_output(
-        &format!("mcp_{}", tool_name),
-        args_val,
-        &error_json,
-        &[],
-    ) {
+    if let Ok(rendered) =
+        render_tool_output(&format!("mcp_{}", tool_name), args_val, &error_json, &[])
+    {
         mcp_event.output = Some(rendered);
     }
 
@@ -296,7 +288,7 @@ async fn handle_tool_blocked<C: ToolOutputContext>(
     // Record trajectory
     let blocked_message = format!("Tool '{}' was blocked: {}", name, reason);
     let blocked_json = serde_json::json!({ "blocked": blocked_message });
-    
+
     ctx.traj().log_tool_call(
         working_history_len_estimate(),
         name,

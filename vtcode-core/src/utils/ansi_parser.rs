@@ -164,7 +164,7 @@ pub fn strip_ansi_ascii_only(text: &str) -> String {
             if last_valid < i {
                 output.push_str(&text[last_valid..i]);
             }
-            
+
             // Start of escape sequence
             if i + 1 < bytes.len() {
                 match bytes[i + 1] {
