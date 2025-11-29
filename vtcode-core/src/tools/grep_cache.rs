@@ -126,7 +126,7 @@ mod tests {
     #[test]
     fn test_cache_operations() {
         let cache = GrepSearchCache::new(10);
-        
+
         let input = make_test_input("test", "/path");
 
         let result = GrepSearchResult {

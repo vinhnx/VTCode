@@ -8,7 +8,9 @@ use crate::agent::runloop::context::{
     ContextTrimConfig, ContextTrimOutcome, apply_aggressive_trim_unified,
     enforce_unified_context_window, prune_unified_tool_responses,
 };
-use crate::agent::runloop::unified::incremental_system_prompt::{IncrementalSystemPrompt, SystemPromptConfig, SystemPromptContext};
+use crate::agent::runloop::unified::incremental_system_prompt::{
+    IncrementalSystemPrompt, SystemPromptConfig, SystemPromptContext,
+};
 use vtcode_core::constants::context as context_constants;
 use vtcode_core::core::pruning_decisions::{PruningDecisionLedger, RetentionChoice};
 use vtcode_core::core::token_budget::{ContextComponent, TokenBudgetManager};
@@ -233,25 +235,30 @@ impl ContextManager {
             enable_token_tracking: self.token_budget_enabled,
             max_retry_attempts: 3, // This could be configurable
         };
-        
+
         let context = SystemPromptContext {
             conversation_length: attempt_history.len(),
-            tool_usage_count: attempt_history.iter().filter(|msg| {
-                msg.tool_calls.is_some() || msg.tool_call_id.is_some()
-            }).count(),
-            error_count: attempt_history.iter().filter(|msg| {
-                msg.content.as_text().contains("error") || 
-                msg.content.as_text().contains("failed")
-            }).count(),
+            tool_usage_count: attempt_history
+                .iter()
+                .filter(|msg| msg.tool_calls.is_some() || msg.tool_call_id.is_some())
+                .count(),
+            error_count: attempt_history
+                .iter()
+                .filter(|msg| {
+                    msg.content.as_text().contains("error")
+                        || msg.content.as_text().contains("failed")
+                })
+                .count(),
             token_usage_ratio: if self.token_budget_enabled {
                 self.token_budget.usage_ratio().await.unwrap_or(0.0)
             } else {
                 0.0
             },
         };
-        
+
         // Use incremental builder to avoid redundant cloning and processing
-        let system_prompt = self.incremental_prompt_builder
+        let system_prompt = self
+            .incremental_prompt_builder
             .get_system_prompt(
                 &self.base_system_prompt,
                 config.hash(),
@@ -259,7 +266,7 @@ impl ContextManager {
                 retry_attempts,
             )
             .await;
-            
+
         if self.token_budget_enabled {
             self.token_budget
                 .count_tokens_for_component(

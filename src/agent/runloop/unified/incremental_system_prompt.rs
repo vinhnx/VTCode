@@ -46,25 +46,27 @@ impl IncrementalSystemPrompt {
         retry_attempts: usize,
     ) -> String {
         let read_guard = self.cached_prompt.read().await;
-        
+
         // Check if we can use the cached version
-        if read_guard.config_hash == config_hash 
-            && read_guard.context_hash == context_hash 
-            && read_guard.retry_attempts == retry_attempts 
-            && !read_guard.content.is_empty() {
+        if read_guard.config_hash == config_hash
+            && read_guard.context_hash == context_hash
+            && read_guard.retry_attempts == retry_attempts
+            && !read_guard.content.is_empty()
+        {
             return read_guard.content.clone();
         }
-        
+
         // Drop read lock before acquiring write lock
         drop(read_guard);
-        
+
         // Rebuild the prompt
         self.rebuild_prompt(
             base_system_prompt,
             config_hash,
             context_hash,
             retry_attempts,
-        ).await
+        )
+        .await
     }
 
     /// Force rebuild of the system prompt
@@ -76,24 +78,25 @@ impl IncrementalSystemPrompt {
         retry_attempts: usize,
     ) -> String {
         let mut write_guard = self.cached_prompt.write().await;
-        
+
         // Double-check after acquiring write lock
-        if write_guard.config_hash == config_hash 
-            && write_guard.context_hash == context_hash 
-            && write_guard.retry_attempts == retry_attempts 
-            && !write_guard.content.is_empty() {
+        if write_guard.config_hash == config_hash
+            && write_guard.context_hash == context_hash
+            && write_guard.retry_attempts == retry_attempts
+            && !write_guard.content.is_empty()
+        {
             return write_guard.content.clone();
         }
-        
+
         // Build the new prompt
         let new_content = self.build_prompt_content(base_system_prompt, retry_attempts);
-        
+
         // Update cache
         write_guard.content = new_content.clone();
         write_guard.config_hash = config_hash;
         write_guard.context_hash = context_hash;
         write_guard.retry_attempts = retry_attempts;
-        
+
         new_content
     }
 
@@ -146,7 +149,7 @@ impl SystemPromptConfig {
     pub fn hash(&self) -> u64 {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
-        
+
         let mut hasher = DefaultHasher::new();
         self.base_prompt.hash(&mut hasher);
         self.enable_retry_context.hash(&mut hasher);
@@ -169,12 +172,12 @@ impl SystemPromptContext {
     pub fn hash(&self) -> u64 {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
-        
+
         let mut hasher = DefaultHasher::new();
         self.conversation_length.hash(&mut hasher);
         self.tool_usage_count.hash(&mut hasher);
         self.error_count.hash(&mut hasher);
-        (self.token_usage_ratio * 1000.0) as usize).hash(&mut hasher);
+        ((self.token_usage_ratio * 1000.0) as usize).hash(&mut hasher);
         hasher.finish()
     }
 }
@@ -187,19 +190,15 @@ mod tests {
     async fn test_incremental_prompt_caching() {
         let prompt_builder = IncrementalSystemPrompt::new();
         let base_prompt = "Test system prompt";
-        
+
         // First call - should build from scratch
-        let prompt1 = prompt_builder
-            .get_system_prompt(base_prompt, 1, 1, 0)
-            .await;
+        let prompt1 = prompt_builder.get_system_prompt(base_prompt, 1, 1, 0).await;
         assert_eq!(prompt1, base_prompt);
-        
+
         // Second call with same parameters - should use cache
-        let prompt2 = prompt_builder
-            .get_system_prompt(base_prompt, 1, 1, 0)
-            .await;
+        let prompt2 = prompt_builder.get_system_prompt(base_prompt, 1, 1, 0).await;
         assert_eq!(prompt2, base_prompt);
-        
+
         // Verify cache stats
         let (is_cached, size) = prompt_builder.cache_stats().await;
         assert!(is_cached);
@@ -210,17 +209,13 @@ mod tests {
     async fn test_incremental_prompt_rebuild() {
         let prompt_builder = IncrementalSystemPrompt::new();
         let base_prompt = "Test system prompt";
-        
+
         // Build initial prompt
-        let _ = prompt_builder
-            .get_system_prompt(base_prompt, 1, 1, 0)
-            .await;
-        
+        let _ = prompt_builder.get_system_prompt(base_prompt, 1, 1, 0).await;
+
         // Rebuild with different retry attempts
-        let prompt = prompt_builder
-            .rebuild_prompt(base_prompt, 1, 1, 1)
-            .await;
-        
+        let prompt = prompt_builder.rebuild_prompt(base_prompt, 1, 1, 1).await;
+
         assert!(prompt.contains("attempt #1"));
     }
 
@@ -232,14 +227,14 @@ mod tests {
             enable_token_tracking: false,
             max_retry_attempts: 3,
         };
-        
+
         let config2 = SystemPromptConfig {
             base_prompt: "Test".to_string(),
             enable_retry_context: true,
             enable_token_tracking: false,
             max_retry_attempts: 3,
         };
-        
+
         assert_eq!(config1.hash(), config2.hash());
     }
 }

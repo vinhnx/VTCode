@@ -4,10 +4,10 @@
 //! replacing hardcoded model strings throughout the codebase for better maintainability.
 //! Read the model list in `docs/models.json`.
 
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::str::FromStr;
-use itertools::Itertools;
 
 #[derive(Clone, Copy)]
 pub struct OpenRouterMetadata {
@@ -1588,10 +1588,7 @@ impl fmt::Display for ModelParseError {
                     f,
                     "Invalid model identifier: '{}'. Supported models: {}",
                     model,
-                    ModelId::all_models()
-                        .iter()
-                        .map(|m| m.as_str())
-                        .join(", ")
+                    ModelId::all_models().iter().map(|m| m.as_str()).join(", ")
                 )
             }
             ModelParseError::InvalidProvider(provider) => {

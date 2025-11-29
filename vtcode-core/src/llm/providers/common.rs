@@ -112,7 +112,7 @@ pub fn get_http_client_for_timeouts(
 
 pub fn extract_prompt_cache_settings_default(
     prompt_cache: Option<PromptCachingConfig>,
-    provider_key: &str,
+    _provider_key: &str,
 ) -> (bool, bool) {
     match prompt_cache {
         Some(cfg) if cfg.enabled => (true, cfg.enabled),

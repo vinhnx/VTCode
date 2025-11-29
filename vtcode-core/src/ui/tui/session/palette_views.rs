@@ -8,10 +8,10 @@ use ratatui::{
 
 use super::super::style::ratatui_color_from_ansi;
 use super::super::types::InlineTheme;
-use super::terminal_capabilities;
 use super::file_palette::FilePalette;
 use super::modal::{ModalListLayout, compute_modal_area};
 use super::prompt_palette::PromptPalette;
+use super::terminal_capabilities;
 
 pub(super) fn render_file_palette(
     frame: &mut Frame<'_>,

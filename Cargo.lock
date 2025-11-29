@@ -5575,6 +5575,7 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "vtcode-acp-client",
+ "vtcode-config",
  "vtcode-core",
  "walkdir",
  "webbrowser",

@@ -152,7 +152,10 @@ impl<V: Send + Sync> LruCache<V> {
 
         // Now handle outcomes with appropriate stats/order updates.
         match outcome {
-            GetOutcome::Hit { value, access_count } => {
+            GetOutcome::Hit {
+                value,
+                access_count,
+            } => {
                 // Batch stats and order updates together.
                 {
                     let mut stats = self.stats.write().await;

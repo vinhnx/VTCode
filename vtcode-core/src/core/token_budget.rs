@@ -368,17 +368,20 @@ impl TokenBudgetManager {
 
     /// Get current usage percentage
     pub async fn usage_percentage(&self) -> f64 {
-        self.get_usage_stats(|stats, max_tokens| stats.usage_percentage(max_tokens)).await
+        self.get_usage_stats(|stats, max_tokens| stats.usage_percentage(max_tokens))
+            .await
     }
 
     /// Get current usage ratio (0.0-1.0)
     pub async fn usage_ratio(&self) -> f64 {
-        self.get_usage_stats(|stats, max_tokens| stats.usage_ratio(max_tokens)).await
+        self.get_usage_stats(|stats, max_tokens| stats.usage_ratio(max_tokens))
+            .await
     }
 
     /// Get remaining tokens in budget
     pub async fn remaining_tokens(&self) -> usize {
-        self.get_usage_stats(|stats, max_tokens| max_tokens.saturating_sub(stats.total_tokens)).await
+        self.get_usage_stats(|stats, max_tokens| max_tokens.saturating_sub(stats.total_tokens))
+            .await
     }
 
     /// Generic method to get usage statistics without duplicate locking

@@ -249,7 +249,13 @@ impl GrepSearchManager {
                 query
             };
 
-            GrepSearchManager::spawn_grep_file(query, search_dir, cancellation_token, state, Some(cache));
+            GrepSearchManager::spawn_grep_file(
+                query,
+                search_dir,
+                cancellation_token,
+                state,
+                Some(cache),
+            );
         });
     }
 
@@ -586,7 +592,7 @@ impl GrepSearchManager {
                     let mut st = search_state.lock().unwrap();
                     st.last_result = Some(GrepSearchResult {
                         query: cached_result.query.clone(),
-                        matches: (*cached_result.matches).clone(),
+                        matches: cached_result.matches.clone(),
                     });
                     return;
                 }

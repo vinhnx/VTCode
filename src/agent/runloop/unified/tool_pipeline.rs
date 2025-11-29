@@ -31,7 +31,9 @@ async fn create_test_registry(workspace: &std::path::Path) -> ToolRegistry {
 }
 
 /// Helper function to create test renderer with default config
-fn create_test_renderer(handle: &vtcode_core::ui::tui::InlineHandle) -> vtcode_core::utils::ansi::AnsiRenderer {
+fn create_test_renderer(
+    handle: &vtcode_core::ui::tui::InlineHandle,
+) -> vtcode_core::utils::ansi::AnsiRenderer {
     AnsiRenderer::with_inline_ui(handle.clone(), Default::default())
 }
 
@@ -60,7 +62,8 @@ impl TestContext {
             10,
             false,
             None,
-        ).unwrap();
+        )
+        .unwrap();
         let handle = session.clone_inline_handle();
         let renderer = create_test_renderer(&handle);
         let approval_recorder = vtcode_core::tools::ApprovalRecorder::new(workspace.clone());
@@ -806,11 +809,7 @@ mod tests {
             traj: &traj,
         };
 
-        let call = vtcode_core::llm::provider::ToolCall::function(
-            "call_1",
-            "test_tool",
-            "{}",
-        );
+        let call = vtcode_core::llm::provider::ToolCall::function("call_1", "test_tool", "{}");
         let ctrl_c_state = Arc::new(CtrlCState::new());
         let ctrl_c_notify = Arc::new(Notify::new());
 
