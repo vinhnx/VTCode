@@ -5,13 +5,14 @@ use ratatui::{
     layout::Rect,
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, BorderType, Borders, Clear, Paragraph, Wrap},
+    widgets::{Block, Borders, Clear, Paragraph, Wrap},
 };
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::config::constants::ui;
 
 use super::super::types::{InlineHeaderContext, InlineHeaderHighlight};
+use super::terminal_capabilities;
 use super::{PROMPT_COMMAND_NAME, Session, ratatui_color_from_ansi};
 
 fn capitalize_first_letter(s: &str) -> String {
@@ -86,7 +87,7 @@ impl Session {
         let block = Block::default()
             .title(self.header_block_title())
             .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
+            .border_type(terminal_capabilities::get_border_type())
             .style(self.styles.default_style());
 
         Paragraph::new(lines.to_vec())

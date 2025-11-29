@@ -5,6 +5,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use toml::Value as TomlValue;
 use toml::value::Table as TomlTable;
 
+mod config_optimizer;
 mod first_run;
 
 use crate::tools::RipgrepStatus;
@@ -321,29 +322,8 @@ fn apply_inline_config_overrides(
     config: &mut VTCodeConfig,
     overrides: &[(String, String)],
 ) -> Result<()> {
-    let serialized =
-        toml::to_string(config).context("Failed to serialize configuration for CLI overrides")?;
-    let mut doc: TomlValue =
-        toml::from_str(&serialized).context("Failed to convert configuration into TOML value")?;
-
-    for (key, raw_value) in overrides {
-        let parsed_value = parse_override_value(raw_value)
-            .with_context(|| format!("Failed to parse override value for '{}'.", key))?;
-        apply_override_value(&mut doc, key, parsed_value)
-            .with_context(|| format!("Failed to apply override for key '{}'.", key))?;
-    }
-
-    let updated_serialized =
-        toml::to_string(&doc).context("Failed to serialize overridden configuration")?;
-    let updated: VTCodeConfig = toml::from_str(&updated_serialized)
-        .context("Failed to deserialize configuration after CLI overrides")?;
-
-    updated
-        .validate()
-        .context("Configuration overrides failed validation")?;
-
-    *config = updated;
-    Ok(())
+    // Use optimized direct struct manipulation instead of serialization round-trips
+    config_optimizer::ConfigOptimizer::apply_overrides(config, overrides)
 }
 
 fn parse_override_value(raw: &str) -> Result<TomlValue> {

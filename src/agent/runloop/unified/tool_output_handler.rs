@@ -1,5 +1,9 @@
 use crate::agent::runloop::mcp_events::McpPanelState;
 use crate::agent::runloop::unified::state::SessionStats;
+use crate::agent::runloop::unified::tool_output_helpers::{
+    check_write_effect_common, handle_modified_files_common, record_token_usage_common,
+    render_error_common, render_tool_output_common,
+};
 use anyhow::Result;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -50,61 +54,28 @@ pub(crate) async fn handle_pipeline_output(
                 mcp_event.success(None);
                 ctx.mcp_panel_state.add_event(mcp_event);
             } else {
-                let exit_code = output.get("exit_code").and_then(|v| v.as_i64());
-                let status_icon = if *command_success { "✓" } else { "✗" };
-                render_tool_call_summary_with_status(
+                render_tool_output_common(
                     ctx.renderer,
                     name,
                     args_val,
-                    status_icon,
-                    exit_code,
+                    output,
+                    *command_success,
+                    vt_config,
+                    token_budget,
                 )?;
             }
 
-            // Extract and record max_tokens usage if present in tool output
-            if let Some(applied_max_tokens) =
-                output.get("applied_max_tokens").and_then(|v| v.as_u64())
-            {
-                let context = format!(
-                    "Tool: {}, Command: {}",
-                    name,
-                    output
-                        .get("command")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or(&args_val.to_string())
-                );
-                let _ = token_budget
-                    .record_max_tokens_usage(name, Some(applied_max_tokens as usize), &context)
-                    .await;
+            // Record token usage
+            record_token_usage_common(name, output, token_budget, vt_config).await?;
 
-                // Also record to global token budget for CLI access
-                if let Some(global_token_budget) =
-                    vtcode_core::core::global_token_manager::get_global_token_budget()
-                {
-                    let _ = global_token_budget
-                        .record_max_tokens_usage(name, Some(applied_max_tokens as usize), &context)
-                        .await;
-                }
-            }
-
-            render_tool_output(
-                ctx.renderer,
-                Some(name),
-                output,
-                vt_config,
-                Some(token_budget),
-            )
-            .await?;
             last_tool_stdout = if *command_success {
                 stdout.clone()
             } else {
                 None
             };
 
-            if matches!(
-                name,
-                "write_file" | "edit_file" | "create_file" | "delete_file"
-            ) {
+            // Check for write effects and handle modified files
+            if check_write_effect_common(name) {
                 any_write_effect = true;
             }
 
@@ -118,12 +89,10 @@ pub(crate) async fn handle_pipeline_output(
             }
         }
         ToolExecutionStatus::Failure { error } => {
-            let err_msg = format!("Tool '{}' failure: {:?}", name, error);
-            ctx.renderer.line(MessageStyle::Error, &err_msg)?;
+            render_error_common(ctx.renderer, name, &error.to_string(), "failure")?;
         }
         ToolExecutionStatus::Timeout { error } => {
-            let err_msg = format!("Tool '{}' timed out: {:?}", name, error);
-            ctx.renderer.line(MessageStyle::Error, &err_msg)?;
+            render_error_common(ctx.renderer, name, &error.to_string(), "timed out")?;
         }
         ToolExecutionStatus::Cancelled => {
             ctx.renderer

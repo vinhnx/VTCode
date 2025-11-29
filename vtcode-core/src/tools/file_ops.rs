@@ -60,7 +60,9 @@ impl FileOpsTool {
             ));
         }
 
-        let mut all_items = Vec::new();
+        // Pre-allocate with reasonable estimate for directory entries
+        // Most directories have 10-50 items, so start with 32 to avoid reallocations
+        let mut all_items = Vec::with_capacity(32);
         if base.is_file() {
             all_items.push(json!({
                 "name": base.file_name().unwrap().to_string_lossy(),
@@ -208,7 +210,8 @@ impl FileOpsTool {
         let pattern_lower = pattern.to_lowercase();
         let search_path = self.workspace_root.join(&input.path);
 
-        let mut items = Vec::new();
+        // Pre-allocate with max_items capacity to avoid reallocations
+        let mut items = Vec::with_capacity(input.max_items.min(1000));
         let mut count = 0;
 
         for entry in WalkDir::new(&search_path).max_depth(10) {
@@ -342,9 +345,9 @@ impl FileOpsTool {
             }
 
             if path.is_dir() {
-                let mut children = Vec::new();
+                let mut children = Vec::with_capacity(16); // Pre-allocate for typical directory size
                 if let Ok(entries) = fs::read_dir(path).await {
-                    let mut entries_list = Vec::new();
+                    let mut entries_list = Vec::with_capacity(32); // Pre-allocate for directory entries
                     let mut entry = entries;
                     while let Ok(Some(file_entry)) = entry.next_entry().await {
                         let entry_name = file_entry.file_name().to_string_lossy().into_owned();

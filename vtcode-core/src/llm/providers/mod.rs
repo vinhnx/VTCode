@@ -1,4 +1,5 @@
 pub mod anthropic;
+// pub mod base;  // Temporarily commented out
 pub mod deepseek;
 pub mod error_handling;
 pub mod gemini;
@@ -13,7 +14,7 @@ pub mod xai;
 pub mod zai;
 
 mod codex_prompt;
-mod common;
+pub mod common;
 mod reasoning;
 mod shared;
 

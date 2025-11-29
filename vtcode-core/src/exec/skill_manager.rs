@@ -182,7 +182,8 @@ impl SkillManager {
             return Ok(Vec::new());
         }
 
-        let mut skills = Vec::new();
+        // Pre-allocate skills vector - typically 10-20 skills per directory
+        let mut skills = Vec::with_capacity(16);
         let mut dir_entries = tokio::fs::read_dir(&self.skills_dir)
             .await
             .context("failed to read skills directory")?;

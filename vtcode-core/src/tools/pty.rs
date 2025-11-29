@@ -432,8 +432,8 @@ impl PtyScrollback {
         Self {
             lines: VecDeque::new(),
             pending_lines: VecDeque::new(),
-            partial: String::new(),
-            pending_partial: String::new(),
+            partial: String::with_capacity(256),
+            pending_partial: String::with_capacity(256),
             capacity_lines: capacity_lines.max(1),
             max_bytes,
             current_bytes: 0,
@@ -683,7 +683,7 @@ impl PtyScrollback {
     }
 
     fn snapshot(&self) -> String {
-        let mut output = String::new();
+        let mut output = String::with_capacity(self.current_bytes.min(self.max_bytes));
         for line in &self.lines {
             output.push_str(line);
         }
@@ -692,7 +692,7 @@ impl PtyScrollback {
     }
 
     fn pending(&self) -> String {
-        let mut output = String::new();
+        let mut output = String::with_capacity(self.pending_lines.len() * 80 + self.pending_partial.len());
         for line in &self.pending_lines {
             output.push_str(line);
         }
@@ -701,7 +701,7 @@ impl PtyScrollback {
     }
 
     fn take_pending(&mut self) -> String {
-        let mut output = String::new();
+        let mut output = String::with_capacity(self.pending_lines.len() * 80 + self.pending_partial.len());
         while let Some(line) = self.pending_lines.pop_front() {
             output.push_str(&line);
         }

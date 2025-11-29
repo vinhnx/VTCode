@@ -121,7 +121,7 @@ where
 
     fn enrich_prompt_cache(&self, prompt_cache: &mut PromptCachingConfig) {
         let resolved = prompt_cache.resolve_cache_dir(Some(self.workspace_paths.workspace_root()));
-        let scope = self.scope_for_path(&resolved);
+        let scope = self.workspace_paths.scope_for_path(&resolved);
         // Check absoluteness before moving `resolved` so we can report a meaningful error.
         let is_abs = resolved.is_absolute();
         let resolved_display = resolved.display().to_string();
@@ -140,31 +140,6 @@ where
             ));
             self.report_error(error);
         }
-    }
-
-    fn scope_for_path(&self, path: &Path) -> PathScope {
-        if path.starts_with(self.workspace_paths.workspace_root()) {
-            return PathScope::Workspace;
-        }
-
-        let config_dir = self.workspace_paths.config_dir();
-        if path.starts_with(&config_dir) {
-            return PathScope::Config;
-        }
-
-        if let Some(cache_dir) = self.workspace_paths.cache_dir() {
-            if path.starts_with(&cache_dir) {
-                return PathScope::Cache;
-            }
-        }
-
-        if let Some(telemetry_dir) = self.workspace_paths.telemetry_dir() {
-            if path.starts_with(&telemetry_dir) {
-                return PathScope::Telemetry;
-            }
-        }
-
-        PathScope::Cache
     }
 
     fn record_event(&self, event: AdapterEvent) {

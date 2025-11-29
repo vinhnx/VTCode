@@ -226,6 +226,28 @@ impl ToolTimeoutPolicy {
         }
     }
 
+    /// Validate a single ceiling duration against bounds
+    #[inline]
+    fn validate_ceiling(ceiling: Option<Duration>, name: &str) -> anyhow::Result<()> {
+        if let Some(ceiling) = ceiling {
+            if ceiling < Duration::from_secs(1) {
+                anyhow::bail!(
+                    "{} must be at least 1 second (got {}s)",
+                    name,
+                    ceiling.as_secs()
+                );
+            }
+            if ceiling > Duration::from_secs(3600) {
+                anyhow::bail!(
+                    "{} must not exceed 3600 seconds/1 hour (got {}s)",
+                    name,
+                    ceiling.as_secs()
+                );
+            }
+        }
+        Ok(())
+    }
+
     /// Validate the timeout policy configuration
     ///
     /// Ensures that:
@@ -233,53 +255,9 @@ impl ToolTimeoutPolicy {
     /// - Warning fraction is between 0.0 and 1.0
     /// - No ceiling is configured as 0 seconds
     pub fn validate(&self) -> anyhow::Result<()> {
-        // Validate default ceiling
-        if let Some(ceiling) = self.default_ceiling {
-            if ceiling < Duration::from_secs(1) {
-                anyhow::bail!(
-                    "default_ceiling_seconds must be at least 1 second (got {}s)",
-                    ceiling.as_secs()
-                );
-            }
-            if ceiling > Duration::from_secs(3600) {
-                anyhow::bail!(
-                    "default_ceiling_seconds must not exceed 3600 seconds/1 hour (got {}s)",
-                    ceiling.as_secs()
-                );
-            }
-        }
-
-        // Validate PTY ceiling
-        if let Some(ceiling) = self.pty_ceiling {
-            if ceiling < Duration::from_secs(1) {
-                anyhow::bail!(
-                    "pty_ceiling_seconds must be at least 1 second (got {}s)",
-                    ceiling.as_secs()
-                );
-            }
-            if ceiling > Duration::from_secs(3600) {
-                anyhow::bail!(
-                    "pty_ceiling_seconds must not exceed 3600 seconds/1 hour (got {}s)",
-                    ceiling.as_secs()
-                );
-            }
-        }
-
-        // Validate MCP ceiling
-        if let Some(ceiling) = self.mcp_ceiling {
-            if ceiling < Duration::from_secs(1) {
-                anyhow::bail!(
-                    "mcp_ceiling_seconds must be at least 1 second (got {}s)",
-                    ceiling.as_secs()
-                );
-            }
-            if ceiling > Duration::from_secs(3600) {
-                anyhow::bail!(
-                    "mcp_ceiling_seconds must not exceed 3600 seconds/1 hour (got {}s)",
-                    ceiling.as_secs()
-                );
-            }
-        }
+        Self::validate_ceiling(self.default_ceiling, "default_ceiling_seconds")?;
+        Self::validate_ceiling(self.pty_ceiling, "pty_ceiling_seconds")?;
+        Self::validate_ceiling(self.mcp_ceiling, "mcp_ceiling_seconds")?;
 
         // Validate warning fraction
         if self.warning_fraction <= 0.0 {

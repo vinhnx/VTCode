@@ -367,13 +367,16 @@ impl SimpleIndexer {
         Ok(())
     }
 
-    /// Search files using regex pattern.
-    pub fn search(&self, pattern: &str, path_filter: Option<&str>) -> Result<Vec<SearchResult>> {
-        let regex = Regex::new(pattern)?;
-
+    /// Internal helper for regex-based file content search.
+    /// Used by both `search()` and `grep()` to avoid code duplication.
+    fn search_files_internal(
+        &self,
+        regex: &Regex,
+        path_filter: Option<&str>,
+        extract_matches: bool,
+    ) -> Vec<SearchResult> {
         let mut results = Vec::new();
 
-        // Search through indexed files.
         for file_path in self.index_cache.keys() {
             if path_filter.is_some_and(|filter| !file_path.contains(filter)) {
                 continue;
@@ -382,10 +385,14 @@ impl SimpleIndexer {
             if let Ok(content) = fs::read_to_string(file_path) {
                 for (line_num, line) in content.lines().enumerate() {
                     if regex.is_match(line) {
-                        let matches: Vec<String> = regex
-                            .find_iter(line)
-                            .map(|m| m.as_str().to_string())
-                            .collect();
+                        let matches = if extract_matches {
+                            regex
+                                .find_iter(line)
+                                .map(|m| m.as_str().to_string())
+                                .collect()
+                        } else {
+                            vec![line.to_string()]
+                        };
 
                         results.push(SearchResult {
                             file_path: file_path.clone(),
@@ -398,7 +405,13 @@ impl SimpleIndexer {
             }
         }
 
-        Ok(results)
+        results
+    }
+
+    /// Search files using regex pattern.
+    pub fn search(&self, pattern: &str, path_filter: Option<&str>) -> Result<Vec<SearchResult>> {
+        let regex = Regex::new(pattern)?;
+        Ok(self.search_files_internal(&regex, path_filter, true))
     }
 
     /// Find files by name pattern.
@@ -470,28 +483,7 @@ impl SimpleIndexer {
     /// Grep-like search (like grep command).
     pub fn grep(&self, pattern: &str, file_pattern: Option<&str>) -> Result<Vec<SearchResult>> {
         let regex = Regex::new(pattern)?;
-        let mut results = Vec::new();
-
-        for file_path in self.index_cache.keys() {
-            if file_pattern.is_some_and(|fp| !file_path.contains(fp)) {
-                continue;
-            }
-
-            if let Ok(content) = fs::read_to_string(file_path) {
-                for (line_num, line) in content.lines().enumerate() {
-                    if regex.is_match(line) {
-                        results.push(SearchResult {
-                            file_path: file_path.clone(),
-                            line_number: line_num + 1,
-                            line_content: line.to_string(),
-                            matches: vec![line.to_string()],
-                        });
-                    }
-                }
-            }
-        }
-
-        Ok(results)
+        Ok(self.search_files_internal(&regex, file_pattern, false))
     }
 
     #[allow(dead_code)]
@@ -557,12 +549,14 @@ impl SimpleIndexer {
         Ok(())
     }
 
+    #[inline]
     fn get_modified_time(&self, file_path: &Path) -> Result<u64> {
         let metadata = fs::metadata(file_path)?;
         let modified = metadata.modified()?;
         Ok(modified.duration_since(SystemTime::UNIX_EPOCH)?.as_secs())
     }
 
+    #[inline]
     fn detect_language(&self, file_path: &Path) -> String {
         file_path
             .extension()
@@ -612,6 +606,7 @@ fn should_skip_dir(path: &Path, config: &SimpleIndexerConfig) -> bool {
     false
 }
 
+#[inline]
 fn calculate_hash(content: &str) -> String {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};

@@ -198,12 +198,21 @@ impl ContextPruner {
 
     /// Analyze context window efficiency
     pub fn analyze_efficiency(&self, messages: &[MessageMetrics]) -> ContextEfficiency {
-        let total_tokens: usize = messages.iter().map(|m| m.token_count).sum();
-        let total_semantic: u32 = messages.iter().map(|m| m.semantic_score).sum();
-        let avg_semantic = if messages.is_empty() {
+        let message_count = messages.len();
+        
+        // Single pass calculation to avoid multiple iterations
+        let mut total_tokens = 0;
+        let mut total_semantic = 0;
+        
+        for msg in messages {
+            total_tokens += msg.token_count;
+            total_semantic += msg.semantic_score;
+        }
+        
+        let avg_semantic = if message_count == 0 {
             0
         } else {
-            total_semantic / messages.len() as u32
+            total_semantic / message_count as u32
         };
 
         let semantic_value_per_token = if total_tokens > 0 {
@@ -216,7 +225,7 @@ impl ContextPruner {
 
         ContextEfficiency {
             total_tokens,
-            total_messages: messages.len(),
+            total_messages: message_count,
             avg_semantic_score: avg_semantic,
             semantic_value_per_token,
             context_utilization_percent: utilization.min(100.0),
@@ -226,24 +235,31 @@ impl ContextPruner {
     /// Format efficiency report
     pub fn format_efficiency_report(&self, messages: &[MessageMetrics]) -> String {
         let efficiency = self.analyze_efficiency(messages);
-        let mut report = String::new();
+        
+        // Pre-allocate with estimated capacity to avoid reallocations
+        let mut report = String::with_capacity(200);
         report.push_str("📊 Context Window Efficiency\n");
-        let _ = write!(
-            report,
-            "  Tokens Used: {}/{} ({:.1}%)\n",
-            efficiency.total_tokens, self.max_tokens, efficiency.context_utilization_percent
-        );
-        let _ = write!(report, "  Messages: {} total\n", efficiency.total_messages);
-        let _ = write!(
-            report,
-            "  Avg Semantic Score: {}/1000\n",
-            efficiency.avg_semantic_score
-        );
-        let _ = write!(
-            report,
-            "  Semantic Value/Token: {:.2}\n",
-            efficiency.semantic_value_per_token
-        );
+        
+        // Use push_str for simple concatenations instead of write! where possible
+        report.push_str("  Tokens Used: ");
+        report.push_str(&efficiency.total_tokens.to_string());
+        report.push('/');
+        report.push_str(&self.max_tokens.to_string());
+        report.push_str(" (");
+        report.push_str(&format!("{:.1}", efficiency.context_utilization_percent));
+        report.push_str("%)\n");
+        
+        report.push_str("  Messages: ");
+        report.push_str(&efficiency.total_messages.to_string());
+        report.push_str(" total\n");
+        
+        report.push_str("  Avg Semantic Score: ");
+        report.push_str(&efficiency.avg_semantic_score.to_string());
+        report.push_str("/1000\n");
+        
+        report.push_str("  Semantic Value/Token: ");
+        report.push_str(&format!("{:.2}", efficiency.semantic_value_per_token));
+        report.push('\n');
 
         report
     }

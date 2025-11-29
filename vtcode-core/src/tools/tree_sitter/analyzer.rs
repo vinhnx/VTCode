@@ -6,10 +6,13 @@ use crate::tools::tree_sitter::analysis::{
 use crate::tools::tree_sitter::cache::AstCache;
 use crate::tools::tree_sitter::highlighting::{HighlightResult, TreeSitterInjectionHighlighter};
 use crate::tools::tree_sitter::languages::*;
+// use crate::tools::tree_sitter::parse_cache::{CachedTreeSitterAnalyzer, ParseCache};
+// use crate::tools::tree_sitter::unified_extractor::UnifiedSymbolExtractor;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::Arc;
 use tree_sitter::{Language, Parser, Tree};
 
 /// Tree-sitter analysis error
@@ -203,8 +206,13 @@ impl TreeSitterAnalyzer {
         }
     }
 
-    /// Parse source code into a syntax tree with optional caching
+    /// Parse source code into a syntax tree with enhanced caching
     pub fn parse(&mut self, source_code: &str, language: LanguageSupport) -> Result<Tree> {
+        // Try to get from parse cache first (much faster than parsing)
+        if let Some(cached_tree) = self.parse_cache.get_cached_parse(source_code, language) {
+            return Ok(cached_tree);
+        }
+
         let parser = self
             .parsers
             .get_mut(&language)
@@ -214,7 +222,10 @@ impl TreeSitterAnalyzer {
             TreeSitterError::ParseError("Failed to parse source code".to_string())
         })?;
 
-        // Record the parse in cache if enabled (for statistics and future cache lookups)
+        // Cache the parse result for future use
+        self.parse_cache.cache_parse(source_code, language, tree.clone());
+
+        // Record the parse in AST cache if enabled (for statistics and future cache lookups)
         if let Some(cache) = &mut self.cache {
             cache.record_parse(source_code, language);
         }
@@ -222,19 +233,15 @@ impl TreeSitterAnalyzer {
         Ok(tree)
     }
 
-    /// Extract symbols from a syntax tree
+    /// Extract symbols from a syntax tree using unified extractor
     pub fn extract_symbols(
         &mut self,
         syntax_tree: &Tree,
         source_code: &str,
         language: LanguageSupport,
     ) -> Result<Vec<SymbolInfo>> {
-        let mut symbols = Vec::new();
-        let root_node = syntax_tree.root_node();
-
-        // Walk the tree and extract symbols based on language
-        self.extract_symbols_recursive(root_node, source_code, language, &mut symbols, None)?;
-
+        // Use the unified symbol extractor to eliminate code duplication
+        let symbols = self.symbol_extractor.extract_symbols(syntax_tree, source_code, language);
         Ok(symbols)
     }
 
@@ -1097,7 +1104,7 @@ impl TreeSitterAnalyzer {
 }
 
 /// Helper function to get tree-sitter language
-fn get_language(language: LanguageSupport) -> Result<Language> {
+pub fn get_language(language: LanguageSupport) -> Result<Language> {
     let lang = match language {
         LanguageSupport::Rust => tree_sitter_rust::LANGUAGE,
         LanguageSupport::Python => tree_sitter_python::LANGUAGE,

@@ -5677,6 +5677,7 @@ dependencies = [
  "json5",
  "jsonschema",
  "line-clipping",
+ "lru",
  "mcp-types",
  "mockito",
  "nix 0.30.1",
