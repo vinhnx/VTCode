@@ -207,7 +207,9 @@ macro_rules! error_context {
         anyhow::Context::with_context(|| format!("Failed to {} {}", $operation, $target))
     };
     ($operation:expr, $target:expr, $details:expr) => {
-        anyhow::Context::with_context(|| format!("Failed to {} {}: {}", $operation, $target, $details))
+        anyhow::Context::with_context(|| {
+            format!("Failed to {} {}: {}", $operation, $target, $details)
+        })
     };
 }
 pub use ui::diff_renderer::DiffRenderer;

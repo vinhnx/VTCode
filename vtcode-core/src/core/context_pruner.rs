@@ -150,25 +150,19 @@ impl ContextPruner {
         // Sort remaining by score (descending) for greedy selection
         scored_messages.sort_unstable_by(|a, b| b.2.cmp(&a.2)); // Use sort_unstable for better performance
 
-        // Greedily add messages by semantic value
+        // Single pass: greedily add messages by semantic value, marking remaining as Summarizable or Remove
         for &(i, msg, _score) in &scored_messages {
             if decisions.contains_key(&i) {
-                continue; // Already decided
+                continue; // Already decided (system or high-priority)
             }
 
             if total_tokens + msg.token_count <= self.max_tokens {
-                decisions.insert(i, RetentionDecision::Keep);
-                total_tokens += msg.token_count;
-            } else {
-                decisions.insert(i, RetentionDecision::Remove);
-            }
-        }
-
-        // Fill any remaining space with low-value messages (for context)
-        for &(i, msg, _score) in &scored_messages {
-            if !decisions.contains_key(&i) && total_tokens + msg.token_count <= self.max_tokens {
+                // Mark as Summarizable (can be kept but may be summarized later)
                 decisions.insert(i, RetentionDecision::Summarizable);
                 total_tokens += msg.token_count;
+            } else {
+                // No room left, mark for removal
+                decisions.insert(i, RetentionDecision::Remove);
             }
         }
 

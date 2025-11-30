@@ -1228,10 +1228,15 @@ impl PtyManager {
             ));
         }
 
+        // Use entry API to avoid double lookup
         let mut sessions = self.inner.sessions.lock();
-        if sessions.contains_key(&session_id) {
-            return Err(anyhow!("PTY session '{}' already exists", session_id));
-        }
+        use std::collections::hash_map::Entry;
+        let entry = match sessions.entry(session_id.clone()) {
+            Entry::Occupied(_) => {
+                return Err(anyhow!("PTY session '{}' already exists", session_id));
+            }
+            Entry::Vacant(e) => e,
+        };
 
         let mut command_parts = command.clone();
         let program = command_parts.remove(0);
@@ -1313,7 +1318,7 @@ impl PtyManager {
                 let mut utf8_buffer: Vec<u8> = Vec::with_capacity(8192); // Pre-allocate buffer
                 let mut total_bytes = 0usize;
                 let mut unicode_detection_hits = 0usize;
-                
+
                 loop {
                     match reader.read(&mut buffer) {
                         Ok(0) => {
@@ -1321,7 +1326,7 @@ impl PtyManager {
                                 let mut scrollback = scrollback_clone.lock();
                                 scrollback.push_utf8(&mut utf8_buffer, true);
                             }
-                            debug!("PTY session '{}' reader reached EOF (processed {} bytes, {} unicode detections)", 
+                            debug!("PTY session '{}' reader reached EOF (processed {} bytes, {} unicode detections)",
                                    session_name, total_bytes, unicode_detection_hits);
                             break;
                         }
@@ -1346,35 +1351,35 @@ impl PtyManager {
                                 let mut scrollback = scrollback_clone.lock();
                                 scrollback.push_utf8(&mut utf8_buffer, false);
                             }
-                            
+
                             // Periodic buffer cleanup to prevent excessive memory usage
                             if utf8_buffer.capacity() > 32768 && utf8_buffer.len() < 1024 {
                                 utf8_buffer.shrink_to_fit();
                             }
                         }
                         Err(error) => {
-                            warn!("PTY session '{}' reader error: {} (processed {} bytes)", 
+                            warn!("PTY session '{}' reader error: {} (processed {} bytes)",
                                   session_name, error, total_bytes);
                             break;
                         }
                     }
                 }
-                debug!("PTY session '{}' reader thread finished (total: {} bytes, unicode detections: {})", 
+                debug!("PTY session '{}' reader thread finished (total: {} bytes, unicode detections: {})",
                        session_name, total_bytes, unicode_detection_hits);
-                
+
                 // End unicode monitoring for this session
                 UNICODE_MONITOR.end_session();
-                
+
                 // Log unicode statistics if any unicode was detected
                 if unicode_detection_hits > 0 {
                     let scrollback = scrollback_clone.lock();
                     let metrics = scrollback.metrics();
                     if metrics.unicode_errors > 0 {
-                        warn!("PTY session '{}' had {} unicode errors during processing", 
+                        warn!("PTY session '{}' had {} unicode errors during processing",
                               session_name, metrics.unicode_errors);
                     }
                     if metrics.total_unicode_chars > 0 {
-                        info!("PTY session '{}' processed {} unicode characters across {} sessions with {} buffer remainder", 
+                        info!("PTY session '{}' processed {} unicode characters across {} sessions with {} buffer remainder",
                               session_name, metrics.total_unicode_chars, metrics.unicode_sessions, metrics.utf8_buffer_size);
                     }
                 }
@@ -1392,19 +1397,17 @@ impl PtyManager {
             scrollback: None,
         };
 
-        sessions.insert(
-            session_id.clone(),
-            Arc::new(PtySessionHandle {
-                master: Mutex::new(master),
-                child: Mutex::new(child),
-                writer: Mutex::new(Some(writer)),
-                terminal: parser,
-                scrollback,
-                reader_thread: Mutex::new(Some(reader_thread)),
-                metadata: metadata.clone(),
-                last_input: Mutex::new(None),
-            }),
-        );
+        // Use the entry we obtained earlier to insert without additional lookup
+        entry.insert(Arc::new(PtySessionHandle {
+            master: Mutex::new(master),
+            child: Mutex::new(child),
+            writer: Mutex::new(Some(writer)),
+            terminal: parser,
+            scrollback,
+            reader_thread: Mutex::new(Some(reader_thread)),
+            metadata: metadata.clone(),
+            last_input: Mutex::new(None),
+        }));
 
         Ok(metadata)
     }

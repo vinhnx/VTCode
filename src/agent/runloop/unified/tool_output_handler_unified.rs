@@ -56,14 +56,24 @@ pub async fn handle_tool_outcome_unified<C: ToolOutputContext>(
             ctx.session_stats().record_tool(name);
 
             // Convert modified_files from Vec<String> to Vec<PathBuf>
-            let modified_files_pathbuf: Vec<PathBuf> = modified_files.iter().map(|s| PathBuf::from(s)).collect();
-            
+            let modified_files_pathbuf: Vec<PathBuf> =
+                modified_files.iter().map(|s| PathBuf::from(s)).collect();
+
             // Create a local copy to avoid borrowing issues
             let _command_success_val = *command_success;
-            
+
             // Handle MCP events and rendering
             if let Some(tool_name) = name.strip_prefix("mcp_") {
-                handle_mcp_tool_success(ctx, tool_name, args_val, output, &modified_files_pathbuf, vt_config, Some(token_budget)).await?;
+                handle_mcp_tool_success(
+                    ctx,
+                    tool_name,
+                    args_val,
+                    output,
+                    &modified_files_pathbuf,
+                    vt_config,
+                    Some(token_budget),
+                )
+                .await?;
             } else {
                 // Handle regular tool success
                 handle_regular_tool_success(
@@ -90,7 +100,16 @@ pub async fn handle_tool_outcome_unified<C: ToolOutputContext>(
 
             // Handle MCP tool failure
             if let Some(tool_name) = name.strip_prefix("mcp_") {
-                handle_mcp_tool_failure(ctx, tool_name, args_val, &error.to_string(), &vtcode_core::tools::registry::classify_error(&error), vt_config, Some(token_budget)).await?;
+                handle_mcp_tool_failure(
+                    ctx,
+                    tool_name,
+                    args_val,
+                    &error.to_string(),
+                    &vtcode_core::tools::registry::classify_error(&error),
+                    vt_config,
+                    Some(token_budget),
+                )
+                .await?;
             } else {
                 // Handle regular tool failure
                 handle_regular_tool_failure(
@@ -113,9 +132,18 @@ pub async fn handle_tool_outcome_unified<C: ToolOutputContext>(
         ToolExecutionStatus::Timeout { error } => {
             // Handle timeout case - treat as failure
             ctx.session_stats().record_tool(name);
-            
+
             if let Some(tool_name) = name.strip_prefix("mcp_") {
-                handle_mcp_tool_failure(ctx, tool_name, args_val, &error.message, &vtcode_core::tools::registry::ToolErrorType::Timeout, vt_config, Some(token_budget)).await?;
+                handle_mcp_tool_failure(
+                    ctx,
+                    tool_name,
+                    args_val,
+                    &error.message,
+                    &vtcode_core::tools::registry::ToolErrorType::Timeout,
+                    vt_config,
+                    Some(token_budget),
+                )
+                .await?;
             } else {
                 handle_regular_tool_failure(
                     ctx,
@@ -137,10 +165,19 @@ pub async fn handle_tool_outcome_unified<C: ToolOutputContext>(
         ToolExecutionStatus::Cancelled => {
             // Handle cancelled case - treat as failure
             ctx.session_stats().record_tool(name);
-            
+
             let error_msg = "Tool execution was cancelled";
             if let Some(tool_name) = name.strip_prefix("mcp_") {
-                handle_mcp_tool_failure(ctx, tool_name, args_val, error_msg, &vtcode_core::tools::registry::ToolErrorType::ExecutionError, vt_config, Some(token_budget)).await?;
+                handle_mcp_tool_failure(
+                    ctx,
+                    tool_name,
+                    args_val,
+                    error_msg,
+                    &vtcode_core::tools::registry::ToolErrorType::ExecutionError,
+                    vt_config,
+                    Some(token_budget),
+                )
+                .await?;
             } else {
                 handle_regular_tool_failure(
                     ctx,
@@ -164,7 +201,6 @@ pub async fn handle_tool_outcome_unified<C: ToolOutputContext>(
             ctx.session_stats().record_tool(name);
             // Progress updates don't need special handling for output rendering
         }
-
     }
 
     Ok((any_write_effect, turn_modified_files, last_tool_stdout))
@@ -192,7 +228,8 @@ async fn handle_mcp_tool_success<C: ToolOutputContext>(
         output,
         vt_config,
         token_budget,
-    ).await?;
+    )
+    .await?;
     mcp_event.success(None);
 
     ctx.mcp_panel_state().add_event(mcp_event);
@@ -217,7 +254,8 @@ async fn handle_regular_tool_success<C: ToolOutputContext>(
     if let Some(cache) = ctx.tool_result_cache() {
         let mut cache_guard = cache.write().await;
         let output_str = serde_json::to_string(output).unwrap_or_default();
-        let cache_key = vtcode_core::tools::result_cache::ToolCacheKey::from_json(name, args_val, "");
+        let cache_key =
+            vtcode_core::tools::result_cache::ToolCacheKey::from_json(name, args_val, "");
         cache_guard.insert(cache_key, output_str);
     }
 
@@ -269,7 +307,14 @@ async fn handle_mcp_tool_failure<C: ToolOutputContext>(
     let error_json = serde_json::json!({ "error": error });
     mcp_event.failure(Some(error.to_string()));
 
-    render_tool_output(ctx.renderer(), Some(&format!("mcp_{}", tool_name)), &error_json, vt_config, token_budget).await?;
+    render_tool_output(
+        ctx.renderer(),
+        Some(&format!("mcp_{}", tool_name)),
+        &error_json,
+        vt_config,
+        token_budget,
+    )
+    .await?;
     mcp_event.success(None);
 
     ctx.mcp_panel_state().add_event(mcp_event);
@@ -292,12 +337,8 @@ async fn handle_regular_tool_failure<C: ToolOutputContext>(
 ) -> Result<()> {
     // Record trajectory
     let error_json = serde_json::json!({ "error": error });
-    ctx.traj().log_tool_call(
-        working_history_len_estimate(),
-        name,
-        &error_json,
-        false,
-    );
+    ctx.traj()
+        .log_tool_call(working_history_len_estimate(), name, &error_json, false);
 
     // Handle modified files (even on failure, some files might have been changed)
     if !modified_files.is_empty() {
@@ -311,13 +352,7 @@ async fn handle_regular_tool_failure<C: ToolOutputContext>(
     }
 
     // Render error output
-    render_tool_call_summary_with_status(
-        ctx.renderer(),
-        name,
-        args_val,
-        "✗",
-        Some(1),
-    )?;
+    render_tool_call_summary_with_status(ctx.renderer(), name, args_val, "✗", Some(1))?;
     Ok(())
 }
 
@@ -333,21 +368,11 @@ async fn handle_tool_blocked<C: ToolOutputContext>(
     let blocked_message = format!("Tool '{}' was blocked: {}", name, reason);
     let blocked_json = serde_json::json!({ "blocked": blocked_message });
 
-    ctx.traj().log_tool_call(
-        working_history_len_estimate(),
-        name,
-        &blocked_json,
-        false,
-    );
+    ctx.traj()
+        .log_tool_call(working_history_len_estimate(), name, &blocked_json, false);
 
     // Render blocked output
-    render_tool_call_summary_with_status(
-        ctx.renderer(),
-        name,
-        args_val,
-        "⚠",
-        Some(1),
-    )?;
+    render_tool_call_summary_with_status(ctx.renderer(), name, args_val, "⚠", Some(1))?;
     Ok(())
 }
 

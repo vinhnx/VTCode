@@ -11,9 +11,14 @@ pub(crate) struct CodeFenceBlock {
 }
 
 pub(crate) fn extract_code_fence_blocks(text: &str) -> Vec<CodeFenceBlock> {
-    let mut blocks = Vec::new();
+    // Estimate capacity: assume ~1 code block per 30 lines on average, cap at 20
+    let estimated_blocks = text.lines().count() / 30 + 1;
+    let mut blocks = Vec::with_capacity(estimated_blocks.min(20));
     let mut current_language: Option<String> = None;
-    let mut current_lines: Vec<String> = Vec::new();
+
+    // Pre-allocate line buffer based on text size estimate
+    let estimated_lines = text.lines().count() / 5; // Assume ~20% of lines are code
+    let mut current_lines: Vec<String> = Vec::with_capacity(estimated_lines.min(1000)); // Cap at 1000 lines
 
     for raw_line in text.lines() {
         let trimmed_start = raw_line.trim_start();
@@ -64,7 +69,9 @@ fn canonicalize_tool_name(raw: &str) -> Option<String> {
     }
 
     let trimmed = trimmed.trim_matches(|ch| matches!(ch, '"' | '\'' | '`'));
-    let mut normalized = String::new();
+
+    // Pre-allocate string with estimated capacity (same as input length)
+    let mut normalized = String::with_capacity(trimmed.len());
     let mut last_was_separator = false;
     for ch in trimmed.chars() {
         if ch.is_ascii_alphanumeric() {

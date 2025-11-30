@@ -174,8 +174,8 @@ pub mod provider_base; // Shared provider utilities to eliminate duplicate code
 // pub mod provider_config;
 pub mod providers;
 pub mod rig_adapter;
-pub mod tool_bridge;
 pub mod token_metrics;
+pub mod tool_bridge;
 pub mod types;
 pub mod utils; // Shared utilities for request/response processing
 

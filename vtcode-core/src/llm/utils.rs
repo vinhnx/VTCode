@@ -6,7 +6,9 @@
 use anyhow::{Context, Result};
 use serde_json::Value;
 
-use crate::llm::provider::{LLMRequest, LLMResponse, Message, MessageRole, MessageContent, LLMStreamEvent, ToolCall};
+use crate::llm::provider::{
+    LLMRequest, LLMResponse, LLMStreamEvent, Message, MessageContent, MessageRole, ToolCall,
+};
 
 /// Parse chat request from OpenAI-compatible format
 pub fn parse_chat_request_openai_format(value: &Value, default_model: &str) -> Option<LLMRequest> {
@@ -17,11 +19,11 @@ pub fn parse_chat_request_openai_format(value: &Value, default_model: &str) -> O
         .unwrap_or(default_model);
 
     let mut parsed_messages = Vec::with_capacity(messages.len());
-    
+
     for msg in messages {
         let role_str = msg.get("role")?.as_str()?;
         let content = msg.get("content")?.as_str()?;
-        
+
         let role = match role_str {
             "system" => MessageRole::System,
             "user" => MessageRole::User,
@@ -29,7 +31,7 @@ pub fn parse_chat_request_openai_format(value: &Value, default_model: &str) -> O
             "tool" => MessageRole::Tool,
             _ => return None, // Invalid role
         };
-        
+
         parsed_messages.push(Message {
             role,
             content: MessageContent::Text(content.to_string()),
@@ -41,8 +43,12 @@ pub fn parse_chat_request_openai_format(value: &Value, default_model: &str) -> O
         });
     }
 
-    let temperature = value.get("temperature").and_then(|t| t.as_f64().map(|f| f as f32));
-    let max_tokens = value.get("max_tokens").and_then(|t| t.as_u64().map(|u| u as u32));
+    let temperature = value
+        .get("temperature")
+        .and_then(|t| t.as_f64().map(|f| f as f32));
+    let max_tokens = value
+        .get("max_tokens")
+        .and_then(|t| t.as_u64().map(|u| u as u32));
 
     Some(LLMRequest {
         messages: parsed_messages,
@@ -84,12 +90,10 @@ pub fn serialize_messages_openai_format(request: &LLMRequest, _provider_name: &s
     if let Some(temp) = request.temperature {
         body["temperature"] = serde_json::json!(temp);
     }
-    
+
     if let Some(max_tokens) = request.max_tokens {
         body["max_tokens"] = serde_json::json!(max_tokens);
     }
-    
-
 
     body
 }
@@ -128,7 +132,7 @@ pub fn parse_response_openai_format(
         .and_then(|u| u.get("prompt_tokens"))
         .and_then(|t| t.as_u64())
         .unwrap_or(0);
-    
+
     let output_tokens = usage
         .and_then(|u| u.get("completion_tokens"))
         .and_then(|t| t.as_u64())
@@ -138,7 +142,7 @@ pub fn parse_response_openai_format(
     let tool_call = message.get("function_call").and_then(|fc| {
         let name = fc.get("name")?.as_str()?;
         let arguments = fc.get("arguments")?.as_str()?;
-        
+
         Some(ToolCall::function(
             "call_001".to_string(), // Generate a simple ID
             name.to_string(),
@@ -155,7 +159,10 @@ pub fn parse_response_openai_format(
             completion_tokens: output_tokens as u32,
             total_tokens: (input_tokens + output_tokens) as u32,
             cached_prompt_tokens: if include_cache {
-                response.get("cache_hit").and_then(|c| c.as_bool()).map(|_| 0)
+                response
+                    .get("cache_hit")
+                    .and_then(|c| c.as_bool())
+                    .map(|_| 0)
             } else {
                 None
             },
@@ -166,7 +173,7 @@ pub fn parse_response_openai_format(
         reasoning: reasoning_content,
         reasoning_details: None,
     };
-    
+
     // Set content based on function call or regular content
     if let Some(tool_call) = tool_call {
         llm_response.content = None;
@@ -175,12 +182,15 @@ pub fn parse_response_openai_format(
         llm_response.content = Some(content);
         llm_response.tool_calls = None;
     }
-    
+
     Ok(llm_response)
 }
 
 /// Parse stream event from OpenAI-compatible format
-pub fn parse_stream_event_openai_format(json: Value, _provider_name: &str) -> Option<LLMStreamEvent> {
+pub fn parse_stream_event_openai_format(
+    json: Value,
+    _provider_name: &str,
+) -> Option<LLMStreamEvent> {
     let choices = json.get("choices")?.as_array()?;
     if choices.is_empty() {
         return None;
@@ -196,19 +206,19 @@ pub fn parse_stream_event_openai_format(json: Value, _provider_name: &str) -> Op
 
 /// Extract reasoning content from text (for providers that support reasoning)
 pub fn extract_reasoning_content(content: &str) -> (Vec<String>, Option<String>) {
-    // Look for reasoning tags or patterns
-    let reasoning_patterns = vec!["<reasoning>", "<think>", "<thought>"];
-    let closing_patterns = vec!["</reasoning>", "</think>", "</thought>"];
+    // Look for reasoning tags or patterns - use static arrays
+    const REASONING_PATTERNS: [&str; 3] = ["<reasoning>", "<think>", "<thought>"];
+    const CLOSING_PATTERNS: [&str; 3] = ["</reasoning>", "</think>", "</thought>"];
 
     let mut reasoning_parts = Vec::new();
     let mut main_content = content.to_string();
 
-    for (open_tag, close_tag) in reasoning_patterns.iter().zip(closing_patterns.iter()) {
+    for (open_tag, close_tag) in REASONING_PATTERNS.iter().zip(CLOSING_PATTERNS.iter()) {
         if let Some(start) = content.find(open_tag) {
             if let Some(end) = content.find(close_tag) {
                 let reasoning_start = start + open_tag.len();
                 let reasoning_text = content[reasoning_start..end].trim().to_string();
-                
+
                 if !reasoning_text.is_empty() {
                     reasoning_parts.push(reasoning_text.clone());
                     // Remove reasoning section from main content
@@ -228,12 +238,23 @@ pub fn extract_reasoning_content(content: &str) -> (Vec<String>, Option<String>)
 }
 
 /// Estimate token count for text (rough approximation)
+///
+/// Note: This delegates to the centralized `CharacterRatioTokenEstimator` in `core::token_estimator`
+/// for consistency across the codebase. Uses byte length / 4 with minimum of 1.
+#[inline]
 pub fn estimate_token_count(text: &str) -> usize {
-    // Rough estimate: 1 token ≈ 4 characters for English text
-    (text.len() / 4).max(1)
+    use crate::core::token_estimator::{CharacterRatioTokenEstimator, TokenEstimator};
+
+    // Use the shared estimator for consistency
+    static ESTIMATOR: CharacterRatioTokenEstimator = CharacterRatioTokenEstimator::new(4);
+    ESTIMATOR.estimate_tokens(text)
 }
 
 /// Truncate text to approximate token limit
+///
+/// Returns a truncated string that fits within the approximate token limit.
+/// Tries to truncate at word boundaries when possible to avoid mid-word cuts.
+#[inline]
 pub fn truncate_to_token_limit(text: &str, max_tokens: usize) -> String {
     if max_tokens == 0 {
         return String::new();
@@ -246,10 +267,9 @@ pub fn truncate_to_token_limit(text: &str, max_tokens: usize) -> String {
 
     // Try to truncate at a word boundary
     let truncated = &text[..max_chars];
-    if let Some(last_space) = truncated.rfind(' ') {
-        truncated[..last_space].to_string()
-    } else {
-        truncated.to_string()
+    match truncated.rfind(' ') {
+        Some(last_space) => truncated[..last_space].to_string(),
+        None => truncated.to_string(),
     }
 }
 
@@ -269,7 +289,10 @@ pub fn validate_model_string(model: &str) -> Result<()> {
     }
 
     // Basic sanity check for model name format
-    if !model.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == '.' || c == ':') {
+    if !model
+        .chars()
+        .all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == '.' || c == ':')
+    {
         anyhow::bail!("Model contains invalid characters. Only alphanumeric, -, _, ., : allowed")
     }
 
@@ -354,7 +377,7 @@ mod tests {
     fn test_extract_reasoning_content() {
         let content = "Some text <reasoning>This is reasoning</reasoning> More text";
         let (reasoning, main) = extract_reasoning_content(content);
-        
+
         assert_eq!(reasoning.len(), 1);
         assert_eq!(reasoning[0], "This is reasoning");
         assert_eq!(main.unwrap(), "Some text  More text");

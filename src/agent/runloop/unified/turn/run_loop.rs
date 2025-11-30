@@ -48,12 +48,12 @@ use crate::agent::runloop::unified::ui_interaction::{
 
 use super::finalization::finalize_session;
 use super::harmony::strip_harmony_syntax;
-use crate::agent::runloop::unified::turn::ui_sync::{redraw_with_sync, wait_for_redraw_complete};
 use super::utils::{render_hook_messages, safe_force_redraw};
 use super::workspace::{load_workspace_files, refresh_vt_config};
 use crate::agent::runloop::mcp_events;
 use crate::agent::runloop::unified::async_mcp_manager::McpInitStatus;
 use crate::agent::runloop::unified::context_manager::ContextManager;
+use crate::agent::runloop::unified::turn::ui_sync::{redraw_with_sync, wait_for_redraw_complete};
 
 use crate::agent::runloop::unified::display::{display_user_message, ensure_turn_bottom_gap};
 use crate::agent::runloop::unified::inline_events::{

@@ -21,10 +21,7 @@ mod shared;
 
 // Re-export commonly used constants
 pub use crate::tools::constants::{
-    ERROR_DETECTION_PATTERNS, 
-    MAX_SEARCH_RESULTS, 
-    OVERFLOW_INDICATOR_PREFIX,
-    DEFAULT_VEC_CAPACITY,
+    DEFAULT_VEC_CAPACITY, ERROR_DETECTION_PATTERNS, MAX_SEARCH_RESULTS, OVERFLOW_INDICATOR_PREFIX,
 };
 
 pub(crate) use codex_prompt::gpt5_codex_developer_prompt;

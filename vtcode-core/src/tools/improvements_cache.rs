@@ -112,14 +112,20 @@ impl<K: Clone + Eq + std::hash::Hash + std::fmt::Debug, V: Clone + std::fmt::Deb
     pub fn put(&self, key: K, value: V) -> Result<(), String> {
         let mut entries = self.entries.write().unwrap();
 
-        // Evict if at capacity
-        if entries.len() >= self.max_size && !entries.contains_key(&key) {
+        // Check if key already exists - if so, just update (no eviction needed)
+        if entries.contains_key(&key) {
+            entries.insert(key, CacheEntry::new(value, self.default_ttl));
+            return Ok(());
+        }
+
+        // Key doesn't exist, check capacity and evict if needed
+        if entries.len() >= self.max_size {
             // Find least recently used entry
-            if let Some(lru_key) = entries
+            let lru_key = entries
                 .iter()
                 .min_by_key(|(_, entry)| entry.last_accessed)
-                .map(|(k, _)| k.clone())
-            {
+                .map(|(k, _)| k.clone());
+            if let Some(lru_key) = lru_key {
                 entries.remove(&lru_key);
                 self.obs_context
                     .event(EventType::CacheEvicted, "cache", "evicted LRU entry", None);
@@ -134,30 +140,34 @@ impl<K: Clone + Eq + std::hash::Hash + std::fmt::Debug, V: Clone + std::fmt::Deb
     pub fn put_arc(&self, key: K, value: Arc<V>) -> Result<(), String> {
         let mut entries = self.entries.write().unwrap();
 
-        // Evict if at capacity
-        if entries.len() >= self.max_size && !entries.contains_key(&key) {
-            if let Some(lru_key) = entries
+        let now = Instant::now();
+        let new_entry = CacheEntry {
+            value: Arc::clone(&value),
+            created_at: now,
+            last_accessed: now,
+            ttl: self.default_ttl,
+        };
+
+        // Check if key already exists - if so, just update (no eviction needed)
+        if entries.contains_key(&key) {
+            entries.insert(key, new_entry);
+            return Ok(());
+        }
+
+        // Key doesn't exist, check capacity and evict if needed
+        if entries.len() >= self.max_size {
+            let lru_key = entries
                 .iter()
                 .min_by_key(|(_, entry)| entry.last_accessed)
-                .map(|(k, _)| k.clone())
-            {
+                .map(|(k, _)| k.clone());
+            if let Some(lru_key) = lru_key {
                 entries.remove(&lru_key);
                 self.obs_context
                     .event(EventType::CacheEvicted, "cache", "evicted LRU entry", None);
             }
         }
 
-        let now = Instant::now();
-        entries.insert(
-            key,
-            CacheEntry {
-                value: Arc::clone(&value),
-                created_at: now,
-                last_accessed: now,
-                ttl: self.default_ttl,
-            },
-        );
-
+        entries.insert(key, new_entry);
         Ok(())
     }
 

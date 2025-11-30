@@ -43,7 +43,7 @@ impl TokenMetrics {
             total_tokens: 0,
             total_chars: 0,
             total_time: Duration::ZERO,
-            by_type: HashMap::new(),
+            by_type: HashMap::with_capacity(10), // Pre-allocate for common content types
         }
     }
 
@@ -157,7 +157,7 @@ impl TokenCounter {
 
     /// Count tokens in batch
     pub fn count_batch(&mut self, items: Vec<(String, String)>) -> HashMap<String, usize> {
-        let mut results = HashMap::new();
+        let mut results = HashMap::with_capacity(items.len()); // Pre-allocate for exact capacity
         for (content_type, text) in items {
             let tokens = self.count_with_profiling(&content_type, &text);
             results.insert(content_type, tokens);

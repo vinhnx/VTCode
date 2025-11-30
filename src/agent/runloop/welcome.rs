@@ -98,7 +98,7 @@ pub(crate) async fn prepare_session_bootstrap(
 }
 
 fn build_header_highlights(onboarding_cfg: &AgentOnboardingConfig) -> Vec<InlineHeaderHighlight> {
-    let mut highlights = Vec::new();
+    let mut highlights = Vec::with_capacity(3); // Typically have 3 highlight sections
 
     if let Some(commands) = slash_commands_highlight() {
         highlights.push(commands);
@@ -200,7 +200,7 @@ fn slash_commands_highlight() -> Option<InlineHeaderHighlight> {
         return None;
     }
 
-    let mut lines = Vec::new();
+    let mut lines = Vec::with_capacity(10); // Estimate 10 lines for usage tips
 
     if !intro.is_empty() {
         lines.push(format!("{}{}", indent, intro));
@@ -273,7 +273,7 @@ fn build_prompt_addendum(
     language_summary: Option<&str>,
     guideline_highlights: Option<&[String]>,
 ) -> Option<String> {
-    let mut lines = Vec::new();
+    let mut lines = Vec::with_capacity(15); // Estimate 15 lines for prompt addendum
     lines.push("## SESSION CONTEXT".to_string());
 
     if onboarding_cfg.include_language_summary
@@ -353,20 +353,22 @@ mod tests {
 
     #[tokio::test]
     async fn test_prepare_session_bootstrap_builds_sections() {
-        let tmp = tempdir().unwrap();
+        let tmp = tempdir().expect("Failed to create temp directory");
         fs::write(
             tmp.path().join("Cargo.toml"),
             "[package]\nname = \"demo\"\nversion = \"0.1.0\"\ndescription = \"Demo project\"\n",
         )
-        .unwrap();
-        fs::create_dir_all(tmp.path().join("src")).unwrap();
-        fs::write(tmp.path().join("src/main.rs"), "fn main() {}\n").unwrap();
+        .expect("Failed to write Cargo.toml");
+        fs::create_dir_all(tmp.path().join("src")).expect("Failed to create src directory");
+        fs::write(tmp.path().join("src/main.rs"), "fn main() {}\n")
+            .expect("Failed to write main.rs");
         fs::write(
             tmp.path().join("AGENTS.md"),
             "- Follow workspace guidelines\n- Prefer 4-space indentation\n- Run cargo fmt before commits\n",
         )
-        .unwrap();
-        fs::write(tmp.path().join("README.md"), "Demo workspace\n").unwrap();
+        .expect("Failed to write AGENTS.md");
+        fs::write(tmp.path().join("README.md"), "Demo workspace\n")
+            .expect("Failed to write README.md");
 
         let mut vt_cfg = VTCodeConfig::default();
         vt_cfg.agent.onboarding.include_language_summary = false;
@@ -453,13 +455,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_welcome_hides_optional_sections_by_default() {
-        let tmp = tempdir().unwrap();
+        let tmp = tempdir().expect("Failed to create temp directory");
         fs::write(
             tmp.path().join("Cargo.toml"),
             "[package]\nname = \"demo\"\nversion = \"0.1.0\"\ndescription = \"Demo project\"\n",
         )
-        .unwrap();
-        fs::write(tmp.path().join("README.md"), "Demo workspace\n").unwrap();
+        .expect("Failed to write Cargo.toml");
+        fs::write(tmp.path().join("README.md"), "Demo workspace\n")
+            .expect("Failed to write README.md");
 
         let runtime_cfg = CoreAgentConfig {
             model: vtcode_core::config::constants::models::google::GEMINI_2_5_FLASH_PREVIEW
@@ -509,14 +512,15 @@ mod tests {
 
     #[tokio::test]
     async fn test_prepare_session_bootstrap_hides_placeholder_when_planning_disabled() {
-        let tmp = tempdir().unwrap();
+        let tmp = tempdir().expect("Failed to create temp directory");
         fs::write(
             tmp.path().join("Cargo.toml"),
             "[package]\nname = \"demo\"\nversion = \"0.1.0\"\ndescription = \"Demo\"\n",
         )
-        .unwrap();
-        fs::create_dir_all(tmp.path().join("src")).unwrap();
-        fs::write(tmp.path().join("src/lib.rs"), "pub fn demo() {}\n").unwrap();
+        .expect("Failed to write Cargo.toml");
+        fs::create_dir_all(tmp.path().join("src")).expect("Failed to create src directory");
+        fs::write(tmp.path().join("src/lib.rs"), "pub fn demo() {}\n")
+            .expect("Failed to write lib.rs");
 
         let mut vt_cfg = VTCodeConfig::default();
         vt_cfg.agent.todo_planning_mode = false;

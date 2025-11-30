@@ -13,10 +13,7 @@ use vtcode_core::tools::result_cache::ToolResultCache;
 use vtcode_core::utils::ansi::AnsiRenderer;
 
 /// Common logic for recording tool usage across all handlers
-pub fn record_tool_usage_common(
-    session_stats: &mut SessionStats,
-    name: &str,
-) {
+pub fn record_tool_usage_common(session_stats: &mut SessionStats, name: &str) {
     session_stats.record_tool(name);
 }
 
@@ -46,7 +43,8 @@ pub async fn handle_mcp_event_common(
                 output_val,
                 vt_config,
                 token_budget,
-            ).await?;
+            )
+            .await?;
         }
     } else {
         let error_msg = output
@@ -54,7 +52,7 @@ pub async fn handle_mcp_event_common(
             .and_then(|e| e.as_str())
             .unwrap_or("Unknown error");
         mcp_event.failure(Some(error_msg.to_string()));
-        
+
         let error_json = serde_json::json!({ "error": error_msg });
         crate::agent::runloop::tool_output::render_tool_output(
             renderer,
@@ -62,7 +60,8 @@ pub async fn handle_mcp_event_common(
             &error_json,
             vt_config,
             token_budget,
-        ).await?;
+        )
+        .await?;
     }
 
     mcp_panel_state.add_event(mcp_event);
@@ -79,7 +78,8 @@ pub async fn cache_tool_result_common(
     if let Some(cache) = tool_result_cache {
         let mut cache_guard = cache.write().await;
         let output_str = serde_json::to_string(output).unwrap_or_default();
-        let cache_key = vtcode_core::tools::result_cache::ToolCacheKey::from_json(name, args_val, "");
+        let cache_key =
+            vtcode_core::tools::result_cache::ToolCacheKey::from_json(name, args_val, "");
         cache_guard.insert(cache_key, output_str);
     }
     Ok(())
@@ -95,7 +95,7 @@ pub fn handle_modified_files_common(
     if !modified_files.is_empty() {
         *any_write_effect = true;
         turn_modified_files.extend(modified_files.iter().cloned());
-        
+
         // Invalidate cache for modified files
         if let Some(cache) = tool_result_cache {
             let mut cache_guard = cache.blocking_write();
@@ -115,9 +115,7 @@ pub async fn record_token_usage_common(
     vt_config: Option<&VTCodeConfig>,
 ) -> Result<()> {
     // Extract and record max_tokens usage if present in tool output
-    if let Some(applied_max_tokens) =
-        output.get("applied_max_tokens").and_then(|v| v.as_u64())
-    {
+    if let Some(applied_max_tokens) = output.get("applied_max_tokens").and_then(|v| v.as_u64()) {
         let context = format!(
             "Tool: {}, Command: {}",
             name,
@@ -126,7 +124,7 @@ pub async fn record_token_usage_common(
                 .and_then(|v| v.as_str())
                 .unwrap_or(&name.to_string())
         );
-        
+
         token_budget
             .record_max_tokens_usage(name, Some(applied_max_tokens as usize), &context)
             .await;
@@ -163,7 +161,7 @@ pub async fn render_tool_output_common(
 ) -> Result<()> {
     let status_icon = if command_success { "✓" } else { "✗" };
     let exit_code = output.get("exit_code").and_then(|v| v.as_i64());
-    
+
     crate::agent::runloop::unified::tool_summary::render_tool_call_summary_with_status(
         renderer,
         name,
@@ -178,7 +176,8 @@ pub async fn render_tool_output_common(
         output,
         vt_config,
         Some(token_budget),
-    ).await
+    )
+    .await
 }
 
 /// Common logic for rendering error messages

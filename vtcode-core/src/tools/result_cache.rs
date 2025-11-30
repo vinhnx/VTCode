@@ -3,7 +3,7 @@
 //! Caches results from read-only tools (grep, list_files, ast analysis) within a session
 //! to avoid re-running identical queries.
 
-use crate::cache::{CacheKey as UnifiedCacheKey, UnifiedCache, EvictionPolicy, DEFAULT_CACHE_TTL};
+use crate::cache::{CacheKey as UnifiedCacheKey, DEFAULT_CACHE_TTL, EvictionPolicy, UnifiedCache};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
@@ -65,8 +65,6 @@ impl ToolCacheKey {
 /// Cached tool result - using String directly as the cache value
 pub type ToolCacheValue = String;
 
-
-
 /// Tool result cache with LRU eviction - now using unified cache
 pub struct ToolResultCache {
     inner: UnifiedCache<ToolCacheKey, String>,
@@ -127,8 +125,6 @@ impl ToolResultCache {
         self.inner.stats().clone()
     }
 }
-
-
 
 #[cfg(test)]
 mod tests {
@@ -216,7 +212,7 @@ mod tests {
 
         cache.get(&key);
         cache.get(&key);
-        
+
         let final_stats = cache.stats();
         assert!(final_stats.hits > initial_stats.hits);
     }

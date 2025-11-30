@@ -103,7 +103,8 @@ impl AstCache {
     pub fn contains(&mut self, content: &str, language: LanguageSupport) -> bool {
         let key = CacheKey::new(content, language);
 
-        if self.cache.contains_key(&key) {
+        // Use get directly to avoid double lookup
+        if self.cache.get(&key).is_some() {
             self.update_access_order(&key);
             self.stats.hits += 1;
             true
