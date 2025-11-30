@@ -22,8 +22,7 @@ impl CompletionLearningData {
         } else {
             (current_rate - 0.1).max(0.0)
         };
-        self.pattern_acceptance
-            .insert(suggestion.to_string(), new_rate);
+        self.pattern_acceptance.insert(suggestion.into(), new_rate);
     }
 
     /// Get insights for a specific context
@@ -36,6 +35,6 @@ impl CompletionLearningData {
 
     /// Record symbol usage frequency
     pub fn record_symbol_usage(&mut self, symbol: &str) {
-        *self.symbol_frequency.entry(symbol.to_string()).or_insert(0) += 1;
+        *self.symbol_frequency.entry(symbol.into()).or_insert(0) += 1;
     }
 }

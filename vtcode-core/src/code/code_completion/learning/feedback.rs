@@ -27,9 +27,9 @@ impl FeedbackProcessor {
     /// Process user feedback
     pub fn process(&mut self, suggestion: &str, accepted: bool, context: &str) {
         let entry = FeedbackEntry {
-            suggestion: suggestion.to_string(),
+            suggestion: suggestion.into(),
             accepted,
-            context: context.to_string(),
+            context: context.into(),
             timestamp: std::time::SystemTime::now(),
         };
 
