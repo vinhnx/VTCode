@@ -20,30 +20,16 @@ impl Default for RustProvider {
 impl LanguageProvider for RustProvider {
     fn get_completions(&self, context: &CompletionContext) -> Vec<CompletionSuggestion> {
         let mut suggestions = Vec::new();
+        let keywords = [("fn", true), ("struct", true), ("impl", true)];
 
-        // Add Rust-specific keywords
-        if context.prefix.is_empty() || "fn".starts_with(&context.prefix) {
-            suggestions.push(CompletionSuggestion::new(
-                "fn".to_owned(),
-                CompletionKind::Keyword,
-                context.clone(),
-            ));
-        }
-
-        if context.prefix.is_empty() || "struct".starts_with(&context.prefix) {
-            suggestions.push(CompletionSuggestion::new(
-                "struct".to_owned(),
-                CompletionKind::Keyword,
-                context.clone(),
-            ));
-        }
-
-        if context.prefix.is_empty() || "impl".starts_with(&context.prefix) {
-            suggestions.push(CompletionSuggestion::new(
-                "impl".to_owned(),
-                CompletionKind::Keyword,
-                context.clone(),
-            ));
+        for (keyword, _) in &keywords {
+            if context.prefix.is_empty() || keyword.starts_with(&context.prefix) {
+                suggestions.push(CompletionSuggestion::new(
+                    keyword.to_string(),
+                    CompletionKind::Keyword,
+                    context.clone(),
+                ));
+            }
         }
 
         suggestions

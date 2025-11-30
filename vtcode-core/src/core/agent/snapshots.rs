@@ -8,6 +8,7 @@ use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use serde::{Deserialize, Serialize};
 
+use crate::utils::error_messages::ERR_CREATE_CHECKPOINT_DIR;
 use crate::utils::session_archive::SessionMessage;
 
 const MAX_DESCRIPTION_LEN: usize = 160;
@@ -133,7 +134,8 @@ impl SnapshotManager {
         if config.enabled {
             fs::create_dir_all(&storage_dir).with_context(|| {
                 format!(
-                    "failed to create checkpoint directory: {}",
+                    "{}: {}",
+                    ERR_CREATE_CHECKPOINT_DIR,
                     storage_dir.display()
                 )
             })?;

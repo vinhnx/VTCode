@@ -78,13 +78,14 @@ impl CompletionCache {
     }
 
     fn evict_lru(&mut self) {
-        if let Some(lru_key) = self
+        let lru_key = self
             .cache
             .iter()
             .min_by_key(|(_, entry)| entry.access_count)
-            .map(|(key, _)| key.clone())
-        {
-            self.cache.remove(&lru_key);
+            .map(|(key, _)| key.clone());
+        
+        if let Some(key) = lru_key {
+            self.cache.remove(&key);
         }
     }
 }

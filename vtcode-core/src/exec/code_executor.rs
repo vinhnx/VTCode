@@ -195,13 +195,13 @@ impl CodeExecutor {
         // Set workspace path for scripts
         env.insert(
             OsString::from("VTCODE_WORKSPACE"),
-            OsString::from(self.workspace_root.to_string_lossy().into_owned()),
+            OsString::from(self.workspace_root.to_string_lossy().as_ref()),
         );
 
         // Set IPC directory for tool invocation
         env.insert(
             OsString::from("VTCODE_IPC_DIR"),
-            OsString::from(ipc_dir.to_string_lossy().into_owned()),
+            OsString::from(ipc_dir.to_string_lossy().as_ref()),
         );
 
         // Spawn IPC handler task that will process tool requests from code
@@ -246,7 +246,7 @@ impl CodeExecutor {
                         Ok(result) => {
                             debug!(tool_name = %request.tool_name, "Tool executed successfully");
                             ToolResponse {
-                                id: request.id.clone(),
+                                id: request.id,
                                 success: true,
                                 result: Some(result),
                                 error: None,
@@ -301,9 +301,9 @@ impl CodeExecutor {
 
         let duration_ms = start.elapsed().as_millis();
 
-        // Parse output
-        let stdout = String::from_utf8_lossy(&process_output.stdout).to_string();
-        let stderr = String::from_utf8_lossy(&process_output.stderr).to_string();
+        // Parse output - only allocate if needed
+        let stdout = String::from_utf8_lossy(&process_output.stdout).into_owned();
+        let stderr = String::from_utf8_lossy(&process_output.stderr).into_owned();
 
         // Extract JSON result if present
         let json_result = self.extract_json_result(&stdout, self.language)?;

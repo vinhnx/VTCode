@@ -162,8 +162,8 @@ impl ToolDiscoveryCache {
         detail_level: DetailLevel,
     ) -> Option<Vec<super::tool_discovery::ToolDiscoveryResult>> {
         let key = ToolDiscoveryCacheKey {
-            provider_name: provider_name.to_string(),
-            keyword: keyword.to_string(),
+            provider_name: provider_name.into(),
+            keyword: keyword.into(),
             detail_level,
         };
 
@@ -191,8 +191,8 @@ impl ToolDiscoveryCache {
         results: Vec<super::tool_discovery::ToolDiscoveryResult>,
     ) {
         let key = ToolDiscoveryCacheKey {
-            provider_name: provider_name.to_string(),
-            keyword: keyword.to_string(),
+            provider_name: provider_name.into(),
+            keyword: keyword.into(),
             detail_level,
         };
 
@@ -238,13 +238,15 @@ impl ToolDiscoveryCache {
 
     /// Cache all tools for a provider
     pub fn cache_all_tools(&self, provider_name: &str, tools: Vec<McpToolInfo>) {
+        let provider_key = provider_name.to_string();
+        
         // Update all tools cache
         let mut all_tools_cache = self.all_tools_cache.write().unwrap();
-        all_tools_cache.insert(provider_name.to_string(), tools.clone());
+        all_tools_cache.insert(provider_key.clone(), tools.clone());
 
         // Update last refresh time
         let mut last_refresh = self.last_refresh.write().unwrap();
-        last_refresh.insert(provider_name.to_string(), Instant::now());
+        last_refresh.insert(provider_key, Instant::now());
 
         // Update bloom filter with all tool names
         let mut bloom_filter = self.bloom_filter.write().unwrap();

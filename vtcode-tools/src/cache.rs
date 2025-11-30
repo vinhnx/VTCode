@@ -199,7 +199,7 @@ impl<V: Send + Sync> LruCache<V> {
     where
         V: Clone,
     {
-        self.get(key).await.map(|arc| (*arc).clone())
+        self.get(key).await.map(|arc| V::clone(&arc))
     }
 
     /// Alias to return Arc<V> explicitly (clarifies intent)

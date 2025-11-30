@@ -347,7 +347,8 @@ impl Default for SystemPromptConfig {
 
 /// Generate system instruction
 pub async fn generate_system_instruction(_config: &SystemPromptConfig) -> Content {
-    Content::system_text(default_system_prompt().to_owned())
+    // default_system_prompt() returns &'static str, convert to String
+    Content::system_text(default_system_prompt().to_string())
 }
 
 /// Read AGENTS.md file if present and extract agent guidelines
@@ -368,7 +369,7 @@ pub async fn compose_system_instruction_text(
     project_root: &Path,
     vtcode_config: Option<&crate::config::VTCodeConfig>,
 ) -> String {
-    let mut instruction = default_system_prompt().to_owned();
+    let mut instruction = default_system_prompt().to_string();
 
     if let Some(cfg) = vtcode_config {
         instruction.push_str("\n\n## CONFIGURATION AWARENESS\n");
@@ -518,7 +519,7 @@ fn format_instruction_path(path: &Path, project_root: &Path, home_dir: Option<&P
         }
 
         if let Some(name) = path.file_name().and_then(|value| value.to_str()) {
-            return name.to_owned();
+            return name.to_string();
         }
     }
 
@@ -526,7 +527,7 @@ fn format_instruction_path(path: &Path, project_root: &Path, home_dir: Option<&P
         if let Ok(relative) = path.strip_prefix(home) {
             let display = relative.display().to_string();
             if display.is_empty() {
-                return "~".to_owned();
+                return "~".to_string();
             }
 
             return format!("~/{display}");
@@ -538,10 +539,12 @@ fn format_instruction_path(path: &Path, project_root: &Path, home_dir: Option<&P
 
 /// Generate a lightweight system instruction for simple operations
 pub fn generate_lightweight_instruction() -> Content {
-    Content::system_text(DEFAULT_LIGHTWEIGHT_PROMPT.to_owned())
+    // DEFAULT_LIGHTWEIGHT_PROMPT is &'static str, convert to String
+    Content::system_text(DEFAULT_LIGHTWEIGHT_PROMPT.to_string())
 }
 
 /// Generate a specialized system instruction for advanced operations
 pub fn generate_specialized_instruction() -> Content {
-    Content::system_text(DEFAULT_SPECIALIZED_PROMPT.to_owned())
+    // DEFAULT_SPECIALIZED_PROMPT is &'static str, convert to String
+    Content::system_text(DEFAULT_SPECIALIZED_PROMPT.to_string())
 }

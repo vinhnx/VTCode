@@ -70,7 +70,7 @@ async fn check_api_connectivity(config: &AgentConfig) -> Result<()> {
     use crate::gemini::{Client, Content, GenerateContentRequest};
     use crate::prompts::generate_lightweight_instruction;
 
-    let mut client = Client::new(config.api_key.clone(), config.model.clone());
+    let mut client = Client::new(config.api_key.clone(), config.model.to_string());
     let contents = vec![Content::user_text("Hello")];
     let lightweight_instruction = generate_lightweight_instruction();
 
@@ -113,7 +113,8 @@ async fn check_api_connectivity(config: &AgentConfig) -> Result<()> {
 
 /// Check filesystem permissions
 async fn check_filesystem_permissions(config: &AgentConfig) -> Result<()> {
-    let mut registry = ToolRegistry::new(config.workspace.clone()).await;
+    let workspace = config.workspace.clone(); // Clone only once for reuse
+    let mut registry = ToolRegistry::new(workspace).await;
 
     // Try to list files in the workspace
     registry

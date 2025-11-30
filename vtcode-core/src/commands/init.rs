@@ -173,7 +173,7 @@ async fn analyze_project(registry: &mut ToolRegistry, workspace: &Path) -> Resul
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or("project")
-        .to_owned();
+        .to_string();
 
     let mut analysis = ProjectAnalysis {
         project_name,
@@ -211,7 +211,7 @@ async fn analyze_project(registry: &mut ToolRegistry, workspace: &Path) -> Resul
     let common_src_dirs = vec!["src", "lib", "pkg", "internal", "cmd", "app", "core"];
     for dir in common_src_dirs {
         if workspace.join(dir).exists() {
-            analysis.source_dirs.push(dir.to_owned());
+            analysis.source_dirs.push(dir.to_string());
         }
     }
 
@@ -233,8 +233,8 @@ async fn analyze_file(
     match path {
         // Rust project files
         "Cargo.toml" => {
-            analysis.languages.push("Rust".to_owned());
-            analysis.build_systems.push("Cargo".to_owned());
+            analysis.languages.push("Rust".to_string());
+            analysis.build_systems.push("Cargo".to_string());
 
             // Read Cargo.toml to extract dependencies
             let cargo_content = registry
@@ -249,16 +249,16 @@ async fn analyze_file(
             }
         }
         "Cargo.lock" => {
-            analysis.config_files.push("Cargo.lock".to_owned());
+            analysis.config_files.push("Cargo.lock".to_string());
         }
         "run.sh" | "run-debug.sh" | "run-dev.sh" | "run-prod.sh" => {
-            analysis.scripts.push(path.to_owned());
+            analysis.scripts.push(path.to_string());
         }
 
         // Node.js project files
         "package.json" => {
-            analysis.languages.push("JavaScript/TypeScript".to_owned());
-            analysis.build_systems.push("npm/yarn/pnpm".to_owned());
+            analysis.languages.push("JavaScript/TypeScript".to_string());
+            analysis.build_systems.push("npm/yarn/pnpm".to_string());
 
             // Read package.json to extract dependencies
             let package_content = registry
@@ -273,23 +273,23 @@ async fn analyze_file(
             }
         }
         "yarn.lock" | "package-lock.json" | "pnpm-lock.yaml" => {
-            analysis.config_files.push(path.to_owned());
+            analysis.config_files.push(path.to_string());
         }
 
         // Python project files
         "requirements.txt" | "pyproject.toml" | "setup.py" | "Pipfile" => {
             if !analysis.languages.iter().any(|s| s == "Python") {
-                analysis.languages.push("Python".to_owned());
+                analysis.languages.push("Python".to_string());
             }
-            analysis.build_systems.push("pip/poetry".to_owned());
-            analysis.config_files.push(path.to_owned());
+            analysis.build_systems.push("pip/poetry".to_string());
+            analysis.config_files.push(path.to_string());
         }
 
         // Go project files
         "go.mod" | "go.sum" => {
-            analysis.languages.push("Go".to_owned());
-            analysis.build_systems.push("Go Modules".to_owned());
-            analysis.config_files.push(path.to_owned());
+            analysis.languages.push("Go".to_string());
+            analysis.build_systems.push("Go Modules".to_string());
+            analysis.config_files.push(path.to_string());
         }
 
         // Java project files

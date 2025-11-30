@@ -20,22 +20,16 @@ impl Default for TypeScriptProvider {
 impl LanguageProvider for TypeScriptProvider {
     fn get_completions(&self, context: &CompletionContext) -> Vec<CompletionSuggestion> {
         let mut suggestions = Vec::new();
+        let keywords = ["function", "interface"];
 
-        // Add TypeScript-specific keywords
-        if context.prefix.is_empty() || "function".starts_with(&context.prefix) {
-            suggestions.push(CompletionSuggestion::new(
-                "function".to_owned(),
-                CompletionKind::Keyword,
-                context.clone(),
-            ));
-        }
-
-        if context.prefix.is_empty() || "interface".starts_with(&context.prefix) {
-            suggestions.push(CompletionSuggestion::new(
-                "interface".to_owned(),
-                CompletionKind::Keyword,
-                context.clone(),
-            ));
+        for keyword in &keywords {
+            if context.prefix.is_empty() || keyword.starts_with(&context.prefix) {
+                suggestions.push(CompletionSuggestion::new(
+                    keyword.to_string(),
+                    CompletionKind::Keyword,
+                    context.clone(),
+                ));
+            }
         }
 
         suggestions

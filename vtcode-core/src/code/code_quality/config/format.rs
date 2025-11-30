@@ -12,14 +12,19 @@ pub struct FormatConfig {
 }
 
 impl FormatConfig {
+    /// Helper to convert string slices to owned Strings
+    fn vec_from(items: &[&str]) -> Vec<String> {
+        items.iter().map(|s| s.to_string()).collect()
+    }
+
     /// Create rustfmt configuration
     pub fn rustfmt() -> Self {
         Self {
             language: LanguageSupport::Rust,
-            tool_name: "rustfmt".to_owned(),
-            command: vec!["rustfmt".to_owned()],
-            args: vec!["--edition".to_owned(), "2021".to_owned()],
-            file_extensions: vec![".rs".to_owned()],
+            tool_name: "rustfmt".to_string(),
+            command: Self::vec_from(&["rustfmt"]),
+            args: Self::vec_from(&["--edition", "2021"]),
+            file_extensions: Self::vec_from(&[".rs"]),
             enabled: true,
         }
     }
@@ -28,10 +33,10 @@ impl FormatConfig {
     pub fn prettier() -> Self {
         Self {
             language: LanguageSupport::TypeScript,
-            tool_name: "prettier".to_owned(),
-            command: vec!["prettier".to_owned()],
-            args: vec!["--write".to_owned()],
-            file_extensions: vec![".ts".to_owned(), ".js".to_owned(), ".json".to_owned()],
+            tool_name: "prettier".to_string(),
+            command: Self::vec_from(&["prettier"]),
+            args: Self::vec_from(&["--write"]),
+            file_extensions: Self::vec_from(&[".ts", ".js", ".json"]),
             enabled: true,
         }
     }
@@ -40,10 +45,10 @@ impl FormatConfig {
     pub fn black() -> Self {
         Self {
             language: LanguageSupport::Python,
-            tool_name: "black".to_owned(),
-            command: vec!["black".to_owned()],
+            tool_name: "black".to_string(),
+            command: Self::vec_from(&["black"]),
             args: vec![],
-            file_extensions: vec![".py".to_owned()],
+            file_extensions: Self::vec_from(&[".py"]),
             enabled: true,
         }
     }

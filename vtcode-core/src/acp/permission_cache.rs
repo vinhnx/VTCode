@@ -216,7 +216,7 @@ mod tests {
         let mut cache = AcpPermissionCache::new();
         let path = test_path("file.rs");
 
-        cache.cache_grant(path.clone(), PermissionGrant::Session);
+        cache.cache_grant(path, PermissionGrant::Session);
 
         // Hit
         let _ = cache.get_permission(&path);
@@ -233,7 +233,7 @@ mod tests {
         let path1 = test_path("file1.rs");
         let path2 = test_path("file2.rs");
 
-        cache.cache_grant(path1.clone(), PermissionGrant::Session);
+        cache.cache_grant(path1, PermissionGrant::Session);
 
         // 3 hits
         cache.get_permission(&path1);
@@ -284,7 +284,7 @@ mod tests {
         let allowed_path = test_path("public.txt");
 
         cache.cache_grant(denied_path.clone(), PermissionGrant::Denied);
-        cache.cache_grant(allowed_path.clone(), PermissionGrant::Session);
+        cache.cache_grant(allowed_path, PermissionGrant::Session);
 
         assert!(cache.is_denied(&denied_path));
         assert!(!cache.is_denied(&allowed_path));
@@ -300,9 +300,9 @@ mod tests {
         let temp_denied_path = test_path("temp_denied.rs");
 
         cache.cache_grant(once_path.clone(), PermissionGrant::Once);
-        cache.cache_grant(session_path.clone(), PermissionGrant::Session);
+        cache.cache_grant(session_path, PermissionGrant::Session);
         cache.cache_grant(denied_path.clone(), PermissionGrant::Denied);
-        cache.cache_grant(temp_denied_path.clone(), PermissionGrant::TemporaryDenial);
+        cache.cache_grant(temp_denied_path, PermissionGrant::TemporaryDenial);
 
         // "Once" and "TemporaryDenial" grants can't be reused
         assert!(!cache.can_use_cached(&once_path));

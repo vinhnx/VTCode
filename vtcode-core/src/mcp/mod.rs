@@ -447,7 +447,7 @@ impl McpClient {
             .await?;
         self.resource_provider_index
             .write()
-            .insert(uri.to_string(), provider_name);
+            .insert(uri.into(), provider_name);
         Ok(data)
     }
 
@@ -470,7 +470,7 @@ impl McpClient {
             .await?;
         self.prompt_provider_index
             .write()
-            .insert(prompt_name.to_string(), provider_name);
+            .insert(prompt_name.into(), provider_name);
         Ok(prompt)
     }
 
@@ -527,8 +527,8 @@ impl McpClient {
 
         let allowlist = self.allowlist.read().clone();
         let timeout = self.tool_timeout();
-        let mut all_tools = Vec::new();
-        let mut index_updates: HashMap<String, String> = HashMap::new();
+        let mut all_tools = Vec::with_capacity(128);
+        let mut index_updates: HashMap<String, String> = HashMap::with_capacity(128);
 
         for provider in providers {
             let provider_name = provider.name.clone();
@@ -574,7 +574,7 @@ impl McpClient {
 
         let allowlist = self.allowlist.read().clone();
         let timeout = self.request_timeout();
-        let mut all_resources = Vec::new();
+        let mut all_resources = Vec::with_capacity(64);
 
         for provider in providers {
             let resources = if force_refresh {
@@ -616,7 +616,7 @@ impl McpClient {
 
         let allowlist = self.allowlist.read().clone();
         let timeout = self.request_timeout();
-        let mut all_prompts = Vec::new();
+        let mut all_prompts = Vec::with_capacity(32);
 
         for provider in providers {
             let prompts = if force_refresh {
@@ -681,7 +681,7 @@ impl McpClient {
                 Ok(true) => {
                     self.tool_provider_index
                         .write()
-                        .insert(tool_name.to_string(), provider.name.clone());
+                        .insert(tool_name.into(), provider.name.clone());
                     return Ok(provider);
                 }
                 Ok(false) => continue,
@@ -732,7 +732,7 @@ impl McpClient {
                 Ok(true) => {
                     self.resource_provider_index
                         .write()
-                        .insert(uri.to_string(), provider.name.clone());
+                        .insert(uri.into(), provider.name.clone());
                     return Ok(provider);
                 }
                 Ok(false) => continue,
@@ -764,7 +764,7 @@ impl McpClient {
                 Ok(true) => {
                     self.prompt_provider_index
                         .write()
-                        .insert(prompt_name.to_string(), provider.name.clone());
+                        .insert(prompt_name.into(), provider.name.clone());
                     return Ok(provider);
                 }
                 Ok(false) => continue,

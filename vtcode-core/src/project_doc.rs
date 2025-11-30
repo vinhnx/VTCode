@@ -29,7 +29,7 @@ impl ProjectDocBundle {
             if trimmed.starts_with('-') {
                 let highlight = trimmed.trim_start_matches('-').trim();
                 if !highlight.is_empty() {
-                    highlights.push(highlight.to_owned());
+                    highlights.push(highlight.to_string());
                 }
             }
         }

@@ -122,7 +122,7 @@ pub async fn record_token_usage_common(
             output
                 .get("command")
                 .and_then(|v| v.as_str())
-                .unwrap_or(&name.to_string())
+                .unwrap_or(name)
         );
 
         token_budget
