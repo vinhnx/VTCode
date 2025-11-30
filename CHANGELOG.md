@@ -3,6 +3,68 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Version 0.43.0] - 2025-11-09
+# [Version 0.47.6] - 2025-11-30
+
+
+### Features
+    - feat: add diff suppression logic and constants for large changes
+    - feat: parse and display friendly error messages from Anthropic API responses
+
+
+### Bug Fixes
+    - fix: clear spinner before displaying error message
+    - fix: gracefully handle provider API errors without panicking
+
+
+### Performance Improvements
+    - perf: optimize memory allocations and pre-allocate buffers in various modules
+    - perf: use write! macro in metrics module
+    - perf: use write! macro in llm/token_metrics
+    - perf: use write! macro in exec modules and utils
+    - perf: use write! macro in core token management modules
+    - perf: use .to_string() instead of format! for context_size
+    - perf: use write!/writeln! macros in tools and prompts modules
+    - perf(ui): use write!/writeln! macros in diff_renderer
+    - perf: optimize string formatting and use unwrap_or_default
+    - perf: remove unnecessary clone() on Copy types
+    - perf: use .to_string() directly for Display types instead of .as_str().to_string()
+    - perf: eliminate redundant clones in config loader
+    - perf: add Vec with_capacity for known-size allocations
+    - perf(core): use write! macro instead of format! with push_str
+    - perf(core): remove redundant clones and allocations
+
+
+### Refactors
+    - refactor: optimize completion learning modules with .into() patterns
+    - refactor: optimize linting and code completion modules
+    - refactor: optimize core modules for code quality and allocations
+    - refactor: update message type handling and improve system prompt instructions
+    - refactor(llm): extract serialize_messages_openai_format helper
+    - refactor(llm): add validate_request_common helper
+    - refactor(llm): add parse_tool_call and map_finish_reason helpers
+    - refactor(llm): extract common provider helpers to reduce duplication
+    - refactor: optimize diff rendering and suppression logic
+    - refactor: streamline code formatting and improve readability across multiple files
+
+
+### Documentation
+    - docs: add comprehensive optimization report
+    - docs: clarify spinner cleanup implementation details
+    - docs: update changelog for v0.47.5 [skip ci]
+    - docs: update changes summary with comprehensive error handling improvements
+
+
+### Style Changes
+    - style: fix clippy warnings (assign_op, unnecessary_cast, collapsible_if, const thread_local)
+    - style: remove redundant closures
+
+
+### Chores
+    - chore: update VSCode extension package.json to v0.47.5 [skip ci]
+    - chore: update npm package.json to v0.47.5 [skip ci]
+    - chore: release v0.47.5
+    - chore: update VSCode extension package.json to v0.47.4 [skip ci]
+    - chore: update npm package.json to v0.47.4 [skip ci]
 # [Version 0.47.5] - 2025-11-25
 
 
