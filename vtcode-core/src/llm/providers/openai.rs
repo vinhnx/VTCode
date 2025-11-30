@@ -18,6 +18,7 @@ use reqwest::Client as HttpClient;
 use reqwest::StatusCode;
 use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
 #[cfg(debug_assertions)]
@@ -293,10 +294,10 @@ struct OpenAIResponsesPayload {
 }
 
 pub struct OpenAIProvider {
-    api_key: String,
+    api_key: Arc<str>,
     http_client: HttpClient,
-    base_url: String,
-    model: String,
+    base_url: Arc<str>,
+    model: Arc<str>,
     responses_api_modes: Mutex<HashMap<String, ResponsesApiState>>,
     prompt_cache_enabled: bool,
     prompt_cache_settings: OpenAIPromptCacheSettings,
@@ -396,7 +397,7 @@ impl OpenAIProvider {
         if let Some(system_prompt) = &request.system_prompt {
             harmony_messages.push(HarmonyMessage::from_role_and_content(
                 HarmonyRole::System,
-                system_prompt.clone(),
+                system_prompt.to_string(),
             ));
         }
 
@@ -409,8 +410,8 @@ impl OpenAIProvider {
                     }
                     let func = tool.function.as_ref()?;
                     Some(ToolDescription::new(
-                        func.name.clone(),
-                        func.description.clone(),
+                        &func.name,
+                        &func.description,
                         Some(func.parameters.clone()),
                     ))
                 })
@@ -547,17 +548,17 @@ impl OpenAIProvider {
         responses_api_modes.insert(model.clone(), Self::default_responses_state(&model));
 
         Self {
-            api_key,
+            api_key: Arc::from(api_key.as_str()),
             http_client: HttpClient::builder()
                 .timeout(Duration::from_secs(120))
                 .build()
                 .unwrap_or_else(|_| HttpClient::new()),
-            base_url: override_base_url(
+            base_url: Arc::from(override_base_url(
                 urls::OPENAI_API_BASE,
                 base_url,
                 Some(env_vars::OPENAI_BASE_URL),
-            ),
-            model,
+            ).as_str()),
+            model: Arc::from(model.as_str()),
             responses_api_modes: Mutex::new(responses_api_modes),
             prompt_cache_enabled,
             prompt_cache_settings,
@@ -2066,10 +2067,10 @@ fn build_standard_responses_payload(
                             active_tool_call_ids.insert(call.id.clone());
                             content_parts.push(json!({
                                 "type": "tool_call",
-                                "id": call.id.clone(),
+                                "id": &call.id,
                                 "function": {
-                                    "name": func.name.clone(),
-                                    "arguments": func.arguments.clone()
+                                    "name": &func.name,
+                                    "arguments": &func.arguments
                                 }
                             }));
                         }
@@ -2084,7 +2085,7 @@ fn build_standard_responses_payload(
                 }
             }
             MessageRole::Tool => {
-                let tool_call_id = msg.tool_call_id.clone().ok_or_else(|| {
+                let tool_call_id = msg.tool_call_id.as_ref().ok_or_else(|| {
                     let formatted_error = error_display::format_llm_error(
                         "OpenAI",
                         "Tool messages must include tool_call_id for Responses API",
@@ -2092,7 +2093,7 @@ fn build_standard_responses_payload(
                     LLMError::InvalidRequest(formatted_error)
                 })?;
 
-                if !active_tool_call_ids.contains(&tool_call_id) {
+                if !active_tool_call_ids.contains(tool_call_id) {
                     continue;
                 }
 
@@ -2110,7 +2111,7 @@ fn build_standard_responses_payload(
                     "tool_call_id": tool_call_id
                 });
 
-                active_tool_call_ids.remove(&tool_call_id);
+                active_tool_call_ids.remove(tool_call_id);
 
                 if !tool_content.is_empty() {
                     if let Value::Object(ref mut map) = tool_result {
@@ -2184,10 +2185,10 @@ fn build_codex_responses_payload(request: &LLMRequest) -> Result<OpenAIResponses
                             active_tool_call_ids.insert(call.id.clone());
                             content_parts.push(json!({
                                 "type": "tool_call",
-                                "id": call.id.clone(),
+                                "id": &call.id,
                                 "function": {
-                                    "name": func.name.clone(),
-                                    "arguments": func.arguments.clone()
+                                    "name": &func.name,
+                                    "arguments": &func.arguments
                                 }
                             }));
                         }
@@ -2261,7 +2262,7 @@ impl LLMProvider for OpenAIProvider {
     fn supports_streaming(&self) -> bool {
         // OpenAI requires ID verification for GPT-5 models, so we must disable streaming
         if matches!(
-            self.model.as_str(),
+            self.model.as_ref(),
             models::openai::GPT_5
                 | models::openai::GPT_5_CODEX
                 | models::openai::GPT_5_MINI
@@ -2278,7 +2279,7 @@ impl LLMProvider for OpenAIProvider {
 
     fn supports_reasoning(&self, model: &str) -> bool {
         let requested = if model.trim().is_empty() {
-            self.model.as_str()
+            self.model.as_ref()
         } else {
             model
         };
@@ -2290,7 +2291,7 @@ impl LLMProvider for OpenAIProvider {
 
     fn supports_reasoning_effort(&self, model: &str) -> bool {
         let requested = if model.trim().is_empty() {
-            self.model.as_str()
+            self.model.as_ref()
         } else {
             model
         };
@@ -2301,7 +2302,7 @@ impl LLMProvider for OpenAIProvider {
 
     fn supports_tools(&self, model: &str) -> bool {
         let requested = if model.trim().is_empty() {
-            self.model.as_str()
+            self.model.as_ref()
         } else {
             model
         };
@@ -2313,7 +2314,7 @@ impl LLMProvider for OpenAIProvider {
 
     async fn stream(&self, mut request: LLMRequest) -> Result<LLMStream, LLMError> {
         if request.model.trim().is_empty() {
-            request.model = self.model.clone();
+            request.model = self.model.to_string();
         }
 
         if !self.supports_parallel_tool_config(&request.model) {
@@ -2619,7 +2620,7 @@ impl LLMProvider for OpenAIProvider {
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
         let mut request = request;
         if request.model.trim().is_empty() {
-            request.model = self.model.clone();
+            request.model = self.model.to_string();
         }
 
         if !self.supports_parallel_tool_config(&request.model) {
@@ -2872,7 +2873,7 @@ impl LLMProvider for OpenAIProvider {
 impl LLMClient for OpenAIProvider {
     async fn generate(&mut self, prompt: &str) -> Result<llm_types::LLMResponse, LLMError> {
         let request = self.parse_client_prompt(prompt);
-        let request_model = request.model.clone();
+        let request_model = request.model.to_string();
         let response = LLMProvider::generate(self, request).await?;
 
         Ok(llm_types::LLMResponse {

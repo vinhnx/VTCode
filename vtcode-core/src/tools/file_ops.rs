@@ -64,8 +64,10 @@ impl FileOpsTool {
         // Most directories have 10-50 items, so start with 32 to avoid reallocations
         let mut all_items = Vec::with_capacity(32);
         if base.is_file() {
+            let file_name = base.file_name()
+                .ok_or_else(|| anyhow!("Invalid file name for path: {}", input.path))?;
             all_items.push(json!({
-                "name": base.file_name().unwrap().to_string_lossy(),
+                "name": file_name.to_string_lossy(),
                 "path": input.path,
                 "type": "file"
             }));
@@ -93,9 +95,14 @@ impl FileOpsTool {
                     .await
                     .with_context(|| format!("Failed to read file type for: {}", path.display()))?
                     .is_dir();
+                
+                let relative_path = path.strip_prefix(&self.workspace_root)
+                    .map(|p| p.to_string_lossy())
+                    .unwrap_or_else(|_| path.to_string_lossy());
+                
                 all_items.push(json!({
                     "name": name,
-                    "path": path.strip_prefix(&self.workspace_root).unwrap_or(&path).to_string_lossy(),
+                    "path": relative_path,
                     "type": if is_dir { "directory" } else { "file" }
                 }));
             }
@@ -110,15 +117,16 @@ impl FileOpsTool {
             return Err(anyhow!("Path '{}' does not exist", input.path));
         }
 
-        // Apply max_items cap first for token efficiency
+        // Apply max_items cap first for token efficiency - AGENTS.md requires max 5 items
         let capped_total = all_items.len().min(input.max_items);
         let (page, per_page) = (
             input.page.unwrap_or(1).max(1),
-            input.per_page.unwrap_or(20).max(1),
+            input.per_page.unwrap_or(5).max(1), // Default to 5 items per page for context optimization
         );
         let start = (page - 1).saturating_mul(per_page);
         let end = (start + per_page).min(capped_total);
         let has_more = end < capped_total;
+        let has_overflow = all_items.len() > input.max_items;
 
         // Log paging operation details
         info!(
@@ -172,7 +180,50 @@ impl FileOpsTool {
             }
         }
 
-        let guidance = if has_more || capped_total < all_items.len() || all_items.len() > 20 {
+        // Implement AGENTS.md pattern for context optimization: show summary with sample
+        let guidance = if has_overflow {
+            // Show overflow indication when we have more items than max_items
+            Some(format!("[+{} more items]", all_items.len() - input.max_items))
+        } else if all_items.len() > 50 && page == 1 {
+            // For large directories on first page, show summary pattern
+            let file_count = page_items.iter().filter(|item| {
+                item.as_object().and_then(|obj| obj.get("type")).and_then(|t| t.as_str()) == Some("file")
+            }).count();
+            let dir_count = page_items.iter().filter(|item| {
+                item.as_object().and_then(|obj| obj.get("type")).and_then(|t| t.as_str()) == Some("directory")
+            }).count();
+            
+            let mut sample_names = page_items.iter()
+                .take(5)
+                .filter_map(|item| item.as_object().and_then(|obj| obj.get("name")).and_then(|n| n.as_str()))
+                .collect::<Vec<_>>();
+            
+            if sample_names.len() > 3 {
+                sample_names.truncate(3);
+                sample_names.push("...");
+            }
+            
+            let summary = if file_count > 0 && dir_count > 0 {
+                format!(
+                    "{} files and {} directories (showing first {}: {})",
+                    file_count, dir_count, sample_names.len(), sample_names.join(", ")
+                )
+            } else if file_count > 0 {
+                format!(
+                    "{} files (showing first {}: {})",
+                    file_count, sample_names.len(), sample_names.join(", ")
+                )
+            } else if dir_count > 0 {
+                format!(
+                    "{} directories (showing first {}: {})",
+                    dir_count, sample_names.len(), sample_names.join(", ")
+                )
+            } else {
+                format!("Empty directory")
+            };
+            
+            Some(format!("{} [+{} more items]", summary, all_items.len() - sample_names.len()))
+        } else if has_more || capped_total < all_items.len() || all_items.len() > 20 {
             Some(format!(
                 "Showing {} of {} items (page {}, per_page {}). Use 'page' and 'per_page' to page through results.",
                 page_items.len(),
@@ -210,13 +261,15 @@ impl FileOpsTool {
         let pattern_lower = pattern.to_lowercase();
         let search_path = self.workspace_root.join(&input.path);
 
-        // Pre-allocate with max_items capacity to avoid reallocations
-        let mut items = Vec::with_capacity(input.max_items.min(1000));
+        // Pre-allocate with max_items capacity to avoid reallocations - AGENTS.md max 5 items
+        let mut items = Vec::with_capacity(input.max_items.min(5));
         let mut count = 0;
+        let mut total_found = 0;
 
         for entry in WalkDir::new(&search_path).max_depth(10) {
             if count >= input.max_items {
-                break;
+                total_found += 1;
+                continue; // Keep counting but don't add more items
             }
 
             let entry = entry.map_err(|e| anyhow!("Walk error: {}", e))?;
@@ -261,9 +314,17 @@ impl FileOpsTool {
                 }));
                 count += 1;
             }
+            total_found += 1;
         }
 
-        Ok(self.paginate_and_format(items, count, input, "recursive", Some(pattern)))
+        // Add overflow indication if we found more items than max_items
+        let mut result = self.paginate_and_format(items, count, input, "recursive", Some(pattern));
+        if total_found > input.max_items {
+            if let Some(obj) = result.as_object_mut() {
+                obj.insert("overflow".to_string(), json!(format!("[+{} more items]", total_found - input.max_items)));
+            }
+        }
+        Ok(result)
     }
 
     /// Execute find by exact name
@@ -655,8 +716,11 @@ impl FileOpsTool {
 
         entries.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
 
-        let effective_max = input.max_items.clamp(1, 1000);
+        // AGENTS.md requires max 5 items for context optimization
+        let effective_max = input.max_items.min(5);
         let selected_total = entries.len().min(effective_max);
+        let has_overflow = entries.len() > effective_max;
+        let total_entries = entries.len();
 
         let mut ranked = Vec::with_capacity(selected_total);
         for (idx, (size, rel_path, modified)) in
@@ -677,6 +741,14 @@ impl FileOpsTool {
 
         let mut output = self.paginate_and_format(ranked, selected_total, input, "largest", None);
         output["sorted_by"] = json!("size_desc");
+        
+        // Add overflow indication if we have more items than max_items
+        if has_overflow {
+            if let Some(obj) = output.as_object_mut() {
+                obj.insert("overflow".to_string(), json!(format!("[+{} more items]", total_entries - effective_max)));
+            }
+        }
+        
         let note = format!(
             "Results sorted by file size (descending). Showing top {} file(s).",
             output

@@ -339,7 +339,7 @@ async fn analyze_file(
 
 /// Extract dependencies from Cargo.toml
 fn extract_cargo_dependencies(analysis: &mut ProjectAnalysis, content: &str) {
-    let mut deps = Vec::new();
+    let mut deps = Vec::with_capacity(20); // Estimate for typical dependency count
 
     // Simple regex-like parsing for dependencies
     for line in content.lines() {
@@ -361,7 +361,7 @@ fn extract_cargo_dependencies(analysis: &mut ProjectAnalysis, content: &str) {
 
 /// Extract dependencies from package.json
 fn extract_package_dependencies(analysis: &mut ProjectAnalysis, content: &str) {
-    let mut deps = Vec::new();
+    let mut deps = Vec::with_capacity(15); // Estimate for typical script count
 
     // Simple parsing for dependencies
     if content.contains("\"dependencies\":") {
@@ -520,7 +520,7 @@ fn generate_agents_md(analysis: &ProjectAnalysis) -> Result<String> {
 }
 
 fn build_quick_start_section(analysis: &ProjectAnalysis) -> String {
-    let mut lines = Vec::new();
+    let mut lines = Vec::with_capacity(10); // Estimate based on typical build systems
     let systems = unique_preserving_order(&analysis.build_systems);
 
     if systems.iter().any(|system| system == "Cargo") {
@@ -580,7 +580,7 @@ fn build_quick_start_section(analysis: &ProjectAnalysis) -> String {
 }
 
 fn build_architecture_section(analysis: &ProjectAnalysis) -> String {
-    let mut lines = Vec::new();
+    let mut lines = Vec::with_capacity(8); // Estimate based on typical sections
 
     if !analysis.project_name.trim().is_empty() {
         lines.push(format!("Repository: {}.", analysis.project_name));

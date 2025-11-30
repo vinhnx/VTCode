@@ -367,10 +367,12 @@ impl WebFetchTool {
 
         // Truncate preview for UI; keep full content available for reasoning.
         let preview_limit = 8000;
-        let (preview, truncated) = if content_length > preview_limit {
-            (format!("{}...", &content[..preview_limit]), true)
+        let (preview, truncated, overflow_info) = if content_length > preview_limit {
+            let truncated_content = format!("{}...", &content[..preview_limit]);
+            let overflow = format!("[+{} more characters]", content_length - preview_limit);
+            (truncated_content, true, Some(overflow))
         } else {
-            (content.clone(), false)
+            (content.clone(), false, None)
         };
 
         // Canonical response shape:
@@ -378,7 +380,7 @@ impl WebFetchTool {
         // - `preview`: truncated snippet for display
         // - `prompt`: what the user/model wants to know
         // - `next_action_hint`: explicit instruction so the agent continues the loop correctly
-        Ok(json!({
+        let mut response = json!({
             "url": args.url,
             "prompt": args.prompt,
             "content": content,
@@ -386,7 +388,14 @@ impl WebFetchTool {
             "content_length": content_length,
             "truncated": truncated,
             "next_action_hint": "Analyze `content` using `prompt` and answer the user in natural language based on the fetched page."
-        }))
+        });
+
+        // Add overflow indicator if content was truncated
+        if let Some(overflow) = overflow_info {
+            response["overflow"] = json!(overflow);
+        }
+
+        Ok(response)
     }
 }
 

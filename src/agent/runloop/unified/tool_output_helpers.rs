@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use vtcode_core::config::loader::VTCodeConfig;
-use vtcode_core::core::decision_tracker::DecisionTracker;
+
 use vtcode_core::core::token_budget::TokenBudgetManager;
 use vtcode_core::tools::result_cache::ToolResultCache;
 use vtcode_core::utils::ansi::AnsiRenderer;
@@ -21,12 +21,15 @@ pub fn record_tool_usage_common(
 }
 
 /// Common logic for handling MCP tool events
-pub fn handle_mcp_event_common(
+pub async fn handle_mcp_event_common(
     mcp_panel_state: &mut McpPanelState,
     tool_name: &str,
     args_val: &serde_json::Value,
     output: Option<&serde_json::Value>,
     is_success: bool,
+    renderer: &mut AnsiRenderer,
+    vt_config: Option<&VTCodeConfig>,
+    token_budget: Option<&TokenBudgetManager>,
 ) -> Result<()> {
     let mut mcp_event = crate::agent::runloop::mcp_events::McpEvent::new(
         "mcp".to_string(),
@@ -37,14 +40,13 @@ pub fn handle_mcp_event_common(
     if is_success {
         mcp_event.success(None);
         if let Some(output_val) = output {
-            if let Ok(rendered) = crate::agent::runloop::tool_output::render_tool_output(
-                &format!("mcp_{}", tool_name),
-                args_val,
+            crate::agent::runloop::tool_output::render_tool_output(
+                renderer,
+                Some(&format!("mcp_{}", tool_name)),
                 output_val,
-                &[],
-            ) {
-                mcp_event.output = Some(rendered);
-            }
+                vt_config,
+                token_budget,
+            ).await?;
         }
     } else {
         let error_msg = output
@@ -54,14 +56,13 @@ pub fn handle_mcp_event_common(
         mcp_event.failure(Some(error_msg.to_string()));
         
         let error_json = serde_json::json!({ "error": error_msg });
-        if let Ok(rendered) = crate::agent::runloop::tool_output::render_tool_output(
-            &format!("mcp_{}", tool_name),
-            args_val,
+        crate::agent::runloop::tool_output::render_tool_output(
+            renderer,
+            Some(&format!("mcp_{}", tool_name)),
             &error_json,
-            &[],
-        ) {
-            mcp_event.output = Some(rendered);
-        }
+            vt_config,
+            token_budget,
+        ).await?;
     }
 
     mcp_panel_state.add_event(mcp_event);
@@ -76,9 +77,10 @@ pub async fn cache_tool_result_common(
     output: &serde_json::Value,
 ) -> Result<()> {
     if let Some(cache) = tool_result_cache {
-        if let Ok(mut cache_guard) = cache.write().await {
-            cache_guard.cache_result(name, args_val, output);
-        }
+        let mut cache_guard = cache.write().await;
+        let output_str = serde_json::to_string(output).unwrap_or_default();
+        let cache_key = vtcode_core::tools::result_cache::ToolCacheKey::from_json(name, args_val, "");
+        cache_guard.insert(cache_key, output_str);
     }
     Ok(())
 }
@@ -96,10 +98,9 @@ pub fn handle_modified_files_common(
         
         // Invalidate cache for modified files
         if let Some(cache) = tool_result_cache {
-            if let Ok(mut cache_guard) = cache.blocking_write() {
-                for file in modified_files {
-                    cache_guard.invalidate_for_path(file);
-                }
+            let mut cache_guard = cache.blocking_write();
+            for file in modified_files {
+                cache_guard.invalidate_for_path(file.to_str().unwrap_or(""));
             }
         }
     }
@@ -128,7 +129,7 @@ pub async fn record_token_usage_common(
         
         token_budget
             .record_max_tokens_usage(name, Some(applied_max_tokens as usize), &context)
-            .await?;
+            .await;
 
         // Also record to global token budget for CLI access
         if let Some(global_token_budget) =
@@ -136,7 +137,7 @@ pub async fn record_token_usage_common(
         {
             global_token_budget
                 .record_max_tokens_usage(name, Some(applied_max_tokens as usize), &context)
-                .await?;
+                .await;
         }
     }
     Ok(())
@@ -151,7 +152,7 @@ pub fn check_write_effect_common(name: &str) -> bool {
 }
 
 /// Common logic for rendering tool output with error handling
-pub fn render_tool_output_common(
+pub async fn render_tool_output_common(
     renderer: &mut AnsiRenderer,
     name: &str,
     args_val: &serde_json::Value,
@@ -177,7 +178,7 @@ pub fn render_tool_output_common(
         output,
         vt_config,
         Some(token_budget),
-    )
+    ).await
 }
 
 /// Common logic for rendering error messages

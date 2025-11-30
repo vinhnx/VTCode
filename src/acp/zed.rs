@@ -139,7 +139,7 @@ struct PlanProgress {
 
 impl PlanProgress {
     fn new(include_context_step: bool) -> Self {
-        let mut entries = Vec::new();
+        let mut entries = Vec::with_capacity(3); // Pre-allocate for typical plan entries (analyze, gather, respond)
 
         let analyze_index = entries.len();
         entries.push(acp::PlanEntry {
@@ -410,19 +410,19 @@ impl ZedAgent {
             .await
             .into_iter()
             .collect();
-        let mut local_definitions =
-            build_function_declarations_for_level(CapabilityLevel::CodeSearch)
-                .into_iter()
-                .filter(|decl| decl.name != tools::READ_FILE && decl.name != tools::LIST_FILES)
-                .filter(|decl| available_local_tools.contains(decl.name.as_str()))
-                .map(|decl| {
-                    ToolDefinition::function(
-                        decl.name.clone(),
-                        decl.description.clone(),
-                        decl.parameters.clone(),
-                    )
-                })
-                .collect::<Vec<_>>();
+        let decls = build_function_declarations_for_level(CapabilityLevel::CodeSearch);
+        let mut local_definitions = Vec::with_capacity(decls.len()); // Pre-allocate capacity
+        
+        for decl in decls {
+            if decl.name != tools::READ_FILE && decl.name != tools::LIST_FILES 
+                && available_local_tools.contains(decl.name.as_str()) {
+                local_definitions.push(ToolDefinition::function(
+                    decl.name.clone(),
+                    decl.description.clone(),
+                    decl.parameters.clone(),
+                ));
+            }
+        }
 
         if available_local_tools.contains(tools::RUN_PTY_CMD)
             && let Some(run_decl) = build_function_declarations()
@@ -453,7 +453,7 @@ impl ZedAgent {
         Self {
             config,
             system_prompt,
-            sessions: Rc::new(RefCell::new(HashMap::new())),
+            sessions: Rc::new(RefCell::new(HashMap::with_capacity(10))), // Pre-allocate for typical session count
             next_session_id: Cell::new(0),
             session_update_tx,
             acp_tool_registry,
@@ -470,7 +470,7 @@ impl ZedAgent {
         let session_id = acp::SessionId(Arc::from(format!("{SESSION_PREFIX}-{raw_id}")));
         let handle = SessionHandle {
             data: Rc::new(RefCell::new(SessionData {
-                messages: Vec::new(),
+                messages: Vec::with_capacity(20), // Pre-allocate for typical message count
                 tool_notice_sent: false,
             })),
             cancel_flag: Rc::new(Cell::new(false)),
@@ -498,7 +498,7 @@ impl ZedAgent {
     }
 
     fn resolved_messages(&self, session: &SessionHandle) -> Vec<Message> {
-        let mut messages = Vec::new();
+        let mut messages = Vec::with_capacity(10); // Pre-allocate for typical message count
         if !self.system_prompt.trim().is_empty() {
             messages.push(Message::system(self.system_prompt.clone()));
         }
@@ -649,7 +649,7 @@ impl ZedAgent {
 
         // Support dotted `command.N` arguments commonly produced by some tool call formats
         if let Value::Object(map) = args {
-            let mut items: Vec<(usize, String)> = Vec::new();
+            let mut items: Vec<(usize, String)> = Vec::with_capacity(10); // Pre-allocate for typical command parts
             for (key, value) in map.iter() {
                 if let Some(index_str) = key.strip_prefix("command.")
                     && let Ok(index) = index_str.parse::<usize>()
@@ -906,7 +906,7 @@ impl ZedAgent {
         calls: &[ProviderToolCall],
     ) -> Result<Vec<ToolCallResult>, acp::Error> {
         if calls.is_empty() {
-            return Ok(Vec::new());
+            return Ok(Vec::with_capacity(0)); // Use with_capacity(0) instead of Vec::new()
         }
 
         let Some(client) = self.client() else {
@@ -924,7 +924,7 @@ impl ZedAgent {
                 .collect());
         };
 
-        let mut results = Vec::new();
+        let mut results = Vec::with_capacity(calls.len()); // Pre-allocate for all tool call results
 
         for call in calls {
             let func_ref = call
@@ -955,8 +955,8 @@ impl ZedAgent {
                     .map(|descriptor| descriptor.kind())
                     .unwrap_or(acp::ToolKind::Other),
                 status: acp::ToolCallStatus::Pending,
-                content: Vec::new(),
-                locations: Vec::new(),
+                content: Vec::with_capacity(1), // Pre-allocate for typical content
+                locations: Vec::with_capacity(1), // Pre-allocate for typical locations
                 raw_input: args_value_for_input.clone(),
                 raw_output: None,
                 meta: None,
@@ -1135,7 +1135,7 @@ impl ZedAgent {
             session_id: session_id.clone(),
             command: program.to_string(),
             args: rest.to_vec(),
-            env: Vec::new(),
+            env: Vec::with_capacity(5), // Pre-allocate for typical environment variables
             cwd: working_dir.clone(),
             output_byte_limit: None,
             meta: None,
@@ -1147,7 +1147,7 @@ impl ZedAgent {
             .map_err(|error| format!("Failed to create terminal: {error}"))?;
         let terminal_id = response.terminal_id;
 
-        let mut content = Vec::new();
+        let mut content = Vec::with_capacity(5); // Pre-allocate for typical content sections
         let summary = match location_display.as_deref() {
             Some(".") | None => format!("Started terminal command: {command_display}"),
             Some(location) => {
@@ -1170,7 +1170,7 @@ impl ZedAgent {
             }
         });
 
-        Ok(ToolExecutionReport::success(content, Vec::new(), payload))
+        Ok(ToolExecutionReport::success(content, Vec::with_capacity(0), payload)) // Use with_capacity(0)
     }
 
     async fn execute_acp_tool(
@@ -1232,7 +1232,7 @@ impl ZedAgent {
                     TOOL_RESPONSE_KEY_TOOL: tool_name,
                     "result": output.clone(),
                 });
-                ToolExecutionReport::success(content, Vec::new(), payload)
+                ToolExecutionReport::success(content, Vec::with_capacity(0), payload) // Use with_capacity(0)
             }
             Err(error) => {
                 warn!(%error, tool = tool_name, "Failed to execute local tool");
@@ -1247,7 +1247,7 @@ impl ZedAgent {
         tool_name: &str,
         output: &Value,
     ) -> Vec<acp::ToolCallContent> {
-        let mut sections = Vec::new();
+        let mut sections = Vec::with_capacity(10); // Pre-allocate for typical sections
 
         if let Some(stdout) = output
             .get("stdout")
@@ -1431,7 +1431,7 @@ impl ZedAgent {
     }
 
     fn list_files_content(output: &Value) -> Vec<acp::ToolCallContent> {
-        let mut lines = Vec::new();
+        let mut lines = Vec::with_capacity(100); // Pre-allocate for typical line count
 
         if let (Some(count), Some(total)) = (
             output.get("count").and_then(Value::as_u64),
@@ -1499,7 +1499,7 @@ impl ZedAgent {
             .get(TOOL_LIST_FILES_ITEMS_KEY)
             .and_then(Value::as_array)
         else {
-            return Vec::new();
+            return Vec::with_capacity(0); // Use with_capacity(0) instead of Vec::new()
         };
 
         items
@@ -1822,8 +1822,8 @@ impl acp::Agent for ZedAgent {
         let provider_supports_tools = provider.supports_tools(&self.config.model);
         let availability =
             self.tool_availability(provider_supports_tools, client_supports_read_text_file);
-        let mut enabled_tools = Vec::new();
-        let mut disabled_tools = Vec::new();
+        let mut enabled_tools = Vec::with_capacity(5); // Pre-allocate for typical tool count
+        let mut disabled_tools = Vec::with_capacity(5); // Pre-allocate for typical tool count
         for (tool, runtime) in availability {
             match runtime {
                 ToolRuntime::Enabled => enabled_tools.push(tool),

@@ -24,6 +24,7 @@ mod status_line;
 mod tool_ledger;
 mod tool_output_handler;
 mod tool_output_handler_unified;
+mod tool_output_helpers;
 mod tool_pipeline;
 mod tool_routing;
 mod tool_summary;

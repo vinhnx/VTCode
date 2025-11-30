@@ -24,6 +24,7 @@ use async_trait::async_trait;
 use reqwest::Client as HttpClient;
 use serde_json::{Map, Value, json};
 use std::collections::HashMap;
+use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing;
 use vtcode_config::types::ReasoningEffortLevel;
@@ -32,10 +33,10 @@ use super::common::{extract_prompt_cache_settings, override_base_url, resolve_mo
 use super::error_handling::{format_network_error, format_parse_error, is_rate_limit_error};
 
 pub struct GeminiProvider {
-    api_key: String,
+    api_key: Arc<str>,
     http_client: HttpClient,
-    base_url: String,
-    model: String,
+    base_url: Arc<str>,
+    model: Arc<str>,
     prompt_cache_enabled: bool,
     prompt_cache_settings: GeminiPromptCacheSettings,
     timeouts: TimeoutsConfig,
@@ -66,10 +67,10 @@ impl GeminiProvider {
         prompt_cache_settings: GeminiPromptCacheSettings,
     ) -> Self {
         Self {
-            api_key,
+            api_key: Arc::from(api_key.as_str()),
             http_client,
-            base_url,
-            model,
+            base_url: Arc::from(base_url.as_str()),
+            model: Arc::from(model.as_str()),
             prompt_cache_enabled,
             prompt_cache_settings,
             timeouts,
@@ -114,14 +115,14 @@ impl GeminiProvider {
         );
 
         Self {
-            api_key,
+            api_key: Arc::from(api_key.as_str()),
             http_client: HttpClient::new(),
-            base_url: override_base_url(
+            base_url: Arc::from(override_base_url(
                 urls::GEMINI_API_BASE,
                 base_url,
                 Some(env_vars::GEMINI_BASE_URL),
-            ),
-            model,
+            ).as_str()),
+            model: Arc::from(model.as_str()),
             prompt_cache_enabled,
             prompt_cache_settings,
             timeouts,
@@ -1003,7 +1004,7 @@ impl LLMClient for GeminiProvider {
                         messages,
                         system_prompt,
                         tools,
-                        model: self.model.clone(),
+                        model: self.model.to_string(),
                         max_tokens: gemini_request
                             .generation_config
                             .as_ref()
@@ -1054,7 +1055,7 @@ impl LLMClient for GeminiProvider {
 
                     return Ok(llm_types::LLMResponse {
                         content,
-                        model: self.model.clone(),
+                        model: self.model.to_string(),
                         usage: response.usage.map(|u| llm_types::Usage {
                             prompt_tokens: u.prompt_tokens as usize,
                             completion_tokens: u.completion_tokens as usize,
@@ -1080,7 +1081,7 @@ impl LLMClient for GeminiProvider {
                         }],
                         system_prompt: None,
                         tools: None,
-                        model: self.model.clone(),
+                        model: self.model.to_string(),
                         max_tokens: None,
                         temperature: None,
                         stream: false,
@@ -1107,7 +1108,7 @@ impl LLMClient for GeminiProvider {
                 }],
                 system_prompt: None,
                 tools: None,
-                model: self.model.clone(),
+                model: self.model.to_string(),
                 max_tokens: None,
                 temperature: None,
                 stream: false,
@@ -1124,7 +1125,7 @@ impl LLMClient for GeminiProvider {
 
         Ok(llm_types::LLMResponse {
             content: response.content.unwrap_or_default(),
-            model: self.model.clone(),
+            model: self.model.to_string(),
             usage: response.usage.map(|u| llm_types::Usage {
                 prompt_tokens: u.prompt_tokens as usize,
                 completion_tokens: u.completion_tokens as usize,

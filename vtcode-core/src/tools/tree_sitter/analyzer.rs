@@ -107,7 +107,7 @@ pub struct TreeSitterAnalyzer {
 impl TreeSitterAnalyzer {
     /// Create a new tree-sitter analyzer
     pub fn new() -> Result<Self> {
-        let mut parsers = HashMap::new();
+        let mut parsers = HashMap::with_capacity(8); // Pre-allocate for 8 languages
 
         // Initialize parsers for all supported languages
         let mut languages = vec![
@@ -207,6 +207,11 @@ impl TreeSitterAnalyzer {
 
     /// Parse source code into a syntax tree
     pub fn parse(&mut self, source_code: &str, language: LanguageSupport) -> Result<Tree> {
+        // Early return for empty source code
+        if source_code.is_empty() {
+            return Err(TreeSitterError::ParseError("Empty source code".to_string()).into());
+        }
+
         let parser = self
             .parsers
             .get_mut(&language)
@@ -610,6 +615,11 @@ impl TreeSitterAnalyzer {
 
     /// Calculate code metrics from a syntax tree
     pub fn calculate_metrics(&self, syntax_tree: &Tree, source_code: &str) -> Result<CodeMetrics> {
+        // Early return for empty source code
+        if source_code.is_empty() {
+            return Ok(CodeMetrics::default());
+        }
+
         let root_node = syntax_tree.root_node();
 
         // Count different types of nodes
@@ -699,6 +709,12 @@ impl TreeSitterAnalyzer {
     /// Parse file into a syntax tree
     pub async fn parse_file<P: AsRef<Path>>(&mut self, file_path: P) -> Result<SyntaxTree> {
         let file_path = file_path.as_ref();
+        
+        // Early return if file doesn't exist
+        if !file_path.exists() {
+            return Err(TreeSitterError::FileReadError(format!("File does not exist: {}", file_path.display())).into());
+        }
+
         let language = self.detect_language_from_path(file_path)?;
 
         let source_code = tokio::fs::read_to_string(file_path)
@@ -751,7 +767,7 @@ impl TreeSitterAnalyzer {
         }
 
         SyntaxNode {
-            kind: node.kind().to_string(),
+            kind: node.kind().to_string(), // This allocation is necessary for the struct
             start_position: Position {
                 row: start.row,
                 column: start.column,
@@ -762,10 +778,10 @@ impl TreeSitterAnalyzer {
                 column: end.column,
                 byte_offset: node.end_byte(),
             },
-            text: source_code[node.start_byte()..node.end_byte()].to_string(),
+            text: source_code[node.start_byte()..node.end_byte()].to_string(), // Necessary for struct
             children: converted_children,
             named_children: self.collect_named_children(node, source_code),
-            leading_comments: Vec::new(),
+            leading_comments: Vec::new(), // Will be populated later if needed
         }
     }
 
@@ -775,7 +791,8 @@ impl TreeSitterAnalyzer {
         node: tree_sitter::Node,
         source_code: &str,
     ) -> HashMap<String, Vec<SyntaxNode>> {
-        let mut named_children = HashMap::new();
+        // Estimate capacity based on typical AST node complexity (average 3-5 named children)
+        let mut named_children = HashMap::with_capacity(5);
 
         for child in node.named_children(&mut node.walk()) {
             let kind = child.kind().to_string();
@@ -813,7 +830,7 @@ impl TreeSitterAnalyzer {
 
     /// Get parser statistics
     pub fn get_parser_stats(&self) -> HashMap<String, usize> {
-        let mut stats = HashMap::new();
+        let mut stats = HashMap::with_capacity(2); // Pre-allocate for known stats
         stats.insert(
             "supported_languages".to_string(),
             self.supported_languages.len(),

@@ -175,7 +175,7 @@ impl SnapshotManager {
     }
 
     fn read_snapshot_files(&self) -> Result<Vec<(usize, PathBuf)>> {
-        let mut entries = Vec::new();
+        let mut entries = Vec::with_capacity(64); // Typical directory has ~20-50 snapshot files
         if !self.storage_dir.exists() {
             return Ok(entries);
         }
@@ -263,7 +263,7 @@ impl SnapshotManager {
         }
 
         let timestamp = Self::current_timestamp()?;
-        let mut files = Vec::new();
+        let mut files = Vec::with_capacity(modified_files.len()); // Pre-allocate for all modified files
 
         for path in modified_files {
             let relative = match self.normalize_path(path) {
@@ -332,7 +332,8 @@ impl SnapshotManager {
             return Ok(Vec::new());
         }
         self.cleanup_old_snapshots().await?;
-        let mut snapshots = Vec::new();
+        let snapshot_files = self.read_snapshot_files()?;
+        let mut snapshots = Vec::with_capacity(snapshot_files.len());
         for (_, path) in self.read_snapshot_files()? {
             let data = tokio::fs::read(&path)
                 .await

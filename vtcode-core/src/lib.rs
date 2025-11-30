@@ -125,6 +125,7 @@
 pub mod acp;
 pub mod audit;
 pub mod bash_runner;
+pub mod cache; // Unified caching system
 pub mod cli;
 pub mod code;
 pub mod commands;
@@ -197,6 +198,18 @@ pub use tools::{
     ToolRegistration, ToolRegistry, build_function_declarations,
     build_function_declarations_for_level, build_function_declarations_with_mode,
 };
+
+/// Macro for consistent error context formatting to reduce code duplication
+/// Replaces repetitive `.with_context(|| format!("Failed to {} {}", operation, path.display()))?` patterns
+#[macro_export]
+macro_rules! error_context {
+    ($operation:expr, $target:expr) => {
+        anyhow::Context::with_context(|| format!("Failed to {} {}", $operation, $target))
+    };
+    ($operation:expr, $target:expr, $details:expr) => {
+        anyhow::Context::with_context(|| format!("Failed to {} {}: {}", $operation, $target, $details))
+    };
+}
 pub use ui::diff_renderer::DiffRenderer;
 pub use utils::dot_config::{
     CacheConfig, DotConfig, DotManager, ProviderConfigs, UiConfig, UserPreferences,

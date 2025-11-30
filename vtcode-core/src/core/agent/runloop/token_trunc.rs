@@ -219,11 +219,13 @@ mod tests {
     async fn test_aggregate_tool_output_honors_max_tokens_and_preserves_tail() {
         let mgr = TokenBudgetManager::default();
         let mut output = serde_json::json!({});
-        // Build a large stdout-like content with start/middle/end
-        let mut buf = String::new();
+        // Build a large stdout-like content with start/middle/end - optimized version
+        let mut buf = String::with_capacity(2000); // Pre-allocate for ~100 lines
         buf.push_str("START_LINE\n");
         for i in 0..100 {
-            buf.push_str(&format!("MIDDLE {}\n", i));
+            // Use write! macro for better performance with repeated formatting
+            use std::fmt::Write;
+            let _ = write!(buf, "MIDDLE {}\n", i);
         }
         buf.push_str("END_LINE\n");
         output["stdout"] = serde_json::json!(buf);

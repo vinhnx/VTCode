@@ -84,7 +84,7 @@ pub struct RefactoringEngine {
 impl RefactoringEngine {
     pub fn new() -> Self {
         Self {
-            analysis_cache: HashMap::new(),
+            analysis_cache: HashMap::with_capacity(100), // Pre-allocate for cache
         }
     }
 
@@ -455,7 +455,7 @@ impl RefactoringUtils {
         suggestions: &mut Vec<VariableExtractionSuggestion>,
     ) {
         use std::collections::HashMap;
-        let mut expr_map: HashMap<String, (usize, Position)> = HashMap::new();
+        let mut expr_map: HashMap<String, (usize, Position)> = HashMap::with_capacity(50); // Pre-allocate for typical expression count
 
         fn traverse(node: &SyntaxNode, map: &mut HashMap<String, (usize, Position)>) {
             if node.kind.contains("expression") {

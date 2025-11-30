@@ -1,7 +1,7 @@
 use crate::agent::runloop::mcp_events::McpPanelState;
 use crate::agent::runloop::unified::state::SessionStats;
 use crate::agent::runloop::unified::tool_output_helpers::{
-    check_write_effect_common, handle_modified_files_common, record_token_usage_common,
+    check_write_effect_common, record_token_usage_common,
     render_error_common, render_tool_output_common,
 };
 use anyhow::Result;
@@ -16,10 +16,8 @@ use vtcode_core::tools::result_cache::ToolResultCache;
 use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_core::utils::ansi::MessageStyle;
 
-use crate::agent::runloop::tool_output::render_tool_output;
 use crate::agent::runloop::unified::run_loop_context::RunLoopContext;
 use crate::agent::runloop::unified::tool_pipeline::{ToolExecutionStatus, ToolPipelineOutcome};
-use crate::agent::runloop::unified::tool_summary::render_tool_call_summary_with_status;
 
 pub(crate) async fn handle_pipeline_output(
     ctx: &mut RunLoopContext<'_>,
@@ -62,7 +60,7 @@ pub(crate) async fn handle_pipeline_output(
                     *command_success,
                     vt_config,
                     token_budget,
-                )?;
+                ).await?;
             }
 
             // Record token usage
@@ -92,7 +90,7 @@ pub(crate) async fn handle_pipeline_output(
             render_error_common(ctx.renderer, name, &error.to_string(), "failure")?;
         }
         ToolExecutionStatus::Timeout { error } => {
-            render_error_common(ctx.renderer, name, &error.to_string(), "timed out")?;
+            render_error_common(ctx.renderer, name, &error.message, "timed out")?;
         }
         ToolExecutionStatus::Cancelled => {
             ctx.renderer

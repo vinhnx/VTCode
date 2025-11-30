@@ -436,6 +436,11 @@ impl CodeAnalyzer {
 
     /// Calculate code complexity metrics
     fn calculate_complexity(&self, tree: &SyntaxTree, symbols: &[SymbolInfo]) -> ComplexityMetrics {
+        // Early return for empty symbols
+        if symbols.is_empty() {
+            return ComplexityMetrics::default();
+        }
+
         let mut cyclomatic_complexity = 1; // Base complexity
         let mut cognitive_complexity = 0;
         let mut max_nesting_depth = 0;
@@ -545,7 +550,7 @@ impl CodeAnalyzer {
         let mut modules = Vec::new();
         let mut functions = Vec::new();
         let mut classes = Vec::new();
-        let mut hierarchy = HashMap::new();
+        let mut hierarchy = HashMap::with_capacity(10); // Pre-allocate for typical hierarchy size
 
         for symbol in symbols {
             match &symbol.kind {
@@ -607,7 +612,7 @@ impl AnalysisUtils {
             count
         }
 
-        let mut node_counts = std::collections::HashMap::new();
+        let mut node_counts = std::collections::HashMap::with_capacity(20); // Pre-allocate for typical node type count
         let total_nodes = traverse_node(&tree.root, &mut node_counts);
 
         // Count how many patterns appear more than once
