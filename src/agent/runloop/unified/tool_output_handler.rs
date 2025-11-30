@@ -1,8 +1,8 @@
 use crate::agent::runloop::mcp_events::McpPanelState;
 use crate::agent::runloop::unified::state::SessionStats;
 use crate::agent::runloop::unified::tool_output_helpers::{
-    check_write_effect_common, record_token_usage_common,
-    render_error_common, render_tool_output_common,
+    check_write_effect_common, record_token_usage_common, render_error_common,
+    render_tool_output_common,
 };
 use anyhow::Result;
 use std::path::PathBuf;
@@ -60,7 +60,8 @@ pub(crate) async fn handle_pipeline_output(
                     *command_success,
                     vt_config,
                     token_budget,
-                ).await?;
+                )
+                .await?;
             }
 
             // Record token usage

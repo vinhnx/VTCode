@@ -83,7 +83,7 @@ impl ToolRegistry {
 
             // Cache workspace root string to avoid repeated allocations
             let workspace_root = self.workspace_root().to_string_lossy();
-            
+
             // Initialize comprehensive error report with pre-allocated vectors
             let mut error_report = serde_json::json!({
                 "timestamp": Utc::now().to_rfc3339(),
@@ -231,7 +231,9 @@ impl ToolRegistry {
                 }) {
                     suggestions.extend_from_slice(&[
                         String::from("Git errors: Check repository status and Git configuration"),
-                        String::from("Run 'run_pty_cmd' with 'git status' to diagnose repository issues"),
+                        String::from(
+                            "Run 'run_pty_cmd' with 'git status' to diagnose repository issues",
+                        ),
                     ]);
                 }
 
@@ -266,9 +268,13 @@ impl ToolRegistry {
                 }
 
                 // Add a general recommendation to use the enhanced get_errors
-                suggestions.push(String::from("For more detailed diagnostics, run 'get_errors' with detailed=true parameter"));
+                suggestions.push(String::from(
+                    "For more detailed diagnostics, run 'get_errors' with detailed=true parameter",
+                ));
             } else {
-                suggestions.push(String::from("No obvious errors discovered in recent sessions"));
+                suggestions.push(String::from(
+                    "No obvious errors discovered in recent sessions",
+                ));
                 if parsed.detailed {
                     suggestions.extend_from_slice(&[
                         String::from("Run 'debug_agent' or 'analyze_agent' for proactive system checks"),
@@ -936,7 +942,7 @@ impl ToolRegistry {
             const MAX_OUTPUT_CHARS: usize = 4000; // Reasonable limit for context windows
             let stdout_chars = result.stdout.chars().count();
             let stderr_chars = result.stderr.chars().count();
-            
+
             let (stdout_output, stdout_overflow) = if stdout_chars > MAX_OUTPUT_CHARS {
                 let truncated: String = result.stdout.chars().take(MAX_OUTPUT_CHARS).collect();
                 let overflow = format!("[+{} more characters]", stdout_chars - MAX_OUTPUT_CHARS);
@@ -944,7 +950,7 @@ impl ToolRegistry {
             } else {
                 (result.stdout, None)
             };
-            
+
             let (stderr_output, stderr_overflow) = if stderr_chars > MAX_OUTPUT_CHARS {
                 let truncated: String = result.stderr.chars().take(MAX_OUTPUT_CHARS).collect();
                 let overflow = format!("[+{} more characters]", stderr_chars - MAX_OUTPUT_CHARS);

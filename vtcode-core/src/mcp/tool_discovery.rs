@@ -94,6 +94,8 @@ impl ToolDiscovery {
     /// This implements progressive disclosure: agents can search with
     /// low detail to find relevant tools, then request full schemas
     /// only for tools they intend to use.
+    ///
+    /// Follows AGENTS.md guidelines: limits results to 5 items with overflow indication.
     pub async fn search_tools(
         &self,
         keyword: &str,
@@ -140,12 +142,26 @@ impl ToolDiscovery {
                 .unwrap_or(Ordering::Equal)
         });
 
-        info!(
-            keyword = keyword,
-            matched = results.len(),
-            detail_level = detail_level.as_str(),
-            "Tool search completed"
-        );
+        // Apply AGENTS.md compliance: limit to 5 results with overflow indication
+        let total_results = results.len();
+        if total_results > 5 {
+            info!(
+                keyword = keyword,
+                matched = total_results,
+                displayed = 5,
+                overflow = total_results - 5,
+                detail_level = detail_level.as_str(),
+                "Tool search completed with overflow"
+            );
+            results.truncate(5);
+        } else {
+            info!(
+                keyword = keyword,
+                matched = total_results,
+                detail_level = detail_level.as_str(),
+                "Tool search completed"
+            );
+        }
 
         Ok(results)
     }

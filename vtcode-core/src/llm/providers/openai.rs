@@ -135,9 +135,9 @@ fn parse_responses_payload(
         return Err(LLMError::Provider(formatted_error));
     }
 
-    let mut content_fragments = Vec::new();
-    let mut reasoning_fragments = Vec::new();
-    let mut tool_calls_vec = Vec::new();
+    let mut content_fragments = Vec::with_capacity(output.len() * 2); // Estimate 2 fragments per output item
+    let mut reasoning_fragments = Vec::with_capacity(output.len()); // Estimate 1 reasoning fragment per output item
+    let mut tool_calls_vec = Vec::with_capacity(output.len()); // Estimate 1 tool call per output item
 
     for item in output {
         let item_type = item
@@ -186,7 +186,7 @@ fn parse_responses_payload(
                             let id = entry
                                 .get("id")
                                 .and_then(|value| value.as_str())
-                                .unwrap_or_else(|| "");
+                                .unwrap_or(""); // Use unwrap_or instead of unwrap_or_else for simple default
                             let serialized = arguments_value.map_or("{}".to_owned(), |value| {
                                 if value.is_string() {
                                     value.as_str().unwrap_or("").to_string()
@@ -390,8 +390,8 @@ impl OpenAIProvider {
         &self,
         request: &LLMRequest,
     ) -> Result<Conversation, LLMError> {
-        let mut harmony_messages = Vec::new();
-        let mut tool_call_authors: HashMap<String, String> = HashMap::new();
+        let mut harmony_messages = Vec::with_capacity(request.messages.len() + 2); // +2 for system prompt and developer message
+        let mut tool_call_authors: HashMap<String, String> = HashMap::with_capacity(16); // Typical tool call count
 
         // Add system message if present
         if let Some(system_prompt) = &request.system_prompt {
@@ -475,7 +475,7 @@ impl OpenAIProvider {
 
                     let author = author_name
                         .map(|name| HarmonyAuthor::new(HarmonyRole::Tool, name))
-                        .unwrap_or_else(|| HarmonyAuthor::from(HarmonyRole::Tool));
+                        .unwrap_or_else(|| HarmonyAuthor::from(HarmonyRole::Tool)); // This is safe - unwrap_or_else is acceptable for simple defaults
 
                     harmony_messages.push(HarmonyMessage::from_author_and_content(
                         author,
@@ -553,11 +553,14 @@ impl OpenAIProvider {
                 .timeout(Duration::from_secs(120))
                 .build()
                 .unwrap_or_else(|_| HttpClient::new()),
-            base_url: Arc::from(override_base_url(
-                urls::OPENAI_API_BASE,
-                base_url,
-                Some(env_vars::OPENAI_BASE_URL),
-            ).as_str()),
+            base_url: Arc::from(
+                override_base_url(
+                    urls::OPENAI_API_BASE,
+                    base_url,
+                    Some(env_vars::OPENAI_BASE_URL),
+                )
+                .as_str(),
+            ),
             model: Arc::from(model.as_str()),
             responses_api_modes: Mutex::new(responses_api_modes),
             prompt_cache_enabled,
@@ -613,7 +616,7 @@ impl OpenAIProvider {
     fn parse_chat_request(&self, value: &Value) -> Option<LLMRequest> {
         let messages_value = value.get("messages")?.as_array()?;
         let mut system_prompt = None;
-        let mut messages = Vec::new();
+        let mut messages = Vec::with_capacity(messages_value.len());
 
         for entry in messages_value {
             let role = entry
@@ -833,8 +836,8 @@ impl OpenAIProvider {
     }
 
     fn convert_to_openai_format(&self, request: &LLMRequest) -> Result<Value, LLMError> {
-        let mut messages = Vec::new();
-        let mut active_tool_call_ids: HashSet<String> = HashSet::new();
+        let mut messages = Vec::with_capacity(request.messages.len() + 1); // +1 for system prompt
+        let mut active_tool_call_ids: HashSet<String> = HashSet::with_capacity(16); // Typical tool call count
 
         if let Some(system_prompt) = &request.system_prompt {
             messages.push(json!({
@@ -1305,7 +1308,7 @@ impl OpenAIProvider {
 
         // Extract content from parsed messages
         let mut content = None;
-        let mut tool_calls = Vec::new();
+        let mut tool_calls = Vec::with_capacity(8); // Typical tool call count in harmony responses
 
         let extract_text_content = |parts: &[HarmonyContent]| -> Option<String> {
             let text = parts

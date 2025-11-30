@@ -4,7 +4,9 @@
 //! code duplication across provider implementations while maintaining the Arc<str> optimization.
 
 use crate::config::core::{PromptCachingConfig, ProviderPromptCachingConfig};
-use crate::llm::providers::common::{extract_prompt_cache_settings, override_base_url, resolve_model};
+use crate::llm::providers::common::{
+    extract_prompt_cache_settings, override_base_url, resolve_model,
+};
 use std::sync::Arc;
 
 /// Common configuration that all providers need
@@ -41,13 +43,10 @@ where
 {
     let api_key_value = api_key.unwrap_or_default();
     let model_value = resolve_model(model, default_model);
-    let base_url_value = override_base_url(
-        default_base_url,
-        base_url,
-        env_var_base_url,
-    );
-    
-    let (prompt_cache_enabled, prompt_cache_settings) = if let Some(ref prompt_cache) = prompt_cache {
+    let base_url_value = override_base_url(default_base_url, base_url, env_var_base_url);
+
+    let (prompt_cache_enabled, prompt_cache_settings) = if let Some(ref prompt_cache) = prompt_cache
+    {
         extract_prompt_cache_settings(
             Some(prompt_cache.clone()),
             |providers| cache_extractor(providers),
@@ -62,7 +61,8 @@ where
         model: Arc::from(model_value.as_str()),
         base_url: Arc::from(base_url_value.as_str()),
         prompt_cache_enabled,
-        prompt_cache_settings: serde_json::to_value(prompt_cache_settings).unwrap_or(serde_json::Value::Null),
+        prompt_cache_settings: serde_json::to_value(prompt_cache_settings)
+            .unwrap_or(serde_json::Value::Null),
     }
 }
 
@@ -94,7 +94,7 @@ macro_rules! impl_provider_constructors {
                 )
             }
         }
-        
+
         impl $provider {
             /// Create provider from configuration options
             pub fn from_config(

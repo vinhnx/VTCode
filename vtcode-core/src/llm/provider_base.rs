@@ -10,10 +10,8 @@ use reqwest::Client as HttpClient;
 use serde_json::Value;
 use std::time::Duration;
 
-use crate::llm::{
-    LLMError, LLMStreamEvent, provider::LLMRequest,
-};
 use crate::config::TimeoutsConfig;
+use crate::llm::{LLMError, LLMStreamEvent, provider::LLMRequest};
 
 /// Default timeout configurations
 pub const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
@@ -45,9 +43,10 @@ impl BaseProviderConfig {
         let api_key_value = api_key.unwrap_or_default();
         let model_value = model.unwrap_or_else(|| default_model.to_string());
         let base_url_value = Self::resolve_base_url(base_url, default_url, env_var)?;
-        
+
         let timeout_config = timeouts.unwrap_or_default();
-        let http_timeout = timeout_config.ceiling_duration(timeout_config.streaming_ceiling_seconds)
+        let http_timeout = timeout_config
+            .ceiling_duration(timeout_config.streaming_ceiling_seconds)
             .unwrap_or(DEFAULT_REQUEST_TIMEOUT);
         let http_client = HttpClient::builder()
             .timeout(http_timeout)
@@ -61,7 +60,8 @@ impl BaseProviderConfig {
             http_client,
             prompt_cache_enabled: false,
             request_timeout: http_timeout,
-            stream_timeout: timeout_config.ceiling_duration(timeout_config.streaming_ceiling_seconds)
+            stream_timeout: timeout_config
+                .ceiling_duration(timeout_config.streaming_ceiling_seconds)
                 .unwrap_or(DEFAULT_STREAM_TIMEOUT),
         })
     }
@@ -95,7 +95,7 @@ impl BaseProviderConfig {
 pub trait OpenAICompatibleProvider: Send + Sync {
     fn provider_name(&self) -> &'static str;
     fn supports_prompt_caching(&self) -> bool;
-    
+
     /// Parse request from OpenAI format
     fn parse_openai_request(&self, value: &Value, default_model: &str) -> Option<LLMRequest> {
         crate::llm::utils::parse_chat_request_openai_format(value, default_model)
@@ -128,7 +128,9 @@ pub struct ErrorHandler {
 
 impl ErrorHandler {
     pub fn new(provider_name: &'static str) -> Self {
-        Self { _provider_name: provider_name }
+        Self {
+            _provider_name: provider_name,
+        }
     }
 
     /// Handle HTTP errors consistently across providers
@@ -143,10 +145,8 @@ impl ErrorHandler {
             _ => format!("HTTP {}: {}", status, error_text.trim()),
         };
 
-        let formatted_error = crate::llm::error_display::format_llm_error(
-            self._provider_name,
-            &error_message,
-        );
+        let formatted_error =
+            crate::llm::error_display::format_llm_error(self._provider_name, &error_message);
 
         // Handle different error types based on status code
         if status == StatusCode::UNAUTHORIZED {
@@ -203,7 +203,7 @@ impl StreamProcessor {
     /// Process SSE stream chunk consistently
     pub fn process_stream_chunk(&self, chunk: &str) -> Vec<LLMStreamEvent> {
         let mut events = Vec::new();
-        
+
         for line in chunk.lines() {
             let line = line.trim();
             if line.is_empty() {
@@ -272,12 +272,8 @@ impl AuthHandler {
     pub fn apply_auth(&self, builder: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
         match self.auth_type {
             AuthType::BearerToken => builder.bearer_auth(&self.api_key),
-            AuthType::ApiKeyHeader(header_name) => {
-                builder.header(header_name, &self.api_key)
-            }
-            AuthType::QueryParam(param_name) => {
-                builder.query(&[(param_name, &self.api_key)])
-            }
+            AuthType::ApiKeyHeader(header_name) => builder.header(header_name, &self.api_key),
+            AuthType::QueryParam(param_name) => builder.query(&[(param_name, &self.api_key)]),
         }
     }
 }
@@ -321,15 +317,18 @@ impl RequestProcessor {
     /// Handle response with consistent error processing
     pub async fn handle_response(&self, response: reqwest::Response) -> Result<Value> {
         let status = response.status();
-        
+
         if !status.is_success() {
             let error_text = response.text().await.unwrap_or_default();
             let error_handler = ErrorHandler::new(self.provider_name);
             return Err(error_handler.handle_http_error(status, &error_text).into());
         }
 
-        let response_text = response.text().await.context("Failed to read response body")?;
-        
+        let response_text = response
+            .text()
+            .await
+            .context("Failed to read response body")?;
+
         serde_json::from_str(&response_text).context("Failed to parse JSON response")
     }
 
@@ -339,7 +338,7 @@ impl RequestProcessor {
         response: reqwest::Response,
     ) -> Result<impl futures::Stream<Item = Result<String>>> {
         let status = response.status();
-        
+
         if !status.is_success() {
             let error_text = response.text().await.unwrap_or_default();
             let error_handler = ErrorHandler::new(self.provider_name);
@@ -426,12 +425,9 @@ mod tests {
     #[test]
     fn test_error_handler() {
         let handler = ErrorHandler::new("test_provider");
-        
-        let error = handler.handle_http_error(
-            reqwest::StatusCode::UNAUTHORIZED,
-            "Invalid API key"
-        );
-        
+
+        let error = handler.handle_http_error(reqwest::StatusCode::UNAUTHORIZED, "Invalid API key");
+
         match error {
             LLMError::Authentication(_) => {
                 // Expected
@@ -442,15 +438,11 @@ mod tests {
 
     #[test]
     fn test_model_resolver() {
-        let resolver = ModelResolver::new(
-            "test_provider",
-            "default-model",
-            &["model1", "model2"],
-        );
+        let resolver = ModelResolver::new("test_provider", "default-model", &["model1", "model2"]);
 
         assert_eq!(resolver.resolve_model(None), "default-model");
         assert_eq!(resolver.resolve_model(Some("custom".to_string())), "custom");
-        
+
         assert!(resolver.validate_model("model1").is_ok());
         assert!(resolver.validate_model("unsupported").is_err());
     }

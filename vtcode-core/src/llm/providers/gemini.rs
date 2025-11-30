@@ -117,11 +117,14 @@ impl GeminiProvider {
         Self {
             api_key: Arc::from(api_key.as_str()),
             http_client: HttpClient::new(),
-            base_url: Arc::from(override_base_url(
-                urls::GEMINI_API_BASE,
-                base_url,
-                Some(env_vars::GEMINI_BASE_URL),
-            ).as_str()),
+            base_url: Arc::from(
+                override_base_url(
+                    urls::GEMINI_API_BASE,
+                    base_url,
+                    Some(env_vars::GEMINI_BASE_URL),
+                )
+                .as_str(),
+            ),
             model: Arc::from(model.as_str()),
             prompt_cache_enabled,
             prompt_cache_settings,

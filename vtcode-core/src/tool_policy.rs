@@ -569,7 +569,9 @@ impl ToolPolicyManager {
             return Ok(());
         }
 
-        for tool in self.config.available_tools.clone() {
+        // Clone once to avoid borrow issues with self.apply_config_policy
+        let tools: Vec<_> = self.config.available_tools.iter().cloned().collect();
+        for tool in tools {
             let config_policy = Self::resolve_config_policy(tools_config, &tool);
             self.apply_config_policy(&tool, config_policy);
         }
@@ -709,11 +711,18 @@ impl ToolPolicyManager {
             .cloned()
             .collect();
 
-        for (provider, policy) in &self.config.mcp.providers {
-            for tool in policy.tools.keys() {
-                available.push(format!("mcp::{}::{}", provider, tool));
-            }
-        }
+        available.extend(
+            self.config
+                .mcp
+                .providers
+                .iter()
+                .flat_map(|(provider, policy)| {
+                    policy
+                        .tools
+                        .keys()
+                        .map(move |tool| format!("mcp::{}::{}", provider, tool))
+                }),
+        );
 
         available.sort();
         available.dedup();

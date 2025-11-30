@@ -7,7 +7,7 @@
 /// These patterns are used in get_errors, grep operations, and error analysis
 pub const ERROR_DETECTION_PATTERNS: &[&str] = &[
     "error",
-    "failed", 
+    "failed",
     "exception",
     "permission denied",
     "not found",

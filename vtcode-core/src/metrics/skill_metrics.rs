@@ -60,8 +60,8 @@ impl SkillMetrics {
     }
 
     pub fn record_deleted(&mut self, skill_name: String) {
-        if self.skill_stats.contains_key(&skill_name) {
-            self.skill_stats.remove(&skill_name);
+        // Use remove directly - returns Option<V>, avoids redundant contains_key check
+        if self.skill_stats.remove(&skill_name).is_some() {
             self.active_skills = self.active_skills.saturating_sub(1);
         }
     }

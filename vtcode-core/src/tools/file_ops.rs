@@ -64,7 +64,8 @@ impl FileOpsTool {
         // Most directories have 10-50 items, so start with 32 to avoid reallocations
         let mut all_items = Vec::with_capacity(32);
         if base.is_file() {
-            let file_name = base.file_name()
+            let file_name = base
+                .file_name()
                 .ok_or_else(|| anyhow!("Invalid file name for path: {}", input.path))?;
             all_items.push(json!({
                 "name": file_name.to_string_lossy(),
@@ -95,11 +96,12 @@ impl FileOpsTool {
                     .await
                     .with_context(|| format!("Failed to read file type for: {}", path.display()))?
                     .is_dir();
-                
-                let relative_path = path.strip_prefix(&self.workspace_root)
+
+                let relative_path = path
+                    .strip_prefix(&self.workspace_root)
                     .map(|p| p.to_string_lossy())
                     .unwrap_or_else(|_| path.to_string_lossy());
-                
+
                 all_items.push(json!({
                     "name": name,
                     "path": relative_path,
@@ -183,46 +185,77 @@ impl FileOpsTool {
         // Implement AGENTS.md pattern for context optimization: show summary with sample
         let guidance = if has_overflow {
             // Show overflow indication when we have more items than max_items
-            Some(format!("[+{} more items]", all_items.len() - input.max_items))
+            Some(format!(
+                "[+{} more items]",
+                all_items.len() - input.max_items
+            ))
         } else if all_items.len() > 50 && page == 1 {
             // For large directories on first page, show summary pattern
-            let file_count = page_items.iter().filter(|item| {
-                item.as_object().and_then(|obj| obj.get("type")).and_then(|t| t.as_str()) == Some("file")
-            }).count();
-            let dir_count = page_items.iter().filter(|item| {
-                item.as_object().and_then(|obj| obj.get("type")).and_then(|t| t.as_str()) == Some("directory")
-            }).count();
-            
-            let mut sample_names = page_items.iter()
+            let file_count = page_items
+                .iter()
+                .filter(|item| {
+                    item.as_object()
+                        .and_then(|obj| obj.get("type"))
+                        .and_then(|t| t.as_str())
+                        == Some("file")
+                })
+                .count();
+            let dir_count = page_items
+                .iter()
+                .filter(|item| {
+                    item.as_object()
+                        .and_then(|obj| obj.get("type"))
+                        .and_then(|t| t.as_str())
+                        == Some("directory")
+                })
+                .count();
+
+            let mut sample_names = page_items
+                .iter()
                 .take(5)
-                .filter_map(|item| item.as_object().and_then(|obj| obj.get("name")).and_then(|n| n.as_str()))
+                .filter_map(|item| {
+                    item.as_object()
+                        .and_then(|obj| obj.get("name"))
+                        .and_then(|n| n.as_str())
+                })
                 .collect::<Vec<_>>();
-            
+
             if sample_names.len() > 3 {
                 sample_names.truncate(3);
                 sample_names.push("...");
             }
-            
+
             let summary = if file_count > 0 && dir_count > 0 {
                 format!(
                     "{} files and {} directories (showing first {}: {})",
-                    file_count, dir_count, sample_names.len(), sample_names.join(", ")
+                    file_count,
+                    dir_count,
+                    sample_names.len(),
+                    sample_names.join(", ")
                 )
             } else if file_count > 0 {
                 format!(
                     "{} files (showing first {}: {})",
-                    file_count, sample_names.len(), sample_names.join(", ")
+                    file_count,
+                    sample_names.len(),
+                    sample_names.join(", ")
                 )
             } else if dir_count > 0 {
                 format!(
                     "{} directories (showing first {}: {})",
-                    dir_count, sample_names.len(), sample_names.join(", ")
+                    dir_count,
+                    sample_names.len(),
+                    sample_names.join(", ")
                 )
             } else {
                 format!("Empty directory")
             };
-            
-            Some(format!("{} [+{} more items]", summary, all_items.len() - sample_names.len()))
+
+            Some(format!(
+                "{} [+{} more items]",
+                summary,
+                all_items.len() - sample_names.len()
+            ))
         } else if has_more || capped_total < all_items.len() || all_items.len() > 20 {
             Some(format!(
                 "Showing {} of {} items (page {}, per_page {}). Use 'page' and 'per_page' to page through results.",
@@ -321,7 +354,10 @@ impl FileOpsTool {
         let mut result = self.paginate_and_format(items, count, input, "recursive", Some(pattern));
         if total_found > input.max_items {
             if let Some(obj) = result.as_object_mut() {
-                obj.insert("overflow".to_string(), json!(format!("[+{} more items]", total_found - input.max_items)));
+                obj.insert(
+                    "overflow".to_string(),
+                    json!(format!("[+{} more items]", total_found - input.max_items)),
+                );
             }
         }
         Ok(result)
@@ -741,14 +777,17 @@ impl FileOpsTool {
 
         let mut output = self.paginate_and_format(ranked, selected_total, input, "largest", None);
         output["sorted_by"] = json!("size_desc");
-        
+
         // Add overflow indication if we have more items than max_items
         if has_overflow {
             if let Some(obj) = output.as_object_mut() {
-                obj.insert("overflow".to_string(), json!(format!("[+{} more items]", total_entries - effective_max)));
+                obj.insert(
+                    "overflow".to_string(),
+                    json!(format!("[+{} more items]", total_entries - effective_max)),
+                );
             }
         }
-        
+
         let note = format!(
             "Results sorted by file size (descending). Showing top {} file(s).",
             output

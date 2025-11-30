@@ -296,10 +296,10 @@ pub async fn list_recent_sessions(limit: usize) -> Result<Vec<SessionListing>> {
     // Batch processing to avoid overwhelming the system with too many concurrent tasks
     const BATCH_SIZE: usize = 10;
     let mut all_listings = Vec::new();
-    
+
     for batch in session_paths.chunks(BATCH_SIZE) {
         let mut tasks = Vec::with_capacity(batch.len());
-        
+
         for path in batch {
             let path = path.clone();
             let task = tokio::task::spawn(async move {
@@ -313,7 +313,7 @@ pub async fn list_recent_sessions(limit: usize) -> Result<Vec<SessionListing>> {
             });
             tasks.push(task);
         }
-        
+
         // Collect results from this batch
         for task in tasks {
             if let Ok(Some(listing)) = task.await {

@@ -34,7 +34,7 @@ impl UiSyncManager {
     /// Force a redraw with proper synchronization, replacing sleep calls
     pub async fn force_redraw_sync(&self, handle: &InlineHandle) -> Result<(), anyhow::Error> {
         let now = Instant::now();
-        
+
         // Check if enough time has passed since last redraw
         {
             let last_redraw = self.last_redraw.read().await;
@@ -45,10 +45,10 @@ impl UiSyncManager {
 
         // Set redraw in progress flag
         self.redraw_in_progress.store(true, Ordering::SeqCst);
-        
+
         // Force the redraw
         handle.force_redraw();
-        
+
         // Update last redraw timestamp
         {
             let mut last_redraw = self.last_redraw.write().await;
@@ -56,11 +56,13 @@ impl UiSyncManager {
         }
 
         // Wait for redraw to complete (with timeout to prevent hanging)
-        tokio::time::timeout(Duration::from_millis(50), self.redraw_notify.notified()).await.ok();
-        
+        tokio::time::timeout(Duration::from_millis(50), self.redraw_notify.notified())
+            .await
+            .ok();
+
         // Clear redraw in progress flag
         self.redraw_in_progress.store(false, Ordering::SeqCst);
-        
+
         Ok(())
     }
 
@@ -117,14 +119,14 @@ mod tests {
     #[tokio::test]
     async fn test_redraw_sync() {
         let manager = UiSyncManager::new();
-        
+
         // Mock handle (would need proper mocking in real tests)
         // For now, just test the basic flow
         assert!(!manager.is_redraw_in_progress());
-        
+
         // Simulate redraw completion
         manager.notify_redraw_complete();
-        
+
         // Test wait for completion when not in progress
         manager.wait_for_redraw_complete().await.unwrap();
     }
@@ -132,11 +134,11 @@ mod tests {
     #[tokio::test]
     async fn test_redraw_rate_limiting() {
         let manager = UiSyncManager::new();
-        
+
         // First redraw should work
         let handle = InlineHandle::new(); // This would need proper mocking
         manager.force_redraw_sync(&handle).await.unwrap();
-        
+
         // Immediate second redraw should be skipped due to rate limiting
         manager.force_redraw_sync(&handle).await.unwrap();
     }

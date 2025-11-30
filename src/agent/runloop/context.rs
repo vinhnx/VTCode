@@ -572,12 +572,18 @@ fn estimate_scope_depth(scope: Option<&str>) -> usize {
 /// Extracts code blocks from markdown-formatted text
 ///
 /// Handles both fenced code blocks with language hints and plain code blocks.
+/// Optimized with capacity planning to reduce allocations.
 #[allow(dead_code)]
 fn extract_code_blocks(source: &str) -> Vec<CodeBlock> {
-    let mut blocks = Vec::new();
+    // Estimate capacity: assume ~1 code block per 50 lines on average
+    let estimated_blocks = source.lines().count() / 50 + 1;
+    let mut blocks = Vec::with_capacity(estimated_blocks.min(10)); // Cap at 10 for safety
     let mut in_block = false;
     let mut current_language: Option<String> = None;
-    let mut current_content = String::new();
+
+    // Pre-allocate content buffer based on source size estimate
+    let estimated_content_size = source.len() / 10; // Assume ~10% of source is code
+    let mut current_content = String::with_capacity(estimated_content_size.min(10000)); // Cap at 10KB
 
     for line in source.lines() {
         let trimmed = line.trim_start();

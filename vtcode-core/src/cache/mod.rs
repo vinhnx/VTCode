@@ -1,5 +1,5 @@
 //! Unified caching system for VT Code
-//! 
+//!
 //! This module provides a consolidated caching framework that replaces
 //! the multiple duplicate cache implementations throughout the codebase.
 
@@ -170,7 +170,13 @@ where
         let expired_keys: Vec<K> = self
             .entries
             .iter()
-            .filter_map(|(k, v)| if v.is_expired(self.ttl) { Some(k.clone()) } else { None })
+            .filter_map(|(k, v)| {
+                if v.is_expired(self.ttl) {
+                    Some(k.clone())
+                } else {
+                    None
+                }
+            })
             .collect();
 
         for key in expired_keys {
@@ -269,14 +275,14 @@ pub fn estimate_json_size(value: &serde_json::Value) -> u64 {
 /// Helper function to create cache key from serializable data
 pub fn create_cache_key<T: Serialize>(data: &T) -> Result<String> {
     let json_bytes = serde_json::to_vec(data)?;
-    
+
     // Use a simple hash function instead of blake3 to avoid dependency
     let mut hash = 0u64;
     for (i, byte) in json_bytes.iter().enumerate() {
         hash = hash.wrapping_mul(31).wrapping_add(*byte as u64);
         hash = hash.rotate_left((i % 64) as u32);
     }
-    
+
     Ok(format!("{:016x}", hash))
 }
 
@@ -383,9 +389,7 @@ mod tests {
         let mut cache = ContextAwareCache::new(100, DEFAULT_CACHE_TTL, EvictionPolicy::Lru);
         let keys: Vec<TestKey> = (0..10).map(|i| TestKey(i.to_string())).collect();
 
-        let results = cache.get_context_limited(&keys, |key| {
-            Some(format!("value_{}", key.0))
-        });
+        let results = cache.get_context_limited(&keys, |key| Some(format!("value_{}", key.0)));
 
         // Should be limited to MAX_CONTEXT_ITEMS (5)
         assert_eq!(results.len(), MAX_CONTEXT_ITEMS);

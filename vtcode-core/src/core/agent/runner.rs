@@ -121,9 +121,9 @@ impl TaskRunState {
             conversation,
             conversation_messages,
             created_contexts: Vec::with_capacity(16), // Typical session creates ~5-10 contexts
-            modified_files: Vec::with_capacity(32), // Typical session modifies ~10-20 files
+            modified_files: Vec::with_capacity(32),   // Typical session modifies ~10-20 files
             executed_commands: Vec::with_capacity(64), // Typical session executes ~20-40 commands
-            warnings: Vec::with_capacity(16), // Typical session has ~5-10 warnings
+            warnings: Vec::with_capacity(16),         // Typical session has ~5-10 warnings
             has_completed: false,
             completion_outcome: TaskOutcome::Unknown,
             turns_executed: 0,

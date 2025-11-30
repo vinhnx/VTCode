@@ -709,10 +709,14 @@ impl TreeSitterAnalyzer {
     /// Parse file into a syntax tree
     pub async fn parse_file<P: AsRef<Path>>(&mut self, file_path: P) -> Result<SyntaxTree> {
         let file_path = file_path.as_ref();
-        
+
         // Early return if file doesn't exist
         if !file_path.exists() {
-            return Err(TreeSitterError::FileReadError(format!("File does not exist: {}", file_path.display())).into());
+            return Err(TreeSitterError::FileReadError(format!(
+                "File does not exist: {}",
+                file_path.display()
+            ))
+            .into());
         }
 
         let language = self.detect_language_from_path(file_path)?;

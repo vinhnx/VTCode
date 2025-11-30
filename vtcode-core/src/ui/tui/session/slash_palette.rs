@@ -225,17 +225,21 @@ impl SlashPalette {
 
             if let Some(ref registry) = self.custom_prompts {
                 if registry.enabled() && !registry.is_empty() {
-                    for prompt in registry.iter() {
-                        new_suggestions.push(SlashPaletteSuggestion::Custom(prompt.clone()));
-                    }
+                    new_suggestions.extend(
+                        registry
+                            .iter()
+                            .map(|p| SlashPaletteSuggestion::Custom(p.clone())),
+                    );
                 }
             }
         } else {
             // Handle regular slash commands
             let static_suggestions = suggestions_for(prefix);
-            for info in static_suggestions {
-                new_suggestions.push(SlashPaletteSuggestion::Static(info));
-            }
+            new_suggestions.extend(
+                static_suggestions
+                    .into_iter()
+                    .map(SlashPaletteSuggestion::Static),
+            );
         }
 
         // Apply limit if prefix is not empty

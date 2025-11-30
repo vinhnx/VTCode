@@ -412,10 +412,12 @@ impl ZedAgent {
             .collect();
         let decls = build_function_declarations_for_level(CapabilityLevel::CodeSearch);
         let mut local_definitions = Vec::with_capacity(decls.len()); // Pre-allocate capacity
-        
+
         for decl in decls {
-            if decl.name != tools::READ_FILE && decl.name != tools::LIST_FILES 
-                && available_local_tools.contains(decl.name.as_str()) {
+            if decl.name != tools::READ_FILE
+                && decl.name != tools::LIST_FILES
+                && available_local_tools.contains(decl.name.as_str())
+            {
                 local_definitions.push(ToolDefinition::function(
                     decl.name.clone(),
                     decl.description.clone(),
@@ -1170,7 +1172,11 @@ impl ZedAgent {
             }
         });
 
-        Ok(ToolExecutionReport::success(content, Vec::with_capacity(0), payload)) // Use with_capacity(0)
+        Ok(ToolExecutionReport::success(
+            content,
+            Vec::with_capacity(0),
+            payload,
+        )) // Use with_capacity(0)
     }
 
     async fn execute_acp_tool(
