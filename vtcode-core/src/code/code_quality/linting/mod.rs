@@ -8,6 +8,47 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 // use anyhow::Result;
 
+/// Shared utilities for lint output parsing
+mod parser_utils {
+    use serde_json::Value;
+    use crate::code::code_quality::config::LintSeverity;
+
+    /// Extract string value from JSON, return as owned String or default
+    pub fn get_str(value: &Value, key: &str, default: &str) -> String {
+        value
+            .get(key)
+            .and_then(Value::as_str)
+            .unwrap_or(default)
+            .to_string()
+    }
+
+    /// Extract u64 and convert to usize
+    pub fn get_u64(value: &Value, key: &str) -> usize {
+        value
+            .get(key)
+            .and_then(Value::as_u64)
+            .unwrap_or(0) as usize
+    }
+
+    /// Parse severity level from string
+    pub fn parse_severity_error(level: &str) -> LintSeverity {
+        match level {
+            "error" | "fatal" => LintSeverity::Error,
+            "warning" => LintSeverity::Warning,
+            _ => LintSeverity::Info,
+        }
+    }
+
+    /// Parse severity level from numeric code (1=warning, 2=error)
+    pub fn parse_severity_numeric(code: u64) -> LintSeverity {
+        match code {
+            2 => LintSeverity::Error,
+            1 => LintSeverity::Warning,
+            _ => LintSeverity::Info,
+        }
+    }
+}
+
 /// Individual lint finding
 #[derive(Debug, Clone)]
 pub struct LintFinding {
@@ -150,23 +191,18 @@ impl LintingOrchestrator {
                             .get("column_start")
                             .and_then(Value::as_u64)
                             .unwrap_or(0);
-                        let rule = message
-                            .get("code")
-                            .and_then(|c| c.get("code"))
-                            .and_then(Value::as_str)
-                            .unwrap_or("")
-                            .to_string();
-                        let severity =
-                            match message.get("level").and_then(Value::as_str).unwrap_or("") {
-                                "error" => LintSeverity::Error,
-                                "warning" => LintSeverity::Warning,
-                                _ => LintSeverity::Info,
-                            };
-                        let msg = message
-                            .get("message")
-                            .and_then(Value::as_str)
-                            .unwrap_or("")
-                            .to_string();
+                        let rule = parser_utils::get_str(
+                            &message
+                                .get("code")
+                                .and_then(|c| c.get("code"))
+                                .unwrap_or(&Value::Null),
+                            "code",
+                            "",
+                        );
+                        let severity = parser_utils::parse_severity_error(
+                            &parser_utils::get_str(message, "level", ""),
+                        );
+                        let msg = parser_utils::get_str(message, "message", "");
                         findings.push(LintFinding {
                             file_path: base_path.join(file),
                             line: line_num as usize,
@@ -192,24 +228,13 @@ impl LintingOrchestrator {
                 let path = file.get("filePath").and_then(Value::as_str).unwrap_or("");
                 if let Some(messages) = file.get("messages").and_then(Value::as_array) {
                     for m in messages {
-                        let line = m.get("line").and_then(Value::as_u64).unwrap_or(0);
-                        let column = m.get("column").and_then(Value::as_u64).unwrap_or(0);
-                        let rule = m
-                            .get("ruleId")
-                            .and_then(Value::as_str)
-                            .unwrap_or("")
-                            .to_string();
-                        let severity = match m.get("severity").and_then(Value::as_u64).unwrap_or(0)
-                        {
-                            2 => LintSeverity::Error,
-                            1 => LintSeverity::Warning,
-                            _ => LintSeverity::Info,
-                        };
-                        let msg = m
-                            .get("message")
-                            .and_then(Value::as_str)
-                            .unwrap_or("")
-                            .to_string();
+                         let line = parser_utils::get_u64(m, "line");
+                         let column = parser_utils::get_u64(m, "column");
+                         let rule = parser_utils::get_str(m, "ruleId", "");
+                         let severity = parser_utils::parse_severity_numeric(
+                             m.get("severity").and_then(Value::as_u64).unwrap_or(0),
+                         );
+                         let msg = parser_utils::get_str(m, "message", "");
                         findings.push(LintFinding {
                             file_path: base_path.join(path),
                             line: line as usize,
@@ -232,25 +257,13 @@ impl LintingOrchestrator {
             && let Some(arr) = json.as_array()
         {
             for item in arr {
-                let path = item.get("path").and_then(Value::as_str).unwrap_or("");
-                let line = item.get("line").and_then(Value::as_u64).unwrap_or(0);
-                let column = item.get("column").and_then(Value::as_u64).unwrap_or(0);
-                let rule = item
-                    .get("symbol")
-                    .and_then(Value::as_str)
-                    .unwrap_or("")
-                    .to_string();
-                let msg = item
-                    .get("message")
-                    .and_then(Value::as_str)
-                    .unwrap_or("")
-                    .to_string();
-                let severity = match item.get("type").and_then(Value::as_str).unwrap_or("") {
-                    "error" | "fatal" => LintSeverity::Error,
-                    "warning" => LintSeverity::Warning,
-                    _ => LintSeverity::Info,
-                };
-                findings.push(LintFinding {
+                 let path = parser_utils::get_str(item, "path", "");
+                 let line = parser_utils::get_u64(item, "line");
+                 let column = parser_utils::get_u64(item, "column");
+                 let rule = parser_utils::get_str(item, "symbol", "");
+                 let msg = parser_utils::get_str(item, "message", "");
+                 let severity = parser_utils::parse_severity_error(&parser_utils::get_str(item, "type", ""));
+                 findings.push(LintFinding {
                     file_path: base_path.join(path),
                     line: line as usize,
                     column: column as usize,
