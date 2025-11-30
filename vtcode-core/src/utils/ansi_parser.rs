@@ -15,7 +15,7 @@
 /// assert_eq!(strip_ansi("\x1b[1;32mbold green\x1b[0m"), "bold green");
 /// ```
 pub fn strip_ansi(text: &str) -> String {
-    let mut output = String::with_capacity(text.len());
+    let mut output = Vec::with_capacity(text.len());
     let bytes = text.as_bytes();
     let mut i = 0;
 
@@ -30,7 +30,9 @@ pub fn strip_ansi(text: &str) -> String {
                         while i < bytes.len() && !(0x40..=0x7e).contains(&bytes[i]) {
                             i += 1;
                         }
-                        i += 1; // Include the final letter
+                        if i < bytes.len() {
+                            i += 1; // Include the final letter
+                        }
                     }
                     b']' => {
                         // OSC sequence - ends with BEL (0x07) or ST (ESC \)
@@ -62,7 +64,14 @@ pub fn strip_ansi(text: &str) -> String {
                     }
                     _ => {
                         // Other 2-character escape sequences
-                        i += 2;
+                        // Only skip if the second byte is ASCII to avoid breaking UTF-8
+                        if bytes[i + 1] < 128 {
+                            i += 2;
+                        } else {
+                            // ESC followed by non-ASCII (likely start of UTF-8 sequence).
+                            // Just skip the ESC and let the next byte be processed.
+                            i += 1;
+                        }
                     }
                 }
             } else {
@@ -70,19 +79,22 @@ pub fn strip_ansi(text: &str) -> String {
             }
         } else if bytes[i] == b'\n' || bytes[i] == b'\r' || bytes[i] == b'\t' {
             // Preserve line breaks and tabs
-            output.push(bytes[i] as char);
+            output.push(bytes[i]);
             i += 1;
-        } else if bytes[i] < 32 && bytes[i] != b'\t' {
+        } else if bytes[i] < 32 {
             // Skip other control characters (except tab)
             i += 1;
         } else {
             // Regular character
-            output.push(bytes[i] as char);
+            output.push(bytes[i]);
             i += 1;
         }
     }
 
-    output
+    // SAFETY: We started with a valid UTF-8 string and only removed ASCII bytes
+    // (ANSI codes and control characters < 32). We never removed bytes from the
+    // middle of a multi-byte UTF-8 sequence (which are always >= 128).
+    unsafe { String::from_utf8_unchecked(output) }
 }
 
 /// Parse and determine the length of the ANSI escape sequence at the start of text
@@ -143,7 +155,18 @@ pub fn parse_ansi_sequence(text: &str) -> Option<usize> {
         }
         _ => {
             // Other escape sequences - might be 2-3 bytes
-            Some(2) // For simple 2-byte escape sequences
+            // Only treat as 2-byte sequence if the second byte is ASCII
+            if bytes[1] < 128 {
+                Some(2)
+            } else {
+                // ESC followed by non-ASCII (likely start of UTF-8 sequence).
+                // Treat as just ESC (1 byte) or not a sequence?
+                // If we return None, the caller might process ESC as char.
+                // If we return Some(1), the caller skips ESC.
+                // Given this is used for skipping ANSI, skipping just ESC seems safer
+                // than skipping ESC + UTF-8 byte.
+                Some(1)
+            }
         }
     }
 }
@@ -206,7 +229,14 @@ pub fn strip_ansi_ascii_only(text: &str) -> String {
                     }
                     _ => {
                         // Other 2-character escape sequences
-                        i += 2;
+                        // Only skip if the second byte is ASCII to avoid breaking UTF-8
+                        if bytes[i + 1] < 128 {
+                            i += 2;
+                        } else {
+                            // ESC followed by non-ASCII (likely start of UTF-8 sequence).
+                            // Just skip the ESC and let the next byte be processed.
+                            i += 1;
+                        }
                     }
                 }
             } else {
@@ -354,5 +384,14 @@ mod tests {
     fn test_parse_ansi_sequence_dcs() {
         // DCS sequence terminated with ST (ESC \)
         assert_eq!(parse_ansi_sequence("\x1bP0;1;2p\x1b\\"), Some(10));
+    }
+
+    #[test]
+    fn test_unicode_preservation() {
+        let input = "VT\u{2014}Code"; // VT—Code
+        assert_eq!(strip_ansi(input), "VT\u{2014}Code");
+
+        let input_ansi = "\x1b[31mVT\u{2014}Code\x1b[0m";
+        assert_eq!(strip_ansi(input_ansi), "VT\u{2014}Code");
     }
 }
