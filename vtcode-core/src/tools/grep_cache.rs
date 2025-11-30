@@ -25,7 +25,7 @@ impl From<&GrepSearchInput> for SearchCacheKey {
             pattern: input.pattern.clone(),
             path: input.path.clone(),
             case_sensitive: input.case_sensitive.unwrap_or(false),
-            max_results: input.max_results.unwrap_or(100),
+            max_results: input.max_results.unwrap_or(5), // AGENTS.md requires max 5 results
             glob_pattern: input.glob_pattern.clone(),
             type_pattern: input.type_pattern.clone(),
         }
@@ -97,7 +97,7 @@ mod tests {
             glob_pattern: Some("*.rs".to_string()),
             context_lines: None,
             include_hidden: None,
-            max_results: Some(50),
+            max_results: Some(5), // AGENTS.md requires max 5 results
             respect_ignore_files: None,
             max_file_size: None,
             search_hidden: None,

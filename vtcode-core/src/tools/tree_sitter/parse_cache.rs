@@ -197,7 +197,7 @@ pub struct CachedTreeSitterAnalyzer {
 
 impl CachedTreeSitterAnalyzer {
     pub fn new(cache_capacity: usize) -> Result<Self, TreeSitterError> {
-        let mut parsers = HashMap::new();
+        let mut parsers = HashMap::with_capacity(8); // Pre-allocate for 8 languages
 
         // Initialize parsers for each language
         let languages = vec![

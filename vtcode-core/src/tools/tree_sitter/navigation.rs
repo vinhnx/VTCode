@@ -67,8 +67,8 @@ pub struct CodeNavigator {
 impl CodeNavigator {
     pub fn new() -> Self {
         Self {
-            symbol_map: HashMap::new(),
-            position_map: HashMap::new(),
+            symbol_map: HashMap::with_capacity(100), // Pre-allocate for typical symbol count
+            position_map: HashMap::with_capacity(100), // Pre-allocate for typical position count
         }
     }
 

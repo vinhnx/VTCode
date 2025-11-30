@@ -3,8 +3,6 @@
 //! This module provides a unified foundation for all LLM providers to eliminate
 //! code duplication across provider implementations.
 
-use crate::config::TimeoutsConfig;
-use crate::config::constants::env_vars;
 use crate::llm::provider::{LLMError, LLMRequest, LLMResponse, Message, ToolDefinition};
 use async_trait::async_trait;
 use reqwest::{Client as HttpClient, StatusCode};
@@ -39,39 +37,27 @@ impl ProviderConfig {
             .timeout(self.timeout)
             .connect_timeout(Duration::from_secs(30))
             .build()
-            .map_err(|e| LLMError::NetworkError(format!("Failed to build HTTP client: {}", e)))
+            .map_err(|e| LLMError::Network(format!("Failed to build HTTP client: {}", e)))
     }
 }
 
 /// Common HTTP error handling for all providers
-pub fn handle_http_error(status: StatusCode, error_text: &str, model: &str) -> LLMError {
-    use StatusCode::*;
-    
+pub fn handle_http_error(status: StatusCode, error_text: &str, _model: &str) -> LLMError {
     match status {
-        UNAUTHORIZED | FORBIDDEN => LLMError::AuthenticationError(format!(
+        StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => LLMError::Authentication(format!(
             "Authentication failed ({}): {}",
             status, error_text
         )),
-        NOT_FOUND if is_model_not_found(status, error_text) => {
-            let fallback = suggest_fallback_model(model);
-            LLMError::ModelNotFound {
-                model: model.to_string(),
-                fallback,
-            }
-        }
-        TOO_MANY_REQUESTS => LLMError::RateLimitError(format!(
-            "Rate limit exceeded ({}): {}",
-            status, error_text
-        )),
-        REQUEST_TIMEOUT => LLMError::TimeoutError(format!(
+        StatusCode::TOO_MANY_REQUESTS => LLMError::RateLimit,
+        StatusCode::REQUEST_TIMEOUT => LLMError::Network(format!(
             "Request timeout ({}): {}",
             status, error_text
         )),
-        _ if status.is_server_error() => LLMError::ServerError(format!(
+        _ if status.is_server_error() => LLMError::Provider(format!(
             "Server error ({}): {}",
             status, error_text
         )),
-        _ => LLMError::NetworkError(format!(
+        _ => LLMError::Network(format!(
             "HTTP error ({}): {}",
             status, error_text
         )),
@@ -84,12 +70,6 @@ pub fn is_model_not_found(status: StatusCode, error_text: &str) -> bool {
         || error_text.contains("model_not_found")
         || (error_text.to_ascii_lowercase().contains("does not exist")
             && error_text.to_ascii_lowercase().contains("model"))
-}
-
-/// Suggest fallback model (common logic)
-pub fn suggest_fallback_model(model: &str) -> Option<String> {
-    // This can be extended with provider-specific fallback logic
-    None
 }
 
 /// Common request building utilities
@@ -220,7 +200,7 @@ pub trait BaseProvider: Send + Sync {
                                     }
                                 }
                                 Err(e) => {
-                                    let error = LLMError::NetworkError(format!("Failed to read response: {}", e));
+                                    let error = LLMError::Network(format!("Failed to read response: {}", e));
                                     if attempt < max_retries {
                                         last_error = Some(error);
                                         continue;
@@ -230,7 +210,7 @@ pub trait BaseProvider: Send + Sync {
                             }
                         }
                         Err(e) => {
-                            let error = LLMError::NetworkError(format!("Request failed: {}", e));
+                            let error = LLMError::Network(format!("Request failed: {}", e));
                             if attempt < max_retries {
                                 last_error = Some(error);
                                 continue;
@@ -250,7 +230,7 @@ pub trait BaseProvider: Send + Sync {
         }
         
         // All retries exhausted
-        Err(last_error.unwrap_or_else(|| LLMError::NetworkError("All retries exhausted".to_string())))
+        Err(last_error.unwrap_or_else(|| LLMError::Network("All retries exhausted".to_string())))
     }
 }
 

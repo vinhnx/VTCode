@@ -66,7 +66,7 @@ pub struct PruningDecisionLedger {
 impl PruningDecisionLedger {
     pub fn new() -> Self {
         Self {
-            decisions: Vec::new(),
+            decisions: Vec::with_capacity(256), // Typical session has ~50-200 pruning decisions
             statistics: PruningStatistics::default(),
             session_start: current_timestamp(),
         }

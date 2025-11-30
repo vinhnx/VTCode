@@ -8,6 +8,7 @@ mod tool_execution;
 mod tool_handling;
 mod turn_loop;
 mod turn_processing;
+mod ui_sync;
 pub(crate) mod utils;
 pub(crate) mod workspace;
 

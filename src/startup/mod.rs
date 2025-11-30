@@ -326,6 +326,7 @@ fn apply_inline_config_overrides(
     config_optimizer::ConfigOptimizer::apply_overrides(config, overrides)
 }
 
+#[allow(dead_code)]
 fn parse_override_value(raw: &str) -> Result<TomlValue> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
@@ -341,6 +342,7 @@ fn parse_override_value(raw: &str) -> Result<TomlValue> {
     }
 }
 
+#[allow(dead_code)]
 fn apply_override_value(target: &mut TomlValue, key: &str, value: TomlValue) -> Result<()> {
     let segments: Vec<&str> = key
         .split('.')

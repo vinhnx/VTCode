@@ -6,7 +6,7 @@ use slash_commands::{SlashCommandContext, SlashCommandControl};
 use std::collections::{BTreeSet, HashMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use tokio::sync::Notify;
 use tokio::task;
 
@@ -48,7 +48,7 @@ use crate::agent::runloop::unified::ui_interaction::{
 
 use super::finalization::finalize_session;
 use super::harmony::strip_harmony_syntax;
-use super::ui_sync::{redraw_with_sync, wait_for_redraw_complete};
+use crate::agent::runloop::unified::turn::ui_sync::{redraw_with_sync, wait_for_redraw_complete};
 use super::utils::{render_hook_messages, safe_force_redraw};
 use super::workspace::{load_workspace_files, refresh_vt_config};
 use crate::agent::runloop::mcp_events;
@@ -282,12 +282,12 @@ pub(crate) async fn run_turn_execute_tool(
     handle: &vtcode_core::ui::tui::InlineHandle,
     last_forced_redraw: &mut Instant,
 ) -> ToolExecutionStatus {
-    use vtcode_core::tools::result_cache::CacheKey;
+    use vtcode_core::tools::result_cache::ToolCacheKey;
 
     // Try to get from cache first for read-only tools
     if is_read_only_tool {
         let _params_str = serde_json::to_string(args_val).unwrap_or_default();
-        let cache_key = CacheKey::from_json(name, &args_val, "");
+        let cache_key = ToolCacheKey::from_json(name, &args_val, "");
         {
             let mut tool_cache = tool_result_cache.write().await;
             if let Some(cached_output) = tool_cache.get(&cache_key) {
@@ -1773,7 +1773,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                     &mut allow_follow_up,
                     &mut bottom_gap_applied,
                     max_tool_loops,
-                    &mut working_history,
+                    working_history,
                 )
                 .await?
                 {
@@ -1870,7 +1870,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                     trim_config.semantic_compression,
                     &pruning_ledger,
                     &mut context_manager,
-                    &mut working_history,
+                    working_history,
                     step_count,
                 )
                 .await;
@@ -2009,7 +2009,6 @@ pub(crate) async fn run_single_agent_loop_unified(
                             renderer.line(MessageStyle::Info, "Operation cancelled by user.")?;
                             break 'outer TurnLoopResult::Cancelled;
                         }
-                        working_history = request_history;
                         payload
                     }
                     Err(error) => {
@@ -2276,7 +2275,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                             Some(&tool_permission_cache),
                             &mut session_stats,
                             &traj,
-                            &mut working_history,
+                            working_history,
                             &call.id,
                             &dec_id,
                             vt_cfg.as_ref(),
@@ -2381,7 +2380,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                             vt_cfg.as_ref(),
                                             &token_budget,
                                             &token_counter,
-                                            &mut working_history,
+                                            working_history,
                                             &call.id,
                                             &dec_id,
                                             &decision_ledger,
@@ -2418,7 +2417,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                             &handle,
                                             &mut session_stats,
                                             &traj,
-                                            &mut working_history,
+                                            working_history,
                                             &call.id,
                                             &dec_id,
                                             &mut mcp_panel_state,
@@ -2450,7 +2449,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                             &handle,
                                             &mut session_stats,
                                             &traj,
-                                            &mut working_history,
+                                            working_history,
                                             &call.id,
                                             &dec_id,
                                             &token_counter,
@@ -2467,7 +2466,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                             &mut renderer,
                                             &handle,
                                             &mut session_stats,
-                                            &mut working_history,
+                                            working_history,
                                             &call.id,
                                             &dec_id,
                                             &decision_ledger,
@@ -2653,13 +2652,13 @@ pub(crate) async fn run_single_agent_loop_unified(
                     continue;
                 }
                 TurnLoopResult::Blocked { reason: _ } => {
-                    conversation_history = working_history;
+                    conversation_history = working_history.clone();
                     handle.clear_input();
                     handle.set_placeholder(default_placeholder.clone());
                     continue;
                 }
                 TurnLoopResult::Completed => {
-                    conversation_history = working_history;
+                    conversation_history = working_history.clone();
 
                     // Removed: Tool response pruning after completion
                     // Removed: Context window enforcement after completion

@@ -160,7 +160,7 @@ impl SystemPromptConfig {
 }
 
 /// Context that affects system prompt building
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone)]
 pub struct SystemPromptContext {
     pub conversation_length: usize,
     pub tool_usage_count: usize,

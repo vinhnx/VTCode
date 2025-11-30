@@ -55,7 +55,7 @@ pub struct TreeSitterInjectionHighlighter {
 impl TreeSitterInjectionHighlighter {
     pub fn new() -> Result<Self> {
         Ok(Self {
-            languages: HashMap::new(),
+            languages: HashMap::with_capacity(8), // Pre-allocate for 8 languages
         })
     }
 

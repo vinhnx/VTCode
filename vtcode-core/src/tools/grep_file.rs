@@ -30,8 +30,8 @@ use tokio::task::spawn_blocking;
 #[cfg(not(docsrs))]
 use perg::{SearchConfig, search_paths};
 
-/// Maximum number of search results to return
-const MAX_SEARCH_RESULTS: NonZeroUsize = NonZeroUsize::new(100).unwrap();
+/// Maximum number of search results to return - AGENTS.md requires max 5 results
+const MAX_SEARCH_RESULTS: NonZeroUsize = NonZeroUsize::new(5).unwrap();
 
 /// Number of threads to use for searching
 const NUM_SEARCH_THREADS: NonZeroUsize = NonZeroUsize::new(2).unwrap();

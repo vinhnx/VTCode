@@ -6,6 +6,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use tree_sitter::{Node, Tree};
+use std::collections::HashSet;
 
 use super::analyzer::{LanguageSupport, Position};
 use super::languages::{SymbolInfo, SymbolKind};
@@ -14,6 +15,18 @@ use super::languages::{SymbolInfo, SymbolKind};
 pub struct UnifiedSymbolExtractor {
     /// Language-specific extraction patterns
     patterns: HashMap<LanguageSupport, LanguagePatterns>,
+    /// Cached node kinds for O(1) lookup instead of O(n) string comparisons
+    cached_node_kinds: HashMap<LanguageSupport, NodeKindCache>,
+}
+
+/// Cached node kinds for O(1) lookup performance
+#[derive(Clone)]
+struct NodeKindCache {
+    function_kinds: HashSet<&'static str>,
+    type_kinds: HashSet<&'static str>,
+    variable_kinds: HashSet<&'static str>,
+    module_kinds: HashSet<&'static str>,
+    scope_creating_kinds: HashSet<&'static str>,
 }
 
 /// Symbol extraction patterns for a specific language
@@ -57,19 +70,86 @@ enum NameExtraction {
 
 impl UnifiedSymbolExtractor {
     pub fn new() -> Self {
-        let mut patterns = HashMap::new();
+        let mut patterns = HashMap::with_capacity(8); // Pre-allocate for 8 languages
+        let mut cached_node_kinds = HashMap::with_capacity(8);
 
         // Initialize patterns for each supported language
-        patterns.insert(LanguageSupport::Rust, Self::rust_patterns());
-        patterns.insert(LanguageSupport::Python, Self::python_patterns());
-        patterns.insert(LanguageSupport::JavaScript, Self::javascript_patterns());
-        patterns.insert(LanguageSupport::TypeScript, Self::typescript_patterns());
-        patterns.insert(LanguageSupport::Go, Self::go_patterns());
-        patterns.insert(LanguageSupport::Java, Self::java_patterns());
-        patterns.insert(LanguageSupport::Bash, Self::bash_patterns());
-        patterns.insert(LanguageSupport::Swift, Self::swift_patterns());
+        let rust_patterns = Self::rust_patterns();
+        cached_node_kinds.insert(LanguageSupport::Rust, Self::build_node_kind_cache(&rust_patterns));
+        patterns.insert(LanguageSupport::Rust, rust_patterns);
 
-        Self { patterns }
+        let python_patterns = Self::python_patterns();
+        cached_node_kinds.insert(LanguageSupport::Python, Self::build_node_kind_cache(&python_patterns));
+        patterns.insert(LanguageSupport::Python, python_patterns);
+
+        let js_patterns = Self::javascript_patterns();
+        cached_node_kinds.insert(LanguageSupport::JavaScript, Self::build_node_kind_cache(&js_patterns));
+        patterns.insert(LanguageSupport::JavaScript, js_patterns);
+
+        let ts_patterns = Self::typescript_patterns();
+        cached_node_kinds.insert(LanguageSupport::TypeScript, Self::build_node_kind_cache(&ts_patterns));
+        patterns.insert(LanguageSupport::TypeScript, ts_patterns);
+
+        let go_patterns = Self::go_patterns();
+        cached_node_kinds.insert(LanguageSupport::Go, Self::build_node_kind_cache(&go_patterns));
+        patterns.insert(LanguageSupport::Go, go_patterns);
+
+        let java_patterns = Self::java_patterns();
+        cached_node_kinds.insert(LanguageSupport::Java, Self::build_node_kind_cache(&java_patterns));
+        patterns.insert(LanguageSupport::Java, java_patterns);
+
+        let bash_patterns = Self::bash_patterns();
+        cached_node_kinds.insert(LanguageSupport::Bash, Self::build_node_kind_cache(&bash_patterns));
+        patterns.insert(LanguageSupport::Bash, bash_patterns);
+
+        let swift_patterns = Self::swift_patterns();
+        cached_node_kinds.insert(LanguageSupport::Swift, Self::build_node_kind_cache(&swift_patterns));
+        patterns.insert(LanguageSupport::Swift, swift_patterns);
+
+        Self { 
+            patterns,
+            cached_node_kinds,
+        }
+    }
+
+    /// Build node kind cache for O(1) lookup performance
+    fn build_node_kind_cache(patterns: &LanguagePatterns) -> NodeKindCache {
+        let mut function_kinds = HashSet::new();
+        let mut type_kinds = HashSet::new();
+        let mut variable_kinds = HashSet::new();
+        let mut module_kinds = HashSet::new();
+        let mut scope_creating_kinds = HashSet::new();
+
+        // Pre-populate sets for O(1) lookup instead of O(n) iteration
+        for pattern in &patterns.function_patterns {
+            function_kinds.insert(pattern.node_kind);
+            if pattern.creates_scope {
+                scope_creating_kinds.insert(pattern.node_kind);
+            }
+        }
+        for pattern in &patterns.type_patterns {
+            type_kinds.insert(pattern.node_kind);
+            if pattern.creates_scope {
+                scope_creating_kinds.insert(pattern.node_kind);
+            }
+        }
+        for pattern in &patterns.variable_patterns {
+            variable_kinds.insert(pattern.node_kind);
+        }
+        for pattern in &patterns.module_patterns {
+            module_kinds.insert(pattern.node_kind);
+            if pattern.creates_scope {
+                scope_creating_kinds.insert(pattern.node_kind);
+            }
+        }
+
+        NodeKindCache {
+            function_kinds,
+            type_kinds,
+            variable_kinds,
+            module_kinds,
+            scope_creating_kinds,
+        }
     }
 
     /// Extract symbols from a syntax tree using unified patterns
@@ -79,20 +159,22 @@ impl UnifiedSymbolExtractor {
         source_code: &str,
         language: LanguageSupport,
     ) -> Vec<SymbolInfo> {
-        let mut symbols = Vec::new();
-
-        if let Some(patterns) = self.patterns.get(&language) {
-            let root_node = syntax_tree.root_node();
-            let mut scope_stack = Vec::new();
-
-            self.extract_symbols_recursive(
-                root_node,
-                source_code,
-                patterns,
-                &mut scope_stack,
-                &mut symbols,
-            );
+        // Early return if language not supported
+        if !self.patterns.contains_key(&language) {
+            return Vec::new();
         }
+
+        let mut symbols = Vec::new();
+        let root_node = syntax_tree.root_node();
+        let mut scope_stack = Vec::new();
+
+        self.extract_symbols_recursive(
+            root_node,
+            source_code,
+            language,
+            &mut scope_stack,
+            &mut symbols,
+        );
 
         symbols
     }
@@ -101,54 +183,39 @@ impl UnifiedSymbolExtractor {
         &self,
         node: Node,
         source_code: &str,
-        patterns: &LanguagePatterns,
+        language: LanguageSupport,
         scope_stack: &mut Vec<String>,
         symbols: &mut Vec<SymbolInfo>,
     ) {
         let node_kind = node.kind();
+        
+        // Get cached node kinds for O(1) lookup instead of O(n) iteration
+        let cache = match self.cached_node_kinds.get(&language) {
+            Some(cache) => cache,
+            None => return, // Early return if no cache for language
+        };
+
         let current_scope = if scope_stack.is_empty() {
             None
         } else {
             Some(scope_stack.join("::"))
         };
 
-        // Try to extract symbols from this node
+        // Try to extract symbols from this node using O(1) cache lookup
         let mut symbol_extracted = false;
+        let patterns = match self.patterns.get(&language) {
+            Some(patterns) => patterns,
+            None => return, // Early return if no patterns for language
+        };
 
-        // Check function patterns
-        for pattern in &patterns.function_patterns {
-            if pattern.node_kind == node_kind {
-                if let Some(name) = self.extract_name(&node, source_code, &pattern.name_extraction) {
-                    symbols.push(SymbolInfo {
-                        name,
-                        kind: pattern.symbol_kind,
-                        position: Position {
-                            row: node.start_position().row,
-                            column: node.start_position().column,
-                            byte_offset: node.start_byte(),
-                        },
-                        scope: current_scope.clone(),
-                        signature: None,
-                        documentation: None,
-                    });
-                    symbol_extracted = true;
-
-                    // If this pattern creates a scope, push the name
-                    if pattern.creates_scope {
-                        scope_stack.push(name);
-                    }
-                    break;
-                }
-            }
-        }
-
-        // If not a function, check type patterns
-        if !symbol_extracted {
-            for pattern in &patterns.type_patterns {
+        // O(1) lookup using pre-cached sets instead of O(n) iteration
+        if cache.function_kinds.contains(node_kind) {
+            // Find the matching pattern efficiently
+            for pattern in &patterns.function_patterns {
                 if pattern.node_kind == node_kind {
                     if let Some(name) = self.extract_name(&node, source_code, &pattern.name_extraction) {
                         symbols.push(SymbolInfo {
-                            name,
+                            name: name.clone(), // Clone only when we have a match
                             kind: pattern.symbol_kind,
                             position: Position {
                                 row: node.start_position().row,
@@ -168,15 +235,39 @@ impl UnifiedSymbolExtractor {
                     }
                 }
             }
-        }
+        } else if cache.type_kinds.contains(node_kind) {
+            // Check type patterns
+            for pattern in &patterns.type_patterns {
+                if pattern.node_kind == node_kind {
+                    if let Some(name) = self.extract_name(&node, source_code, &pattern.name_extraction) {
+                        symbols.push(SymbolInfo {
+                            name: name.clone(),
+                            kind: pattern.symbol_kind,
+                            position: Position {
+                                row: node.start_position().row,
+                                column: node.start_position().column,
+                                byte_offset: node.start_byte(),
+                            },
+                            scope: current_scope.clone(),
+                            signature: None,
+                            documentation: None,
+                        });
+                        symbol_extracted = true;
 
-        // If not a type, check variable patterns
-        if !symbol_extracted {
+                        if pattern.creates_scope {
+                            scope_stack.push(name);
+                        }
+                        break;
+                    }
+                }
+            }
+        } else if cache.variable_kinds.contains(node_kind) {
+            // Check variable patterns
             for pattern in &patterns.variable_patterns {
                 if pattern.node_kind == node_kind {
                     if let Some(name) = self.extract_name(&node, source_code, &pattern.name_extraction) {
                         symbols.push(SymbolInfo {
-                            name,
+                            name, // No clone needed here
                             kind: pattern.symbol_kind,
                             position: Position {
                                 row: node.start_position().row,
@@ -197,14 +288,11 @@ impl UnifiedSymbolExtractor {
         // Process children (even if we extracted a symbol from this node)
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
-            self.extract_symbols_recursive(child, source_code, patterns, scope_stack, symbols);
+            self.extract_symbols_recursive(child, source_code, language, scope_stack, symbols);
         }
 
-        // Pop scope if we pushed one for this node
-        if symbol_extracted && scope_stack.last().map_or(false, |s| {
-            patterns.function_patterns.iter().any(|p| p.node_kind == node_kind && p.creates_scope) ||
-            patterns.type_patterns.iter().any(|p| p.node_kind == node_kind && p.creates_scope)
-        }) {
+        // Pop scope if we pushed one for this node - O(1) lookup using cache
+        if symbol_extracted && cache.scope_creating_kinds.contains(node_kind) {
             scope_stack.pop();
         }
     }

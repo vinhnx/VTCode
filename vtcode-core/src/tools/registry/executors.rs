@@ -81,18 +81,21 @@ impl ToolRegistry {
                 pattern: None,
             });
 
-            // Initialize comprehensive error report
+            // Cache workspace root string to avoid repeated allocations
+            let workspace_root = self.workspace_root().to_string_lossy();
+            
+            // Initialize comprehensive error report with pre-allocated vectors
             let mut error_report = serde_json::json!({
                 "timestamp": Utc::now().to_rfc3339(),
-                "workspace": self.workspace_root().to_string_lossy(),
+                "workspace": workspace_root,
                 "scope": parsed.scope,
                 "detailed": parsed.detailed,
                 "total_errors": 0,
-                "recent_errors": Vec::<Value>::new(),
-                "suggestions": Vec::<String>::new(),
+                "recent_errors": Vec::<Value>::with_capacity(parsed.limit.min(100)), // Cap capacity to prevent excessive allocation
+                "suggestions": Vec::<String>::with_capacity(20), // Pre-allocate for common suggestions
                 "diagnostics": {
-                    "tool_execution_failures": Vec::<Value>::new(),
-                    "recent_tool_calls": Vec::<Value>::new(),
+                    "tool_execution_failures": Vec::<Value>::with_capacity(10),
+                    "recent_tool_calls": Vec::<Value>::with_capacity(20),
                     "system_state": {}
                 }
             });
@@ -104,11 +107,11 @@ impl ToolRegistry {
                         Ok(list) => list,
                         Err(err) => {
                             tracing::warn!("Failed to list session archives: {}", err);
-                            Vec::new()
+                            Vec::with_capacity(0) // Use with_capacity(0) instead of Vec::new()
                         }
                     };
 
-                let mut issues = Vec::new();
+                let mut issues = Vec::with_capacity(parsed.limit.min(100)); // Cap capacity to prevent excessive allocation
                 let mut total_errors = 0usize;
 
                 for listing in sessions {
@@ -118,29 +121,8 @@ impl ToolRegistry {
                             let text = message.content.as_text();
                             let lower = text.to_lowercase();
 
-                            // Enhanced error detection patterns
-                            let error_patterns = [
-                                "error",
-                                "failed",
-                                "exception",
-                                "permission denied",
-                                "not found",
-                                "no such file",
-                                "cannot",
-                                "could not",
-                                "exception",
-                                "panic",
-                                "crash",
-                                "unhandled",
-                                "fatal",
-                                "timeout",
-                                "connection refused",
-                                "access denied",
-                                "stack trace",
-                                "traceback",
-                                "abort",
-                                "terminate",
-                            ];
+                            // Use shared error detection patterns
+                            let error_patterns = crate::tools::constants::ERROR_DETECTION_PATTERNS;
 
                             let matches_pattern = if let Some(ref pattern) = parsed.pattern {
                                 lower.contains(&pattern.to_lowercase())
@@ -169,7 +151,7 @@ impl ToolRegistry {
             }
 
             // Enhanced suggestions with self-fix capabilities
-            let mut suggestions = Vec::new();
+            let mut suggestions = Vec::with_capacity(10); // Pre-allocate for common suggestions
             let total_errors = error_report["total_errors"]
                 .as_u64()
                 .unwrap_or(0)
@@ -196,9 +178,11 @@ impl ToolRegistry {
 
                 // Self-fix suggestions based on common error patterns
                 // Extract error messages to check for patterns
-                let error_messages: Vec<String> = error_report["recent_errors"]
+                let empty_vec = Vec::with_capacity(0); // Use with_capacity(0) instead of Vec::new()
+                let recent_errors_array = error_report["recent_errors"]
                     .as_array()
-                    .unwrap_or(&Vec::new())
+                    .unwrap_or(&empty_vec);
+                let error_messages: Vec<String> = recent_errors_array
                     .iter()
                     .filter_map(|err| err.get("message").and_then(|m| m.as_str()))
                     .map(|s| s.to_lowercase())
@@ -210,18 +194,11 @@ impl ToolRegistry {
                         || msg.contains("no such file")
                         || msg.contains("file does not exist")
                 }) {
-                    suggestions.push(
-                        "File not found errors: Verify file paths exist and are accessible"
-                            .to_string(),
-                    );
-                    suggestions.push(
-                        "Try using 'list_files' to check directory contents before accessing files"
-                            .to_string(),
-                    );
-                    suggestions.push(
-                        "Consider creating missing files with 'create_file' or 'write_file' tools"
-                            .to_string(),
-                    );
+                    suggestions.extend_from_slice(&[
+                        String::from("File not found errors: Verify file paths exist and are accessible"),
+                        String::from("Try using 'list_files' to check directory contents before accessing files"),
+                        String::from("Consider creating missing files with 'create_file' or 'write_file' tools"),
+                    ]);
                 }
 
                 // Permission errors
@@ -230,14 +207,10 @@ impl ToolRegistry {
                         || msg.contains("access denied")
                         || msg.contains("forbidden")
                 }) {
-                    suggestions.push(
-                        "Permission errors: Check file permissions and workspace access"
-                            .to_string(),
-                    );
-                    suggestions.push(
-                        "Consider running with appropriate permissions or changing file ownership"
-                            .to_string(),
-                    );
+                    suggestions.extend_from_slice(&[
+                        String::from("Permission errors: Check file permissions and workspace access"),
+                        String::from("Consider running with appropriate permissions or changing file ownership"),
+                    ]);
                 }
 
                 // Command execution errors
@@ -246,23 +219,20 @@ impl ToolRegistry {
                         || msg.contains("command failed")
                         || msg.contains("exit code")
                 }) {
-                    suggestions.push("Command execution errors: Verify command availability with 'list_files' or check PATH environment".to_string());
-                    suggestions.push(
-                        "Use 'run_pty_cmd' to test commands manually before automation".to_string(),
-                    );
+                    suggestions.extend_from_slice(&[
+                        String::from("Command execution errors: Verify command availability with 'list_files' or check PATH environment"),
+                        String::from("Use 'run_pty_cmd' to test commands manually before automation"),
+                    ]);
                 }
 
                 // Git-related errors
                 if error_messages.iter().any(|msg| {
                     msg.contains("git") && (msg.contains("error") || msg.contains("fatal"))
                 }) {
-                    suggestions.push(
-                        "Git errors: Check repository status and Git configuration".to_string(),
-                    );
-                    suggestions.push(
-                        "Run 'run_pty_cmd' with 'git status' to diagnose repository issues"
-                            .to_string(),
-                    );
+                    suggestions.extend_from_slice(&[
+                        String::from("Git errors: Check repository status and Git configuration"),
+                        String::from("Run 'run_pty_cmd' with 'git status' to diagnose repository issues"),
+                    ]);
                 }
 
                 // Network/HTTP errors
@@ -274,18 +244,11 @@ impl ToolRegistry {
                         || msg.contains("ssl")
                         || msg.contains("tls")
                 }) {
-                    suggestions.push(
-                        "Network/HTTP errors: Check internet connectivity and proxy settings"
-                            .to_string(),
-                    );
-                    suggestions.push(
-                        "Verify API endpoints and credentials if using external services"
-                            .to_string(),
-                    );
-                    suggestions.push(
-                        "Consider using 'web_fetch' with proper error handling for web requests"
-                            .to_string(),
-                    );
+                    suggestions.extend_from_slice(&[
+                        String::from("Network/HTTP errors: Check internet connectivity and proxy settings"),
+                        String::from("Verify API endpoints and credentials if using external services"),
+                        String::from("Consider using 'web_fetch' with proper error handling for web requests"),
+                    ]);
                 }
 
                 // Memory/resource errors
@@ -296,26 +259,21 @@ impl ToolRegistry {
                         || msg.contains("resource")
                         || msg.contains("too large")
                 }) {
-                    suggestions.push(
-                        "Memory/resource errors: Consider processing data in smaller chunks"
-                            .to_string(),
-                    );
-                    suggestions.push("Use 'execute_code' with memory-efficient algorithms when handling large files".to_string());
+                    suggestions.extend_from_slice(&[
+                        String::from("Memory/resource errors: Consider processing data in smaller chunks"),
+                        String::from("Use 'execute_code' with memory-efficient algorithms when handling large files"),
+                    ]);
                 }
 
                 // Add a general recommendation to use the enhanced get_errors
-                suggestions.push(
-                    "For more detailed diagnostics, run 'get_errors' with detailed=true parameter"
-                        .to_string(),
-                );
+                suggestions.push(String::from("For more detailed diagnostics, run 'get_errors' with detailed=true parameter"));
             } else {
-                suggestions.push("No obvious errors discovered in recent sessions".to_string());
+                suggestions.push(String::from("No obvious errors discovered in recent sessions"));
                 if parsed.detailed {
-                    suggestions.push(
-                        "Run 'debug_agent' or 'analyze_agent' for proactive system checks"
-                            .to_string(),
-                    );
-                    suggestions.push("Consider performing routine maintenance tasks if working with large projects".to_string());
+                    suggestions.extend_from_slice(&[
+                        String::from("Run 'debug_agent' or 'analyze_agent' for proactive system checks"),
+                        String::from("Consider performing routine maintenance tasks if working with large projects"),
+                    ]);
                 }
             }
 
@@ -330,12 +288,12 @@ impl ToolRegistry {
                 let recent_executions = self.get_recent_tool_executions(20); // Last 20 executions
                 let recent_failures = self.get_recent_tool_failures(10); // Last 10 failures
 
-                // Convert to JSON format for the report
+                // Convert to JSON format for the report with capacity planning
                 let recent_tool_calls: Vec<Value> = recent_executions
                     .iter()
                     .map(|record| {
                         json!({
-                            "tool_name": record.tool_name,
+                            "tool_name": &record.tool_name, // Use reference to avoid clone
                             "timestamp": record.timestamp.duration_since(std::time::UNIX_EPOCH)
                                 .map(|d| d.as_secs())
                                 .unwrap_or(0),
@@ -344,11 +302,12 @@ impl ToolRegistry {
                     })
                     .collect();
 
+                // Convert failures to JSON format with capacity planning
                 let tool_execution_failures: Vec<Value> = recent_failures
                     .iter()
                     .map(|record| {
                         json!({
-                            "tool_name": record.tool_name,
+                            "tool_name": &record.tool_name, // Use reference to avoid clone
                             "timestamp": record.timestamp.duration_since(std::time::UNIX_EPOCH)
                                 .map(|d| d.as_secs())
                                 .unwrap_or(0),
@@ -356,19 +315,21 @@ impl ToolRegistry {
                                 Ok(_) => "Unexpected success in failure list".to_string(),
                                 Err(e) => e.clone(),
                             },
-                            "args": record.args,
+                            "args": &record.args, // Use reference to avoid clone
                         })
                     })
                     .collect();
 
+                // Cache workspace root to avoid repeated allocations
+                let workspace_root = self.workspace_root().to_string_lossy();
                 let system_state = json!({
                     "available_tools_count": available_tools.len(),
-                    "workspace_root": self.workspace_root().to_string_lossy(),
+                    "workspace_root": workspace_root,
                     "recent_tool_calls": recent_tool_calls,
                 });
 
                 // Self-diagnosis logic
-                let mut self_diagnosis_issues = Vec::new();
+                let mut self_diagnosis_issues = Vec::with_capacity(5); // Pre-allocate for common diagnosis issues
 
                 // Check for common system issues
                 if available_tools.is_empty() {
@@ -399,7 +360,7 @@ impl ToolRegistry {
                 }
 
                 // Provide self-fix suggestions
-                let mut self_fix_suggestions = Vec::new();
+                let mut self_fix_suggestions = Vec::with_capacity(5); // Pre-allocate for common fix suggestions
                 if !self_diagnosis_issues.is_empty() {
                     self_fix_suggestions
                         .push("Run system initialization to ensure proper setup".to_string());
@@ -473,9 +434,10 @@ impl ToolRegistry {
         Box::pin(async move {
             // Lightweight snapshot of registry state for diagnostics; this will not include full session context.
             let tools = self.available_tools().await;
+            let workspace_root = self.workspace_root().to_string_lossy();
             let stats = json!({
                 "tools_registered": tools,
-                "workspace_root": self.workspace_root().to_string_lossy(),
+                "workspace_root": workspace_root,
             });
             Ok(stats)
         })
@@ -649,10 +611,20 @@ impl ToolRegistry {
                 .await
                 .with_context(|| format!("grep_file failed for pattern '{}'", payload.pattern))?;
 
+            // Add overflow indication if we have more results than the limit
+            let matches_count = result.matches.len();
+            let max_results = payload.max_results.unwrap_or(5); // Default to 5 per AGENTS.md
+            let overflow_indication = if matches_count > max_results {
+                format!("[+{} more matches]", matches_count - max_results)
+            } else {
+                String::new()
+            };
+
             Ok(json!({
                 "success": true,
                 "query": result.query,
                 "matches": result.matches,
+                "overflow": overflow_indication,
             }))
         })
     }
@@ -709,9 +681,9 @@ impl ToolRegistry {
         use crate::tools::web_fetch::WebFetchTool;
         // Get config from policy gateway or use defaults
         let mode = "restricted".to_string(); // Default mode
-        let blocked_domains = Vec::new();
-        let blocked_patterns = Vec::new();
-        let allowed_domains = Vec::new();
+        let blocked_domains = Vec::with_capacity(10); // Pre-allocate for common blocked domains
+        let blocked_patterns = Vec::with_capacity(10); // Pre-allocate for common blocked patterns
+        let allowed_domains = Vec::with_capacity(10); // Pre-allocate for common allowed domains
         let strict_https_only = true;
 
         let tool = WebFetchTool::with_config(
@@ -813,12 +785,26 @@ impl ToolRegistry {
 
             let tools_json: Vec<Value> = results.iter().map(|r| r.to_json(detail_level)).collect();
 
-            Ok(json!({
+            // Implement AGENTS.md pattern for large result sets
+            let matched = results.len();
+            let overflow_indication = if matched > 50 {
+                format!("[+{} more tools]", matched - 5)
+            } else {
+                String::new()
+            };
+
+            let mut response = json!({
                 "keyword": parsed.keyword,
-                "matched": results.len(),
+                "matched": matched,
                 "detail_level": detail_level.as_str(),
-                "results": tools_json
-            }))
+                "results": tools_json,
+            });
+
+            if !overflow_indication.is_empty() {
+                response["overflow"] = json!(overflow_indication);
+            }
+
+            Ok(response)
         })
     }
 
@@ -946,13 +932,46 @@ impl ToolRegistry {
                 "Code execution completed"
             );
 
-            // Build response
+            // Implement AGENTS.md pattern for large outputs
+            const MAX_OUTPUT_CHARS: usize = 4000; // Reasonable limit for context windows
+            let stdout_chars = result.stdout.chars().count();
+            let stderr_chars = result.stderr.chars().count();
+            
+            let (stdout_output, stdout_overflow) = if stdout_chars > MAX_OUTPUT_CHARS {
+                let truncated: String = result.stdout.chars().take(MAX_OUTPUT_CHARS).collect();
+                let overflow = format!("[+{} more characters]", stdout_chars - MAX_OUTPUT_CHARS);
+                (truncated, Some(overflow))
+            } else {
+                (result.stdout, None)
+            };
+            
+            let (stderr_output, stderr_overflow) = if stderr_chars > MAX_OUTPUT_CHARS {
+                let truncated: String = result.stderr.chars().take(MAX_OUTPUT_CHARS).collect();
+                let overflow = format!("[+{} more characters]", stderr_chars - MAX_OUTPUT_CHARS);
+                (truncated, Some(overflow))
+            } else {
+                (result.stderr, None)
+            };
+
+            // Build response with overflow indicators
             let mut response = json!({
                 "exit_code": result.exit_code,
                 "duration_ms": result.duration_ms,
-                "stdout": result.stdout,
-                "stderr": result.stderr,
+                "stdout": stdout_output,
+                "stderr": stderr_output,
             });
+
+            // Add overflow indicators if present
+            if stdout_overflow.is_some() || stderr_overflow.is_some() {
+                let mut overflow_info = serde_json::Map::new();
+                if let Some(overflow) = stdout_overflow {
+                    overflow_info.insert("stdout".to_string(), json!(overflow));
+                }
+                if let Some(overflow) = stderr_overflow {
+                    overflow_info.insert("stderr".to_string(), json!(overflow));
+                }
+                response["overflow"] = json!(overflow_info);
+            }
 
             // Include JSON result if present
             if let Some(json_result) = result.json_result {
@@ -1017,7 +1036,7 @@ impl ToolRegistry {
                     .collect::<Result<Vec<_>>>()
                     .context("failed to parse inputs")?
             } else {
-                Vec::new()
+                Vec::with_capacity(0) // Use with_capacity(0) instead of Vec::new()
             };
 
             let metadata = SkillMetadata {
@@ -1308,7 +1327,7 @@ impl ToolRegistry {
 
                     // Reconstruct the new content by applying the patch changes
                     let old_lines: Vec<&str> = old_content.lines().collect();
-                    let mut new_lines = Vec::new();
+                    let mut new_lines = Vec::with_capacity(old_lines.len() + chunks.len() * 10); // Pre-allocate for typical patch size
                     let mut current_old_line_idx = 0;
 
                     for chunk in chunks {
@@ -2188,12 +2207,12 @@ fn parse_command_parts(
         Some(_) => {
             return Err(anyhow!("command must be a string or string array"));
         }
-        None => Vec::new(),
+        None => Vec::with_capacity(0), // Use with_capacity(0) instead of Vec::new()
     };
 
     // If we didn't get a command array or string, try to pick up dotted command.N args
     if parts.is_empty() {
-        let mut entries: Vec<(usize, String)> = Vec::new();
+        let mut entries: Vec<(usize, String)> = Vec::with_capacity(50); // Pre-allocate for typical patch size
         for (k, v) in payload.iter() {
             if let Some(idx_str) = k.strip_prefix("command.") {
                 if let Ok(idx) = idx_str.parse::<usize>() {
@@ -2711,7 +2730,7 @@ impl PtyInputPayload {
             "received send_pty_input payload"
         );
 
-        let mut buffer = Vec::new();
+        let mut buffer = Vec::with_capacity(4096); // Pre-allocate 4KB buffer for typical PTY output
 
         // Prefer input_base64 if present, else use input
         if let Some(encoded) = map
@@ -3008,7 +3027,7 @@ fn extract_build_errors_and_summary(output: &str, max_tokens: usize) -> String {
         return output.to_string();
     }
 
-    let mut extracted = Vec::new();
+    let mut extracted = Vec::with_capacity(100); // Pre-allocate for typical extraction size
     let mut i = 0;
 
     // Patterns that indicate important lines to keep

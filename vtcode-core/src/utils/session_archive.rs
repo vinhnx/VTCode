@@ -275,7 +275,8 @@ pub async fn list_recent_sessions(limit: usize) -> Result<Vec<SessionListing>> {
         return Ok(Vec::new());
     }
 
-    let mut listings = Vec::new();
+    // Collect all session file paths first
+    let mut session_paths = Vec::new();
     for entry in fs::read_dir(&sessions_dir).with_context(|| {
         format!(
             "failed to read session directory: {}",
@@ -286,25 +287,48 @@ pub async fn list_recent_sessions(limit: usize) -> Result<Vec<SessionListing>> {
             format!("failed to read session entry in {}", sessions_dir.display())
         })?;
         let path = entry.path();
-        if !is_session_file(&path) {
-            continue;
+        if is_session_file(&path) {
+            session_paths.push(path);
         }
-
-        let data = fs::read_to_string(&path)
-            .with_context(|| format!("failed to read session file: {}", path.display()))?;
-        let snapshot: SessionSnapshot = match serde_json::from_str(&data) {
-            Ok(snapshot) => snapshot,
-            Err(_) => continue,
-        };
-        listings.push(SessionListing { path, snapshot });
     }
 
-    listings.sort_by(|a, b| b.snapshot.ended_at.cmp(&a.snapshot.ended_at));
-    if limit > 0 && listings.len() > limit {
-        listings.truncate(limit);
+    // Process session files in parallel for better performance with large archives
+    // Batch processing to avoid overwhelming the system with too many concurrent tasks
+    const BATCH_SIZE: usize = 10;
+    let mut all_listings = Vec::new();
+    
+    for batch in session_paths.chunks(BATCH_SIZE) {
+        let mut tasks = Vec::with_capacity(batch.len());
+        
+        for path in batch {
+            let path = path.clone();
+            let task = tokio::task::spawn(async move {
+                match tokio::fs::read_to_string(&path).await {
+                    Ok(data) => match serde_json::from_str::<SessionSnapshot>(&data) {
+                        Ok(snapshot) => Some(SessionListing { path, snapshot }),
+                        Err(_) => None, // Invalid JSON, skip
+                    },
+                    Err(_) => None, // Failed to read, skip
+                }
+            });
+            tasks.push(task);
+        }
+        
+        // Collect results from this batch
+        for task in tasks {
+            if let Ok(Some(listing)) = task.await {
+                all_listings.push(listing);
+            }
+        }
     }
 
-    Ok(listings)
+    // Sort and limit results
+    all_listings.sort_by(|a, b| b.snapshot.ended_at.cmp(&a.snapshot.ended_at));
+    if limit > 0 && all_listings.len() > limit {
+        all_listings.truncate(limit);
+    }
+
+    Ok(all_listings)
 }
 
 /// Find a session archive by its identifier (file stem) without needing to list all sessions.

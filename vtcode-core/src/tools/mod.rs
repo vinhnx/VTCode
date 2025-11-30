@@ -121,6 +121,7 @@
 //! the monolithic implementation into focused, reusable components.
 
 pub mod apply_patch;
+pub mod constants;
 pub mod error_messages;
 
 pub mod cache;
@@ -190,7 +191,7 @@ pub use registry::{
     ToolJustification, ToolRegistration, ToolRegistry, ToolRiskContext, ToolRiskScorer, ToolSource,
     WorkspaceTrust,
 };
-pub use result_cache::{CacheKey, CacheStats, CachedResult, ToolResultCache};
+pub use result_cache::{ToolCacheKey, ToolResultCache};
 pub use result_metadata::{
     EnhancedToolResult, ResultCompleteness, ResultMetadata, ResultScorer, ScorerRegistry,
 };

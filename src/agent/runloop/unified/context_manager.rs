@@ -250,7 +250,7 @@ impl ContextManager {
                 })
                 .count(),
             token_usage_ratio: if self.token_budget_enabled {
-                self.token_budget.usage_ratio().await.unwrap_or(0.0)
+                self.token_budget.usage_ratio().await
             } else {
                 0.0
             },

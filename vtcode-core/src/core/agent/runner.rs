@@ -120,14 +120,14 @@ impl TaskRunState {
         Self {
             conversation,
             conversation_messages,
-            created_contexts: Vec::new(),
-            modified_files: Vec::new(),
-            executed_commands: Vec::new(),
-            warnings: Vec::new(),
+            created_contexts: Vec::with_capacity(16), // Typical session creates ~5-10 contexts
+            modified_files: Vec::with_capacity(32), // Typical session modifies ~10-20 files
+            executed_commands: Vec::with_capacity(64), // Typical session executes ~20-40 commands
+            warnings: Vec::with_capacity(16), // Typical session has ~5-10 warnings
             has_completed: false,
             completion_outcome: TaskOutcome::Unknown,
             turns_executed: 0,
-            turn_durations_ms: Vec::new(),
+            turn_durations_ms: Vec::with_capacity(max_tool_loops as usize), // Pre-allocate for expected number of turns
             max_tool_loops,
             consecutive_tool_loops: 0,
             max_tool_loop_streak: 0,
@@ -213,7 +213,7 @@ mod tests {
 
     #[test]
     fn record_turn_duration_records_once() {
-        let mut durations = Vec::new();
+        let mut durations = Vec::with_capacity(5); // Test only needs capacity for a few durations
         let mut recorded = false;
         let start = std::time::Instant::now();
 

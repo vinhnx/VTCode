@@ -1,5 +1,5 @@
 pub mod anthropic;
-// pub mod base;  // Temporarily commented out
+pub mod base;
 pub mod deepseek;
 pub mod error_handling;
 pub mod gemini;
@@ -9,14 +9,23 @@ pub mod moonshot;
 pub mod ollama;
 pub mod openai;
 pub mod openrouter;
+pub mod provider_base;
 pub mod streaming_progress;
 pub mod xai;
 pub mod zai;
 
 mod codex_prompt;
 pub mod common;
-mod reasoning;
+pub mod reasoning;
 mod shared;
+
+// Re-export commonly used constants
+pub use crate::tools::constants::{
+    ERROR_DETECTION_PATTERNS, 
+    MAX_SEARCH_RESULTS, 
+    OVERFLOW_INDICATOR_PREFIX,
+    DEFAULT_VEC_CAPACITY,
+};
 
 pub(crate) use codex_prompt::gpt5_codex_developer_prompt;
 pub(crate) use reasoning::{ReasoningBuffer, extract_reasoning_trace, split_reasoning_from_text};

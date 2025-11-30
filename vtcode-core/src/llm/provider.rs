@@ -733,6 +733,17 @@ pub enum MessageRole {
     Tool,
 }
 
+impl std::fmt::Display for MessageRole {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MessageRole::System => write!(f, "system"),
+            MessageRole::User => write!(f, "user"),
+            MessageRole::Assistant => write!(f, "assistant"),
+            MessageRole::Tool => write!(f, "tool"),
+        }
+    }
+}
+
 impl MessageRole {
     /// Get the role string for Gemini API
     /// Note: Gemini API has specific constraints on message roles

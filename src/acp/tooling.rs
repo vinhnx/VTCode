@@ -117,9 +117,9 @@ impl AcpToolRegistry {
         list_files_enabled: bool,
         local_definitions: Vec<ToolDefinition>,
     ) -> Self {
-        let mut entries = Vec::new();
-        let mut mapping = HashMap::new();
-        let mut local_map = HashMap::new();
+        let mut entries = Vec::with_capacity(5); // Pre-allocate for typical tool count (ReadFile, ListFiles + locals)
+        let mut mapping = HashMap::with_capacity(10); // Pre-allocate for mapping entries
+        let mut local_map = HashMap::with_capacity(local_definitions.len()); // Pre-allocate for local definitions
 
         if read_file_enabled {
             let workspace_display = workspace_root.display().to_string();
@@ -136,10 +136,10 @@ impl AcpToolRegistry {
             );
             let read_file_examples = vec![
                 json!({
-                    TOOL_READ_FILE_PATH_ARG: sample_path_string.clone(),
+                    TOOL_READ_FILE_PATH_ARG: &sample_path_string, // Use reference to avoid clone
                 }),
                 json!({
-                    TOOL_READ_FILE_PATH_ARG: sample_path_string.clone(),
+                    TOOL_READ_FILE_PATH_ARG: &sample_path_string, // Use reference to avoid clone
                     TOOL_READ_FILE_LINE_ARG: 1,
                     TOOL_READ_FILE_LIMIT_ARG: 200,
                 }),
@@ -198,6 +198,7 @@ impl AcpToolRegistry {
                 path = TOOL_LIST_FILES_PATH_ARG,
                 uri = TOOL_LIST_FILES_URI_ARG,
             );
+            let workspace_display_str = workspace_root.display().to_string();
             let list_files_examples = vec![
                 json!({
                     TOOL_LIST_FILES_MODE_ARG: "list",
@@ -208,7 +209,7 @@ impl AcpToolRegistry {
                     TOOL_LIST_FILES_PER_PAGE_ARG: 100,
                 }),
                 json!({
-                    TOOL_LIST_FILES_URI_ARG: format!("zed-fs://{}/src", workspace_root.display()),
+                    TOOL_LIST_FILES_URI_ARG: format!("zed-fs://{}/src", workspace_display_str),
                 }),
             ];
             let list_files_schema = json!({
