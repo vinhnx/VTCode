@@ -7,6 +7,14 @@ use crate::utils::colors::style;
 use anyhow::{Result, anyhow};
 use serde_json::json;
 
+/// Helper to print tool execution result with consistent formatting
+fn print_result(action: &str, result: &Result<serde_json::Value>) {
+    match result {
+        Ok(_) => println!("   {} {}", style("✓").green(), action),
+        Err(e) => println!("   {} {}: {}", style("✗").red(), action, e),
+    }
+}
+
 /// Handle the create-project command - create a complete project structure
 pub async fn handle_create_project_command(
     config: AgentConfig,
@@ -48,13 +56,11 @@ pub async fn handle_create_project_command(
         )
         .await;
 
-    match create_dir_result {
-        Ok(_) => println!("   {} Created project directory", style("✓").green()),
-        Err(e) => {
-            println!("   {} Failed to create directory: {}", style("✗").red(), e);
-            return Err(anyhow!("Failed to create project directory: {}", e));
-        }
+    if let Err(e) = &create_dir_result {
+        println!("   {} Failed to create directory: {}", style("✗").red(), e);
+        return Err(anyhow!("Failed to create project directory: {}", e));
     }
+    print_result("Created project directory", &create_dir_result);
 
     // Step 2: Create Cargo.toml
     println!("{}", style("Step 2: Generating Cargo.toml...").yellow());
@@ -86,10 +92,7 @@ edition = "2021"
         )
         .await;
 
-    match cargo_result {
-        Ok(_) => println!("   {} Created Cargo.toml", style("✓").green()),
-        Err(e) => println!("   {} Failed to create Cargo.toml: {}", style("✗").red(), e),
-    }
+    print_result("Created Cargo.toml", &cargo_result);
 
     // Step 3: Create src directory and main.rs
     println!(
@@ -137,10 +140,7 @@ fn main() {
         )
         .await;
 
-    match main_rs_result {
-        Ok(_) => println!("   {} Created src/main.rs", style("✓").green()),
-        Err(e) => println!("   {} Failed to create main.rs: {}", style("✗").red(), e),
-    }
+    print_result("Created src/main.rs", &main_rs_result);
 
     // Step 4: Create README.md
     println!("{}", style("Step 4: Generating documentation...").yellow());
@@ -183,10 +183,7 @@ cargo test
         )
         .await;
 
-    match readme_result {
-        Ok(_) => println!("   {} Created README.md", style("✓").green()),
-        Err(e) => println!("   {} Failed to create README.md: {}", style("✗").red(), e),
-    }
+    print_result("Created README.md", &readme_result);
 
     // Step 5: Create .gitignore
     println!("{}", style("Step 5: Adding .gitignore...").yellow());
@@ -209,10 +206,7 @@ Cargo.lock
         )
         .await;
 
-    match gitignore_result {
-        Ok(_) => println!("   {} Created .gitignore", style("✓").green()),
-        Err(e) => println!("   {} Failed to create .gitignore: {}", style("✗").red(), e),
-    }
+    print_result("Created .gitignore", &gitignore_result);
 
     // Step 6: Test the build
     println!("{}", style("Step 6: Testing project build...").yellow());

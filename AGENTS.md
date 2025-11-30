@@ -23,10 +23,12 @@ cargo fmt                   # Format code
 -   **Naming**: snake_case functions/vars, PascalCase types (standard Rust)
 -   **Error Handling**: `anyhow::Result<T>` + `anyhow::Context`; NO `unwrap()`
 -   **Constants**: Use `vtcode-core/src/config/constants.rs` (never hardcode, especially model IDs)
+-   **Error Messages**: Use `vtcode-core/src/utils/error_messages.rs` constants instead of hardcoded strings (e.g., `ERR_READ_FILE`, `ERR_CREATE_DIR`). See module for all standard messages.
 -   **ANSI Codes**: **NEVER hardcode** escape sequences. Always use constants from `vtcode-core/src/utils/ansi_codes.rs` (e.g., `ALT_BUFFER_DISABLE`, `CURSOR_SHOW`, `RESET`, `CLEAR_SCREEN`)
 -   **Config**: Read from `vtcode.toml` at runtime
 -   **Docs**: Markdown ONLY in `./docs/`; use `docs/models.json` for latest LLM models
 -   **Formatting**: 4-space indentation, early returns, simple variable names
+-   **String Allocations**: Avoid `.to_owned()` on string literals; use `&'static str` or references. Use `.into()` for generic type conversion. See `.cleanup_report.md` for allocation optimization patterns.
 
 ## Context Engineering & Output Curation (NEW - Phase 1 Optimization)
 

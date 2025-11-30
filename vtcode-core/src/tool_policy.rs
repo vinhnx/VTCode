@@ -5,6 +5,7 @@
 //! user control overwhich tools the agent can use.
 
 use anyhow::{Context, Result};
+use crate::utils::error_messages::ERR_CREATE_POLICY_DIR;
 use dialoguer::{
     Confirm,
     console::{Color as ConsoleColor, Style as ConsoleStyle, style},
@@ -259,7 +260,7 @@ fn parse_mcp_policy_key(tool_name: &str) -> Option<(String, String)> {
     let mut parts = tool_name.splitn(3, "::");
     match (parts.next()?, parts.next(), parts.next()) {
         ("mcp", Some(provider), Some(tool)) if !provider.is_empty() && !tool.is_empty() => {
-            Some((provider.to_owned(), tool.to_owned()))
+            Some((provider.to_string(), tool.to_string()))
         }
         _ => None,
     }
@@ -359,7 +360,8 @@ impl ToolPolicyManager {
             if !tokio::fs::try_exists(parent).await.unwrap_or(false) {
                 tokio::fs::create_dir_all(parent).await.with_context(|| {
                     format!(
-                        "Failed to create directory for tool policy config at {}",
+                        "{} at {}",
+                        ERR_CREATE_POLICY_DIR,
                         parent.display()
                     )
                 })?;
@@ -449,13 +451,14 @@ impl ToolPolicyManager {
 
     fn apply_auto_allow_defaults(config: &mut ToolPolicyConfig) {
         for tool in AUTO_ALLOW_TOOLS {
+            let tool_str = tool.to_string();
             config
                 .policies
-                .entry((*tool).to_owned())
+                .entry(tool_str.clone())
                 .and_modify(|policy| *policy = ToolPolicy::Allow)
                 .or_insert(ToolPolicy::Allow);
-            if !config.available_tools.contains(&(*tool).to_owned()) {
-                config.available_tools.push((*tool).to_owned());
+            if !config.available_tools.contains(&tool_str) {
+                config.available_tools.push(tool_str);
             }
         }
         Self::ensure_network_constraints(config);
@@ -491,7 +494,8 @@ impl ToolPolicyManager {
             if !tokio::fs::try_exists(parent).await.unwrap_or(false) {
                 tokio::fs::create_dir_all(parent).await.with_context(|| {
                     format!(
-                        "Failed to create directory for tool policy config at {}",
+                        "{} at {}",
+                        ERR_CREATE_POLICY_DIR,
                         parent.display()
                     )
                 })?;
@@ -626,9 +630,10 @@ impl ToolPolicyManager {
             has_changes = true;
         }
 
-        let mut current_available = self.config.available_tools.clone();
-        current_available.sort();
-        if current_available != canonical_tools {
+        // Only clone if we need to compare/sort
+        let mut sorted_available = self.config.available_tools.clone();
+        sorted_available.sort();
+        if sorted_available != canonical_tools {
             self.config.available_tools = canonical_tools;
             has_changes = true;
         }
@@ -656,16 +661,16 @@ impl ToolPolicyManager {
                 .config
                 .mcp
                 .providers
-                .entry(provider.clone())
+                .entry(provider.to_string())
                 .or_default();
 
-            let existing_tools: HashSet<String> = entry.tools.keys().cloned().collect();
-            let advertised: HashSet<String> = tools.iter().cloned().collect();
+            let existing_tools: HashSet<_> = entry.tools.keys().cloned().collect();
+            let advertised: HashSet<_> = tools.iter().cloned().collect();
 
             // Add new tools with default Prompt policy
             for tool in tools {
                 if !existing_tools.contains(tool) {
-                    entry.tools.insert(tool.clone(), ToolPolicy::Prompt);
+                    entry.tools.insert(tool.to_string(), ToolPolicy::Prompt);
                     has_changes = true;
                 }
             }
@@ -762,9 +767,9 @@ impl ToolPolicyManager {
             .config
             .mcp
             .providers
-            .entry(provider.to_owned())
+            .entry(provider.to_string())
             .or_default();
-        entry.tools.insert(tool.to_owned(), policy);
+        entry.tools.insert(tool.to_string(), policy);
         self.save_config().await
     }
 

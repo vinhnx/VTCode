@@ -90,10 +90,11 @@ impl PiiTokenizer {
     /// Create a new PII tokenizer with default patterns.
     pub fn new() -> Self {
         // Build patterns from static defaults (compiled once)
-        let mut patterns = HashMap::new();
-        for (pii_type, regex) in DEFAULT_PII_PATTERNS.iter() {
-            patterns.insert(*pii_type, regex.clone());
-        }
+        // Note: Cloning Regex is cheap (Arc-based internally)
+        let patterns = DEFAULT_PII_PATTERNS
+            .iter()
+            .map(|(pii_type, regex)| (*pii_type, regex.clone()))
+            .collect();
 
         Self {
             patterns,
@@ -103,11 +104,12 @@ impl PiiTokenizer {
 
     /// Detect PII in a string.
     pub fn detect_pii(&self, text: &str) -> Result<Vec<DetectedPii>> {
-        let mut detected = Vec::new();
+        let mut detected = Vec::with_capacity(8);
 
         for (pii_type, pattern) in &self.patterns {
             for mat in pattern.find_iter(text) {
-                let value = text[mat.start()..mat.end()].to_owned();
+                // Only allocate value when actually detected (lazy allocation)
+                let value = text[mat.start()..mat.end()].to_string();
                 let context_start = mat.start().saturating_sub(20);
                 let context_end = (mat.end() + 20).min(text.len());
                 let context = text[context_start..context_end]
@@ -138,26 +140,25 @@ impl PiiTokenizer {
         let detected = self.detect_pii(text)?;
 
         if detected.is_empty() {
-            return Ok((text.to_owned(), HashMap::new()));
+            return Ok((text.to_string(), HashMap::new()));
         }
 
-        let mut result = text.to_owned();
+        let mut result = text.to_string();
         let mut new_tokens = HashMap::new();
 
         // Process detections in reverse order to maintain offsets
         for detection in detected.iter().rev() {
             let token = self.generate_token(&detection.value, detection.pii_type)?;
-            let token_str = token.token.clone();
-            result.replace_range(detection.start..detection.end, &token_str);
-            new_tokens.insert(token_str, token);
+            let token_str = &token.token;
+            result.replace_range(detection.start..detection.end, token_str);
+            new_tokens.insert(token_str.clone(), token);
         }
 
         // Store tokens for later de-tokenization
         {
             let mut store = self.token_store.lock().unwrap();
-            for (k, v) in new_tokens.iter() {
-                store.insert(k.clone(), v.clone());
-            }
+            // Use drain to move ownership, avoiding unnecessary clones
+            store.extend(new_tokens.drain());
         }
 
         debug!(pii_count = detected.len(), "Tokenized PII in string");
@@ -206,7 +207,7 @@ impl PiiTokenizer {
 
         Ok(PiiToken {
             token,
-            original_value: value.to_owned(),
+            original_value: value.to_string(),
             pii_type,
             created_at: chrono::Utc::now().to_rfc3339(),
         })

@@ -22,13 +22,18 @@ pub enum LintSeverity {
 }
 
 impl LintConfig {
+    /// Helper to convert string slices to owned Strings
+    fn vec_from(items: &[&str]) -> Vec<String> {
+        items.iter().map(|s| s.to_string()).collect()
+    }
+
     /// Create clippy configuration
     pub fn clippy() -> Self {
         Self {
             language: LanguageSupport::Rust,
-            tool_name: "clippy".to_owned(),
-            command: vec!["cargo".to_owned(), "clippy".to_owned()],
-            args: vec!["--".to_owned(), "-D".to_owned(), "warnings".to_owned()],
+            tool_name: "clippy".to_string(),
+            command: Self::vec_from(&["cargo", "clippy"]),
+            args: Self::vec_from(&["--", "-D", "warnings"]),
             severity_levels: HashMap::new(),
             enabled: true,
         }
@@ -38,9 +43,9 @@ impl LintConfig {
     pub fn eslint() -> Self {
         Self {
             language: LanguageSupport::TypeScript,
-            tool_name: "eslint".to_owned(),
-            command: vec!["eslint".to_owned()],
-            args: vec!["--format".to_owned(), "json".to_owned()],
+            tool_name: "eslint".to_string(),
+            command: Self::vec_from(&["eslint"]),
+            args: Self::vec_from(&["--format", "json"]),
             severity_levels: HashMap::new(),
             enabled: true,
         }
@@ -50,9 +55,9 @@ impl LintConfig {
     pub fn pylint() -> Self {
         Self {
             language: LanguageSupport::Python,
-            tool_name: "pylint".to_owned(),
-            command: vec!["pylint".to_owned()],
-            args: vec!["--output-format".to_owned(), "json".to_owned()],
+            tool_name: "pylint".to_string(),
+            command: Self::vec_from(&["pylint"]),
+            args: Self::vec_from(&["--output-format", "json"]),
             severity_levels: HashMap::new(),
             enabled: true,
         }

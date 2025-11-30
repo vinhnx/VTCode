@@ -400,6 +400,7 @@ impl FilePalette {
     }
 
     /// Get the appropriate style for a file entry based on its path and type
+    #[allow(dead_code)]
     pub fn style_for_entry(&self, entry: &FileEntry) -> Option<anstyle::Style> {
         let path = Path::new(&entry.path);
         self.file_colorizer.style_for_path(path)

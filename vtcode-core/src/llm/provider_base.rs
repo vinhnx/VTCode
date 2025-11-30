@@ -355,6 +355,7 @@ impl RequestProcessor {
 
 /// Common model resolution utilities
 pub struct ModelResolver {
+    #[allow(dead_code)]
     provider_name: &'static str,
     default_model: &'static str,
     supported_models: &'static [&'static str],

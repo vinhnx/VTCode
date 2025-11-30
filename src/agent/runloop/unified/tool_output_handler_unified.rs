@@ -57,7 +57,7 @@ pub async fn handle_tool_outcome_unified<C: ToolOutputContext>(
 
             // Convert modified_files from Vec<String> to Vec<PathBuf>
             let modified_files_pathbuf: Vec<PathBuf> =
-                modified_files.iter().map(|s| PathBuf::from(s)).collect();
+                modified_files.iter().map(PathBuf::from).collect();
 
             // Create a local copy to avoid borrowing issues
             let _command_success_val = *command_success;
@@ -105,7 +105,7 @@ pub async fn handle_tool_outcome_unified<C: ToolOutputContext>(
                     tool_name,
                     args_val,
                     &error.to_string(),
-                    &vtcode_core::tools::registry::classify_error(&error),
+                    &vtcode_core::tools::registry::classify_error(error),
                     vt_config,
                     Some(token_budget),
                 )
@@ -119,7 +119,7 @@ pub async fn handle_tool_outcome_unified<C: ToolOutputContext>(
                     &error.to_string(),
                     &None,
                     &[],
-                    &vtcode_core::tools::registry::classify_error(&error),
+                    &vtcode_core::tools::registry::classify_error(error),
                     vt_config,
                     token_budget,
                     &mut any_write_effect,

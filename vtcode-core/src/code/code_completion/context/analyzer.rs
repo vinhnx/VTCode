@@ -30,26 +30,26 @@ impl ContextAnalyzer {
     fn detect_language(&self, source: &str) -> String {
         // Try to detect language from content
         if let Some(language) = self.tree_sitter.detect_language_from_content(source) {
-            return match language {
-                crate::tools::tree_sitter::LanguageSupport::Rust => "rust".to_owned(),
-                crate::tools::tree_sitter::LanguageSupport::Python => "python".to_owned(),
-                crate::tools::tree_sitter::LanguageSupport::JavaScript => "javascript".to_owned(),
-                crate::tools::tree_sitter::LanguageSupport::TypeScript => "typescript".to_owned(),
-                crate::tools::tree_sitter::LanguageSupport::Go => "go".to_owned(),
-                crate::tools::tree_sitter::LanguageSupport::Java => "java".to_owned(),
-                crate::tools::tree_sitter::LanguageSupport::Bash => "bash".to_owned(),
-                crate::tools::tree_sitter::LanguageSupport::Swift => "swift".to_owned(),
-            };
+            return (match language {
+                crate::tools::tree_sitter::LanguageSupport::Rust => "rust",
+                crate::tools::tree_sitter::LanguageSupport::Python => "python",
+                crate::tools::tree_sitter::LanguageSupport::JavaScript => "javascript",
+                crate::tools::tree_sitter::LanguageSupport::TypeScript => "typescript",
+                crate::tools::tree_sitter::LanguageSupport::Go => "go",
+                crate::tools::tree_sitter::LanguageSupport::Java => "java",
+                crate::tools::tree_sitter::LanguageSupport::Bash => "bash",
+                crate::tools::tree_sitter::LanguageSupport::Swift => "swift",
+            }).into();
         }
 
         // Default to rust if no language detected
-        "rust".to_owned()
+        "rust".into()
     }
 
     fn extract_prefix(&self, source: &str, line: usize, column: usize) -> String {
         let lines: Vec<&str> = source.lines().collect();
         if line < lines.len() && column <= lines[line].len() {
-            lines[line][..column].to_owned()
+            lines[line][..column].into()
         } else {
             String::new()
         }

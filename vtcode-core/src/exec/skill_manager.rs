@@ -10,6 +10,7 @@
 //! Skills can be loaded across conversations and shared with other agents.
 
 use crate::exec::ToolDependency;
+use crate::utils::error_messages::*;
 use anyhow::{Context, Result, anyhow};
 use serde::{Deserialize, Serialize};
 use std::fmt::Write;
@@ -80,12 +81,12 @@ impl SkillManager {
         // Create skills directory
         tokio::fs::create_dir_all(&self.skills_dir)
             .await
-            .context("failed to create skills directory")?;
+            .context(ERR_CREATE_SKILLS_DIR)?;
 
         let skill_dir = self.skills_dir.join(&skill.metadata.name);
         tokio::fs::create_dir_all(&skill_dir)
             .await
-            .context("failed to create skill directory")?;
+            .context(ERR_CREATE_SKILL_DIR)?;
 
         // Save code file
         let code_filename = match skill.metadata.language.as_str() {
@@ -97,22 +98,22 @@ impl SkillManager {
         let code_path = skill_dir.join(code_filename);
         tokio::fs::write(&code_path, &skill.code)
             .await
-            .context("failed to write skill code")?;
+            .context(ERR_WRITE_SKILL_CODE)?;
 
         // Save metadata
         let metadata_path = skill_dir.join("skill.json");
         let metadata_json = serde_json::to_string_pretty(&skill.metadata)
-            .context("failed to serialize skill metadata")?;
+            .context(ERR_SERIALIZE_METADATA)?;
         tokio::fs::write(&metadata_path, metadata_json)
             .await
-            .context("failed to write skill metadata")?;
+            .context(ERR_WRITE_SKILL_METADATA)?;
 
         // Save documentation
         let doc_path = skill_dir.join("SKILL.md");
         let documentation = Self::generate_markdown(&skill);
         tokio::fs::write(&doc_path, documentation)
             .await
-            .context("failed to write skill documentation")?;
+            .context(ERR_WRITE_SKILL_DOCS)?;
 
         info!(
             skill_name = %skill.metadata.name,
@@ -132,12 +133,12 @@ impl SkillManager {
             .await
             .unwrap_or(false)
         {
-            (skill_dir.join("skill.py"), "python3".to_owned())
+            (skill_dir.join("skill.py"), "python3")
         } else if tokio::fs::try_exists(skill_dir.join("skill.js"))
             .await
             .unwrap_or(false)
         {
-            (skill_dir.join("skill.js"), "javascript".to_owned())
+            (skill_dir.join("skill.js"), "javascript")
         } else {
             return Err(anyhow!("skill '{}' not found", name));
         };
@@ -145,15 +146,15 @@ impl SkillManager {
         // Load code
         let code = tokio::fs::read_to_string(&code_path)
             .await
-            .context("failed to read skill code")?;
+            .context(ERR_READ_SKILL_CODE)?;
 
         // Load metadata
         let metadata_path = skill_dir.join("skill.json");
         let metadata_json = tokio::fs::read_to_string(&metadata_path)
             .await
-            .context("failed to read skill metadata")?;
+            .context(ERR_READ_SKILL_METADATA)?;
         let metadata: SkillMetadata =
-            serde_json::from_str(&metadata_json).context("failed to parse skill metadata")?;
+            serde_json::from_str(&metadata_json).context(ERR_PARSE_SKILL_METADATA)?;
 
         // Ensure language matches
         if metadata.language != language {
@@ -186,12 +187,12 @@ impl SkillManager {
         let mut skills = Vec::with_capacity(16);
         let mut dir_entries = tokio::fs::read_dir(&self.skills_dir)
             .await
-            .context("failed to read skills directory")?;
+            .context(ERR_READ_SKILLS_DIR)?;
 
         while let Some(entry) = dir_entries
             .next_entry()
             .await
-            .context("failed to read directory entry")?
+            .context(ERR_READ_DIR_ENTRY)?
         {
             let path = entry.path();
             if path.is_dir() {
@@ -230,7 +231,7 @@ impl SkillManager {
         let skill_dir = self.skills_dir.join(name);
         tokio::fs::remove_dir_all(&skill_dir)
             .await
-            .context("failed to delete skill")?;
+            .context(ERR_DELETE_SKILL)?;
 
         info!(skill_name = %name, "Skill deleted successfully");
 
@@ -245,8 +246,8 @@ impl SkillManager {
     ) -> Result<crate::exec::CompatibilityReport> {
         let skill = self.load_skill(name).await?;
         let checker = crate::exec::SkillCompatibilityChecker::new(
-            skill.metadata.name.clone(),
-            skill.metadata.tool_dependencies.clone(),
+            skill.metadata.name,
+            skill.metadata.tool_dependencies,
             tool_versions,
         );
 
@@ -324,20 +325,20 @@ mod tests {
     #[test]
     fn test_skill_metadata_serialization() {
         let metadata = SkillMetadata {
-            name: "filter_files".to_owned(),
-            description: "Filter files by pattern".to_owned(),
-            language: "python3".to_owned(),
+            name: "filter_files".into(),
+            description: "Filter files by pattern".into(),
+            language: "python3".into(),
             inputs: vec![ParameterDoc {
-                name: "pattern".to_owned(),
-                r#type: "str".to_owned(),
-                description: "File pattern to match".to_owned(),
+                name: "pattern".into(),
+                r#type: "str".into(),
+                description: "File pattern to match".into(),
                 required: true,
             }],
-            output: "List of matching filenames".to_owned(),
-            examples: vec!["filter_files(pattern='*.rs')".to_owned()],
-            tags: vec!["files".to_owned(), "filtering".to_owned()],
-            created_at: "2025-01-01T00:00:00Z".to_owned(),
-            modified_at: "2025-01-01T00:00:00Z".to_owned(),
+            output: "List of matching filenames".into(),
+            examples: vec!["filter_files(pattern='*.rs')".into()],
+            tags: vec!["files".into(), "filtering".into()],
+            created_at: "2025-01-01T00:00:00Z".into(),
+            modified_at: "2025-01-01T00:00:00Z".into(),
             tool_dependencies: vec![],
         };
 

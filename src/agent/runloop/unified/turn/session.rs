@@ -54,7 +54,7 @@ pub(crate) async fn handle_tool_failure(
     let classified = classify_error(details.error);
     let structured = ToolExecutionError::with_original_error(
         details.name.to_string(),
-        classified.clone(),
+        classified,
         error_summary.clone(),
         original_details.clone(),
     );

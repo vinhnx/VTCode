@@ -13,6 +13,38 @@ use tokio::sync::RwLock;
 use vtcode_acp_client::{AcpClient, AgentRegistry};
 use vtcode_core::tools::traits::Tool;
 
+/// Shared utilities for ACP tools to reduce duplication
+mod shared {
+    use super::*;
+
+    const ERR_ARGS_OBJECT: &str = "Arguments must be an object";
+    const ERR_CLIENT_UNINITIALIZED: &str = "ACP client not initialized";
+
+    pub fn extract_args_object(args: &Value) -> anyhow::Result<&serde_json::Map<String, Value>> {
+        args.as_object()
+            .ok_or_else(|| anyhow::anyhow!(ERR_ARGS_OBJECT))
+    }
+
+    pub fn get_required_field(obj: &serde_json::Map<String, Value>, field: &str, custom_err: Option<&str>) -> anyhow::Result<&str> {
+        obj.get(field)
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow::anyhow!(
+                custom_err.unwrap_or(&format!("Invalid {}", field))
+            ))
+    }
+
+    pub fn check_client_initialized(client: &Option<AcpClient>) -> anyhow::Result<&AcpClient> {
+        client.as_ref().ok_or_else(|| anyhow::anyhow!(ERR_CLIENT_UNINITIALIZED))
+    }
+
+    pub fn validate_field_exists(obj: &serde_json::Map<String, Value>, field: &str) -> anyhow::Result<()> {
+        if !obj.contains_key(field) {
+            return Err(anyhow::anyhow!("Missing required field: {}", field));
+        }
+        Ok(())
+    }
+}
+
 /// ACP Inter-Agent Communication Tool
 pub struct AcpTool {
     client: Arc<RwLock<Option<AcpClient>>>,
@@ -38,7 +70,7 @@ impl AcpTool {
 
     /// Get the registry
     pub fn registry(&self) -> Arc<AgentRegistry> {
-        self.registry.clone()
+        Arc::clone(&self.registry)
     }
 }
 
@@ -60,54 +92,36 @@ impl Tool for AcpTool {
     }
 
     fn validate_args(&self, args: &Value) -> anyhow::Result<()> {
-        let obj = args
-            .as_object()
-            .ok_or_else(|| anyhow::anyhow!("Arguments must be an object"))?;
-
-        if !obj.contains_key("action") {
-            return Err(anyhow::anyhow!("Missing required field: action"));
-        }
-
-        if !obj.contains_key("remote_agent_id") {
-            return Err(anyhow::anyhow!("Missing required field: remote_agent_id"));
-        }
-
+        let obj = shared::extract_args_object(args)?;
+        shared::validate_field_exists(obj, "action")?;
+        shared::validate_field_exists(obj, "remote_agent_id")?;
         Ok(())
     }
 
     async fn execute(&self, args: Value) -> anyhow::Result<Value> {
-        let obj = args
-            .as_object()
-            .ok_or_else(|| anyhow::anyhow!("Arguments must be an object"))?;
+        let obj = shared::extract_args_object(&args)?;
 
-        let action = obj
-            .get("action")
+        let action = shared::get_required_field(obj, "action", None)?;
+        let remote_agent_id = shared::get_required_field(obj, "remote_agent_id", None)?;
+        let method = obj
+            .get("method")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| anyhow::anyhow!("Invalid action"))?;
-
-        let remote_agent_id = obj
-            .get("remote_agent_id")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| anyhow::anyhow!("Invalid remote_agent_id"))?;
-
-        let method = obj.get("method").and_then(|v| v.as_str()).unwrap_or("sync"); // Default to sync
+            .unwrap_or("sync");
 
         let call_args = obj.get("args").cloned().unwrap_or(json!({}));
 
         let client = self.client.read().await;
-        let client = client
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("ACP client not initialized"))?;
+        let client = shared::check_client_initialized(&*client)?;
 
         match method {
             "sync" => client
-                .call_sync(remote_agent_id, action.to_string(), call_args)
+                .call_sync(remote_agent_id, action.into(), call_args)
                 .await
                 .map_err(|e| anyhow::anyhow!("ACP call failed: {}", e)),
 
             "async" => {
                 let message_id = client
-                    .call_async(remote_agent_id, action.to_string(), call_args)
+                    .call_async(remote_agent_id, action.into(), call_args)
                     .await
                     .map_err(|e| anyhow::anyhow!("ACP async call failed: {}", e))?;
 
@@ -147,46 +161,27 @@ impl Tool for AcpDiscoveryTool {
     }
 
     fn validate_args(&self, args: &Value) -> anyhow::Result<()> {
-        let obj = args
-            .as_object()
-            .ok_or_else(|| anyhow::anyhow!("Arguments must be an object"))?;
+        let obj = shared::extract_args_object(args)?;
 
         match obj.get("mode").and_then(|v| v.as_str()) {
-            Some("by_capability") => {
-                if !obj.contains_key("capability") {
-                    return Err(anyhow::anyhow!(
-                        "Missing required field for by_capability mode: capability"
-                    ));
-                }
-            }
-            Some("by_id") => {
-                if !obj.contains_key("agent_id") {
-                    return Err(anyhow::anyhow!(
-                        "Missing required field for by_id mode: agent_id"
-                    ));
-                }
-            }
+            Some("by_capability") => shared::validate_field_exists(obj, "capability")?,
+            Some("by_id") => shared::validate_field_exists(obj, "agent_id")?,
             Some(other) => return Err(anyhow::anyhow!("Unknown discovery mode: {}", other)),
-            None => {} // Default mode (list all)
+            None => {},
         }
 
         Ok(())
     }
 
     async fn execute(&self, args: Value) -> anyhow::Result<Value> {
-        let obj = args
-            .as_object()
-            .ok_or_else(|| anyhow::anyhow!("Arguments must be an object"))?;
-
+        let obj = shared::extract_args_object(&args)?;
         let mode = obj
             .get("mode")
             .and_then(|v| v.as_str())
             .unwrap_or("list_online");
 
         let client = self.client.read().await;
-        let client = client
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("ACP client not initialized"))?;
+        let client = shared::check_client_initialized(&*client)?;
 
         match mode {
             "list_all" => {
@@ -216,10 +211,7 @@ impl Tool for AcpDiscoveryTool {
             }
 
             "by_capability" => {
-                let capability = obj
-                    .get("capability")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow::anyhow!("Invalid capability"))?;
+                let capability = shared::get_required_field(obj, "capability", None)?;
 
                 let agents = client
                     .registry()
@@ -235,10 +227,7 @@ impl Tool for AcpDiscoveryTool {
             }
 
             "by_id" => {
-                let agent_id = obj
-                    .get("agent_id")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow::anyhow!("Invalid agent_id"))?;
+                let agent_id = shared::get_required_field(obj, "agent_id", None)?;
 
                 let agent = client
                     .registry()
@@ -277,31 +266,17 @@ impl Tool for AcpHealthTool {
     }
 
     fn validate_args(&self, args: &Value) -> anyhow::Result<()> {
-        let obj = args
-            .as_object()
-            .ok_or_else(|| anyhow::anyhow!("Arguments must be an object"))?;
-
-        if !obj.contains_key("agent_id") {
-            return Err(anyhow::anyhow!("Missing required field: agent_id"));
-        }
-
+        let obj = shared::extract_args_object(args)?;
+        shared::validate_field_exists(obj, "agent_id")?;
         Ok(())
     }
 
     async fn execute(&self, args: Value) -> anyhow::Result<Value> {
-        let obj = args
-            .as_object()
-            .ok_or_else(|| anyhow::anyhow!("Arguments must be an object"))?;
-
-        let agent_id = obj
-            .get("agent_id")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| anyhow::anyhow!("Invalid agent_id"))?;
+        let obj = shared::extract_args_object(&args)?;
+        let agent_id = shared::get_required_field(obj, "agent_id", None)?;
 
         let client = self.client.read().await;
-        let client = client
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("ACP client not initialized"))?;
+        let client = shared::check_client_initialized(&*client)?;
 
         let is_online = client
             .ping(agent_id)

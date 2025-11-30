@@ -287,7 +287,7 @@ pub(crate) async fn run_turn_execute_tool(
     // Try to get from cache first for read-only tools
     if is_read_only_tool {
         let _params_str = serde_json::to_string(args_val).unwrap_or_default();
-        let cache_key = ToolCacheKey::from_json(name, &args_val, "");
+        let cache_key = ToolCacheKey::from_json(name, args_val, "");
         {
             let mut tool_cache = tool_result_cache.write().await;
             if let Some(cached_output) = tool_cache.get(&cache_key) {
@@ -312,7 +312,7 @@ pub(crate) async fn run_turn_execute_tool(
         let result = execute_tool_with_timeout_ref(
             tool_registry,
             name,
-            &args_val,
+            args_val,
             ctrl_c_state,
             ctrl_c_notify,
             progress_reporter,
@@ -335,7 +335,7 @@ pub(crate) async fn run_turn_execute_tool(
     execute_tool_with_timeout_ref(
         tool_registry,
         name,
-        &args_val,
+        args_val,
         ctrl_c_state,
         ctrl_c_notify,
         progress_reporter,
@@ -1841,7 +1841,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                     ledger.update_available_tools(tool_names);
                 }
 
-                run_turn_ledger(&decision_ledger, &working_history, &tools).await;
+                run_turn_ledger(&decision_ledger, working_history, &tools).await;
 
                 let _conversation_len = working_history.len();
 
@@ -1889,7 +1889,7 @@ pub(crate) async fn run_single_agent_loop_unified(
 
                 let system_prompt = run_turn_build_system_prompt(
                     &mut context_manager,
-                    &working_history,
+                    working_history,
                     step_count,
                 )
                 .await?;
@@ -1925,7 +1925,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                     verbosity: None,
                 };
 
-                let action_suggestion = extract_action_from_messages(&working_history);
+                let action_suggestion = extract_action_from_messages(working_history);
                 let thinking_spinner = PlaceholderSpinner::new(
                     &handle,
                     input_status_state.left.clone(),
@@ -2028,7 +2028,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                             .any(|msg| msg.role == uni::MessageRole::Tool);
 
                         if has_recent_tool {
-                            let reply = derive_recent_tool_output(&working_history)
+                            let reply = derive_recent_tool_output(working_history)
                                 .unwrap_or_else(|| "Command completed successfully.".to_string());
                             renderer.line(MessageStyle::Response, &reply)?;
                             ensure_turn_bottom_gap(&mut renderer, &mut bottom_gap_applied)?;

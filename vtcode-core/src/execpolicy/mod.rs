@@ -5,6 +5,26 @@ use tokio::fs;
 
 use anyhow::{Context, Result, anyhow};
 
+/// Helper to validate flags in arguments (reduces duplication in 10+ validators)
+/// Returns error if any flag not in allowed_flags is found
+fn validate_allowed_flags(args: &[String], allowed_flags: &[&str], command_name: &str) -> Result<()> {
+    for arg in args {
+        if arg.starts_with('-') && !allowed_flags.contains(&arg.as_str()) {
+            return Err(anyhow!("unsupported {} flag '{}'", command_name, arg));
+        }
+    }
+    Ok(())
+}
+
+/// Helper to validate that a command accepts no arguments
+fn validate_no_args(args: &[String], command_name: &str) -> Result<()> {
+    if args.is_empty() {
+        Ok(())
+    } else {
+        Err(anyhow!("{} does not accept arguments", command_name))
+    }
+}
+
 /// Validate whether a command is allowed to run under the execution policy.
 ///
 /// The policy is inspired by the Codex execution policy and limits commands to
@@ -80,48 +100,37 @@ pub async fn sanitize_working_dir(
 }
 
 fn validate_echo(args: &[String]) -> Result<()> {
-    for arg in args {
-        if arg.starts_with('-') {
-            match arg.as_str() {
-                "-n" | "-e" | "-E" => continue,
-                _ => {
-                    return Err(anyhow!("unsupported echo flag '{}'", arg));
-                }
-            }
-        }
-    }
-    Ok(())
+    validate_allowed_flags(args, &["-n", "-e", "-E"], "echo")
 }
 
 async fn validate_ls(args: &[String], workspace_root: &Path, working_dir: &Path) -> Result<()> {
+    let allowed_ls_flags = &["-1", "-a", "-l"];
     for arg in args {
-        match arg.as_str() {
-            "-1" | "-a" | "-l" => continue,
-            value if value.starts_with('-') => {
-                return Err(anyhow!("unsupported ls flag '{}'", value));
+        if arg.starts_with('-') {
+            if !allowed_ls_flags.contains(&arg.as_str()) {
+                return Err(anyhow!("unsupported ls flag '{}'", arg));
             }
-            value => {
-                let path = resolve_path(workspace_root, working_dir, value).await?;
-                ensure_path_exists(&path)?;
-            }
+        } else {
+            let path = resolve_path(workspace_root, working_dir, arg).await?;
+            ensure_path_exists(&path)?;
         }
     }
     Ok(())
 }
 
 async fn validate_cat(args: &[String], workspace_root: &Path, working_dir: &Path) -> Result<()> {
+    let allowed_cat_flags = &["-b", "-n", "-t"];
     let mut files = Vec::new();
+    
     for arg in args {
-        match arg.as_str() {
-            "-b" | "-n" | "-t" => continue,
-            value if value.starts_with('-') => {
-                return Err(anyhow!("unsupported cat flag '{}'", value));
+        if arg.starts_with('-') {
+            if !allowed_cat_flags.contains(&arg.as_str()) {
+                return Err(anyhow!("unsupported cat flag '{}'", arg));
             }
-            value => {
-                let path = resolve_path(workspace_root, working_dir, value).await?;
-                ensure_is_file(&path).await?;
-                files.push(path);
-            }
+        } else {
+            let path = resolve_path(workspace_root, working_dir, arg).await?;
+            ensure_is_file(&path).await?;
+            files.push(path);
         }
     }
 
@@ -242,11 +251,7 @@ fn validate_printenv(args: &[String]) -> Result<()> {
 }
 
 fn validate_pwd(args: &[String]) -> Result<()> {
-    if args.is_empty() {
-        Ok(())
-    } else {
-        Err(anyhow!("pwd does not accept arguments"))
-    }
+    validate_no_args(args, "pwd")
 }
 
 async fn validate_rg(args: &[String], workspace_root: &Path, working_dir: &Path) -> Result<()> {

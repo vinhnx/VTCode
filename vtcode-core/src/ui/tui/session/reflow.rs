@@ -264,7 +264,7 @@ impl Session {
             // Collapse multiple consecutive newlines
             let processed_text = collapse_excess_newlines(&combined_text);
 
-            let base_line = Line::from(vec![Span::raw(processed_text)]);
+            let base_line = Line::from(vec![Span::raw(processed_text.into_owned())]);
             if max_width > 0 {
                 lines.extend(self.wrap_line(base_line, max_width));
             } else {
@@ -605,9 +605,15 @@ impl Session {
 }
 
 /// Collapse multiple consecutive newlines (3 or more) into at most 2 newlines
+/// Returns Cow to avoid allocation when no changes are needed
 #[allow(dead_code)]
-fn collapse_excess_newlines(text: &str) -> String {
-    let mut result = String::new();
+fn collapse_excess_newlines(text: &str) -> std::borrow::Cow<'_, str> {
+    // Quick check: if no triple newlines, return borrowed
+    if !text.contains("\n\n\n") {
+        return std::borrow::Cow::Borrowed(text);
+    }
+
+    let mut result = String::with_capacity(text.len());
     let mut chars = text.chars().peekable();
     let mut newline_count = 0;
 
@@ -636,5 +642,5 @@ fn collapse_excess_newlines(text: &str) -> String {
         }
     }
 
-    result
+    std::borrow::Cow::Owned(result)
 }

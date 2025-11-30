@@ -1029,7 +1029,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                     let _ = renderer.line(MessageStyle::Error, &format!("Error: {}", err));
                     TurnLoopOutcome {
                         result: RunLoopTurnLoopResult::Aborted,
-                        working_history: working_history,
+                        working_history,
                         any_write_effect: false,
                         turn_modified_files: std::collections::BTreeSet::new(),
                     }

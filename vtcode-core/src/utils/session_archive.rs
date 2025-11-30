@@ -1,5 +1,6 @@
 use crate::llm::provider::{Message, MessageContent, MessageRole};
 use crate::utils::dot_config::DotManager;
+use crate::utils::error_messages::*;
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -249,14 +250,14 @@ impl SessionArchive {
         };
 
         let payload = serde_json::to_string_pretty(&snapshot)
-            .context("failed to serialize session snapshot")?;
+            .context(ERR_SERIALIZE_STATE)?;
         if let Some(parent) = self.path.parent() {
             fs::create_dir_all(parent).with_context(|| {
-                format!("failed to create session directory: {}", parent.display())
+                format!("{}: {}", ERR_CREATE_SESSION_DIR, parent.display())
             })?;
         }
         fs::write(&self.path, payload)
-            .with_context(|| format!("failed to write session archive: {}", self.path.display()))?;
+            .with_context(|| format!("{}: {}", ERR_WRITE_SESSION, self.path.display()))?;
 
         Ok(self.path.clone())
     }

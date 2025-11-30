@@ -356,8 +356,8 @@ mod tests {
     #[test]
     fn test_cache_basic_operations() {
         let mut cache = UnifiedCache::new(10, DEFAULT_CACHE_TTL, EvictionPolicy::Lru);
-        let key = TestKey("test".to_string());
-        let value = "test_value".to_string();
+        let key = TestKey("test".into());
+        let value = "test_value".into();
 
         // Insert and retrieve
         cache.insert(key.clone(), value.clone(), 100);
@@ -373,8 +373,8 @@ mod tests {
     #[test]
     fn test_cache_expiration() {
         let mut cache = UnifiedCache::new(10, Duration::from_millis(100), EvictionPolicy::Lru);
-        let key = TestKey("test".to_string());
-        let value = "test_value".to_string();
+        let key = TestKey("test".into());
+        let value = "test_value".into();
 
         cache.insert(key.clone(), value, 100);
         assert!(cache.get(&key).is_some());

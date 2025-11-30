@@ -1,6 +1,6 @@
 use std::{cmp::min, sync::Arc};
 
-use anstyle::{Color as AnsiColorEnum, Effects};
+use anstyle::Color as AnsiColorEnum;
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
@@ -207,15 +207,25 @@ fn render_transcript(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
     let scroll_area = Rect::new(inner.x, inner.y, content_width, inner.height);
 
     // Use cached visible lines to avoid re-cloning on viewport-only scrolls
-    let mut visible_lines =
+    let cached_lines =
         collect_transcript_window_cached(session, content_width, visible_start, viewport_rows);
 
-    let fill_count = viewport_rows.saturating_sub(visible_lines.len());
-    if fill_count > 0 {
-        let target_len = visible_lines.len() + fill_count;
-        visible_lines.resize_with(target_len, Line::default);
-    }
-    session.overlay_queue_lines(&mut visible_lines, content_width);
+    // Only clone if we need to mutate (fill or overlay)
+    let fill_count = viewport_rows.saturating_sub(cached_lines.len());
+    let visible_lines = if fill_count > 0 || !session.queued_inputs.is_empty() {
+        // Need to mutate, so clone from Arc
+        let mut lines = (*cached_lines).clone();
+        if fill_count > 0 {
+            let target_len = lines.len() + fill_count;
+            lines.resize_with(target_len, Line::default);
+        }
+        session.overlay_queue_lines(&mut lines, content_width);
+        lines
+    } else {
+        // No mutation needed, use Arc directly
+        (*cached_lines).clone()
+    };
+
     let paragraph = Paragraph::new(visible_lines)
         .style(default_style(session))
         .wrap(Wrap { trim: true });
@@ -243,6 +253,75 @@ pub(super) fn recalculate_transcript_rows(session: &mut Session) {
     apply_transcript_rows(session, available);
 }
 
+/// Generic palette rendering helper to avoid duplication
+fn render_palette_generic<F>(
+    session: &mut Session,
+    frame: &mut Frame<'_>,
+    viewport: Rect,
+    is_active: bool,
+    title: String,
+    items: Vec<(usize, String, bool)>, // (index, display_text, is_selected)
+    instructions: Vec<Line<'static>>,
+    has_more: bool,
+    more_text: String,
+    render_item: F,
+) where
+    F: Fn(&Session, &str, bool) -> ListItem<'static>,
+{
+    if !is_active || viewport.height == 0 || viewport.width == 0 || session.modal.is_some() {
+        return;
+    }
+
+    if items.is_empty() {
+        return;
+    }
+
+    // Calculate width hint
+    let mut width_hint = 40u16;
+    for (_, display_text, _) in &items {
+        width_hint = width_hint.max(measure_text_width(display_text) + 4);
+    }
+
+    let modal_height = items.len() + instructions.len() + 2 + if has_more { 1 } else { 0 };
+    let area = compute_modal_area(viewport, width_hint, modal_height, 0, 0, true);
+
+    frame.render_widget(Clear, area);
+    let block = Block::default()
+        .title(title)
+        .borders(Borders::ALL)
+        .border_type(terminal_capabilities::get_border_type())
+        .style(default_style(session))
+        .border_style(border_style(session));
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    if inner.height == 0 || inner.width == 0 {
+        return;
+    }
+
+    let layout = ModalListLayout::new(inner, instructions.len());
+    if let Some(text_area) = layout.text_area {
+        let paragraph = Paragraph::new(instructions).wrap(Wrap { trim: true });
+        frame.render_widget(paragraph, text_area);
+    }
+
+    let mut list_items: Vec<ListItem> = items
+        .iter()
+        .map(|(_, display_text, is_selected)| render_item(session, display_text, *is_selected))
+        .collect();
+
+    if has_more {
+        let continuation_style = default_style(session).add_modifier(Modifier::DIM | Modifier::ITALIC);
+        list_items.push(ListItem::new(Line::from(Span::styled(
+            more_text,
+            continuation_style,
+        ))));
+    }
+
+    let list = List::new(list_items).style(default_style(session));
+    frame.render_widget(list, layout.list_area);
+}
+
 fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, viewport: Rect) {
     if !session.file_palette_active {
         return;
@@ -267,111 +346,68 @@ fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, viewport: R
         return;
     }
 
-    let mut width_hint = 40u16;
-    for (_, entry, _) in &items {
-        width_hint = width_hint.max(measure_text_width(&entry.display_name) + 4);
-    }
+    // Convert items to generic format
+    let generic_items: Vec<(usize, String, bool)> = items
+        .iter()
+        .map(|(idx, entry, selected)| {
+            let display = if entry.is_dir {
+                format!("{}/ ", entry.display_name)
+            } else {
+                entry.display_name.clone()
+            };
+            (*idx, display, *selected)
+        })
+        .collect();
 
-    let instructions = file_palette_instructions(session, palette);
-    let has_continuation = palette.has_more_items();
-    let modal_height = items.len()
-        + instructions.len()
-        + 2  // borders
-        + if has_continuation { 1 } else { 0 }; // continuation indicator
-    let area = compute_modal_area(viewport, width_hint, modal_height, 0, 0, true);
-
-    frame.render_widget(Clear, area);
     let title = format!(
         "File Browser (Page {}/{})",
         palette.current_page_number(),
         palette.total_pages()
     );
-    let block = Block::default()
-        .title(title)
-        .borders(Borders::ALL)
-        .border_type(terminal_capabilities::get_border_type())
-        .style(default_style(session))
-        .border_style(border_style(session));
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
 
-    if inner.height == 0 || inner.width == 0 {
-        return;
-    }
+    let instructions = file_palette_instructions(session, palette);
+    let has_more = palette.has_more_items();
+    let more_text = format!(
+        "  ... ({} more items)",
+        palette.total_items() - (palette.current_page_number() * 20)
+    );
 
-    let layout = ModalListLayout::new(inner, instructions.len());
-    if let Some(text_area) = layout.text_area {
-        let paragraph = Paragraph::new(instructions).wrap(Wrap { trim: true });
-        frame.render_widget(paragraph, text_area);
-    }
-
-    let mut list_items: Vec<ListItem> = items
-        .iter()
-        .map(|(_, entry, is_selected)| {
-            let base_style = if *is_selected {
+    // Render using generic helper
+    render_palette_generic(
+        session,
+        frame,
+        viewport,
+        true, // is_active already checked above
+        title,
+        generic_items,
+        instructions,
+        has_more,
+        more_text,
+        |session, display_text, is_selected| {
+            let base_style = if is_selected {
                 modal_list_highlight_style(session)
             } else {
                 default_style(session)
             };
 
-            // Get system file color from LS_COLORS if available
-            let mut style = if let Some(file_palette) = session.file_palette.as_ref() {
-                if let Some(file_style) = file_palette.style_for_entry(entry) {
-                    // Convert anstyle::Style to ratatui::Style using anstyle_utils
-                    let anstyle_converted =
-                        crate::utils::anstyle_utils::ansi_style_to_ratatui_style(file_style);
-
-                    let mut ratatui_style = base_style;
-                    if let Some(fg) = anstyle_converted.fg {
-                        ratatui_style = ratatui_style.fg(fg);
-                    }
-                    if let Some(bg) = anstyle_converted.bg {
-                        ratatui_style = ratatui_style.bg(bg);
-                    }
-                    ratatui_style = ratatui_style.add_modifier(anstyle_converted.add_modifier);
-
-                    ratatui_style
-                } else {
-                    base_style
-                }
+            // Apply file-specific styling
+            let mut style = base_style;
+            
+            // Add icon prefix based on file type
+            let (prefix, is_dir) = if display_text.ends_with("/ ") {
+                ("↳  ", true)
             } else {
-                base_style
+                ("  · ", false)
             };
 
-            // Add visual distinction for directories (this can enhance or override LS_COLORS)
-            if entry.is_dir {
+            if is_dir {
                 style = style.add_modifier(Modifier::BOLD);
             }
 
-            // Add icon prefix
-            let prefix = if entry.is_dir {
-                "↳  " // Folder indicator
-            } else {
-                "  · " // Indent files
-            };
-
-            let display_text = format!("{}{}", prefix, entry.display_name);
-
-            ListItem::new(Line::from(Span::styled(display_text, style)))
-        })
-        .collect();
-
-    // Add continuation indicator if there are more items
-    if palette.has_more_items() {
-        let continuation_text = format!(
-            "  ... ({} more items)",
-            palette.total_items() - (palette.current_page_number() * 20)
-        );
-        let continuation_style =
-            default_style(session).add_modifier(Modifier::DIM | Modifier::ITALIC);
-        list_items.push(ListItem::new(Line::from(Span::styled(
-            continuation_text,
-            continuation_style,
-        ))));
-    }
-
-    let list = List::new(list_items).style(default_style(session));
-    frame.render_widget(list, layout.list_area);
+            let display = format!("{}{}", prefix, display_text.trim_end_matches("/ "));
+            ListItem::new(Line::from(Span::styled(display, style)))
+        },
+    );
 }
 
 fn render_file_palette_loading(session: &Session, frame: &mut Frame<'_>, viewport: Rect) {
@@ -465,76 +501,48 @@ fn render_prompt_palette(session: &mut Session, frame: &mut Frame<'_>, viewport:
         return;
     }
 
-    let mut width_hint = 40u16;
-    for (_, entry, _) in &items {
-        width_hint = width_hint.max(measure_text_width(&entry.name) + 4);
-    }
+    // Convert items to generic format
+    let generic_items: Vec<(usize, String, bool)> = items
+        .iter()
+        .map(|(idx, entry, selected)| (*idx, entry.name.clone(), *selected))
+        .collect();
 
-    let instructions = prompt_palette_instructions(session, palette);
-    let has_continuation = palette.has_more_items();
-    let modal_height = items.len()
-        + instructions.len()
-        + 2  // borders
-        + if has_continuation { 1 } else { 0 }; // continuation indicator
-    let area = compute_modal_area(viewport, width_hint, modal_height, 0, 0, true);
-
-    frame.render_widget(Clear, area);
     let title = format!(
         "Custom Prompts (Page {}/{})",
         palette.current_page_number(),
         palette.total_pages()
     );
-    let block = Block::default()
-        .title(title)
-        .borders(Borders::ALL)
-        .border_type(terminal_capabilities::get_border_type())
-        .style(default_style(session))
-        .border_style(border_style(session));
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
 
-    if inner.height == 0 || inner.width == 0 {
-        return;
-    }
+    let instructions = prompt_palette_instructions(session, palette);
+    let has_more = palette.has_more_items();
+    let more_text = format!(
+        "  ... ({} more items)",
+        palette.total_items() - (palette.current_page_number() * 20)
+    );
 
-    let layout = ModalListLayout::new(inner, instructions.len());
-    if let Some(text_area) = layout.text_area {
-        let paragraph = Paragraph::new(instructions).wrap(Wrap { trim: true });
-        frame.render_widget(paragraph, text_area);
-    }
-
-    let mut list_items: Vec<ListItem> = items
-        .iter()
-        .map(|(_, entry, is_selected)| {
-            let base_style = if *is_selected {
+    // Render using generic helper
+    render_palette_generic(
+        session,
+        frame,
+        viewport,
+        true, // is_active already checked above
+        title,
+        generic_items,
+        instructions,
+        has_more,
+        more_text,
+        |session, display_text, is_selected| {
+            let base_style = if is_selected {
                 modal_list_highlight_style(session)
             } else {
                 default_style(session)
             };
 
             // Format: "  · prompt-name"
-            let display_text = format!("  · {}", entry.name);
-
-            ListItem::new(Line::from(Span::styled(display_text, base_style)))
-        })
-        .collect();
-
-    // Add continuation indicator if there are more items
-    if palette.has_more_items() {
-        let continuation_text = format!(
-            "  ... ({} more items)",
-            palette.total_items() - (palette.current_page_number() * 20)
-        );
-        let continuation_style =
-            default_style(session).add_modifier(Modifier::DIM | Modifier::ITALIC);
-        list_items.push(ListItem::new(Line::from(Span::styled(
-            continuation_text,
-            continuation_style,
-        ))));
-    }
-
-    let list = List::new(list_items).style(default_style(session));
-    frame.render_widget(list, layout.list_area);
+            let display = format!("  · {}", display_text);
+            ListItem::new(Line::from(Span::styled(display, base_style)))
+        },
+    );
 }
 
 fn render_prompt_palette_loading(session: &Session, frame: &mut Frame<'_>, viewport: Rect) {
@@ -815,23 +823,24 @@ fn collect_transcript_window_cached(
     width: u16,
     start_row: usize,
     max_rows: usize,
-) -> Vec<Line<'static>> {
+) -> Arc<Vec<Line<'static>>> {
     // Check if we have cached visible lines for this exact position and width
     if let Some((cached_offset, cached_width, cached_lines)) = &session.visible_lines_cache
         && *cached_offset == start_row
         && *cached_width == width
     {
-        // Reuse cached lines from Arc (zero-copy, no allocation)
-        return (**cached_lines).clone();
+        // Return Arc clone (cheap pointer copy, no Vec allocation)
+        return Arc::clone(cached_lines);
     }
 
     // Not in cache, fetch from transcript
     let visible_lines = collect_transcript_window(session, width, start_row, max_rows);
 
-    // Cache for next render if scroll position unchanged (wrapped in Arc for cheap sharing)
-    session.visible_lines_cache = Some((start_row, width, Arc::new(visible_lines.clone())));
+    // Cache for next render (wrapped in Arc for cheap sharing)
+    let arc_lines = Arc::new(visible_lines);
+    session.visible_lines_cache = Some((start_row, width, Arc::clone(&arc_lines)));
 
-    visible_lines
+    arc_lines
 }
 
 fn ensure_scroll_metrics(session: &mut Session) {
@@ -895,7 +904,8 @@ pub(super) fn ensure_reflow_cache(session: &mut Session, width: u16) -> &mut Tra
         if index < session.lines.len() {
             let line = &session.lines[index];
             if cache.needs_reflow(index, line.revision) {
-                let new_lines = reflow_message_lines(session, index, width);
+                // Use Session method from reflow.rs to avoid duplication
+                let new_lines = session.reflow_message_lines(index, width);
                 cache.update_message(index, line.revision, new_lines);
             }
         }
@@ -930,60 +940,6 @@ fn collect_transcript_window(
     cache.get_visible_range(start_row, max_rows)
 }
 
-fn reflow_message_lines(session: &Session, index: usize, width: u16) -> Vec<Line<'static>> {
-    let Some(message) = session.lines.get(index) else {
-        return vec![Line::default()];
-    };
-
-    if message.kind == InlineMessageKind::Tool {
-        return reflow_tool_lines(session, index, width);
-    }
-
-    if message.kind == InlineMessageKind::Pty {
-        return reflow_pty_lines(session, index, width);
-    }
-
-    let spans = render_message_spans(session, index);
-    let base_line = Line::from(spans);
-    if width == 0 {
-        return vec![base_line];
-    }
-
-    let mut wrapped = Vec::new();
-    let max_width = width as usize;
-
-    if message.kind == InlineMessageKind::User && max_width > 0 {
-        wrapped.push(message_divider_line(session, max_width, message.kind));
-    }
-
-    let mut lines = wrap_line(session, base_line, max_width);
-    if !lines.is_empty() {
-        lines = justify_wrapped_lines(session, lines, max_width, message.kind);
-    }
-    if lines.is_empty() {
-        lines.push(Line::default());
-    }
-    wrapped.extend(lines);
-
-    if message.kind == InlineMessageKind::User && max_width > 0 {
-        wrapped.push(message_divider_line(session, max_width, message.kind));
-    }
-
-    if wrapped.is_empty() {
-        wrapped.push(Line::default());
-    }
-
-    // Add a line break after Error, Info, and Policy messages
-    // User messages already have dividers, Tool/PTY have special formatting, and Agent messages don't need line breaks
-    match message.kind {
-        InlineMessageKind::Error | InlineMessageKind::Info | InlineMessageKind::Policy => {
-            wrapped.push(Line::default());
-        }
-        _ => {} // Don't add line breaks for User (has dividers), Agent, Tool, or PTY messages
-    }
-
-    wrapped
-}
 
 fn wrap_block_lines(
     session: &Session,
@@ -1086,116 +1042,6 @@ fn wrap_block_lines_with_options(
     }
 
     wrapped
-}
-
-fn reflow_tool_lines(session: &Session, index: usize, width: u16) -> Vec<Line<'static>> {
-    let Some(line) = session.lines.get(index) else {
-        return vec![Line::default()];
-    };
-
-    let max_width = if width == 0 {
-        usize::MAX
-    } else {
-        width as usize
-    };
-
-    let mut border_style =
-        ratatui_style_from_inline(&tool_border_style(session), session.theme.foreground);
-    border_style = border_style.add_modifier(Modifier::DIM);
-
-    let is_detail = line
-        .segments
-        .iter()
-        .any(|segment| segment.style.effects.contains(Effects::ITALIC));
-    let next_is_tool = session
-        .lines
-        .get(index + 1)
-        .map(|next| next.kind == InlineMessageKind::Tool)
-        .unwrap_or(false);
-
-    let is_end = !next_is_tool;
-
-    let mut lines = Vec::new();
-    if is_detail {
-        // Simple indent prefix without border characters
-        let body_prefix = "  ";
-        let content = render_tool_segments(session, line);
-        lines.extend(wrap_block_lines(
-            session,
-            body_prefix,
-            body_prefix,
-            content,
-            max_width,
-            border_style,
-        ));
-    } else {
-        // For simple tool output, render without borders
-        // Combine all segments into single text to preserve newlines and avoid excessive line breaks
-        let mut combined_text = String::new();
-        for segment in &line.segments {
-            // Strip ANSI codes from each segment to ensure plain text output
-            let stripped_text = strip_ansi_codes(&segment.text);
-            combined_text.push_str(&stripped_text);
-        }
-
-        // Process the combined text with newlines preserved
-        // To reduce excessive blank lines, collapse multiple consecutive newlines
-        let processed_text = if combined_text.contains("\n\n\n") {
-            // Replace 3 or more consecutive newlines with just 2 newlines
-            let mut result = String::new();
-            let mut chars = combined_text.chars().peekable();
-            let mut newline_count = 0;
-
-            while let Some(ch) = chars.next() {
-                if ch == '\n' {
-                    newline_count += 1;
-                    // Skip over additional newlines, but make sure we preserve at least one
-                    while let Some(&next_ch) = chars.peek() {
-                        if next_ch == '\n' {
-                            chars.next(); // consume the additional newline
-                            newline_count += 1;
-                        } else {
-                            break;
-                        }
-                    }
-
-                    // Add at most 2 newlines (instead of all the consecutive ones)
-                    let newlines_to_add = std::cmp::min(newline_count, 2);
-                    for _ in 0..newlines_to_add {
-                        result.push('\n');
-                    }
-                    newline_count = 0;
-                } else {
-                    result.push(ch);
-                    if ch != '\n' {
-                        newline_count = 0; // reset counter when non-newline is encountered
-                    }
-                }
-            }
-
-            result
-        } else {
-            combined_text
-        };
-
-        let base_line = Line::from(vec![Span::raw(processed_text)]);
-        if max_width > 0 {
-            lines.extend(wrap_line(session, base_line, max_width));
-        } else {
-            lines.push(base_line);
-        }
-    }
-
-    if is_end {
-        // Don't add bottom border for simple tool output
-        // lines.push(block_footer_line(width, border_style));
-    }
-
-    if lines.is_empty() {
-        lines.push(Line::default());
-    }
-
-    lines
 }
 
 fn pty_block_has_content(session: &Session, index: usize) -> bool {

@@ -103,6 +103,7 @@ pub mod colors;
 pub mod diff;
 pub mod diff_styles;
 pub mod dot_config;
+pub mod error_messages;
 pub mod image_processing;
 pub mod ratatui_styles;
 pub mod safety;

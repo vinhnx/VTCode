@@ -20,22 +20,16 @@ impl Default for PythonProvider {
 impl LanguageProvider for PythonProvider {
     fn get_completions(&self, context: &CompletionContext) -> Vec<CompletionSuggestion> {
         let mut suggestions = Vec::new();
+        let keywords = ["def", "class"];
 
-        // Add Python-specific keywords
-        if context.prefix.is_empty() || "def".starts_with(&context.prefix) {
-            suggestions.push(CompletionSuggestion::new(
-                "def".to_owned(),
-                CompletionKind::Keyword,
-                context.clone(),
-            ));
-        }
-
-        if context.prefix.is_empty() || "class".starts_with(&context.prefix) {
-            suggestions.push(CompletionSuggestion::new(
-                "class".to_owned(),
-                CompletionKind::Keyword,
-                context.clone(),
-            ));
+        for keyword in &keywords {
+            if context.prefix.is_empty() || keyword.starts_with(&context.prefix) {
+                suggestions.push(CompletionSuggestion::new(
+                    keyword.to_string(),
+                    CompletionKind::Keyword,
+                    context.clone(),
+                ));
+            }
         }
 
         suggestions
