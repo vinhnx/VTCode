@@ -13,9 +13,6 @@ use super::progress::ProgressReporter;
 use vtcode_core::exec::cancellation;
 use vtcode_core::tools::registry::ToolErrorType;
 use vtcode_core::tools::registry::{ToolExecutionError, ToolRegistry, ToolTimeoutCategory};
-use vtcode_core::ui::theme;
-use vtcode_core::ui::tui::{spawn_session, theme_from_styles};
-use vtcode_core::utils::ansi::AnsiRenderer;
 
 use super::run_loop_context::RunLoopContext;
 use super::state::CtrlCState;
@@ -25,59 +22,6 @@ use crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner;
 use crate::hooks::lifecycle::LifecycleHookEngine;
 use vtcode_core::config::loader::VTCodeConfig;
 
-/// Helper function to create test registry with common setup
-async fn create_test_registry(workspace: &std::path::Path) -> ToolRegistry {
-    ToolRegistry::new(workspace.to_path_buf()).await
-}
-
-/// Helper function to create test renderer with default config
-fn create_test_renderer(
-    handle: &vtcode_core::ui::tui::InlineHandle,
-) -> vtcode_core::utils::ansi::AnsiRenderer {
-    AnsiRenderer::with_inline_ui(handle.clone(), Default::default())
-}
-
-/// Helper function to create common test context components
-struct TestContext {
-    registry: ToolRegistry,
-    renderer: vtcode_core::utils::ansi::AnsiRenderer,
-    session: vtcode_core::ui::tui::InlineSession,
-    handle: vtcode_core::ui::tui::InlineHandle,
-    approval_recorder: vtcode_core::tools::ApprovalRecorder,
-    workspace: std::path::PathBuf,
-}
-
-impl TestContext {
-    async fn new() -> Self {
-        let tmp = tempfile::TempDir::new().unwrap();
-        let workspace = tmp.path().to_path_buf();
-
-        let registry = create_test_registry(&workspace).await;
-        let active_styles = theme::active_styles();
-        let theme_spec = theme_from_styles(&active_styles);
-        let session = spawn_session(
-            theme_spec,
-            None,
-            vtcode_core::config::types::UiSurfacePreference::default(),
-            10,
-            false,
-            None,
-        )
-        .unwrap();
-        let handle = session.clone_inline_handle();
-        let renderer = create_test_renderer(&handle);
-        let approval_recorder = vtcode_core::tools::ApprovalRecorder::new(workspace.clone());
-
-        Self {
-            registry,
-            renderer,
-            session,
-            handle,
-            approval_recorder,
-            workspace,
-        }
-    }
-}
 // No direct use of ApprovalRecorder or DecisionOutcome in this module; these are referenced via `RunLoopContext`.
 
 /// Default timeout for tool execution if no policy is configured
@@ -710,6 +654,61 @@ mod tests {
     use vtcode_core::ui::theme;
     use vtcode_core::ui::tui::{spawn_session, theme_from_styles};
     use vtcode_core::utils::ansi::AnsiRenderer;
+
+    /// Helper function to create test registry with common setup
+    async fn create_test_registry(workspace: &std::path::Path) -> ToolRegistry {
+        ToolRegistry::new(workspace.to_path_buf()).await
+    }
+
+    /// Helper function to create test renderer with default config
+    fn create_test_renderer(
+        handle: &vtcode_core::ui::tui::InlineHandle,
+    ) -> vtcode_core::utils::ansi::AnsiRenderer {
+        AnsiRenderer::with_inline_ui(handle.clone(), Default::default())
+    }
+
+    /// Helper function to create common test context components
+    struct TestContext {
+        registry: ToolRegistry,
+        renderer: vtcode_core::utils::ansi::AnsiRenderer,
+        session: vtcode_core::ui::tui::InlineSession,
+        handle: vtcode_core::ui::tui::InlineHandle,
+        approval_recorder: vtcode_core::tools::ApprovalRecorder,
+        workspace: std::path::PathBuf,
+    }
+
+    impl TestContext {
+        async fn new() -> Self {
+            let tmp = tempfile::TempDir::new().unwrap();
+            let workspace = tmp.path().to_path_buf();
+
+            let registry = create_test_registry(&workspace).await;
+            let active_styles = theme::active_styles();
+            let theme_spec = theme_from_styles(&active_styles);
+            let session = spawn_session(
+                theme_spec,
+                None,
+                vtcode_core::config::types::UiSurfacePreference::default(),
+                10,
+                false,
+                None,
+            )
+            .unwrap();
+            let handle = session.clone_inline_handle();
+            let renderer = create_test_renderer(&handle);
+            let approval_recorder = vtcode_core::tools::ApprovalRecorder::new(workspace.clone());
+
+            Self {
+                registry,
+                renderer,
+                session,
+                handle,
+                approval_recorder,
+                workspace,
+            }
+        }
+    }
+
     #[tokio::test]
     async fn test_execute_tool_with_timeout() {
         // Setup test dependencies
