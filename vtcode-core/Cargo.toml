@@ -27,7 +27,7 @@ clap = { version = "4.5", features = ["derive"] }
 reqwest = { version = "0.12", features = ["json", "rustls-tls", "stream"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-json5 = "0.4"
+json5 = "1.0"
 toml = "0.9.8"
 toml_edit = "0.23"
 tokio = { version = "1.48", features = [
@@ -64,7 +64,7 @@ tempfile = "3.0"
 once_cell = "1.19"
 parking_lot = "0.12"
 sha2 = "0.10"
-lru = "0.12"
+lru = "0.16"
 chrono = { version = "0.4", features = [
     "serde",
 ] } # For timestamp handling in CLI
@@ -135,13 +135,13 @@ rmcp = { version = "0.9", features = [
     "transport-streamable-http-client-reqwest",
 ] }
 mcp-types = { path = "../third-party/mcp-types", version = "0.1.1" }
-openai-harmony = "0.0.3"
+openai-harmony = "0.0.8"
 url = "2.5"
-jsonschema = "0.29"
+jsonschema = "0.37"
 uuid = { version = "1.8.0", features = ["v4", "fast-rng"] }
 which = "8.0.0"
 textwrap = "0.16"
-editor-command = "1.0"
+editor-command = "2.0"
 signal-hook = "0.3"
 
 [build-dependencies]
@@ -180,4 +180,4 @@ rustdoc-args = ["--cfg", "docsrs"]
 [dev-dependencies]
 assert_fs = "1.1"
 nix = { version = "0.30", features = ["user"] }
-mockito = "0.31"
+mockito = "1.7"
