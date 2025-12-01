@@ -67,7 +67,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Check tracked file sizes
         run: python3 scripts/check_large_files.py 400000 --allow "resources/vhs/*.gif"
 
@@ -77,7 +77,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
@@ -90,7 +90,7 @@ jobs:
   #   name: Check Typos
   #   runs-on: ubuntu-latest
   #   steps:
-  #     - uses: actions/checkout@v5
+  #     - uses: actions/checkout@v6
   #     - uses: crate-ci/typos@master
 
   # Check for any disallowed dependencies in the codebase due to license / security issues.
@@ -99,7 +99,7 @@ jobs:
   #   name: Check Dependencies
   #   runs-on: ubuntu-latest
   #   steps:
-  #     - uses: actions/checkout@v5
+  #     - uses: actions/checkout@v6
   #     - uses: EmbarkStudios/cargo-deny-action@v2
 
   # Run cargo clippy.
@@ -108,7 +108,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
         with: { components: clippy }
       - uses: Swatinem/rust-cache@v2
@@ -120,7 +120,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - id: filter
         uses: dorny/paths-filter@v3
         with:
@@ -142,7 +142,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
@@ -161,7 +161,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.toolchain }}
@@ -174,7 +174,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: "Check out the repo"
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - uses: "dtolnay/rust-toolchain@stable"
         with:
@@ -196,7 +196,7 @@ jobs:
   #   runs-on: "ubuntu-latest"
   #   steps:
   #     - name: "Check out the repo"
-  #       uses: actions/checkout@v5
+  #       uses: actions/checkout@v6
 
   #     - uses: "actions-rs/toolchain@v1"
   #       with:
