@@ -67,6 +67,7 @@ impl UiSyncManager {
     }
 
     /// Notify that a redraw has been completed
+    #[allow(dead_code)]
     pub fn notify_redraw_complete(&self) {
         self.redraw_notify.notify_one();
     }

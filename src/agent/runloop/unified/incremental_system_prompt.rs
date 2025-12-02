@@ -115,6 +115,7 @@ impl IncrementalSystemPrompt {
     }
 
     /// Clear the cached prompt (useful when configuration changes)
+    #[allow(dead_code)]
     pub async fn clear_cache(&self) {
         let mut write_guard = self.cached_prompt.write().await;
         write_guard.content.clear();
@@ -124,6 +125,7 @@ impl IncrementalSystemPrompt {
     }
 
     /// Get cache statistics
+    #[allow(dead_code)]
     pub async fn cache_stats(&self) -> (bool, usize) {
         let read_guard = self.cached_prompt.read().await;
         (!read_guard.content.is_empty(), read_guard.content.len())

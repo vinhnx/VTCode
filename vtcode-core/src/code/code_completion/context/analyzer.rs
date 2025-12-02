@@ -39,7 +39,8 @@ impl ContextAnalyzer {
                 crate::tools::tree_sitter::LanguageSupport::Java => "java",
                 crate::tools::tree_sitter::LanguageSupport::Bash => "bash",
                 crate::tools::tree_sitter::LanguageSupport::Swift => "swift",
-            }).into();
+            })
+            .into();
         }
 
         // Default to rust if no language detected

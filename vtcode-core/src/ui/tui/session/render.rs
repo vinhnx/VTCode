@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::{cmp::min, sync::Arc};
 
 use anstyle::Color as AnsiColorEnum;
@@ -311,7 +313,8 @@ fn render_palette_generic<F>(
         .collect();
 
     if has_more {
-        let continuation_style = default_style(session).add_modifier(Modifier::DIM | Modifier::ITALIC);
+        let continuation_style =
+            default_style(session).add_modifier(Modifier::DIM | Modifier::ITALIC);
         list_items.push(ListItem::new(Line::from(Span::styled(
             more_text,
             continuation_style,
@@ -392,7 +395,7 @@ fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, viewport: R
 
             // Apply file-specific styling
             let mut style = base_style;
-            
+
             // Add icon prefix based on file type
             let (prefix, is_dir) = if display_text.ends_with("/ ") {
                 ("↳  ", true)
@@ -939,7 +942,6 @@ fn collect_transcript_window(
     // Use the optimized method from the new TranscriptReflowCache
     cache.get_visible_range(start_row, max_rows)
 }
-
 
 fn wrap_block_lines(
     session: &Session,

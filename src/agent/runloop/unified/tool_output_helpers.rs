@@ -1,4 +1,5 @@
 //! Helper functions to eliminate code duplication in tool output handlers
+#![allow(dead_code)]
 
 use crate::agent::runloop::mcp_events::McpPanelState;
 use crate::agent::runloop::unified::state::SessionStats;
@@ -112,7 +113,7 @@ pub async fn record_token_usage_common(
     name: &str,
     output: &serde_json::Value,
     token_budget: &TokenBudgetManager,
-    vt_config: Option<&VTCodeConfig>,
+    _vt_config: Option<&VTCodeConfig>,
 ) -> Result<()> {
     // Extract and record max_tokens usage if present in tool output
     if let Some(applied_max_tokens) = output.get("applied_max_tokens").and_then(|v| v.as_u64()) {

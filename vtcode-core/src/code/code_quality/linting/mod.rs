@@ -10,8 +10,8 @@ use std::process::Command;
 
 /// Shared utilities for lint output parsing
 mod parser_utils {
-    use serde_json::Value;
     use crate::code::code_quality::config::LintSeverity;
+    use serde_json::Value;
 
     /// Extract string value from JSON, return as owned String or default
     pub fn get_str(value: &Value, key: &str, default: &str) -> String {
@@ -24,10 +24,7 @@ mod parser_utils {
 
     /// Extract u64 and convert to usize
     pub fn get_u64(value: &Value, key: &str) -> usize {
-        value
-            .get(key)
-            .and_then(Value::as_u64)
-            .unwrap_or(0) as usize
+        value.get(key).and_then(Value::as_u64).unwrap_or(0) as usize
     }
 
     /// Parse severity level from string
@@ -199,9 +196,9 @@ impl LintingOrchestrator {
                             "code",
                             "",
                         );
-                        let severity = parser_utils::parse_severity_error(
-                            &parser_utils::get_str(message, "level", ""),
-                        );
+                        let severity = parser_utils::parse_severity_error(&parser_utils::get_str(
+                            message, "level", "",
+                        ));
                         let msg = parser_utils::get_str(message, "message", "");
                         findings.push(LintFinding {
                             file_path: base_path.join(file),
@@ -228,13 +225,13 @@ impl LintingOrchestrator {
                 let path = file.get("filePath").and_then(Value::as_str).unwrap_or("");
                 if let Some(messages) = file.get("messages").and_then(Value::as_array) {
                     for m in messages {
-                         let line = parser_utils::get_u64(m, "line");
-                         let column = parser_utils::get_u64(m, "column");
-                         let rule = parser_utils::get_str(m, "ruleId", "");
-                         let severity = parser_utils::parse_severity_numeric(
-                             m.get("severity").and_then(Value::as_u64).unwrap_or(0),
-                         );
-                         let msg = parser_utils::get_str(m, "message", "");
+                        let line = parser_utils::get_u64(m, "line");
+                        let column = parser_utils::get_u64(m, "column");
+                        let rule = parser_utils::get_str(m, "ruleId", "");
+                        let severity = parser_utils::parse_severity_numeric(
+                            m.get("severity").and_then(Value::as_u64).unwrap_or(0),
+                        );
+                        let msg = parser_utils::get_str(m, "message", "");
                         findings.push(LintFinding {
                             file_path: base_path.join(path),
                             line: line as usize,
@@ -257,13 +254,14 @@ impl LintingOrchestrator {
             && let Some(arr) = json.as_array()
         {
             for item in arr {
-                 let path = parser_utils::get_str(item, "path", "");
-                 let line = parser_utils::get_u64(item, "line");
-                 let column = parser_utils::get_u64(item, "column");
-                 let rule = parser_utils::get_str(item, "symbol", "");
-                 let msg = parser_utils::get_str(item, "message", "");
-                 let severity = parser_utils::parse_severity_error(&parser_utils::get_str(item, "type", ""));
-                 findings.push(LintFinding {
+                let path = parser_utils::get_str(item, "path", "");
+                let line = parser_utils::get_u64(item, "line");
+                let column = parser_utils::get_u64(item, "column");
+                let rule = parser_utils::get_str(item, "symbol", "");
+                let msg = parser_utils::get_str(item, "message", "");
+                let severity =
+                    parser_utils::parse_severity_error(&parser_utils::get_str(item, "type", ""));
+                findings.push(LintFinding {
                     file_path: base_path.join(path),
                     line: line as usize,
                     column: column as usize,

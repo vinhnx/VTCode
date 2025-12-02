@@ -2,6 +2,7 @@
 //!
 //! This module provides a single, generic implementation for handling tool execution
 //! outcomes that can be used by all the different context types.
+#![allow(dead_code)]
 
 use crate::agent::runloop::mcp_events::McpPanelState;
 use crate::agent::runloop::unified::state::SessionStats;
@@ -244,8 +245,8 @@ async fn handle_regular_tool_success<C: ToolOutputContext>(
     stdout: &Option<String>,
     modified_files: &[PathBuf],
     command_success: bool,
-    vt_config: Option<&VTCodeConfig>,
-    token_budget: &TokenBudgetManager,
+    _vt_config: Option<&VTCodeConfig>,
+    _token_budget: &TokenBudgetManager,
     any_write_effect: &mut bool,
     turn_modified_files: &mut Vec<PathBuf>,
     last_tool_stdout: &mut Option<String>,
@@ -328,9 +329,9 @@ async fn handle_regular_tool_failure<C: ToolOutputContext>(
     error: &str,
     stdout: &Option<String>,
     modified_files: &[PathBuf],
-    error_kind: &vtcode_core::tools::registry::ToolErrorType,
-    vt_config: Option<&VTCodeConfig>,
-    token_budget: &TokenBudgetManager,
+    _error_kind: &vtcode_core::tools::registry::ToolErrorType,
+    _vt_config: Option<&VTCodeConfig>,
+    _token_budget: &TokenBudgetManager,
     any_write_effect: &mut bool,
     turn_modified_files: &mut Vec<PathBuf>,
     last_tool_stdout: &mut Option<String>,
@@ -361,8 +362,8 @@ async fn handle_tool_blocked<C: ToolOutputContext>(
     name: &str,
     args_val: &serde_json::Value,
     reason: &str,
-    vt_config: Option<&VTCodeConfig>,
-    token_budget: &TokenBudgetManager,
+    _vt_config: Option<&VTCodeConfig>,
+    _token_budget: &TokenBudgetManager,
 ) -> Result<()> {
     // Record trajectory
     let blocked_message = format!("Tool '{}' was blocked: {}", name, reason);

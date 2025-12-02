@@ -25,19 +25,26 @@ mod shared {
             .ok_or_else(|| anyhow::anyhow!(ERR_ARGS_OBJECT))
     }
 
-    pub fn get_required_field(obj: &serde_json::Map<String, Value>, field: &str, custom_err: Option<&str>) -> anyhow::Result<&str> {
+    pub fn get_required_field(
+        obj: &serde_json::Map<String, Value>,
+        field: &str,
+        custom_err: Option<&str>,
+    ) -> anyhow::Result<&str> {
         obj.get(field)
             .and_then(|v| v.as_str())
-            .ok_or_else(|| anyhow::anyhow!(
-                custom_err.unwrap_or(&format!("Invalid {}", field))
-            ))
+            .ok_or_else(|| anyhow::anyhow!(custom_err.unwrap_or(&format!("Invalid {}", field))))
     }
 
     pub fn check_client_initialized(client: &Option<AcpClient>) -> anyhow::Result<&AcpClient> {
-        client.as_ref().ok_or_else(|| anyhow::anyhow!(ERR_CLIENT_UNINITIALIZED))
+        client
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!(ERR_CLIENT_UNINITIALIZED))
     }
 
-    pub fn validate_field_exists(obj: &serde_json::Map<String, Value>, field: &str) -> anyhow::Result<()> {
+    pub fn validate_field_exists(
+        obj: &serde_json::Map<String, Value>,
+        field: &str,
+    ) -> anyhow::Result<()> {
         if !obj.contains_key(field) {
             return Err(anyhow::anyhow!("Missing required field: {}", field));
         }
@@ -103,10 +110,7 @@ impl Tool for AcpTool {
 
         let action = shared::get_required_field(obj, "action", None)?;
         let remote_agent_id = shared::get_required_field(obj, "remote_agent_id", None)?;
-        let method = obj
-            .get("method")
-            .and_then(|v| v.as_str())
-            .unwrap_or("sync");
+        let method = obj.get("method").and_then(|v| v.as_str()).unwrap_or("sync");
 
         let call_args = obj.get("args").cloned().unwrap_or(json!({}));
 
@@ -167,7 +171,7 @@ impl Tool for AcpDiscoveryTool {
             Some("by_capability") => shared::validate_field_exists(obj, "capability")?,
             Some("by_id") => shared::validate_field_exists(obj, "agent_id")?,
             Some(other) => return Err(anyhow::anyhow!("Unknown discovery mode: {}", other)),
-            None => {},
+            None => {}
         }
 
         Ok(())

@@ -9,7 +9,7 @@ use crossterm::ExecutableCommand;
 use crossterm::terminal::{
     Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
-use editor_command::EditorBuilder;
+use editor_command::Editor;
 use tempfile::NamedTempFile;
 use tracing::debug;
 
@@ -62,19 +62,17 @@ impl TerminalAppLauncher {
             debug!("launching editor with file: {:?}", file_path);
 
             // Try to build editor command from VISUAL/EDITOR environment variables first
-            let mut cmd = EditorBuilder::new()
-                .environment()
-                .path(&file_path)
-                .build()
-                .or_else(|_| {
+            let mut cmd = match Editor::new() {
+                Ok(editor) => editor.open(&file_path),
+                Err(_) => {
                     // If EDITOR/VISUAL not set, search for available editors in PATH
                     debug!("EDITOR/VISUAL not set, searching for available editors");
-                    Self::try_common_editors(&file_path)
-                })
-                .context(
-                    "failed to detect editor: set EDITOR or VISUAL environment variable, \
-                     or install vim, nano, or your preferred editor",
-                )?;
+                    Self::try_common_editors(&file_path).context(
+                        "failed to detect editor: set EDITOR or VISUAL environment variable, \
+                             or install vim, nano, or your preferred editor",
+                    )?
+                }
+            };
 
             let status = cmd
                 .current_dir(&self.workspace_root)
