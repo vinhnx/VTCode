@@ -32,7 +32,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Install ripgrep (for grep_search)
         run: sudo apt-get update && sudo apt-get install -y ripgrep
