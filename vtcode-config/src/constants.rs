@@ -264,7 +264,7 @@ pub mod models {
         pub const MINIMAX_M2_CLOUD: &str = "minimax-m2:cloud";
     }
 
-    // DeepSeek models (native API)
+    // DeepSeek models (native API) - V3.2 released 2025-12-01
     pub mod deepseek {
         pub const DEFAULT_MODEL: &str = "deepseek-chat";
         pub const SUPPORTED_MODELS: &[&str] = &["deepseek-chat", "deepseek-reasoner"];

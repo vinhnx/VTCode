@@ -909,6 +909,130 @@
         "doc_comment": "Qwen3 Coder 30B A3B Instruct - Large Mixture-of-Experts coding deployment"
       }
     },
+    "deepseek/deepseek-chat": {
+      "id": "deepseek/deepseek-chat",
+      "name": "DeepSeek: DeepSeek V3.2 Chat",
+      "reasoning": false,
+      "tool_call": true,
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "context": 128000,
+      "max_output_tokens": 8192,
+      "cost": {
+        "input": 2.8E-7,
+        "output": 1.1E-6
+      },
+      "vtcode": {
+        "variant": "OpenRouterDeepseekChat",
+        "constant": "DEEPSEEK_CHAT",
+        "vendor": "deepseek",
+        "display": "DeepSeek V3.2 Chat",
+        "description": "DeepSeek official chat model via OpenRouter",
+        "efficient": true,
+        "top_tier": true,
+        "generation": "V3.2",
+        "doc_comment": "DeepSeek V3.2 Chat - Official chat model via OpenRouter"
+      }
+    },
+    "deepseek/deepseek-v3.2": {
+      "id": "deepseek/deepseek-v3.2",
+      "name": "DeepSeek: DeepSeek V3.2",
+      "reasoning": true,
+      "tool_call": true,
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "context": 128000,
+      "max_output_tokens": 8192,
+      "cost": {
+        "input": 2.8E-7,
+        "output": 1.1E-6
+      },
+      "vtcode": {
+        "variant": "OpenRouterDeepSeekV32",
+        "constant": "DEEPSEEK_V3_2",
+        "vendor": "deepseek",
+        "display": "DeepSeek V3.2",
+        "description": "DeepSeek V3.2 model with thinking support via OpenRouter",
+        "efficient": false,
+        "top_tier": true,
+        "generation": "V3.2",
+        "doc_comment": "DeepSeek V3.2 - Standard model with thinking support via OpenRouter"
+      }
+    },
+    "deepseek/deepseek-reasoner": {
+      "id": "deepseek/deepseek-reasoner",
+      "name": "DeepSeek: DeepSeek V3.2 Reasoner (Thinking)",
+      "reasoning": true,
+      "tool_call": true,
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "context": 128000,
+      "max_output_tokens": 8192,
+      "cost": {
+        "input": 5.5E-6,
+        "output": 2.2E-5
+      },
+      "vtcode": {
+        "variant": "OpenRouterDeepseekReasoner",
+        "constant": "DEEPSEEK_REASONER",
+        "vendor": "deepseek",
+        "display": "DeepSeek V3.2 Reasoner",
+        "description": "DeepSeek thinking mode model via OpenRouter with deliberate reasoning output",
+        "efficient": false,
+        "top_tier": true,
+        "generation": "V3.2",
+        "doc_comment": "DeepSeek V3.2 Reasoner - Thinking mode via OpenRouter"
+      }
+    },
+    "deepseek/deepseek-v3.2-speciale": {
+      "id": "deepseek/deepseek-v3.2-speciale",
+      "name": "DeepSeek: DeepSeek V3.2 Speciale",
+      "reasoning": true,
+      "tool_call": false,
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "context": 128000,
+      "max_output_tokens": 8192,
+      "cost": {
+        "input": 5.5E-6,
+        "output": 2.2E-5
+      },
+      "vtcode": {
+        "variant": "OpenRouterDeepSeekV32Speciale",
+        "constant": "DEEPSEEK_V3_2_SPECIALE",
+        "vendor": "deepseek",
+        "display": "DeepSeek V3.2 Speciale",
+        "description": "DeepSeek V3.2 Speciale - Enhanced reasoning model (no tool-use)",
+        "efficient": false,
+        "top_tier": true,
+        "generation": "V3.2",
+        "doc_comment": "DeepSeek V3.2 Speciale - Enhanced reasoning with maxed-out capabilities"
+      }
+    },
     "deepseek/deepseek-v3.2-exp": {
       "id": "deepseek/deepseek-v3.2-exp",
       "name": "DeepSeek: DeepSeek V3.2 Exp",
