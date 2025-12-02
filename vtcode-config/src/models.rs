@@ -204,9 +204,9 @@ pub enum ModelId {
     ClaudeSonnet4,
 
     // DeepSeek models
-    /// DeepSeek V3.2-Exp Chat - Non-thinking mode
+    /// DeepSeek V3.2 Chat - Fast non-thinking mode
     DeepSeekChat,
-    /// DeepSeek V3.2-Exp Reasoner - Thinking mode with deliberate reasoning output
+    /// DeepSeek V3.2 Reasoner - Thinking mode with structured reasoning output
     DeepSeekReasoner,
 
     // xAI models
@@ -351,6 +351,14 @@ pub enum ModelId {
     OpenRouterQwen3CoderFlash,
     /// Qwen3 Coder 30B A3B Instruct - Large Mixture-of-Experts coding deployment
     OpenRouterQwen3Coder30bA3bInstruct,
+    /// DeepSeek V3.2 Chat - Official chat model via OpenRouter
+    OpenRouterDeepseekChat,
+    /// DeepSeek V3.2 - Standard model with thinking support via OpenRouter
+    OpenRouterDeepSeekV32,
+    /// DeepSeek V3.2 Reasoner - Thinking mode via OpenRouter
+    OpenRouterDeepseekReasoner,
+    /// DeepSeek V3.2 Speciale - Enhanced reasoning model (no tool-use)
+    OpenRouterDeepSeekV32Speciale,
     /// DeepSeek V3.2 Exp - Experimental DeepSeek V3.2 listing
     OpenRouterDeepSeekV32Exp,
     /// DeepSeek Chat v3.1 - Advanced DeepSeek model via OpenRouter
@@ -645,8 +653,8 @@ impl ModelId {
             ModelId::ClaudeHaiku45 => "Claude Haiku 4.5",
             ModelId::ClaudeSonnet4 => "Claude Sonnet 4",
             // DeepSeek models
-            ModelId::DeepSeekChat => "DeepSeek V3.2-Exp (Chat)",
-            ModelId::DeepSeekReasoner => "DeepSeek V3.2-Exp (Reasoner)",
+            ModelId::DeepSeekChat => "DeepSeek V3.2 Chat",
+            ModelId::DeepSeekReasoner => "DeepSeek V3.2 Reasoner",
             // xAI models
             ModelId::XaiGrok4 => "Grok-4",
             ModelId::XaiGrok4Mini => "Grok-4 Mini",
@@ -742,10 +750,10 @@ impl ModelId {
             }
             // DeepSeek models
             ModelId::DeepSeekChat => {
-                "DeepSeek V3.2-Exp non-thinking mode optimized for fast coding responses"
+                "DeepSeek V3.2 - Fast, efficient chat model for immediate responses"
             }
             ModelId::DeepSeekReasoner => {
-                "DeepSeek V3.2-Exp thinking mode with structured reasoning output"
+                "DeepSeek V3.2 - Thinking mode with integrated tool-use and reasoning capability"
             }
             // xAI models
             ModelId::XaiGrok4 => "Flagship Grok 4 model with long context and tool use",
