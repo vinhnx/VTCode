@@ -4,8 +4,8 @@
 //! ~/.vtcode/tool-policy.json to minimize repeated prompts while maintaining
 //! user control overwhich tools the agent can use.
 
-use anyhow::{Context, Result};
 use crate::utils::error_messages::ERR_CREATE_POLICY_DIR;
+use anyhow::{Context, Result};
 use dialoguer::{
     Confirm,
     console::{Color as ConsoleColor, Style as ConsoleStyle, style},
@@ -359,11 +359,7 @@ impl ToolPolicyManager {
         if let Some(parent) = config_path.parent() {
             if !tokio::fs::try_exists(parent).await.unwrap_or(false) {
                 tokio::fs::create_dir_all(parent).await.with_context(|| {
-                    format!(
-                        "{} at {}",
-                        ERR_CREATE_POLICY_DIR,
-                        parent.display()
-                    )
+                    format!("{} at {}", ERR_CREATE_POLICY_DIR, parent.display())
                 })?;
             }
         }
@@ -493,11 +489,7 @@ impl ToolPolicyManager {
         if let Some(parent) = path.parent() {
             if !tokio::fs::try_exists(parent).await.unwrap_or(false) {
                 tokio::fs::create_dir_all(parent).await.with_context(|| {
-                    format!(
-                        "{} at {}",
-                        ERR_CREATE_POLICY_DIR,
-                        parent.display()
-                    )
+                    format!("{} at {}", ERR_CREATE_POLICY_DIR, parent.display())
                 })?;
             }
         }

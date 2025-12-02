@@ -102,8 +102,8 @@ impl SkillManager {
 
         // Save metadata
         let metadata_path = skill_dir.join("skill.json");
-        let metadata_json = serde_json::to_string_pretty(&skill.metadata)
-            .context(ERR_SERIALIZE_METADATA)?;
+        let metadata_json =
+            serde_json::to_string_pretty(&skill.metadata).context(ERR_SERIALIZE_METADATA)?;
         tokio::fs::write(&metadata_path, metadata_json)
             .await
             .context(ERR_WRITE_SKILL_METADATA)?;
@@ -189,11 +189,7 @@ impl SkillManager {
             .await
             .context(ERR_READ_SKILLS_DIR)?;
 
-        while let Some(entry) = dir_entries
-            .next_entry()
-            .await
-            .context(ERR_READ_DIR_ENTRY)?
-        {
+        while let Some(entry) = dir_entries.next_entry().await.context(ERR_READ_DIR_ENTRY)? {
             let path = entry.path();
             if path.is_dir() {
                 let metadata_path = path.join("skill.json");

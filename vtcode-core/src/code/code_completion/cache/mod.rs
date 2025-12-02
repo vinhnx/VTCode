@@ -83,7 +83,7 @@ impl CompletionCache {
             .iter()
             .min_by_key(|(_, entry)| entry.access_count)
             .map(|(key, _)| key.clone());
-        
+
         if let Some(key) = lru_key {
             self.cache.remove(&key);
         }

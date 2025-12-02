@@ -133,11 +133,7 @@ impl SnapshotManager {
 
         if config.enabled {
             fs::create_dir_all(&storage_dir).with_context(|| {
-                format!(
-                    "{}: {}",
-                    ERR_CREATE_CHECKPOINT_DIR,
-                    storage_dir.display()
-                )
+                format!("{}: {}", ERR_CREATE_CHECKPOINT_DIR, storage_dir.display())
             })?;
         }
         Ok(Self {

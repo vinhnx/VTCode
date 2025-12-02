@@ -249,12 +249,10 @@ impl SessionArchive {
             messages,
         };
 
-        let payload = serde_json::to_string_pretty(&snapshot)
-            .context(ERR_SERIALIZE_STATE)?;
+        let payload = serde_json::to_string_pretty(&snapshot).context(ERR_SERIALIZE_STATE)?;
         if let Some(parent) = self.path.parent() {
-            fs::create_dir_all(parent).with_context(|| {
-                format!("{}: {}", ERR_CREATE_SESSION_DIR, parent.display())
-            })?;
+            fs::create_dir_all(parent)
+                .with_context(|| format!("{}: {}", ERR_CREATE_SESSION_DIR, parent.display()))?;
         }
         fs::write(&self.path, payload)
             .with_context(|| format!("{}: {}", ERR_WRITE_SESSION, self.path.display()))?;

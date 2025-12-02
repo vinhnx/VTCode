@@ -1887,12 +1887,9 @@ pub(crate) async fn run_single_agent_loop_unified(
                     Ok(system_prompt)
                 }
 
-                let system_prompt = run_turn_build_system_prompt(
-                    &mut context_manager,
-                    working_history,
-                    step_count,
-                )
-                .await?;
+                let system_prompt =
+                    run_turn_build_system_prompt(&mut context_manager, working_history, step_count)
+                        .await?;
 
                 let use_streaming = provider_client.supports_streaming();
                 let reasoning_effort = vt_cfg.as_ref().and_then(|cfg| {

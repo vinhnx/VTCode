@@ -7,7 +7,11 @@ use anyhow::{Context, Result, anyhow};
 
 /// Helper to validate flags in arguments (reduces duplication in 10+ validators)
 /// Returns error if any flag not in allowed_flags is found
-fn validate_allowed_flags(args: &[String], allowed_flags: &[&str], command_name: &str) -> Result<()> {
+fn validate_allowed_flags(
+    args: &[String],
+    allowed_flags: &[&str],
+    command_name: &str,
+) -> Result<()> {
     for arg in args {
         if arg.starts_with('-') && !allowed_flags.contains(&arg.as_str()) {
             return Err(anyhow!("unsupported {} flag '{}'", command_name, arg));
@@ -121,7 +125,7 @@ async fn validate_ls(args: &[String], workspace_root: &Path, working_dir: &Path)
 async fn validate_cat(args: &[String], workspace_root: &Path, working_dir: &Path) -> Result<()> {
     let allowed_cat_flags = &["-b", "-n", "-t"];
     let mut files = Vec::new();
-    
+
     for arg in args {
         if arg.starts_with('-') {
             if !allowed_cat_flags.contains(&arg.as_str()) {
