@@ -91,10 +91,9 @@ impl ToolPipelineOutcome {
                 command_success,
                 has_more,
             } => {
-                let modified_files = modified_files;
                 ToolPipelineOutcome {
                     status: ToolExecutionStatus::Success {
-                        output,
+                        output: output.clone(),
                         stdout: stdout.clone(),
                         modified_files: modified_files.clone(),
                         command_success,
@@ -429,28 +428,22 @@ async fn execute_tool_with_progress(
         progress_reporter.set_progress(estimated_progress).await;
 
         let token = CancellationToken::new();
-        // Clone args only once for the async move block
-        let args_for_exec = args.clone();
-        let exec_future = {
-            let name = name.to_string();
-            let progress_reporter = progress_reporter.clone();
+    // Use reference to args to avoid cloning
+    let exec_future = cancellation::with_tool_cancellation(token.clone(), async move {
+        // Tool execution in progress (already set above)
+        progress_reporter.set_progress(40).await;
 
-            cancellation::with_tool_cancellation(token.clone(), async move {
-                // Tool execution in progress (already set above)
-                progress_reporter.set_progress(40).await;
+        // Execute the tool with reference to avoid clone
+        let result = registry_clone.execute_tool_ref(name, args).await;
 
-                // Execute the tool with reference to avoid clone
-                let result = registry_clone.execute_tool_ref(&name, &args_for_exec).await;
+        // Phase 4: Processing results (85-95%)
+        progress_reporter
+            .set_message(format!("Processing {} results...", name))
+            .await;
+        progress_reporter.set_progress(90).await;
 
-                // Phase 4: Processing results (85-95%)
-                progress_reporter
-                    .set_message(format!("Processing {} results...", name))
-                    .await;
-                progress_reporter.set_progress(90).await;
-
-                result
-            })
-        };
+        result
+    });
 
         if ctrl_c_state.is_cancel_requested() || ctrl_c_state.is_exit_requested() {
             token.cancel();

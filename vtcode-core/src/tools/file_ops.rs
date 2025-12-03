@@ -49,9 +49,26 @@ impl FileOpsTool {
         }
     }
 
+    /// Get relative path from workspace root, avoiding allocation when possible
+    #[inline]
+    fn relative_path<'a>(&self, path: &'a Path) -> Cow<'a, str> {
+        path.strip_prefix(&self.workspace_root)
+            .unwrap_or(path)
+            .to_string_lossy()
+    }
+
     /// Execute basic directory listing
     async fn execute_basic_list(&self, input: &ListInput) -> Result<Value> {
         let base = self.workspace_root.join(&input.path);
+
+        // Check if path exists before proceeding
+        if !base.exists() {
+            return Err(anyhow!(
+                "Path '{}' does not exist. Workspace root: {}",
+                input.path,
+                self.workspace_root.display()
+            ));
+        }
 
         if self.should_exclude(&base).await {
             return Err(anyhow!(
@@ -75,7 +92,7 @@ impl FileOpsTool {
         } else if base.is_dir() {
             let mut entries = tokio::fs::read_dir(&base)
                 .await
-                .with_context(|| format!("Failed to read directory: {}", input.path))?;
+                .with_context(|| format!("Failed to read directory: {}. Workspace root: {}", input.path, self.workspace_root.display()))?;
             while let Some(entry) = entries
                 .next_entry()
                 .await
@@ -97,10 +114,7 @@ impl FileOpsTool {
                     .with_context(|| format!("Failed to read file type for: {}", path.display()))?
                     .is_dir();
 
-                let relative_path = path
-                    .strip_prefix(&self.workspace_root)
-                    .map(|p| p.to_string_lossy())
-                    .unwrap_or_else(|_| path.to_string_lossy());
+                let relative_path = self.relative_path(&path);
 
                 all_items.push(json!({
                     "name": name,
@@ -293,6 +307,15 @@ impl FileOpsTool {
         let pattern = input.name_pattern.as_deref().unwrap_or(DEFAULT_PATTERN);
         let pattern_lower = pattern.to_lowercase();
         let search_path = self.workspace_root.join(&input.path);
+
+        // Check if path exists before walking
+        if !search_path.exists() {
+            return Err(anyhow!(
+                "Path '{}' does not exist. Workspace root: {}",
+                input.path,
+                self.workspace_root.display()
+            ));
+        }
 
         // Pre-allocate with max_items capacity to avoid reallocations - AGENTS.md max 5 items
         let mut items = Vec::with_capacity(input.max_items.min(5));
@@ -1590,9 +1613,16 @@ mod tests {
 #[async_trait]
 impl Tool for FileOpsTool {
     async fn execute(&self, args: Value) -> Result<Value> {
-        let input: ListInput = serde_json::from_value(args).context(
+        let mut input: ListInput = serde_json::from_value(args).context(
             "Error: Invalid 'list_files' arguments. Expected JSON object with: path (required, string). Optional: mode (string), max_items (number), page (number), per_page (number), include_hidden (bool), response_format (string). Example: {\"path\": \"src\", \"page\": 1, \"per_page\": 50, \"response_format\": \"concise\"}",
         )?;
+
+        // Normalize path: strip /workspace prefix if present (common LLM pattern)
+        if input.path.starts_with("/workspace/") {
+            input.path = input.path.strip_prefix("/workspace/").unwrap().to_string();
+        } else if input.path == "/workspace" {
+            input.path = ".".to_string();
+        }
 
         let mode_clone = input.mode.clone();
         let mode = mode_clone.as_deref().unwrap_or("list");

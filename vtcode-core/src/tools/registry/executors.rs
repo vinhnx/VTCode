@@ -81,8 +81,8 @@ impl ToolRegistry {
                 pattern: None,
             });
 
-            // Cache workspace root string to avoid repeated allocations
-            let workspace_root = self.workspace_root().to_string_lossy();
+            // Use Cow to avoid allocation when possible
+            let workspace_root = self.workspace_root_str();
 
             // Initialize comprehensive error report with pre-allocated vectors
             let mut error_report = serde_json::json!({
@@ -326,8 +326,8 @@ impl ToolRegistry {
                     })
                     .collect();
 
-                // Cache workspace root to avoid repeated allocations
-                let workspace_root = self.workspace_root().to_string_lossy();
+                // Use Cow to avoid allocation
+                let workspace_root = self.workspace_root_str();
                 let system_state = json!({
                     "available_tools_count": available_tools.len(),
                     "workspace_root": workspace_root,
@@ -440,7 +440,7 @@ impl ToolRegistry {
         Box::pin(async move {
             // Lightweight snapshot of registry state for diagnostics; this will not include full session context.
             let tools = self.available_tools().await;
-            let workspace_root = self.workspace_root().to_string_lossy();
+            let workspace_root = self.workspace_root_str();
             let stats = json!({
                 "tools_registered": tools,
                 "workspace_root": workspace_root,
@@ -816,7 +816,7 @@ impl ToolRegistry {
 
     pub(super) fn execute_code_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
         let mcp_client = self.mcp_client.clone();
-        let workspace_root = self.inventory.workspace_root().to_path_buf();
+        let workspace_root = self.workspace_root_owned();
         Box::pin(async move {
             use crate::exec::code_executor::{CodeExecutor, Language};
 
@@ -989,7 +989,7 @@ impl ToolRegistry {
     }
 
     pub(super) fn save_skill_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        let workspace_root = self.inventory.workspace_root().to_path_buf();
+        let workspace_root = self.workspace_root_owned();
         Box::pin(async move {
             use crate::exec::{Skill, SkillManager, SkillMetadata};
 
@@ -1074,7 +1074,7 @@ impl ToolRegistry {
     }
 
     pub(super) fn load_skill_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        let workspace_root = self.inventory.workspace_root().to_path_buf();
+        let workspace_root = self.workspace_root_owned();
         Box::pin(async move {
             use crate::exec::SkillManager;
 
@@ -1105,7 +1105,7 @@ impl ToolRegistry {
     }
 
     pub(super) fn list_skills_executor(&mut self, _args: Value) -> BoxFuture<'_, Result<Value>> {
-        let workspace_root = self.inventory.workspace_root().to_path_buf();
+        let workspace_root = self.workspace_root_owned();
         Box::pin(async move {
             use crate::exec::SkillManager;
 
@@ -1120,7 +1120,7 @@ impl ToolRegistry {
     }
 
     pub(super) fn search_skills_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        let workspace_root = self.inventory.workspace_root().to_path_buf();
+        let workspace_root = self.workspace_root_owned();
         Box::pin(async move {
             use crate::exec::SkillManager;
 

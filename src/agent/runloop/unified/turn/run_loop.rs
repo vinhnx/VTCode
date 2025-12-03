@@ -621,7 +621,7 @@ pub(crate) async fn run_turn_handle_tool_failure(
     traj.log_tool_call(working_history.len(), name, &serde_json::json!({}), false);
 
     let error_message = error.to_string();
-    let error_json = serde_json::json!({ "error": error_message.clone() });
+    let error_json = serde_json::json!({ "error": error_message });
 
     if let Some(tool_name) = name.strip_prefix("mcp_") {
         renderer.line_if_not_empty(MessageStyle::Output)?;
@@ -723,7 +723,7 @@ pub(crate) async fn run_turn_handle_tool_timeout(
     traj.log_tool_call(working_history.len(), name, &serde_json::json!({}), false);
 
     let error_message = error.to_string();
-    let err_json = serde_json::json!({ "error": error_message.clone() });
+    let err_json = serde_json::json!({ "error": error_message });
     let timeout_content = serde_json::to_string(&err_json).unwrap_or_else(|_| "{}".to_string());
 
     // Track timeout error token usage
