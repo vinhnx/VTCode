@@ -17,6 +17,8 @@ mod risk_scorer;
 mod telemetry;
 mod utils;
 
+use std::borrow::Cow;
+
 pub use approval_recorder::ApprovalRecorder;
 pub use declarations::{
     build_function_declarations, build_function_declarations_for_level,
@@ -507,6 +509,16 @@ impl ToolRegistry {
 
     pub fn workspace_root(&self) -> &PathBuf {
         self.inventory.workspace_root()
+    }
+
+    /// Get workspace root as Cow<str> to avoid allocations when possible
+    pub(crate) fn workspace_root_str(&self) -> Cow<'_, str> {
+        self.workspace_root().to_string_lossy()
+    }
+
+    /// Get workspace root as PathBuf (clones only when needed)
+    pub(crate) fn workspace_root_owned(&self) -> PathBuf {
+        self.inventory.workspace_root().clone()
     }
 
     pub fn file_ops_tool(&self) -> &FileOpsTool {

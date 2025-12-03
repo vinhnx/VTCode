@@ -87,7 +87,6 @@ impl ContextTrimOutcome {
 ///
 /// This function intelligently prunes tool responses and calls to manage context size,
 /// prioritizing recent messages and important tool interactions.
-#[allow(dead_code)]
 pub(crate) fn prune_unified_tool_responses(
     history: &mut Vec<uni::Message>,
     config: &ContextTrimConfig,
@@ -178,7 +177,6 @@ fn remove_messages_with_retention(
 ///
 /// This is a fast-path trimming method that simply removes the oldest messages
 /// to meet the target size, without semantic analysis.
-#[allow(dead_code)]
 pub(crate) fn apply_aggressive_trim_unified(
     history: &mut Vec<uni::Message>,
     config: ContextTrimConfig,
@@ -208,7 +206,6 @@ pub(crate) fn apply_aggressive_trim_unified(
 ///
 /// This function analyzes the semantic importance of messages and removes the least
 /// valuable ones first, while preserving recent messages and high-value content.
-#[allow(dead_code)]
 pub(crate) fn enforce_unified_context_window(
     history: &mut Vec<uni::Message>,
     config: ContextTrimConfig,

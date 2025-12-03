@@ -2,8 +2,6 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use anyhow::{Context, Result, anyhow, bail};
-use toml::Value as TomlValue;
-use toml::value::Table as TomlTable;
 
 mod config_optimizer;
 mod first_run;
@@ -326,60 +324,6 @@ fn apply_inline_config_overrides(
     config_optimizer::ConfigOptimizer::apply_overrides(config, overrides)
 }
 
-#[allow(dead_code)]
-fn parse_override_value(raw: &str) -> Result<TomlValue> {
-    let trimmed = raw.trim();
-    if trimmed.is_empty() {
-        return Ok(TomlValue::String(String::new()));
-    }
-
-    let candidate = format!("value = {}", trimmed);
-    match toml::from_str::<TomlTable>(&candidate) {
-        Ok(mut table) => Ok(table
-            .remove("value")
-            .unwrap_or_else(|| TomlValue::String(trimmed.to_owned()))),
-        Err(_) => Ok(TomlValue::String(trimmed.to_owned())),
-    }
-}
-
-#[allow(dead_code)]
-fn apply_override_value(target: &mut TomlValue, key: &str, value: TomlValue) -> Result<()> {
-    let segments: Vec<&str> = key
-        .split('.')
-        .map(str::trim)
-        .filter(|segment| !segment.is_empty())
-        .collect();
-
-    if segments.is_empty() {
-        bail!("Configuration override key must not be empty");
-    }
-
-    let mut current = target;
-    for segment in &segments[..segments.len() - 1] {
-        let table = current.as_table_mut().ok_or_else(|| {
-            anyhow!(
-                "Cannot set configuration override '{}': '{}' is not a table",
-                key,
-                segment
-            )
-        })?;
-
-        current = table
-            .entry(segment.to_owned())
-            .or_insert_with(|| TomlValue::Table(TomlTable::new()));
-    }
-
-    let table = current.as_table_mut().ok_or_else(|| {
-        anyhow!(
-            "Cannot set configuration override '{}': parent is not a table",
-            key
-        )
-    })?;
-
-    let last_segment = (*segments.last().unwrap()).to_owned();
-    table.insert(last_segment, value);
-    Ok(())
-}
 
 async fn determine_theme(args: &Cli, config: &VTCodeConfig) -> Result<String> {
     let user_theme_pref = load_user_config().await.ok().and_then(|dot| {
