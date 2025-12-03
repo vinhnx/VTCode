@@ -34,7 +34,8 @@
 
 <p align="center"><strong>VT Code</strong> is a Rust-based terminal coding agent with semantic code intelligence via Tree-sitter. Supports multiple LLM providers with automatic failover and efficient context management.</p>
 
-<h6 align="center">> Development blog: <a href="https://buymeacoffee.com/vinhnx/vt-code">Lessons from Building VT Code: An Open-Source CLI AI Coding Agent</a><</h6>
+<h6 align="center">* YouTube Video: <a href="https://youtu.be/MgYtSUF-Wjs">VT Code: The AI Agent for Your Terminal</a></h6>
+<h6 align="center"> * Blog: <a href="https://buymeacoffee.com/vinhnx/vt-code">Lessons from Building VT Code: An Open-Source CLI AI Coding Agent</a></h6>
 
 <p align="center">
   <img src="resources/vhs/demo.gif" alt="VT Code demo" width="80%" />
