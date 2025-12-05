@@ -227,11 +227,11 @@ pub async fn read_instruction_bundle(
 }
 
 fn global_instruction_candidates(home: &Path) -> Vec<PathBuf> {
-    let mut candidates = Vec::new();
-    candidates.push(home.join(AGENTS_FILENAME));
-    candidates.push(home.join(".vtcode").join(AGENTS_FILENAME));
-    candidates.push(home.join(GLOBAL_CONFIG_DIRECTORY).join(AGENTS_FILENAME));
-    candidates
+    vec![
+        home.join(AGENTS_FILENAME),
+        home.join(".vtcode").join(AGENTS_FILENAME),
+        home.join(GLOBAL_CONFIG_DIRECTORY).join(AGENTS_FILENAME),
+    ]
 }
 
 async fn expand_instruction_patterns(

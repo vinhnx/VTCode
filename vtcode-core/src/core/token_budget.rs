@@ -481,9 +481,9 @@ impl TokenBudgetManager {
                     .applied_max_tokens
                     .map(|n| n.to_string())
                     .unwrap_or_else(|| "None".to_owned());
-                let _ = write!(
+                let _ = writeln!(
                     report,
-                    "  - Tool: {} | Applied max_tokens: {} | Context: {}\n",
+                    "  - Tool: {} | Applied max_tokens: {} | Context: {}",
                     usage.tool_name, applied, usage.context
                 );
             }
@@ -546,9 +546,9 @@ impl TokenBudgetManager {
         }
 
         if with_max_tokens > 0 {
-            let _ = write!(
+            let _ = writeln!(
                 summary,
-                "Tool calls with max_tokens: {} (avg: {:.1})\n",
+                "Tool calls with max_tokens: {} (avg: {:.1})",
                 with_max_tokens,
                 total_max_tokens as f64 / with_max_tokens as f64
             );

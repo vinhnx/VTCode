@@ -137,7 +137,8 @@ mod tests {
         let manager = UiSyncManager::new();
 
         // First redraw should work
-        let handle = InlineHandle::new(); // This would need proper mocking
+        let (sender, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let handle = InlineHandle { sender }; // lightweight test handle
         manager.force_redraw_sync(&handle).await.unwrap();
 
         // Immediate second redraw should be skipped due to rate limiting

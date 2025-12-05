@@ -1,3 +1,5 @@
+#![allow(clippy::collapsible_if)]
+
 use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::{DeepSeekPromptCacheSettings, PromptCachingConfig};
@@ -128,10 +130,10 @@ impl DeepSeekProvider {
             payload.insert("stream".to_string(), Value::Bool(true));
         }
 
-        if let Some(tools) = &request.tools {
-            if let Some(serialized_tools) = serialize_tools_openai_format(tools) {
-                payload.insert("tools".to_string(), Value::Array(serialized_tools));
-            }
+        if let Some(tools) = &request.tools
+            && let Some(serialized_tools) = serialize_tools_openai_format(tools)
+        {
+            payload.insert("tools".to_string(), Value::Array(serialized_tools));
         }
 
         if let Some(choice) = &request.tool_choice {

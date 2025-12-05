@@ -533,37 +533,32 @@ impl AnthropicProvider {
             .unwrap_or(0);
 
         let mut tools_json: Option<Vec<Value>> = None;
-        if let Some(tools) = &request.tools {
-            if !tools.is_empty() {
-                let mut built_tools: Vec<Value> = tools
-                    .iter()
-                    .filter_map(|tool| {
-                        let func = tool.function.as_ref()?;
-                        let mut obj = json!({
-                            "name": func.name,
-                            "description": func.description,
-                            "input_schema": func.parameters
-                        });
-                        if let Some(strict) = tool.strict {
-                            if strict {
-                                obj["strict"] = json!(true);
-                            }
+        if let Some(tools) = &request.tools && !tools.is_empty() {
+            let mut built_tools: Vec<Value> = tools
+                .iter()
+                .filter_map(|tool| {
+                    let func = tool.function.as_ref()?;
+                    let mut obj = json!({
+                        "name": func.name,
+                        "description": func.description,
+                        "input_schema": func.parameters
+                    });
+                        if tool.strict == Some(true) {
+                            obj["strict"] = json!(true);
                         }
-                        Some(obj)
-                    })
-                    .collect();
+                    Some(obj)
+                })
+                .collect();
 
-                if breakpoints_remaining > 0 {
-                    if let Some(cache_control) = cache_control_template.as_ref() {
-                        if let Some(last_tool) = built_tools.last_mut() {
-                            last_tool["cache_control"] = cache_control.clone();
-                            breakpoints_remaining -= 1;
-                        }
-                    }
-                }
-
-                tools_json = Some(built_tools);
+            if breakpoints_remaining > 0
+                && let Some(cache_control) = cache_control_template.as_ref()
+                && let Some(last_tool) = built_tools.last_mut()
+            {
+                last_tool["cache_control"] = cache_control.clone();
+                breakpoints_remaining -= 1;
             }
+
+            tools_json = Some(built_tools);
         }
 
         let mut system_value: Option<Value> = None;
@@ -653,11 +648,10 @@ impl AnthropicProvider {
                     if msg.role == MessageRole::User
                         && self.prompt_cache_settings.cache_user_messages
                         && breakpoints_remaining > 0
+                        && let Some(cache_control) = cache_control_template.as_ref()
                     {
-                        if let Some(cache_control) = cache_control_template.as_ref() {
-                            block["cache_control"] = cache_control.clone();
-                            breakpoints_remaining -= 1;
-                        }
+                        block["cache_control"] = cache_control.clone();
+                        breakpoints_remaining -= 1;
                     }
 
                     messages.push(json!({
@@ -701,43 +695,43 @@ impl AnthropicProvider {
             anthropic_request["tool_choice"] = tool_choice.to_provider_format("anthropic");
         }
 
-        if let Some(effort) = request.reasoning_effort {
-            if self.supports_reasoning_effort(&request.model) {
-                if let Some(payload) = reasoning_parameters_for(Provider::Anthropic, effort) {
-                    anthropic_request["reasoning"] = payload;
-                } else {
-                    anthropic_request["reasoning"] = json!({ "effort": effort.as_str() });
-                }
+        if let Some(effort) = request.reasoning_effort
+            && self.supports_reasoning_effort(&request.model)
+        {
+            if let Some(payload) = reasoning_parameters_for(Provider::Anthropic, effort) {
+                anthropic_request["reasoning"] = payload;
+            } else {
+                anthropic_request["reasoning"] = json!({ "effort": effort.as_str() });
             }
         }
 
         // Include structured output format when requested and supported by the model
         // According to Anthropic documentation, structured outputs are available for Claude 4 and Claude 4.5 models
-        if let Some(schema) = &request.output_format {
-            if self.supports_structured_output(&request.model) {
-                // If there are existing tools, we need to preserve them and add our structured output tool
-                let mut tools_array = if let Some(existing_tools) =
-                    anthropic_request.get("tools").and_then(|t| t.as_array())
-                {
-                    existing_tools.clone()
-                } else {
-                    Vec::new()
-                };
+        if let Some(schema) = &request.output_format
+            && self.supports_structured_output(&request.model)
+        {
+            // If there are existing tools, we need to preserve them and add our structured output tool
+            let mut tools_array = if let Some(existing_tools) =
+                anthropic_request.get("tools").and_then(|t| t.as_array())
+            {
+                existing_tools.clone()
+            } else {
+                Vec::new()
+            };
 
-                // Add the structured output tool
-                tools_array.push(json!({
-                    "name": "structured_output",
-                    "description": "Forces Claude to respond in a specific JSON format according to the provided schema",
-                    "input_schema": schema
-                }));
-                anthropic_request["tools"] = Value::Array(tools_array);
+            // Add the structured output tool
+            tools_array.push(json!({
+                "name": "structured_output",
+                "description": "Forces Claude to respond in a specific JSON format according to the provided schema",
+                "input_schema": schema
+            }));
+            anthropic_request["tools"] = Value::Array(tools_array);
 
-                // Force the model to use the structured output tool
-                anthropic_request["tool_choice"] = json!({
-                    "type": "tool",
-                    "name": "structured_output"
-                });
-            }
+            // Force the model to use the structured output tool
+            anthropic_request["tool_choice"] = json!({
+                "type": "tool",
+                "name": "structured_output"
+            });
         }
 
         Ok(anthropic_request)
@@ -906,9 +900,7 @@ impl LLMProvider for AnthropicProvider {
             return true;
         }
 
-        models::anthropic::REASONING_MODELS
-            .iter()
-            .any(|candidate| *candidate == requested)
+        models::anthropic::REASONING_MODELS.contains(&requested)
     }
 
     fn supports_parallel_tool_config(&self, _model: &str) -> bool {
@@ -1022,10 +1014,10 @@ impl LLMProvider for AnthropicProvider {
         // - No string length constraints (minLength, maxLength)
         // - Array minItems only supports values 0 or 1
         // - additionalProperties must be false for objects
-        if let Some(ref schema) = request.output_format {
-            if self.supports_structured_output(&request.model) {
-                self.validate_anthropic_schema(schema)?;
-            }
+        if let Some(ref schema) = request.output_format
+            && self.supports_structured_output(&request.model)
+        {
+            self.validate_anthropic_schema(schema)?;
         }
 
         for message in &request.messages {
@@ -1415,17 +1407,15 @@ impl AnthropicProvider {
                 // Check for unsupported array constraints beyond minItems with values 0 or 1
                 "minItems" | "maxItems" | "uniqueItems" => {
                     if key == "minItems" {
-                        if let Some(min_items) = value.as_u64() {
-                            if min_items > 1 {
-                                let formatted_error = error_display::format_llm_error(
-                                    "Anthropic",
-                                    &format!(
-                                        "Array minItems only supports values 0 or 1, got {}, path: {}",
-                                        min_items, path
-                                    ),
-                                );
-                                return Err(LLMError::InvalidRequest(formatted_error));
-                            }
+                        if let Some(min_items) = value.as_u64() && min_items > 1 {
+                            let formatted_error = error_display::format_llm_error(
+                                "Anthropic",
+                                &format!(
+                                    "Array minItems only supports values 0 or 1, got {}, path: {}",
+                                    min_items, path
+                                ),
+                            );
+                            return Err(LLMError::InvalidRequest(formatted_error));
                         }
                     } else {
                         let formatted_error = error_display::format_llm_error(
@@ -1440,17 +1430,15 @@ impl AnthropicProvider {
                 }
                 // Check for additionalProperties - must be false for objects
                 "additionalProperties" => {
-                    if let Some(additional_props) = value.as_bool() {
-                        if additional_props != false {
-                            let formatted_error = error_display::format_llm_error(
-                                "Anthropic",
-                                &format!(
-                                    "additionalProperties must be set to false, got {}, path: {}",
-                                    additional_props, path
-                                ),
-                            );
-                            return Err(LLMError::InvalidRequest(formatted_error));
-                        }
+                    if let Some(additional_props) = value.as_bool() && additional_props {
+                        let formatted_error = error_display::format_llm_error(
+                            "Anthropic",
+                            &format!(
+                                "additionalProperties must be set to false, got {}, path: {}",
+                                additional_props, path
+                            ),
+                        );
+                        return Err(LLMError::InvalidRequest(formatted_error));
                     }
                 }
                 // Recursively validate nested objects and arrays in properties

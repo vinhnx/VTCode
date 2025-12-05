@@ -215,8 +215,10 @@ pub use improvement_algorithms::{
     MLScoreComponents, PatternDetector, PatternState, TimeDecayedScore, jaro_winkler_similarity,
 };
 // Deprecated exports - use crate::cache instead
+#[allow(deprecated)]
 #[deprecated(since = "0.47.7", note = "Use crate::cache::CacheStats instead")]
 pub use improvements_cache::CacheStats as LruCacheStats;
+#[allow(deprecated)]
 #[deprecated(since = "0.47.7", note = "Use crate::cache::UnifiedCache instead")]
 pub use improvements_cache::LruCache;
 pub use improvements_config::{

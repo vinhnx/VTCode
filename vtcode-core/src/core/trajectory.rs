@@ -31,14 +31,13 @@ impl TrajectoryLogger {
         if !self.enabled {
             return;
         }
-        if let Ok(line) = serde_json::to_string(record) {
-            if let Ok(mut f) = OpenOptions::new()
+        if let Ok(line) = serde_json::to_string(record)
+            && let Ok(mut f) = OpenOptions::new()
                 .create(true)
                 .append(true)
                 .open(&self.path)
-            {
-                let _ = writeln!(f, "{line}");
-            }
+        {
+            let _ = writeln!(f, "{line}");
         }
     }
 

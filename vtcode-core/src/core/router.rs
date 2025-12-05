@@ -117,21 +117,21 @@ impl Router {
                     reasoning_effort,
                     verbosity: None,
                 };
-                if let Ok(resp) = provider.generate(req).await {
-                    if let Some(text) = resp.content {
-                        let t = text.trim().to_lowercase();
-                        class = if t.contains("codegen") {
-                            TaskClass::CodegenHeavy
-                        } else if t.contains("retrieval") {
-                            TaskClass::RetrievalHeavy
-                        } else if t.contains("complex") {
-                            TaskClass::Complex
-                        } else if t.contains("simple") {
-                            TaskClass::Simple
-                        } else {
-                            TaskClass::Standard
-                        };
-                    }
+                if let Ok(resp) = provider.generate(req).await
+                    && let Some(text) = resp.content
+                {
+                    let t = text.trim().to_lowercase();
+                    class = if t.contains("codegen") {
+                        TaskClass::CodegenHeavy
+                    } else if t.contains("retrieval") {
+                        TaskClass::RetrievalHeavy
+                    } else if t.contains("complex") {
+                        TaskClass::Complex
+                    } else if t.contains("simple") {
+                        TaskClass::Simple
+                    } else {
+                        TaskClass::Standard
+                    };
                 }
             }
         }

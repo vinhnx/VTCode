@@ -98,14 +98,13 @@ pub async fn handle_anthropic_http_error(response: Response) -> Result<Response,
 /// Parse Anthropic error response to extract friendly message
 /// Returns Cow to avoid allocation when returning error_text directly
 fn parse_anthropic_error_message(error_text: &str) -> std::borrow::Cow<'_, str> {
-    if let Ok(error_json) = serde_json::from_str::<Value>(error_text) {
-        if let Some(message) = error_json
+    if let Ok(error_json) = serde_json::from_str::<Value>(error_text)
+        && let Some(message) = error_json
             .get("error")
             .and_then(|e| e.get("message"))
             .and_then(|m| m.as_str())
-        {
-            return std::borrow::Cow::Owned(message.to_string());
-        }
+    {
+        return std::borrow::Cow::Owned(message.to_string());
     }
     std::borrow::Cow::Borrowed(error_text)
 }

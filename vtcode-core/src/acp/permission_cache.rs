@@ -207,7 +207,7 @@ mod tests {
         let mut cache = AcpPermissionCache::new();
         let path = test_path("file.rs");
 
-        cache.cache_grant(path./* clone removed */, PermissionGrant::Session);
+        cache.cache_grant(path.clone(), PermissionGrant::Session);
         assert_eq!(cache.get_permission(&path), Some(PermissionGrant::Session));
     }
 
@@ -255,7 +255,7 @@ mod tests {
         let mut cache = AcpPermissionCache::new();
         let path = test_path("file.rs");
 
-        cache.cache_grant(path./* clone removed */, PermissionGrant::Session);
+        cache.cache_grant(path.clone(), PermissionGrant::Session);
         assert!(cache.get_permission(&path).is_some());
 
         cache.invalidate(&path);
@@ -283,7 +283,7 @@ mod tests {
         let denied_path = test_path("secret.txt");
         let allowed_path = test_path("public.txt");
 
-        cache.cache_grant(denied_path./* clone removed */, PermissionGrant::Denied);
+        cache.cache_grant(denied_path.clone(), PermissionGrant::Denied);
         cache.cache_grant(allowed_path, PermissionGrant::Session);
 
         assert!(cache.is_denied(&denied_path));
@@ -299,9 +299,9 @@ mod tests {
         let denied_path = test_path("denied.rs");
         let temp_denied_path = test_path("temp_denied.rs");
 
-        cache.cache_grant(once_path./* clone removed */, PermissionGrant::Once);
+        cache.cache_grant(once_path.clone(), PermissionGrant::Once);
         cache.cache_grant(session_path, PermissionGrant::Session);
-        cache.cache_grant(denied_path./* clone removed */, PermissionGrant::Denied);
+        cache.cache_grant(denied_path.clone(), PermissionGrant::Denied);
         cache.cache_grant(temp_denied_path, PermissionGrant::TemporaryDenial);
 
         // "Once" and "TemporaryDenial" grants can't be reused
@@ -319,7 +319,7 @@ mod tests {
 
         for i in 0..5 {
             cache.cache_grant(
-                test_path(&format!("file{}.rs", i))./* clone removed */,
+                test_path(&format!("file{}.rs", i)),
                 PermissionGrant::Session,
             );
         }

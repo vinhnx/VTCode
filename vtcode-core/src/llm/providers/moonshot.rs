@@ -1,3 +1,5 @@
+#![allow(clippy::collapsible_if)]
+
 use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::PromptCachingConfig;
@@ -112,32 +114,32 @@ impl MoonshotProvider {
         payload.insert("stream".to_string(), Value::Bool(request.stream));
 
         // Add tools if present
-        if let Some(tools) = &request.tools {
-            if let Some(serialized_tools) = serialize_tools_openai_format(tools) {
-                payload.insert("tools".to_string(), Value::Array(serialized_tools));
+        if let Some(tools) = &request.tools
+            && let Some(serialized_tools) = serialize_tools_openai_format(tools)
+        {
+            payload.insert("tools".to_string(), Value::Array(serialized_tools));
 
-                // Add tool choice if specified
-                if let Some(choice) = &request.tool_choice {
-                    payload.insert(
-                        "tool_choice".to_string(),
-                        choice.to_provider_format(PROVIDER_KEY),
-                    );
-                }
+            // Add tool choice if specified
+            if let Some(choice) = &request.tool_choice {
+                payload.insert(
+                    "tool_choice".to_string(),
+                    choice.to_provider_format(PROVIDER_KEY),
+                );
             }
         }
 
         // Handle reasoning effort for Kimi-K2-Thinking model
-        if let Some(effort) = request.reasoning_effort {
-            if self.supports_reasoning_effort(&request.model) {
-                // Use the configured reasoning parameters
-                if let Some(reasoning_payload) =
-                    reasoning_parameters_for(ModelProvider::Moonshot, effort)
-                {
-                    // Add the reasoning parameters to the payload
-                    if let Some(obj) = reasoning_payload.as_object() {
-                        for (key, value) in obj {
-                            payload.insert(key.clone(), value.clone());
-                        }
+        if let Some(effort) = request.reasoning_effort
+            && self.supports_reasoning_effort(&request.model)
+        {
+            // Use the configured reasoning parameters
+            if let Some(reasoning_payload) =
+                reasoning_parameters_for(ModelProvider::Moonshot, effort)
+            {
+                // Add the reasoning parameters to the payload
+                if let Some(obj) = reasoning_payload.as_object() {
+                    for (key, value) in obj {
+                        payload.insert(key.clone(), value.clone());
                     }
                 }
             }
