@@ -154,18 +154,15 @@ fn toml_to_json(toml: &toml::Value) -> serde_json::Value {
         toml::Value::Datetime(d) => serde_json::Value::String(d.to_string()),
         toml::Value::Array(arr) => {
             // Use iterator and collect for more efficient transformation
-            serde_json::Value::Array(
-                arr.iter()
-                    .map(toml_to_json)
-                    .collect()
-            )
+            serde_json::Value::Array(arr.iter().map(toml_to_json).collect())
         }
         toml::Value::Table(table) => {
             // Use iterator and collect for more efficient transformation
             serde_json::Value::Object(
-                table.iter()
+                table
+                    .iter()
                     .map(|(k, v)| (k.clone(), toml_to_json(v)))
-                    .collect()
+                    .collect(),
             )
         }
     }

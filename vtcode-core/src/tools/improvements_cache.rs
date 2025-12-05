@@ -1,10 +1,25 @@
-//! Production-ready LRU cache with TTL enforcement
+//! **DEPRECATED**: Use `crate::cache::UnifiedCache` instead
 //!
+//! This module is deprecated as of Dec 2025. All usage has been migrated to UnifiedCache.
+//!
+//! **Migration completed**:
+//! - ✅ improvements_registry_ext.rs → UnifiedCache
+//! - ✅ async_middleware.rs → UnifiedCache
+//! - ✅ ui/tui/session/performance.rs → UnifiedCache
+//!
+//! **Why deprecated**: Duplicate implementation of LRU caching.
+//! UnifiedCache provides the same functionality with better integration.
+//!
+//! **For new code**: Use `crate::cache::UnifiedCache` with `EvictionPolicy::Lru`
+//!
+//! ---
+//! Original documentation (for reference):
+//!
+//! Production-ready LRU cache with TTL enforcement
 //! - Thread-safe concurrent access via Arc<RwLock>
 //! - LRU eviction policy with configurable max size
 //! - TTL enforcement (automatic and on-access)
 //! - Observability hooks for cache operations
-//! - Async-compatible for tokio-based systems
 
 use crate::tools::improvements_errors::{EventType, ObservabilityContext};
 use std::collections::HashMap;
@@ -40,9 +55,10 @@ impl<V> CacheEntry<V> {
     }
 }
 
-/// LRU cache with TTL support
+/// **DEPRECATED**: Use `crate::cache::UnifiedCache` instead
 ///
-/// Thread-safe, configurable size, automatic TTL enforcement.
+/// LRU cache with TTL support (kept for backward compatibility only)
+#[deprecated(since = "0.47.7", note = "Use crate::cache::UnifiedCache instead")]
 pub struct LruCache<K: Clone + Eq + std::hash::Hash, V: Clone> {
     max_size: usize,
     default_ttl: Duration,

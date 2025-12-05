@@ -90,9 +90,13 @@ impl FileOpsTool {
                 "type": "file"
             }));
         } else if base.is_dir() {
-            let mut entries = tokio::fs::read_dir(&base)
-                .await
-                .with_context(|| format!("Failed to read directory: {}. Workspace root: {}", input.path, self.workspace_root.display()))?;
+            let mut entries = tokio::fs::read_dir(&base).await.with_context(|| {
+                format!(
+                    "Failed to read directory: {}. Workspace root: {}",
+                    input.path,
+                    self.workspace_root.display()
+                )
+            })?;
             while let Some(entry) = entries
                 .next_entry()
                 .await

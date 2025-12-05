@@ -156,7 +156,8 @@ pub mod web_fetch;
 // Production-grade improvements modules
 pub mod async_middleware;
 pub mod improvement_algorithms;
-pub mod improvements_cache;
+#[deprecated(since = "0.47.7", note = "Use crate::cache::UnifiedCache instead")]
+pub mod improvements_cache; // Deprecated - kept for backward compatibility only
 pub mod improvements_config;
 pub mod improvements_errors;
 pub mod improvements_registry_ext;
@@ -213,7 +214,10 @@ pub use async_middleware::{
 pub use improvement_algorithms::{
     MLScoreComponents, PatternDetector, PatternState, TimeDecayedScore, jaro_winkler_similarity,
 };
+// Deprecated exports - use crate::cache instead
+#[deprecated(since = "0.47.7", note = "Use crate::cache::CacheStats instead")]
 pub use improvements_cache::CacheStats as LruCacheStats;
+#[deprecated(since = "0.47.7", note = "Use crate::cache::UnifiedCache instead")]
 pub use improvements_cache::LruCache;
 pub use improvements_config::{
     CacheConfig, ContextConfig, FallbackConfig, ImprovementsConfig, PatternConfig,

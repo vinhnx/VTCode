@@ -2,8 +2,14 @@
 //!
 //! Caches results from read-only tools (grep, list_files, ast analysis) within a session
 //! to avoid re-running identical queries.
+//!
+//! **Enhanced with fuzzy matching** (migrated from smart_cache.rs):
+//! - Exact match caching for identical queries
+//! - Fuzzy matching for similar queries (optional)
+//! - Deduplication to prevent redundant tool calls
 
 use crate::cache::{CacheKey as UnifiedCacheKey, DEFAULT_CACHE_TTL, EvictionPolicy, UnifiedCache};
+use serde_json::Value;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
@@ -65,24 +71,85 @@ impl ToolCacheKey {
 /// Cached tool result - using String directly as the cache value
 pub type ToolCacheValue = String;
 
-/// Tool result cache with LRU eviction - now using unified cache
+/// Fuzzy matching utility for finding similar cache entries
+pub struct FuzzyMatcher;
+
+impl FuzzyMatcher {
+    /// Calculate similarity between two JSON values (0.0 = completely different, 1.0 = identical)
+    pub fn similarity(a: &Value, b: &Value) -> f32 {
+        let a_str = Self::canonicalize(a);
+        let b_str = Self::canonicalize(b);
+
+        let min_len = a_str.len().min(b_str.len());
+        if min_len == 0 {
+            return 0.0;
+        }
+
+        let matches = a_str
+            .chars()
+            .zip(b_str.chars())
+            .filter(|(x, y)| x == y)
+            .count();
+
+        matches as f32 / min_len as f32
+    }
+
+    /// Normalize JSON for comparison (sorted keys, stable format)
+    fn canonicalize(value: &Value) -> String {
+        match value {
+            Value::Object(map) => {
+                let mut keys: Vec<_> = map.keys().collect();
+                keys.sort();
+                let parts: Vec<String> = keys
+                    .iter()
+                    .map(|k| format!("{}:{:?}", k, map[*k]))
+                    .collect();
+                format!("{{{}}}", parts.join(","))
+            }
+            Value::Array(arr) => {
+                let parts: Vec<String> = arr.iter().map(|v| format!("{:?}", v)).collect();
+                format!("[{}]", parts.join(","))
+            }
+            v => format!("{:?}", v),
+        }
+    }
+}
+
+/// Tool result cache with LRU eviction and optional fuzzy matching
 pub struct ToolResultCache {
     inner: UnifiedCache<ToolCacheKey, String>,
+    fuzzy_threshold: Option<f32>, // None = disabled, Some(0.0-1.0) = enabled
 }
 
 impl ToolResultCache {
-    /// Create a new cache with specified capacity
+    /// Create a new cache with specified capacity (fuzzy matching disabled)
     pub fn new(capacity: usize) -> Self {
         Self {
             inner: UnifiedCache::new(capacity, DEFAULT_CACHE_TTL, EvictionPolicy::Lru),
+            fuzzy_threshold: None,
         }
     }
 
-    /// Create with custom TTL
+    /// Create with custom TTL (fuzzy matching disabled)
     pub fn with_ttl(capacity: usize, ttl_secs: u64) -> Self {
         Self {
             inner: UnifiedCache::new(capacity, Duration::from_secs(ttl_secs), EvictionPolicy::Lru),
+            fuzzy_threshold: None,
         }
+    }
+
+    /// Create with fuzzy matching enabled (threshold: 0.0-1.0, typically 0.8)
+    /// Higher threshold = stricter matching (0.8 = 80% similarity required)
+    pub fn with_fuzzy_matching(capacity: usize, fuzzy_threshold: f32) -> Self {
+        Self {
+            inner: UnifiedCache::new(capacity, DEFAULT_CACHE_TTL, EvictionPolicy::Lru),
+            fuzzy_threshold: Some(fuzzy_threshold.clamp(0.0, 1.0)),
+        }
+    }
+
+    /// Check if fuzzy matching is enabled
+    pub fn is_fuzzy_enabled(&self) -> bool {
+        self.fuzzy_threshold.is_some()
     }
 
     /// Insert a result into the cache

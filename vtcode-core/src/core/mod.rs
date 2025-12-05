@@ -40,6 +40,7 @@ pub mod decision_tracker;
 pub mod error_recovery;
 pub mod global_token_manager;
 pub mod interfaces;
+pub mod loop_detector;
 pub mod orchestrator_retry;
 pub mod prompt_caching;
 pub mod pruning_decisions;

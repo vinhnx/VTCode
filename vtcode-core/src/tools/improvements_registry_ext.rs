@@ -3,16 +3,25 @@
 //! Extends ToolRegistry with improvement capabilities:
 //! - Tool effectiveness tracking
 //! - Intelligent tool selection based on patterns
-//! - Result caching and optimization
+//! - Result caching and optimization (migrated to UnifiedCache)
 //! - Observability integration
 
+use crate::cache::{CacheKey, DEFAULT_CACHE_TTL, EvictionPolicy, UnifiedCache};
 use crate::tools::{
-    improvements_cache::LruCache,
     improvements_errors::ObservabilityContext,
     pattern_engine::{ExecutionEvent, PatternEngine},
 };
 use std::sync::Arc;
-use std::time::Duration;
+
+/// Cache key for tool results
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+struct ToolResultKey(String);
+
+impl CacheKey for ToolResultKey {
+    fn to_cache_key(&self) -> String {
+        self.0.clone()
+    }
+}
 
 /// Tool effectiveness metrics
 #[derive(Clone, Debug)]
@@ -42,24 +51,25 @@ impl ToolMetrics {
     }
 }
 
-/// ToolRegistry improvement extension
+/// ToolRegistry improvement extension (migrated to UnifiedCache)
 pub struct ToolRegistryImprovement {
     pattern_engine: Arc<PatternEngine>,
     tool_metrics: Arc<parking_lot::RwLock<std::collections::HashMap<String, ToolMetrics>>>,
-    result_cache: Arc<LruCache<String, String>>,
+    result_cache: Arc<parking_lot::RwLock<UnifiedCache<ToolResultKey, String>>>,
     obs_context: Arc<ObservabilityContext>,
 }
 
 impl ToolRegistryImprovement {
-    /// Create new registry extension
+    /// Create new registry extension (now using UnifiedCache)
     pub fn new(obs_context: Arc<ObservabilityContext>) -> Self {
         Self {
             pattern_engine: Arc::new(PatternEngine::new(1000, 20)),
             tool_metrics: Arc::new(parking_lot::RwLock::new(std::collections::HashMap::new())),
-            result_cache: Arc::new(
-                LruCache::new(10000, Duration::from_secs(3600))
-                    .with_observability(obs_context.clone()),
-            ),
+            result_cache: Arc::new(parking_lot::RwLock::new(UnifiedCache::new(
+                10000,
+                DEFAULT_CACHE_TTL,
+                EvictionPolicy::Lru,
+            ))),
             obs_context,
         }
     }
@@ -145,26 +155,29 @@ impl ToolRegistryImprovement {
         self.pattern_engine.predict_next_tool()
     }
 
-    /// Cache result for tool execution
+    /// Cache result for tool execution (migrated to UnifiedCache)
     pub fn cache_result(&self, tool: &str, args: &str, result: &str) {
-        let key = format!("{}::{}", tool, args);
-        let _ = self.result_cache.put_arc(key, Arc::new(result.to_owned()));
+        let key = ToolResultKey(format!("{}::{}", tool, args));
+        let size = result.len() as u64;
+        self.result_cache
+            .write()
+            .insert(key, result.to_string(), size);
     }
 
-    /// Try to get cached result
+    /// Try to get cached result (migrated to UnifiedCache)
     pub fn get_cached_result(&self, tool: &str, args: &str) -> Option<String> {
-        let key = format!("{}::{}", tool, args);
-        self.result_cache.get_owned(key.as_str())
+        let key = ToolResultKey(format!("{}::{}", tool, args));
+        self.result_cache.write().get_owned(&key)
     }
 
-    /// Clear cache
+    /// Clear cache (migrated to UnifiedCache)
     pub fn clear_cache(&self) {
-        self.result_cache.clear();
+        self.result_cache.write().clear();
     }
 
-    /// Get cache stats
-    pub fn cache_stats(&self) -> crate::tools::improvements_cache::CacheStats {
-        self.result_cache.stats()
+    /// Get cache stats (migrated to UnifiedCache)
+    pub fn cache_stats(&self) -> crate::cache::CacheStats {
+        self.result_cache.read().stats().clone()
     }
 
     /// Rank tools by effectiveness

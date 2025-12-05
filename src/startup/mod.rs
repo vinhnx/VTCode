@@ -324,7 +324,6 @@ fn apply_inline_config_overrides(
     config_optimizer::ConfigOptimizer::apply_overrides(config, overrides)
 }
 
-
 async fn determine_theme(args: &Cli, config: &VTCodeConfig) -> Result<String> {
     let user_theme_pref = load_user_config().await.ok().and_then(|dot| {
         let trimmed = dot.preferences.theme.trim();

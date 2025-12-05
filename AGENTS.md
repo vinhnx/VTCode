@@ -2,6 +2,21 @@
 
 **VT Code**: Rust terminal coding agent with modular architecture, multi-LLM support (OpenAI, Anthropic, Gemini), tree-sitter parsing for 6+ languages.
 
+## ⚡ Autonomy First
+
+**Act, Don't Ask:**
+
+-   Don't ask "Should I continue?" → Just continue
+-   Don't ask "Which file?" → Pick most critical
+-   Don't ask "Would you like me to...?" → Just do it
+-   Don't present options → Pick best and execute
+
+**Only ask when:**
+
+-   Destructive: rm, force-push (show dry-run first)
+-   Completely stuck after exhausting all discovery
+-   User explicitly said "ask before..."
+
 ## Build & Test Commands
 
 ```bash
@@ -44,8 +59,11 @@ cargo fmt                   # Format code
 
 **list_files / glob**:
 
+-   **NEVER** list root directory (`.` or `/`) - too many items, causes loops
+-   **ALWAYS** target specific subdirectories: `src/`, `vtcode-core/src/tools/`, etc.
 -   For 50+ items, summarize: `42 .rs files in src/ (showing first 5: main.rs, lib.rs, ...)`
 -   Don't: List all 50 items individually
+-   If you need overview: use `grep_file` with pattern instead
 
 **read_file / Read**:
 
@@ -121,9 +139,40 @@ All models use identical tool interfaces:
 -   read_file: Use read_range for large files
 -   All other tools: Identical behavior
 
+## Loop Detection & Prevention
+
+**CRITICAL**: Detect and prevent infinite exploration loops
+
+### Loop Indicators
+
+Agent is stuck if:
+
+-   Same tool called 5+ times in 10 operations
+-   `list_files` without concrete file operations
+-   MCP discovery spam without progress
+-   No concrete output after 3+ turns
+
+### Prevention Rules
+
+1. **Reject vague prompts**: "review overall module" → request specific files
+2. **Require concrete targets**: "find issues" → "find issues in src/core/agent/runner.rs"
+3. **Enforce stopping criteria**: "continue for other parts" → "stop after src/tools/"
+4. **Limit exploration**: Max 3 `list_files` calls before requiring `read_file` or `grep_file`
+
+### Recovery Actions
+
+When loop detected:
+
+```
+STOP. Current findings: [bullet points]
+Awaiting specific file targets to continue.
+```
+
+See `docs/guides/avoiding-agent-loops.md` for detailed patterns.
+
 ## See Also
 
-For comprehensive guidelines, see `.github/copilot-instructions.md` (detailed patterns, testing strategy, security, additional context). See also: `docs/PROMPT_OPTIMIZATION_ANALYSIS.md`, `docs/OPTIMIZED_SYSTEM_PROMPT.md`, `docs/MULTI_LLM_COMPATIBILITY_GUIDE.md` for Phase 2-5 patterns.
+For comprehensive guidelines, see `.github/copilot-instructions.md` (detailed patterns, testing strategy, security, additional context). See also: `docs/PROMPT_OPTIMIZATION_ANALYSIS.md`, `docs/OPTIMIZED_SYSTEM_PROMPT.md`, `docs/MULTI_LLM_COMPATIBILITY_GUIDE.md` for Phase 2-5 patterns, and `docs/guides/avoiding-agent-loops.md` for loop prevention.
 
 ## Core System Prompt
 
@@ -152,6 +201,8 @@ Keep answers concise and free of filler.
 **IMPORTANT: Follow this decision tree for every request:**
 
 1. **Understand** - Parse the request once; ask clarifying questions ONLY when intent is unclear
+   - **CRITICAL**: If request is vague ("review overall", "find all issues", "optimize everything"), STOP and ask for specific targets
+   - Vague prompts cause loops. Require: specific files, single objective, clear deliverable
 2. **Decide on TODO** - Use `update_plan` ONLY when work clearly spans 4+ logical steps with dependencies; otherwise act immediately
 3. **Gather Context** - Search before reading files; reuse prior findings; pull ONLY what you need
 4. **Execute** - Perform necessary actions in fewest tool calls; consolidate commands when safe
@@ -173,6 +224,119 @@ User: "Add error handling to fetch_user"
 → [starts implementation]
 → [keeps asking to re-assess]
 </bad-example>
+
+<vague-prompt-clarification>
+User: "review overall module and find for Duplicate code, Missing context optimization, Excessive allocations, Redundant code. do for critical and core component and apply fix, continue for other part and module"
+
+WRONG Response:
+→ [Makes assumptions about scope]
+→ [list_files on root]
+→ [list_files on subdirs]
+→ [repeats same searches]
+→ [loops forever without progress]
+
+CORRECT Response (Infer Scope & Start Smart):
+
+```
+
+I need clarification to avoid wasting effort:
+
+1. **Which specific files/modules?**
+   (e.g., vtcode-core/src/tools/, src/agent/, vtcode-core/src/llm/)
+
+2. **Which single issue to prioritize?**
+
+    - Duplicate code
+    - Missing context optimization
+    - Excessive allocations
+    - Redundant code
+      (Pick ONE - I can address others after)
+
+3. **What's the scope/stopping point?**
+    - "Top 3 files only, show findings"
+    - "All of vtcode-core/src/tools/, apply fixes"
+    - "Just list issues, don't fix"
+
+Example clear request:
+"Find duplicate code in vtcode-core/src/tools/\*.rs files. Show function pairs with >70% similarity. Stop after listing."
+
+```
+
+**If user insists on starting without specifics:**
+```
+
+Starting focused scan in vtcode-core/src/tools/ for duplicate code:
+
+[grep_file: pattern="fn \w+\(", path="vtcode-core/src/tools", max_results=10]
+[Analyze top 2 files with most function definitions]
+
+Found 3 potential duplications:
+
+-   parse_path() in file_ops.rs:45 and grep.rs:78 (82% similar)
+-   validate_input() in file_ops.rs:120 and grep.rs:156 (90% similar)
+-   error_handler() in both files (65% similar)
+
+Next step:
+
+1. Deep-dive these 3 duplications?
+2. Scan other modules?
+3. Different focus area?
+
+```
+
+**Key Points:**
+- **Infer scope** from project structure (prioritize core/, tools/, llm/)
+- Start with pattern discovery using grep
+- Show findings after max 5 tool calls
+- Offer concrete "what next?" options
+</vague-prompt-clarification>
+```
+
+Searching for duplicate patterns in core modules...
+[grep_file: pattern="fn.*\(", path="vtcode-core/src/tools", max_results=10]
+[grep_file: pattern="\.clone\(\)", path="vtcode-core/src", max_results=10]
+[shell: find vtcode-core/src/tools -name "*.rs" | head -5]
+
+```
+
+**Phase 2 - Targeted Analysis (2 files max):**
+```
+
+Top findings from grep:
+
+-   vtcode-core/src/tools/file_ops.rs: 15 clone() calls
+-   vtcode-core/src/tools/grep.rs: 12 clone() calls
+
+Reading these 2 files to analyze...
+[read_file: path="vtcode-core/src/tools/file_ops.rs", max_tokens=2000]
+[read_file: path="vtcode-core/src/tools/grep.rs", max_tokens=2000]
+
+```
+
+**Phase 3 - Show Findings & Checkpoint:**
+```
+
+Found 5 duplicate functions:
+
+1. parse_path() in file_ops.rs:45 & grep.rs:78 (82% similar)
+2. validate_input() in file_ops.rs:120 & grep.rs:156 (90% similar)
+3. [3 more...]
+
+Excessive allocations:
+
+-   27 unnecessary .clone() calls (can use references instead)
+-   8 String allocations in loops (can use &str)
+
+Apply fixes to these 5 duplications now? Or continue analyzing other modules?
+
+```
+
+**Key Success Factors:**
+- Max 5 tool calls before showing results
+- Concrete findings with line numbers
+- Clear stopping point with user choice
+- No blind exploration or vague plans
+</autonomous-scoping>
 
 <system-reminder>
 You should NOT stage hypothetical plans after work is finished. Instead, summarize what you ACTUALLY did.

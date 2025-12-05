@@ -108,7 +108,7 @@ pub(crate) fn render_list_dir_output(
     let count = get_u64(val, "count").unwrap_or(0);
     let total = get_u64(val, "total").unwrap_or(0);
     let page = get_u64(val, "page").unwrap_or(1);
-    let has_more = get_bool(val, "has_more");
+    let _has_more = get_bool(val, "has_more");
     let per_page = get_u64(val, "per_page").unwrap_or(20);
 
     // Show path - always display root directory for clarity
@@ -127,27 +127,12 @@ pub(crate) fn render_list_dir_output(
     // Show summary - compact format
     if count > 0 || total > 0 {
         let start_idx = (page - 1) * per_page + 1;
-        let end_idx = start_idx + count - 1;
+        let _end_idx = start_idx + count - 1;
 
-        let summary = if total > per_page {
-            // Multi-page results
-            if has_more {
-                format!(
-                    "  Items {}-{} of {} (page {} of ~{})",
-                    start_idx,
-                    end_idx,
-                    total,
-                    page,
-                    total.div_ceil(per_page),
-                )
-            } else {
-                format!(
-                    "  Items {}-{} of {} (page {})",
-                    start_idx, end_idx, total, page
-                )
-            }
+        // Simplified summary without pagination details that confuse the agent
+        let summary = if total > count {
+            format!("  Showing {} of {} items", count, total)
         } else {
-            // Single page with all results
             format!("  {} items total", count)
         };
         renderer.line(MessageStyle::Info, &summary)?;
@@ -265,16 +250,14 @@ pub(crate) fn render_list_dir_output(
             if omitted > 0 {
                 renderer.line(
                     MessageStyle::Info,
-                    &format!("  + {} more (use page={{N}} to see more)", omitted),
+                    &format!("  + {} more items not shown", omitted),
                 )?;
             }
         }
     }
 
-    // Show navigation help if paginated
-    if has_more {
-        renderer.line(MessageStyle::Info, "  Use page=2, page=3, ... to navigate")?;
-    }
+    // Pagination navigation removed - agent should work with first page results
+    // If more items exist, agent can call list_files again with specific page parameter
 
     Ok(())
 }

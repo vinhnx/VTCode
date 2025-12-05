@@ -13,8 +13,7 @@ pub const TOOL_READ_FILE_PATH_ARG: &str = "path";
 pub const TOOL_READ_FILE_LINE_ARG: &str = "line";
 pub const TOOL_READ_FILE_LIMIT_ARG: &str = "limit";
 
-pub const TOOL_LIST_FILES_DESCRIPTION: &str =
-    "Explore workspace files, recursive matches, or pattern-based searches";
+pub const TOOL_LIST_FILES_DESCRIPTION: &str = "Explore workspace files in a SUBDIRECTORY (root path is blocked). Requires path like 'src/' or 'vtcode-core/'. For root overview, use shell commands via run_pty_cmd.";
 pub const TOOL_LIST_FILES_PATH_ARG: &str = "path";
 pub const TOOL_LIST_FILES_MODE_ARG: &str = "mode";
 pub const TOOL_LIST_FILES_PAGE_ARG: &str = "page";
