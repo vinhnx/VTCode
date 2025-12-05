@@ -3,6 +3,32 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Version 0.43.0] - 2025-11-09
+# [Version 0.47.8] - 2025-12-05
+
+
+### Features
+    - feat: update tool policies and improve code structure with dead code allowances
+    - feat(build): add multi-stage Dockerfile for building and running vtcode
+
+
+### Refactors
+    - refactor: remove unused tools from tool policies
+
+
+### Documentation
+    - docs: update changelog for v0.47.7 [skip ci]
+
+
+### Chores
+    - chore: update tool policies and optimize configuration loading
+    - chore: update VSCode extension package.json to v0.47.7 [skip ci]
+    - chore: update npm package.json to v0.47.7 [skip ci]
+    - chore: release v0.47.7
+    - chore: update VSCode extension package.json to v0.47.6 [skip ci]
+    - chore(deps): bump DavidAnson/markdownlint-cli2-action from 20 to 21
+    - chore(deps): bump actions/checkout from 5 to 6
+    - chore(deps): bump the all-rust-deps group with 15 updates
+    - chore: update npm package.json to v0.47.6 [skip ci]
 # [Version 0.47.7] - 2025-12-03
 
 
