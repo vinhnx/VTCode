@@ -35,7 +35,7 @@ impl MoonshotProvider {
     pub fn new(api_key: String) -> Self {
         Self::with_model_internal(
             api_key,
-            models::moonshot::DEFAULT_MODEL.to_string(),
+            "kimi-k2-0905".to_string(), // Deprecated: use OpenRouter models instead
             None,
             None,
         )
@@ -52,7 +52,7 @@ impl MoonshotProvider {
         prompt_cache: Option<PromptCachingConfig>,
         _timeouts: Option<TimeoutsConfig>,
     ) -> Self {
-        let resolved_model = resolve_model(model, models::moonshot::DEFAULT_MODEL);
+        let resolved_model = resolve_model(model, "kimi-k2-0905"); // Deprecated: use OpenRouter models instead
         let resolved_base_url = override_base_url(
             urls::MOONSHOT_API_BASE,
             base_url,

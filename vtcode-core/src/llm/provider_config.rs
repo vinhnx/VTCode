@@ -145,7 +145,7 @@ pub struct MoonshotProviderConfig;
 impl ProviderConfig for MoonshotProviderConfig {
     const PROVIDER_KEY: &'static str = "moonshot";
     const DISPLAY_NAME: &'static str = "Moonshot";
-    const DEFAULT_MODEL: &'static str = crate::config::constants::models::moonshot::DEFAULT_MODEL;
+    const DEFAULT_MODEL: &'static str = "kimi-k2-0905"; // Deprecated: use OpenRouter models instead
     const API_BASE_URL: &'static str = crate::config::constants::urls::MOONSHOT_API_BASE;
     const BASE_URL_ENV_VAR: Option<&'static str> = Some(crate::config::constants::env_vars::MOONSHOT_BASE_URL);
 

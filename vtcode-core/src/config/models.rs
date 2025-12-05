@@ -299,6 +299,12 @@ pub enum ModelId {
     OpenRouterGrok4,
     /// GLM 4.6 - Z.AI GLM 4.6 long-context reasoning model
     OpenRouterZaiGlm46,
+    /// Kimi K2 0905 - MoonshotAI Kimi K2 0905 MoE release optimised for coding agents
+    OpenRouterMoonshotaiKimiK20905,
+    /// Kimi K2 Thinking - MoonshotAI reasoning-tier Kimi K2 release optimized for long-horizon agents
+    OpenRouterMoonshotaiKimiK2Thinking,
+    /// Kimi K2 (free) - Community tier for MoonshotAI Kimi K2
+    OpenRouterMoonshotaiKimiK2Free,
     /// Qwen3 Max - Flagship Qwen3 mixture for general reasoning
     OpenRouterQwen3Max,
     /// Qwen3 235B A22B - Mixture-of-experts Qwen3 235B general model
@@ -489,6 +495,9 @@ impl ModelId {
             | ModelId::OpenRouterGrok41Fast
             | ModelId::OpenRouterGrok4
             | ModelId::OpenRouterZaiGlm46
+            | ModelId::OpenRouterMoonshotaiKimiK20905
+            | ModelId::OpenRouterMoonshotaiKimiK2Thinking
+            | ModelId::OpenRouterMoonshotaiKimiK2Free
             | ModelId::OpenRouterQwen3Max
             | ModelId::OpenRouterQwen3235bA22b
             | ModelId::OpenRouterQwen3235bA22bFree
@@ -601,6 +610,9 @@ impl ModelId {
             | ModelId::OpenRouterGrok41Fast
             | ModelId::OpenRouterGrok4
             | ModelId::OpenRouterZaiGlm46
+            | ModelId::OpenRouterMoonshotaiKimiK20905
+            | ModelId::OpenRouterMoonshotaiKimiK2Thinking
+            | ModelId::OpenRouterMoonshotaiKimiK2Free
             | ModelId::OpenRouterQwen3Max
             | ModelId::OpenRouterQwen3235bA22b
             | ModelId::OpenRouterQwen3235bA22bFree
@@ -970,10 +982,13 @@ impl ModelId {
             | ModelId::OpenRouterDeepSeekV32
             | ModelId::OpenRouterDeepseekReasoner
             | ModelId::OpenRouterDeepSeekV32Speciale
+            | ModelId::OpenRouterMoonshotaiKimiK20905
+            | ModelId::OpenRouterMoonshotaiKimiK2Thinking
+            | ModelId::OpenRouterMoonshotaiKimiK2Free
             | ModelId::OpenRouterMinimaxM2Free => {
-                // Fallback description for OpenRouter models
-                // In production, these should have metadata
-                "Model available via OpenRouter marketplace"
+               // Fallback description for OpenRouter models
+               // In production, these should have metadata
+               "Model available via OpenRouter marketplace"
             }
         }
     }
@@ -1298,6 +1313,9 @@ impl ModelId {
             | ModelId::OpenRouterGrok41Fast
             | ModelId::OpenRouterGrok4
             | ModelId::OpenRouterZaiGlm46
+            | ModelId::OpenRouterMoonshotaiKimiK20905
+            | ModelId::OpenRouterMoonshotaiKimiK2Thinking
+            | ModelId::OpenRouterMoonshotaiKimiK2Free
             | ModelId::OpenRouterQwen3Max
             | ModelId::OpenRouterQwen3235bA22b
             | ModelId::OpenRouterQwen3235bA22bFree
@@ -1687,11 +1705,7 @@ mod tests {
             models::zai::GLM_4_32B_0414_128K.parse::<ModelId>().unwrap(),
             ModelId::ZaiGlm432b0414128k
         );
-        assert_eq!(
-            models::MOONSHOT_KIMI_K2_TURBO_PREVIEW
-                .parse::<ModelId>()
-                .unwrap(),
-        );
+        // Moonshot models are deprecated; use OpenRouter variants instead
         for entry in openrouter_generated::ENTRIES {
             assert_eq!(entry.id.parse::<ModelId>().unwrap(), entry.variant);
         }
