@@ -73,6 +73,7 @@ impl PruningDecisionLedger {
     }
 
     /// Record a pruning decision for a message
+    #[allow(clippy::too_many_arguments)]
     pub fn record_decision(
         &mut self,
         turn_number: usize,
@@ -226,9 +227,9 @@ impl PruningDecisionLedger {
                 RetentionChoice::Keep => "KEEP",
                 RetentionChoice::Remove => "REMOVE",
             };
-            let _ = write!(
+            let _ = writeln!(
                 out,
-                "- [turn {}] msg#{} {}: score={} tokens={} age={} ({})\n",
+                "- [turn {}] msg#{} {}: score={} tokens={} age={} ({})",
                 d.turn_number,
                 d.message_index,
                 action,

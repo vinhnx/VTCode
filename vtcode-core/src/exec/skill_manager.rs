@@ -193,10 +193,10 @@ impl SkillManager {
             let path = entry.path();
             if path.is_dir() {
                 let metadata_path = path.join("skill.json");
-                if let Ok(metadata_json) = tokio::fs::read_to_string(&metadata_path).await {
-                    if let Ok(metadata) = serde_json::from_str::<SkillMetadata>(&metadata_json) {
-                        skills.push(metadata);
-                    }
+                if let Ok(metadata_json) = tokio::fs::read_to_string(&metadata_path).await
+                    && let Ok(metadata) = serde_json::from_str::<SkillMetadata>(&metadata_json)
+                {
+                    skills.push(metadata);
                 }
             }
         }

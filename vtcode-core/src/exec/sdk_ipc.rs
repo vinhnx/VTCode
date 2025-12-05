@@ -137,18 +137,18 @@ impl ToolIpcHandler {
 
     /// Process response for PII (de-tokenize if enabled).
     pub fn process_response_for_pii(&self, response: &mut ToolResponse) -> Result<()> {
-        if let Some(tokenizer) = &self.pii_tokenizer {
-            if let Some(result) = &response.result {
-                let result_str =
-                    serde_json::to_string(result).context("failed to serialize response result")?;
-                let detokenized = tokenizer
-                    .detokenize_string(&result_str)
-                    .context("PII de-tokenization failed")?;
-                response.result = Some(
-                    serde_json::from_str(&detokenized)
-                        .context("failed to parse de-tokenized result")?,
-                );
-            }
+        if let Some(tokenizer) = &self.pii_tokenizer
+            && let Some(result) = &response.result
+        {
+            let result_str =
+                serde_json::to_string(result).context("failed to serialize response result")?;
+            let detokenized = tokenizer
+                .detokenize_string(&result_str)
+                .context("PII de-tokenization failed")?;
+            response.result = Some(
+                serde_json::from_str(&detokenized)
+                    .context("failed to parse de-tokenized result")?,
+            );
         }
         Ok(())
     }

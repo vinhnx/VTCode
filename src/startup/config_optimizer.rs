@@ -191,7 +191,7 @@ mod tests {
     #[test]
     fn test_parse_json_value_numeric() {
         assert_eq!(parse_json_value("42").unwrap(), serde_json::json!(42));
-        assert_eq!(parse_json_value("3.14").unwrap(), serde_json::json!(3.14));
+        assert_eq!(parse_json_value("2.5").unwrap(), serde_json::json!(2.5));
     }
 
     #[test]

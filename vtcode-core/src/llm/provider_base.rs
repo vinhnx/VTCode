@@ -138,10 +138,10 @@ impl ErrorHandler {
         use reqwest::StatusCode;
 
         let error_message = match status {
-            StatusCode::UNAUTHORIZED => format!("Authentication failed: Invalid API key"),
-            StatusCode::TOO_MANY_REQUESTS => format!("Rate limit exceeded"),
+            StatusCode::UNAUTHORIZED => "Authentication failed: Invalid API key".to_string(),
+            StatusCode::TOO_MANY_REQUESTS => "Rate limit exceeded".to_string(),
             StatusCode::BAD_REQUEST => format!("Bad request: {}", error_text.trim()),
-            s if s.as_u16() == 402 => format!("Insufficient balance"),
+            s if s.as_u16() == 402 => "Insufficient balance".to_string(),
             _ => format!("HTTP {}: {}", status, error_text.trim()),
         };
 
@@ -149,12 +149,8 @@ impl ErrorHandler {
             crate::llm::error_display::format_llm_error(self._provider_name, &error_message);
 
         // Handle different error types based on status code
-        if status == StatusCode::UNAUTHORIZED {
-            LLMError::ApiError(formatted_error)
-        } else if status == StatusCode::TOO_MANY_REQUESTS {
+        if status == StatusCode::TOO_MANY_REQUESTS {
             LLMError::RateLimit
-        } else if status.as_u16() == 402 {
-            LLMError::ApiError(formatted_error)
         } else {
             LLMError::ApiError(formatted_error)
         }

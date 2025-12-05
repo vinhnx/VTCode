@@ -187,13 +187,13 @@ async fn validate_cp(args: &[String], workspace_root: &Path, working_dir: &Path)
     }
 
     let dest_path = resolve_path_allow_new(workspace_root, working_dir, dest_raw).await?;
-    if let Some(parent) = dest_path.parent() {
-        if !fs::try_exists(parent).await.unwrap_or(false) {
-            return Err(anyhow!(
-                "destination parent '{}' must exist",
-                parent.display()
-            ));
-        }
+    if let Some(parent) = dest_path.parent()
+        && !fs::try_exists(parent).await.unwrap_or(false)
+    {
+        return Err(anyhow!(
+            "destination parent '{}' must exist",
+            parent.display()
+        ));
     }
 
     Ok(())
@@ -439,22 +439,22 @@ async fn validate_git(
                 // This condition was originally in the unreachable pattern
                 // but now it's handled within the general case for "tag"
             }
-            return validate_git_read_only(subcommand, subargs);
+            validate_git_read_only(subcommand, subargs)
         }
 
         // Tree and object inspection
         "ls-tree" | "ls-files" | "cat-file" | "rev-parse" | "describe" => {
-            return validate_git_read_only(subcommand, subargs);
+            validate_git_read_only(subcommand, subargs)
         }
 
         // Config inspection (read-only)
         "config" if subargs.is_empty() || subargs.iter().all(|a| !a.starts_with("--")) => {
-            return validate_git_read_only(subcommand, subargs);
+            validate_git_read_only(subcommand, subargs)
         }
 
         // Additional inspection commands
         "blame" | "grep" | "shortlog" | "format-patch" => {
-            return validate_git_read_only(subcommand, subargs);
+            validate_git_read_only(subcommand, subargs)
         }
 
         // Stash operations (safe list/show)
@@ -464,20 +464,20 @@ async fn validate_git(
                 Some("list" | "show" | "pop" | "apply" | "drop")
             ) =>
         {
-            return validate_git_stash(subargs);
+            validate_git_stash(subargs)
         }
 
         // Tier 2: Safe write operations (with validation)
-        "add" => return validate_git_add(subargs, workspace_root, working_dir).await,
-        "commit" => return validate_git_commit(subargs),
-        "reset" => return validate_git_reset(subargs, confirm),
+        "add" => validate_git_add(subargs, workspace_root, working_dir).await,
+        "commit" => validate_git_commit(subargs),
+        "reset" => validate_git_reset(subargs, confirm),
         "checkout" | "switch" => {
-            return validate_git_checkout(subargs, workspace_root, working_dir, confirm).await;
+            validate_git_checkout(subargs, workspace_root, working_dir, confirm).await
         }
         "restore" => {
-            return validate_git_checkout(subargs, workspace_root, working_dir, confirm).await;
+            validate_git_checkout(subargs, workspace_root, working_dir, confirm).await
         }
-        "merge" => return validate_git_merge(subargs),
+        "merge" => validate_git_merge(subargs),
 
         // Tier 3: Dangerous operations (always blocked)
         "push" => {
@@ -486,41 +486,43 @@ async fn validate_git(
                 .iter()
                 .any(|a| a.contains("force") || a == "-f" || a == "--no-verify")
             {
-                return Err(anyhow!(
+                Err(anyhow!(
                     "git push with force flags is not permitted. Use safe push operations only."
-                ));
+                ))
             }
-            return validate_git_read_only(subcommand, subargs);
+            else {
+                validate_git_read_only(subcommand, subargs)
+            }
         }
 
         "force-push" => {
-            return Err(anyhow!(
+            Err(anyhow!(
                 "git force-push is not permitted by the execution policy"
-            ));
+            ))
         }
 
         "clean" => {
-            return Err(anyhow!(
+            Err(anyhow!(
                 "git clean is not permitted by the execution policy. Use explicit rm commands instead."
-            ));
+            ))
         }
 
         "gc" if subargs.iter().any(|a| a.contains("aggressive")) => {
-            return Err(anyhow!("git gc with aggressive flag is not permitted"));
+            Err(anyhow!("git gc with aggressive flag is not permitted"))
         }
 
         "filter-branch" | "rebase" | "cherry-pick" => {
-            return Err(anyhow!(
+            Err(anyhow!(
                 "git {} is not permitted - complex history operations require confirmation",
                 subcommand
-            ));
+            ))
         }
 
         other => {
-            return Err(anyhow!(
+            Err(anyhow!(
                 "git subcommand '{}' is not permitted by the execution policy",
                 other
-            ));
+            ))
         }
     }
 }
@@ -729,12 +731,10 @@ async fn validate_git_checkout(
     }
 
     // Block forced checkout unless explicit confirm
-    if args.iter().any(|a| a == "-f" || a == "--force") {
-        if !confirm {
-            return Err(anyhow!(
-                "git checkout --force is potentially destructive; set `confirm=true` to proceed."
-            ));
-        }
+    if args.iter().any(|a| a == "-f" || a == "--force") && !confirm {
+        return Err(anyhow!(
+            "git checkout --force is potentially destructive; set `confirm=true` to proceed."
+        ));
     }
 
     // Validate paths if provided
@@ -1028,7 +1028,7 @@ fn parse_sed_section(
     target: &mut String,
 ) -> Result<()> {
     let mut escaped = false;
-    while let Some(ch) = chars.next() {
+    for ch in chars.by_ref() {
         if escaped {
             target.push(ch);
             escaped = false;

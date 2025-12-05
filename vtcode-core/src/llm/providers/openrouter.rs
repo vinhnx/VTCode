@@ -1,3 +1,5 @@
+#![allow(clippy::collapsible_if)]
+
 use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::{OpenRouterPromptCacheSettings, PromptCachingConfig};

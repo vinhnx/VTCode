@@ -142,8 +142,9 @@ mod tests {
     use super::*;
     use tempfile::tempdir;
 
-    fn write_doc(dir: &Path, content: &str) {
-            std::fs::write(dir.join("AGENTS.md"), content).context("write AGENTS.md")?;
+    fn write_doc(dir: &Path, content: &str) -> Result<()> {
+        std::fs::write(dir.join("AGENTS.md"), content).context("write AGENTS.md")?;
+        Ok(())
     }
 
     #[tokio::test]
@@ -156,7 +157,7 @@ mod tests {
     #[tokio::test]
     async fn reads_doc_within_limit() {
         let tmp = tempdir().expect("failed to unwrap");
-        write_doc(tmp.path(), "hello world");
+        write_doc(tmp.path(), "hello world").expect("write doc");
 
         let result = read_project_doc(tmp.path(), 4096).await.expect("failed to unwrap").expect("failed to unwrap");
         assert_eq!(result.contents, "hello world");
@@ -167,7 +168,7 @@ mod tests {
     async fn truncates_when_limit_exceeded() {
         let tmp = tempdir().expect("failed to unwrap");
         let content = "A".repeat(64);
-        write_doc(tmp.path(), &content);
+        write_doc(tmp.path(), &content).expect("write doc");
 
         let result = read_project_doc(tmp.path(), 16).await.expect("failed to unwrap").expect("failed to unwrap");
         assert!(result.truncated);
@@ -178,11 +179,11 @@ mod tests {
     async fn reads_docs_from_repo_root_downwards() {
         let repo = tempdir().expect("failed to unwrap");
         std::fs::write(repo.path().join(".git"), "gitdir: /tmp/git").expect("failed to unwrap");
-        write_doc(repo.path(), "root doc");
+        write_doc(repo.path(), "root doc").expect("write doc");
 
         let nested = repo.path().join("nested/sub");
         std::fs::create_dir_all(&nested).expect("failed to unwrap");
-        write_doc(&nested, "nested doc");
+        write_doc(&nested, "nested doc").expect("write doc");
 
         let bundle = read_project_doc_with_options(&ProjectDocOptions {
             current_dir: &nested,
@@ -202,7 +203,7 @@ mod tests {
     #[tokio::test]
     async fn includes_extra_instruction_files() {
         let repo = tempdir().expect("failed to unwrap");
-        write_doc(repo.path(), "root doc");
+        write_doc(repo.path(), "root doc").expect("write doc");
         let docs = repo.path().join("docs");
         std::fs::create_dir_all(&docs).expect("failed to unwrap");
         let extra = docs.join("guidelines.md");
@@ -235,11 +236,4 @@ mod tests {
         let highlights = bundle.highlights(1);
         assert_eq!(highlights, vec!["First".to_owned()]);
     }
-}
-// Updated to use context for error handling and reduce unwraps
-use anyhow::{Context, Result};
-
-fn write_doc(dir: &Path, content: &str) -> Result<()> {
-    std::fs::write(dir.join("AGENTS.md"), content).context("write AGENTS.md")?;
-    Ok(())
 }

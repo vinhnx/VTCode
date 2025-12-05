@@ -1,3 +1,5 @@
+#![allow(clippy::collapsible_if)]
+
 use super::AnthropicProvider;
 use crate::config::TimeoutsConfig;
 use crate::config::constants::models;
@@ -89,9 +91,7 @@ impl LLMProvider for MinimaxProvider {
                     LLMStreamEvent::Completed { response } => {
                         let processed = post_process_response(
                             response,
-                            tool_defs
-                                .as_ref()
-                                .map(|defs| defs.as_slice()),
+                            tool_defs.as_deref(),
                         );
                         yield LLMStreamEvent::Completed { response: processed };
                     }
@@ -136,7 +136,7 @@ fn post_process_response(
     if response
         .tool_calls
         .as_ref()
-        .map_or(false, |calls| !calls.is_empty())
+        .is_some_and(|calls| !calls.is_empty())
     {
         return response;
     }
@@ -256,11 +256,11 @@ fn build_parameter_type_map(
                             continue;
                         }
 
-                        if let Some(array) = param_type.as_array() {
-                            if let Some(first) = array.iter().find_map(|value| value.as_str()) {
-                                param_map.insert(name.clone(), first.to_string());
-                                continue;
-                            }
+                        if let Some(array) = param_type.as_array()
+                            && let Some(first) = array.iter().find_map(|value| value.as_str())
+                        {
+                            param_map.insert(name.clone(), first.to_string());
+                            continue;
                         }
                     }
 
@@ -277,9 +277,9 @@ fn build_parameter_type_map(
 
 fn extract_name(raw: &str) -> String {
     let trimmed = raw.trim();
-    if trimmed.starts_with('\"') && trimmed.ends_with('\"') && trimmed.len() >= 2 {
-        trimmed[1..trimmed.len() - 1].to_string()
-    } else if trimmed.starts_with('\'') && trimmed.ends_with('\'') && trimmed.len() >= 2 {
+    let is_wrapped = (trimmed.starts_with('\"') && trimmed.ends_with('\"'))
+        || (trimmed.starts_with('\'') && trimmed.ends_with('\''));
+    if is_wrapped && trimmed.len() >= 2 {
         trimmed[1..trimmed.len() - 1].to_string()
     } else {
         trimmed.to_string()

@@ -26,7 +26,7 @@ pub trait CacheValue: Send + Sync + Clone + 'static {}
 impl<T> CacheValue for T where T: Send + Sync + Clone + 'static {}
 
 /// Cache statistics with consistent structure across all cache types
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CacheStats {
     pub hits: u64,
     pub misses: u64,
@@ -34,19 +34,6 @@ pub struct CacheStats {
     pub current_size: usize,
     pub max_size: usize,
     pub total_memory_bytes: u64,
-}
-
-impl Default for CacheStats {
-    fn default() -> Self {
-        Self {
-            hits: 0,
-            misses: 0,
-            evictions: 0,
-            current_size: 0,
-            max_size: 0,
-            total_memory_bytes: 0,
-        }
-    }
 }
 
 /// Cache entry with metadata
@@ -97,7 +84,7 @@ pub struct UnifiedCache<K, V> {
 pub enum EvictionPolicy {
     /// Least Recently Used
     Lru,
-    /// Least Frequently Used  
+    /// Least Frequently Used
     Lfu,
     /// First In, First Out
     Fifo,

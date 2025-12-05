@@ -9,9 +9,11 @@ use crate::llm::provider::{LLMError, LLMProvider};
 use std::collections::HashMap;
 use std::str::FromStr;
 
+type ProviderFactory = Box<dyn Fn(ProviderConfig) -> Box<dyn LLMProvider> + Send + Sync>;
+
 /// LLM provider factory and registry
 pub struct LLMFactory {
-    providers: HashMap<String, Box<dyn Fn(ProviderConfig) -> Box<dyn LLMProvider> + Send + Sync>>,
+    providers: HashMap<String, ProviderFactory>,
 }
 
 #[derive(Debug, Clone)]
@@ -106,9 +108,7 @@ impl LLMFactory {
         }
 
         let m = trimmed.to_lowercase();
-        if m.starts_with("gpt-oss-") {
-            Some("openai".to_owned())
-        } else if m.starts_with("gpt-") || m.starts_with("o1") {
+        if m.starts_with("gpt-oss-") || m.starts_with("gpt-") || m.starts_with("o1") {
             Some("openai".to_owned())
         } else if m.starts_with("claude-") {
             Some("anthropic".to_owned())

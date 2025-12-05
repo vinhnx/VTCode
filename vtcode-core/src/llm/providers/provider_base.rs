@@ -101,10 +101,10 @@ macro_rules! impl_provider_constructors {
                 api_key: Option<String>,
                 model: Option<String>,
                 base_url: Option<String>,
-                prompt_cache: Option<crate::config::core::PromptCachingConfig>,
-                _timeouts: Option<crate::config::TimeoutsConfig>,
+                prompt_cache: Option<$crate::config::core::PromptCachingConfig>,
+                _timeouts: Option<$crate::config::TimeoutsConfig>,
             ) -> Self {
-                let config = crate::llm::providers::provider_base::build_provider_config(
+                let config = $crate::llm::providers::provider_base::build_provider_config(
                     api_key,
                     model,
                     base_url,
@@ -116,7 +116,7 @@ macro_rules! impl_provider_constructors {
                     $cache_validator,
                 );
 
-                <Self as crate::llm::providers::provider_base::FromProviderConfig>::from_provider_config(config)
+                <Self as $crate::llm::providers::provider_base::FromProviderConfig>::from_provider_config(config)
             }
         }
     };

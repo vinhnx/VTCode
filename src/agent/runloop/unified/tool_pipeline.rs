@@ -842,7 +842,7 @@ mod tests {
         let permission_cache_arc = Arc::new(tokio::sync::RwLock::new(ToolPermissionCache::new()));
         {
             let mut cache = permission_cache_arc.write().await;
-            cache.cache_grant("read_file", PermissionGrant::Permanent);
+            cache.cache_grant("read_file".to_string(), PermissionGrant::Permanent);
         }
 
         let mut session = spawn_session(

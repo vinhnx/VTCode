@@ -90,7 +90,7 @@ pub struct RecoveryPattern {
 }
 
 /// Patterns of failures and recovery
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct FailurePatterns {
     /// Tools with high failure rates
     pub high_failure_tools: Vec<(String, f64)>,
@@ -100,17 +100,6 @@ pub struct FailurePatterns {
     pub common_errors: Vec<(String, u64)>,
     /// Effective recovery patterns
     pub recovery_patterns: Vec<RecoveryPattern>,
-}
-
-impl Default for FailurePatterns {
-    fn default() -> Self {
-        Self {
-            high_failure_tools: vec![],
-            high_failure_patterns: vec![],
-            common_errors: vec![],
-            recovery_patterns: vec![],
-        }
-    }
 }
 
 /// Analyzes agent behavior from metrics history

@@ -183,13 +183,14 @@ impl LintingOrchestrator {
                 for span in spans {
                     if span.get("is_primary").and_then(Value::as_bool) == Some(true) {
                         let file = span.get("file_name").and_then(Value::as_str).unwrap_or("");
-                        let line_num = span.get("line_start").and_then(Value::as_u64).unwrap_or(0);
+                        let line_num =
+                            span.get("line_start").and_then(Value::as_u64).unwrap_or(0) as usize;
                         let column = span
                             .get("column_start")
                             .and_then(Value::as_u64)
-                            .unwrap_or(0);
+                            .unwrap_or(0) as usize;
                         let rule = parser_utils::get_str(
-                            &message
+                            message
                                 .get("code")
                                 .and_then(|c| c.get("code"))
                                 .unwrap_or(&Value::Null),
@@ -202,8 +203,8 @@ impl LintingOrchestrator {
                         let msg = parser_utils::get_str(message, "message", "");
                         findings.push(LintFinding {
                             file_path: base_path.join(file),
-                            line: line_num as usize,
-                            column: column as usize,
+                            line: line_num,
+                            column,
                             severity,
                             rule,
                             message: msg,
@@ -234,8 +235,8 @@ impl LintingOrchestrator {
                         let msg = parser_utils::get_str(m, "message", "");
                         findings.push(LintFinding {
                             file_path: base_path.join(path),
-                            line: line as usize,
-                            column: column as usize,
+                            line,
+                            column,
                             severity,
                             rule,
                             message: msg,
@@ -263,8 +264,8 @@ impl LintingOrchestrator {
                     parser_utils::parse_severity_error(&parser_utils::get_str(item, "type", ""));
                 findings.push(LintFinding {
                     file_path: base_path.join(path),
-                    line: line as usize,
-                    column: column as usize,
+                    line,
+                    column,
                     severity,
                     rule,
                     message: msg,

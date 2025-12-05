@@ -1,3 +1,10 @@
+#![allow(
+    clippy::collapsible_if,
+    clippy::manual_contains,
+    clippy::nonminimal_bool,
+    clippy::single_match
+)]
+
 use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::{OpenAIPromptCacheSettings, PromptCachingConfig};
@@ -156,17 +163,17 @@ fn parse_responses_payload(
                     .unwrap_or("");
                 match entry_type {
                     "output_text" | "text" => {
-                        if let Some(text) = entry.get("text").and_then(|value| value.as_str()) {
-                            if !text.is_empty() {
-                                content_fragments.push(text.to_string());
-                            }
+                        if let Some(text) = entry.get("text").and_then(|value| value.as_str())
+                            && !text.is_empty()
+                        {
+                            content_fragments.push(text.to_string());
                         }
                     }
                     "reasoning" => {
-                        if let Some(text) = entry.get("text").and_then(|value| value.as_str()) {
-                            if !text.is_empty() {
-                                reasoning_fragments.push(text.to_string());
-                            }
+                        if let Some(text) = entry.get("text").and_then(|value| value.as_str())
+                            && !text.is_empty()
+                        {
+                            reasoning_fragments.push(text.to_string());
                         }
                     }
                     "tool_call" => {
@@ -351,9 +358,7 @@ impl OpenAIProvider {
     }
 
     fn is_responses_api_model(model: &str) -> bool {
-        models::openai::RESPONSES_API_MODELS
-            .iter()
-            .any(|candidate| *candidate == model)
+        models::openai::RESPONSES_API_MODELS.contains(&model)
     }
 
     fn normalized_harmony_model(model: &str) -> String {
@@ -430,11 +435,12 @@ impl OpenAIProvider {
 
         // Convert messages
         for msg in &request.messages {
-            if !developer_inserted && msg.role != MessageRole::System {
-                if let Some(dev_msg) = developer_message.take() {
-                    harmony_messages.push(dev_msg);
-                    developer_inserted = true;
-                }
+            if !developer_inserted
+                && msg.role != MessageRole::System
+                && let Some(dev_msg) = developer_message.take()
+            {
+                harmony_messages.push(dev_msg);
+                developer_inserted = true;
             }
 
             match msg.role {
@@ -854,28 +860,28 @@ impl OpenAIProvider {
             });
             let mut skip_message = false;
 
-            if msg.role == MessageRole::Assistant {
-                if let Some(tool_calls) = &msg.tool_calls {
-                    if !tool_calls.is_empty() {
-                        let tool_calls_json: Vec<Value> = tool_calls
-                            .iter()
-                            .filter_map(|tc| {
-                                tc.function.as_ref().map(|func| {
-                                    active_tool_call_ids.insert(tc.id.clone());
-                                    json!({
-                                        "id": tc.id,
-                                        "type": "function",
-                                        "function": {
-                                            "name": func.name,
-                                            "arguments": func.arguments
-                                        }
-                                    })
-                                })
+            if msg.role == MessageRole::Assistant
+                && let Some(tool_calls) = &msg.tool_calls
+                && !tool_calls.is_empty()
+            {
+                let tool_calls_json: Vec<Value> = tool_calls
+                    .iter()
+                    .filter_map(|tc| {
+                        tc.function.as_ref().map(|func| {
+                            active_tool_call_ids.insert(tc.id.clone());
+                            json!({
+                                "id": tc.id,
+                                "type": "function",
+                                "function": {
+                                    "name": func.name,
+                                    "arguments": func.arguments
+                                }
                             })
-                            .collect();
-                        message["tool_calls"] = Value::Array(tool_calls_json);
-                    }
-                }
+                        })
+                    })
+                    .collect();
+
+                message["tool_calls"] = Value::Array(tool_calls_json);
             }
 
             if msg.role == MessageRole::Tool {
@@ -910,24 +916,24 @@ impl OpenAIProvider {
             openai_request[MAX_COMPLETION_TOKENS_FIELD] = json!(max_tokens);
         }
 
-        if let Some(temperature) = request.temperature {
-            if Self::supports_temperature_parameter(&request.model) {
-                openai_request["temperature"] = json!(temperature);
-            }
+        if let Some(temperature) = request.temperature
+            && Self::supports_temperature_parameter(&request.model)
+        {
+            openai_request["temperature"] = json!(temperature);
         }
 
         if self.supports_tools(&request.model) {
-            if let Some(tools) = &request.tools {
-                if let Some(serialized) = Self::serialize_tools(tools) {
-                    openai_request["tools"] = serialized;
+            if let Some(tools) = &request.tools
+                && let Some(serialized) = Self::serialize_tools(tools)
+            {
+                openai_request["tools"] = serialized;
 
-                    // Check if any tools are custom types - if so, disable parallel tool calls
-                    // as per GPT-5 specification: "custom tool type does NOT support parallel tool calling"
-                    let has_custom_tool = tools.iter().any(|tool| tool.tool_type == "custom");
-                    if has_custom_tool {
-                        // Override parallel tool calls to false if custom tools are present
-                        openai_request["parallel_tool_calls"] = Value::Bool(false);
-                    }
+                // Check if any tools are custom types - if so, disable parallel tool calls
+                // as per GPT-5 specification: "custom tool type does NOT support parallel tool calling"
+                let has_custom_tool = tools.iter().any(|tool| tool.tool_type == "custom");
+                if has_custom_tool {
+                    // Override parallel tool calls to false if custom tools are present
+                    openai_request["parallel_tool_calls"] = Value::Bool(false);
                 }
             }
 
@@ -937,7 +943,7 @@ impl OpenAIProvider {
 
             // Only set parallel tool calls if not overridden due to custom tools
             if request.parallel_tool_calls.is_some()
-                && !openai_request.get("parallel_tool_calls").is_some()
+                && openai_request.get("parallel_tool_calls").is_none()
             {
                 if let Some(parallel) = request.parallel_tool_calls {
                     openai_request["parallel_tool_calls"] = Value::Bool(parallel);
@@ -1497,7 +1503,7 @@ impl OpenAIProvider {
         // Send HTTP request to inference server
         let response = self
             .http_client
-            .post(&format!("{}/generate", server_url))
+            .post(format!("{}/generate", server_url))
             .header("Content-Type", "application/json")
             .json(&request_body)
             .send()
@@ -1659,6 +1665,7 @@ mod tests {
             messages: vec![Message::user("Hello".to_owned())],
             system_prompt: None,
             tools: Some(vec![sample_tool()]),
+            output_format: None,
             model: model.to_string(),
             max_tokens: None,
             temperature: None,
@@ -2287,9 +2294,7 @@ impl LLMProvider for OpenAIProvider {
             model
         };
 
-        models::openai::REASONING_MODELS
-            .iter()
-            .any(|candidate| *candidate == requested)
+        models::openai::REASONING_MODELS.contains(&requested)
     }
 
     fn supports_reasoning_effort(&self, model: &str) -> bool {
@@ -2310,9 +2315,7 @@ impl LLMProvider for OpenAIProvider {
             model
         };
 
-        !models::openai::TOOL_UNAVAILABLE_MODELS
-            .iter()
-            .any(|candidate| *candidate == requested)
+        !models::openai::TOOL_UNAVAILABLE_MODELS.contains(&requested)
     }
 
     async fn stream(&self, mut request: LLMRequest) -> Result<LLMStream, LLMError> {
@@ -2405,24 +2408,24 @@ impl LLMProvider for OpenAIProvider {
             }
 
             if is_model_not_found(status, &error_text) {
-                if let Some(fallback_model) = fallback_model_if_not_found(&request.model) {
-                    if fallback_model != request.model {
-                        #[cfg(debug_assertions)]
-                        debug!(
-                            target = "vtcode::llm::openai",
-                            requested = %request.model,
-                            fallback = %fallback_model,
-                            "Model not found while streaming; retrying with fallback"
-                        );
-                        let mut retry_request = request.clone();
-                        retry_request.model = fallback_model;
-                        retry_request.stream = false;
-                        let response = self.generate(retry_request).await?;
-                        let stream = try_stream! {
-                            yield LLMStreamEvent::Completed { response };
-                        };
-                        return Ok(Box::pin(stream));
-                    }
+                if let Some(fallback_model) = fallback_model_if_not_found(&request.model)
+                    && fallback_model != request.model
+                {
+                    #[cfg(debug_assertions)]
+                    debug!(
+                        target = "vtcode::llm::openai",
+                        requested = %request.model,
+                        fallback = %fallback_model,
+                        "Model not found while streaming; retrying with fallback"
+                    );
+                    let mut retry_request = request.clone();
+                    retry_request.model = fallback_model;
+                    retry_request.stream = false;
+                    let response = self.generate(retry_request).await?;
+                    let stream = try_stream! {
+                        yield LLMStreamEvent::Completed { response };
+                    };
+                    return Ok(Box::pin(stream));
                 }
                 let formatted_error = error_display::format_llm_error(
                     "OpenAI",
@@ -2458,7 +2461,7 @@ impl LLMProvider for OpenAIProvider {
             let mut done = false;
             #[cfg(debug_assertions)]
             let mut streamed_events_counter: usize = 0;
-            let telemetry = OpenAIStreamTelemetry::default();
+            let telemetry = OpenAIStreamTelemetry;
 
             while let Some(chunk_result) = body_stream.next().await {
                 let chunk = chunk_result.map_err(|err| {
@@ -2919,7 +2922,7 @@ mod streaming_tests {
             models::openai::GPT_5_NANO,
         ];
 
-        for model in &test_models {
+        for &model in &test_models {
             let provider = OpenAIProvider::with_model("test-key".to_owned(), model.to_owned());
             assert_eq!(
                 provider.supports_streaming(),

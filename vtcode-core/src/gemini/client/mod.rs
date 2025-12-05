@@ -169,10 +169,7 @@ impl Client {
             let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
 
-            let is_retryable = match status.as_u16() {
-                429 | 500 | 502 | 503 | 504 => true,
-                _ => false,
-            };
+            let is_retryable = matches!(status.as_u16(), 429 | 500 | 502 | 503 | 504);
 
             return Err(StreamingError::ApiError {
                 status_code: status.as_u16(),

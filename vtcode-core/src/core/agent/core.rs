@@ -328,9 +328,8 @@ impl Agent {
 
         if self.config.verbose {
             println!(
-                "{} {}",
-                style("[SHUTDOWN]").cyan().bold(),
-                "Agent shutdown complete"
+                "{} Agent shutdown complete",
+                style("[SHUTDOWN]").cyan().bold()
             );
         }
 

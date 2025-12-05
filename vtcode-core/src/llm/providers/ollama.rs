@@ -265,16 +265,16 @@ impl OllamaProvider {
         let mut messages = Vec::new();
         let mut tool_names: HashMap<String, String> = HashMap::new();
 
-        if let Some(system) = &request.system_prompt {
-            if !system.trim().is_empty() {
-                messages.push(OllamaChatMessage {
-                    role: "system".to_string(),
-                    content: Some(system.clone()),
-                    tool_calls: None,
-                    tool_call_id: None,
-                    tool_name: None,
-                });
-            }
+        if let Some(system) = &request.system_prompt
+            && !system.trim().is_empty()
+        {
+            messages.push(OllamaChatMessage {
+                role: "system".to_string(),
+                content: Some(system.clone()),
+                tool_calls: None,
+                tool_call_id: None,
+                tool_name: None,
+            });
         }
 
         for message in &request.messages {

@@ -1,3 +1,5 @@
+#![allow(clippy::collapsible_if)]
+
 use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::{GeminiPromptCacheMode, GeminiPromptCacheSettings, PromptCachingConfig};
@@ -251,39 +253,42 @@ impl LLMProvider for GeminiProvider {
             let mut aggregated_text = String::new();
             let mut _reasoning_buffer = crate::llm::providers::ReasoningBuffer::default();
 
+            #[allow(clippy::collapsible_if)]
             let mut on_chunk = |chunk: &str| -> Result<(), StreamingError> {
                 if chunk.is_empty() {
                     return Ok(());
                 }
 
                 if let Some(delta) = Self::apply_stream_delta(&mut aggregated_text, chunk) {
-                    if !delta.is_empty() {
-                        // Split any reasoning content from the delta
-                        let (reasoning_segments, cleaned_delta) =
-                            crate::llm::providers::split_reasoning_from_text(&delta);
+                    if delta.is_empty() {
+                        return Ok(());
+                    }
 
-                        // Send any extracted reasoning content
-                        for segment in reasoning_segments {
-                            if !segment.is_empty() {
-                                event_sender
-                                    .send(Ok(LLMStreamEvent::Reasoning { delta: segment }))
-                                    .map_err(|_| StreamingError::StreamingError {
-                                        message: "Streaming consumer dropped".to_string(),
-                                        partial_content: Some(chunk.to_string()),
-                                    })?;
-                            }
+                    // Split any reasoning content from the delta
+                    let (reasoning_segments, cleaned_delta) =
+                        crate::llm::providers::split_reasoning_from_text(&delta);
+
+                    // Send any extracted reasoning content
+                    for segment in reasoning_segments {
+                        if !segment.is_empty() {
+                            event_sender
+                                .send(Ok(LLMStreamEvent::Reasoning { delta: segment }))
+                                .map_err(|_| StreamingError::StreamingError {
+                                    message: "Streaming consumer dropped".to_string(),
+                                    partial_content: Some(chunk.to_string()),
+                                })?;
                         }
+                    }
 
-                        // Send the cleaned content if any remains
-                        if let Some(cleaned) = cleaned_delta {
-                            if !cleaned.is_empty() {
-                                event_sender
-                                    .send(Ok(LLMStreamEvent::Token { delta: cleaned }))
-                                    .map_err(|_| StreamingError::StreamingError {
-                                        message: "Streaming consumer dropped".to_string(),
-                                        partial_content: Some(chunk.to_string()),
-                                    })?;
-                            }
+                    // Send the cleaned content if any remains
+                    if let Some(cleaned) = cleaned_delta {
+                        if !cleaned.is_empty() {
+                            event_sender
+                                .send(Ok(LLMStreamEvent::Token { delta: cleaned }))
+                                .map_err(|_| StreamingError::StreamingError {
+                                    message: "Streaming consumer dropped".to_string(),
+                                    partial_content: Some(chunk.to_string()),
+                                })?;
                         }
                     }
                 }
@@ -366,8 +371,6 @@ impl LLMProvider for GeminiProvider {
             let model = request.model.as_str();
             let max_output_tokens = if model.contains("2.5") || model.contains("3") {
                 65536 // Gemini 2.5 and 3 models support 65K output tokens
-            } else if model.contains("2.0") {
-                8192 // Gemini 2.0 models support 8K output tokens
             } else {
                 8192 // Conservative default
             };
@@ -413,8 +416,6 @@ impl GeminiProvider {
     pub fn max_output_tokens(model: &str) -> usize {
         if model.contains("2.5") || model.contains("3") {
             65_536 // 65K tokens for Gemini 2.5 and 3 models
-        } else if model.contains("2.0") {
-            8_192 // 8K tokens for Gemini 2.0 models
         } else {
             8_192 // Conservative default
         }
@@ -618,39 +619,20 @@ impl GeminiProvider {
                 let thinking_level = match effort {
                     // For Gemini models, treat None as Low for basic reasoning
                     ReasoningEffortLevel::None => {
-                        if request.model.contains("gemini-3") {
-                            Some("low") // For Gemini 3 Pro, use "low" instead of None
-                        } else {
-                            Some("low") // For other Gemini models, use "low"
-                        }
+                        Some("low")
                     }
                     // For Gemini 3 Pro, use the new thinking_level parameter
                     // According to Google's documentation: low=fast responses, high=maximum reasoning
                     ReasoningEffortLevel::Minimal | ReasoningEffortLevel::Low => {
-                        if request.model.contains("gemini-3") {
-                            // For Gemini 3 Pro, use "low" for minimal/fast thinking
-                            Some("low")
-                        } else {
-                            // For older models, continue using "low"
-                            Some("low")
-                        }
+                        Some("low")
                     }
                     ReasoningEffortLevel::Medium => {
                         // Note: According to Google's docs, medium is coming soon for Gemini 3,
                         // so we'll map to high for now to maintain functionality
-                        if request.model.contains("gemini-3") {
-                            Some("high") // Default to high for Gemini 3 Pro since medium not fully available
-                        } else {
-                            Some("high") // Maintain compatibility for older models
-                        }
+                        Some("high") // Default to high for Gemini 3 Pro since medium not fully available
                     }
                     ReasoningEffortLevel::High => {
-                        if request.model.contains("gemini-3") {
-                            // For Gemini 3 Pro, use "high" for maximum reasoning depth
-                            Some("high")
-                        } else {
-                            Some("high") // Maintain compatibility for older models
-                        }
+                        Some("high") // Maintain compatibility for older models
                     }
                 };
 
@@ -1214,7 +1196,10 @@ mod tests {
             .expect("system instruction should be present");
         assert!(matches!(
             system_instruction.parts.as_slice(),
-            [Part::Text { text }] if text == "System prompt"
+            [Part::Text {
+                text,
+                thought_signature: _
+            }] if text == "System prompt"
         ));
 
         assert_eq!(gemini_request.contents.len(), 3);
@@ -1245,6 +1230,7 @@ mod tests {
                     parts: vec![
                         Part::Text {
                             text: "Here you go".to_string(),
+                            thought_signature: None,
                         },
                         Part::FunctionCall {
                             function_call: GeminiFunctionCall {
@@ -1558,7 +1544,6 @@ mod tests {
                         thought_signature: Some(test_signature.clone()),
                     }]),
                     tool_call_id: None,
-                    name: None,
                 },
             ],
             system_prompt: None,

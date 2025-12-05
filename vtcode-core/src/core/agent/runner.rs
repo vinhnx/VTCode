@@ -128,7 +128,7 @@ impl TaskRunState {
             has_completed: false,
             completion_outcome: TaskOutcome::Unknown,
             turns_executed: 0,
-            turn_durations_ms: Vec::with_capacity(max_tool_loops as usize), // Pre-allocate for expected number of turns
+            turn_durations_ms: Vec::with_capacity(max_tool_loops), // Pre-allocate for expected number of turns
             max_tool_loops,
             consecutive_tool_loops: 0,
             max_tool_loop_streak: 0,
@@ -341,13 +341,11 @@ impl AgentRunner {
             return;
         }
         let mut out = String::new();
-        let mut count = 0;
-        for ch in clean.chars() {
+        for (count, ch) in clean.chars().enumerate() {
             if count >= HEAD_CHARS {
                 break;
             }
             out.push(ch);
-            count += 1;
         }
         out.push_str("\n…\n");
         // tail
@@ -1072,28 +1070,21 @@ impl AgentRunner {
                     }
                 }
 
-                if !had_tool_call {
-                    if !response_text.trim().is_empty() {
-                        Self::print_compact_response(self.agent_type, &response_text, self.quiet);
-                        if agent_message_streamed {
-                            if used_streaming_fallback {
-                                event_recorder.agent_message(&response_text);
-                            }
-                        } else {
-                            event_recorder.agent_message(&response_text);
-                        }
-                        task_state.conversation.push(Content {
-                            role: "model".to_owned(),
-                            parts: vec![Part::Text {
-                                text: response_text.clone(),
-                                thought_signature: None,
-                            }],
-                        });
-                        task_state.conversation_messages.push(
-                            Message::assistant(response_text.clone())
-                                .with_reasoning(reasoning.clone()),
-                        );
+                if !had_tool_call && !response_text.trim().is_empty() {
+                    Self::print_compact_response(self.agent_type, &response_text, self.quiet);
+                    if !agent_message_streamed || used_streaming_fallback {
+                        event_recorder.agent_message(&response_text);
                     }
+                    task_state.conversation.push(Content {
+                        role: "model".to_owned(),
+                        parts: vec![Part::Text {
+                            text: response_text.clone(),
+                            thought_signature: None,
+                        }],
+                    });
+                    task_state.conversation_messages.push(
+                        Message::assistant(response_text.clone()).with_reasoning(reasoning.clone()),
+                    );
                 }
 
                 if !task_state.has_completed {
@@ -1267,6 +1258,7 @@ impl AgentRunner {
                         had_tool_call = true;
 
                         // Process each tool call
+                        #[allow(clippy::collapsible_if)]
                         for tool_call in tool_calls {
                             if let Some(function) = tool_call.get("function") {
                                 if let (Some(name), Some(arguments)) = (
@@ -2061,7 +2053,7 @@ impl AgentRunner {
         // Try with simple adaptive retry (up to 2 retries)
         let mut delay = std::time::Duration::from_millis(200);
         for attempt in 0..3 {
-            match registry.execute_tool_ref(tool_name, &args).await {
+            match registry.execute_tool_ref(tool_name, args).await {
                 Ok(result) => return Ok(result),
                 Err(_e) if attempt < 2 => {
                     tokio::time::sleep(delay).await;
@@ -2081,6 +2073,7 @@ impl AgentRunner {
     }
 
     /// Generate a meaningful summary of the task execution
+    #[allow(clippy::too_many_arguments)]
     fn generate_task_summary(
         &self,
         task: &Task,
@@ -2197,15 +2190,15 @@ fn parse_tool_code(tool_code: &str) -> Option<(String, String)> {
     };
 
     // Try to match function call pattern: name(args)
-    if let Some(open_paren) = code.find('(') {
-        if let Some(close_paren) = code.rfind(')') {
-            let func_name = code[..open_paren].trim().to_owned();
-            let args_str = &code[open_paren + 1..close_paren];
+    if let Some(open_paren) = code.find('(')
+        && let Some(close_paren) = code.rfind(')')
+    {
+        let func_name = code[..open_paren].trim().to_owned();
+        let args_str = &code[open_paren + 1..close_paren];
 
-            // Convert Python-style arguments to JSON
-            let json_args = convert_python_args_to_json(args_str)?;
-            return Some((func_name, json_args));
-        }
+        // Convert Python-style arguments to JSON
+        let json_args = convert_python_args_to_json(args_str)?;
+        return Some((func_name, json_args));
     }
 
     None

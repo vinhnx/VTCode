@@ -156,10 +156,10 @@ impl SnapshotManager {
 
     fn normalize_path(&self, path: &Path) -> Option<PathBuf> {
         if path.is_absolute() {
-            if let Ok(canonical_path) = fs::canonicalize(path) {
-                if let Ok(stripped) = canonical_path.strip_prefix(&self.canonical_workspace) {
-                    return sanitize_relative_path(stripped);
-                }
+            if let Ok(canonical_path) = fs::canonicalize(path)
+                && let Ok(stripped) = canonical_path.strip_prefix(&self.canonical_workspace)
+            {
+                return sanitize_relative_path(stripped);
             }
 
             if let Ok(stripped) = path.strip_prefix(&self.workspace) {

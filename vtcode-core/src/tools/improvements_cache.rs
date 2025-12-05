@@ -20,6 +20,7 @@
 //! - LRU eviction policy with configurable max size
 //! - TTL enforcement (automatic and on-access)
 //! - Observability hooks for cache operations
+#![allow(deprecated)]
 
 use crate::tools::improvements_errors::{EventType, ObservabilityContext};
 use std::collections::HashMap;

@@ -79,12 +79,11 @@ impl LoopDetector {
             timestamp: Instant::now(),
         };
 
-        if self.recent_calls.len() >= DETECTION_WINDOW {
-            if let Some(old) = self.recent_calls.pop_front() {
-                if let Some(count) = self.tool_counts.get_mut(&old.tool_name) {
-                    *count = count.saturating_sub(1);
-                }
-            }
+        if self.recent_calls.len() >= DETECTION_WINDOW
+            && let Some(old) = self.recent_calls.pop_front()
+            && let Some(count) = self.tool_counts.get_mut(&old.tool_name)
+        {
+            *count = count.saturating_sub(1);
         }
 
         self.recent_calls.push_back(record);
@@ -96,13 +95,16 @@ impl LoopDetector {
     fn check_for_loops(&mut self, current_tool: &str) -> Option<String> {
         let count = self.tool_counts.get(current_tool).copied().unwrap_or(0);
 
-        if count >= MAX_SAME_TOOL_CALLS {
-            if let Some(last) = self.last_warning {
-                if last.elapsed().as_secs() < 30 {
-                    return None;
-                }
-            }
+        if count >= MAX_SAME_TOOL_CALLS
+            && self
+                .last_warning
+                .map(|last| last.elapsed().as_secs() < 30)
+                .unwrap_or(false)
+        {
+            return None;
+        }
 
+        if count >= MAX_SAME_TOOL_CALLS {
             self.last_warning = Some(Instant::now());
 
             return Some(format!(
