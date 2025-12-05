@@ -35,7 +35,7 @@
     "read_file": "allow",
     "write_file": "allow",
     "edit_file": "allow",
-    "apply_patch": "allow",
+    "apply_patch": "prompt",
     "close_pty_session": "allow",
     "create_pty_session": "allow",
     "list_pty_sessions": "allow",

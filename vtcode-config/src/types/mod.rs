@@ -28,6 +28,8 @@ pub enum ReasoningEffortLevel {
     Medium,
     /// High reasoning effort - maps to high thinking level for Gemini 3 Pro
     High,
+    /// Extra high reasoning effort - for gpt-5.1-codex-max long-running tasks
+    XHigh,
 }
 
 impl ReasoningEffortLevel {
@@ -39,6 +41,7 @@ impl ReasoningEffortLevel {
             Self::Low => reasoning::LOW,
             Self::Medium => reasoning::MEDIUM,
             Self::High => reasoning::HIGH,
+            Self::XHigh => "xhigh",
         }
     }
 
@@ -55,6 +58,8 @@ impl ReasoningEffortLevel {
             Some(Self::Medium)
         } else if normalized.eq_ignore_ascii_case(reasoning::HIGH) {
             Some(Self::High)
+        } else if normalized.eq_ignore_ascii_case("xhigh") {
+            Some(Self::XHigh)
         } else {
             None
         }

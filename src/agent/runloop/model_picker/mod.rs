@@ -829,19 +829,6 @@ mod tests {
     }
 
     #[test]
-    fn model_picker_lists_new_moonshot_models() {
-        let options = MODEL_OPTIONS.as_slice();
-        assert!(has_model(options, ModelId::MoonshotKimiK2TurboPreview));
-        assert!(has_model(options, ModelId::MoonshotKimiK20905Preview));
-        assert!(has_model(options, ModelId::MoonshotKimiK20711Preview));
-        assert!(has_model(options, ModelId::MoonshotKimiLatest));
-        assert!(has_model(options, ModelId::MoonshotKimiLatest8k));
-        assert!(has_model(options, ModelId::MoonshotKimiLatest32k));
-        assert!(has_model(options, ModelId::MoonshotKimiLatest128k));
-        assert!(has_model(options, ModelId::OpenRouterMoonshotaiKimiK20905));
-    }
-
-    #[test]
     fn model_picker_lists_new_anthropic_models() {
         let options = MODEL_OPTIONS.as_slice();
         assert!(has_model(options, ModelId::ClaudeOpus41));

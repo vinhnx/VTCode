@@ -56,6 +56,7 @@ fn fallback_model_if_not_found(model: &str) -> Option<String> {
         m if m == models::openai::GPT_5_MINI => Some(models::openai::GPT_5.to_string()),
         m if m == models::openai::GPT_5_NANO => Some(models::openai::GPT_5_MINI.to_string()),
         m if m == models::openai::GPT_5_1_CODEX => Some(models::openai::GPT_5_CODEX.to_string()),
+        m if m == models::openai::GPT_5_1_CODEX_MAX => Some(models::openai::GPT_5_1_CODEX.to_string()),
         _ => Some(models::openai::DEFAULT_MODEL.to_string()),
     }
 }
@@ -65,12 +66,13 @@ use super::{
     common::{
         extract_prompt_cache_settings, override_base_url, parse_client_prompt_common, resolve_model,
     },
-    extract_reasoning_trace, gpt5_codex_developer_prompt,
+    extract_reasoning_trace,
     shared::{
         StreamAssemblyError, StreamTelemetry, append_reasoning_segments, extract_data_payload,
         find_sse_boundary,
     },
 };
+use crate::prompts::system::default_system_prompt;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ResponsesApiState {
@@ -353,8 +355,119 @@ impl OpenAIProvider {
         Some(Value::Array(serialized_tools))
     }
 
+    /// Serialize tools for the Responses API format (used by GPT-5.1 Codex models)
+    /// Per OpenAI documentation (see GIT_TOOL example):
+    /// - Function tools use FLAT format: {"type": "function", "name": "...", "description": "...", "parameters": {...}}
+    /// - Built-in tools like apply_patch use: {"type": "apply_patch"} (no other fields)
+    /// Note: Cannot have both built-in apply_patch AND a function named "apply_patch"
+    fn serialize_tools_for_responses(tools: &[ToolDefinition]) -> Option<Value> {
+        if tools.is_empty() {
+            return None;
+        }
+
+        // Check if built-in apply_patch is present
+        let has_builtin_apply_patch = tools.iter().any(|t| t.tool_type == "apply_patch");
+
+        let serialized_tools = tools
+            .iter()
+            .filter_map(|tool| {
+                match tool.tool_type.as_str() {
+                    "function" => {
+                        let func = tool.function.as_ref()?;
+                        // Skip function tools named "apply_patch" if built-in apply_patch is present
+                        if has_builtin_apply_patch && func.name == "apply_patch" {
+                            return None;
+                        }
+                        // GPT-5.1 Codex uses FLAT function format (name at top level)
+                        Some(json!({
+                            "type": "function",
+                            "name": &func.name,
+                            "description": &func.description,
+                            "parameters": &func.parameters
+                        }))
+                    }
+                    "apply_patch" => {
+                        // Built-in apply_patch - just {"type": "apply_patch"}, no other fields
+                        Some(json!({"type": "apply_patch"}))
+                    }
+                    "shell" => {
+                        // For shell, treat as function tool with flat format
+                        if let Some(func) = &tool.function {
+                            Some(json!({
+                                "type": "function",
+                                "name": &func.name,
+                                "description": &func.description,
+                                "parameters": &func.parameters
+                            }))
+                        } else {
+                            None
+                        }
+                    }
+                    "custom" => {
+                        // GPT-5 custom tool - use custom format
+                        if let Some(func) = &tool.function {
+                            // Skip if named apply_patch and built-in is present
+                            if has_builtin_apply_patch && func.name == "apply_patch" {
+                                return None;
+                            }
+                            Some(json!({
+                                "type": "custom",
+                                "name": &func.name,
+                                "description": &func.description,
+                                "format": func.parameters.get("format")
+                            }))
+                        } else {
+                            None
+                        }
+                    }
+                    "grammar" => {
+                        // GPT-5 grammar tool - skip if it would conflict with apply_patch
+                        if has_builtin_apply_patch {
+                            return None;
+                        }
+                        if let Some(grammar) = &tool.grammar {
+                            Some(json!({
+                                "type": "custom",
+                                "name": "apply_patch_grammar",
+                                "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool.",
+                                "format": {
+                                    "type": "grammar",
+                                    "syntax": &grammar.syntax,
+                                    "definition": &grammar.definition
+                                }
+                            }))
+                        } else {
+                            None
+                        }
+                    }
+                    _ => {
+                        // Unknown tool type - treat as function tool with flat format
+                        if let Some(func) = &tool.function {
+                            // Skip if named apply_patch and built-in is present
+                            if has_builtin_apply_patch && func.name == "apply_patch" {
+                                return None;
+                            }
+                            Some(json!({
+                                "type": "function",
+                                "name": &func.name,
+                                "description": &func.description,
+                                "parameters": &func.parameters
+                            }))
+                        } else {
+                            None
+                        }
+                    }
+                }
+            })
+            .collect::<Vec<Value>>();
+
+        Some(Value::Array(serialized_tools))
+    }
+
     fn is_gpt5_codex_model(model: &str) -> bool {
         model == models::openai::GPT_5_CODEX
+            || model == models::openai::GPT_5_1_CODEX
+            || model == models::openai::GPT_5_1_CODEX_MAX
     }
 
     fn is_responses_api_model(model: &str) -> bool {
@@ -499,7 +612,10 @@ impl OpenAIProvider {
     }
 
     fn requires_responses_api(model: &str) -> bool {
-        model == models::openai::GPT_5 || model == models::openai::GPT_5_CODEX
+        model == models::openai::GPT_5
+            || model == models::openai::GPT_5_CODEX
+            || model == models::openai::GPT_5_1_CODEX
+            || model == models::openai::GPT_5_1_CODEX_MAX
     }
 
     fn default_responses_state(model: &str) -> ResponsesApiState {
@@ -583,12 +699,18 @@ impl OpenAIProvider {
     }
 
     fn supports_temperature_parameter(model: &str) -> bool {
-        // GPT-5 variants and GPT-5 Codex models don't support temperature parameter
-        // All other OpenAI models generally support it
-        !Self::is_gpt5_codex_model(model)
-            && model != models::openai::GPT_5
-            && model != models::openai::GPT_5_MINI
-            && model != models::openai::GPT_5_NANO
+        // GPT-5.0 variants don't support temperature
+        // GPT-5.1 Codex variants also don't support temperature (API confirmed)
+        if model == models::openai::GPT_5
+            || model == models::openai::GPT_5_CODEX
+            || model == models::openai::GPT_5_MINI
+            || model == models::openai::GPT_5_NANO
+            || model == models::openai::GPT_5_1_CODEX
+            || model == models::openai::GPT_5_1_CODEX_MAX
+        {
+            return false;
+        }
+        true
     }
 
     fn responses_api_state(&self, model: &str) -> ResponsesApiState {
@@ -1004,7 +1126,7 @@ impl OpenAIProvider {
 
         if self.supports_tools(&request.model) {
             if let Some(tools) = &request.tools {
-                if let Some(serialized) = Self::serialize_tools(tools) {
+                if let Some(serialized) = Self::serialize_tools_for_responses(tools) {
                     openai_request["tools"] = serialized;
 
                     // Check if any tools are custom types - if so, disable parallel tool calls
@@ -1052,18 +1174,9 @@ impl OpenAIProvider {
         if self.supports_reasoning_effort(&request.model)
             && openai_request.get("reasoning").is_none()
         {
-            // For GPT-5.1 models, use "none" as the default reasoning effort
-            // For other models, use the default reasoning effort level (medium)
-            let default_effort = if request.model.starts_with("gpt-5.1") {
-                "none"
-            } else {
-                ReasoningEffortLevel::default().as_str()
-            };
-
-            // Only add the reasoning parameter if it's not "none"
-            if default_effort != "none" {
-                openai_request["reasoning"] = json!({ "effort": default_effort });
-            }
+            // Use the default reasoning effort level (medium)
+            let default_effort = ReasoningEffortLevel::default().as_str();
+            openai_request["reasoning"] = json!({ "effort": default_effort });
         }
 
         // Add text formatting options for GPT-5 and compatible models, including verbosity and grammar
@@ -2255,7 +2368,12 @@ fn build_codex_responses_payload(request: &LLMRequest) -> Result<OpenAIResponses
         }
     }
 
-    let instructions = gpt5_codex_developer_prompt(&additional_guidance);
+    // Use collected guidance, or fall back to default system prompt if empty
+    let instructions = if additional_guidance.is_empty() {
+        default_system_prompt().to_string()
+    } else {
+        additional_guidance.join("\n\n")
+    };
 
     Ok(OpenAIResponsesPayload {
         input,

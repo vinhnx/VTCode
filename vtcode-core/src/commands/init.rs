@@ -576,7 +576,7 @@ fn build_quick_start_section(analysis: &ProjectAnalysis) -> String {
         );
     }
 
-    render_section("Quick start", lines).unwrap()
+    render_section("Quick start", lines).expect("Failed to render Quick start section")
 }
 
 fn build_architecture_section(analysis: &ProjectAnalysis) -> String {

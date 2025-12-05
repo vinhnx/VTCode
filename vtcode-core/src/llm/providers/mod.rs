@@ -14,7 +14,6 @@ pub mod streaming_progress;
 pub mod xai;
 pub mod zai;
 
-mod codex_prompt;
 pub mod common;
 pub mod reasoning;
 mod shared;
@@ -24,7 +23,6 @@ pub use crate::tools::constants::{
     DEFAULT_VEC_CAPACITY, ERROR_DETECTION_PATTERNS, MAX_SEARCH_RESULTS, OVERFLOW_INDICATOR_PREFIX,
 };
 
-pub(crate) use codex_prompt::gpt5_codex_developer_prompt;
 pub(crate) use reasoning::{ReasoningBuffer, extract_reasoning_trace, split_reasoning_from_text};
 
 pub use anthropic::AnthropicProvider;

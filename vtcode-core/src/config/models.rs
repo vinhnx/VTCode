@@ -119,10 +119,7 @@ impl Provider {
             }
             Provider::Ollama => models::ollama::REASONING_LEVEL_MODELS.contains(&model),
             Provider::LmStudio => false,
-            Provider::Moonshot => {
-                model == models::moonshot::KIMI_K2_THINKING
-                    || model == models::moonshot::KIMI_K2_THINKING_TURBO
-            }
+            Provider::Moonshot => false,
             Provider::XAI => model == models::xai::GROK_4 || model == models::xai::GROK_4_CODE,
             Provider::ZAI => model == models::zai::GLM_4_6,
             Provider::Minimax => model == models::minimax::MINIMAX_M2,
@@ -197,6 +194,8 @@ pub enum ModelId {
     GPT51,
     /// GPT-5.1 Codex - Code-focused GPT-5.1 variant using the Responses API
     GPT51Codex,
+    /// GPT-5.1 Codex Max - Maximum context code-focused GPT-5.1 variant
+    GPT51CodexMax,
     /// GPT-5.1 Mini - Enhanced efficient OpenAI model with improved capabilities (2025-11-14)
     GPT51Mini,
     /// Codex Mini Latest - Latest Codex model for code generation (2025-05-16)
@@ -252,26 +251,6 @@ pub enum ModelId {
     /// GLM-4-32B-0414-128K - Legacy long-context GLM deployment
     ZaiGlm432b0414128k,
 
-    // Moonshot.ai models
-    /// Kimi K2 Turbo Preview - Recommended high-speed K2 deployment
-    MoonshotKimiK2TurboPreview,
-    /// Kimi K2 Thinking - Moonshot reasoning-tier K2 release for long-horizon agentic tasks
-    MoonshotKimiK2Thinking,
-    /// Kimi K2 Thinking Heavy - Enhanced reasoning with parallel trajectories (8x) and reflective aggregation
-    MoonshotKimiK2ThinkingHeavy,
-    /// Kimi K2 0905 Preview - Flagship 256K K2 release with enhanced coding agents
-    MoonshotKimiK20905Preview,
-    /// Kimi K2 0711 Preview - Long-context K2 release tuned for balanced workloads
-    MoonshotKimiK20711Preview,
-    /// Kimi Latest - Auto-tier alias that selects 8K/32K/128K variants automatically
-    MoonshotKimiLatest,
-    /// Kimi Latest 8K - Vision-enabled 8K tier with automatic context caching
-    MoonshotKimiLatest8k,
-    /// Kimi Latest 32K - Vision-enabled mid-tier with extended context
-    MoonshotKimiLatest32k,
-    /// Kimi Latest 128K - Vision-enabled flagship tier with maximum context
-    MoonshotKimiLatest128k,
-
     // Ollama models
     /// GPT-OSS 20B - Open-weight GPT-OSS 20B model served via Ollama locally
     OllamaGptOss20b,
@@ -284,8 +263,6 @@ pub enum ModelId {
     /// DeepSeek V3.1 671B Cloud - DeepSeek reasoning deployment via Ollama Cloud
     OllamaDeepseekV31_671bCloud,
 
-    /// Kimi K2 1T Cloud - Cloud-hosted Kimi K2 1T model served via Ollama Cloud
-    OllamaKimiK21tCloud,
     /// Qwen3 Coder 480B Cloud - Large Qwen3 coding specialist via Ollama Cloud
     OllamaQwen3Coder480bCloud,
     /// GLM 4.6 Cloud - GLM 4.6 reasoning model via Ollama Cloud
@@ -322,12 +299,6 @@ pub enum ModelId {
     OpenRouterGrok4,
     /// GLM 4.6 - Z.AI GLM 4.6 long-context reasoning model
     OpenRouterZaiGlm46,
-    /// Kimi K2 0905 - MoonshotAI Kimi K2 0905 MoE release optimised for coding agents
-    OpenRouterMoonshotaiKimiK20905,
-    /// Kimi K2 Thinking - MoonshotAI reasoning-tier Kimi K2 release optimized for long-horizon agents
-    OpenRouterMoonshotaiKimiK2Thinking,
-    /// Kimi K2 (free) - Community tier for MoonshotAI Kimi K2
-    OpenRouterMoonshotaiKimiK2Free,
     /// Qwen3 Max - Flagship Qwen3 mixture for general reasoning
     OpenRouterQwen3Max,
     /// Qwen3 235B A22B - Mixture-of-experts Qwen3 235B general model
@@ -466,6 +437,7 @@ impl ModelId {
             ModelId::GPT5Nano => models::GPT_5_NANO,
             ModelId::GPT51 => models::GPT_5_1,
             ModelId::GPT51Codex => models::GPT_5_1_CODEX,
+            ModelId::GPT51CodexMax => models::GPT_5_1_CODEX_MAX,
             ModelId::GPT51Mini => models::GPT_5_1_MINI,
             ModelId::CodexMiniLatest => models::CODEX_MINI_LATEST,
             ModelId::OpenAIGptOss20b => models::openai::GPT_OSS_20B,
@@ -493,16 +465,6 @@ impl ModelId {
             ModelId::ZaiGlm45Airx => models::zai::GLM_4_5_AIRX,
             ModelId::ZaiGlm45Flash => models::zai::GLM_4_5_FLASH,
             ModelId::ZaiGlm432b0414128k => models::zai::GLM_4_32B_0414_128K,
-            // Moonshot models
-            ModelId::MoonshotKimiK2TurboPreview => models::MOONSHOT_KIMI_K2_TURBO_PREVIEW,
-            ModelId::MoonshotKimiK2Thinking => models::MOONSHOT_KIMI_K2_THINKING,
-            ModelId::MoonshotKimiK2ThinkingHeavy => models::MOONSHOT_KIMI_K2_THINKING_TURBO,
-            ModelId::MoonshotKimiK20905Preview => models::MOONSHOT_KIMI_K2_0905_PREVIEW,
-            ModelId::MoonshotKimiK20711Preview => models::MOONSHOT_KIMI_K2_0711_PREVIEW,
-            ModelId::MoonshotKimiLatest => models::MOONSHOT_KIMI_LATEST,
-            ModelId::MoonshotKimiLatest8k => models::MOONSHOT_KIMI_LATEST_8K,
-            ModelId::MoonshotKimiLatest32k => models::MOONSHOT_KIMI_LATEST_32K,
-            ModelId::MoonshotKimiLatest128k => models::MOONSHOT_KIMI_LATEST_128K,
             // Ollama models
             ModelId::OllamaGptOss20b => models::ollama::GPT_OSS_20B,
             ModelId::OllamaGptOss20bCloud => models::ollama::GPT_OSS_20B_CLOUD,
@@ -510,7 +472,6 @@ impl ModelId {
             ModelId::OllamaQwen317b => models::ollama::QWEN3_1_7B,
             ModelId::OllamaDeepseekV31_671bCloud => models::ollama::DEEPSEEK_V31_671B_CLOUD,
 
-            ModelId::OllamaKimiK21tCloud => models::ollama::KIMI_K2_1T_CLOUD,
             ModelId::OllamaQwen3Coder480bCloud => models::ollama::QWEN3_CODER_480B_CLOUD,
             ModelId::OllamaGlm46Cloud => models::ollama::GLM_46_CLOUD,
             ModelId::OllamaMinimaxM2Cloud => models::ollama::MINIMAX_M2_CLOUD,
@@ -528,9 +489,6 @@ impl ModelId {
             | ModelId::OpenRouterGrok41Fast
             | ModelId::OpenRouterGrok4
             | ModelId::OpenRouterZaiGlm46
-            | ModelId::OpenRouterMoonshotaiKimiK20905
-            | ModelId::OpenRouterMoonshotaiKimiK2Thinking
-            | ModelId::OpenRouterMoonshotaiKimiK2Free
             | ModelId::OpenRouterQwen3Max
             | ModelId::OpenRouterQwen3235bA22b
             | ModelId::OpenRouterQwen3235bA22bFree
@@ -599,6 +557,7 @@ impl ModelId {
             | ModelId::GPT5Nano
             | ModelId::GPT51
             | ModelId::GPT51Codex
+            | ModelId::GPT51CodexMax
             | ModelId::GPT51Mini
             | ModelId::CodexMiniLatest
             | ModelId::OpenAIGptOss20b
@@ -621,21 +580,11 @@ impl ModelId {
             | ModelId::ZaiGlm45Airx
             | ModelId::ZaiGlm45Flash
             | ModelId::ZaiGlm432b0414128k => Provider::ZAI,
-            ModelId::MoonshotKimiK2TurboPreview
-            | ModelId::MoonshotKimiK2Thinking
-            | ModelId::MoonshotKimiK2ThinkingHeavy
-            | ModelId::MoonshotKimiK20905Preview
-            | ModelId::MoonshotKimiK20711Preview
-            | ModelId::MoonshotKimiLatest
-            | ModelId::MoonshotKimiLatest8k
-            | ModelId::MoonshotKimiLatest32k
-            | ModelId::MoonshotKimiLatest128k => Provider::Moonshot,
             ModelId::OllamaGptOss20b
             | ModelId::OllamaGptOss20bCloud
             | ModelId::OllamaGptOss120bCloud
             | ModelId::OllamaQwen317b
             | ModelId::OllamaDeepseekV31_671bCloud
-            | ModelId::OllamaKimiK21tCloud
             | ModelId::OllamaQwen3Coder480bCloud
             | ModelId::OllamaGlm46Cloud
             | ModelId::OllamaMinimaxM2Cloud => Provider::Ollama,
@@ -652,9 +601,6 @@ impl ModelId {
             | ModelId::OpenRouterGrok41Fast
             | ModelId::OpenRouterGrok4
             | ModelId::OpenRouterZaiGlm46
-            | ModelId::OpenRouterMoonshotaiKimiK20905
-            | ModelId::OpenRouterMoonshotaiKimiK2Thinking
-            | ModelId::OpenRouterMoonshotaiKimiK2Free
             | ModelId::OpenRouterQwen3Max
             | ModelId::OpenRouterQwen3235bA22b
             | ModelId::OpenRouterQwen3235bA22bFree
@@ -758,6 +704,7 @@ impl ModelId {
             ModelId::GPT5Codex => Some(ModelId::CodexMiniLatest),
             ModelId::GPT51 => Some(ModelId::GPT51Mini),
             ModelId::GPT51Codex => Some(ModelId::CodexMiniLatest),
+            ModelId::GPT51CodexMax => Some(ModelId::CodexMiniLatest),
             ModelId::DeepSeekReasoner => Some(ModelId::DeepSeekChat),
             ModelId::XaiGrok4 => Some(ModelId::XaiGrok4Mini),
             ModelId::XaiGrok4Code => Some(ModelId::XaiGrok4CodeLatest),
@@ -793,6 +740,7 @@ impl ModelId {
             ModelId::GPT5Nano => "GPT-5 Nano",
             ModelId::GPT51 => "GPT-5.1",
             ModelId::GPT51Codex => "GPT-5.1 Codex",
+            ModelId::GPT51CodexMax => "GPT-5.1 Codex Max",
             ModelId::GPT51Mini => "GPT-5.1 Mini",
             ModelId::CodexMiniLatest => "Codex Mini Latest",
             // Anthropic models
@@ -819,15 +767,6 @@ impl ModelId {
             ModelId::ZaiGlm45Flash => "GLM 4.5 Flash",
             ModelId::ZaiGlm432b0414128k => "GLM 4 32B 0414 128K",
             // Moonshot models
-            ModelId::MoonshotKimiK2TurboPreview => "Kimi K2 Turbo Preview",
-            ModelId::MoonshotKimiK2Thinking => "Kimi K2 Thinking",
-            ModelId::MoonshotKimiK2ThinkingHeavy => "Kimi K2 Thinking (Heavy)",
-            ModelId::MoonshotKimiK20905Preview => "Kimi K2 0905 Preview",
-            ModelId::MoonshotKimiK20711Preview => "Kimi K2 0711 Preview",
-            ModelId::MoonshotKimiLatest => "Kimi Latest (auto-tier)",
-            ModelId::MoonshotKimiLatest8k => "Kimi Latest 8K",
-            ModelId::MoonshotKimiLatest32k => "Kimi Latest 32K",
-            ModelId::MoonshotKimiLatest128k => "Kimi Latest 128K",
             // Ollama models
             ModelId::OllamaGptOss20b => "GPT-OSS 20B (local)",
             ModelId::OllamaGptOss20bCloud => "GPT-OSS 20B (cloud)",
@@ -835,7 +774,6 @@ impl ModelId {
             ModelId::OllamaQwen317b => "Qwen3 1.7B (local)",
             ModelId::OllamaDeepseekV31_671bCloud => "DeepSeek V3.1 671B (cloud)",
 
-            ModelId::OllamaKimiK21tCloud => "Kimi K2 1T (cloud)",
             ModelId::OllamaQwen3Coder480bCloud => "Qwen3 Coder 480B (cloud)",
             ModelId::OllamaGlm46Cloud => "GLM 4.6 (cloud)",
             ModelId::OllamaMinimaxM2Cloud => "MiniMax-M2 (cloud)",
@@ -882,6 +820,9 @@ impl ModelId {
             }
             ModelId::GPT51Codex => {
                 "Code-focused GPT-5.1 variant optimized for tool calling and structured outputs"
+            }
+            ModelId::GPT51CodexMax => {
+                "Maximum context code-focused GPT-5.1 variant optimized for large codebases"
             }
             ModelId::GPT51Mini => "Enhanced efficient OpenAI model with improved capabilities",
             ModelId::GPT5Mini => "Latest efficient OpenAI model, great for most tasks",
@@ -933,33 +874,6 @@ impl ModelId {
                 "Legacy GLM 4 32B deployment offering extended 128K context window"
             }
             // Moonshot models
-            ModelId::MoonshotKimiK2TurboPreview => {
-                "Recommended high-speed Kimi K2 turbo variant with 256K context and 60+ tok/s output"
-            }
-            ModelId::MoonshotKimiK2Thinking => {
-                "Moonshot reasoning-tier Kimi K2 release optimized for deliberate, multi-step agentic reasoning"
-            }
-            ModelId::MoonshotKimiK2ThinkingHeavy => {
-                "Moonshot enhanced Kimi K2 reasoning with heavy mode (8x parallel trajectories + reflective aggregation)"
-            }
-            ModelId::MoonshotKimiK20905Preview => {
-                "Latest Kimi K2 0905 flagship with enhanced agentic coding, 256K context, and richer tool support"
-            }
-            ModelId::MoonshotKimiK20711Preview => {
-                "Kimi K2 0711 preview tuned for balanced cost and capability with 131K context"
-            }
-            ModelId::MoonshotKimiLatest => {
-                "Auto-tier alias that selects the right Kimi Latest vision tier (8K/32K/128K) with context caching"
-            }
-            ModelId::MoonshotKimiLatest8k => {
-                "Kimi Latest 8K vision tier for short tasks with automatic context caching"
-            }
-            ModelId::MoonshotKimiLatest32k => {
-                "Kimi Latest 32K vision tier blending longer context with latest assistant features"
-            }
-            ModelId::MoonshotKimiLatest128k => {
-                "Kimi Latest 128K flagship vision tier delivering maximum context and newest capabilities"
-            }
             ModelId::OllamaGptOss20b => {
                 "Local GPT-OSS 20B deployment served via Ollama with no external API dependency"
             }
@@ -976,9 +890,6 @@ impl ModelId {
                 "DeepSeek V3.1 671B cloud deployment via Ollama with tool use and long-form reasoning"
             }
 
-            ModelId::OllamaKimiK21tCloud => {
-                "Cloud-hosted Kimi K2 1T model accessed through Ollama Cloud for high-capacity reasoning tasks"
-            }
             ModelId::OllamaMinimaxM2Cloud => {
                 "Cloud-hosted MiniMax-M2 accessed through Ollama Cloud with reasoning and tool use"
             }
@@ -1016,9 +927,6 @@ impl ModelId {
             | ModelId::OpenRouterGrok41Fast
             | ModelId::OpenRouterGrok4
             | ModelId::OpenRouterZaiGlm46
-            | ModelId::OpenRouterMoonshotaiKimiK20905
-            | ModelId::OpenRouterMoonshotaiKimiK2Thinking
-            | ModelId::OpenRouterMoonshotaiKimiK2Free
             | ModelId::OpenRouterQwen3Max
             | ModelId::OpenRouterQwen3235bA22b
             | ModelId::OpenRouterQwen3235bA22bFree
@@ -1091,6 +999,7 @@ impl ModelId {
             ModelId::GPT5Nano,
             ModelId::GPT51,
             ModelId::GPT51Codex,
+            ModelId::GPT51CodexMax,
             ModelId::GPT51Mini,
             ModelId::CodexMiniLatest,
             // Anthropic models
@@ -1117,22 +1026,13 @@ impl ModelId {
             ModelId::ZaiGlm45Flash,
             ModelId::ZaiGlm432b0414128k,
             // Moonshot models
-            ModelId::MoonshotKimiK2TurboPreview,
-            ModelId::MoonshotKimiK2Thinking,
-            ModelId::MoonshotKimiK2ThinkingHeavy,
-            ModelId::MoonshotKimiK20905Preview,
-            ModelId::MoonshotKimiK20711Preview,
-            ModelId::MoonshotKimiLatest,
-            ModelId::MoonshotKimiLatest8k,
-            ModelId::MoonshotKimiLatest32k,
-            ModelId::MoonshotKimiLatest128k,
+            
             // Ollama models
             ModelId::OllamaGptOss20b,
             ModelId::OllamaGptOss20bCloud,
             ModelId::OllamaGptOss120bCloud,
             ModelId::OllamaQwen317b,
             ModelId::OllamaDeepseekV31_671bCloud,
-            ModelId::OllamaKimiK21tCloud,
             ModelId::OllamaQwen3Coder480bCloud,
             ModelId::OllamaGlm46Cloud,
             ModelId::OllamaMinimaxM2Cloud,
@@ -1170,7 +1070,7 @@ impl ModelId {
             ModelId::ClaudeOpus41,
             ModelId::ClaudeSonnet45,
             ModelId::DeepSeekReasoner,
-            ModelId::MoonshotKimiK20905Preview,
+            
             ModelId::XaiGrok4,
             ModelId::ZaiGlm46,
             ModelId::OpenRouterGrokCodeFast1,
@@ -1201,7 +1101,7 @@ impl ModelId {
             Provider::Anthropic => ModelId::ClaudeOpus45,
             Provider::Minimax => ModelId::MinimaxM2,
             Provider::DeepSeek => ModelId::DeepSeekReasoner,
-            Provider::Moonshot => ModelId::MoonshotKimiK20905Preview,
+            Provider::Moonshot => ModelId::OpenRouterGrokCodeFast1, // Fallback: no Moonshot models available
             Provider::XAI => ModelId::XaiGrok4,
             Provider::OpenRouter => ModelId::OpenRouterGrokCodeFast1,
             Provider::Ollama => ModelId::OllamaGptOss20b,
@@ -1218,7 +1118,7 @@ impl ModelId {
             Provider::Anthropic => ModelId::ClaudeSonnet45,
             Provider::Minimax => ModelId::MinimaxM2,
             Provider::DeepSeek => ModelId::DeepSeekChat,
-            Provider::Moonshot => ModelId::MoonshotKimiK2TurboPreview,
+            Provider::Moonshot => ModelId::OpenRouterGrokCodeFast1, // Fallback: no Moonshot models available
             Provider::XAI => ModelId::XaiGrok4Code,
             Provider::OpenRouter => ModelId::OpenRouterGrokCodeFast1,
             Provider::Ollama => ModelId::OllamaQwen317b,
@@ -1235,16 +1135,16 @@ impl ModelId {
             Provider::Anthropic => ModelId::ClaudeOpus41,
             Provider::Minimax => ModelId::MinimaxM2,
             Provider::DeepSeek => ModelId::DeepSeekReasoner,
-            Provider::Moonshot => ModelId::MoonshotKimiK2TurboPreview,
+            Provider::Moonshot => ModelId::OpenRouterGrokCodeFast1, // Fallback: no Moonshot models available
             Provider::XAI => ModelId::XaiGrok4,
             Provider::OpenRouter => ModelId::OpenRouterGrokCodeFast1,
             Provider::Ollama => ModelId::OllamaGptOss20b,
             Provider::LmStudio => ModelId::LmStudioMetaLlama318BInstruct,
             Provider::ZAI => ModelId::ZaiGlm46,
-        }
-    }
+            }
+            }
 
-    /// Check if this is a "flash" variant (optimized for speed)
+            /// Check if this is a "flash" variant (optimized for speed)
     pub fn is_flash_variant(&self) -> bool {
         matches!(
             self,
@@ -1252,8 +1152,7 @@ impl ModelId {
                 | ModelId::Gemini25Flash
                 | ModelId::Gemini25FlashLite
                 | ModelId::ZaiGlm45Flash
-                | ModelId::MoonshotKimiK2TurboPreview
-                | ModelId::MoonshotKimiLatest8k
+
         )
     }
 
@@ -1268,9 +1167,6 @@ impl ModelId {
                 | ModelId::DeepSeekReasoner
                 | ModelId::XaiGrok4
                 | ModelId::ZaiGlm46
-                | ModelId::MoonshotKimiK2Thinking
-                | ModelId::MoonshotKimiK20905Preview
-                | ModelId::MoonshotKimiLatest128k
         )
     }
 
@@ -1292,9 +1188,8 @@ impl ModelId {
                 | ModelId::ZaiGlm45Air
                 | ModelId::ZaiGlm45Airx
                 | ModelId::ZaiGlm45Flash
-                | ModelId::MoonshotKimiK2TurboPreview
-                | ModelId::MoonshotKimiLatest8k
-        )
+
+                )
     }
 
     /// Check if this is a top-tier model
@@ -1314,20 +1209,11 @@ impl ModelId {
                 | ModelId::XaiGrok4
                 | ModelId::XaiGrok4CodeLatest
                 | ModelId::ZaiGlm46
-                | ModelId::MoonshotKimiK2Thinking
-                | ModelId::MoonshotKimiK20905Preview
-                | ModelId::MoonshotKimiLatest128k
         )
     }
 
     /// Determine whether the model is a reasoning-capable variant
     pub fn is_reasoning_variant(&self) -> bool {
-        if matches!(
-            self,
-            ModelId::MoonshotKimiK2Thinking | ModelId::MoonshotKimiK2ThinkingHeavy
-        ) {
-            return true;
-        }
         if let Some(meta) = self.openrouter_metadata() {
             return meta.reasoning;
         }
@@ -1361,6 +1247,7 @@ impl ModelId {
             | ModelId::GPT5Nano
             | ModelId::GPT51
             | ModelId::GPT51Codex
+            | ModelId::GPT51CodexMax
             | ModelId::GPT51Mini
             | ModelId::CodexMiniLatest
             | ModelId::OpenAIGptOss20b
@@ -1388,22 +1275,12 @@ impl ModelId {
             | ModelId::ZaiGlm45Flash => "4.5",
             ModelId::ZaiGlm432b0414128k => "4-32B",
             // Moonshot generations
-            ModelId::MoonshotKimiK2TurboPreview
-            | ModelId::MoonshotKimiK2ThinkingHeavy
-            | ModelId::MoonshotKimiK20905Preview
-            | ModelId::MoonshotKimiK20711Preview => "k2",
-            ModelId::MoonshotKimiK2Thinking => "k2-thinking",
-            ModelId::MoonshotKimiLatest
-            | ModelId::MoonshotKimiLatest8k
-            | ModelId::MoonshotKimiLatest32k
-            | ModelId::MoonshotKimiLatest128k => "latest",
             ModelId::OllamaGptOss20b => "oss",
             ModelId::OllamaGptOss20bCloud => "oss-cloud",
             ModelId::OllamaGptOss120bCloud => "oss-cloud",
             ModelId::OllamaQwen317b => "oss",
             ModelId::OllamaDeepseekV31_671bCloud => "deepseek-v3.1",
 
-            ModelId::OllamaKimiK21tCloud => "kimi-k2",
             ModelId::OllamaQwen3Coder480bCloud => "qwen3",
             ModelId::OllamaGlm46Cloud => "glm-4.6",
             ModelId::OllamaMinimaxM2Cloud => "minimax-m2",
@@ -1421,9 +1298,6 @@ impl ModelId {
             | ModelId::OpenRouterGrok41Fast
             | ModelId::OpenRouterGrok4
             | ModelId::OpenRouterZaiGlm46
-            | ModelId::OpenRouterMoonshotaiKimiK20905
-            | ModelId::OpenRouterMoonshotaiKimiK2Thinking
-            | ModelId::OpenRouterMoonshotaiKimiK2Free
             | ModelId::OpenRouterQwen3Max
             | ModelId::OpenRouterQwen3235bA22b
             | ModelId::OpenRouterQwen3235bA22bFree
@@ -1475,7 +1349,10 @@ impl ModelId {
     pub fn is_gpt51_variant(&self) -> bool {
         matches!(
             self,
-            ModelId::GPT51 | ModelId::GPT51Codex | ModelId::GPT51Mini
+            ModelId::GPT51
+                | ModelId::GPT51Codex
+                | ModelId::GPT51CodexMax
+                | ModelId::GPT51Mini
         )
     }
 
@@ -1512,6 +1389,10 @@ impl FromStr for ModelId {
             s if s == models::GPT_5_CODEX => Ok(ModelId::GPT5Codex),
             s if s == models::GPT_5_MINI => Ok(ModelId::GPT5Mini),
             s if s == models::GPT_5_NANO => Ok(ModelId::GPT5Nano),
+            s if s == models::openai::GPT_5_1 => Ok(ModelId::GPT51),
+            s if s == models::openai::GPT_5_1_CODEX => Ok(ModelId::GPT51Codex),
+            s if s == models::openai::GPT_5_1_CODEX_MAX => Ok(ModelId::GPT51CodexMax),
+            s if s == models::openai::GPT_5_1_MINI => Ok(ModelId::GPT51Mini),
             s if s == models::CODEX_MINI_LATEST => Ok(ModelId::CodexMiniLatest),
             s if s == models::openai::GPT_OSS_20B => Ok(ModelId::OpenAIGptOss20b),
             s if s == models::openai::GPT_OSS_120B => Ok(ModelId::OpenAIGptOss120b),
@@ -1541,23 +1422,6 @@ impl FromStr for ModelId {
             s if s == models::zai::GLM_4_5_FLASH => Ok(ModelId::ZaiGlm45Flash),
             s if s == models::zai::GLM_4_32B_0414_128K => Ok(ModelId::ZaiGlm432b0414128k),
             // Moonshot models
-            s if s == models::MOONSHOT_KIMI_K2_TURBO_PREVIEW => {
-                Ok(ModelId::MoonshotKimiK2TurboPreview)
-            }
-            s if s == models::MOONSHOT_KIMI_K2_THINKING => Ok(ModelId::MoonshotKimiK2Thinking),
-            s if s == models::MOONSHOT_KIMI_K2_THINKING_TURBO => {
-                Ok(ModelId::MoonshotKimiK2ThinkingHeavy)
-            }
-            s if s == models::MOONSHOT_KIMI_K2_0905_PREVIEW => {
-                Ok(ModelId::MoonshotKimiK20905Preview)
-            }
-            s if s == models::MOONSHOT_KIMI_K2_0711_PREVIEW => {
-                Ok(ModelId::MoonshotKimiK20711Preview)
-            }
-            s if s == models::MOONSHOT_KIMI_LATEST => Ok(ModelId::MoonshotKimiLatest),
-            s if s == models::MOONSHOT_KIMI_LATEST_8K => Ok(ModelId::MoonshotKimiLatest8k),
-            s if s == models::MOONSHOT_KIMI_LATEST_32K => Ok(ModelId::MoonshotKimiLatest32k),
-            s if s == models::MOONSHOT_KIMI_LATEST_128K => Ok(ModelId::MoonshotKimiLatest128k),
             s if s == models::ollama::GPT_OSS_20B => Ok(ModelId::OllamaGptOss20b),
             s if s == models::ollama::GPT_OSS_20B_CLOUD => Ok(ModelId::OllamaGptOss20bCloud),
             s if s == models::ollama::GPT_OSS_120B_CLOUD => Ok(ModelId::OllamaGptOss120bCloud),
@@ -1566,7 +1430,6 @@ impl FromStr for ModelId {
                 Ok(ModelId::OllamaDeepseekV31_671bCloud)
             }
 
-            s if s == models::ollama::KIMI_K2_1T_CLOUD => Ok(ModelId::OllamaKimiK21tCloud),
             s if s == models::ollama::QWEN3_CODER_480B_CLOUD => {
                 Ok(ModelId::OllamaQwen3Coder480bCloud)
             }
@@ -1828,43 +1691,6 @@ mod tests {
             models::MOONSHOT_KIMI_K2_TURBO_PREVIEW
                 .parse::<ModelId>()
                 .unwrap(),
-            ModelId::MoonshotKimiK2TurboPreview
-        );
-        assert_eq!(
-            models::MOONSHOT_KIMI_K2_THINKING
-                .parse::<ModelId>()
-                .unwrap(),
-            ModelId::MoonshotKimiK2Thinking
-        );
-        assert_eq!(
-            models::MOONSHOT_KIMI_K2_0905_PREVIEW
-                .parse::<ModelId>()
-                .unwrap(),
-            ModelId::MoonshotKimiK20905Preview
-        );
-        assert_eq!(
-            models::MOONSHOT_KIMI_K2_0711_PREVIEW
-                .parse::<ModelId>()
-                .unwrap(),
-            ModelId::MoonshotKimiK20711Preview
-        );
-        assert_eq!(
-            models::MOONSHOT_KIMI_LATEST.parse::<ModelId>().unwrap(),
-            ModelId::MoonshotKimiLatest
-        );
-        assert_eq!(
-            models::MOONSHOT_KIMI_LATEST_8K.parse::<ModelId>().unwrap(),
-            ModelId::MoonshotKimiLatest8k
-        );
-        assert_eq!(
-            models::MOONSHOT_KIMI_LATEST_32K.parse::<ModelId>().unwrap(),
-            ModelId::MoonshotKimiLatest32k
-        );
-        assert_eq!(
-            models::MOONSHOT_KIMI_LATEST_128K
-                .parse::<ModelId>()
-                .unwrap(),
-            ModelId::MoonshotKimiLatest128k
         );
         for entry in openrouter_generated::ENTRIES {
             assert_eq!(entry.id.parse::<ModelId>().unwrap(), entry.variant);
@@ -1904,10 +1730,6 @@ mod tests {
         assert_eq!(ModelId::DeepSeekChat.provider(), Provider::DeepSeek);
         assert_eq!(ModelId::XaiGrok4.provider(), Provider::XAI);
         assert_eq!(ModelId::ZaiGlm46.provider(), Provider::ZAI);
-        assert_eq!(
-            ModelId::MoonshotKimiK20905Preview.provider(),
-            Provider::Moonshot
-        );
         assert_eq!(ModelId::OllamaGptOss20b.provider(), Provider::Ollama);
         assert_eq!(ModelId::OllamaGptOss120bCloud.provider(), Provider::Ollama);
         assert_eq!(ModelId::OllamaQwen317b.provider(), Provider::Ollama);
@@ -1981,10 +1803,6 @@ mod tests {
             ModelId::default_orchestrator_for_provider(Provider::ZAI),
             ModelId::ZaiGlm46
         );
-        assert_eq!(
-            ModelId::default_orchestrator_for_provider(Provider::Moonshot),
-            ModelId::MoonshotKimiK20905Preview
-        );
 
         assert_eq!(
             ModelId::default_subagent_for_provider(Provider::Gemini),
@@ -2024,7 +1842,6 @@ mod tests {
         );
         assert_eq!(
             ModelId::default_subagent_for_provider(Provider::Moonshot),
-            ModelId::MoonshotKimiK2TurboPreview
         );
 
         assert_eq!(
@@ -2033,7 +1850,6 @@ mod tests {
         );
         assert_eq!(
             ModelId::default_single_for_provider(Provider::Moonshot),
-            ModelId::MoonshotKimiK2TurboPreview
         );
         assert_eq!(
             ModelId::default_single_for_provider(Provider::Ollama),
@@ -2060,8 +1876,6 @@ mod tests {
         assert!(ModelId::Gemini25FlashLite.is_flash_variant());
         assert!(!ModelId::GPT5.is_flash_variant());
         assert!(ModelId::ZaiGlm45Flash.is_flash_variant());
-        assert!(ModelId::MoonshotKimiK2TurboPreview.is_flash_variant());
-        assert!(ModelId::MoonshotKimiLatest8k.is_flash_variant());
 
         // Pro variants
         assert!(ModelId::Gemini25Pro.is_pro_variant());
@@ -2069,8 +1883,6 @@ mod tests {
         assert!(ModelId::GPT5Codex.is_pro_variant());
         assert!(ModelId::DeepSeekReasoner.is_pro_variant());
         assert!(ModelId::ZaiGlm46.is_pro_variant());
-        assert!(ModelId::MoonshotKimiK20905Preview.is_pro_variant());
-        assert!(ModelId::MoonshotKimiLatest128k.is_pro_variant());
         assert!(!ModelId::Gemini25FlashPreview.is_pro_variant());
 
         // Efficient variants
@@ -2084,8 +1896,6 @@ mod tests {
         assert!(ModelId::ZaiGlm45Air.is_efficient_variant());
         assert!(ModelId::ZaiGlm45Airx.is_efficient_variant());
         assert!(ModelId::ZaiGlm45Flash.is_efficient_variant());
-        assert!(ModelId::MoonshotKimiK2TurboPreview.is_efficient_variant());
-        assert!(ModelId::MoonshotKimiLatest8k.is_efficient_variant());
         assert!(!ModelId::GPT5.is_efficient_variant());
 
         for entry in openrouter_generated::ENTRIES {
@@ -2102,8 +1912,6 @@ mod tests {
         assert!(ModelId::XaiGrok4CodeLatest.is_top_tier());
         assert!(ModelId::DeepSeekReasoner.is_top_tier());
         assert!(ModelId::ZaiGlm46.is_top_tier());
-        assert!(ModelId::MoonshotKimiK20905Preview.is_top_tier());
-        assert!(ModelId::MoonshotKimiLatest128k.is_top_tier());
         assert!(!ModelId::Gemini25FlashPreview.is_top_tier());
         assert!(!ModelId::ClaudeHaiku45.is_top_tier());
 
@@ -2151,13 +1959,6 @@ mod tests {
         assert_eq!(ModelId::ZaiGlm45Airx.generation(), "4.5");
         assert_eq!(ModelId::ZaiGlm45Flash.generation(), "4.5");
         assert_eq!(ModelId::ZaiGlm432b0414128k.generation(), "4-32B");
-        assert_eq!(ModelId::MoonshotKimiK2TurboPreview.generation(), "k2");
-        assert_eq!(ModelId::MoonshotKimiK20905Preview.generation(), "k2");
-        assert_eq!(ModelId::MoonshotKimiK20711Preview.generation(), "k2");
-        assert_eq!(ModelId::MoonshotKimiLatest.generation(), "latest");
-        assert_eq!(ModelId::MoonshotKimiLatest8k.generation(), "latest");
-        assert_eq!(ModelId::MoonshotKimiLatest32k.generation(), "latest");
-        assert_eq!(ModelId::MoonshotKimiLatest128k.generation(), "latest");
         assert_eq!(ModelId::OllamaGptOss20b.generation(), "oss");
         assert_eq!(ModelId::OllamaGptOss120bCloud.generation(), "oss-cloud");
         assert_eq!(ModelId::OllamaQwen317b.generation(), "oss");
@@ -2228,15 +2029,7 @@ mod tests {
         assert!(zai_models.contains(&ModelId::ZaiGlm432b0414128k));
 
         let moonshot_models = ModelId::models_for_provider(Provider::Moonshot);
-        assert!(moonshot_models.contains(&ModelId::MoonshotKimiK2TurboPreview));
-        assert!(moonshot_models.contains(&ModelId::MoonshotKimiK2Thinking));
-        assert!(moonshot_models.contains(&ModelId::MoonshotKimiK20905Preview));
-        assert!(moonshot_models.contains(&ModelId::MoonshotKimiK20711Preview));
-        assert!(moonshot_models.contains(&ModelId::MoonshotKimiLatest));
-        assert!(moonshot_models.contains(&ModelId::MoonshotKimiLatest8k));
-        assert!(moonshot_models.contains(&ModelId::MoonshotKimiLatest32k));
-        assert!(moonshot_models.contains(&ModelId::MoonshotKimiLatest128k));
-        assert_eq!(moonshot_models.len(), 8);
+        assert_eq!(moonshot_models.len(), 0); // No Moonshot models available
 
         let ollama_models = ModelId::models_for_provider(Provider::Ollama);
         assert!(ollama_models.contains(&ModelId::OllamaGptOss20b));

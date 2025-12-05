@@ -128,6 +128,18 @@
                 },
                 "context": 400000
             },
+            "gpt-5.1-codex-max": {
+                "id": "gpt-5.1-codex-max",
+                "name": "GPT-5.1 Codex Max",
+                "description": "Faster and more token efficient variant of GPT-5.1 Codex. Matches Codex performance with ~30% fewer thinking tokens. Recommended 'medium' reasoning for interactive coding. Supports none/medium/high/xhigh reasoning effort.",
+                "reasoning": true,
+                "tool_call": true,
+                "modalities": {
+                    "input": ["text"],
+                    "output": ["text"]
+                },
+                "context": 400000
+            },
             "gpt-5.1-mini": {
                 "id": "gpt-5.1-mini",
                 "name": "GPT-5.1 Mini",
@@ -763,60 +775,6 @@
                     "top_tier": true,
                     "generation": "GLM-4.6",
                     "doc_comment": "GLM 4.6 - Z.AI GLM 4.6 long-context reasoning model"
-                }
-            },
-            "moonshotai/kimi-k2-0905": {
-                "id": "moonshotai/kimi-k2-0905",
-                "name": "MoonshotAI: Kimi K2 0905",
-                "reasoning": false,
-                "tool_call": true,
-                "modalities": {
-                    "input": ["text"],
-                    "output": ["text"]
-                },
-                "context": 262144,
-                "max_output_tokens": 262144,
-                "cost": {
-                    "input": 3.9e-7,
-                    "output": 1.9e-6
-                },
-                "vtcode": {
-                    "variant": "OpenRouterMoonshotaiKimiK20905",
-                    "constant": "MOONSHOTAI_KIMI_K2_0905",
-                    "vendor": "moonshotai",
-                    "display": "Kimi K2 0905",
-                    "description": "MoonshotAI Kimi K2 0905 MoE release optimised for coding agents",
-                    "efficient": false,
-                    "top_tier": true,
-                    "generation": "K2-0905",
-                    "doc_comment": "Kimi K2 0905 - MoonshotAI Kimi K2 0905 MoE release optimised for coding agents"
-                }
-            },
-            "moonshotai/kimi-k2:free": {
-                "id": "moonshotai/kimi-k2:free",
-                "name": "MoonshotAI: Kimi K2 (free)",
-                "reasoning": false,
-                "tool_call": false,
-                "modalities": {
-                    "input": ["text"],
-                    "output": ["text"]
-                },
-                "context": 262144,
-                "max_output_tokens": null,
-                "cost": {
-                    "input": 0.0,
-                    "output": 0.0
-                },
-                "vtcode": {
-                    "variant": "OpenRouterMoonshotaiKimiK2Free",
-                    "constant": "MOONSHOTAI_KIMI_K2_FREE",
-                    "vendor": "moonshotai",
-                    "display": "Kimi K2 (free)",
-                    "description": "Community tier for MoonshotAI Kimi K2",
-                    "efficient": false,
-                    "top_tier": false,
-                    "generation": "K2",
-                    "doc_comment": "Kimi K2 (free) - Community tier for MoonshotAI Kimi K2"
                 }
             },
             "qwen/qwen3-max": {
