@@ -90,21 +90,19 @@ impl ToolPipelineOutcome {
                 modified_files,
                 command_success,
                 has_more,
-            } => {
-                ToolPipelineOutcome {
-                    status: ToolExecutionStatus::Success {
-                        output: output.clone(),
-                        stdout: stdout.clone(),
-                        modified_files: modified_files.clone(),
-                        command_success,
-                        has_more,
-                    },
-                    stdout,
-                    modified_files,
+            } => ToolPipelineOutcome {
+                status: ToolExecutionStatus::Success {
+                    output: output.clone(),
+                    stdout: stdout.clone(),
+                    modified_files: modified_files.clone(),
                     command_success,
                     has_more,
-                }
-            }
+                },
+                stdout,
+                modified_files,
+                command_success,
+                has_more,
+            },
             other => ToolPipelineOutcome {
                 status: other,
                 stdout: None,
@@ -428,22 +426,22 @@ async fn execute_tool_with_progress(
         progress_reporter.set_progress(estimated_progress).await;
 
         let token = CancellationToken::new();
-    // Use reference to args to avoid cloning
-    let exec_future = cancellation::with_tool_cancellation(token.clone(), async move {
-        // Tool execution in progress (already set above)
-        progress_reporter.set_progress(40).await;
+        // Use reference to args to avoid cloning
+        let exec_future = cancellation::with_tool_cancellation(token.clone(), async move {
+            // Tool execution in progress (already set above)
+            progress_reporter.set_progress(40).await;
 
-        // Execute the tool with reference to avoid clone
-        let result = registry_clone.execute_tool_ref(name, args).await;
+            // Execute the tool with reference to avoid clone
+            let result = registry_clone.execute_tool_ref(name, args).await;
 
-        // Phase 4: Processing results (85-95%)
-        progress_reporter
-            .set_message(format!("Processing {} results...", name))
-            .await;
-        progress_reporter.set_progress(90).await;
+            // Phase 4: Processing results (85-95%)
+            progress_reporter
+                .set_message(format!("Processing {} results...", name))
+                .await;
+            progress_reporter.set_progress(90).await;
 
-        result
-    });
+            result
+        });
 
         if ctrl_c_state.is_cancel_requested() || ctrl_c_state.is_exit_requested() {
             token.cancel();

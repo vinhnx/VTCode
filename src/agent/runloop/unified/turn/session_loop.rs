@@ -542,13 +542,12 @@ pub(crate) async fn run_single_agent_loop_unified(
                                                 guard.clone()
                                             };
 
-                                            // Enumerate MCP tools after initial setup (with detailed tool discovery messages)
+                                            // Enumerate MCP tools after initial setup (silently)
                                             McpToolManager::enumerate_mcp_tools_after_initial_setup(
                                                 &mut tool_registry,
                                                 &tools,
                                                 mcp_tools,
                                                 &mut last_known_mcp_tools,
-                                                &mut renderer,
                                             ).await?;
                                         }
                                         Err(err) => {
@@ -622,12 +621,11 @@ pub(crate) async fn run_single_agent_loop_unified(
                                                 guard.clone()
                                             };
 
-                                            // Enumerate MCP tools after refresh (with detailed tool discovery messages)
+                                            // Enumerate MCP tools after refresh (silently)
                                             McpToolManager::enumerate_mcp_tools_after_refresh(
                                                 &mut tool_registry,
                                                 &tools,
                                                 &mut last_known_mcp_tools,
-                                                &mut renderer,
                                             )
                                             .await?;
                                         }

@@ -1264,13 +1264,12 @@ pub(crate) async fn run_single_agent_loop_unified(
                                                 guard.clone()
                                             };
 
-                                            // Enumerate MCP tools after initial setup (with detailed tool discovery messages)
+                                            // Enumerate MCP tools after initial setup (silently)
                                             McpToolManager::enumerate_mcp_tools_after_initial_setup(
                                                 &mut tool_registry,
                                                 &tools,
                                                 mcp_tools,
                                                 &mut last_known_mcp_tools,
-                                                &mut renderer,
                                             ).await?;
                                         }
                                         Err(err) => {
@@ -1344,12 +1343,11 @@ pub(crate) async fn run_single_agent_loop_unified(
                                                 guard.clone()
                                             };
 
-                                            // Enumerate MCP tools after refresh (with detailed tool discovery messages)
+                                            // Enumerate MCP tools after refresh (silently)
                                             McpToolManager::enumerate_mcp_tools_after_refresh(
                                                 &mut tool_registry,
                                                 &tools,
                                                 &mut last_known_mcp_tools,
-                                                &mut renderer,
                                             )
                                             .await?;
                                         }
@@ -1965,10 +1963,20 @@ pub(crate) async fn run_single_agent_loop_unified(
                             "Interrupted by user",
                         )))
                     } else {
+                        // Get LLM request timeout from config (default: 120 seconds)
+                        let llm_timeout_secs = vt_cfg
+                            .as_ref()
+                            .map(|cfg| cfg.timeouts.streaming_ceiling_seconds)
+                            .unwrap_or(120);
+                        let llm_timeout = tokio::time::Duration::from_secs(llm_timeout_secs);
+
                         let generate_future = provider_client.generate(request);
                         tokio::pin!(generate_future);
                         let cancel_notifier = ctrl_c_notify.notified();
                         tokio::pin!(cancel_notifier);
+                        let timeout_future = tokio::time::sleep(llm_timeout);
+                        tokio::pin!(timeout_future);
+
                         let outcome = tokio::select! {
                             res = &mut generate_future => {
                                 thinking_spinner.finish();
@@ -1979,6 +1987,13 @@ pub(crate) async fn run_single_agent_loop_unified(
                                 Err(uni::LLMError::Provider(error_display::format_llm_error(
                                     &provider_name,
                                     "Interrupted by user",
+                                )))
+                            }
+                            _ = &mut timeout_future => {
+                                thinking_spinner.finish();
+                                Err(uni::LLMError::Provider(error_display::format_llm_error(
+                                    &provider_name,
+                                    &format!("Request timed out after {} seconds. The LLM is taking too long to respond. Try a simpler prompt or check your network connection.", llm_timeout_secs),
                                 )))
                             }
                         };
@@ -2009,6 +2024,9 @@ pub(crate) async fn run_single_agent_loop_unified(
                         payload
                     }
                     Err(error) => {
+                        // Finish spinner before rendering error to remove it from transcript
+                        thinking_spinner.finish();
+
                         if ctrl_c_state.is_cancel_requested() {
                             renderer.line_if_not_empty(MessageStyle::Output)?;
                             renderer.line(MessageStyle::Info, "Operation cancelled by user.")?;
@@ -2126,10 +2144,43 @@ pub(crate) async fn run_single_agent_loop_unified(
                         let args_val = call
                             .parsed_arguments()
                             .unwrap_or_else(|_| serde_json::json!({}));
+
+                        // Normalize args for loop detection: strip pagination params and normalize paths
+                        let normalized_args = if let Some(obj) = args_val.as_object() {
+                            let mut normalized = obj.clone();
+                            normalized.remove("page");
+                            normalized.remove("per_page");
+
+                            // For list_files: normalize root path variations to catch loops
+                            if name == "list_files" {
+                                if let Some(path) = normalized.get("path").and_then(|v| v.as_str())
+                                {
+                                    let path_trimmed =
+                                        path.trim_start_matches("./").trim_start_matches('/');
+                                    if path_trimmed.is_empty() || path_trimmed == "." {
+                                        // Normalize all root variations to the same key
+                                        normalized.insert(
+                                            "path".to_string(),
+                                            serde_json::json!("__ROOT__"),
+                                        );
+                                    }
+                                } else {
+                                    // No path = root
+                                    normalized
+                                        .insert("path".to_string(), serde_json::json!("__ROOT__"));
+                                }
+                            }
+
+                            serde_json::Value::Object(normalized)
+                        } else {
+                            args_val.clone()
+                        };
+
                         let signature_key = format!(
                             "{}::{}",
                             name,
-                            serde_json::to_string(&args_val).unwrap_or_else(|_| "{}".to_string())
+                            serde_json::to_string(&normalized_args)
+                                .unwrap_or_else(|_| "{}".to_string())
                         );
 
                         // Check for loop hang detection
@@ -2155,12 +2206,12 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         )?;
                                         // Add feedback to conversation history so LLM doesn't repeat the same tool
                                         let loop_feedback = format!(
-                                            "I've detected that I was calling tool '{}' repeatedly with the same arguments. This indicates I'm stuck in a loop. I will not call this tool again with the same arguments. Please help me break out of this loop by providing guidance on a different approach or adjustment to my request.",
-                                            name
+                                            "LOOP DETECTED: Tool '{}' called {} times with same arguments. STOP calling this tool. Change your approach: use a different tool, different arguments, or ask user for clarification.",
+                                            name, repeat_count
                                         );
                                         working_history
-                                            .push(uni::Message::assistant(loop_feedback.clone()));
-                                        renderer.line(MessageStyle::Info, &loop_feedback)?;
+                                            .push(uni::Message::system(loop_feedback.clone()));
+                                        renderer.line(MessageStyle::Error, &loop_feedback)?;
                                         // Reset only this signature for fresh monitoring
                                         loop_detector.reset_signature(&signature_key);
                                         continue; // Skip processing this tool call
@@ -2180,14 +2231,13 @@ pub(crate) async fn run_single_agent_loop_unified(
                                     }
                                 }
                             } else {
-                                // Non-interactive mode: break out of the loop and notify user
-                                renderer.line(
-                                    MessageStyle::Error,
-                                    &format!(
-                                        "Detected infinite loop: tool '{}' called {} times with identical arguments. Breaking out of tool loop.",
-                                        name, repeat_count
-                                    ),
-                                )?;
+                                // Non-interactive mode: add system message and break
+                                let loop_msg = format!(
+                                    "LOOP DETECTED: Tool '{}' called {} times with identical arguments. Session stopped to prevent infinite loop. Provide more specific instructions.",
+                                    name, repeat_count
+                                );
+                                working_history.push(uni::Message::system(loop_msg.clone()));
+                                renderer.line(MessageStyle::Error, &loop_msg)?;
                                 ensure_turn_bottom_gap(&mut renderer, &mut bottom_gap_applied)?;
                                 break 'outer TurnLoopResult::Completed;
                             }
@@ -2197,20 +2247,13 @@ pub(crate) async fn run_single_agent_loop_unified(
                             .entry(signature_key.clone())
                             .or_insert(0);
                         if *failed_attempts >= tool_repeat_limit {
-                            renderer.line(
-                                MessageStyle::Error,
-                                &format!(
-                                    "Aborting: tool '{}' failed {} times with identical arguments.",
-                                    name, *failed_attempts
-                                ),
-                            )?;
+                            let abort_msg = format!(
+                                "REPEATED FAILURE: Tool '{}' failed {} times with same arguments. Stopping to prevent loop. Read the error messages above and try a different approach.",
+                                name, *failed_attempts
+                            );
+                            renderer.line(MessageStyle::Error, &abort_msg)?;
                             ensure_turn_bottom_gap(&mut renderer, &mut bottom_gap_applied)?;
-                            working_history.push(uni::Message::assistant(
-                            format!(
-                                "I stopped because tool '{}' kept failing with the same arguments. Please adjust the request or ask me to continue a different way.",
-                                name
-                            ),
-                        ));
+                            working_history.push(uni::Message::system(abort_msg));
                             break 'outer TurnLoopResult::Completed;
                         }
 

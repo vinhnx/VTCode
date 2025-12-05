@@ -1,5 +1,15 @@
 //! Smart result caching with deduplication
 //!
+//! **UPDATE (Dec 2025)**: Fuzzy matching has been migrated to `result_cache.rs`.
+//! For new code, use `ToolResultCache::with_fuzzy_matching()` instead.
+//!
+//! This module is maintained for backward compatibility but new features
+//! should use the unified caching layer in `result_cache.rs`.
+//!
+//! **Migration Path**:
+//! - `SmartResultCache` → `ToolResultCache::with_fuzzy_matching(capacity, 0.8)`
+//! - `ResultSignature::similarity()` → `FuzzyMatcher::similarity()`
+//!
 //! Caches tool results with fuzzy matching to prevent redundant tool calls.
 
 use crate::utils::current_timestamp;

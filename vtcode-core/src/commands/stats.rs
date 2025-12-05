@@ -129,7 +129,7 @@ fn display_json_stats(config: &AgentConfig, metrics: &PerformanceMetrics) {
         }
     });
 
-    println!("{}", serde_json::to_string_pretty(&stats).unwrap());
+    println!("{}", serde_json::to_string_pretty(&stats).expect("failed to format stats"));
 }
 
 fn display_html_stats(config: &AgentConfig, metrics: &PerformanceMetrics) {

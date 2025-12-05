@@ -149,10 +149,19 @@ impl AsyncMiddleware for AsyncLoggingMiddleware {
     }
 }
 
-/// Async caching middleware with LRU
+/// Async caching middleware with UnifiedCache (migrated from LruCache)
 pub struct AsyncCachingMiddleware {
-    cache: Arc<crate::tools::improvements_cache::LruCache<String, String>>,
+    cache: Arc<parking_lot::RwLock<crate::cache::UnifiedCache<AsyncCacheKey, String>>>,
     obs_context: Arc<ObservabilityContext>,
+}
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+struct AsyncCacheKey(String);
+
+impl crate::cache::CacheKey for AsyncCacheKey {
+    fn to_cache_key(&self) -> String {
+        self.0.clone()
+    }
 }
 
 impl AsyncCachingMiddleware {
@@ -161,14 +170,14 @@ impl AsyncCachingMiddleware {
         ttl_seconds: u64,
         obs_context: Arc<ObservabilityContext>,
     ) -> Self {
-        let cache = crate::tools::improvements_cache::LruCache::new(
+        let cache = crate::cache::UnifiedCache::new(
             max_entries,
             std::time::Duration::from_secs(ttl_seconds),
-        )
-        .with_observability(obs_context.clone());
+            crate::cache::EvictionPolicy::Lru,
+        );
 
         Self {
-            cache: Arc::new(cache),
+            cache: Arc::new(parking_lot::RwLock::new(cache)),
             obs_context,
         }
     }
@@ -202,10 +211,10 @@ impl AsyncMiddleware for AsyncCachingMiddleware {
                 + 'a,
         >,
     ) -> ToolResult {
-        let key = Self::cache_key(&request.tool_name, &request.arguments);
+        let key = AsyncCacheKey(Self::cache_key(&request.tool_name, &request.arguments));
 
-        // Check cache
-        if let Some(cached) = self.cache.get_owned(key.as_str()) {
+        // Check cache (migrated to UnifiedCache)
+        if let Some(cached) = self.cache.write().get_owned(&key) {
             self.obs_context.event(
                 crate::tools::EventType::CacheHit,
                 "cache",
@@ -225,10 +234,11 @@ impl AsyncMiddleware for AsyncCachingMiddleware {
         // Execute
         let result = next(request).await;
 
-        // Cache successful result
+        // Cache successful result (migrated to UnifiedCache)
         if result.success {
             if let Some(ref output) = result.output {
-                let _ = self.cache.put_arc(key, Arc::new(output.clone()));
+                let size = output.len() as u64;
+                self.cache.write().insert(key, output.clone(), size);
             }
         }
 

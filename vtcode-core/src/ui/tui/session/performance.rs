@@ -1,48 +1,55 @@
 //! Performance optimization utilities for the TUI session
 //!
 //! Contains optimized algorithms and data structures for performance-critical operations.
+//! Migrated to use UnifiedCache for consistency.
 
+use crate::cache::{CacheKey, EvictionPolicy, UnifiedCache, DEFAULT_CACHE_TTL};
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-// Reuse the centralized LRU cache implementation from tools to avoid duplicate code.
-use crate::tools::improvements_cache::LruCache as CentralLruCache;
+// Thread-safe LRU cache using UnifiedCache (migrated from improvements_cache)
 
-// Thread-safe version using RwLock if needed for concurrent access
-
-pub struct ThreadSafeLruCache<K, V> {
-    inner: Arc<CentralLruCache<K, V>>,
+pub struct ThreadSafeLruCache<K, V>
+where
+    K: CacheKey,
+    V: Clone + Send + Sync + 'static,
+{
+    inner: Arc<parking_lot::RwLock<UnifiedCache<K, V>>>,
 }
 
 impl<K, V> ThreadSafeLruCache<K, V>
 where
-    K: Eq + Hash + Clone,
-    V: Clone,
+    K: CacheKey,
+    V: Clone + Send + Sync + 'static,
 {
     pub fn new(capacity: usize) -> Self {
-        let cache = CentralLruCache::new(capacity, Duration::from_secs(300));
-        Self { inner: Arc::new(cache) }
+        let cache = UnifiedCache::new(capacity, DEFAULT_CACHE_TTL, EvictionPolicy::Lru);
+        Self {
+            inner: Arc::new(parking_lot::RwLock::new(cache)),
+        }
     }
 
-    /// Returns a cloned owned V value for compatibility.
+    /// Returns a cloned owned V value for compatibility (migrated to UnifiedCache)
     pub fn get(&self, key: &K) -> Option<V> {
-        self.inner.get_owned(key)
+        self.inner.write().get_owned(key)
     }
 
     pub fn insert(&self, key: K, value: V) {
-        let _ = self.inner.put(key, value);
+        let size = std::mem::size_of_val(&value) as u64;
+        self.inner.write().insert(key, value, size);
     }
 
     /// Efficient insert with Arc to avoid cloning large values
     pub fn insert_arc(&self, key: K, value: Arc<V>) {
-        let _ = self.inner.put_arc(key, value);
+        let size = std::mem::size_of_val(&*value) as u64;
+        self.inner.write().insert(key, (*value).clone(), size);
     }
 
-    /// Gets the shared Arc<V> if present.
+    /// Gets the shared Arc<V> if present (migrated to UnifiedCache)
     pub fn get_arc(&self, key: &K) -> Option<Arc<V>> {
-        self.inner.get_arc(key)
+        self.inner.write().get(key)
     }
 }
 

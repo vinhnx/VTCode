@@ -34,7 +34,7 @@ const fn default_loop_detection_enabled() -> bool {
 
 #[inline]
 const fn default_loop_detection_threshold() -> usize {
-    3
+    2
 }
 
 #[inline]

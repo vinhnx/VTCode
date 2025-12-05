@@ -637,7 +637,70 @@ impl ToolRegistry {
 
     pub(super) fn list_files_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
         let tool = self.inventory.file_ops_tool().clone();
-        Box::pin(async move { tool.execute(args).await })
+        let workspace_root = self.inventory.workspace_root().to_path_buf();
+        Box::pin(async move {
+            // Helper to discover top-level directories
+            fn discover_directories(workspace_root: &std::path::Path) -> Vec<String> {
+                let mut dirs = Vec::new();
+                if let Ok(entries) = std::fs::read_dir(workspace_root) {
+                    for entry in entries.flatten() {
+                        if entry.path().is_dir() {
+                            if let Some(name) = entry.file_name().to_str() {
+                                // Skip hidden directories and common non-code dirs
+                                if !name.starts_with('.')
+                                    && name != "target"
+                                    && name != "node_modules"
+                                    && name != "dist"
+                                    && name != "__pycache__"
+                                    && name != "build"
+                                {
+                                    dirs.push(name.to_string());
+                                }
+                            }
+                        }
+                    }
+                }
+                dirs.sort();
+                dirs.truncate(8);
+                dirs
+            }
+
+            // Check if path is root or missing
+            let is_root_path = if let Some(path) = args.get("path").and_then(|p| p.as_str()) {
+                let normalized = path.trim_start_matches("./").trim_start_matches('/');
+                normalized.is_empty() || normalized == "." || normalized == "/"
+            } else {
+                true // No path = root
+            };
+
+            if is_root_path {
+                let dirs = discover_directories(&workspace_root);
+
+                // Format error with clear next action for the LLM
+                let next_action = if dirs.is_empty() {
+                    "Call: run_pty_cmd with {\"command\": \"ls -la\"}".to_string()
+                } else {
+                    format!(
+                        "Call: list_files with {{\"path\": \"{}\"}}",
+                        dirs.first().unwrap_or(&"src".to_string())
+                    )
+                };
+
+                let available = if dirs.is_empty() {
+                    String::new()
+                } else {
+                    format!(" Available: {}", dirs.join(", "))
+                };
+
+                return Err(anyhow!(
+                    "BLOCKED: list_files cannot use root path.{} NEXT ACTION: {}",
+                    available,
+                    next_action
+                ));
+            }
+
+            tool.execute(args).await
+        })
     }
 
     pub(super) fn run_pty_cmd_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {

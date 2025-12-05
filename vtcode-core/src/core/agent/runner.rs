@@ -24,6 +24,7 @@ use crate::utils::colors::style;
 use anyhow::{Result, anyhow};
 use futures::StreamExt;
 use serde_json::Value;
+use std::cell::RefCell;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tokio::time::{Duration, timeout};
@@ -316,6 +317,8 @@ pub struct AgentRunner {
     event_sink: Option<EventSink>,
     /// Maximum number of autonomous turns before halting
     max_turns: usize,
+    /// Loop detector to prevent infinite exploration
+    loop_detector: RefCell<crate::core::loop_detector::LoopDetector>,
 }
 
 impl AgentRunner {
@@ -613,6 +616,7 @@ impl AgentRunner {
             quiet: false,
             event_sink: None,
             max_turns: defaults::DEFAULT_FULL_AUTO_MAX_TURNS,
+            loop_detector: RefCell::new(crate::core::loop_detector::LoopDetector::new()),
         })
     }
 
@@ -966,6 +970,18 @@ impl AgentRunner {
                             .name
                             .clone();
 
+                        let args = call
+                            .parsed_arguments()
+                            .unwrap_or_else(|_| serde_json::json!({}));
+
+                        // Check for loops before executing
+                        if let Some(warning) =
+                            self.loop_detector.borrow_mut().record_call(&name, &args)
+                        {
+                            runner_println!(self, "{}", style(&warning).yellow().bold());
+                            task_state.warnings.push(warning);
+                        }
+
                         runner_println!(
                             self,
                             "{} [{}] Calling tool: {}",
@@ -973,10 +989,6 @@ impl AgentRunner {
                             self.agent_type,
                             name
                         );
-
-                        let args = call
-                            .parsed_arguments()
-                            .unwrap_or_else(|_| serde_json::json!({}));
 
                         let command_event = event_recorder.command_started(&name);
 

@@ -186,7 +186,14 @@ pub(crate) async fn execute_llm_request(
         );
     }
 
-    let (response, response_streamed) = llm_result?;
+    let (response, response_streamed) = match llm_result {
+        Ok(result) => result,
+        Err(error) => {
+            // Finish spinner before returning error to remove it from transcript
+            thinking_spinner.finish();
+            return Err(anyhow::Error::new(error));
+        }
+    };
     *ctx.working_history = request_history;
     Ok((response, response_streamed))
 }

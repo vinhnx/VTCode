@@ -6,6 +6,7 @@
 /// allowing preservation of high-semantic-value messages even if older.
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt::Write;
 
 /// Semantic importance score for a message (0-1000 scale)
 /// Higher values indicate more important for context retention
@@ -231,28 +232,25 @@ impl ContextPruner {
 
         // Pre-allocate with estimated capacity to avoid reallocations
         let mut report = String::with_capacity(200);
-        report.push_str("📊 Context Window Efficiency\n");
-
-        // Use push_str for simple concatenations instead of write! where possible
-        report.push_str("  Tokens Used: ");
-        report.push_str(&efficiency.total_tokens.to_string());
-        report.push('/');
-        report.push_str(&self.max_tokens.to_string());
-        report.push_str(" (");
-        report.push_str(&format!("{:.1}", efficiency.context_utilization_percent));
-        report.push_str("%)\n");
-
-        report.push_str("  Messages: ");
-        report.push_str(&efficiency.total_messages.to_string());
-        report.push_str(" total\n");
-
-        report.push_str("  Avg Semantic Score: ");
-        report.push_str(&efficiency.avg_semantic_score.to_string());
-        report.push_str("/1000\n");
-
-        report.push_str("  Semantic Value/Token: ");
-        report.push_str(&format!("{:.2}", efficiency.semantic_value_per_token));
-        report.push('\n');
+        let _ = writeln!(report, "Context Window Efficiency");
+        let _ = writeln!(
+            report,
+            "  Tokens Used: {}/{} ({:.1}%)",
+            efficiency.total_tokens,
+            self.max_tokens,
+            efficiency.context_utilization_percent
+        );
+        let _ = writeln!(report, "  Messages: {} total", efficiency.total_messages);
+        let _ = writeln!(
+            report,
+            "  Avg Semantic Score: {}/1000",
+            efficiency.avg_semantic_score
+        );
+        let _ = writeln!(
+            report,
+            "  Semantic Value/Token: {:.2}",
+            efficiency.semantic_value_per_token
+        );
 
         report
     }
