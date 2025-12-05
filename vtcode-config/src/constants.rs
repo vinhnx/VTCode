@@ -89,6 +89,7 @@ pub mod models {
             "gpt-5-nano",
             "gpt-5.1", // Enhanced version of GPT-5 with temperature support and streaming
             "gpt-5.1-codex", // Enhanced version of GPT-5 Codex with temperature support and streaming
+            "gpt-5.1-codex-max", // Enhanced version of GPT-5 Codex with temperature support and streaming
             "gpt-5.1-mini",  // Enhanced mini version with temperature support and streaming
             "codex-mini-latest",
             "gpt-oss-20b",
@@ -103,11 +104,12 @@ pub mod models {
             GPT_5_NANO,
             GPT_5_1,
             GPT_5_1_CODEX,
+            GPT_5_1_CODEX_MAX,
             GPT_5_1_MINI,
         ];
 
         /// Models that support the OpenAI reasoning parameter payload
-        pub const REASONING_MODELS: &[&str] = &[GPT_5, GPT_5_CODEX, GPT_5_1, GPT_5_1_CODEX];
+        pub const REASONING_MODELS: &[&str] = &[GPT_5, GPT_5_CODEX, GPT_5_1, GPT_5_1_CODEX, GPT_5_1_CODEX_MAX];
 
         /// Models that do not expose structured tool calling on the OpenAI platform
         pub const TOOL_UNAVAILABLE_MODELS: &[&str] = &[];
@@ -122,6 +124,7 @@ pub mod models {
         pub const GPT_5_NANO: &str = "gpt-5-nano";
         pub const GPT_5_1: &str = "gpt-5.1"; // Enhanced version with temperature support and streaming
         pub const GPT_5_1_CODEX: &str = "gpt-5.1-codex"; // Enhanced version with temperature support and streaming
+        pub const GPT_5_1_CODEX_MAX: &str = "gpt-5.1-codex-max"; // Enhanced version with temperature support and streaming
         pub const GPT_5_1_MINI: &str = "gpt-5.1-mini"; // Enhanced version with temperature support and streaming
         pub const CODEX_MINI_LATEST: &str = "codex-mini-latest";
         pub const GPT_OSS_20B: &str = "gpt-oss-20b";
@@ -155,25 +158,9 @@ pub mod models {
         pub const DEFAULT_MODEL: &str = "kimi-k2-turbo-preview";
         pub const SUPPORTED_MODELS: &[&str] = &[
             "kimi-k2-turbo-preview",
-            "kimi-k2-thinking",
-            "kimi-k2-thinking-turbo",
-            "kimi-k2-0905-preview",
-            "kimi-k2-0711-preview",
-            "kimi-latest",
-            "kimi-latest-8k",
-            "kimi-latest-32k",
-            "kimi-latest-128k",
         ];
 
         pub const KIMI_K2_TURBO_PREVIEW: &str = "kimi-k2-turbo-preview";
-        pub const KIMI_K2_THINKING: &str = "kimi-k2-thinking";
-        pub const KIMI_K2_THINKING_TURBO: &str = "kimi-k2-thinking-turbo";
-        pub const KIMI_K2_0905_PREVIEW: &str = "kimi-k2-0905-preview";
-        pub const KIMI_K2_0711_PREVIEW: &str = "kimi-k2-0711-preview";
-        pub const KIMI_LATEST: &str = "kimi-latest";
-        pub const KIMI_LATEST_8K: &str = "kimi-latest-8k";
-        pub const KIMI_LATEST_32K: &str = "kimi-latest-32k";
-        pub const KIMI_LATEST_128K: &str = "kimi-latest-128k";
     }
 
     // OpenRouter models (extensible via vtcode.toml)
@@ -353,6 +340,7 @@ pub mod models {
     pub const GPT_5_NANO: &str = openai::GPT_5_NANO;
     pub const GPT_5_1: &str = openai::GPT_5_1;
     pub const GPT_5_1_CODEX: &str = openai::GPT_5_1_CODEX;
+    pub const GPT_5_1_CODEX_MAX: &str = openai::GPT_5_1_CODEX_MAX;
     pub const GPT_5_1_MINI: &str = openai::GPT_5_1_MINI;
     pub const CODEX_MINI: &str = openai::CODEX_MINI_LATEST;
     pub const CODEX_MINI_LATEST: &str = openai::CODEX_MINI_LATEST;
@@ -366,14 +354,6 @@ pub mod models {
     pub const CLAUDE_OPUS_4_5: &str = anthropic::CLAUDE_OPUS_4_5;
     pub const MINIMAX_M2: &str = minimax::MINIMAX_M2;
     pub const MOONSHOT_KIMI_K2_TURBO_PREVIEW: &str = moonshot::KIMI_K2_TURBO_PREVIEW;
-    pub const MOONSHOT_KIMI_K2_THINKING: &str = moonshot::KIMI_K2_THINKING;
-    pub const MOONSHOT_KIMI_K2_THINKING_TURBO: &str = moonshot::KIMI_K2_THINKING_TURBO;
-    pub const MOONSHOT_KIMI_K2_0905_PREVIEW: &str = moonshot::KIMI_K2_0905_PREVIEW;
-    pub const MOONSHOT_KIMI_K2_0711_PREVIEW: &str = moonshot::KIMI_K2_0711_PREVIEW;
-    pub const MOONSHOT_KIMI_LATEST: &str = moonshot::KIMI_LATEST;
-    pub const MOONSHOT_KIMI_LATEST_8K: &str = moonshot::KIMI_LATEST_8K;
-    pub const MOONSHOT_KIMI_LATEST_32K: &str = moonshot::KIMI_LATEST_32K;
-    pub const MOONSHOT_KIMI_LATEST_128K: &str = moonshot::KIMI_LATEST_128K;
     pub const XAI_GROK_4: &str = xai::GROK_4;
     pub const XAI_GROK_4_MINI: &str = xai::GROK_4_MINI;
     pub const XAI_GROK_4_CODE: &str = xai::GROK_4_CODE;
@@ -699,7 +679,7 @@ pub mod reasoning {
     pub const LOW: &str = "low";
     pub const MEDIUM: &str = "medium";
     pub const HIGH: &str = "high";
-    pub const ALLOWED_LEVELS: &[&str] = &[LOW, MEDIUM, HIGH];
+    pub const ALLOWED_LEVELS: &[&str] = &[LOW, MEDIUM, HIGH, "xhigh"];
     pub const LABEL_LOW: &str = "Low";
     pub const LABEL_MEDIUM: &str = "Medium";
     pub const LABEL_HIGH: &str = "High";

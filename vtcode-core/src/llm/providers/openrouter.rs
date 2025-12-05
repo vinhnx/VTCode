@@ -29,7 +29,7 @@ use super::{
         convert_usage_to_llm_types, extract_prompt_cache_settings, map_finish_reason_common,
         override_base_url, parse_client_prompt_common, resolve_model,
     },
-    extract_reasoning_trace, gpt5_codex_developer_prompt,
+    extract_reasoning_trace,
     shared::{
         StreamAssemblyError, StreamDelta, StreamFragment, StreamTelemetry, ToolCallBuilder,
         append_text_with_reasoning, apply_tool_call_delta_from_content, extract_data_payload,
@@ -37,6 +37,7 @@ use super::{
     },
     split_reasoning_from_text,
 };
+use crate::prompts::system::default_system_prompt;
 
 #[derive(Default)]
 struct OpenRouterStreamTelemetry;
@@ -1315,7 +1316,12 @@ impl OpenRouterProvider {
             }
         }
 
-        let developer_prompt = gpt5_codex_developer_prompt(&additional_guidance);
+        // Use collected guidance, or fall back to default system prompt if empty
+        let developer_prompt = if additional_guidance.is_empty() {
+            default_system_prompt().to_string()
+        } else {
+            additional_guidance.join("\n\n")
+        };
         input.insert(
             0,
             json!({

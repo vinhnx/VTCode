@@ -84,18 +84,19 @@ pub fn reasoning_parameters_for(provider: Provider, effort: ReasoningEffortLevel
                 ReasoningEffortLevel::Low => openai::responses_api::ReasoningEffort::Low,
                 ReasoningEffortLevel::Medium => openai::responses_api::ReasoningEffort::Medium,
                 ReasoningEffortLevel::High => openai::responses_api::ReasoningEffort::High,
+                ReasoningEffortLevel::XHigh => return Some(json!({ "effort": "xhigh" })), // GPT-5.1-Codex-Max xhigh
             };
             reasoning = reasoning.with_effort(mapped);
             serde_json::to_value(reasoning).ok()
         }
         Provider::Gemini => {
-            let include_thoughts = matches!(effort, ReasoningEffortLevel::High);
+            let include_thoughts = matches!(effort, ReasoningEffortLevel::High | ReasoningEffortLevel::XHigh);
             let budget = match effort {
                 ReasoningEffortLevel::None => return None,
                 ReasoningEffortLevel::Minimal => 16, // Low budget for minimal reasoning
                 ReasoningEffortLevel::Low => 64,
                 ReasoningEffortLevel::Medium => 128,
-                ReasoningEffortLevel::High => 256,
+                ReasoningEffortLevel::High | ReasoningEffortLevel::XHigh => 256, // Max budget for Gemini
             };
             let config = ThinkingConfig {
                 thinking_budget: budget,
@@ -124,7 +125,7 @@ pub fn reasoning_parameters_for(provider: Provider, effort: ReasoningEffortLevel
                     "reasoning_steps_limit": 120,
                     "reasoning_token_budget": 96000
                 }),
-                ReasoningEffortLevel::High => json!({
+                ReasoningEffortLevel::High | ReasoningEffortLevel::XHigh => json!({
                     "reasoning_effort": "high",
                     "reasoning_steps_limit": 300,
                     "reasoning_token_budget": 128000

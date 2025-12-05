@@ -220,14 +220,12 @@ pub(super) fn select_reasoning_with_ratatui(
     selection: &SelectionDetail,
     current: ReasoningEffortLevel,
 ) -> Result<Option<ReasoningChoice>> {
+    let is_codex_max = selection.model_id.contains("codex-max");
+    
     let mut entries = vec![
         SelectionEntry::new(
             format!("Keep current ({})", reasoning_level_label(current)),
             Some(KEEP_CURRENT_DESCRIPTION.to_string()),
-        ),
-        SelectionEntry::new(
-            reasoning_level_label(ReasoningEffortLevel::Low),
-            Some(reasoning_level_description(ReasoningEffortLevel::Low).to_string()),
         ),
         SelectionEntry::new(
             reasoning_level_label(ReasoningEffortLevel::Medium),
@@ -238,6 +236,13 @@ pub(super) fn select_reasoning_with_ratatui(
             Some(reasoning_level_description(ReasoningEffortLevel::High).to_string()),
         ),
     ];
+    
+    if is_codex_max {
+        entries.push(SelectionEntry::new(
+            reasoning_level_label(ReasoningEffortLevel::XHigh),
+            Some(reasoning_level_description(ReasoningEffortLevel::XHigh).to_string()),
+        ));
+    }
 
     let mut disable_index = None;
     if let Some(alternative) = selection.reasoning_off_model {
@@ -279,9 +284,9 @@ pub(super) fn select_reasoning_with_ratatui(
 
     let choice = match index {
         0 => current,
-        1 => ReasoningEffortLevel::Low,
-        2 => ReasoningEffortLevel::Medium,
-        3 => ReasoningEffortLevel::High,
+        1 => ReasoningEffortLevel::Medium,
+        2 => ReasoningEffortLevel::High,
+        3 if is_codex_max => ReasoningEffortLevel::XHigh,
         _ => current,
     };
     Ok(Some(ReasoningChoice::Level(choice)))

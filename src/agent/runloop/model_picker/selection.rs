@@ -161,6 +161,7 @@ pub(super) fn reasoning_level_label(level: ReasoningEffortLevel) -> &'static str
         ReasoningEffortLevel::Low => reasoning::LABEL_LOW,
         ReasoningEffortLevel::Medium => reasoning::LABEL_MEDIUM,
         ReasoningEffortLevel::High => reasoning::LABEL_HIGH,
+        ReasoningEffortLevel::XHigh => "Extra High",
     }
 }
 
@@ -171,6 +172,7 @@ pub(super) fn reasoning_level_description(level: ReasoningEffortLevel) -> &'stat
         ReasoningEffortLevel::Low => reasoning::DESCRIPTION_LOW,
         ReasoningEffortLevel::Medium => reasoning::DESCRIPTION_MEDIUM,
         ReasoningEffortLevel::High => reasoning::DESCRIPTION_HIGH,
+        ReasoningEffortLevel::XHigh => "Maximum reasoning for hardest long-running tasks (gpt-5.1-codex-max only)",
     }
 }
 

@@ -631,8 +631,8 @@ impl GeminiProvider {
                         // so we'll map to high for now to maintain functionality
                         Some("high") // Default to high for Gemini 3 Pro since medium not fully available
                     }
-                    ReasoningEffortLevel::High => {
-                        Some("high") // Maintain compatibility for older models
+                    ReasoningEffortLevel::High | ReasoningEffortLevel::XHigh => {
+                        Some("high") // XHigh maps to high for Gemini (max available)
                     }
                 };
 
