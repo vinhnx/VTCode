@@ -155,12 +155,9 @@ pub mod models {
 
     // Moonshot.ai models (direct API)
     pub mod moonshot {
-        pub const DEFAULT_MODEL: &str = "kimi-k2-turbo-preview";
-        pub const SUPPORTED_MODELS: &[&str] = &[
-            "kimi-k2-turbo-preview",
-        ];
-
-        pub const KIMI_K2_TURBO_PREVIEW: &str = "kimi-k2-turbo-preview";
+        // Moonshot Kimi K2 models are now available via OpenRouter
+        // Use OpenRouter variants: moonshotai/kimi-k2-0905, moonshotai/kimi-k2-thinking, moonshotai/kimi-k2:free
+        pub const SUPPORTED_MODELS: &[&str] = &[];
     }
 
     // OpenRouter models (extensible via vtcode.toml)
@@ -353,7 +350,6 @@ pub mod models {
     pub const CLAUDE_OPUS_4_1: &str = anthropic::CLAUDE_OPUS_4_1;
     pub const CLAUDE_OPUS_4_5: &str = anthropic::CLAUDE_OPUS_4_5;
     pub const MINIMAX_M2: &str = minimax::MINIMAX_M2;
-    pub const MOONSHOT_KIMI_K2_TURBO_PREVIEW: &str = moonshot::KIMI_K2_TURBO_PREVIEW;
     pub const XAI_GROK_4: &str = xai::GROK_4;
     pub const XAI_GROK_4_MINI: &str = xai::GROK_4_MINI;
     pub const XAI_GROK_4_CODE: &str = xai::GROK_4_CODE;
@@ -438,7 +434,6 @@ pub mod model_helpers {
             "openrouter" => Some(models::openrouter::DEFAULT_MODEL),
             #[cfg(docsrs)]
             "openrouter" => Some("openrouter/auto"), // Fallback for docs.rs build
-            "moonshot" => Some(models::moonshot::DEFAULT_MODEL),
             "xai" => Some(models::xai::DEFAULT_MODEL),
             "zai" => Some(models::zai::DEFAULT_MODEL),
             "ollama" => Some(models::ollama::DEFAULT_MODEL),

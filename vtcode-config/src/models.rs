@@ -280,6 +280,12 @@ pub enum ModelId {
     OpenRouterGrok4,
     /// GLM 4.6 - Z.AI GLM 4.6 long-context reasoning model
     OpenRouterZaiGlm46,
+    /// Kimi K2 0905 - MoonshotAI Kimi K2 0905 MoE release optimised for coding agents
+    OpenRouterMoonshotaiKimiK20905,
+    /// Kimi K2 Thinking - MoonshotAI reasoning-tier Kimi K2 release optimized for long-horizon agents
+    OpenRouterMoonshotaiKimiK2Thinking,
+    /// Kimi K2 (free) - Community tier for MoonshotAI Kimi K2
+    OpenRouterMoonshotaiKimiK2Free,
     /// Qwen3 Max - Flagship Qwen3 mixture for general reasoning
     OpenRouterQwen3Max,
     /// Qwen3 235B A22B - Mixture-of-experts Qwen3 235B general model
@@ -1513,10 +1519,7 @@ mod tests {
             ModelId::default_subagent_for_provider(Provider::ZAI),
             ModelId::ZaiGlm45Flash
         );
-        assert_eq!(
-            ModelId::default_subagent_for_provider(Provider::Moonshot),
-            ModelId::MoonshotKimiK2TurboPreview
-        );
+        // Moonshot provider now uses OpenRouter models instead of direct API
 
         assert_eq!(
             ModelId::default_single_for_provider(Provider::DeepSeek),
