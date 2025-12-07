@@ -44,7 +44,11 @@ pub async fn handle_validate_command(
         match check_filesystem_permissions(&config).await {
             Ok(_) => println!("  {} Filesystem permissions OK", style("[+]").green()),
             Err(e) => {
-                println!("  {} Filesystem permissions issue: {}", style("[X]").red(), e);
+                println!(
+                    "  {} Filesystem permissions issue: {}",
+                    style("[X]").red(),
+                    e
+                );
                 all_checks = false;
             }
         }

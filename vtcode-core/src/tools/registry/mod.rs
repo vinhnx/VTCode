@@ -301,6 +301,7 @@ pub struct ToolRegistry {
     mcp_tool_presence: HashMap<String, bool>,
     timeout_policy: ToolTimeoutPolicy,
     execution_history: ToolExecutionHistory,
+    initialized: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -392,6 +393,7 @@ impl ToolRegistry {
             mcp_tool_presence: HashMap::new(),
             timeout_policy: ToolTimeoutPolicy::default(),
             execution_history: ToolExecutionHistory::new(100), // Keep last 100 executions
+            initialized: false,
         };
 
         registry.sync_policy_catalog().await;
@@ -599,6 +601,22 @@ impl ToolRegistry {
     }
 
     pub async fn initialize_async(&mut self) -> Result<()> {
+        if self.initialized && (self.mcp_client.is_none() || !self.mcp_tool_index.is_empty()) {
+            return Ok(());
+        }
+
+        if self.mcp_client.is_some() && self.mcp_tool_index.is_empty() {
+            if let Err(err) = self.refresh_mcp_tools().await {
+                warn!(
+                    error = %err,
+                    "Failed to refresh MCP tools during registry initialization"
+                );
+            }
+        }
+
+        self.sync_policy_catalog().await;
+        self.initialized = true;
+
         Ok(())
     }
 
@@ -943,6 +961,7 @@ impl ToolRegistry {
         self.mcp_client = Some(mcp_client);
         self.mcp_tool_index.clear();
         self.mcp_tool_presence.clear();
+        self.initialized = false;
         self
     }
 
@@ -951,6 +970,7 @@ impl ToolRegistry {
         self.mcp_client = Some(mcp_client);
         self.mcp_tool_index.clear();
         self.mcp_tool_presence.clear();
+        self.initialized = false;
     }
 
     /// Get the MCP client if available

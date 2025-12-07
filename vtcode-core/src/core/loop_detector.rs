@@ -2,15 +2,15 @@
 //!
 //! Detects when the agent is stuck in repetitive patterns and suggests intervention.
 
-use crate::config::constants::tools;
+use crate::config::constants::{defaults, tools};
 use std::collections::{HashMap, VecDeque};
 use std::time::Instant;
 
 // Separate limits for different operation types to reduce false positives
 const MAX_READONLY_TOOL_CALLS: usize = 10; // read_file, grep_file, list_files
-const MAX_WRITE_TOOL_CALLS: usize = 3;     // write_file, edit_file, apply_patch
-const MAX_COMMAND_TOOL_CALLS: usize = 5;   // shell, run_pty_cmd
-const MAX_OTHER_TOOL_CALLS: usize = 3;     // Other tools (default)
+const MAX_WRITE_TOOL_CALLS: usize = 3; // write_file, edit_file, apply_patch
+const MAX_COMMAND_TOOL_CALLS: usize = 5; // shell, run_pty_cmd
+const MAX_OTHER_TOOL_CALLS: usize = 3; // Other tools (default)
 const DETECTION_WINDOW: usize = 10;
 const HARD_LIMIT_MULTIPLIER: usize = 2; // Hard stop at 2x soft limit
 
@@ -56,14 +56,21 @@ pub struct LoopDetector {
     recent_calls: VecDeque<ToolCallRecord>,
     tool_counts: HashMap<String, usize>,
     last_warning: Option<Instant>,
+    max_identical_call_limit: Option<usize>,
 }
 
 impl LoopDetector {
     pub fn new() -> Self {
+        Self::with_max_repeated_calls(defaults::DEFAULT_MAX_REPEATED_TOOL_CALLS)
+    }
+
+    pub fn with_max_repeated_calls(limit: usize) -> Self {
+        let normalized_limit = if limit > 1 { Some(limit) } else { None };
         Self {
             recent_calls: VecDeque::with_capacity(DETECTION_WINDOW),
             tool_counts: HashMap::new(),
             last_warning: None,
+            max_identical_call_limit: normalized_limit,
         }
     }
 
@@ -84,17 +91,24 @@ impl LoopDetector {
         }
         let args_hash = hasher.finish();
 
-        // Check for immediate repetition (same tool + args within last 2 calls)
-        if self.recent_calls.len() >= 2 {
-            let last_two: Vec<_> = self.recent_calls.iter().rev().take(2).collect();
-            if last_two
-                .iter()
-                .all(|r| r.tool_name == tool_name_owned && r.args_hash == args_hash)
-            {
-                return Some(format!(
-                    "HARD STOP: Identical tool call repeated 3+ times: {} with same arguments. This indicates a loop.",
-                    tool_name
-                ));
+        if let Some(limit) = self.max_identical_call_limit {
+            let required_history = limit.saturating_sub(1);
+            if required_history > 0 && self.recent_calls.len() >= required_history {
+                let identical =
+                    self.recent_calls
+                        .iter()
+                        .rev()
+                        .take(required_history)
+                        .all(|record| {
+                            record.tool_name == tool_name_owned && record.args_hash == args_hash
+                        });
+
+                if identical {
+                    return Some(format!(
+                        "HARD STOP: Identical tool call repeated {} times: {} with same arguments. This indicates a loop.",
+                        limit, tool_name
+                    ));
+                }
             }
         }
 
@@ -134,9 +148,7 @@ impl LoopDetector {
             return Some(format!(
                 "CRITICAL: Tool '{}' called {} times (hard limit: {}). Execution halted to prevent infinite loop.\n\
                  Agent must reformulate task or request user guidance.",
-                tool_name,
-                count,
-                hard_limit
+                tool_name, count, hard_limit
             ));
         }
 
@@ -158,11 +170,7 @@ impl LoopDetector {
                     "Loop detected: '{}' called {} times in last {} operations.\n\n\
                      {}\n\n\
                      Hard limit at {} calls.",
-                    tool_name,
-                    count,
-                    DETECTION_WINDOW,
-                    alternatives,
-                    hard_limit
+                    tool_name, count, DETECTION_WINDOW, alternatives, hard_limit
                 ));
             }
         }
@@ -350,7 +358,11 @@ mod tests {
 
         // Count for each should be 1
         assert_eq!(
-            detector.tool_counts.get(tools::LIST_FILES).copied().unwrap_or(0),
+            detector
+                .tool_counts
+                .get(tools::LIST_FILES)
+                .copied()
+                .unwrap_or(0),
             3
         );
     }

@@ -45,6 +45,13 @@ macro_rules! runner_println {
     };
 }
 
+#[derive(Clone)]
+struct ShellPolicyCacheEntry {
+    signature: u64,
+    deny_regexes: Vec<(String, regex::Regex)>,
+    deny_globs: Vec<(String, regex::Regex)>,
+}
+
 /// API failure tracking for exponential backoff
 struct ApiFailureTracker {
     consecutive_failures: u32,
@@ -411,6 +418,8 @@ pub struct AgentRunner {
     session_id: String,
     /// Workspace path
     _workspace: PathBuf,
+    /// Cached vtcode configuration
+    config: Arc<VTCodeConfig>,
     /// Model identifier
     model: String,
     /// API key (for provider client construction in future flows)
@@ -427,6 +436,8 @@ pub struct AgentRunner {
     max_turns: usize,
     /// Loop detector to prevent infinite exploration
     loop_detector: RefCell<LoopDetector>,
+    /// Cached shell policy patterns to avoid recompilation
+    shell_policy_cache: RefCell<Option<ShellPolicyCacheEntry>>,
     /// API failure tracking for exponential backoff
     failure_tracker: RefCell<ApiFailureTracker>,
     /// Context optimizer for token budget management
@@ -434,6 +445,10 @@ pub struct AgentRunner {
 }
 
 impl AgentRunner {
+    fn config(&self) -> &VTCodeConfig {
+        self.config.as_ref()
+    }
+
     fn print_compact_response(agent: AgentType, text: &str, quiet: bool) {
         if quiet {
             return;
@@ -776,25 +791,35 @@ impl AgentRunner {
         let provider_client = create_provider_for_model(model.as_str(), api_key.clone(), None)
             .map_err(|e| anyhow!("Failed to create provider client: {}", e))?;
 
-        // Create system prompt for single agent, merging configuration and AGENTS.md hierarchy
-        let system_prompt = match ConfigManager::load_from_workspace(&workspace) {
+        // Load configuration once to seed system prompt and runtime policies
+        let (config_value, system_prompt) = match ConfigManager::load_from_workspace(&workspace) {
             Ok(manager) => {
-                compose_system_instruction_text(workspace.as_path(), Some(manager.config())).await
+                let cfg = manager.config().clone();
+                let prompt = compose_system_instruction_text(workspace.as_path(), Some(&cfg)).await;
+                (cfg, prompt)
             }
             Err(err) => {
                 warn!("Failed to load vtcode configuration for system prompt composition: {err:#}");
-                compose_system_instruction_text(workspace.as_path(), None).await
+                let cfg = VTCodeConfig::default();
+                let prompt = compose_system_instruction_text(workspace.as_path(), None).await;
+                (cfg, prompt)
             }
         };
+
+        let max_repeated_tool_calls = config_value.tools.max_repeated_tool_calls.max(1);
+        let config = Arc::new(config_value);
+        let tool_registry = ToolRegistry::new(workspace.clone()).await;
+        let loop_detector = LoopDetector::with_max_repeated_calls(max_repeated_tool_calls);
 
         Ok(Self {
             agent_type,
             client,
             provider_client,
-            tool_registry: ToolRegistry::new(workspace.clone()).await,
+            tool_registry,
             system_prompt,
             session_id,
             _workspace: workspace,
+            config,
             model: model.to_string(),
             _api_key: api_key,
             reasoning_effort,
@@ -802,9 +827,10 @@ impl AgentRunner {
             quiet: false,
             event_sink: None,
             max_turns: defaults::DEFAULT_FULL_AUTO_MAX_TURNS,
-            loop_detector: RefCell::new(LoopDetector::new()),
+            loop_detector: RefCell::new(loop_detector),
             failure_tracker: RefCell::new(ApiFailureTracker::new()),
             context_optimizer: RefCell::new(ContextOptimizer::new()),
+            shell_policy_cache: RefCell::new(None),
         })
     }
 
@@ -835,6 +861,14 @@ impl AgentRunner {
 
     /// Apply workspace configuration to the tool registry, including tool policies and MCP setup.
     pub async fn apply_workspace_configuration(&mut self, vt_cfg: &VTCodeConfig) -> Result<()> {
+        self.config = Arc::new(vt_cfg.clone());
+        *self.loop_detector.borrow_mut() =
+            LoopDetector::with_max_repeated_calls(self.config.tools.max_repeated_tool_calls.max(1));
+        self.shell_policy_cache.borrow_mut().take();
+
+        self.system_prompt =
+            compose_system_instruction_text(self._workspace.as_path(), Some(self.config())).await;
+
         self.tool_registry.initialize_async().await?;
 
         self.tool_registry.apply_commands_config(&vt_cfg.commands);
@@ -940,12 +974,8 @@ impl AgentRunner {
             .collect();
 
         // Track execution results
-        // Determine max loops via configuration
-        let cfg = ConfigManager::load()
-            .or_else(|_| ConfigManager::load_from_workspace("."))
-            .or_else(|_| ConfigManager::load_from_file("vtcode.toml"))
-            .map(|cm| cm.config().clone())
-            .unwrap_or_default();
+        // Determine loop guards via cached configuration
+        let cfg = self.config();
         let max_tool_loops = cfg.tools.max_tool_loops.max(1);
 
         let mut task_state = TaskRunState::new(conversation, conversation_messages, max_tool_loops);
@@ -962,7 +992,10 @@ impl AgentRunner {
             };
             if utilization > 0.90 {
                 // At 90%+ utilization, warn and consider stopping
-                warn!("Token budget at {:.1}% - approaching limit", utilization * 100.0);
+                warn!(
+                    "Token budget at {:.1}% - approaching limit",
+                    utilization * 100.0
+                );
                 task_state.warnings.push(format!(
                     "Token budget at {}% - approaching context limit",
                     (utilization * 100.0) as u32
@@ -1010,7 +1043,10 @@ impl AgentRunner {
                 for content in &task_state.conversation[task_state.last_processed_message_idx..] {
                     let mut text = String::new();
                     for part in &content.parts {
-                        if let Part::Text { text: part_text, .. } = part {
+                        if let Part::Text {
+                            text: part_text, ..
+                        } = part
+                        {
                             if !text.is_empty() {
                                 text.push('\n');
                             }
@@ -1174,11 +1210,8 @@ impl AgentRunner {
                     had_tool_call = true;
                     // Clone tool_calls once for message, move original for processing
                     task_state.conversation_messages.push(
-                        Message::assistant_with_tools(
-                            response_text.clone(),
-                            tool_calls.clone(),
-                        )
-                        .with_reasoning(reasoning.clone()),
+                        Message::assistant_with_tools(response_text.clone(), tool_calls.clone())
+                            .with_reasoning(reasoning.clone()),
                     );
 
                     // Determine if we can parallelize (read-only operations)
@@ -2335,12 +2368,7 @@ impl AgentRunner {
         // Enforce per-agent shell policies for RUN_PTY_CMD
         let is_shell = tool_name == tools::RUN_PTY_CMD;
         if is_shell {
-            let cfg = ConfigManager::load()
-                .or_else(|_| ConfigManager::load_from_workspace("."))
-                .or_else(|_| ConfigManager::load_from_file("vtcode.toml"))
-                .map(|cm| cm.config().clone())
-                .unwrap_or_default();
-
+            let cfg = self.config();
             let cmd_text = if let Some(cmd_val) = args.get("command") {
                 if cmd_val.is_array() {
                     cmd_val
@@ -2364,40 +2392,103 @@ impl AgentRunner {
                 self.agent_type.to_string().to_uppercase()
             );
 
-            let mut deny_regex = cfg.commands.deny_regex;
+            let mut deny_regex_patterns: Vec<String> = cfg.commands.deny_regex.clone();
             if let Ok(extra) = std::env::var(format!("{}DENY_REGEX", agent_prefix)) {
-                deny_regex.extend(extra.split(',').map(|s| s.trim().to_owned()));
+                deny_regex_patterns.extend(extra.split(',').filter_map(|entry| {
+                    let trimmed = entry.trim();
+                    (!trimmed.is_empty()).then(|| trimmed.to_owned())
+                }));
             }
-            if !deny_regex.is_empty() {
-                // Compile deny regexes once to avoid recompiling for each pattern match
-                let compiled_deny: Vec<regex::Regex> = deny_regex
+
+            let mut deny_glob_patterns: Vec<String> = cfg.commands.deny_glob.clone();
+            if let Ok(extra) = std::env::var(format!("{}DENY_GLOB", agent_prefix)) {
+                deny_glob_patterns.extend(extra.split(',').filter_map(|entry| {
+                    let trimmed = entry.trim();
+                    (!trimmed.is_empty()).then(|| trimmed.to_owned())
+                }));
+            }
+
+            use std::collections::hash_map::DefaultHasher;
+            use std::hash::{Hash, Hasher};
+
+            let mut hasher = DefaultHasher::new();
+            deny_regex_patterns.hash(&mut hasher);
+            deny_glob_patterns.hash(&mut hasher);
+            let signature = hasher.finish();
+
+            let cached_entry = {
+                let cache_guard = self.shell_policy_cache.borrow();
+                cache_guard
+                    .as_ref()
+                    .filter(|entry| entry.signature == signature)
+                    .cloned()
+            };
+
+            let policy_entry = if let Some(entry) = cached_entry {
+                entry
+            } else {
+                let deny_regexes = deny_regex_patterns
                     .iter()
-                    .filter_map(|pat| regex::Regex::new(pat).ok())
-                    .collect();
-                for re in &compiled_deny {
-                    if re.is_match(&cmd_text) {
-                        return Err(anyhow!("Shell command denied by regex: {}", re.as_str()));
-                    }
+                    .filter_map(|pattern| {
+                        if pattern.is_empty() {
+                            return None;
+                        }
+                        match regex::Regex::new(pattern) {
+                            Ok(regex) => Some((pattern.clone(), regex)),
+                            Err(err) => {
+                                warn!(
+                                    agent = ?self.agent_type,
+                                    pattern,
+                                    error = %err,
+                                    "Invalid deny regex pattern skipped"
+                                );
+                                None
+                            }
+                        }
+                    })
+                    .collect::<Vec<_>>();
+
+                let deny_globs = deny_glob_patterns
+                    .iter()
+                    .filter_map(|pattern| {
+                        if pattern.is_empty() {
+                            return None;
+                        }
+                        let re_pattern =
+                            format!("^{}$", regex::escape(pattern).replace(r"\\*", ".*"));
+                        match regex::Regex::new(&re_pattern) {
+                            Ok(regex) => Some((pattern.clone(), regex)),
+                            Err(err) => {
+                                warn!(
+                                    agent = ?self.agent_type,
+                                    pattern,
+                                    error = %err,
+                                    "Invalid deny glob pattern skipped"
+                                );
+                                None
+                            }
+                        }
+                    })
+                    .collect::<Vec<_>>();
+
+                let entry = ShellPolicyCacheEntry {
+                    signature,
+                    deny_regexes,
+                    deny_globs,
+                };
+                self.shell_policy_cache.borrow_mut().replace(entry.clone());
+                entry
+            };
+
+            for (pattern, compiled) in &policy_entry.deny_regexes {
+                if compiled.is_match(&cmd_text) {
+                    return Err(anyhow!("Shell command denied by regex: {}", pattern));
                 }
             }
 
-            let mut deny_glob = cfg.commands.deny_glob;
-            if let Ok(extra) = std::env::var(format!("{}DENY_GLOB", agent_prefix)) {
-                deny_glob.extend(extra.split(',').map(|s| s.trim().to_owned()));
-            }
-            if !deny_glob.is_empty() {
-                // Compile glob-derived regexes once
-                let compiled_globs: Vec<(String, regex::Regex)> = deny_glob
-                    .iter()
-                    .filter_map(|pat| {
-                        let re = format!("^{}$", regex::escape(pat).replace(r"\*", ".*"));
-                        regex::Regex::new(&re).ok().map(|r| (pat.clone(), r))
-                    })
-                    .collect();
-                for (pat, re) in &compiled_globs {
-                    if re.is_match(&cmd_text) {
-                        return Err(anyhow!("Shell command denied by glob: {}", pat));
-                    }
+            for (pattern, compiled) in &policy_entry.deny_globs {
+                if compiled.is_match(&cmd_text) {
+                    return Err(anyhow!("Shell command denied by glob: {}", pattern));
                 }
             }
             info!(target = "policy", agent = ?self.agent_type, tool = tool_name, cmd = %cmd_text, "shell_policy_checked");
