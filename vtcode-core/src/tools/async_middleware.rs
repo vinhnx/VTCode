@@ -114,32 +114,33 @@ impl AsyncMiddleware for AsyncLoggingMiddleware {
                 + 'a,
         >,
     ) -> ToolResult {
+        let tool_name = request.tool_name.clone();
         tracing::debug!(
-            tool = %request.tool_name,
+            tool = %tool_name,
             "tool execution started"
         );
 
         let start = Instant::now();
-        let mut result = next(request.clone()).await;
+        let mut result = next(request).await;
         let duration = start.elapsed().as_millis() as u64;
 
         result.duration_ms = duration;
 
         if result.success {
             tracing::debug!(
-                tool = %request.tool_name,
+                tool = %tool_name,
                 duration_ms = duration,
                 "tool execution completed"
             );
             self.obs_context.event(
                 crate::tools::EventType::ToolSelected,
                 "executor",
-                format!("executed {} in {}ms", request.tool_name, duration),
+                format!("executed {} in {}ms", tool_name, duration),
                 Some(1.0),
             );
         } else {
             tracing::error!(
-                tool = %request.tool_name,
+                tool = %tool_name,
                 error = ?result.error,
                 "tool execution failed"
             );

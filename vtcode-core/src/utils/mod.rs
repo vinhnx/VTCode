@@ -26,6 +26,10 @@
 //! - **Pattern Matching**: File exclusion patterns
 //! - **Workspace Safety**: Prevents accidental file operations
 //!
+//! ### Path Utilities (`path`)
+//! - **Path Normalization**: Resolve `.` and `..` components
+//! - **Shared Utilities**: Common path operations
+//!
 //! ## Basic Usage Examples
 //!
 //! ### Configuration Management
@@ -105,6 +109,7 @@ pub mod diff_styles;
 pub mod dot_config;
 pub mod error_messages;
 pub mod image_processing;
+pub mod path;
 pub mod ratatui_styles;
 pub mod safety;
 pub mod session_archive;

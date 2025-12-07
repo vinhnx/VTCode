@@ -415,6 +415,64 @@ impl AgentRunner {
         }
     }
 
+    fn record_warning(
+        &self,
+        agent_prefix: &str,
+        task_state: &mut TaskRunState,
+        event_recorder: &ExecEventRecorder,
+        warning_message: impl Into<String>,
+    ) {
+        let warning_message = warning_message.into();
+        runner_println!(
+            self,
+            "{} {}",
+            agent_prefix,
+            format!("{} {}", style("(WARN)").yellow().bold(), warning_message)
+        );
+        task_state.warnings.push(warning_message.clone());
+        event_recorder.warning(&warning_message);
+    }
+
+    fn record_tool_failure(
+        &self,
+        agent_prefix: &str,
+        task_state: &mut TaskRunState,
+        event_recorder: &ExecEventRecorder,
+        command_event: &ThreadEvent,
+        tool_name: &str,
+        error: &anyhow::Error,
+        tool_response_id: Option<&str>,
+    ) {
+        let failure_text = format!("Tool {} failed: {}", tool_name, error);
+        runner_println!(
+            self,
+            "{} {}",
+            agent_prefix,
+            format!("{} {}", style("(ERR)").red().bold(), failure_text)
+        );
+        task_state.warnings.push(failure_text.clone());
+        event_recorder.command_finished(
+            command_event,
+            CommandExecutionStatus::Failed,
+            None,
+            &failure_text,
+        );
+        event_recorder.warning(&failure_text);
+        task_state.conversation.push(Content {
+            role: "user".to_owned(),
+            parts: vec![Part::Text {
+                text: failure_text.clone(),
+                thought_signature: None,
+            }],
+        });
+        if let Some(call_id) = tool_response_id {
+            let error_payload = serde_json::json!({ "error": error.to_string() }).to_string();
+            task_state
+                .conversation_messages
+                .push(Message::tool_response(call_id.to_owned(), error_payload));
+        }
+    }
+
     async fn collect_provider_response(
         &mut self,
         request: &LLMRequest,
@@ -872,11 +930,15 @@ impl AgentRunner {
                 );
 
                 let mut had_tool_call = false;
+                let has_provider_tool_calls = resp
+                    .tool_calls
+                    .as_ref()
+                    .is_some_and(|calls| !calls.is_empty());
 
                 if !reasoning_recorded && let Some(reasoning) = reasoning.as_ref() {
                     event_recorder.reasoning(reasoning);
                 }
-                {
+                if response_text.trim().is_empty() && !has_provider_tool_calls {
                     runner_println!(
                         self,
                         "{} {} received empty response with no tool calls",
@@ -911,20 +973,18 @@ impl AgentRunner {
 
                     let warning_message =
                         "Provider halted execution after detecting a potential tool loop";
-                    runner_println!(
-                        self,
-                        "{} {}",
+                    self.record_warning(
                         agent_prefix,
-                        format!("{} {}", style("(WARN)").yellow().bold(), warning_message)
+                        &mut task_state,
+                        &event_recorder,
+                        warning_message,
                     );
-                    task_state.warnings.push(warning_message.to_owned());
-                    event_recorder.warning(warning_message);
                     task_state.mark_tool_loop_limit_hit();
                     task_state.record_turn(&turn_started_at, &mut turn_recorded);
                     break;
                 }
 
-                let mut effective_tool_calls = resp.tool_calls.clone();
+                let mut effective_tool_calls = resp.tool_calls;
 
                 if effective_tool_calls
                     .as_ref()
@@ -947,20 +1007,19 @@ impl AgentRunner {
                     )]);
                 }
 
-                if let Some(tool_calls) = effective_tool_calls.as_ref().filter(|tc| !tc.is_empty())
-                {
+                if let Some(tool_calls) = effective_tool_calls.filter(|tc| !tc.is_empty()) {
                     had_tool_call = true;
-                    let tool_calls_vec = tool_calls.clone();
+                    let tool_calls_for_message = tool_calls.clone();
 
                     task_state.conversation_messages.push(
                         Message::assistant_with_tools(
                             response_text.clone(),
-                            tool_calls_vec.clone(),
+                            tool_calls_for_message,
                         )
                         .with_reasoning(reasoning.clone()),
                     );
 
-                    for call in tool_calls_vec {
+                    for call in tool_calls {
                         let name = call
                             .function
                             .as_ref()
@@ -1016,10 +1075,7 @@ impl AgentRunner {
                                 // For LLM: use full result
                                 task_state
                                     .conversation_messages
-                                    .push(Message::tool_response(
-                                        call.id.clone(),
-                                        tool_result.clone(),
-                                    ));
+                                    .push(Message::tool_response(call.id.clone(), tool_result));
 
                                 task_state.executed_commands.push(name.clone());
                                 event_recorder.command_finished(
@@ -1038,33 +1094,15 @@ impl AgentRunner {
                                 }
                             }
                             Err(e) => {
-                                runner_println!(
-                                    self,
-                                    "{} {}",
+                                self.record_tool_failure(
                                     agent_prefix,
-                                    format!("{} {} tool failed: {}", style("(ERR)").red(), name, e)
-                                );
-                                let warning_message = format!("Tool {} failed: {}", name, e);
-                                task_state.warnings.push(warning_message.clone());
-                                event_recorder.command_finished(
+                                    &mut task_state,
+                                    &event_recorder,
                                     &command_event,
-                                    CommandExecutionStatus::Failed,
-                                    None,
-                                    &warning_message,
+                                    &name,
+                                    &e,
+                                    Some(call.id.as_str()),
                                 );
-                                event_recorder.warning(&warning_message);
-                                task_state.conversation.push(Content {
-                                    role: "user".to_owned(),
-                                    parts: vec![Part::Text {
-                                        text: format!("Tool {} failed: {}", name, e),
-                                        thought_signature: None,
-                                    }],
-                                });
-                                let error_payload =
-                                    serde_json::json!({ "error": e.to_string() }).to_string();
-                                task_state
-                                    .conversation_messages
-                                    .push(Message::tool_response(call.id.clone(), error_payload));
                             }
                         }
                     }
@@ -1138,14 +1176,12 @@ impl AgentRunner {
                             "Reached tool-call limit of {} iterations; pausing autonomous loop",
                             task_state.max_tool_loops
                         );
-                        runner_println!(
-                            self,
-                            "{} {}",
+                        self.record_warning(
                             agent_prefix,
-                            format!("{} {}", style("(WARN)").yellow().bold(), warning_message)
+                            &mut task_state,
+                            &event_recorder,
+                            warning_message,
                         );
-                        task_state.warnings.push(warning_message.clone());
-                        event_recorder.warning(&warning_message);
                         task_state.mark_tool_loop_limit_hit();
                         task_state.record_turn(&turn_started_at, &mut turn_recorded);
                         tool_loop_limit_triggered = true;
@@ -1275,7 +1311,7 @@ impl AgentRunner {
 
                                     // Execute the tool
                                     let command_event = event_recorder.command_started(name);
-                                    match self.execute_tool(name, &arguments.clone()).await {
+                                    match self.execute_tool(name, arguments).await {
                                         Ok(result) => {
                                             runner_println!(
                                                 self,
@@ -1319,34 +1355,15 @@ impl AgentRunner {
                                             }
                                         }
                                         Err(e) => {
-                                            runner_println!(
-                                                self,
-                                                "{} {}",
+                                            self.record_tool_failure(
                                                 agent_prefix,
-                                                format!(
-                                                    "{} {} tool failed: {}",
-                                                    style("(ERR)").red(),
-                                                    name,
-                                                    e
-                                                )
-                                            );
-                                            let warning_message =
-                                                format!("Tool {} failed: {}", name, e);
-                                            task_state.warnings.push(warning_message.clone());
-                                            event_recorder.command_finished(
+                                                &mut task_state,
+                                                &event_recorder,
                                                 &command_event,
-                                                CommandExecutionStatus::Failed,
+                                                name,
+                                                &e,
                                                 None,
-                                                &warning_message,
                                             );
-                                            event_recorder.warning(&warning_message);
-                                            task_state.conversation.push(Content {
-                                                role: "user".to_owned(), // Gemini API only accepts "user" and "model"
-                                                parts: vec![Part::Text {
-                                                    text: format!("Tool {} failed: {}", name, e),
-                                                    thought_signature: None,
-                                                }],
-                                            });
                                         }
                                     }
                                 }
@@ -1415,33 +1432,15 @@ impl AgentRunner {
                                     }
                                 }
                                 Err(e) => {
-                                    runner_println!(
-                                        self,
-                                        "{} {}",
+                                    self.record_tool_failure(
                                         agent_prefix,
-                                        format!(
-                                            "{} {} tool failed: {}",
-                                            style("(ERR)").red().bold(),
-                                            name,
-                                            e
-                                        )
-                                    );
-                                    let warning_message = format!("Tool {} failed: {}", name, e);
-                                    task_state.warnings.push(warning_message.clone());
-                                    event_recorder.command_finished(
+                                        &mut task_state,
+                                        &event_recorder,
                                         &command_event,
-                                        CommandExecutionStatus::Failed,
+                                        name,
+                                        &e,
                                         None,
-                                        &warning_message,
                                     );
-                                    event_recorder.warning(&warning_message);
-                                    task_state.conversation.push(Content {
-                                        role: "user".to_owned(), // Gemini API only accepts "user" and "model"
-                                        parts: vec![Part::Text {
-                                            text: format!("Tool {} failed: {}", name, e),
-                                            thought_signature: None,
-                                        }],
-                                    });
                                 }
                             }
                         }
@@ -1522,37 +1521,15 @@ impl AgentRunner {
                                             }
                                         }
                                         Err(e) => {
-                                            runner_println!(
-                                                self,
-                                                "{} {}",
+                                            self.record_tool_failure(
                                                 agent_prefix,
-                                                format!(
-                                                    "{} {} tool failed: {}",
-                                                    style("(ERROR)").red().bold(),
-                                                    func_name,
-                                                    e
-                                                )
-                                            );
-                                            let warning_message =
-                                                format!("Tool {} failed: {}", func_name, e);
-                                            task_state.warnings.push(warning_message.clone());
-                                            event_recorder.command_finished(
+                                                &mut task_state,
+                                                &event_recorder,
                                                 &command_event,
-                                                CommandExecutionStatus::Failed,
+                                                func_name,
+                                                &e,
                                                 None,
-                                                &warning_message,
                                             );
-                                            event_recorder.warning(&warning_message);
-                                            task_state.conversation.push(Content {
-                                                role: "user".to_owned(), // Gemini API only accepts "user" and "model"
-                                                parts: vec![Part::Text {
-                                                    text: format!(
-                                                        "Tool {} failed: {}",
-                                                        func_name, e
-                                                    ),
-                                                    thought_signature: None,
-                                                }],
-                                            });
                                         }
                                     }
                                 }
@@ -1647,34 +1624,15 @@ impl AgentRunner {
                                     }
                                 }
                                 Err(e) => {
-                                    runner_println!(
-                                        self,
-                                        "{} {}",
+                                    self.record_tool_failure(
                                         agent_prefix,
-                                        format!(
-                                            "{} {} tool failed: {}",
-                                            style("(ERROR)").red().bold(),
-                                            tool_name,
-                                            e
-                                        )
-                                    );
-                                    let warning_message =
-                                        format!("Tool {} failed: {}", tool_name, e);
-                                    task_state.warnings.push(warning_message.clone());
-                                    event_recorder.command_finished(
+                                        &mut task_state,
+                                        &event_recorder,
                                         &command_event,
-                                        CommandExecutionStatus::Failed,
+                                        tool_name,
+                                        &e,
                                         None,
-                                        &warning_message,
                                     );
-                                    event_recorder.warning(&warning_message);
-                                    task_state.conversation.push(Content {
-                                        role: "user".to_owned(), // Gemini API only accepts "user" and "model"
-                                        parts: vec![Part::Text {
-                                            text: format!("Tool {} failed: {}", tool_name, e),
-                                            thought_signature: None,
-                                        }],
-                                    });
                                 }
                             }
                         }
@@ -2014,14 +1972,16 @@ impl AgentRunner {
             if let Ok(extra) = std::env::var(format!("{}DENY_REGEX", agent_prefix)) {
                 deny_regex.extend(extra.split(',').map(|s| s.trim().to_owned()));
             }
-            // Compile deny regexes once to avoid recompiling for each pattern match
-            let compiled_deny: Vec<regex::Regex> = deny_regex
-                .iter()
-                .filter_map(|pat| regex::Regex::new(pat).ok())
-                .collect();
-            for re in &compiled_deny {
-                if re.is_match(&cmd_text) {
-                    return Err(anyhow!("Shell command denied by regex: {}", re.as_str()));
+            if !deny_regex.is_empty() {
+                // Compile deny regexes once to avoid recompiling for each pattern match
+                let compiled_deny: Vec<regex::Regex> = deny_regex
+                    .iter()
+                    .filter_map(|pat| regex::Regex::new(pat).ok())
+                    .collect();
+                for re in &compiled_deny {
+                    if re.is_match(&cmd_text) {
+                        return Err(anyhow!("Shell command denied by regex: {}", re.as_str()));
+                    }
                 }
             }
 
@@ -2029,17 +1989,19 @@ impl AgentRunner {
             if let Ok(extra) = std::env::var(format!("{}DENY_GLOB", agent_prefix)) {
                 deny_glob.extend(extra.split(',').map(|s| s.trim().to_owned()));
             }
-            // Compile glob-derived regexes once
-            let compiled_globs: Vec<(String, regex::Regex)> = deny_glob
-                .iter()
-                .filter_map(|pat| {
-                    let re = format!("^{}$", regex::escape(pat).replace(r"\*", ".*"));
-                    regex::Regex::new(&re).ok().map(|r| (pat.clone(), r))
-                })
-                .collect();
-            for (pat, re) in &compiled_globs {
-                if re.is_match(&cmd_text) {
-                    return Err(anyhow!("Shell command denied by glob: {}", pat));
+            if !deny_glob.is_empty() {
+                // Compile glob-derived regexes once
+                let compiled_globs: Vec<(String, regex::Regex)> = deny_glob
+                    .iter()
+                    .filter_map(|pat| {
+                        let re = format!("^{}$", regex::escape(pat).replace(r"\*", ".*"));
+                        regex::Regex::new(&re).ok().map(|r| (pat.clone(), r))
+                    })
+                    .collect();
+                for (pat, re) in &compiled_globs {
+                    if re.is_match(&cmd_text) {
+                        return Err(anyhow!("Shell command denied by glob: {}", pat));
+                    }
                 }
             }
             info!(target = "policy", agent = ?self.agent_type, tool = tool_name, cmd = %cmd_text, "shell_policy_checked");

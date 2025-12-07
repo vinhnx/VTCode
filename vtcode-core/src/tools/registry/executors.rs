@@ -151,7 +151,7 @@ impl ToolRegistry {
             }
 
             // Enhanced suggestions with self-fix capabilities
-            let mut suggestions = Vec::with_capacity(10); // Pre-allocate for common suggestions
+            let mut suggestions: Vec<String> = Vec::with_capacity(10);
             let total_errors = error_report["total_errors"]
                 .as_u64()
                 .unwrap_or(0)
@@ -160,20 +160,13 @@ impl ToolRegistry {
 
             if total_errors > 0 {
                 suggestions.push(
-                    "Review recent assistant tool calls and session archives for more details"
-                        .to_string(),
+                    "Review recent assistant tool calls and session archives for more details".into(),
                 );
 
                 if parsed.detailed {
-                    suggestions.push(
-                        "Consider running 'debug_agent' for more system diagnostics".to_string(),
-                    );
-                    suggestions.push(
-                        "Try 'analyze_agent' to understand current behavior patterns".to_string(),
-                    );
-                    suggestions.push(
-                        "Use 'search_tools' to find specific tools for error handling".to_string(),
-                    );
+                    suggestions.push("Consider running 'debug_agent' for more system diagnostics".into());
+                    suggestions.push("Try 'analyze_agent' to understand current behavior patterns".into());
+                    suggestions.push("Use 'search_tools' to find specific tools for error handling".into());
                 }
 
                 // Self-fix suggestions based on common error patterns
@@ -207,10 +200,8 @@ impl ToolRegistry {
                         || msg.contains("access denied")
                         || msg.contains("forbidden")
                 }) {
-                    suggestions.extend_from_slice(&[
-                        String::from("Permission errors: Check file permissions and workspace access"),
-                        String::from("Consider running with appropriate permissions or changing file ownership"),
-                    ]);
+                    suggestions.push("Permission errors: Check file permissions and workspace access".into());
+                    suggestions.push("Consider running with appropriate permissions or changing file ownership".into());
                 }
 
                 // Command execution errors
@@ -219,22 +210,16 @@ impl ToolRegistry {
                         || msg.contains("command failed")
                         || msg.contains("exit code")
                 }) {
-                    suggestions.extend_from_slice(&[
-                        String::from("Command execution errors: Verify command availability with 'list_files' or check PATH environment"),
-                        String::from("Use 'run_pty_cmd' to test commands manually before automation"),
-                    ]);
+                    suggestions.push("Command execution errors: Verify command availability with 'list_files' or check PATH environment".into());
+                    suggestions.push("Use 'run_pty_cmd' to test commands manually before automation".into());
                 }
 
                 // Git-related errors
                 if error_messages.iter().any(|msg| {
                     msg.contains("git") && (msg.contains("error") || msg.contains("fatal"))
                 }) {
-                    suggestions.extend_from_slice(&[
-                        String::from("Git errors: Check repository status and Git configuration"),
-                        String::from(
-                            "Run 'run_pty_cmd' with 'git status' to diagnose repository issues",
-                        ),
-                    ]);
+                    suggestions.push("Git errors: Check repository status and Git configuration".into());
+                    suggestions.push("Run 'run_pty_cmd' with 'git status' to diagnose repository issues".into());
                 }
 
                 // Network/HTTP errors
@@ -246,11 +231,9 @@ impl ToolRegistry {
                         || msg.contains("ssl")
                         || msg.contains("tls")
                 }) {
-                    suggestions.extend_from_slice(&[
-                        String::from("Network/HTTP errors: Check internet connectivity and proxy settings"),
-                        String::from("Verify API endpoints and credentials if using external services"),
-                        String::from("Consider using 'web_fetch' with proper error handling for web requests"),
-                    ]);
+                    suggestions.push("Network/HTTP errors: Check internet connectivity and proxy settings".into());
+                    suggestions.push("Verify API endpoints and credentials if using external services".into());
+                    suggestions.push("Consider using 'web_fetch' with proper error handling for web requests".into());
                 }
 
                 // Memory/resource errors
@@ -261,25 +244,21 @@ impl ToolRegistry {
                         || msg.contains("resource")
                         || msg.contains("too large")
                 }) {
-                    suggestions.extend_from_slice(&[
-                        String::from("Memory/resource errors: Consider processing data in smaller chunks"),
-                        String::from("Use 'execute_code' with memory-efficient algorithms when handling large files"),
-                    ]);
+                    suggestions.push("Memory/resource errors: Consider processing data in smaller chunks".into());
+                    suggestions.push("Use 'execute_code' with memory-efficient algorithms when handling large files".into());
                 }
 
                 // Add a general recommendation to use the enhanced get_errors
-                suggestions.push(String::from(
-                    "For more detailed diagnostics, run 'get_errors' with detailed=true parameter",
-                ));
+                suggestions.push(
+                    "For more detailed diagnostics, run 'get_errors' with detailed=true parameter".into(),
+                );
             } else {
-                suggestions.push(String::from(
-                    "No obvious errors discovered in recent sessions",
-                ));
+                suggestions.push(
+                    "No obvious errors discovered in recent sessions".into(),
+                );
                 if parsed.detailed {
-                    suggestions.extend_from_slice(&[
-                        String::from("Run 'debug_agent' or 'analyze_agent' for proactive system checks"),
-                        String::from("Consider performing routine maintenance tasks if working with large projects"),
-                    ]);
+                    suggestions.push("Run 'debug_agent' or 'analyze_agent' for proactive system checks".into());
+                    suggestions.push("Consider performing routine maintenance tasks if working with large projects".into());
                 }
             }
 
@@ -331,15 +310,15 @@ impl ToolRegistry {
                 let system_state = json!({
                     "available_tools_count": available_tools.len(),
                     "workspace_root": workspace_root,
-                    "recent_tool_calls": recent_tool_calls,
+                    "recent_tool_calls": recent_tool_calls
                 });
 
                 // Self-diagnosis logic
-                let mut self_diagnosis_issues = Vec::with_capacity(5); // Pre-allocate for common diagnosis issues
+                let mut self_diagnosis_issues: Vec<String> = Vec::with_capacity(5);
 
                 // Check for common system issues
                 if available_tools.is_empty() {
-                    self_diagnosis_issues.push("No tools are currently available - this may indicate a system initialization issue".to_string());
+                    self_diagnosis_issues.push("No tools are currently available - this may indicate a system initialization issue".into());
                 }
 
                 // Check workspace status
@@ -366,45 +345,39 @@ impl ToolRegistry {
                 }
 
                 // Provide self-fix suggestions
-                let mut self_fix_suggestions = Vec::with_capacity(5); // Pre-allocate for common fix suggestions
+                let mut self_fix_suggestions: Vec<String> = Vec::with_capacity(5);
                 if !self_diagnosis_issues.is_empty() {
-                    self_fix_suggestions
-                        .push("Run system initialization to ensure proper setup".to_string());
-                    self_fix_suggestions
-                        .push("Verify workspace directory and permissions".to_string());
-                    self_fix_suggestions
-                        .push("Check that all required tools are properly configured".to_string());
+                    self_fix_suggestions.push("Run system initialization to ensure proper setup".into());
+                    self_fix_suggestions.push("Verify workspace directory and permissions".into());
+                    self_fix_suggestions.push("Check that all required tools are properly configured".into());
 
                     if !recent_failures.is_empty() {
                         self_fix_suggestions.push(
-                            "Review recent tool failures and their error messages".to_string(),
+                            "Review recent tool failures and their error messages".into(),
                         );
                         self_fix_suggestions.push(
-                            "Consider retrying failed operations with corrected parameters"
-                                .to_string(),
+                            "Consider retrying failed operations with corrected parameters".into(),
                         );
                     }
                 } else if total_errors == 0 && recent_failures.is_empty() {
                     self_fix_suggestions
-                        .push("System appears healthy. No immediate issues detected.".to_string());
+                        .push("System appears healthy. No immediate issues detected.".into());
                     if parsed.scope != "all" {
                         self_fix_suggestions.push(
-                            "Consider running with scope='all' for comprehensive check".to_string(),
+                            "Consider running with scope='all' for comprehensive check".into(),
                         );
                     }
                 } else {
                     self_fix_suggestions.push(
-                        "Based on the errors found, review the suggestions provided above"
-                            .to_string(),
+                        "Based on the errors found, review the suggestions provided above".into(),
                     );
                     self_fix_suggestions.push(
-                        "Consider running 'debug_agent' for additional system insights".to_string(),
+                        "Consider running 'debug_agent' for additional system insights".into(),
                     );
 
                     if !recent_failures.is_empty() {
                         self_fix_suggestions.push(
-                            "Examine recent tool execution failures in the diagnostics section"
-                                .to_string(),
+                            "Examine recent tool execution failures in the diagnostics section".into(),
                         );
                     }
                 }
@@ -416,8 +389,7 @@ impl ToolRegistry {
                         self_diagnosis_issues.join("; ")
                     )
                 } else {
-                    "Self-diagnosis: System appears healthy with no critical issues detected"
-                        .to_string()
+                    "Self-diagnosis: System appears healthy with no critical issues detected".into()
                 };
 
                 error_report["diagnostics"] = json!({

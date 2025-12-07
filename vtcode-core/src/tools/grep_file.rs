@@ -180,6 +180,13 @@ impl GrepSearchManager {
         }
     }
 
+    fn cached_result(cache: &GrepSearchCache, input: &GrepSearchInput) -> Option<GrepSearchResult> {
+        cache.get(input).map(|cached| GrepSearchResult {
+            query: cached.query.clone(),
+            matches: cached.matches.clone(),
+        })
+    }
+
     /// Call whenever the user edits the search query.
     pub fn on_user_query(&self, query: String) {
         {
@@ -587,13 +594,10 @@ impl GrepSearchManager {
 
             // Check cache first if available
             if let Some(ref cache) = cache {
-                if let Some(cached_result) = cache.get(&input) {
+                if let Some(cached_result) = Self::cached_result(cache, &input) {
                     #[expect(clippy::unwrap_used)]
                     let mut st = search_state.lock().unwrap();
-                    st.last_result = Some(GrepSearchResult {
-                        query: cached_result.query.clone(),
-                        matches: cached_result.matches.clone(),
-                    });
+                    st.last_result = Some(cached_result);
                     return;
                 }
             }
@@ -639,11 +643,8 @@ impl GrepSearchManager {
     /// Perform an actual ripgrep search with the given input parameters
     pub async fn perform_search(&self, input: GrepSearchInput) -> Result<GrepSearchResult> {
         // Check cache first
-        if let Some(cached_result) = self.cache.get(&input) {
-            return Ok(GrepSearchResult {
-                query: cached_result.query.clone(),
-                matches: cached_result.matches.clone(),
-            });
+        if let Some(cached_result) = Self::cached_result(&self.cache, &input) {
+            return Ok(cached_result);
         }
 
         let query = input.pattern.clone();
