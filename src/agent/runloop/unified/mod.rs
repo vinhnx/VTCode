@@ -32,5 +32,8 @@ pub mod turn;
 mod ui_interaction;
 mod workspace_links;
 
+// Optimization and safety modules
+pub mod tool_call_safety;
+
 pub(crate) use driver::UnifiedTurnDriver;
 pub(crate) use intent_extractor::extract_action_from_messages;

@@ -75,6 +75,7 @@ use crate::agent::runloop::unified::state::{CtrlCSignal, CtrlCState, SessionStat
 use crate::agent::runloop::unified::status_line::{
     InputStatusState, update_context_efficiency, update_input_status_if_changed,
 };
+use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
 use crate::agent::runloop::unified::tool_pipeline::{
     ToolExecutionStatus, execute_tool_with_timeout_ref,
 };
@@ -1732,6 +1733,9 @@ pub(crate) async fn run_single_agent_loop_unified(
                 loop_detection_interactive,
             );
             let mut loop_detection_disabled_for_session = false;
+            let mut tool_call_safety = ToolCallSafetyValidator::new();
+            tool_call_safety.set_limits(max_tool_loops, max_tool_loops.saturating_mul(3));
+            tool_call_safety.start_turn();
             let autonomous_executor = AutonomousExecutor::new();
 
             async fn run_turn_preamble(
@@ -2252,6 +2256,27 @@ pub(crate) async fn run_single_agent_loop_unified(
                                 // Skip this tool call entirely
                                 continue;
                             }
+                        }
+
+                        // Safety validation: rate limits, per-turn/session limits, destructive checks
+                        let validation = match tool_call_safety.validate_call(name) {
+                            Ok(v) => v,
+                            Err(err) => {
+                                let msg = format!("Tool safety blocked '{}': {}", name, err);
+                                renderer.line(MessageStyle::Error, &msg)?;
+                                working_history.push(uni::Message::system(msg));
+                                ensure_turn_bottom_gap(&mut renderer, &mut bottom_gap_applied)?;
+                                break 'outer TurnLoopResult::Completed;
+                            }
+                        };
+                        if validation.requires_confirmation && skip_confirmations {
+                            let msg = format!(
+                                "Skipping '{}' because confirmations are disabled and it is marked destructive.",
+                                name
+                            );
+                            renderer.line(MessageStyle::Error, &msg)?;
+                            working_history.push(uni::Message::system(msg));
+                            continue;
                         }
 
                         // Check for loop hang detection

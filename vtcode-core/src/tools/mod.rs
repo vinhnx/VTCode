@@ -133,6 +133,7 @@ pub mod command_resolver;
 pub mod editing;
 pub mod error_context;
 pub mod execution_context;
+pub mod execution_tracker;
 pub mod fallback_chains;
 pub mod file_ops;
 pub mod grep_cache;
@@ -163,6 +164,7 @@ pub mod improvements_config;
 pub mod improvements_errors;
 pub mod improvements_registry_ext;
 pub mod middleware;
+pub mod parallel_executor;
 pub mod pattern_engine;
 
 #[cfg(test)]
@@ -179,6 +181,7 @@ pub use command_resolver::CommandResolver;
 pub use editing::{Patch, PatchError, PatchHunk, PatchLine, PatchOperation};
 pub use error_context::ToolErrorContext;
 pub use execution_context::{ToolExecutionContext, ToolExecutionRecord, ToolPattern};
+pub use execution_tracker::{ExecutionRecord, ExecutionStats, ExecutionStatus, ExecutionTracker};
 pub use fallback_chains::{
     AbortCondition, ChainStopReason, FallbackChain, FallbackChainExecutor, FallbackChainResult,
     FallbackStep,

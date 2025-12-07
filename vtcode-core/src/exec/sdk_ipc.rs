@@ -88,16 +88,17 @@ impl ToolIpcHandler {
     }
 
     /// Create a new IPC handler with PII protection enabled.
-    pub fn with_pii_protection(ipc_dir: PathBuf) -> Self {
-        Self {
+    pub fn with_pii_protection(ipc_dir: PathBuf) -> Result<Self> {
+        Ok(Self {
             ipc_dir,
-            pii_tokenizer: Some(Arc::new(crate::exec::PiiTokenizer::new())),
-        }
+            pii_tokenizer: Some(Arc::new(crate::exec::PiiTokenizer::new()?)),
+        })
     }
 
     /// Enable PII protection on existing handler.
-    pub fn enable_pii_protection(&mut self) {
-        self.pii_tokenizer = Some(Arc::new(crate::exec::PiiTokenizer::new()));
+    pub fn enable_pii_protection(&mut self) -> Result<()> {
+        self.pii_tokenizer = Some(Arc::new(crate::exec::PiiTokenizer::new()?));
+        Ok(())
     }
 
     /// Read a tool request from the code.
@@ -200,12 +201,12 @@ mod tests {
     #[test]
     fn serialize_tool_request() {
         let request = ToolRequest {
-            id: "test-id".to_owned(),
-            tool_name: "read_file".to_owned(),
+            id: "test-id".into(),
+            tool_name: "read_file".into(),
             args: json!({"path": "/test"}),
         };
 
-        let json = serde_json::to_string(&request).unwrap();
+        let json = serde_json::to_string(&request).expect("ToolRequest should serialize");
         assert!(json.contains("test-id"));
         assert!(json.contains("read_file"));
     }
@@ -213,13 +214,13 @@ mod tests {
     #[test]
     fn serialize_success_response() {
         let response = ToolResponse {
-            id: "test-id".to_owned(),
+            id: "test-id".into(),
             success: true,
             result: Some(json!({"data": "test"})),
             error: None,
         };
 
-        let json = serde_json::to_string(&response).unwrap();
+        let json = serde_json::to_string(&response).expect("ToolResponse should serialize");
         assert!(json.contains("test-id"));
         assert!(json.contains("true"));
         assert!(!json.contains("error"));
@@ -228,13 +229,13 @@ mod tests {
     #[test]
     fn serialize_error_response() {
         let response = ToolResponse {
-            id: "test-id".to_owned(),
+            id: "test-id".into(),
             success: false,
             result: None,
-            error: Some("File not found".to_owned()),
+            error: Some("File not found".into()),
         };
 
-        let json = serde_json::to_string(&response).unwrap();
+        let json = serde_json::to_string(&response).expect("ToolResponse should serialize");
         assert!(json.contains("test-id"));
         assert!(json.contains("false"));
         assert!(json.contains("File not found"));
