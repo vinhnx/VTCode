@@ -739,7 +739,9 @@ mod tests {
             "total": 2
         });
 
-        optimizer.optimize_result(tools::GREP_FILE, grep_result).await;
+        optimizer
+            .optimize_result(tools::GREP_FILE, grep_result)
+            .await;
 
         // Trigger compaction
         optimizer.compact_history();

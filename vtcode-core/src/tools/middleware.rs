@@ -279,8 +279,8 @@ impl Middleware for CachingMiddleware {
                         error: None,
                         metadata: ExecutionMetadata {
                             from_cache: true,
-                        layers_executed: vec![LAYER_CACHING.into()],
-                        ..Default::default()
+                            layers_executed: vec![LAYER_CACHING.into()],
+                            ..Default::default()
                         },
                     };
                 }
@@ -361,7 +361,8 @@ impl Middleware for RetryMiddleware {
         result.metadata.layers_executed.push(LAYER_RETRY.into());
         result
     }
-}/// Validation middleware
+}
+/// Validation middleware
 pub struct ValidationMiddleware {
     obs_context: Arc<ObservabilityContext>,
 }
@@ -409,7 +410,10 @@ impl Middleware for ValidationMiddleware {
         }
 
         let mut result = next(request);
-        result.metadata.layers_executed.push(LAYER_VALIDATION.into());
+        result
+            .metadata
+            .layers_executed
+            .push(LAYER_VALIDATION.into());
         result
     }
 }
@@ -480,8 +484,12 @@ impl CircuitBreakerMiddleware {
         Self {
             failure_threshold,
             // OPTIMIZATION: Pre-allocate capacity for typical tool counts
-            open_circuits: Arc::new(std::sync::RwLock::new(std::collections::HashSet::with_capacity(10))),
-            failure_tracker: Arc::new(std::sync::RwLock::new(std::collections::HashMap::with_capacity(20))),
+            open_circuits: Arc::new(std::sync::RwLock::new(
+                std::collections::HashSet::with_capacity(10),
+            )),
+            failure_tracker: Arc::new(std::sync::RwLock::new(
+                std::collections::HashMap::with_capacity(20),
+            )),
         }
     }
 

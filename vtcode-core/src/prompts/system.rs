@@ -871,6 +871,18 @@ pub async fn compose_system_instruction_text(
             instruction.push_str("- **PTY functionality**: Disabled\n");
         }
 
+        let repeated_desc = if cfg.tools.max_repeated_tool_calls > 0 {
+            cfg.tools.max_repeated_tool_calls.to_string()
+        } else {
+            "disabled (manual guardrails)".to_owned()
+        };
+        let _ = write!(
+            instruction,
+            "- **Loop guards**: max {} tool loops per turn; identical call limit: {}\n",
+            cfg.tools.max_tool_loops.max(1),
+            repeated_desc
+        );
+
         instruction.push_str("\n**IMPORTANT**: Respect these configuration policies. Commands not in the allow list will require user confirmation. Always inform users when actions require confirmation due to security policies.\n");
     }
 

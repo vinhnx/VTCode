@@ -117,9 +117,10 @@ fn parse_json_value(raw: &str) -> Result<serde_json::Value> {
 
     // Try to parse as float
     if let Ok(n) = trimmed.parse::<f64>()
-        && let Some(num) = serde_json::Number::from_f64(n) {
-            return Ok(serde_json::Value::Number(num));
-        }
+        && let Some(num) = serde_json::Number::from_f64(n)
+    {
+        return Ok(serde_json::Value::Number(num));
+    }
 
     // Try to parse as JSON first (more common case)
     if let Ok(json) = serde_json::from_str::<serde_json::Value>(trimmed) {
