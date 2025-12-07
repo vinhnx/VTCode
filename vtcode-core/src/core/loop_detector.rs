@@ -26,11 +26,11 @@ fn normalize_args_for_detection(tool_name: &str, args: &serde_json::Value) -> se
                 let path_trimmed = path.trim_start_matches("./").trim_start_matches('/');
                 if path_trimmed.is_empty() || path_trimmed == "." {
                     // Normalize all root variations to the same key
-                    normalized.insert("path".to_string(), serde_json::json!("__ROOT__"));
+                    normalized.insert("path".into(), serde_json::json!("__ROOT__"));
                 }
             } else {
                 // No path = root
-                normalized.insert("path".to_string(), serde_json::json!("__ROOT__"));
+                normalized.insert("path".into(), serde_json::json!("__ROOT__"));
             }
         }
 
@@ -68,10 +68,16 @@ impl LoopDetector {
         use std::hash::{Hash, Hasher};
 
         let normalized_args = normalize_args_for_detection(tool_name, args);
+
         let tool_name_owned = tool_name.to_owned();
 
         let mut hasher = DefaultHasher::new();
-        normalized_args.to_string().hash(&mut hasher);
+        // OPTIMIZATION: Hash the value directly instead of converting to string first
+        if let Ok(bytes) = serde_json::to_vec(&normalized_args) {
+            bytes.hash(&mut hasher);
+        } else {
+            normalized_args.to_string().hash(&mut hasher);
+        }
         let args_hash = hasher.finish();
 
         // Check for immediate repetition (same tool + args within last 2 calls)

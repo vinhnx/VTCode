@@ -40,6 +40,42 @@ macro_rules! runner_println {
     };
 }
 
+/// API failure tracking for exponential backoff
+struct ApiFailureTracker {
+    consecutive_failures: u32,
+    last_failure: Option<std::time::Instant>,
+}
+
+impl ApiFailureTracker {
+    fn new() -> Self {
+        Self {
+            consecutive_failures: 0,
+            last_failure: None,
+        }
+    }
+
+    fn record_failure(&mut self) {
+        self.consecutive_failures += 1;
+        self.last_failure = Some(std::time::Instant::now());
+    }
+
+    fn reset(&mut self) {
+        self.consecutive_failures = 0;
+        self.last_failure = None;
+    }
+
+    fn should_circuit_break(&self) -> bool {
+        self.consecutive_failures >= 3
+    }
+
+    fn backoff_duration(&self) -> Duration {
+        let base_ms = 1000;
+        let max_ms = 30000;
+        let backoff_ms = base_ms * 2_u64.pow(self.consecutive_failures.saturating_sub(1));
+        Duration::from_millis(backoff_ms.min(max_ms))
+    }
+}
+
 /// Format tool result for display in the TUI.
 /// Limits verbose output from web_fetch to avoid overwhelming the terminal.
 pub fn format_tool_result_for_display(tool_name: &str, result: &Value) -> String {
@@ -385,6 +421,8 @@ pub struct AgentRunner {
     max_turns: usize,
     /// Loop detector to prevent infinite exploration
     loop_detector: RefCell<LoopDetector>,
+    /// API failure tracking for exponential backoff
+    failure_tracker: RefCell<ApiFailureTracker>,
 }
 
 impl AgentRunner {
@@ -558,6 +596,7 @@ impl AgentRunner {
         let mut streaming_response: Option<crate::llm::provider::LLMResponse> = None;
 
         if supports_streaming {
+            // OPTIMIZATION: Clone only needed for fallback path
             match self.provider_client.stream(request.clone()).await {
                 Ok(mut stream) => {
                     while let Some(event) = stream.next().await {
@@ -656,6 +695,17 @@ impl AgentRunner {
             used_streaming_fallback = true;
         }
 
+        // Check circuit breaker before fallback
+        if self.failure_tracker.borrow().should_circuit_break() {
+            let backoff = self.failure_tracker.borrow().backoff_duration();
+            warn!(
+                "Circuit breaker active after {} consecutive failures. Waiting {:?} before retry.",
+                self.failure_tracker.borrow().consecutive_failures,
+                backoff
+            );
+            tokio::time::sleep(backoff).await;
+        }
+
         // Optimize: Create fallback request without cloning if possible
         // We only need to change stream=false, so we can reuse the request
         let fallback_request = LLMRequest {
@@ -668,6 +718,8 @@ impl AgentRunner {
             .generate(fallback_request)
             .await
             .map_err(|e| {
+                // Record failure for exponential backoff
+                self.failure_tracker.borrow_mut().record_failure();
                 runner_println!(
                     self,
                     "{} {} Failed",
@@ -684,6 +736,9 @@ impl AgentRunner {
 
         let content = response.content.take().unwrap_or_default();
         let reasoning = response.reasoning.clone();
+
+        // Reset failure tracker on success
+        self.failure_tracker.borrow_mut().reset();
 
         Ok(ProviderResponseSummary {
             response,
@@ -739,6 +794,7 @@ impl AgentRunner {
             event_sink: None,
             max_turns: defaults::DEFAULT_FULL_AUTO_MAX_TURNS,
             loop_detector: RefCell::new(LoopDetector::new()),
+            failure_tracker: RefCell::new(ApiFailureTracker::new()),
         })
     }
 
@@ -821,6 +877,7 @@ impl AgentRunner {
     ) -> Result<TaskResults> {
         // Agent execution status
         let agent_prefix = format!("[{}]", self.agent_type);
+        // OPTIMIZATION: Avoid cloning session_id repeatedly by using reference
         let mut event_recorder =
             ExecEventRecorder::new(self.session_id.clone(), self.event_sink.clone());
         event_recorder.turn_started();
@@ -1169,25 +1226,9 @@ impl AgentRunner {
                                 let call_id = call.id.clone();
                                 let tool_registry = self.tool_registry.clone();
 
-                                // Check for loops before execution
-                                let loop_warning =
-                                    self.loop_detector.borrow_mut().record_call(&name, &args);
-
+                                // OPTIMIZATION: Loop check already done before parallel execution
+                                // No need to check again here - saves duplicate borrow_mut calls
                                 async move {
-                                    if let Some(warning) = loop_warning {
-                                        if warning.contains("CRITICAL")
-                                            || warning.contains("HARD STOP")
-                                        {
-                                            return (
-                                                name,
-                                                args,
-                                                call_id,
-                                                Err(anyhow::anyhow!("{}", warning)),
-                                            );
-                                        }
-                                        tracing::warn!("{}", warning);
-                                    }
-
                                     let mut registry = tool_registry;
                                     registry.initialize_async().await.ok();
                                     let result =

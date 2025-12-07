@@ -7,7 +7,6 @@
 //! - Observability integration
 
 use crate::cache::{CacheKey, DEFAULT_CACHE_TTL, EvictionPolicy, UnifiedCache};
-use crate::config::constants::tools;
 use crate::tools::{
     improvements_errors::ObservabilityContext,
     pattern_engine::{ExecutionEvent, PatternEngine},
@@ -201,6 +200,7 @@ impl ToolRegistryImprovement {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::constants::tools;
 
     #[test]
     fn test_record_execution() {

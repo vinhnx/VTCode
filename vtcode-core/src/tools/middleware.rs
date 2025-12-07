@@ -7,6 +7,14 @@ use crate::tools::improvements_errors::{EventType, ObservabilityContext};
 use std::fmt;
 use std::sync::Arc;
 
+// OPTIMIZATION: Const string literals to avoid allocations in hot paths
+const LAYER_LOGGING: &str = "logging";
+const LAYER_CACHING: &str = "caching";
+const LAYER_RETRY: &str = "retry";
+const LAYER_VALIDATION: &str = "validation";
+const LAYER_METRICS: &str = "metrics";
+const LAYER_CIRCUIT_BREAKER: &str = "circuit_breaker";
+
 /// Result of middleware chain execution
 #[derive(Debug, Clone)]
 pub struct MiddlewareResult {
@@ -138,7 +146,8 @@ impl Default for RequestMetadata {
             parent_request_id: None,
             priority: 50,
             timeout_ms: 30000,
-            tags: Vec::new(),
+            // OPTIMIZATION: Pre-allocate typical tag count
+            tags: Vec::with_capacity(3),
         }
     }
 }
@@ -196,7 +205,7 @@ impl Middleware for LoggingMiddleware {
         }
 
         result.metadata.duration_ms = duration;
-        result.metadata.layers_executed.push("logging".into());
+        result.metadata.layers_executed.push(LAYER_LOGGING.into());
         result
     }
 }
@@ -270,8 +279,8 @@ impl Middleware for CachingMiddleware {
                         error: None,
                         metadata: ExecutionMetadata {
                             from_cache: true,
-                            layers_executed: vec!["caching".into()],
-                            ..Default::default()
+                        layers_executed: vec![LAYER_CACHING.into()],
+                        ..Default::default()
                         },
                     };
                 }
@@ -295,7 +304,7 @@ impl Middleware for CachingMiddleware {
             }
         }
 
-        result.metadata.layers_executed.push("caching".into());
+        result.metadata.layers_executed.push(LAYER_CACHING.into());
         result
     }
 }
@@ -332,7 +341,7 @@ impl Middleware for RetryMiddleware {
         request: ToolRequest,
         next: Box<dyn Fn(ToolRequest) -> MiddlewareResult + Send + Sync>,
     ) -> MiddlewareResult {
-        // Try once, then retry with clones
+        // OPTIMIZATION: Clone once, reuse for all retries
         let mut result = next(request.clone());
 
         if !result.success && self.max_attempts > 1 {
@@ -349,12 +358,10 @@ impl Middleware for RetryMiddleware {
             }
         }
 
-        result.metadata.layers_executed.push("retry".into());
+        result.metadata.layers_executed.push(LAYER_RETRY.into());
         result
     }
-}
-
-/// Validation middleware
+}/// Validation middleware
 pub struct ValidationMiddleware {
     obs_context: Arc<ObservabilityContext>,
 }
@@ -402,7 +409,7 @@ impl Middleware for ValidationMiddleware {
         }
 
         let mut result = next(request);
-        result.metadata.layers_executed.push("validation".into());
+        result.metadata.layers_executed.push(LAYER_VALIDATION.into());
         result
     }
 }
@@ -453,7 +460,7 @@ impl Middleware for MetricsMiddleware {
         updated_result
             .metadata
             .layers_executed
-            .push("metrics".into());
+            .push(LAYER_METRICS.into());
         updated_result
     }
 }
@@ -472,8 +479,9 @@ impl CircuitBreakerMiddleware {
     pub fn new(failure_threshold: f64) -> Self {
         Self {
             failure_threshold,
-            open_circuits: Arc::new(std::sync::RwLock::new(std::collections::HashSet::new())),
-            failure_tracker: Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
+            // OPTIMIZATION: Pre-allocate capacity for typical tool counts
+            open_circuits: Arc::new(std::sync::RwLock::new(std::collections::HashSet::with_capacity(10))),
+            failure_tracker: Arc::new(std::sync::RwLock::new(std::collections::HashMap::with_capacity(20))),
         }
     }
 
@@ -548,7 +556,7 @@ impl Middleware for CircuitBreakerMiddleware {
         updated_result
             .metadata
             .layers_executed
-            .push("circuit_breaker".into());
+            .push(LAYER_CIRCUIT_BREAKER.into());
         updated_result
     }
 }
@@ -561,7 +569,8 @@ pub struct MiddlewareChain {
 impl MiddlewareChain {
     pub fn new() -> Self {
         Self {
-            middlewares: Vec::new(),
+            // OPTIMIZATION: Pre-allocate for typical middleware stack (3-5 layers)
+            middlewares: Vec::with_capacity(5),
         }
     }
 
