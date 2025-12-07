@@ -51,21 +51,25 @@ impl LoopDetector {
     }
 
     /// Start a new turn and reset per-turn counters
+    #[allow(dead_code)]
     pub fn start_turn(&mut self) {
         self.turn_tool_count = 0;
     }
 
     /// Check if we've hit per-turn tool limit
+    #[allow(dead_code)]
     pub fn is_turn_limit_exceeded(&self) -> bool {
         self.turn_tool_count > self.max_tools_per_turn
     }
 
     /// Get current turn tool count
+    #[allow(dead_code)]
     pub fn turn_count(&self) -> usize {
         self.turn_tool_count
     }
 
     /// Set max tools per turn (for testing/customization)
+    #[allow(dead_code)]
     pub fn set_max_tools_per_turn(&mut self, max: usize) {
         self.max_tools_per_turn = max;
     }

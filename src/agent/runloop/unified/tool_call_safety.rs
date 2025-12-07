@@ -114,11 +114,13 @@ impl ToolCallSafetyValidator {
     }
 
     /// Check if tool is destructive
+    #[allow(dead_code)]
     pub fn is_destructive(&self, tool_name: &str) -> bool {
         self.destructive_tools.contains(tool_name)
     }
 
     /// Get list of destructive tools
+    #[allow(dead_code)]
     pub fn destructive_tools(&self) -> Vec<&'static str> {
         self.destructive_tools.iter().copied().collect()
     }
@@ -133,10 +135,12 @@ impl ToolCallSafetyValidator {
 #[derive(Debug, Clone)]
 pub struct CallValidation {
     /// Whether tool is destructive
+    #[allow(dead_code)]
     pub is_destructive: bool,
     /// Whether confirmation is required
     pub requires_confirmation: bool,
     /// Whether execution is allowed
+    #[allow(dead_code)]
     pub execution_allowed: bool,
 }
 
