@@ -884,6 +884,12 @@ pub async fn compose_system_instruction_text(
             repeated_desc
         );
 
+        if cfg.mcp.enabled {
+            instruction.push_str(
+                "- **MCP integrations**: Enabled. Prefer MCP tools (search_tools, list_mcp_resources, fetch_mcp_resource) for context before external fetches.\n",
+            );
+        }
+
         instruction.push_str("\n**IMPORTANT**: Respect these configuration policies. Commands not in the allow list will require user confirmation. Always inform users when actions require confirmation due to security policies.\n");
     }
 

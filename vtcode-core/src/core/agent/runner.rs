@@ -1297,6 +1297,20 @@ impl AgentRunner {
                                 .parsed_arguments()
                                 .unwrap_or_else(|_| serde_json::json!({}));
                             let call_id = call.id.clone();
+
+                            if !self.is_valid_tool(&name).await {
+                                let warning =
+                                    format!("Skipped denied or unknown tool: {}", name);
+                                runner_println!(
+                                    self,
+                                    "{} {}",
+                                    agent_prefix,
+                                    style(&warning).yellow().bold()
+                                );
+                                task_state.warnings.push(warning);
+                                continue;
+                            }
+
                             let tool_registry = self.tool_registry.clone();
 
                             futures.push({
@@ -1436,13 +1450,16 @@ impl AgentRunner {
                             let command_event = event_recorder.command_started(&name);
 
                             // Safety: Validate tool name before execution
-                            if !self.is_valid_tool(&name) {
+                            if !self.is_valid_tool(&name).await {
                                 runner_println!(
                                     self,
                                     "{} Invalid tool: {}",
                                     agent_prefix,
                                     style(&name).red().bold()
                                 );
+                                task_state
+                                    .warnings
+                                    .push(format!("Skipped denied or unknown tool: {}", name));
                                 continue;
                             }
 
@@ -2311,17 +2328,20 @@ impl AgentRunner {
         let declarations = build_function_declarations();
 
         // Filter tools based on agent type and permissions
-        let allowed_tools: Vec<Tool> = declarations
-            .into_iter()
-            .filter(|decl| self.is_tool_allowed(&decl.name))
-            .map(|decl| Tool {
+        let mut allowed_tools = Vec::with_capacity(declarations.len());
+        for decl in declarations {
+            if !self.is_tool_allowed(&decl.name) {
+                continue;
+            }
+
+            allowed_tools.push(Tool {
                 function_declarations: vec![crate::gemini::FunctionDeclaration {
                     name: decl.name,
                     description: decl.description,
                     parameters: sanitize_function_parameters(decl.parameters),
                 }],
-            })
-            .collect();
+            });
+        }
 
         Ok(allowed_tools)
     }
@@ -2340,28 +2360,31 @@ impl AgentRunner {
         }
     }
 
-    /// Validate if a tool name is safe and known
+    /// Validate if a tool name is safe, registered, and allowed by policy
     #[inline]
-    fn is_valid_tool(&self, tool_name: &str) -> bool {
-        // Check against known safe tools
-        matches!(
-            tool_name,
-            tools::READ_FILE
-                | tools::WRITE_FILE
-                | tools::EDIT_FILE
-                | tools::APPLY_PATCH
-                | tools::LIST_FILES
-                | tools::GREP_FILE
-                | tools::RUN_PTY_CMD
-                | tools::WEB_FETCH
-                | tools::SEARCH_TOOLS
-                | tools::EXECUTE_CODE
-                | tools::SAVE_SKILL
-                | tools::LOAD_SKILL
-                | tools::UPDATE_PLAN
-                | tools::GET_ERRORS
-                | "shell" // Legacy alias
-        )
+    async fn is_valid_tool(&self, tool_name: &str) -> bool {
+        // Normalize legacy alias for shell commands
+        let canonical = if tool_name == "shell" {
+            tools::RUN_PTY_CMD
+        } else {
+            tool_name
+        };
+
+        // Ensure the tool exists in the registry (including MCP tools)
+        if !self.tool_registry.has_tool(canonical).await {
+            return false;
+        }
+
+        // Enforce policy gate: Allow and Prompt are executable, Deny blocks
+        if let Ok(policy_manager) = self.tool_registry.policy_manager() {
+            return matches!(
+                policy_manager.get_policy(canonical),
+                crate::tool_policy::ToolPolicy::Allow
+                    | crate::tool_policy::ToolPolicy::Prompt
+            );
+        }
+
+        true
     }
 
     /// Execute a tool by name with given arguments
