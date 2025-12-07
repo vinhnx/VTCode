@@ -3,6 +3,44 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Version 0.43.0] - 2025-11-09
+# [Version 0.47.12] - 2025-12-08
+
+
+### Features
+    - feat: update tool policy and enhance loop detection functionality
+    - feat: implement tool call safety validation and execution tracking
+    - feat(build): add multi-stage Dockerfile for building and running vtcode
+
+
+### Refactors
+    - refactor: update tool policy and enhance tool validation
+    - refactor: improve code formatting and structure across multiple files
+    - refactor: implement API failure tracking with exponential backoff; optimize tool caching and navigation
+    - refactor: optimize core agent execution and consolidate utility modules
+    - refactor: introduce warning and error handling methods in AgentRunner; streamline tool failure logging and path normalization utilities
+    - refactor: update model configurations to use OpenRouter for Moonshot models; remove deprecated entries and enhance model support
+    - refactor: enhance reasoning model support and update tool policies; remove deprecated Moonshot models
+    - refactor: improve code readability by simplifying conditional statements and updating deprecated usages across multiple modules
+
+
+### Documentation
+    - docs: update changelog for v0.47.11 [skip ci]
+    - docs: update changelog for v0.47.10 [skip ci]
+    - docs: update changelog for v0.47.9 [skip ci]
+    - docs: update changelog for v0.47.8 [skip ci]
+
+
+### Chores
+    - chore: release v0.47.11
+    - chore: update dependencies and improve code formatting
+    - chore: release v0.47.10
+    - chore: update VSCode extension package.json to v0.47.9 [skip ci]
+    - chore: update npm package.json to v0.47.9 [skip ci]
+    - chore: release v0.47.9
+    - chore: release v0.47.8
+    - chore: update tool policies and optimize configuration loading
+    - chore: update VSCode extension package.json to v0.47.7 [skip ci]
+    - chore: update npm package.json to v0.47.7 [skip ci]
 # [Version 0.47.11] - 2025-12-08
 
 
