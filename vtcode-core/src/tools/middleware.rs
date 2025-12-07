@@ -196,25 +196,36 @@ impl Middleware for LoggingMiddleware {
         }
 
         result.metadata.duration_ms = duration;
-        result
-            .metadata
-            .layers_executed
-            .push("logging".into());
+        result.metadata.layers_executed.push("logging".into());
         result
     }
 }
 
-/// Caching middleware
+/// Cache entry with timestamp for staleness detection
+#[derive(Debug, Clone)]
+struct CacheEntry {
+    value: Arc<String>,
+    timestamp: std::time::Instant,
+}
+
+/// Caching middleware with staleness detection
 pub struct CachingMiddleware {
-    // In production, this would be a proper cache implementation
-    cache: Arc<std::sync::RwLock<std::collections::HashMap<String, Arc<String>>>>,
+    cache: Arc<std::sync::RwLock<std::collections::HashMap<String, CacheEntry>>>,
+    /// Maximum age of cache entries in seconds (default: 300 = 5 minutes)
+    max_age_secs: u64,
 }
 
 impl CachingMiddleware {
     pub fn new() -> Self {
         Self {
             cache: Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
+            max_age_secs: 300, // 5 minutes default
         }
+    }
+
+    pub fn with_max_age(mut self, max_age_secs: u64) -> Self {
+        self.max_age_secs = max_age_secs;
+        self
     }
 
     fn cache_key(tool: &str, args: &str) -> String {
@@ -224,6 +235,10 @@ impl CachingMiddleware {
         let mut hasher = DefaultHasher::new();
         hasher.write(args.as_bytes());
         format!("{}:{}", tool, hasher.finish())
+    }
+
+    fn is_stale(&self, entry: &CacheEntry) -> bool {
+        entry.timestamp.elapsed().as_secs() > self.max_age_secs
     }
 }
 
@@ -245,19 +260,21 @@ impl Middleware for CachingMiddleware {
     ) -> MiddlewareResult {
         let key = Self::cache_key(&request.tool_name, &request.arguments);
 
-        // Check cache
+        // Check cache and staleness
         if let Ok(cache) = self.cache.read() {
-            if let Some(cached) = cache.get(&key) {
-                return MiddlewareResult {
-                    success: true,
-                    result: Some((**cached).clone()),
-                    error: None,
-                    metadata: ExecutionMetadata {
-                        from_cache: true,
-                        layers_executed: vec!["caching".into()],
-                        ..Default::default()
-                    },
-                };
+            if let Some(entry) = cache.get(&key) {
+                if !self.is_stale(entry) {
+                    return MiddlewareResult {
+                        success: true,
+                        result: Some((*entry.value).clone()),
+                        error: None,
+                        metadata: ExecutionMetadata {
+                            from_cache: true,
+                            layers_executed: vec!["caching".into()],
+                            ..Default::default()
+                        },
+                    };
+                }
             }
         }
 
@@ -267,15 +284,18 @@ impl Middleware for CachingMiddleware {
         if result.success {
             if let Some(ref output) = result.result {
                 if let Ok(mut cache) = self.cache.write() {
-                    cache.insert(key, Arc::new(output.clone()));
+                    cache.insert(
+                        key,
+                        CacheEntry {
+                            value: Arc::new(output.clone()),
+                            timestamp: std::time::Instant::now(),
+                        },
+                    );
                 }
             }
         }
 
-        result
-            .metadata
-            .layers_executed
-            .push("caching".into());
+        result.metadata.layers_executed.push("caching".into());
         result
     }
 }
@@ -346,9 +366,7 @@ impl ValidationMiddleware {
 
     fn validate_request(&self, request: &ToolRequest) -> Result<(), MiddlewareError> {
         if request.tool_name.is_empty() {
-            return Err(MiddlewareError::ValidationFailed(
-                "tool_name is empty",
-            ));
+            return Err(MiddlewareError::ValidationFailed("tool_name is empty"));
         }
 
         if request.arguments.is_empty() {
@@ -384,11 +402,154 @@ impl Middleware for ValidationMiddleware {
         }
 
         let mut result = next(request);
+        result.metadata.layers_executed.push("validation".into());
         result
+    }
+}
+
+/// Metrics middleware that integrates with AgentBehaviorAnalyzer
+pub struct MetricsMiddleware {
+    analyzer: Arc<std::sync::RwLock<crate::exec::agent_optimization::AgentBehaviorAnalyzer>>,
+}
+
+impl MetricsMiddleware {
+    pub fn new(
+        analyzer: Arc<std::sync::RwLock<crate::exec::agent_optimization::AgentBehaviorAnalyzer>>,
+    ) -> Self {
+        Self { analyzer }
+    }
+}
+
+impl Middleware for MetricsMiddleware {
+    fn name(&self) -> &str {
+        "metrics"
+    }
+
+    fn execute(
+        &self,
+        request: ToolRequest,
+        next: Box<dyn Fn(ToolRequest) -> MiddlewareResult + Send + Sync>,
+    ) -> MiddlewareResult {
+        let tool_name = request.tool_name.clone();
+
+        // Execute the request
+        let result = next(request);
+
+        // Record metrics
+        if let Ok(mut analyzer) = self.analyzer.write() {
+            if result.success {
+                analyzer.record_tool_usage(&tool_name);
+            } else {
+                let error_msg = result
+                    .error
+                    .as_ref()
+                    .map(|e| e.to_string())
+                    .unwrap_or_else(|| "unknown error".to_string());
+                analyzer.record_tool_failure(&tool_name, &error_msg);
+            }
+        }
+
+        let mut updated_result = result;
+        updated_result
             .metadata
             .layers_executed
-            .push("validation".into());
-        result
+            .push("metrics".into());
+        updated_result
+    }
+}
+
+/// Circuit breaker middleware for failing tools
+pub struct CircuitBreakerMiddleware {
+    /// Failure threshold (0.0-1.0) to open circuit
+    failure_threshold: f64,
+    /// Tools with open circuits (blocked)
+    open_circuits: Arc<std::sync::RwLock<std::collections::HashSet<String>>>,
+    /// Failure tracking per tool
+    failure_tracker: Arc<std::sync::RwLock<std::collections::HashMap<String, (u64, u64)>>>, // (failures, total)
+}
+
+impl CircuitBreakerMiddleware {
+    pub fn new(failure_threshold: f64) -> Self {
+        Self {
+            failure_threshold,
+            open_circuits: Arc::new(std::sync::RwLock::new(std::collections::HashSet::new())),
+            failure_tracker: Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
+        }
+    }
+
+    fn should_block(&self, tool_name: &str) -> bool {
+        if let Ok(circuits) = self.open_circuits.read() {
+            circuits.contains(tool_name)
+        } else {
+            false
+        }
+    }
+
+    fn update_circuit(&self, tool_name: &str, success: bool) {
+        if let Ok(mut tracker) = self.failure_tracker.write() {
+            let (failures, total) = tracker.entry(tool_name.to_owned()).or_insert((0, 0));
+            *total += 1;
+            if !success {
+                *failures += 1;
+            }
+
+            let failure_rate = *failures as f64 / *total as f64;
+            if failure_rate >= self.failure_threshold && *total >= 5 {
+                // Open circuit after 5 attempts
+                if let Ok(mut circuits) = self.open_circuits.write() {
+                    circuits.insert(tool_name.to_owned());
+                    tracing::warn!(
+                        tool = %tool_name,
+                        failure_rate = failure_rate,
+                        "circuit breaker opened"
+                    );
+                }
+            }
+        }
+    }
+}
+
+impl Middleware for CircuitBreakerMiddleware {
+    fn name(&self) -> &str {
+        "circuit_breaker"
+    }
+
+    fn execute(
+        &self,
+        request: ToolRequest,
+        next: Box<dyn Fn(ToolRequest) -> MiddlewareResult + Send + Sync>,
+    ) -> MiddlewareResult {
+        let tool_name = request.tool_name.clone();
+
+        // Check if circuit is open
+        if self.should_block(&tool_name) {
+            return MiddlewareResult {
+                success: false,
+                result: None,
+                error: Some(MiddlewareError::ExecutionFailed(
+                    "circuit breaker open - tool has high failure rate",
+                )),
+                metadata: ExecutionMetadata {
+                    layers_executed: vec!["circuit_breaker".into()],
+                    warnings: vec![format!(
+                        "Tool {} blocked by circuit breaker due to high failure rate",
+                        tool_name
+                    )],
+                    ..Default::default()
+                },
+            };
+        }
+
+        // Execute and track result
+        let result = next(request);
+        self.update_circuit(&tool_name, result.success);
+
+        let mut updated_result = result;
+        updated_result
+            .metadata
+            .layers_executed
+            .push("circuit_breaker".into());
+        updated_result
     }
 }
 
@@ -407,6 +568,19 @@ impl MiddlewareChain {
     pub fn add(mut self, middleware: Arc<dyn Middleware>) -> Self {
         self.middlewares.push(middleware);
         self
+    }
+
+    /// Add metrics middleware with AgentBehaviorAnalyzer integration
+    pub fn with_metrics(
+        self,
+        analyzer: Arc<std::sync::RwLock<crate::exec::agent_optimization::AgentBehaviorAnalyzer>>,
+    ) -> Self {
+        self.add(Arc::new(MetricsMiddleware::new(analyzer)))
+    }
+
+    /// Add circuit breaker middleware with failure threshold
+    pub fn with_circuit_breaker(self, threshold: f64) -> Self {
+        self.add(Arc::new(CircuitBreakerMiddleware::new(threshold)))
     }
 
     /// Execute request through the middleware chain with a synchronous executor
@@ -459,7 +633,7 @@ mod tests {
     fn test_logging_middleware() {
         let middleware = LoggingMiddleware::new(tracing::Level::INFO);
         let request = ToolRequest {
-            tool_name: "grep_file".into(),
+            tool_name: crate::config::constants::tools::GREP_FILE.into(),
             arguments: "pattern:test".into(),
             context: "src/".into(),
             metadata: RequestMetadata::default(),
@@ -531,5 +705,168 @@ mod tests {
 
         let result = middleware.execute(invalid_request, executor);
         assert!(!result.success);
+    }
+
+    #[test]
+    fn test_metrics_middleware() {
+        use crate::exec::agent_optimization::AgentBehaviorAnalyzer;
+
+        let analyzer = Arc::new(std::sync::RwLock::new(AgentBehaviorAnalyzer::new()));
+        let middleware = MetricsMiddleware::new(analyzer.clone());
+
+        let request = ToolRequest {
+            tool_name: "test_tool".into(),
+            arguments: "arg".into(),
+            context: "ctx".into(),
+            metadata: RequestMetadata::default(),
+        };
+
+        let executor = Box::new(|_req: ToolRequest| MiddlewareResult {
+            success: true,
+            result: Some("result".into()),
+            error: None,
+            metadata: ExecutionMetadata::default(),
+        });
+
+        let result = middleware.execute(request, executor);
+        assert!(result.success);
+        assert!(result.metadata.layers_executed.contains(&"metrics".into()));
+
+        // Verify metrics were recorded
+        let analyzer_lock = analyzer.read().unwrap();
+        assert_eq!(
+            *analyzer_lock
+                .tool_stats()
+                .usage_frequency
+                .get("test_tool")
+                .unwrap(),
+            1
+        );
+    }
+
+    #[test]
+    fn test_circuit_breaker_middleware() {
+        let middleware = CircuitBreakerMiddleware::new(0.5);
+
+        let request = ToolRequest {
+            tool_name: "failing_tool".into(),
+            arguments: "arg".into(),
+            context: "ctx".into(),
+            metadata: RequestMetadata::default(),
+        };
+
+        // Simulate 5 failures to open circuit
+        for _ in 0..5 {
+            let executor = Box::new(|_req: ToolRequest| MiddlewareResult {
+                success: false,
+                result: None,
+                error: Some(MiddlewareError::ExecutionFailed("test error")),
+                metadata: ExecutionMetadata::default(),
+            });
+
+            let _ = middleware.execute(request.clone(), executor);
+        }
+
+        // Next call should be blocked
+        let executor = Box::new(|_req: ToolRequest| MiddlewareResult {
+            success: true,
+            result: Some("should not execute".into()),
+            error: None,
+            metadata: ExecutionMetadata::default(),
+        });
+
+        let result = middleware.execute(request, executor);
+        assert!(!result.success);
+        assert!(
+            result
+                .metadata
+                .layers_executed
+                .contains(&"circuit_breaker".into())
+        );
+    }
+
+    #[test]
+    fn test_caching_middleware_staleness() {
+        let middleware = CachingMiddleware::new().with_max_age(1); // 1 second max age
+
+        let request = ToolRequest {
+            tool_name: "test_tool".into(),
+            arguments: "arg".into(),
+            context: "ctx".into(),
+            metadata: RequestMetadata::default(),
+        };
+
+        // First execution (cache miss)
+        let executor = Box::new(|_req: ToolRequest| MiddlewareResult {
+            success: true,
+            result: Some("result1".into()),
+            error: None,
+            metadata: ExecutionMetadata::default(),
+        });
+
+        let result1 = middleware.execute(request.clone(), executor);
+        assert!(!result1.metadata.from_cache);
+
+        // Second execution (cache hit)
+        let executor = Box::new(|_req: ToolRequest| MiddlewareResult {
+            success: true,
+            result: Some("result2".into()),
+            error: None,
+            metadata: ExecutionMetadata::default(),
+        });
+
+        let result2 = middleware.execute(request.clone(), executor);
+        assert!(result2.metadata.from_cache);
+        assert_eq!(result2.result.unwrap(), "result1");
+
+        // Wait for cache to become stale
+        std::thread::sleep(std::time::Duration::from_secs(2));
+
+        // Third execution (cache miss due to staleness)
+        let executor = Box::new(|_req: ToolRequest| MiddlewareResult {
+            success: true,
+            result: Some("result3".into()),
+            error: None,
+            metadata: ExecutionMetadata::default(),
+        });
+
+        let result3 = middleware.execute(request, executor);
+        assert!(!result3.metadata.from_cache);
+        assert_eq!(result3.result.unwrap(), "result3");
+    }
+
+    #[test]
+    fn test_middleware_chain_with_metrics_and_circuit_breaker() {
+        use crate::exec::agent_optimization::AgentBehaviorAnalyzer;
+
+        let analyzer = Arc::new(std::sync::RwLock::new(AgentBehaviorAnalyzer::new()));
+
+        let chain = MiddlewareChain::new()
+            .with_metrics(analyzer.clone())
+            .with_circuit_breaker(0.8);
+
+        let request = ToolRequest {
+            tool_name: "test_tool".into(),
+            arguments: "arg".into(),
+            context: "ctx".into(),
+            metadata: RequestMetadata::default(),
+        };
+
+        let executor = |_req: ToolRequest| MiddlewareResult {
+            success: true,
+            result: Some("result".into()),
+            error: None,
+            metadata: ExecutionMetadata::default(),
+        };
+
+        let result = chain.execute_sync(request, executor);
+        assert!(result.success);
+        assert!(result.metadata.layers_executed.contains(&"metrics".into()));
+        assert!(
+            result
+                .metadata
+                .layers_executed
+                .contains(&"circuit_breaker".into())
+        );
     }
 }

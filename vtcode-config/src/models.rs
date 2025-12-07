@@ -928,7 +928,7 @@ impl ModelId {
                 | ModelId::Gemini25Flash
                 | ModelId::Gemini25FlashLite
                 | ModelId::ZaiGlm45Flash
-                )
+        )
     }
 
     /// Check if this is a "pro" variant (optimized for capability)
@@ -963,7 +963,7 @@ impl ModelId {
                 | ModelId::ZaiGlm45Air
                 | ModelId::ZaiGlm45Airx
                 | ModelId::ZaiGlm45Flash
-                )
+        )
     }
 
     /// Check if this is a top-tier model

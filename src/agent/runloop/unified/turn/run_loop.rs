@@ -13,7 +13,7 @@ use tokio::task;
 #[cfg(debug_assertions)]
 use tracing::debug;
 use tracing::warn;
-use vtcode_core::config::constants::{defaults, ui};
+use vtcode_core::config::constants::{defaults, tools, ui};
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, UiSurfacePreference};
 use vtcode_core::core::agent::snapshots::{SnapshotConfig, SnapshotManager};
@@ -85,6 +85,7 @@ use crate::agent::runloop::unified::tool_summary::{
 use crate::agent::runloop::unified::workspace_links::LinkedDirectory;
 use crate::hooks::lifecycle::{LifecycleHookEngine, SessionEndReason, SessionStartTrigger};
 use crate::ide_context::IdeContextBridge;
+use vtcode_core::tools::autonomous_executor::{AutonomousExecutor, AutonomousPolicy};
 
 #[allow(dead_code)]
 pub enum TurnLoopResult {
@@ -617,6 +618,24 @@ pub(crate) async fn run_turn_handle_tool_failure(
     // Display a simple failure message and log
     let failure_msg = format!("Tool '{}' failed: {}", name, error);
     renderer.line(MessageStyle::Error, &failure_msg)?;
+    // Provide simple recovery hint to reduce repeated failures
+    let recovery_hint = match name {
+        tools::GREP_FILE => {
+            "Try narrowing the pattern or limiting files (e.g., use glob or specific paths)."
+        }
+        tools::LIST_FILES => {
+            "Specify a subdirectory instead of root; avoid repeating on '.' or './'."
+        }
+        tools::READ_FILE => {
+            "Ensure the path exists and is inside the workspace; try providing a line range."
+        }
+        _ => "Adjust arguments, try a smaller scope, or use a different tool.",
+    };
+    renderer.line(MessageStyle::Info, recovery_hint)?;
+    working_history.push(uni::Message::system(format!(
+        "Tool '{}' failed. Hint: {}",
+        name, recovery_hint
+    )));
 
     traj.log_tool_call(working_history.len(), name, &serde_json::json!({}), false);
 
@@ -1683,6 +1702,8 @@ pub(crate) async fn run_single_agent_loop_unified(
             let mut last_tool_stdout: Option<String> = None;
             let mut bottom_gap_applied = false;
             let mut turn_modified_files: BTreeSet<PathBuf> = BTreeSet::new();
+            let mut budget_warned_75 = false;
+            let mut budget_warned_85 = false;
             let tool_repeat_limit = vt_cfg
                 .as_ref()
                 .map(|cfg| cfg.tools.max_repeated_tool_calls)
@@ -1711,6 +1732,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                 loop_detection_interactive,
             );
             let mut loop_detection_disabled_for_session = false;
+            let autonomous_executor = AutonomousExecutor::new();
 
             async fn run_turn_preamble(
                 ctrl_c_state: &Arc<crate::agent::runloop::unified::state::CtrlCState>,
@@ -1776,6 +1798,29 @@ pub(crate) async fn run_single_agent_loop_unified(
                 .await?
                 {
                     break res;
+                }
+
+                // Token budget warnings (Requirement 2.1/2.2/5.5)
+                if token_budget_enabled {
+                    let usage = token_budget.usage_ratio().await;
+                    if usage >= 0.85 && !budget_warned_85 {
+                        let msg = format!(
+                            "Token budget high: {:.1}% used. Checkpoint or compaction recommended.",
+                            usage * 100.0
+                        );
+                        renderer.line(MessageStyle::Error, &msg)?;
+                        working_history.push(uni::Message::system(msg.clone()));
+                        budget_warned_85 = true;
+                        budget_warned_75 = true; // implied
+                    } else if usage >= 0.75 && !budget_warned_75 {
+                        let msg = format!(
+                            "Token budget warning: {:.1}% used. I will compact outputs.",
+                            usage * 100.0
+                        );
+                        renderer.line(MessageStyle::Info, &msg)?;
+                        working_history.push(uni::Message::system(msg.clone()));
+                        budget_warned_75 = true;
+                    }
                 }
 
                 let decision = run_turn_decision(vt_cfg.as_ref(), &config, input).await;
@@ -2152,7 +2197,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                             normalized.remove("per_page");
 
                             // For list_files: normalize root path variations to catch loops
-                            if name == "list_files" {
+                            if name == tools::LIST_FILES {
                                 if let Some(path) = normalized.get("path").and_then(|v| v.as_str())
                                 {
                                     let path_trimmed =
@@ -2182,6 +2227,32 @@ pub(crate) async fn run_single_agent_loop_unified(
                             serde_json::to_string(&normalized_args)
                                 .unwrap_or_else(|_| "{}".to_string())
                         );
+
+                        // Autonomous policy feedback (Requirement 3.x/5.x)
+                        let policy = autonomous_executor.get_policy(&name, &args_val);
+                        match policy {
+                            AutonomousPolicy::AutoExecute => {
+                                // no-op for verbosity
+                            }
+                            AutonomousPolicy::VerifyThenExecute => {
+                                let msg = format!(
+                                    "Policy: '{}' requires verify-then-execute. Proceeding with caution.",
+                                    name
+                                );
+                                renderer.line(MessageStyle::Info, &msg)?;
+                                working_history.push(uni::Message::system(msg));
+                            }
+                            AutonomousPolicy::RequireConfirmation => {
+                                let msg = format!(
+                                    "Policy: '{}' requires confirmation. Skipping this call to avoid destructive action.",
+                                    name
+                                );
+                                renderer.line(MessageStyle::Error, &msg)?;
+                                working_history.push(uni::Message::system(msg));
+                                // Skip this tool call entirely
+                                continue;
+                            }
+                        }
 
                         // Check for loop hang detection
                         let (is_loop_detected, repeat_count) =
@@ -2232,9 +2303,23 @@ pub(crate) async fn run_single_agent_loop_unified(
                                 }
                             } else {
                                 // Non-interactive mode: add system message and break
+                                let alternative = match name {
+                                    tools::LIST_FILES => {
+                                        "Instead of listing root repeatedly, target subdirectories or use grep_file for patterns."
+                                    }
+                                    tools::GREP_FILE => {
+                                        "Refine the search pattern or open specific files with read_file."
+                                    }
+                                    tools::READ_FILE => {
+                                        "Narrow to specific ranges or search first with grep_file."
+                                    }
+                                    _ => {
+                                        "Try a different tool, change arguments, or ask for clarification."
+                                    }
+                                };
                                 let loop_msg = format!(
-                                    "LOOP DETECTED: Tool '{}' called {} times with identical arguments. Session stopped to prevent infinite loop. Provide more specific instructions.",
-                                    name, repeat_count
+                                    "LOOP DETECTED: Tool '{}' called {} times with identical arguments. Session stopped to prevent infinite loop. {}",
+                                    name, repeat_count, alternative
                                 );
                                 working_history.push(uni::Message::system(loop_msg.clone()));
                                 renderer.line(MessageStyle::Error, &loop_msg)?;
@@ -2342,8 +2427,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                                 // Check if this is a read-only tool that can be cached
                                 let is_read_only_tool = matches!(
                                     name,
-                                    "read_file"
-                                        | "list_files"
+                                    tools::READ_FILE
+                                        | tools::LIST_FILES
                                         | "grep_search"
                                         | "find_files"
                                         | "tree_sitter_analyze"

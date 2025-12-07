@@ -1,5 +1,6 @@
 //! Risk scoring system for tool execution
 
+use crate::config::constants::tools;
 use serde::{Deserialize, Serialize};
 
 /// Risk level classification for tools
@@ -210,19 +211,19 @@ impl ToolRiskScorer {
     fn base_risk_for_tool(tool_name: &str) -> u32 {
         match tool_name {
             // Read-only tools (base: 0)
-            "read_file" | "list_files" | "grep_file" => 0,
+            tools::READ_FILE | tools::LIST_FILES | tools::GREP_FILE => 0,
 
             // Safe metadata tools (base: 5)
             "file_info" | "status" | "logs" => 5,
 
             // Write tools (base: 20)
-            "write_file" | "edit_file" | "create_file" => 20,
+            tools::WRITE_FILE | tools::EDIT_FILE | tools::CREATE_FILE => 20,
 
             // Potentially risky write operations (base: 25)
-            "apply_patch" | "delete_file" => 25,
+            tools::APPLY_PATCH | tools::DELETE_FILE => 25,
 
             // PTY/interactive commands (base: 35)
-            "create_pty_session" | "run_pty_cmd" | "send_pty_input" => 35,
+            tools::CREATE_PTY_SESSION | tools::RUN_PTY_CMD | tools::SEND_PTY_INPUT => 35,
 
             // Network operations (base: 40)
             "web_search" | "fetch_url" => 40,
@@ -251,7 +252,7 @@ mod tests {
     fn test_risk_calculation() {
         // Read-only operation in trusted workspace
         let ctx = ToolRiskContext::new(
-            "read_file".to_string(),
+            tools::READ_FILE.to_string(),
             ToolSource::Internal,
             WorkspaceTrust::Trusted,
         );
@@ -260,7 +261,7 @@ mod tests {
 
         // Write operation in untrusted workspace
         let ctx = ToolRiskContext::new(
-            "write_file".to_string(),
+            tools::WRITE_FILE.to_string(),
             ToolSource::External,
             WorkspaceTrust::Untrusted,
         )
@@ -272,7 +273,7 @@ mod tests {
     #[test]
     fn test_approval_history_reduces_risk() {
         let mut ctx = ToolRiskContext::new(
-            "run_pty_cmd".to_string(),
+            tools::RUN_PTY_CMD.to_string(),
             ToolSource::Internal,
             WorkspaceTrust::Untrusted,
         );

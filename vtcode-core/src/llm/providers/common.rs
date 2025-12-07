@@ -276,10 +276,7 @@ pub fn validate_request_common(
         && !models.contains(&request.model)
     {
         let msg = format!("Unsupported model: {}", request.model);
-        let formatted = error_display::format_llm_error(
-            provider_name,
-            &msg,
-        );
+        let formatted = error_display::format_llm_error(provider_name, &msg);
         return Err(LLMError::InvalidRequest(formatted));
     }
 

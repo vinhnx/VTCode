@@ -106,7 +106,7 @@ pub trait OpenAICompatibleProvider: Send + Sync {
         use crate::llm::providers::common::serialize_messages_openai_format;
         match serialize_messages_openai_format(request, self.provider_name()) {
             Ok(messages) => serde_json::json!({ "messages": messages }),
-            Err(_) => serde_json::json!({ "messages": [] })
+            Err(_) => serde_json::json!({ "messages": [] }),
         }
     }
 

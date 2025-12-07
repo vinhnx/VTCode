@@ -530,7 +530,9 @@ impl FileOpsTool {
             .to_string();
 
         let mut items = Vec::with_capacity(
-            dir_contents.get(&relative_path as &str).map_or(0, |c| c.len())
+            dir_contents
+                .get(&relative_path as &str)
+                .map_or(0, |c| c.len()),
         );
 
         if let Some(contents) = dir_contents.get(&relative_path) {

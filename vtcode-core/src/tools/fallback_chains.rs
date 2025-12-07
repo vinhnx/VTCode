@@ -3,11 +3,11 @@
 //! Provides structured fallback chains that automatically try alternative tools
 //! when a primary tool fails or returns low-quality results.
 
+use crate::config::constants::tools;
+use crate::tools::result_metadata::{EnhancedToolResult, ResultMetadata};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::time::{Duration, Instant};
-
-use crate::tools::result_metadata::{EnhancedToolResult, ResultMetadata};
 
 /// A single step in a fallback chain
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -105,7 +105,7 @@ impl FallbackChain {
     pub fn file_search() -> Self {
         Self {
             name: "file_search".to_string(),
-            primary: FallbackStep::new("grep_file").min_confidence(0.7),
+            primary: FallbackStep::new(tools::GREP_FILE).min_confidence(0.7),
             fallbacks: vec![
                 FallbackStep::new("ripgrep")
                     .min_confidence(0.65)
@@ -131,7 +131,7 @@ impl FallbackChain {
                 FallbackStep::new("regex_parse")
                     .min_confidence(0.6)
                     .non_terminal(),
-                FallbackStep::new("grep_file").min_confidence(0.4),
+                FallbackStep::new(tools::GREP_FILE).min_confidence(0.4),
             ],
             abort_conditions: vec![AbortCondition::MaxFailures { count: 2 }],
         }

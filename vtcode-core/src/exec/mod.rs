@@ -10,8 +10,8 @@ pub mod skill_manager;
 pub mod tool_versioning;
 
 pub use agent_optimization::{
-    AgentBehaviorAnalyzer, CodePattern, FailurePatterns, RecoveryPattern, SkillStatistics,
-    ToolStatistics,
+    AgentBehaviorAnalyzer, AppliedRecovery, CodePattern, FailurePatterns, RecoveryPattern,
+    SkillStatistics, ToolStatistics,
 };
 pub use code_executor::{CodeExecutor, ExecutionConfig, ExecutionResult, Language};
 pub use pii_tokenizer::{DetectedPii, PiiToken, PiiTokenizer, PiiType};

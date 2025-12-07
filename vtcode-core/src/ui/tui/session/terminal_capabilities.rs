@@ -81,6 +81,14 @@ pub fn get_border_type() -> ratatui::widgets::BorderType {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[inline]
+    fn set_var(key: &str, value: &str) {
+        unsafe { env::set_var(key, value) };
+    }
+    #[inline]
+    fn remove_var(key: &str) {
+        unsafe { env::remove_var(key) };
+    }
 
     #[test]
     fn test_supports_unicode_box_drawing() {
@@ -93,44 +101,44 @@ mod tests {
         let original_no_unicode = env::var("VTCODE_NO_UNICODE").ok();
 
         // Test with VTCODE_NO_UNICODE set (should disable Unicode)
-        env::set_var("VTCODE_NO_UNICODE", "1");
+        set_var("VTCODE_NO_UNICODE", "1");
         assert!(!supports_unicode_box_drawing());
-        env::remove_var("VTCODE_NO_UNICODE");
+        remove_var("VTCODE_NO_UNICODE");
 
         // Test with modern terminal
-        env::set_var("TERM", "xterm-256color");
+        set_var("TERM", "xterm-256color");
         assert!(supports_unicode_box_drawing());
 
         // Test with UTF-8 locale
-        env::set_var("LANG", "en_US.UTF-8");
+        set_var("LANG", "en_US.UTF-8");
         assert!(supports_unicode_box_drawing());
 
         // Test with basic terminal
-        env::set_var("TERM", "dumb");
+        set_var("TERM", "dumb");
         assert!(!supports_unicode_box_drawing());
 
         // Test with no locale info (should default to false for safety)
-        env::remove_var("TERM");
-        env::remove_var("LANG");
-        env::remove_var("LC_ALL");
+        remove_var("TERM");
+        remove_var("LANG");
+        remove_var("LC_ALL");
         assert!(!supports_unicode_box_drawing());
 
         // Restore original values
         match original_term {
-            Some(val) => env::set_var("TERM", val),
-            None => env::remove_var("TERM"),
+            Some(val) => set_var("TERM", &val),
+            None => remove_var("TERM"),
         }
         match original_lang {
-            Some(val) => env::set_var("LANG", val),
-            None => env::remove_var("LANG"),
+            Some(val) => set_var("LANG", &val),
+            None => remove_var("LANG"),
         }
         match original_lc_all {
-            Some(val) => env::set_var("LC_ALL", val),
-            None => env::remove_var("LC_ALL"),
+            Some(val) => set_var("LC_ALL", &val),
+            None => remove_var("LC_ALL"),
         }
         match original_no_unicode {
-            Some(val) => env::set_var("VTCODE_NO_UNICODE", val),
-            None => env::remove_var("VTCODE_NO_UNICODE"),
+            Some(val) => set_var("VTCODE_NO_UNICODE", &val),
+            None => remove_var("VTCODE_NO_UNICODE"),
         }
     }
 
@@ -140,19 +148,19 @@ mod tests {
         let original_term = env::var("TERM").ok();
 
         // Test with Unicode-supporting terminal
-        env::set_var("TERM", "xterm-256color");
+        set_var("TERM", "xterm-256color");
         let border_type = get_border_type();
         assert!(matches!(border_type, ratatui::widgets::BorderType::Rounded));
 
         // Test with basic terminal
-        env::set_var("TERM", "dumb");
+        set_var("TERM", "dumb");
         let border_type = get_border_type();
         assert!(matches!(border_type, ratatui::widgets::BorderType::Plain));
 
         // Restore original TERM
         match original_term {
-            Some(val) => env::set_var("TERM", val),
-            None => env::remove_var("TERM"),
+            Some(val) => set_var("TERM", &val),
+            None => remove_var("TERM"),
         }
     }
 }

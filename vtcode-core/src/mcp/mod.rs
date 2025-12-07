@@ -325,7 +325,10 @@ impl McpClient {
         // Check for path traversal in file-related arguments
         if self.config.security.validation.path_traversal_protection
             && let Some(path) = args.get("path").and_then(|v| v.as_str())
-            && (path.contains("../") || path.starts_with("../") || path.contains("..\\") || path.starts_with("..\\"))
+            && (path.contains("../")
+                || path.starts_with("../")
+                || path.contains("..\\")
+                || path.starts_with("..\\"))
         {
             return Err(anyhow::anyhow!("Path traversal detected in arguments"));
         }

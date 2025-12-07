@@ -104,6 +104,7 @@ pub mod at_pattern;
 pub mod cached_style_parser;
 pub mod color_utils;
 pub mod colors;
+pub mod common;
 pub mod diff;
 pub mod diff_styles;
 pub mod dot_config;
@@ -116,7 +117,6 @@ pub mod session_archive;
 pub mod style_helpers;
 pub mod transcript;
 pub mod unicode_monitor;
-pub mod common;
 pub mod vtcodegitignore;
 
 pub use anstyle_utils::*;

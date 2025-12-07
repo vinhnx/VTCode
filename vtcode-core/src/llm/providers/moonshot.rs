@@ -145,8 +145,6 @@ impl MoonshotProvider {
             }
         }
 
-
-
         Ok(Value::Object(payload))
     }
 

@@ -188,7 +188,7 @@ result = stats
 
         // Verify config is valid
         assert_eq!(config.timeout_secs, 5);
-        assert_eq!(config.memory_limit_mb, 256);
+        assert_eq!(config.max_output_bytes, 10 * 1024 * 1024);
         assert!(code_pattern.contains("# Filter in code"));
 
         // Token efficiency: with traditional approach:
@@ -210,7 +210,6 @@ result = stats
 
         let config = ExecutionConfig {
             timeout_secs: 5,
-            memory_limit_mb: 256,
             ..Default::default()
         };
 
@@ -231,7 +230,7 @@ try:
 
         // Verify config is valid
         assert_eq!(config.timeout_secs, 5);
-        assert_eq!(config.memory_limit_mb, 256);
+        assert_eq!(config.max_output_bytes, 10 * 1024 * 1024);
         assert!(code_pattern.contains("try:"));
         assert!(code_pattern.contains("except"));
 
@@ -288,7 +287,6 @@ try:
 
         let config = ExecutionConfig {
             timeout_secs: 5,
-            memory_limit_mb: 256,
             ..Default::default()
         };
 
@@ -302,7 +300,7 @@ transformed = [s.upper() for s in data]
 result = {"original_count": len(data), "transformed": transformed}
 "#;
 
-        assert_eq!(config.memory_limit_mb, 256);
+        assert_eq!(config.max_output_bytes, 10 * 1024 * 1024);
         assert!(code_pattern.contains("result = {"));
 
         // This pattern keeps transformations local, reducing context overhead
@@ -314,7 +312,6 @@ result = {"original_count": len(data), "transformed": transformed}
 
         let config = ExecutionConfig {
             timeout_secs: 5,
-            memory_limit_mb: 256,
             ..Default::default()
         };
 

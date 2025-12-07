@@ -7,6 +7,7 @@
 //! - Observability integration
 
 use crate::cache::{CacheKey, DEFAULT_CACHE_TTL, EvictionPolicy, UnifiedCache};
+use crate::config::constants::tools;
 use crate::tools::{
     improvements_errors::ObservabilityContext,
     pattern_engine::{ExecutionEvent, PatternEngine},
@@ -206,9 +207,15 @@ mod tests {
         let obs = Arc::new(ObservabilityContext::noop());
         let ext = ToolRegistryImprovement::new(obs);
 
-        ext.record_execution("grep_file".to_owned(), "pattern".to_owned(), true, 0.8, 100);
+        ext.record_execution(
+            tools::GREP_FILE.to_owned(),
+            "pattern".to_owned(),
+            true,
+            0.8,
+            100,
+        );
 
-        let metrics = ext.get_tool_metrics("grep_file");
+        let metrics = ext.get_tool_metrics(tools::GREP_FILE);
         assert!(metrics.is_some());
         assert_eq!(metrics.unwrap().success_rate(), 1.0);
     }
@@ -218,9 +225,9 @@ mod tests {
         let obs = Arc::new(ObservabilityContext::noop());
         let ext = ToolRegistryImprovement::new(obs);
 
-        ext.cache_result("grep_file", "pattern", "result");
+        ext.cache_result(tools::GREP_FILE, "pattern", "result");
         assert_eq!(
-            ext.get_cached_result("grep_file", "pattern"),
+            ext.get_cached_result(tools::GREP_FILE, "pattern"),
             Some("result".to_owned())
         );
     }

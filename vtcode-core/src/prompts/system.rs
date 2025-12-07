@@ -696,7 +696,6 @@ Decision: Choose B because [reason].
 4.  **Backtrack**: Return to last known-good state if stuck.
 "#;
 
-
 /// LIGHTWEIGHT PROMPT (v4 - Resource-constrained / Simple operations)
 /// Minimal, essential guidance only
 const DEFAULT_LIGHTWEIGHT_PROMPT: &str = r#"You are VT Code, a coding agent. Be precise, efficient, and persistent.

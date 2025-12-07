@@ -126,10 +126,7 @@ impl RefactoringEngine {
         {
             operations.push(RefactoringOperation {
                 kind: RefactoringKind::ExtractFunction,
-                description: format!(
-                    "Extract parts of {} into separate functions",
-                    symbol.name
-                ),
+                description: format!("Extract parts of {} into separate functions", symbol.name),
                 changes: vec![], // Would be populated with actual changes
                 preview: vec!["// Extracted function".to_string()],
             });
@@ -304,8 +301,7 @@ impl RefactoringEngine {
 
         if let Some(change) = operation.changes.first()
             && let Ok(content) = tokio::fs::read_to_string(&change.file_path).await
-            && let Ok(re) =
-                regex::Regex::new(&format!(r"\b{}\b", regex::escape(&change.new_text)))
+            && let Ok(re) = regex::Regex::new(&format!(r"\b{}\b", regex::escape(&change.new_text)))
         {
             for mat in re.find_iter(&content) {
                 if mat.start() != change.old_range.start.byte_offset {

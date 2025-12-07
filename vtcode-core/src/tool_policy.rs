@@ -588,7 +588,7 @@ impl ToolPolicyManager {
         // OPTIMIZATION: Use HashSet for deduplication, then convert to sorted Vec
         let mut canonical_tools = Vec::with_capacity(tools.len());
         let mut seen = HashSet::with_capacity(tools.len());
-        
+
         for tool in tools {
             let canonical = canonical_tool_name(&tool).into_owned();
             if seen.insert(canonical.clone()) {

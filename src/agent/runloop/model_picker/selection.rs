@@ -172,7 +172,9 @@ pub(super) fn reasoning_level_description(level: ReasoningEffortLevel) -> &'stat
         ReasoningEffortLevel::Low => reasoning::DESCRIPTION_LOW,
         ReasoningEffortLevel::Medium => reasoning::DESCRIPTION_MEDIUM,
         ReasoningEffortLevel::High => reasoning::DESCRIPTION_HIGH,
-        ReasoningEffortLevel::XHigh => "Maximum reasoning for hardest long-running tasks (gpt-5.1-codex-max only)",
+        ReasoningEffortLevel::XHigh => {
+            "Maximum reasoning for hardest long-running tasks (gpt-5.1-codex-max only)"
+        }
     }
 }
 

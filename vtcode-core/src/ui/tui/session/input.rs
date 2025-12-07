@@ -208,9 +208,7 @@ impl Session {
             }
         }
 
-        if !cursor_set
-            && let Some(current) = buffers.last()
-        {
+        if !cursor_set && let Some(current) = buffers.last() {
             cursor_line_idx = buffers.len() - 1;
             cursor_column = current.prefix_width + current.text_width;
         }

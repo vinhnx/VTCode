@@ -4,10 +4,10 @@ use tokio::sync::mpsc;
 use crate::config::types::UiSurfacePreference;
 
 pub mod alternate_screen;
+mod runner;
 mod session;
 mod style;
 mod theme_parser;
-mod runner;
 mod types;
 
 pub use style::{convert_style, theme_from_styles};
@@ -19,7 +19,7 @@ pub use types::{
     SecurePromptConfig,
 };
 
-use runner::{run_tui, TuiOptions};
+use runner::{TuiOptions, run_tui};
 
 pub fn spawn_session(
     theme: InlineTheme,

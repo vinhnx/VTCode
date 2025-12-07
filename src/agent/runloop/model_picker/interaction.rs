@@ -221,7 +221,7 @@ pub(super) fn select_reasoning_with_ratatui(
     current: ReasoningEffortLevel,
 ) -> Result<Option<ReasoningChoice>> {
     let is_codex_max = selection.model_id.contains("codex-max");
-    
+
     let mut entries = vec![
         SelectionEntry::new(
             format!("Keep current ({})", reasoning_level_label(current)),
@@ -236,7 +236,7 @@ pub(super) fn select_reasoning_with_ratatui(
             Some(reasoning_level_description(ReasoningEffortLevel::High).to_string()),
         ),
     ];
-    
+
     if is_codex_max {
         entries.push(SelectionEntry::new(
             reasoning_level_label(ReasoningEffortLevel::XHigh),
