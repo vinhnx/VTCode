@@ -986,9 +986,9 @@ impl ModelId {
             | ModelId::OpenRouterMoonshotaiKimiK2Thinking
             | ModelId::OpenRouterMoonshotaiKimiK2Free
             | ModelId::OpenRouterMinimaxM2Free => {
-               // Fallback description for OpenRouter models
-               // In production, these should have metadata
-               "Model available via OpenRouter marketplace"
+                // Fallback description for OpenRouter models
+                // In production, these should have metadata
+                "Model available via OpenRouter marketplace"
             }
         }
     }
@@ -1041,7 +1041,7 @@ impl ModelId {
             ModelId::ZaiGlm45Flash,
             ModelId::ZaiGlm432b0414128k,
             // Moonshot models
-            
+
             // Ollama models
             ModelId::OllamaGptOss20b,
             ModelId::OllamaGptOss20bCloud,
@@ -1085,7 +1085,6 @@ impl ModelId {
             ModelId::ClaudeOpus41,
             ModelId::ClaudeSonnet45,
             ModelId::DeepSeekReasoner,
-            
             ModelId::XaiGrok4,
             ModelId::ZaiGlm46,
             ModelId::OpenRouterGrokCodeFast1,
@@ -1156,10 +1155,10 @@ impl ModelId {
             Provider::Ollama => ModelId::OllamaGptOss20b,
             Provider::LmStudio => ModelId::LmStudioMetaLlama318BInstruct,
             Provider::ZAI => ModelId::ZaiGlm46,
-            }
-            }
+        }
+    }
 
-            /// Check if this is a "flash" variant (optimized for speed)
+    /// Check if this is a "flash" variant (optimized for speed)
     pub fn is_flash_variant(&self) -> bool {
         matches!(
             self,
@@ -1167,7 +1166,6 @@ impl ModelId {
                 | ModelId::Gemini25Flash
                 | ModelId::Gemini25FlashLite
                 | ModelId::ZaiGlm45Flash
-
         )
     }
 
@@ -1203,8 +1201,7 @@ impl ModelId {
                 | ModelId::ZaiGlm45Air
                 | ModelId::ZaiGlm45Airx
                 | ModelId::ZaiGlm45Flash
-
-                )
+        )
     }
 
     /// Check if this is a top-tier model
@@ -1367,10 +1364,7 @@ impl ModelId {
     pub fn is_gpt51_variant(&self) -> bool {
         matches!(
             self,
-            ModelId::GPT51
-                | ModelId::GPT51Codex
-                | ModelId::GPT51CodexMax
-                | ModelId::GPT51Mini
+            ModelId::GPT51 | ModelId::GPT51Codex | ModelId::GPT51CodexMax | ModelId::GPT51Mini
         )
     }
 
@@ -1856,7 +1850,7 @@ mod tests {
         );
         assert_eq!(
             ModelId::default_subagent_for_provider(Provider::Moonshot),
-            ModelId::MoonshotV18k
+            ModelId::OpenRouterGrokCodeFast1
         );
 
         assert_eq!(
@@ -1865,7 +1859,7 @@ mod tests {
         );
         assert_eq!(
             ModelId::default_single_for_provider(Provider::Moonshot),
-            ModelId::MoonshotV18k
+            ModelId::OpenRouterGrokCodeFast1
         );
         assert_eq!(
             ModelId::default_single_for_provider(Provider::Ollama),
@@ -2076,7 +2070,7 @@ mod tests {
         assert!(fallbacks.contains(&ModelId::ClaudeOpus41));
         assert!(fallbacks.contains(&ModelId::ClaudeSonnet45));
         assert!(fallbacks.contains(&ModelId::DeepSeekReasoner));
-        assert!(fallbacks.contains(&ModelId::MoonshotKimiK20905Preview));
+        assert!(fallbacks.contains(&ModelId::OpenRouterMoonshotaiKimiK20905));
         assert!(fallbacks.contains(&ModelId::XaiGrok4));
         assert!(fallbacks.contains(&ModelId::ZaiGlm46));
         assert!(fallbacks.contains(&ModelId::OpenRouterGrokCodeFast1));

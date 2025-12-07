@@ -160,13 +160,18 @@ impl ToolRegistry {
 
             if total_errors > 0 {
                 suggestions.push(
-                    "Review recent assistant tool calls and session archives for more details".into(),
+                    "Review recent assistant tool calls and session archives for more details"
+                        .into(),
                 );
 
                 if parsed.detailed {
-                    suggestions.push("Consider running 'debug_agent' for more system diagnostics".into());
-                    suggestions.push("Try 'analyze_agent' to understand current behavior patterns".into());
-                    suggestions.push("Use 'search_tools' to find specific tools for error handling".into());
+                    suggestions
+                        .push("Consider running 'debug_agent' for more system diagnostics".into());
+                    suggestions
+                        .push("Try 'analyze_agent' to understand current behavior patterns".into());
+                    suggestions.push(
+                        "Use 'search_tools' to find specific tools for error handling".into(),
+                    );
                 }
 
                 // Self-fix suggestions based on common error patterns
@@ -200,8 +205,13 @@ impl ToolRegistry {
                         || msg.contains("access denied")
                         || msg.contains("forbidden")
                 }) {
-                    suggestions.push("Permission errors: Check file permissions and workspace access".into());
-                    suggestions.push("Consider running with appropriate permissions or changing file ownership".into());
+                    suggestions.push(
+                        "Permission errors: Check file permissions and workspace access".into(),
+                    );
+                    suggestions.push(
+                        "Consider running with appropriate permissions or changing file ownership"
+                            .into(),
+                    );
                 }
 
                 // Command execution errors
@@ -211,15 +221,20 @@ impl ToolRegistry {
                         || msg.contains("exit code")
                 }) {
                     suggestions.push("Command execution errors: Verify command availability with 'list_files' or check PATH environment".into());
-                    suggestions.push("Use 'run_pty_cmd' to test commands manually before automation".into());
+                    suggestions.push(
+                        "Use 'run_pty_cmd' to test commands manually before automation".into(),
+                    );
                 }
 
                 // Git-related errors
                 if error_messages.iter().any(|msg| {
                     msg.contains("git") && (msg.contains("error") || msg.contains("fatal"))
                 }) {
-                    suggestions.push("Git errors: Check repository status and Git configuration".into());
-                    suggestions.push("Run 'run_pty_cmd' with 'git status' to diagnose repository issues".into());
+                    suggestions
+                        .push("Git errors: Check repository status and Git configuration".into());
+                    suggestions.push(
+                        "Run 'run_pty_cmd' with 'git status' to diagnose repository issues".into(),
+                    );
                 }
 
                 // Network/HTTP errors
@@ -231,9 +246,17 @@ impl ToolRegistry {
                         || msg.contains("ssl")
                         || msg.contains("tls")
                 }) {
-                    suggestions.push("Network/HTTP errors: Check internet connectivity and proxy settings".into());
-                    suggestions.push("Verify API endpoints and credentials if using external services".into());
-                    suggestions.push("Consider using 'web_fetch' with proper error handling for web requests".into());
+                    suggestions.push(
+                        "Network/HTTP errors: Check internet connectivity and proxy settings"
+                            .into(),
+                    );
+                    suggestions.push(
+                        "Verify API endpoints and credentials if using external services".into(),
+                    );
+                    suggestions.push(
+                        "Consider using 'web_fetch' with proper error handling for web requests"
+                            .into(),
+                    );
                 }
 
                 // Memory/resource errors
@@ -244,20 +267,23 @@ impl ToolRegistry {
                         || msg.contains("resource")
                         || msg.contains("too large")
                 }) {
-                    suggestions.push("Memory/resource errors: Consider processing data in smaller chunks".into());
+                    suggestions.push(
+                        "Memory/resource errors: Consider processing data in smaller chunks".into(),
+                    );
                     suggestions.push("Use 'execute_code' with memory-efficient algorithms when handling large files".into());
                 }
 
                 // Add a general recommendation to use the enhanced get_errors
                 suggestions.push(
-                    "For more detailed diagnostics, run 'get_errors' with detailed=true parameter".into(),
+                    "For more detailed diagnostics, run 'get_errors' with detailed=true parameter"
+                        .into(),
                 );
             } else {
-                suggestions.push(
-                    "No obvious errors discovered in recent sessions".into(),
-                );
+                suggestions.push("No obvious errors discovered in recent sessions".into());
                 if parsed.detailed {
-                    suggestions.push("Run 'debug_agent' or 'analyze_agent' for proactive system checks".into());
+                    suggestions.push(
+                        "Run 'debug_agent' or 'analyze_agent' for proactive system checks".into(),
+                    );
                     suggestions.push("Consider performing routine maintenance tasks if working with large projects".into());
                 }
             }
@@ -347,14 +373,15 @@ impl ToolRegistry {
                 // Provide self-fix suggestions
                 let mut self_fix_suggestions: Vec<String> = Vec::with_capacity(5);
                 if !self_diagnosis_issues.is_empty() {
-                    self_fix_suggestions.push("Run system initialization to ensure proper setup".into());
+                    self_fix_suggestions
+                        .push("Run system initialization to ensure proper setup".into());
                     self_fix_suggestions.push("Verify workspace directory and permissions".into());
-                    self_fix_suggestions.push("Check that all required tools are properly configured".into());
+                    self_fix_suggestions
+                        .push("Check that all required tools are properly configured".into());
 
                     if !recent_failures.is_empty() {
-                        self_fix_suggestions.push(
-                            "Review recent tool failures and their error messages".into(),
-                        );
+                        self_fix_suggestions
+                            .push("Review recent tool failures and their error messages".into());
                         self_fix_suggestions.push(
                             "Consider retrying failed operations with corrected parameters".into(),
                         );
@@ -377,7 +404,8 @@ impl ToolRegistry {
 
                     if !recent_failures.is_empty() {
                         self_fix_suggestions.push(
-                            "Examine recent tool execution failures in the diagnostics section".into(),
+                            "Examine recent tool execution failures in the diagnostics section"
+                                .into(),
                         );
                     }
                 }
@@ -2612,19 +2640,19 @@ mod tests {
         // Test "git diff on file.rs" -> "git diff file.rs"
         let result = normalize_natural_language_command("git diff on vtcode-core/src/mcp/mod.rs");
         assert_eq!(result, "git diff vtcode-core/src/mcp/mod.rs");
-        
+
         // Test "git log on src/" -> "git log src/"
         let result = normalize_natural_language_command("git log on src/");
         assert_eq!(result, "git log src/");
-        
+
         // Test "git status on ." -> "git status ."
         let result = normalize_natural_language_command("git status on .");
         assert_eq!(result, "git status .");
-        
+
         // Test that normal commands are not affected
         let result = normalize_natural_language_command("git diff --cached");
         assert_eq!(result, "git diff --cached");
-        
+
         // Test that "on" in other contexts is not affected
         let result = normalize_natural_language_command("echo on");
         assert_eq!(result, "echo on");
@@ -2964,11 +2992,18 @@ fn build_ephemeral_pty_response(
     let final_output = output_override.as_ref().unwrap_or(&output);
 
     // Detect if this is a git diff command - output is already rendered visually
-    let has_git = setup.command.iter().any(|arg| arg.to_lowercase().contains("git"));
+    let has_git = setup
+        .command
+        .iter()
+        .any(|arg| arg.to_lowercase().contains("git"));
     let has_diff_cmd = setup.command.iter().any(|arg| {
         let lower = arg.to_lowercase();
-        lower == "diff" || lower == "show" || lower == "log" || 
-        lower.contains("git diff") || lower.contains("git show") || lower.contains("git log")
+        lower == "diff"
+            || lower == "show"
+            || lower == "log"
+            || lower.contains("git diff")
+            || lower.contains("git show")
+            || lower.contains("git log")
     });
     let is_git_diff = has_git && has_diff_cmd;
 
@@ -3276,10 +3311,10 @@ fn quote_windows_argument(arg: &str) -> String {
 fn tokenize_command_string(command: &str, _shell_hint: Option<&str>) -> Result<Vec<String>> {
     // Sanitize markdown formatting (backticks) that LLMs sometimes include
     let sanitized = strip_markdown_code_formatting(command);
-    
+
     // Normalize natural language patterns before tokenization
     let normalized = normalize_natural_language_command(&sanitized);
-    
+
     split(&normalized).map_err(|err| anyhow!(err))
 }
 
@@ -3287,7 +3322,7 @@ fn tokenize_command_string(command: &str, _shell_hint: Option<&str>) -> Result<V
 /// Handles common patterns like "git diff on file.rs" -> "git diff file.rs"
 fn normalize_natural_language_command(command: &str) -> String {
     let trimmed = command.trim();
-    
+
     // Pattern: "git <subcommand> on <path>" -> "git <subcommand> <path>"
     // Examples: "git diff on file.rs", "git log on src/", "git status on ."
     if let Some(git_idx) = trimmed.find("git ") {
@@ -3296,7 +3331,7 @@ fn normalize_natural_language_command(command: &str) -> String {
             if on_idx > git_idx {
                 let before_on = &trimmed[..on_idx];
                 let after_on = &trimmed[on_idx + 4..]; // Skip " on "
-                
+
                 // Only normalize if "on" is followed by a path-like argument
                 // (not empty and doesn't look like another command)
                 if !after_on.trim().is_empty() && !after_on.trim().starts_with('-') {
@@ -3305,7 +3340,7 @@ fn normalize_natural_language_command(command: &str) -> String {
             }
         }
     }
-    
+
     trimmed.to_string()
 }
 

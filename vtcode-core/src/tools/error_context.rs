@@ -2,6 +2,7 @@
 ///
 /// Provides structured error reporting with file/line context,
 /// partial output preservation, and helpful suggestions.
+use crate::config::constants::tools;
 use std::fmt;
 use std::fmt::Write as _;
 
@@ -183,8 +184,8 @@ mod tests {
 
     #[test]
     fn test_creates_error_context() {
-        let ctx = ToolErrorContext::new("grep_file", "Pattern not found");
-        assert_eq!(ctx.tool_name, "grep_file");
+        let ctx = ToolErrorContext::new(tools::GREP_FILE, "Pattern not found");
+        assert_eq!(ctx.tool_name, tools::GREP_FILE);
         assert_eq!(ctx.message, "Pattern not found");
         assert!(ctx.partial_output.is_none());
         assert!(ctx.suggestions.is_empty());
@@ -192,7 +193,7 @@ mod tests {
 
     #[test]
     fn test_adds_file_context() {
-        let ctx = ToolErrorContext::new("read_file", "I/O error")
+        let ctx = ToolErrorContext::new(tools::READ_FILE, "I/O error")
             .with_file("/path/to/file.rs")
             .with_line(42);
 
@@ -212,13 +213,13 @@ mod tests {
 
     #[test]
     fn test_formats_for_user() {
-        let ctx = ToolErrorContext::new("grep_file", "Permission denied")
+        let ctx = ToolErrorContext::new(tools::GREP_FILE, "Permission denied")
             .with_file("secret.txt")
             .with_line(1)
             .with_suggestion("Check file permissions");
 
         let formatted = ctx.format_for_user();
-        assert!(formatted.contains("grep_file"));
+        assert!(formatted.contains(tools::GREP_FILE));
         assert!(formatted.contains("Permission denied"));
         assert!(formatted.contains("secret.txt"));
         assert!(formatted.contains("Line: 1"));

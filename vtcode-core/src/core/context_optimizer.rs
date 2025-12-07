@@ -2,28 +2,54 @@
 //!
 //! Implements context engineering principles from AGENTS.md:
 //! - Per-tool output curation (max 5 grep results, summarize 50+ files)
-//! - Token budget awareness (70%/85%/90% thresholds)
+//! - Token budget awareness (90%/95% thresholds)
 //! - Semantic context over volume
 //! - Progressive compaction
 
-use serde_json::Value;
+use crate::config::constants::tools;
+use crate::core::token_budget::{TokenBudgetManager, TokenUsageStats};
+use anyhow::{Context, Result};
+use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
 use std::collections::VecDeque;
+use std::path::Path;
+use std::sync::Arc;
+use tokio::fs;
 
 /// Context budget thresholds
-const COMPACT_THRESHOLD: f64 = 0.70; // Start compacting
-const AGGRESSIVE_THRESHOLD: f64 = 0.85; // Aggressive compaction
-const CHECKPOINT_THRESHOLD: f64 = 0.90; // Create checkpoint
+const COMPACT_THRESHOLD: f64 = 0.90; // Start compacting at 90%
+const CHECKPOINT_THRESHOLD: f64 = 0.95; // Create checkpoint at 95%
 
 /// Maximum results to show per tool
 const MAX_GREP_RESULTS: usize = 5;
 const MAX_LIST_FILES: usize = 50;
 const MAX_FILE_LINES: usize = 2000;
 
+/// Compact mode levels
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CompactMode {
+    Normal,     // <90%
+    Compact,    // 90-95%
+    Checkpoint, // >95%
+}
+
+/// Checkpoint state for context reset
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CheckpointState {
+    pub task_description: String,
+    pub completed_steps: Vec<String>,
+    pub current_work: String,
+    pub next_steps: Vec<String>,
+    pub token_usage: TokenUsageStats,
+    pub key_files: Vec<String>,
+    pub timestamp: u64,
+}
+
 /// Context optimization manager
 pub struct ContextOptimizer {
-    total_budget: usize,
-    used_tokens: usize,
+    token_budget: Option<Arc<TokenBudgetManager>>,
     history: VecDeque<ContextEntry>,
+    compact_mode: CompactMode,
 }
 
 #[derive(Debug, Clone)]
@@ -35,47 +61,72 @@ struct ContextEntry {
 }
 
 impl ContextOptimizer {
-    pub fn new(total_budget: usize) -> Self {
+    /// Create a new context optimizer without token budget integration
+    pub fn new() -> Self {
         Self {
-            total_budget,
-            used_tokens: 0,
+            token_budget: None,
             history: VecDeque::new(),
+            compact_mode: CompactMode::Normal,
+        }
+    }
+
+    /// Create a new context optimizer with token budget integration
+    pub fn with_token_budget(token_budget: Arc<TokenBudgetManager>) -> Self {
+        Self {
+            token_budget: Some(token_budget),
+            history: VecDeque::new(),
+            compact_mode: CompactMode::Normal,
         }
     }
 
     /// Get current budget utilization (0.0 to 1.0)
-    pub fn utilization(&self) -> f64 {
-        self.used_tokens as f64 / self.total_budget as f64
+    pub async fn utilization(&self) -> f64 {
+        if let Some(ref budget) = self.token_budget {
+            budget.usage_ratio().await
+        } else {
+            0.0
+        }
     }
 
     /// Check if checkpoint is needed
-    pub fn needs_checkpoint(&self) -> bool {
-        self.utilization() >= CHECKPOINT_THRESHOLD
+    pub async fn needs_checkpoint(&self) -> bool {
+        self.utilization().await >= CHECKPOINT_THRESHOLD
     }
 
     /// Check if compaction is needed
-    pub fn needs_compaction(&self) -> bool {
-        self.utilization() >= COMPACT_THRESHOLD
+    pub async fn needs_compaction(&self) -> bool {
+        self.utilization().await >= COMPACT_THRESHOLD
     }
 
-    /// Check if aggressive compaction is needed
-    pub fn needs_aggressive_compaction(&self) -> bool {
-        self.utilization() >= AGGRESSIVE_THRESHOLD
+    /// Get current compact mode
+    pub fn compact_mode(&self) -> CompactMode {
+        self.compact_mode
+    }
+
+    /// Update compact mode based on current utilization
+    pub async fn update_compact_mode(&mut self) {
+        let util = self.utilization().await;
+        self.compact_mode = if util >= CHECKPOINT_THRESHOLD {
+            CompactMode::Checkpoint
+        } else if util >= COMPACT_THRESHOLD {
+            CompactMode::Compact
+        } else {
+            CompactMode::Normal
+        };
     }
 
     /// Optimize tool result based on tool type and budget
-    pub fn optimize_result(&mut self, tool_name: &str, result: Value) -> Value {
+    pub async fn optimize_result(&mut self, tool_name: &str, result: Value) -> Value {
         let optimized = match tool_name {
-            "grep_file" => self.optimize_grep_result(result),
-            "list_files" => self.optimize_list_files_result(result),
-            "read_file" => self.optimize_read_file_result(result),
-            "shell" | "run_pty_cmd" => self.optimize_command_result(result),
+            tools::GREP_FILE => self.optimize_grep_result(result),
+            tools::LIST_FILES => self.optimize_list_files_result(result),
+            tools::READ_FILE => self.optimize_read_file_result(result),
+            "shell" | tools::RUN_PTY_CMD => self.optimize_command_result(result),
             _ => result,
         };
 
         // Estimate tokens (rough: 1 token ≈ 4 chars)
         let tokens = optimized.to_string().len() / 4;
-        self.used_tokens += tokens;
 
         self.history.push_back(ContextEntry {
             tool_name: tool_name.to_string(),
@@ -84,8 +135,11 @@ impl ContextOptimizer {
             compacted: false,
         });
 
+        // Update compact mode based on current utilization
+        self.update_compact_mode().await;
+
         // Auto-compact if needed
-        if self.needs_compaction() {
+        if self.needs_compaction().await {
             self.compact_history();
         }
 
@@ -97,7 +151,8 @@ impl ContextOptimizer {
         if let Some(obj) = result.as_object() {
             if let Some(matches) = obj.get("matches").and_then(|v| v.as_array()) {
                 if matches.len() > MAX_GREP_RESULTS {
-                    let truncated: Vec<_> = matches.iter().take(MAX_GREP_RESULTS).cloned().collect();
+                    let truncated: Vec<_> =
+                        matches.iter().take(MAX_GREP_RESULTS).cloned().collect();
                     let overflow = matches.len() - MAX_GREP_RESULTS;
                     return serde_json::json!({
                         "matches": truncated,
@@ -128,18 +183,53 @@ impl ContextOptimizer {
         result
     }
 
-    /// Optimize read_file - truncate if too large
+    /// Optimize read_file - truncate based on max_tokens parameter or default limits
     fn optimize_read_file_result(&self, result: Value) -> Value {
         if let Some(obj) = result.as_object() {
             if let Some(content) = obj.get("content").and_then(|v| v.as_str()) {
+                // Check if max_tokens was specified in the result
+                let max_tokens = obj
+                    .get("max_tokens")
+                    .and_then(|v| v.as_u64())
+                    .map(|v| v as usize);
+
+                // Estimate tokens (rough: 1 token ≈ 4 chars)
+                let estimated_tokens = content.len() / 4;
                 let lines: Vec<_> = content.lines().collect();
-                if lines.len() > MAX_FILE_LINES {
-                    let truncated = lines[..MAX_FILE_LINES].join("\n");
+
+                // Determine if we need to truncate based on tokens or lines
+                let should_truncate = if let Some(max_tok) = max_tokens {
+                    estimated_tokens > max_tok
+                } else {
+                    lines.len() > MAX_FILE_LINES
+                };
+
+                if should_truncate {
+                    let target_tokens = max_tokens.unwrap_or(MAX_FILE_LINES * 20); // ~20 tokens per line
+                    let target_chars = target_tokens * 4;
+
+                    let truncated = if content.len() > target_chars {
+                        // Truncate by characters, then find last complete line
+                        let partial = &content[..target_chars];
+                        if let Some(last_newline) = partial.rfind('\n') {
+                            &partial[..last_newline]
+                        } else {
+                            partial
+                        }
+                    } else {
+                        // Truncate by lines
+                        &lines[..MAX_FILE_LINES.min(lines.len())].join("\n")
+                    };
+
+                    let truncated_lines = truncated.lines().count();
+
                     return serde_json::json!({
                         "content": truncated,
                         "truncated": true,
                         "total_lines": lines.len(),
-                        "showing_lines": MAX_FILE_LINES,
+                        "showing_lines": truncated_lines,
+                        "estimated_tokens": estimated_tokens,
+                        "max_tokens": max_tokens,
                         "note": "File truncated. Use read_file with start_line/end_line for specific sections."
                     });
                 }
@@ -159,7 +249,9 @@ impl ContextOptimizer {
                         .iter()
                         .enumerate()
                         .filter(|(_, line)| {
-                            line.contains("error:") || line.contains("Error:") || line.contains("ERROR")
+                            line.contains("error:")
+                                || line.contains("Error:")
+                                || line.contains("ERROR")
                         })
                         .flat_map(|(i, _)| {
                             let start = i.saturating_sub(2);
@@ -188,10 +280,9 @@ impl ContextOptimizer {
         result
     }
 
-    /// Compact history to free up tokens
+    /// Compact history to free up tokens while preserving critical information
+    /// Preserves: file paths, line numbers, error messages
     fn compact_history(&mut self) {
-        let mut freed_tokens = 0;
-        
         // Compact oldest entries first
         for entry in self.history.iter_mut() {
             if entry.compacted {
@@ -199,72 +290,260 @@ impl ContextOptimizer {
             }
 
             let compacted = match entry.tool_name.as_str() {
-                "grep_file" | "list_files" => {
-                    // Already optimized, just mark as compacted
-                    serde_json::json!({
-                        "tool": entry.tool_name,
-                        "note": "Result compacted to save tokens"
-                    })
+                tools::GREP_FILE => {
+                    // Preserve file paths and line numbers from grep results
+                    Self::compact_grep_entry(&entry.result)
                 }
-                "read_file" => {
-                    serde_json::json!({
-                        "tool": "read_file",
-                        "note": "File content compacted. Re-read if needed."
-                    })
+                tools::LIST_FILES => {
+                    // Preserve file paths and counts
+                    Self::compact_list_files_entry(&entry.result)
+                }
+                tools::READ_FILE => {
+                    // Preserve file path and line range
+                    Self::compact_read_file_entry(&entry.result)
+                }
+                "shell" | tools::RUN_PTY_CMD => {
+                    // Preserve error messages and exit codes
+                    Self::compact_command_entry(&entry.result)
                 }
                 _ => {
-                    serde_json::json!({
-                        "tool": entry.tool_name,
-                        "note": "Output compacted"
-                    })
+                    // Generic compaction - preserve any error fields
+                    Self::compact_generic_entry(&entry.result, &entry.tool_name)
                 }
             };
 
-            let old_tokens = entry.tokens;
             let new_tokens = compacted.to_string().len() / 4;
-            freed_tokens += old_tokens - new_tokens;
 
             entry.result = compacted;
             entry.tokens = new_tokens;
             entry.compacted = true;
-
-            // Stop if we've freed enough
-            if freed_tokens > self.total_budget / 10 {
-                break;
-            }
         }
-
-        self.used_tokens = self.used_tokens.saturating_sub(freed_tokens);
     }
 
-    /// Create checkpoint summary for context reset
-    pub fn create_checkpoint(&self) -> Value {
-        serde_json::json!({
-            "checkpoint": true,
-            "total_budget": self.total_budget,
-            "used_tokens": self.used_tokens,
-            "utilization": format!("{:.1}%", self.utilization() * 100.0),
-            "note": "Context checkpoint created. Previous work summarized.",
-            "recommendation": "Continue from this point with fresh context window."
-        })
+    /// Compact grep entry while preserving paths and line numbers
+    fn compact_grep_entry(result: &Value) -> Value {
+        if let Some(obj) = result.as_object() {
+            let mut preserved = serde_json::Map::new();
+            preserved.insert("tool".to_string(), json!(tools::GREP_FILE));
+
+            // Preserve file paths and line numbers
+            if let Some(matches) = obj.get("matches").and_then(|v| v.as_array()) {
+                let paths_and_lines: Vec<_> = matches
+                    .iter()
+                    .filter_map(|m| {
+                        let path = m.get("path").or_else(|| m.get("file"))?;
+                        let line = m.get("line").or_else(|| m.get("line_number"));
+                        Some(json!({
+                            "path": path,
+                            "line": line
+                        }))
+                    })
+                    .collect();
+                preserved.insert("matches".to_string(), json!(paths_and_lines));
+            }
+
+            if let Some(total) = obj.get("total") {
+                preserved.insert("total".to_string(), total.clone());
+            }
+
+            preserved.insert(
+                "note".to_string(),
+                json!("Grep results compacted - paths and line numbers preserved"),
+            );
+            return Value::Object(preserved);
+        }
+        json!({"tool": tools::GREP_FILE, "note": "Compacted"})
+    }
+
+    /// Compact list_files entry while preserving paths
+    fn compact_list_files_entry(result: &Value) -> Value {
+        if let Some(obj) = result.as_object() {
+            let mut preserved = serde_json::Map::new();
+            preserved.insert("tool".to_string(), json!(tools::LIST_FILES));
+
+            // Preserve total count and sample of paths
+            if let Some(files) = obj.get("files").and_then(|v| v.as_array()) {
+                preserved.insert("total_files".to_string(), json!(files.len()));
+                let sample: Vec<_> = files.iter().take(3).cloned().collect();
+                preserved.insert("sample_paths".to_string(), json!(sample));
+            } else if let Some(total) = obj.get("total_files") {
+                preserved.insert("total_files".to_string(), total.clone());
+                if let Some(sample) = obj.get("sample") {
+                    preserved.insert("sample_paths".to_string(), sample.clone());
+                }
+            }
+
+            preserved.insert(
+                "note".to_string(),
+                json!("File list compacted - count and sample preserved"),
+            );
+            return Value::Object(preserved);
+        }
+        json!({"tool": tools::LIST_FILES, "note": "Compacted"})
+    }
+
+    /// Compact read_file entry while preserving path and line range
+    fn compact_read_file_entry(result: &Value) -> Value {
+        if let Some(obj) = result.as_object() {
+            let mut preserved = serde_json::Map::new();
+            preserved.insert("tool".to_string(), json!(tools::READ_FILE));
+
+            // Preserve file path
+            if let Some(path) = obj.get("path").or_else(|| obj.get("file")) {
+                preserved.insert("path".to_string(), path.clone());
+            }
+
+            // Preserve line range information
+            if let Some(start) = obj.get("start_line") {
+                preserved.insert("start_line".to_string(), start.clone());
+            }
+            if let Some(end) = obj.get("end_line") {
+                preserved.insert("end_line".to_string(), end.clone());
+            }
+            if let Some(total) = obj.get("total_lines") {
+                preserved.insert("total_lines".to_string(), total.clone());
+            }
+
+            preserved.insert(
+                "note".to_string(),
+                json!("File content compacted - path and line range preserved"),
+            );
+            return Value::Object(preserved);
+        }
+        json!({"tool": tools::READ_FILE, "note": "Compacted"})
+    }
+
+    /// Compact command entry while preserving errors
+    fn compact_command_entry(result: &Value) -> Value {
+        if let Some(obj) = result.as_object() {
+            let mut preserved = serde_json::Map::new();
+            preserved.insert("tool".to_string(), json!("command"));
+
+            // Preserve exit code
+            if let Some(exit_code) = obj.get("exit_code").or_else(|| obj.get("code")) {
+                preserved.insert("exit_code".to_string(), exit_code.clone());
+            }
+
+            // Preserve error messages
+            if let Some(stderr) = obj.get("stderr").and_then(|v| v.as_str()) {
+                if !stderr.is_empty() {
+                    // Keep first 200 chars of stderr
+                    let truncated = if stderr.len() > 200 {
+                        format!("{}...", &stderr[..200])
+                    } else {
+                        stderr.to_string()
+                    };
+                    preserved.insert("stderr".to_string(), json!(truncated));
+                }
+            }
+
+            // Preserve error lines from stdout
+            if let Some(errors) = obj.get("errors") {
+                preserved.insert("errors".to_string(), errors.clone());
+            }
+
+            preserved.insert(
+                "note".to_string(),
+                json!("Command output compacted - errors preserved"),
+            );
+            return Value::Object(preserved);
+        }
+        json!({"tool": "command", "note": "Compacted"})
+    }
+
+    /// Compact generic entry while preserving error fields
+    fn compact_generic_entry(result: &Value, tool_name: &str) -> Value {
+        if let Some(obj) = result.as_object() {
+            let mut preserved = serde_json::Map::new();
+            preserved.insert("tool".to_string(), json!(tool_name));
+
+            // Preserve any error-related fields
+            for key in [
+                "error",
+                "errors",
+                "error_message",
+                "stderr",
+                "exit_code",
+                "status",
+            ] {
+                if let Some(value) = obj.get(key) {
+                    preserved.insert(key.to_string(), value.clone());
+                }
+            }
+
+            // Preserve any path-related fields
+            for key in ["path", "file", "files", "directory"] {
+                if let Some(value) = obj.get(key) {
+                    preserved.insert(key.to_string(), value.clone());
+                }
+            }
+
+            preserved.insert(
+                "note".to_string(),
+                json!("Output compacted - errors and paths preserved"),
+            );
+            return Value::Object(preserved);
+        }
+        json!({"tool": tool_name, "note": "Compacted"})
+    }
+
+    /// Create checkpoint state for context reset
+    pub async fn create_checkpoint(
+        &self,
+        task_description: String,
+        completed_steps: Vec<String>,
+        current_work: String,
+        next_steps: Vec<String>,
+        key_files: Vec<String>,
+    ) -> CheckpointState {
+        let token_usage = if let Some(ref budget) = self.token_budget {
+            budget.get_stats().await
+        } else {
+            crate::core::token_budget::TokenUsageStats::new()
+        };
+
+        CheckpointState {
+            task_description,
+            completed_steps,
+            current_work,
+            next_steps,
+            token_usage,
+            key_files,
+            timestamp: crate::utils::current_timestamp(),
+        }
+    }
+
+    /// Save checkpoint to file
+    pub async fn save_checkpoint(&self, path: &Path, checkpoint: &CheckpointState) -> Result<()> {
+        let json =
+            serde_json::to_string_pretty(checkpoint).context("Failed to serialize checkpoint")?;
+        fs::write(path, json)
+            .await
+            .context("Failed to write checkpoint file")?;
+        Ok(())
+    }
+
+    /// Load checkpoint from file
+    pub async fn load_checkpoint(path: &Path) -> Result<CheckpointState> {
+        let json = fs::read_to_string(path)
+            .await
+            .context("Failed to read checkpoint file")?;
+        let checkpoint: CheckpointState =
+            serde_json::from_str(&json).context("Failed to deserialize checkpoint")?;
+        Ok(checkpoint)
     }
 
     /// Get budget status message
-    pub fn budget_status(&self) -> String {
-        let util = self.utilization();
+    pub async fn budget_status(&self) -> String {
+        let util = self.utilization().await;
         if util >= CHECKPOINT_THRESHOLD {
             format!(
                 "⚠️  Token budget at {:.1}% - checkpoint recommended",
                 util * 100.0
             )
-        } else if util >= AGGRESSIVE_THRESHOLD {
-            format!(
-                "⚠️  Token budget at {:.1}% - aggressive compaction active",
-                util * 100.0
-            )
         } else if util >= COMPACT_THRESHOLD {
             format!(
-                "ℹ️  Token budget at {:.1}% - compaction active",
+                "⚠️  Token budget at {:.1}% - compaction active",
                 util * 100.0
             )
         } else {
@@ -276,68 +555,271 @@ impl ContextOptimizer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::token_budget::TokenBudgetConfig;
     use serde_json::json;
 
-    #[test]
-    fn test_grep_optimization() {
-        let mut optimizer = ContextOptimizer::new(100000);
-        
-        let matches: Vec<_> = (0..20).map(|i| json!({"line": i, "text": "match"})).collect();
+    #[tokio::test]
+    async fn test_grep_optimization() {
+        let mut optimizer = ContextOptimizer::new();
+
+        let matches: Vec<_> = (0..20)
+            .map(|i| json!({"line": i, "text": "match"}))
+            .collect();
         let result = json!({"matches": matches});
-        
-        let optimized = optimizer.optimize_result("grep_file", result);
-        
+
+        let optimized = optimizer.optimize_result(tools::GREP_FILE, result).await;
+
         let opt_matches = optimized["matches"].as_array().unwrap();
         assert_eq!(opt_matches.len(), MAX_GREP_RESULTS);
         assert!(optimized["overflow"].is_string());
     }
 
-    #[test]
-    fn test_list_files_optimization() {
-        let mut optimizer = ContextOptimizer::new(100000);
-        
+    #[tokio::test]
+    async fn test_list_files_optimization() {
+        let mut optimizer = ContextOptimizer::new();
+
         let files: Vec<_> = (0..100).map(|i| json!(format!("file{}.rs", i))).collect();
         let result = json!({"files": files});
-        
-        let optimized = optimizer.optimize_result("list_files", result);
-        
+
+        let optimized = optimizer.optimize_result(tools::LIST_FILES, result).await;
+
         assert_eq!(optimized["total_files"], 100);
         assert!(optimized["sample"].is_array());
         assert!(optimized["note"].is_string());
     }
 
-    #[test]
-    fn test_budget_thresholds() {
-        let mut optimizer = ContextOptimizer::new(1000);
-        
-        assert!(!optimizer.needs_compaction());
-        
-        optimizer.used_tokens = 700;
-        assert!(optimizer.needs_compaction());
-        assert!(!optimizer.needs_aggressive_compaction());
-        
-        optimizer.used_tokens = 850;
-        assert!(optimizer.needs_aggressive_compaction());
-        assert!(!optimizer.needs_checkpoint());
-        
-        optimizer.used_tokens = 900;
-        assert!(optimizer.needs_checkpoint());
+    #[tokio::test]
+    async fn test_budget_thresholds_with_token_budget() {
+        let mut config = TokenBudgetConfig::default();
+        config.max_context_tokens = 1000;
+        let budget = Arc::new(TokenBudgetManager::new(config));
+
+        let optimizer = ContextOptimizer::with_token_budget(budget.clone());
+
+        assert!(!optimizer.needs_compaction().await);
+
+        // Simulate 90% usage
+        budget
+            .record_tokens_for_component(
+                crate::core::token_budget::ContextComponent::UserMessage,
+                900,
+                None,
+            )
+            .await;
+        assert!(optimizer.needs_compaction().await);
+        assert!(!optimizer.needs_checkpoint().await);
+
+        // Simulate 95% usage
+        budget
+            .record_tokens_for_component(
+                crate::core::token_budget::ContextComponent::UserMessage,
+                50,
+                None,
+            )
+            .await;
+        assert!(optimizer.needs_checkpoint().await);
     }
 
-    #[test]
-    fn test_compaction() {
-        let mut optimizer = ContextOptimizer::new(1000);
-        
-        // Add some entries
-        for i in 0..10 {
-            let result = json!({"data": format!("entry {}", i), "large": "x".repeat(100)});
-            optimizer.optimize_result("test_tool", result);
-        }
-        
-        let before = optimizer.used_tokens;
+    #[tokio::test]
+    async fn test_compact_mode_updates() {
+        let mut config = TokenBudgetConfig::default();
+        config.max_context_tokens = 1000;
+        let budget = Arc::new(TokenBudgetManager::new(config));
+
+        let mut optimizer = ContextOptimizer::with_token_budget(budget.clone());
+
+        assert_eq!(optimizer.compact_mode(), CompactMode::Normal);
+
+        // Simulate 90% usage
+        budget
+            .record_tokens_for_component(
+                crate::core::token_budget::ContextComponent::UserMessage,
+                900,
+                None,
+            )
+            .await;
+        optimizer.update_compact_mode().await;
+        assert_eq!(optimizer.compact_mode(), CompactMode::Compact);
+
+        // Simulate 95% usage
+        budget
+            .record_tokens_for_component(
+                crate::core::token_budget::ContextComponent::UserMessage,
+                50,
+                None,
+            )
+            .await;
+        optimizer.update_compact_mode().await;
+        assert_eq!(optimizer.compact_mode(), CompactMode::Checkpoint);
+    }
+
+    #[tokio::test]
+    async fn test_checkpoint_creation() {
+        let config = TokenBudgetConfig::default();
+        let budget = Arc::new(TokenBudgetManager::new(config));
+        let optimizer = ContextOptimizer::with_token_budget(budget);
+
+        let checkpoint = optimizer
+            .create_checkpoint(
+                "Test task".to_string(),
+                vec!["Step 1".to_string(), "Step 2".to_string()],
+                "Current work".to_string(),
+                vec!["Next step".to_string()],
+                vec!["file1.rs".to_string()],
+            )
+            .await;
+
+        assert_eq!(checkpoint.task_description, "Test task");
+        assert_eq!(checkpoint.completed_steps.len(), 2);
+        assert_eq!(checkpoint.current_work, "Current work");
+        assert_eq!(checkpoint.next_steps.len(), 1);
+        assert_eq!(checkpoint.key_files.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_checkpoint_save_load() {
+        let config = TokenBudgetConfig::default();
+        let budget = Arc::new(TokenBudgetManager::new(config));
+        let optimizer = ContextOptimizer::with_token_budget(budget);
+
+        let checkpoint = optimizer
+            .create_checkpoint(
+                "Test task".to_string(),
+                vec!["Step 1".to_string()],
+                "Current work".to_string(),
+                vec!["Next step".to_string()],
+                vec!["file1.rs".to_string()],
+            )
+            .await;
+
+        let temp_path = std::env::temp_dir().join("test_checkpoint.json");
+        optimizer
+            .save_checkpoint(&temp_path, &checkpoint)
+            .await
+            .unwrap();
+
+        let loaded = ContextOptimizer::load_checkpoint(&temp_path).await.unwrap();
+
+        assert_eq!(loaded.task_description, checkpoint.task_description);
+        assert_eq!(loaded.completed_steps, checkpoint.completed_steps);
+        assert_eq!(loaded.current_work, checkpoint.current_work);
+
+        // Cleanup
+        let _ = std::fs::remove_file(&temp_path);
+    }
+
+    #[tokio::test]
+    async fn test_read_file_token_based_truncation() {
+        let mut optimizer = ContextOptimizer::new();
+
+        // Create a large file content
+        let large_content = "line\n".repeat(5000);
+        let result = json!({
+            "content": large_content,
+            "max_tokens": 1000
+        });
+
+        let optimized = optimizer.optimize_result(tools::READ_FILE, result).await;
+
+        assert!(optimized["truncated"].as_bool().unwrap_or(false));
+        assert!(optimized["estimated_tokens"].is_number());
+        assert_eq!(optimized["max_tokens"], 1000);
+    }
+
+    #[tokio::test]
+    async fn test_history_compaction_preserves_paths() {
+        let mut optimizer = ContextOptimizer::new();
+
+        // Add grep result with paths and line numbers
+        let grep_result = json!({
+            "matches": [
+                {"path": "src/main.rs", "line": 42, "text": "error"},
+                {"path": "src/lib.rs", "line": 100, "text": "error"}
+            ],
+            "total": 2
+        });
+
+        optimizer.optimize_result(tools::GREP_FILE, grep_result).await;
+
+        // Trigger compaction
         optimizer.compact_history();
-        let after = optimizer.used_tokens;
-        
-        assert!(after < before);
+
+        // Check that paths and line numbers are preserved
+        let compacted = &optimizer.history[0].result;
+        assert_eq!(compacted["tool"], tools::GREP_FILE);
+        assert!(compacted["matches"].is_array());
+        let matches = compacted["matches"].as_array().unwrap();
+        assert_eq!(matches[0]["path"], "src/main.rs");
+        assert_eq!(matches[0]["line"], 42);
+    }
+
+    #[tokio::test]
+    async fn test_history_compaction_preserves_errors() {
+        let mut optimizer = ContextOptimizer::new();
+
+        // Add command result with errors
+        let cmd_result = json!({
+            "exit_code": 1,
+            "stderr": "Error: file not found at line 42",
+            "stdout": "some output"
+        });
+
+        optimizer.optimize_result("shell", cmd_result).await;
+
+        // Trigger compaction
+        optimizer.compact_history();
+
+        // Check that errors are preserved
+        let compacted = &optimizer.history[0].result;
+        assert_eq!(compacted["tool"], "command");
+        assert_eq!(compacted["exit_code"], 1);
+        assert!(compacted["stderr"].as_str().unwrap().contains("Error"));
+    }
+
+    #[tokio::test]
+    async fn test_list_files_compaction_preserves_paths() {
+        let mut optimizer = ContextOptimizer::new();
+
+        // Add list_files result
+        let files: Vec<_> = (0..10).map(|i| json!(format!("file{}.rs", i))).collect();
+        let result = json!({"files": files});
+
+        optimizer.optimize_result(tools::LIST_FILES, result).await;
+
+        // Trigger compaction
+        optimizer.compact_history();
+
+        // Check that file count and sample are preserved
+        let compacted = &optimizer.history[0].result;
+        assert_eq!(compacted["tool"], tools::LIST_FILES);
+        assert_eq!(compacted["total_files"], 10);
+        assert!(compacted["sample_paths"].is_array());
+    }
+
+    #[tokio::test]
+    async fn test_read_file_compaction_preserves_line_range() {
+        let mut optimizer = ContextOptimizer::new();
+
+        // Add read_file result with line range
+        let result = json!({
+            "path": "src/main.rs",
+            "content": "some content",
+            "start_line": 10,
+            "end_line": 50,
+            "total_lines": 100
+        });
+
+        optimizer.optimize_result(tools::READ_FILE, result).await;
+
+        // Trigger compaction
+        optimizer.compact_history();
+
+        // Check that path and line range are preserved
+        let compacted = &optimizer.history[0].result;
+        assert_eq!(compacted["tool"], tools::READ_FILE);
+        assert_eq!(compacted["path"], "src/main.rs");
+        assert_eq!(compacted["start_line"], 10);
+        assert_eq!(compacted["end_line"], 50);
+        assert_eq!(compacted["total_lines"], 100);
     }
 }

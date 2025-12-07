@@ -533,7 +533,9 @@ impl AnthropicProvider {
             .unwrap_or(0);
 
         let mut tools_json: Option<Vec<Value>> = None;
-        if let Some(tools) = &request.tools && !tools.is_empty() {
+        if let Some(tools) = &request.tools
+            && !tools.is_empty()
+        {
             let mut built_tools: Vec<Value> = tools
                 .iter()
                 .filter_map(|tool| {
@@ -543,9 +545,9 @@ impl AnthropicProvider {
                         "description": func.description,
                         "input_schema": func.parameters
                     });
-                        if tool.strict == Some(true) {
-                            obj["strict"] = json!(true);
-                        }
+                    if tool.strict == Some(true) {
+                        obj["strict"] = json!(true);
+                    }
                     Some(obj)
                 })
                 .collect();
@@ -1407,7 +1409,9 @@ impl AnthropicProvider {
                 // Check for unsupported array constraints beyond minItems with values 0 or 1
                 "minItems" | "maxItems" | "uniqueItems" => {
                     if key == "minItems" {
-                        if let Some(min_items) = value.as_u64() && min_items > 1 {
+                        if let Some(min_items) = value.as_u64()
+                            && min_items > 1
+                        {
                             let formatted_error = error_display::format_llm_error(
                                 "Anthropic",
                                 &format!(
@@ -1430,7 +1434,9 @@ impl AnthropicProvider {
                 }
                 // Check for additionalProperties - must be false for objects
                 "additionalProperties" => {
-                    if let Some(additional_props) = value.as_bool() && additional_props {
+                    if let Some(additional_props) = value.as_bool()
+                        && additional_props
+                    {
                         let formatted_error = error_display::format_llm_error(
                             "Anthropic",
                             &format!(

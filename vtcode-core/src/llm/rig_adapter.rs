@@ -90,7 +90,10 @@ pub fn reasoning_parameters_for(provider: Provider, effort: ReasoningEffortLevel
             serde_json::to_value(reasoning).ok()
         }
         Provider::Gemini => {
-            let include_thoughts = matches!(effort, ReasoningEffortLevel::High | ReasoningEffortLevel::XHigh);
+            let include_thoughts = matches!(
+                effort,
+                ReasoningEffortLevel::High | ReasoningEffortLevel::XHigh
+            );
             let budget = match effort {
                 ReasoningEffortLevel::None => return None,
                 ReasoningEffortLevel::Minimal => 16, // Low budget for minimal reasoning

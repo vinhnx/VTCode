@@ -258,7 +258,9 @@ impl Session {
 
     /// Clears the thinking spinner message when agent response or error arrives
     fn clear_thinking_spinner_if_active(&mut self, kind: InlineMessageKind) {
-        if matches!(kind, InlineMessageKind::Agent | InlineMessageKind::Error) && self.thinking_spinner.is_active {
+        if matches!(kind, InlineMessageKind::Agent | InlineMessageKind::Error)
+            && self.thinking_spinner.is_active
+        {
             if let Some(spinner_idx) = self.thinking_spinner.spinner_line_index {
                 if spinner_idx < self.lines.len() {
                     self.lines.remove(spinner_idx);

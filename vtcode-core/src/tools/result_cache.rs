@@ -9,6 +9,7 @@
 //! - Deduplication to prevent redundant tool calls
 
 use crate::cache::{CacheKey as UnifiedCacheKey, DEFAULT_CACHE_TTL, EvictionPolicy, UnifiedCache};
+use crate::config::constants::tools;
 use serde_json::Value;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -18,7 +19,7 @@ use std::time::Duration;
 /// Identifies a cached tool result
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct ToolCacheKey {
-    /// Tool name (e.g., "grep_file", "list_files")
+    /// Tool name (e.g., tools::GREP_FILE, tools::LIST_FILES)
     pub tool: String,
     /// Normalized parameters (serialized, hashed for speed)
     pub params_hash: u64,
@@ -199,8 +200,8 @@ mod tests {
 
     #[test]
     fn creates_cache_key() {
-        let key = ToolCacheKey::new("grep_file", "pattern=test", "/workspace");
-        assert_eq!(key.tool, "grep_file");
+        let key = ToolCacheKey::new(tools::GREP_FILE, "pattern=test", "/workspace");
+        assert_eq!(key.tool, tools::GREP_FILE);
         assert_eq!(key.target_path, "/workspace");
     }
 
@@ -216,7 +217,7 @@ mod tests {
     #[test]
     fn caches_and_retrieves_result() {
         let mut cache = ToolResultCache::new(10);
-        let key = ToolCacheKey::new("grep_file", "pattern=test", "/workspace");
+        let key = ToolCacheKey::new(tools::GREP_FILE, "pattern=test", "/workspace");
         let output = "line 1\nline 2".to_string();
 
         cache.insert_arc(key.clone(), Arc::new(output.clone()));
@@ -226,7 +227,7 @@ mod tests {
     #[test]
     fn returns_none_for_missing_key() {
         let mut cache = ToolResultCache::new(10);
-        let key = ToolCacheKey::new("grep_file", "pattern=test", "/workspace");
+        let key = ToolCacheKey::new(tools::GREP_FILE, "pattern=test", "/workspace");
         assert!(cache.get(&key).is_none());
     }
 

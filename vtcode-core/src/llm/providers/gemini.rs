@@ -618,14 +618,10 @@ impl GeminiProvider {
                 // Note: "None" reasoning level is only for OpenAI GPT-5.1 models, not for Gemini
                 let thinking_level = match effort {
                     // For Gemini models, treat None as Low for basic reasoning
-                    ReasoningEffortLevel::None => {
-                        Some("low")
-                    }
+                    ReasoningEffortLevel::None => Some("low"),
                     // For Gemini 3 Pro, use the new thinking_level parameter
                     // According to Google's documentation: low=fast responses, high=maximum reasoning
-                    ReasoningEffortLevel::Minimal | ReasoningEffortLevel::Low => {
-                        Some("low")
-                    }
+                    ReasoningEffortLevel::Minimal | ReasoningEffortLevel::Low => Some("low"),
                     ReasoningEffortLevel::Medium => {
                         // Note: According to Google's docs, medium is coming soon for Gemini 3,
                         // so we'll map to high for now to maintain functionality

@@ -56,7 +56,9 @@ fn fallback_model_if_not_found(model: &str) -> Option<String> {
         m if m == models::openai::GPT_5_MINI => Some(models::openai::GPT_5.to_string()),
         m if m == models::openai::GPT_5_NANO => Some(models::openai::GPT_5_MINI.to_string()),
         m if m == models::openai::GPT_5_1_CODEX => Some(models::openai::GPT_5_CODEX.to_string()),
-        m if m == models::openai::GPT_5_1_CODEX_MAX => Some(models::openai::GPT_5_1_CODEX.to_string()),
+        m if m == models::openai::GPT_5_1_CODEX_MAX => {
+            Some(models::openai::GPT_5_1_CODEX.to_string())
+        }
         _ => Some(models::openai::DEFAULT_MODEL.to_string()),
     }
 }

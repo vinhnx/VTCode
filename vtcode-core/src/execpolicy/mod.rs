@@ -3,8 +3,8 @@ use std::io;
 use std::path::{Component, Path, PathBuf};
 use tokio::fs;
 
-use anyhow::{Context, Result, anyhow};
 use crate::utils::path::canonicalize_workspace;
+use anyhow::{Context, Result, anyhow};
 
 /// Helper to validate flags in arguments (reduces duplication in 10+ validators)
 /// Returns error if any flag not in allowed_flags is found
@@ -475,9 +475,7 @@ async fn validate_git(
         "checkout" | "switch" => {
             validate_git_checkout(subargs, workspace_root, working_dir, confirm).await
         }
-        "restore" => {
-            validate_git_checkout(subargs, workspace_root, working_dir, confirm).await
-        }
+        "restore" => validate_git_checkout(subargs, workspace_root, working_dir, confirm).await,
         "merge" => validate_git_merge(subargs),
 
         // Tier 3: Dangerous operations (always blocked)
@@ -490,41 +488,32 @@ async fn validate_git(
                 Err(anyhow!(
                     "git push with force flags is not permitted. Use safe push operations only."
                 ))
-            }
-            else {
+            } else {
                 validate_git_read_only(subcommand, subargs)
             }
         }
 
-        "force-push" => {
-            Err(anyhow!(
-                "git force-push is not permitted by the execution policy"
-            ))
-        }
+        "force-push" => Err(anyhow!(
+            "git force-push is not permitted by the execution policy"
+        )),
 
-        "clean" => {
-            Err(anyhow!(
-                "git clean is not permitted by the execution policy. Use explicit rm commands instead."
-            ))
-        }
+        "clean" => Err(anyhow!(
+            "git clean is not permitted by the execution policy. Use explicit rm commands instead."
+        )),
 
         "gc" if subargs.iter().any(|a| a.contains("aggressive")) => {
             Err(anyhow!("git gc with aggressive flag is not permitted"))
         }
 
-        "filter-branch" | "rebase" | "cherry-pick" => {
-            Err(anyhow!(
-                "git {} is not permitted - complex history operations require confirmation",
-                subcommand
-            ))
-        }
+        "filter-branch" | "rebase" | "cherry-pick" => Err(anyhow!(
+            "git {} is not permitted - complex history operations require confirmation",
+            subcommand
+        )),
 
-        other => {
-            Err(anyhow!(
-                "git subcommand '{}' is not permitted by the execution policy",
-                other
-            ))
-        }
+        other => Err(anyhow!(
+            "git subcommand '{}' is not permitted by the execution policy",
+            other
+        )),
     }
 }
 
@@ -1134,15 +1123,15 @@ mod tests {
     #[test]
     fn test_validate_git_reset() {
         // Safe reset modes
-        assert!(validate_git_reset(&["--soft".to_owned()]).is_ok());
-        assert!(validate_git_reset(&["--mixed".to_owned()]).is_ok());
-        assert!(validate_git_reset(&["--unstage".to_owned()]).is_ok());
-        assert!(validate_git_reset(&[]).is_ok());
+        assert!(validate_git_reset(&["--soft".to_owned()], false).is_ok());
+        assert!(validate_git_reset(&["--mixed".to_owned()], false).is_ok());
+        assert!(validate_git_reset(&["--unstage".to_owned()], false).is_ok());
+        assert!(validate_git_reset(&[], false).is_ok());
 
         // Dangerous reset modes
-        assert!(validate_git_reset(&["--hard".to_owned()]).is_err());
-        assert!(validate_git_reset(&["--merge".to_owned()]).is_err());
-        assert!(validate_git_reset(&["--keep".to_owned()]).is_err());
+        assert!(validate_git_reset(&["--hard".to_owned()], false).is_err());
+        assert!(validate_git_reset(&["--merge".to_owned()], false).is_err());
+        assert!(validate_git_reset(&["--keep".to_owned()], false).is_err());
     }
 
     #[test]
@@ -1166,7 +1155,7 @@ mod tests {
 
         // Safe read-only operations should be allowed
         assert!(
-            validate_git(&["status".to_owned()], &workspace, &working)
+            validate_git(&["status".to_owned()], &workspace, &working, false)
                 .await
                 .is_ok()
         );
@@ -1174,13 +1163,14 @@ mod tests {
             validate_git(
                 &["log".to_owned(), "--oneline".to_owned()],
                 &workspace,
-                &working
+                &working,
+                false
             )
             .await
             .is_ok()
         );
         assert!(
-            validate_git(&["diff".to_owned()], &workspace, &working)
+            validate_git(&["diff".to_owned()], &workspace, &working, false)
                 .await
                 .is_ok()
         );
@@ -1188,7 +1178,8 @@ mod tests {
             validate_git(
                 &["show".to_owned(), "HEAD".to_owned()],
                 &workspace,
-                &working
+                &working,
+                false
             )
             .await
             .is_ok()
@@ -1205,33 +1196,39 @@ mod tests {
             validate_git(
                 &["push".to_owned(), "--force".to_owned()],
                 &workspace,
-                &working
+                &working,
+                false
             )
             .await
             .is_err()
         );
         assert!(
-            validate_git(&["push".to_owned(), "-f".to_owned()], &workspace, &working)
+            validate_git(
+                &["push".to_owned(), "-f".to_owned()],
+                &workspace,
+                &working,
+                false
+            )
+            .await
+            .is_err()
+        );
+        assert!(
+            validate_git(&["clean".to_owned()], &workspace, &working, false)
                 .await
                 .is_err()
         );
         assert!(
-            validate_git(&["clean".to_owned()], &workspace, &working)
+            validate_git(&["filter-branch".to_owned()], &workspace, &working, false)
                 .await
                 .is_err()
         );
         assert!(
-            validate_git(&["filter-branch".to_owned()], &workspace, &working)
+            validate_git(&["rebase".to_owned()], &workspace, &working, false)
                 .await
                 .is_err()
         );
         assert!(
-            validate_git(&["rebase".to_owned()], &workspace, &working)
-                .await
-                .is_err()
-        );
-        assert!(
-            validate_git(&["cherry-pick".to_owned()], &workspace, &working)
+            validate_git(&["cherry-pick".to_owned()], &workspace, &working, false)
                 .await
                 .is_err()
         );

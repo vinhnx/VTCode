@@ -343,16 +343,13 @@ pub(super) fn render_reasoning_inline(
     }
 
     let is_codex_max = selection.model_id.contains("codex-max");
-    
-    let mut levels = vec![
-        ReasoningEffortLevel::Medium,
-        ReasoningEffortLevel::High,
-    ];
-    
+
+    let mut levels = vec![ReasoningEffortLevel::Medium, ReasoningEffortLevel::High];
+
     if is_codex_max {
         levels.push(ReasoningEffortLevel::XHigh);
     }
-    
+
     for level in levels {
         items.push(InlineListItem {
             title: reasoning_level_label(level).to_string(),

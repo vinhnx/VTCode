@@ -236,9 +236,7 @@ impl ContextPruner {
         let _ = writeln!(
             report,
             "  Tokens Used: {}/{} ({:.1}%)",
-            efficiency.total_tokens,
-            self.max_tokens,
-            efficiency.context_utilization_percent
+            efficiency.total_tokens, self.max_tokens, efficiency.context_utilization_percent
         );
         let _ = writeln!(report, "  Messages: {} total", efficiency.total_messages);
         let _ = writeln!(

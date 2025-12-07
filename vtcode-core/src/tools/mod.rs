@@ -124,6 +124,7 @@ pub mod apply_patch;
 pub mod constants;
 pub mod error_messages;
 
+pub mod autonomous_executor;
 pub mod cache;
 pub mod command;
 pub mod command_cache;
@@ -152,7 +153,6 @@ pub mod traits;
 pub mod tree_sitter;
 pub mod types;
 pub mod web_fetch;
-pub mod autonomous_executor;
 
 // Production-grade improvements modules
 pub mod async_middleware;

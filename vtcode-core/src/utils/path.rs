@@ -30,4 +30,3 @@ pub fn canonicalize_workspace(workspace_root: &Path) -> PathBuf {
         workspace_root.to_path_buf()
     })
 }
-

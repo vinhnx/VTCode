@@ -90,7 +90,7 @@ pub mod models {
             "gpt-5.1", // Enhanced version of GPT-5 with temperature support and streaming
             "gpt-5.1-codex", // Enhanced version of GPT-5 Codex with temperature support and streaming
             "gpt-5.1-codex-max", // Enhanced version of GPT-5 Codex with temperature support and streaming
-            "gpt-5.1-mini",  // Enhanced mini version with temperature support and streaming
+            "gpt-5.1-mini",      // Enhanced mini version with temperature support and streaming
             "codex-mini-latest",
             "gpt-oss-20b",
             "gpt-oss-120b",
@@ -109,7 +109,13 @@ pub mod models {
         ];
 
         /// Models that support the OpenAI reasoning parameter payload
-        pub const REASONING_MODELS: &[&str] = &[GPT_5, GPT_5_CODEX, GPT_5_1, GPT_5_1_CODEX, GPT_5_1_CODEX_MAX];
+        pub const REASONING_MODELS: &[&str] = &[
+            GPT_5,
+            GPT_5_CODEX,
+            GPT_5_1,
+            GPT_5_1_CODEX,
+            GPT_5_1_CODEX_MAX,
+        ];
 
         /// Models that do not expose structured tool calling on the OpenAI platform
         pub const TOOL_UNAVAILABLE_MODELS: &[&str] = &[];

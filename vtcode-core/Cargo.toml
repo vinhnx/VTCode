@@ -181,3 +181,4 @@ rustdoc-args = ["--cfg", "docsrs"]
 assert_fs = "1.1"
 nix = { version = "0.30", features = ["user"] }
 mockito = "1.7"
+proptest = "1.5"

@@ -4,6 +4,7 @@
 //! This allows the agent to make informed decisions about result reliability
 //! and prioritize high-quality results in context windows.
 
+use crate::config::constants::tools;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -313,7 +314,7 @@ impl ResultScorer for GrepScorer {
     }
 
     fn tool_name(&self) -> &str {
-        "grep_file"
+        tools::GREP_FILE
     }
 }
 
@@ -449,7 +450,7 @@ impl ScorerRegistry {
     pub fn new() -> Self {
         let mut scorers: HashMap<String, Box<dyn ResultScorer>> = HashMap::new();
         scorers.insert(
-            "grep_file".to_string(),
+            tools::GREP_FILE.to_string(),
             Box::new(GrepScorer) as Box<dyn ResultScorer>,
         );
         scorers.insert(
@@ -529,7 +530,7 @@ mod tests {
         let result = EnhancedToolResult::new(
             json!({"matches": []}),
             ResultMetadata::success(0.8, 0.8),
-            "grep_file".to_string(),
+            tools::GREP_FILE.to_string(),
         );
 
         assert!(result.is_useful());
