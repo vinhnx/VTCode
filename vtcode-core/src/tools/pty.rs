@@ -236,7 +236,7 @@ mod unicode_tests {
 }
 use std::ffi::OsString;
 use std::io::{Read, Write};
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::mpsc;
 use std::thread::{self, JoinHandle};
@@ -1594,21 +1594,7 @@ fn exit_status_code(status: portable_pty::ExitStatus) -> i32 {
     }
 }
 
-fn normalize_path(path: &Path) -> PathBuf {
-    let mut normalized = PathBuf::new();
-    for component in path.components() {
-        match component {
-            Component::ParentDir => {
-                normalized.pop();
-            }
-            Component::CurDir => {}
-            Component::Prefix(prefix) => normalized.push(prefix.as_os_str()),
-            Component::RootDir => normalized.push(component.as_os_str()),
-            Component::Normal(part) => normalized.push(part),
-        }
-    }
-    normalized
-}
+use crate::utils::path::normalize_path;
 
 fn set_command_environment(
     builder: &mut CommandBuilder,
