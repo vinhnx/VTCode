@@ -204,7 +204,7 @@ impl AgentBehaviorAnalyzer {
         *self
             .tool_stats
             .usage_frequency
-            .entry(tool_name.to_owned())
+            .entry(tool_name.into())
             .or_insert(0) += 1;
     }
 
@@ -222,7 +222,7 @@ impl AgentBehaviorAnalyzer {
         } else {
             self.skill_stats
                 .most_effective_skills
-                .insert(0, skill_name.to_owned());
+                .insert(0, skill_name.into());
         }
         self.skill_stats.reused_skills += 1;
     }
@@ -240,7 +240,7 @@ impl AgentBehaviorAnalyzer {
         } else {
             self.failure_patterns
                 .common_errors
-                .push((error_msg.to_owned(), 1));
+                .push((error_msg.into(), 1));
         }
 
         // Update high failure tools - find count
@@ -263,7 +263,7 @@ impl AgentBehaviorAnalyzer {
         } else {
             self.failure_patterns
                 .high_failure_tools
-                .push((tool_name.to_owned(), failure_rate));
+                .push((tool_name.into(), failure_rate));
         }
 
         debug!(

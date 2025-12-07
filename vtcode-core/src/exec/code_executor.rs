@@ -205,11 +205,10 @@ impl CodeExecutor {
         );
 
         // Spawn IPC handler task that will process tool requests from code
-        let ipc_handler = if self.enable_pii_protection {
-            ToolIpcHandler::with_pii_protection(ipc_dir.clone())
-        } else {
-            ToolIpcHandler::new(ipc_dir.clone())
-        };
+        let mut ipc_handler = ToolIpcHandler::new(ipc_dir.clone());
+        if self.enable_pii_protection {
+            ipc_handler.enable_pii_protection()?;
+        }
         let mcp_client = self.mcp_client.clone();
         let execution_timeout = Duration::from_secs(self.config.timeout_secs);
 

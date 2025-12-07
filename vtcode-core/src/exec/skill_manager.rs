@@ -338,8 +338,9 @@ mod tests {
             tool_dependencies: vec![],
         };
 
-        let json = serde_json::to_string(&metadata).unwrap();
-        let deserialized: SkillMetadata = serde_json::from_str(&json).unwrap();
+        let json = serde_json::to_string(&metadata).expect("Skill metadata should serialize");
+        let deserialized: SkillMetadata =
+            serde_json::from_str(&json).expect("Serialized skill metadata should deserialize");
         assert_eq!(deserialized.name, metadata.name);
     }
 }

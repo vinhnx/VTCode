@@ -139,12 +139,12 @@ impl ToolExecutionContext {
             .rev()
             .filter(|r| r.result.metadata.quality_score() > 0.7)
             .take(n)
-            .map(|r| r.tool_name.clone())
+            .map(|r| &r.tool_name)
             .collect();
 
         tools.sort();
         tools.dedup();
-        tools
+        tools.into_iter().cloned().collect()
     }
 
     /// Suggest a fallback tool based on prior effectiveness
@@ -192,18 +192,19 @@ impl ToolExecutionContext {
         // Pattern 1: Redundant searches
         let recent_records: Vec<_> = self.execution_history.iter().rev().take(10).collect();
 
-        let mut same_pattern_tools = vec![new_record.tool_name.clone()];
+        let mut same_pattern_tools = vec![&new_record.tool_name];
         for record in &recent_records {
             if are_args_equivalent(&record.args, &new_record.args) {
-                same_pattern_tools.push(record.tool_name.clone());
+                same_pattern_tools.push(&record.tool_name);
             }
         }
 
         if same_pattern_tools.len() > 2 {
-            same_pattern_tools.sort();
-            same_pattern_tools.dedup();
+            let mut tools: Vec<String> = same_pattern_tools.into_iter().cloned().collect();
+            tools.sort();
+            tools.dedup();
             self.patterns.push(ToolPattern::RedundantSearch {
-                tools: same_pattern_tools,
+                tools,
                 pattern: format!("{:?}", new_record.args),
             });
         }

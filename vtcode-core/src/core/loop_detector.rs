@@ -80,8 +80,6 @@ impl LoopDetector {
 
         let normalized_args = normalize_args_for_detection(tool_name, args);
 
-        let tool_name_owned = tool_name.to_owned();
-
         let mut hasher = DefaultHasher::new();
         // OPTIMIZATION: Hash the value directly instead of converting to string first
         if let Ok(bytes) = serde_json::to_vec(&normalized_args) {
@@ -94,14 +92,12 @@ impl LoopDetector {
         if let Some(limit) = self.max_identical_call_limit {
             let required_history = limit.saturating_sub(1);
             if required_history > 0 && self.recent_calls.len() >= required_history {
-                let identical =
-                    self.recent_calls
-                        .iter()
-                        .rev()
-                        .take(required_history)
-                        .all(|record| {
-                            record.tool_name == tool_name_owned && record.args_hash == args_hash
-                        });
+                let identical = self
+                    .recent_calls
+                    .iter()
+                    .rev()
+                    .take(required_history)
+                    .all(|record| record.tool_name == tool_name && record.args_hash == args_hash);
 
                 if identical {
                     return Some(format!(
@@ -113,7 +109,7 @@ impl LoopDetector {
         }
 
         let record = ToolCallRecord {
-            tool_name: tool_name_owned.clone(),
+            tool_name: tool_name.to_string(),
             args_hash,
             timestamp: Instant::now(),
         };
@@ -126,7 +122,7 @@ impl LoopDetector {
         }
 
         self.recent_calls.push_back(record);
-        *self.tool_counts.entry(tool_name_owned).or_insert(0) += 1;
+        *self.tool_counts.entry(tool_name.to_string()).or_insert(0) += 1;
 
         self.check_for_loops(tool_name)
     }
@@ -135,12 +131,7 @@ impl LoopDetector {
         let count = self.tool_counts.get(tool_name).copied().unwrap_or(0);
 
         // Determine tool-specific limits
-        let max_calls = match tool_name {
-            tools::READ_FILE | tools::GREP_FILE | tools::LIST_FILES => MAX_READONLY_TOOL_CALLS,
-            tools::WRITE_FILE | tools::EDIT_FILE | "apply_patch" => MAX_WRITE_TOOL_CALLS,
-            tools::RUN_PTY_CMD | "shell" => MAX_COMMAND_TOOL_CALLS,
-            _ => MAX_OTHER_TOOL_CALLS,
-        };
+        let max_calls = Self::get_limit_for_tool(tool_name);
 
         // Hard limit check - immediate halt
         let hard_limit = max_calls * HARD_LIMIT_MULTIPLIER;
@@ -162,9 +153,7 @@ impl LoopDetector {
 
             if should_warn {
                 self.last_warning = Some(now);
-                let alternatives = self
-                    .suggest_alternative(tool_name)
-                    .unwrap_or_else(|| "Consider a different approach.".to_string());
+                let alternatives = Self::suggest_alternative_for_tool(tool_name);
 
                 return Some(format!(
                     "Loop detected: '{}' called {} times in last {} operations.\n\n\
@@ -251,6 +240,49 @@ impl LoopDetector {
         self.recent_calls.clear();
         self.tool_counts.clear();
         self.last_warning = None;
+    }
+
+    /// Get limit for a specific tool (extracted to static method for efficiency)
+    #[inline]
+    fn get_limit_for_tool(tool_name: &str) -> usize {
+        match tool_name {
+            tools::READ_FILE | tools::GREP_FILE | tools::LIST_FILES => MAX_READONLY_TOOL_CALLS,
+            tools::WRITE_FILE | tools::EDIT_FILE | "apply_patch" => MAX_WRITE_TOOL_CALLS,
+            tools::RUN_PTY_CMD | "shell" => MAX_COMMAND_TOOL_CALLS,
+            _ => MAX_OTHER_TOOL_CALLS,
+        }
+    }
+
+    /// Suggest alternatives for stuck tools (extracted to static method for efficiency)
+    #[inline]
+    fn suggest_alternative_for_tool(tool_name: &str) -> String {
+        match tool_name {
+            tools::LIST_FILES => "Instead of listing repeatedly:\n\
+                 • Use grep_file to search for specific patterns\n\
+                 • Target specific subdirectories (e.g., 'src/', 'tests/')\n\
+                 • Use read_file if you know the exact file path"
+                .to_string(),
+            tools::GREP_FILE => "Instead of grepping repeatedly:\n\
+                 • Refine your search pattern to be more specific\n\
+                 • Use read_file to examine specific files\n\
+                 • Consider using execute_code for complex filtering"
+                .to_string(),
+            tools::READ_FILE => "Instead of reading files repeatedly:\n\
+                 • Use grep_file to find specific content first\n\
+                 • Read specific line ranges with read_range parameter\n\
+                 • Consider if you already have the information needed"
+                .to_string(),
+            tools::SEARCH_TOOLS => "Instead of searching tools repeatedly:\n\
+                 • Review the tools you've already discovered\n\
+                 • Use execute_code to call tools directly\n\
+                 • Check if you need a different approach to the task"
+                .to_string(),
+            _ => "Consider:\n\
+                 • Using a different tool for this task\n\
+                 • Breaking down the problem into smaller steps\n\
+                 • Asking for user guidance if stuck"
+                .to_string(),
+        }
     }
 }
 

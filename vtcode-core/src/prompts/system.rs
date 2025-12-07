@@ -31,6 +31,7 @@ use crate::config::constants::{
 use crate::gemini::Content;
 use crate::instructions::{InstructionBundle, InstructionScope, read_instruction_bundle};
 use crate::project_doc::read_project_doc;
+use crate::prompts::system_prompt_cache::PROMPT_CACHE;
 use dirs::home_dir;
 use std::env;
 use std::fmt::Write as _;
@@ -931,8 +932,10 @@ pub async fn generate_system_instruction_with_config(
     project_root: &Path,
     vtcode_config: Option<&crate::config::VTCodeConfig>,
 ) -> Content {
-    let instruction = compose_system_instruction_text(project_root, vtcode_config).await;
-
+    let cache_key = cache_key(project_root, vtcode_config);
+    let instruction = PROMPT_CACHE.get_or_insert_with(&cache_key, || {
+        futures::executor::block_on(compose_system_instruction_text(project_root, vtcode_config))
+    });
     Content::system_text(instruction)
 }
 
@@ -941,8 +944,10 @@ pub async fn generate_system_instruction_with_guidelines(
     _config: &SystemPromptConfig,
     project_root: &Path,
 ) -> Content {
-    let instruction = compose_system_instruction_text(project_root, None).await;
-
+    let cache_key = cache_key(project_root, None);
+    let instruction = PROMPT_CACHE.get_or_insert_with(&cache_key, || {
+        futures::executor::block_on(compose_system_instruction_text(project_root, None))
+    });
     Content::system_text(instruction)
 }
 
@@ -1006,6 +1011,16 @@ fn format_instruction_path(path: &Path, project_root: &Path, home_dir: Option<&P
     }
 
     path.display().to_string()
+}
+
+fn cache_key(project_root: &Path, vtcode_config: Option<&crate::config::VTCodeConfig>) -> String {
+    let root = project_root.display().to_string();
+    if let Some(cfg) = vtcode_config {
+        let max_bytes = cfg.agent.instruction_max_bytes;
+        let files = cfg.agent.instruction_files.join(";");
+        return format!("sys_prompt_async:{root}:{max_bytes}:{files}");
+    }
+    format!("sys_prompt_async:{root}:default")
 }
 
 /// Generate a lightweight system instruction for simple operations

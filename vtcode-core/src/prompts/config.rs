@@ -31,7 +31,7 @@ impl Default for SystemPromptConfig {
 }
 
 /// Agent personality options
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Hash, PartialEq, Eq)]
 pub enum AgentPersonality {
     Professional,
     Friendly,
@@ -40,7 +40,7 @@ pub enum AgentPersonality {
 }
 
 /// Response style options
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Hash, PartialEq, Eq)]
 pub enum ResponseStyle {
     Concise,
     Detailed,

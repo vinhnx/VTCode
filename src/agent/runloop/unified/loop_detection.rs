@@ -11,6 +11,10 @@ pub struct LoopDetector {
     threshold: usize,
     /// Whether detection is enabled
     enabled: bool,
+    /// Max tools allowed per turn (safety limit)
+    max_tools_per_turn: usize,
+    /// Current turn tool count
+    turn_tool_count: usize,
 }
 
 impl LoopDetector {
@@ -19,6 +23,8 @@ impl LoopDetector {
             repeated_calls: HashMap::new(),
             threshold,
             enabled,
+            max_tools_per_turn: 10,
+            turn_tool_count: 0,
         }
     }
 
@@ -27,6 +33,12 @@ impl LoopDetector {
     pub fn record_tool_call(&mut self, signature: &str) -> (bool, usize) {
         if !self.enabled {
             return (false, 0);
+        }
+
+        // Check per-turn limit as safety boundary
+        self.turn_tool_count += 1;
+        if self.turn_tool_count > self.max_tools_per_turn {
+            return (true, self.turn_tool_count);
         }
 
         let count = self
@@ -38,9 +50,30 @@ impl LoopDetector {
         (*count > self.threshold, *count)
     }
 
+    /// Start a new turn and reset per-turn counters
+    pub fn start_turn(&mut self) {
+        self.turn_tool_count = 0;
+    }
+
+    /// Check if we've hit per-turn tool limit
+    pub fn is_turn_limit_exceeded(&self) -> bool {
+        self.turn_tool_count > self.max_tools_per_turn
+    }
+
+    /// Get current turn tool count
+    pub fn turn_count(&self) -> usize {
+        self.turn_tool_count
+    }
+
+    /// Set max tools per turn (for testing/customization)
+    pub fn set_max_tools_per_turn(&mut self, max: usize) {
+        self.max_tools_per_turn = max;
+    }
+
     /// Clear the tracking state
     pub fn reset(&mut self) {
         self.repeated_calls.clear();
+        self.turn_tool_count = 0;
     }
 
     /// Reset tracking for a specific signature only

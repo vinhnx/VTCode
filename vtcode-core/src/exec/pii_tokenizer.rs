@@ -49,16 +49,48 @@ impl PiiType {
 }
 
 // Compile default PII patterns once to avoid repeated regex compilation overhead.
-static DEFAULT_PII_PATTERNS: Lazy<Vec<(PiiType, Regex)>> = Lazy::new(|| {
-    vec![
-        (PiiType::Email, Regex::new(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}").unwrap()),
-        (PiiType::PhoneNumber, Regex::new(r"(?:\+?1[-.\s]?)?\(?[0-9]{3}\)?[-.\s]?[0-9]{3}[-.\s]?[0-9]{4}").unwrap()),
-        (PiiType::SocialSecurityNumber, Regex::new(r"[0-9]{3}-[0-9]{2}-[0-9]{4}").unwrap()),
-        (PiiType::CreditCard, Regex::new(r"[0-9]{4}[\s-]?[0-9]{4}[\s-]?[0-9]{4}[\s-]?[0-9]{4}").unwrap()),
-        (PiiType::IpAddress, Regex::new(r"(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)").unwrap()),
-        (PiiType::ApiKey, Regex::new(r#"(?:api[_-]?key|apikey|API[_-]?KEY)\s*[:=]\s*['"]?[a-zA-Z0-9_-]{32,}['"]?"#).unwrap()),
-        (PiiType::AuthToken, Regex::new(r"(?:bearer|token|authorization)\s+[a-zA-Z0-9._-]+").unwrap()),
-    ]
+static DEFAULT_PII_PATTERNS: Lazy<Result<Vec<(PiiType, Regex)>, String>> = Lazy::new(|| {
+    let patterns = vec![
+        (
+            PiiType::Email,
+            r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}",
+        ),
+        (
+            PiiType::PhoneNumber,
+            r"(?:\+?1[-.\s]?)?\(?[0-9]{3}\)?[-.\s]?[0-9]{3}[-.\s]?[0-9]{4}",
+        ),
+        (PiiType::SocialSecurityNumber, r"[0-9]{3}-[0-9]{2}-[0-9]{4}"),
+        (
+            PiiType::CreditCard,
+            r"[0-9]{4}[\s-]?[0-9]{4}[\s-]?[0-9]{4}[\s-]?[0-9]{4}",
+        ),
+        (
+            PiiType::IpAddress,
+            r"(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)",
+        ),
+        (
+            PiiType::ApiKey,
+            r#"(?:api[_-]?key|apikey|API[_-]?KEY)\s*[:=]\s*['"]?[a-zA-Z0-9_-]{32,}['"]?"#,
+        ),
+        (
+            PiiType::AuthToken,
+            r"(?:bearer|token|authorization)\s+[a-zA-Z0-9._-]+",
+        ),
+    ];
+
+    let mut compiled = Vec::with_capacity(patterns.len());
+    for (pii_type, pattern) in patterns {
+        match Regex::new(pattern) {
+            Ok(regex) => compiled.push((pii_type, regex)),
+            Err(e) => {
+                return Err(format!(
+                    "Failed to compile PII regex for {:?}: {}",
+                    pii_type, e
+                ));
+            }
+        }
+    }
+    Ok(compiled)
 });
 
 /// Detected PII instance with location and type.
@@ -88,18 +120,20 @@ pub struct PiiTokenizer {
 
 impl PiiTokenizer {
     /// Create a new PII tokenizer with default patterns.
-    pub fn new() -> Self {
+    pub fn new() -> Result<Self> {
         // Build patterns from static defaults (compiled once)
         // Note: Cloning Regex is cheap (Arc-based internally)
         let patterns = DEFAULT_PII_PATTERNS
+            .as_ref()
+            .map_err(|e| anyhow::anyhow!("PII pattern initialization failed: {}", e))?
             .iter()
             .map(|(pii_type, regex)| (*pii_type, regex.clone()))
             .collect();
 
-        Self {
+        Ok(Self {
             patterns,
             token_store: Arc::new(Mutex::new(HashMap::new())),
-        }
+        })
     }
 
     /// Detect PII in a string.
@@ -156,7 +190,10 @@ impl PiiTokenizer {
 
         // Store tokens for later de-tokenization
         {
-            let mut store = self.token_store.lock().unwrap();
+            let mut store = self
+                .token_store
+                .lock()
+                .map_err(|e| anyhow::anyhow!("Failed to acquire token store lock: {}", e))?;
             // Use drain to move ownership, avoiding unnecessary clones
             store.extend(new_tokens.drain());
         }
@@ -168,7 +205,10 @@ impl PiiTokenizer {
 
     /// De-tokenize a string using stored token map.
     pub fn detokenize_string(&self, text: &str) -> Result<String> {
-        let store = self.token_store.lock().unwrap();
+        let store = self
+            .token_store
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Failed to acquire token store lock: {}", e))?;
         let mut result = text.to_string();
 
         for (token, pii_token) in store.iter() {
@@ -228,7 +268,10 @@ impl PiiTokenizer {
 
 impl Default for PiiTokenizer {
     fn default() -> Self {
-        Self::new()
+        Self::new().unwrap_or_else(|_| Self {
+            patterns: Default::default(),
+            token_store: Arc::new(Mutex::new(HashMap::new())),
+        })
     }
 }
 
@@ -238,7 +281,7 @@ mod tests {
 
     #[test]
     fn test_detect_email() {
-        let tokenizer = PiiTokenizer::new();
+        let tokenizer = PiiTokenizer::new().expect("PII tokenizer should initialize");
         let text = "Contact me at john@example.com for more info";
         let detected = tokenizer.detect_pii(text).unwrap();
 

@@ -1241,7 +1241,7 @@ impl AgentRunner {
                             let name = call
                                 .function
                                 .as_ref()
-                                .expect("Tool call must have function")
+                                .ok_or_else(|| anyhow!("Tool call missing function definition"))?
                                 .name
                                 .clone();
                             let args = call
@@ -1286,19 +1286,20 @@ impl AgentRunner {
                         // Pre-allocate futures with exact capacity
                         let mut futures = Vec::with_capacity(tool_calls.len());
                         for call in &tool_calls {
-                            futures.push((|| {
-                                let name = call
-                                    .function
-                                    .as_ref()
-                                    .expect("Tool call must have function")
-                                    .name
-                                    .clone();
-                                let args = call
-                                    .parsed_arguments()
-                                    .unwrap_or_else(|_| serde_json::json!({}));
-                                let call_id = call.id.clone();
-                                let tool_registry = self.tool_registry.clone();
+                            let name = match call.function.as_ref() {
+                                Some(func) => func.name.clone(),
+                                None => {
+                                    warn!("Tool call missing function definition");
+                                    continue;
+                                }
+                            };
+                            let args = call
+                                .parsed_arguments()
+                                .unwrap_or_else(|_| serde_json::json!({}));
+                            let call_id = call.id.clone();
+                            let tool_registry = self.tool_registry.clone();
 
+                            futures.push({
                                 // OPTIMIZATION: Loop check already done before parallel execution
                                 async move {
                                     let mut registry = tool_registry;
@@ -1309,7 +1310,7 @@ impl AgentRunner {
                                         );
                                     (name, args, call_id, result)
                                 }
-                            })());
+                            });
                         }
 
                         let results = join_all(futures).await;
@@ -1390,7 +1391,7 @@ impl AgentRunner {
                             let name = call
                                 .function
                                 .as_ref()
-                                .expect("Tool call must have function")
+                                .ok_or_else(|| anyhow!("Tool call missing function definition"))?
                                 .name
                                 .clone();
 

@@ -90,9 +90,7 @@ impl ExecEventRecorder {
         }
         let item = ThreadItem {
             id: self.next_item_id(),
-            details: ThreadItemDetails::AgentMessage(AgentMessageItem {
-                text: text.to_string(),
-            }),
+            details: ThreadItemDetails::AgentMessage(AgentMessageItem { text: text.into() }),
         };
         self.record(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
     }
@@ -103,7 +101,7 @@ impl ExecEventRecorder {
         }
 
         if let Some(active) = self.active_agent_message.as_mut() {
-            active.buffer = text.to_string();
+            active.buffer = text.into();
             let item = ThreadItem {
                 id: active.id.clone(),
                 details: ThreadItemDetails::AgentMessage(AgentMessageItem {
@@ -114,16 +112,17 @@ impl ExecEventRecorder {
             true
         } else {
             let id = self.next_item_id();
+            let text_owned = text.to_string();
             let item = ThreadItem {
                 id: id.clone(),
                 details: ThreadItemDetails::AgentMessage(AgentMessageItem {
-                    text: text.to_string(),
+                    text: text_owned.clone(),
                 }),
             };
             self.record(ThreadEvent::ItemStarted(ItemStartedEvent { item }));
             self.active_agent_message = Some(StreamingAgentMessage {
                 id,
-                buffer: text.to_string(),
+                buffer: text_owned,
             });
             true
         }

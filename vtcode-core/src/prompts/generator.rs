@@ -1,7 +1,10 @@
 use super::config::SystemPromptConfig;
 use super::context::PromptContext;
+use super::system_prompt_cache::PROMPT_CACHE;
 use super::templates::PromptTemplates;
+use std::collections::hash_map::DefaultHasher;
 use std::fmt::Write as FmtWrite;
+use std::hash::{Hash, Hasher};
 
 /// System prompt generator
 pub struct SystemPromptGenerator<'a> {
@@ -53,7 +56,10 @@ impl<'a> SystemPromptGenerator<'a> {
         // Tool usage if enabled
         if self.config.include_tools && !self.context.available_tools.is_empty() {
             append!(PromptTemplates::tool_usage_prompt());
-            let tools = self.context.available_tools.join(", ");
+            let mut tools = self.context.available_tools.clone();
+            tools.sort();
+            tools.dedup();
+            let tools = tools.join(", ");
             if !first {
                 out.push_str("\n\n");
             }
@@ -74,7 +80,10 @@ impl<'a> SystemPromptGenerator<'a> {
             }
 
             if !self.context.languages.is_empty() {
-                let langs = self.context.languages.join(", ");
+                let mut langs = self.context.languages.clone();
+                langs.sort();
+                langs.dedup();
+                let langs = langs.join(", ");
                 if !first {
                     out.push_str("\n\n");
                 }
@@ -105,6 +114,50 @@ pub fn generate_system_instruction_with_config(
     config: &SystemPromptConfig,
     context: &PromptContext,
 ) -> String {
-    let generator = SystemPromptGenerator::new(config, context);
-    generator.generate()
+    let cache_key = cache_key(config, context);
+    PROMPT_CACHE.get_or_insert_with(&cache_key, || {
+        let generator = SystemPromptGenerator::new(config, context);
+        generator.generate()
+    })
+}
+
+fn cache_key(config: &SystemPromptConfig, context: &PromptContext) -> String {
+    let mut hasher = DefaultHasher::new();
+
+    config.verbose.hash(&mut hasher);
+    config.include_tools.hash(&mut hasher);
+    config.include_workspace.hash(&mut hasher);
+    config.personality.hash(&mut hasher);
+    config.response_style.hash(&mut hasher);
+    if let Some(custom) = &config.custom_instruction {
+        custom.hash(&mut hasher);
+    }
+
+    if let Some(workspace) = &context.workspace {
+        workspace.hash(&mut hasher);
+    }
+
+    let mut languages = context.languages.clone();
+    languages.sort();
+    languages.dedup();
+    languages.hash(&mut hasher);
+
+    let mut tools = context.available_tools.clone();
+    tools.sort();
+    tools.dedup();
+    tools.hash(&mut hasher);
+
+    if let Some(project_type) = &context.project_type {
+        project_type.hash(&mut hasher);
+    }
+
+    if let Some(preferences) = &context.user_preferences {
+        preferences.preferred_languages.hash(&mut hasher);
+        if let Some(style) = &preferences.coding_style {
+            style.hash(&mut hasher);
+        }
+        preferences.preferred_frameworks.hash(&mut hasher);
+    }
+
+    format!("system_prompt:{:x}", hasher.finish())
 }
