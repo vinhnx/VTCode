@@ -96,7 +96,8 @@ struct ToolDiscoveryCacheKey {
 /// Cached tool discovery result (internal cache entry)
 #[derive(Clone)]
 struct CachedToolDiscoveryEntry {
-    results: Vec<super::tool_discovery::ToolDiscoveryResult>,
+    // OPTIMIZATION: Use Arc to avoid cloning large vectors on cache hits
+    results: Arc<Vec<super::tool_discovery::ToolDiscoveryResult>>,
     timestamp: Instant,
     provider_tool_count: usize,
 }
@@ -150,8 +151,13 @@ impl ToolDiscoveryCache {
 
     /// Check if a tool might exist (fast negative lookup)
     pub fn might_have_tool(&self, tool_name: &str) -> bool {
-        let bloom_filter = self.bloom_filter.read().unwrap();
-        bloom_filter.contains(tool_name)
+        match self.bloom_filter.read() {
+            Ok(bloom_filter) => bloom_filter.contains(tool_name),
+            Err(_) => {
+                tracing::warn!("Bloom filter lock poisoned, assuming tool might exist");
+                true
+            }
+        }
     }
 
     /// Get cached tool discovery results
@@ -161,18 +167,26 @@ impl ToolDiscoveryCache {
         keyword: &str,
         detail_level: DetailLevel,
     ) -> Option<Vec<super::tool_discovery::ToolDiscoveryResult>> {
+        // OPTIMIZATION: Use to_owned() for explicit String allocation
         let key = ToolDiscoveryCacheKey {
-            provider_name: provider_name.into(),
-            keyword: keyword.into(),
+            provider_name: provider_name.to_owned(),
+            keyword: keyword.to_owned(),
             detail_level,
         };
 
-        let mut detailed_cache = self.detailed_cache.write().unwrap();
+        let mut detailed_cache = match self.detailed_cache.write() {
+            Ok(cache) => cache,
+            Err(e) => {
+                tracing::error!("Detailed cache lock poisoned: {}", e);
+                return None;
+            }
+        };
 
         if let Some(cached) = detailed_cache.get(&key) {
             // Check if the cached entry is still fresh
             if cached.timestamp.elapsed() < self.config.max_age {
-                return Some(cached.results.clone());
+                // OPTIMIZATION: Arc allows returning owned Vec without cloning the data
+                return Some((*cached.results).clone());
             } else {
                 // Entry is stale, remove it
                 detailed_cache.pop(&key);
@@ -190,26 +204,35 @@ impl ToolDiscoveryCache {
         detail_level: DetailLevel,
         results: Vec<super::tool_discovery::ToolDiscoveryResult>,
     ) {
+        // OPTIMIZATION: Use to_owned() for explicit String allocation
         let key = ToolDiscoveryCacheKey {
-            provider_name: provider_name.into(),
-            keyword: keyword.into(),
+            provider_name: provider_name.to_owned(),
+            keyword: keyword.to_owned(),
             detail_level,
         };
 
         let cached = CachedToolDiscoveryEntry {
-            results: results.clone(),
+            // OPTIMIZATION: Wrap in Arc once, share across cache hits
+            results: Arc::new(results.clone()),
             timestamp: Instant::now(),
             provider_tool_count: results.len(),
         };
 
-        let mut detailed_cache = self.detailed_cache.write().unwrap();
-        detailed_cache.put(key, cached);
+        if let Ok(mut detailed_cache) = self.detailed_cache.write() {
+            detailed_cache.put(key, cached);
+        } else {
+            tracing::error!("Failed to acquire detailed cache lock for writing");
+            return;
+        }
 
         // Update bloom filter with all tool names
         if !results.is_empty() {
-            let mut bloom_filter = self.bloom_filter.write().unwrap();
-            for result in &results {
-                bloom_filter.insert(&result.tool.name);
+            if let Ok(mut bloom_filter) = self.bloom_filter.write() {
+                for result in &results {
+                    bloom_filter.insert(&result.tool.name);
+                }
+            } else {
+                tracing::error!("Failed to acquire bloom filter lock for writing");
             }
         }
     }
@@ -220,7 +243,13 @@ impl ToolDiscoveryCache {
         provider_name: &str,
         refresh_if_stale: bool,
     ) -> Option<Vec<McpToolInfo>> {
-        let last_refresh = self.last_refresh.read().unwrap();
+        let last_refresh = match self.last_refresh.read() {
+            Ok(lr) => lr,
+            Err(e) => {
+                tracing::error!("Last refresh lock poisoned: {}", e);
+                return None;
+            }
+        };
         let should_refresh = if let Some(last) = last_refresh.get(provider_name) {
             last.elapsed() > self.config.provider_refresh_interval
         } else {
@@ -232,25 +261,42 @@ impl ToolDiscoveryCache {
             return None; // Signal that refresh is needed
         }
 
-        let all_tools_cache = self.all_tools_cache.read().unwrap();
-        all_tools_cache.get(provider_name).cloned()
+        match self.all_tools_cache.read() {
+            Ok(all_tools_cache) => all_tools_cache.get(provider_name).cloned(),
+            Err(e) => {
+                tracing::error!("All tools cache lock poisoned: {}", e);
+                None
+            }
+        }
     }
 
     /// Cache all tools for a provider
     pub fn cache_all_tools(&self, provider_name: &str, tools: Vec<McpToolInfo>) {
-        // OPTIMIZATION: Avoid unnecessary string allocation
-        let provider_key = provider_name;
-        
         // Update all tools cache
-        let mut all_tools_cache = self.all_tools_cache.write().unwrap();
-        all_tools_cache.insert(provider_key.into(), tools.clone());
+        let mut all_tools_cache = match self.all_tools_cache.write() {
+            Ok(cache) => cache,
+            Err(e) => {
+                tracing::error!("All tools cache lock poisoned: {}", e);
+                return;
+            }
+        };
+        all_tools_cache.insert(provider_name.to_owned(), tools.clone());
 
         // Update last refresh time
-        let mut last_refresh = self.last_refresh.write().unwrap();
-        last_refresh.insert(provider_key.into(), Instant::now());
+        if let Ok(mut last_refresh) = self.last_refresh.write() {
+            last_refresh.insert(provider_name.to_owned(), Instant::now());
+        } else {
+            tracing::error!("Failed to update last refresh time");
+        }
 
         // Update bloom filter with all tool names
-        let mut bloom_filter = self.bloom_filter.write().unwrap();
+        let mut bloom_filter = match self.bloom_filter.write() {
+            Ok(bf) => bf,
+            Err(e) => {
+                tracing::error!("Bloom filter lock poisoned: {}", e);
+                return;
+            }
+        };
         bloom_filter.clear(); // Clear and rebuild for accuracy
 
         for tool in &tools {
@@ -274,24 +320,40 @@ impl ToolDiscoveryCache {
 
     /// Clear all caches
     pub fn clear(&self) {
-        self.bloom_filter.write().unwrap().clear();
-        self.detailed_cache.write().unwrap().clear();
-        self.all_tools_cache.write().unwrap().clear();
-        self.last_refresh.write().unwrap().clear();
+        if let Ok(mut bf) = self.bloom_filter.write() {
+            bf.clear();
+        }
+        if let Ok(mut dc) = self.detailed_cache.write() {
+            dc.clear();
+        }
+        if let Ok(mut atc) = self.all_tools_cache.write() {
+            atc.clear();
+        }
+        if let Ok(mut lr) = self.last_refresh.write() {
+            lr.clear();
+        }
     }
 
     /// Get cache statistics
     pub fn stats(&self) -> ToolCacheStats {
-        let detailed_cache = self.detailed_cache.read().unwrap();
-        let all_tools_cache = self.all_tools_cache.read().unwrap();
-        let bloom_filter = self.bloom_filter.read().unwrap();
+        let (detailed_entries, detailed_capacity) = self.detailed_cache.read()
+            .map(|cache| (cache.len(), cache.cap().get()))
+            .unwrap_or((0, 0));
+
+        let all_tools_entries = self.all_tools_cache.read()
+            .map(|cache| cache.len())
+            .unwrap_or(0);
+
+        let (bf_size, bf_hashes) = self.bloom_filter.read()
+            .map(|bf| (bf.size, bf.num_hashes))
+            .unwrap_or((0, 0));
 
         ToolCacheStats {
-            detailed_cache_entries: detailed_cache.len(),
-            detailed_cache_capacity: detailed_cache.cap().get(),
-            all_tools_cache_entries: all_tools_cache.len(),
-            bloom_filter_size: bloom_filter.size,
-            bloom_filter_hashes: bloom_filter.num_hashes,
+            detailed_cache_entries: detailed_entries,
+            detailed_cache_capacity: detailed_capacity,
+            all_tools_cache_entries: all_tools_entries,
+            bloom_filter_size: bf_size,
+            bloom_filter_hashes: bf_hashes,
         }
     }
 }

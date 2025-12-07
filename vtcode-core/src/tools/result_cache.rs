@@ -6,10 +6,9 @@
 //! **Enhanced with fuzzy matching** (migrated from smart_cache.rs):
 //! - Exact match caching for identical queries
 //! - Fuzzy matching for similar queries (optional)
-//! - Deduplication to prevent redundant tool calls
+/// Deduplication to prevent redundant tool calls
 
 use crate::cache::{CacheKey as UnifiedCacheKey, DEFAULT_CACHE_TTL, EvictionPolicy, UnifiedCache};
-use crate::config::constants::tools;
 use serde_json::Value;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -197,6 +196,7 @@ impl ToolResultCache {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::constants::tools;
 
     #[test]
     fn creates_cache_key() {

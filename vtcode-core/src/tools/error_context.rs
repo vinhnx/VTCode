@@ -2,7 +2,6 @@
 ///
 /// Provides structured error reporting with file/line context,
 /// partial output preservation, and helpful suggestions.
-use crate::config::constants::tools;
 use std::fmt;
 use std::fmt::Write as _;
 
