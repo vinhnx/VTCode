@@ -271,14 +271,16 @@ pub fn validate_request_common(
         return Err(LLMError::InvalidRequest(formatted));
     }
 
-    if let Some(models) = supported_models {
-        if !request.model.trim().is_empty() && !models.contains(&request.model) {
-            let formatted = error_display::format_llm_error(
-                provider_name,
-                &format!("Unsupported model: {}", request.model),
-            );
-            return Err(LLMError::InvalidRequest(formatted));
-        }
+    if let Some(models) = supported_models
+        && !request.model.trim().is_empty()
+        && !models.contains(&request.model)
+    {
+        let msg = format!("Unsupported model: {}", request.model);
+        let formatted = error_display::format_llm_error(
+            provider_name,
+            &msg,
+        );
+        return Err(LLMError::InvalidRequest(formatted));
     }
 
     for message in &request.messages {

@@ -208,10 +208,10 @@ async fn analyze_project(registry: &mut ToolRegistry, workspace: &Path) -> Resul
     }
 
     // Detect common source directories
-    let common_src_dirs = vec!["src", "lib", "pkg", "internal", "cmd", "app", "core"];
-    for dir in common_src_dirs {
+    let common_src_dirs = ["src", "lib", "pkg", "internal", "cmd", "app", "core"];
+    for &dir in &common_src_dirs {
         if workspace.join(dir).exists() {
-            analysis.source_dirs.push(dir.to_string());
+            analysis.source_dirs.push(dir.into());
         }
     }
 
@@ -233,8 +233,8 @@ async fn analyze_file(
     match path {
         // Rust project files
         "Cargo.toml" => {
-            analysis.languages.push("Rust".to_string());
-            analysis.build_systems.push("Cargo".to_string());
+            analysis.languages.push("Rust".into());
+            analysis.build_systems.push("Cargo".into());
 
             // Read Cargo.toml to extract dependencies
             let cargo_content = registry
@@ -249,16 +249,16 @@ async fn analyze_file(
             }
         }
         "Cargo.lock" => {
-            analysis.config_files.push("Cargo.lock".to_string());
+            analysis.config_files.push("Cargo.lock".into());
         }
         "run.sh" | "run-debug.sh" | "run-dev.sh" | "run-prod.sh" => {
-            analysis.scripts.push(path.to_string());
+            analysis.scripts.push(path.into());
         }
 
         // Node.js project files
         "package.json" => {
-            analysis.languages.push("JavaScript/TypeScript".to_string());
-            analysis.build_systems.push("npm/yarn/pnpm".to_string());
+            analysis.languages.push("JavaScript/TypeScript".into());
+            analysis.build_systems.push("npm/yarn/pnpm".into());
 
             // Read package.json to extract dependencies
             let package_content = registry
@@ -273,23 +273,23 @@ async fn analyze_file(
             }
         }
         "yarn.lock" | "package-lock.json" | "pnpm-lock.yaml" => {
-            analysis.config_files.push(path.to_string());
+            analysis.config_files.push(path.into());
         }
 
         // Python project files
         "requirements.txt" | "pyproject.toml" | "setup.py" | "Pipfile" => {
             if !analysis.languages.iter().any(|s| s == "Python") {
-                analysis.languages.push("Python".to_string());
+                analysis.languages.push("Python".into());
             }
-            analysis.build_systems.push("pip/poetry".to_string());
-            analysis.config_files.push(path.to_string());
+            analysis.build_systems.push("pip/poetry".into());
+            analysis.config_files.push(path.into());
         }
 
         // Go project files
         "go.mod" | "go.sum" => {
-            analysis.languages.push("Go".to_string());
-            analysis.build_systems.push("Go Modules".to_string());
-            analysis.config_files.push(path.to_string());
+            analysis.languages.push("Go".into());
+            analysis.build_systems.push("Go Modules".into());
+            analysis.config_files.push(path.into());
         }
 
         // Java project files
@@ -641,7 +641,7 @@ fn build_architecture_section(analysis: &ProjectAnalysis) -> String {
 }
 
 fn build_code_style_section(analysis: &ProjectAnalysis) -> String {
-    let mut lines = Vec::new();
+    let mut lines = Vec::with_capacity(analysis.languages.len().max(1));
 
     for language in unique_preserving_order(&analysis.languages) {
         match language.as_str() {
@@ -667,7 +667,7 @@ fn build_code_style_section(analysis: &ProjectAnalysis) -> String {
 }
 
 fn build_testing_section(analysis: &ProjectAnalysis) -> String {
-    let mut lines = Vec::new();
+    let mut lines = Vec::with_capacity(4);
     let systems = unique_preserving_order(&analysis.build_systems);
 
     if systems.iter().any(|system| system == "Cargo") {
@@ -710,7 +710,7 @@ fn build_testing_section(analysis: &ProjectAnalysis) -> String {
 }
 
 fn build_pr_guidelines_section(analysis: &ProjectAnalysis) -> Option<String> {
-    let mut lines = Vec::new();
+    let mut lines = Vec::with_capacity(3);
 
     if analysis
         .commit_patterns
@@ -737,7 +737,7 @@ fn build_pr_guidelines_section(analysis: &ProjectAnalysis) -> Option<String> {
 }
 
 fn build_additional_guidance_section(analysis: &ProjectAnalysis) -> Option<String> {
-    let mut lines = Vec::new();
+    let mut lines = Vec::with_capacity(2);
 
     if !analysis.documentation_files.is_empty() {
         let docs = unique_preserving_order(&analysis.documentation_files);
@@ -745,7 +745,7 @@ fn build_additional_guidance_section(analysis: &ProjectAnalysis) -> Option<Strin
     }
 
     if !analysis.dependencies.is_empty() {
-        let mut highlights = Vec::new();
+        let mut highlights = Vec::with_capacity(analysis.dependencies.len());
         for (ecosystem, deps) in &analysis.dependencies {
             if deps.is_empty() {
                 continue;

@@ -66,11 +66,11 @@ impl SecurityMetrics {
             .unwrap_or(0)
     }
 
-    pub fn get_most_detected_pattern(&self) -> Option<String> {
+    pub fn get_most_detected_pattern(&self) -> Option<&str> {
         self.pattern_distribution
             .iter()
             .max_by_key(|(_, count)| *count)
-            .map(|(name, _)| name.clone())
+            .map(|(name, _)| name.as_str())
     }
 
     pub fn get_high_severity_events(&self) -> Vec<AuditEvent> {

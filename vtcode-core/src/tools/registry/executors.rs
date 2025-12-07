@@ -2608,6 +2608,29 @@ mod tests {
     }
 
     #[test]
+    fn normalize_natural_language_git_diff_on_file() {
+        // Test "git diff on file.rs" -> "git diff file.rs"
+        let result = normalize_natural_language_command("git diff on vtcode-core/src/mcp/mod.rs");
+        assert_eq!(result, "git diff vtcode-core/src/mcp/mod.rs");
+        
+        // Test "git log on src/" -> "git log src/"
+        let result = normalize_natural_language_command("git log on src/");
+        assert_eq!(result, "git log src/");
+        
+        // Test "git status on ." -> "git status ."
+        let result = normalize_natural_language_command("git status on .");
+        assert_eq!(result, "git status .");
+        
+        // Test that normal commands are not affected
+        let result = normalize_natural_language_command("git diff --cached");
+        assert_eq!(result, "git diff --cached");
+        
+        // Test that "on" in other contexts is not affected
+        let result = normalize_natural_language_command("echo on");
+        assert_eq!(result, "echo on");
+    }
+
+    #[test]
     fn detects_windows_shell_name_variants() {
         assert!(should_use_windows_command_tokenizer(Some(
             "C:/Windows/System32/cmd.exe"
@@ -2940,6 +2963,15 @@ fn build_ephemeral_pty_response(
     // Use the override output if available (for exit code 127), otherwise use actual output
     let final_output = output_override.as_ref().unwrap_or(&output);
 
+    // Detect if this is a git diff command - output is already rendered visually
+    let has_git = setup.command.iter().any(|arg| arg.to_lowercase().contains("git"));
+    let has_diff_cmd = setup.command.iter().any(|arg| {
+        let lower = arg.to_lowercase();
+        lower == "diff" || lower == "show" || lower == "log" || 
+        lower.contains("git diff") || lower.contains("git show") || lower.contains("git log")
+    });
+    let is_git_diff = has_git && has_diff_cmd;
+
     let mut response = json!({
         "success": true,
         "command": setup.command.clone(),
@@ -2962,6 +2994,7 @@ fn build_ephemeral_pty_response(
         "working_dir": setup.working_dir_display.clone(),
         "timeout_secs": setup.timeout_secs,
         "duration_ms": if completed { duration.as_millis() } else { 0 },
+        "output_already_rendered": is_git_diff,
     });
 
     // Add CRITICAL signals for exit code 127 to ABSOLUTELY PREVENT retry loops
@@ -3243,7 +3276,37 @@ fn quote_windows_argument(arg: &str) -> String {
 fn tokenize_command_string(command: &str, _shell_hint: Option<&str>) -> Result<Vec<String>> {
     // Sanitize markdown formatting (backticks) that LLMs sometimes include
     let sanitized = strip_markdown_code_formatting(command);
-    split(&sanitized).map_err(|err| anyhow!(err))
+    
+    // Normalize natural language patterns before tokenization
+    let normalized = normalize_natural_language_command(&sanitized);
+    
+    split(&normalized).map_err(|err| anyhow!(err))
+}
+
+/// Normalize natural language command patterns to proper shell syntax.
+/// Handles common patterns like "git diff on file.rs" -> "git diff file.rs"
+fn normalize_natural_language_command(command: &str) -> String {
+    let trimmed = command.trim();
+    
+    // Pattern: "git <subcommand> on <path>" -> "git <subcommand> <path>"
+    // Examples: "git diff on file.rs", "git log on src/", "git status on ."
+    if let Some(git_idx) = trimmed.find("git ") {
+        if let Some(on_idx) = trimmed.find(" on ") {
+            // Ensure "on" comes after "git" and is not part of another word
+            if on_idx > git_idx {
+                let before_on = &trimmed[..on_idx];
+                let after_on = &trimmed[on_idx + 4..]; // Skip " on "
+                
+                // Only normalize if "on" is followed by a path-like argument
+                // (not empty and doesn't look like another command)
+                if !after_on.trim().is_empty() && !after_on.trim().starts_with('-') {
+                    return format!("{} {}", before_on, after_on);
+                }
+            }
+        }
+    }
+    
+    trimmed.to_string()
 }
 
 /// Strip common markdown code formatting from command strings.

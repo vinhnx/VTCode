@@ -156,13 +156,13 @@ impl MessageToolCorrelation {
     pub fn summary(&self) -> String {
         format!(
             "Intent: {} | Tools: {} | Fulfillment: {} (confidence: {:.0}%)",
-            self.stated_intent.to_string(),
+            self.stated_intent,
             self.tool_executions
                 .iter()
                 .map(|e| e.tool_name.clone())
                 .collect::<Vec<_>>()
                 .join(", "),
-            self.intent_fulfillment.to_string(),
+            self.intent_fulfillment,
             self.confidence * 100.0
         )
     }

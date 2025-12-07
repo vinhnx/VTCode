@@ -121,18 +121,18 @@ impl RefactoringEngine {
         let mut operations = Vec::new();
 
         // Extract function (if function is too long)
-        if let Some(signature) = &symbol.signature {
-            if signature.lines().count() > 20 {
-                operations.push(RefactoringOperation {
-                    kind: RefactoringKind::ExtractFunction,
-                    description: format!(
-                        "Extract parts of {} into separate functions",
-                        symbol.name
-                    ),
-                    changes: vec![], // Would be populated with actual changes
-                    preview: vec!["// Extracted function".to_string()],
-                });
-            }
+        if let Some(signature) = &symbol.signature
+            && signature.lines().count() > 20
+        {
+            operations.push(RefactoringOperation {
+                kind: RefactoringKind::ExtractFunction,
+                description: format!(
+                    "Extract parts of {} into separate functions",
+                    symbol.name
+                ),
+                changes: vec![], // Would be populated with actual changes
+                preview: vec!["// Extracted function".to_string()],
+            });
         }
 
         // Rename function
@@ -302,29 +302,27 @@ impl RefactoringEngine {
             return conflicts;
         }
 
-        if let Some(change) = operation.changes.first() {
-            if let Ok(content) = tokio::fs::read_to_string(&change.file_path).await {
-                if let Ok(re) =
-                    regex::Regex::new(&format!(r"\b{}\b", regex::escape(&change.new_text)))
-                {
-                    for mat in re.find_iter(&content) {
-                        if mat.start() != change.old_range.start.byte_offset {
-                            conflicts.push(RefactoringConflict {
-                                kind: ConflictKind::NameConflict,
-                                message: format!(
-                                    "name '{}' already exists in {}",
-                                    change.new_text, change.file_path
-                                ),
-                                position: Position {
-                                    row: 0,
-                                    column: 0,
-                                    byte_offset: mat.start(),
-                                },
-                                suggestion: Some("choose a different name".to_string()),
-                            });
-                            break;
-                        }
-                    }
+        if let Some(change) = operation.changes.first()
+            && let Ok(content) = tokio::fs::read_to_string(&change.file_path).await
+            && let Ok(re) =
+                regex::Regex::new(&format!(r"\b{}\b", regex::escape(&change.new_text)))
+        {
+            for mat in re.find_iter(&content) {
+                if mat.start() != change.old_range.start.byte_offset {
+                    conflicts.push(RefactoringConflict {
+                        kind: ConflictKind::NameConflict,
+                        message: format!(
+                            "name '{}' already exists in {}",
+                            change.new_text, change.file_path
+                        ),
+                        position: Position {
+                            row: 0,
+                            column: 0,
+                            byte_offset: mat.start(),
+                        },
+                        suggestion: Some("choose a different name".to_string()),
+                    });
+                    break;
                 }
             }
         }

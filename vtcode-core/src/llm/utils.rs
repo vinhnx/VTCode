@@ -67,37 +67,6 @@ pub fn parse_chat_request_openai_format(value: &Value, default_model: &str) -> O
     })
 }
 
-/// Serialize messages to OpenAI-compatible format
-pub fn serialize_messages_openai_format(request: &LLMRequest, _provider_name: &str) -> Value {
-    let messages: Vec<Value> = request
-        .messages
-        .iter()
-        .map(|msg| {
-            serde_json::json!({
-                "role": msg.role,
-                "content": msg.content
-            })
-        })
-        .collect();
-
-    let mut body = serde_json::json!({
-        "model": request.model,
-        "messages": messages,
-        "stream": false
-    });
-
-    // Add optional parameters only if they're set
-    if let Some(temp) = request.temperature {
-        body["temperature"] = serde_json::json!(temp);
-    }
-
-    if let Some(max_tokens) = request.max_tokens {
-        body["max_tokens"] = serde_json::json!(max_tokens);
-    }
-
-    body
-}
-
 /// Parse response from OpenAI-compatible format
 pub fn parse_response_openai_format(
     response: Value,
@@ -214,16 +183,14 @@ pub fn extract_reasoning_content(content: &str) -> (Vec<String>, Option<String>)
     let mut main_content = content.to_string();
 
     for (open_tag, close_tag) in REASONING_PATTERNS.iter().zip(CLOSING_PATTERNS.iter()) {
-        if let Some(start) = content.find(open_tag) {
-            if let Some(end) = content.find(close_tag) {
-                let reasoning_start = start + open_tag.len();
-                let reasoning_text = content[reasoning_start..end].trim().to_string();
+        if let (Some(start), Some(end)) = (content.find(open_tag), content.find(close_tag)) {
+            let reasoning_start = start + open_tag.len();
+            let reasoning_text = content[reasoning_start..end].trim().to_string();
 
-                if !reasoning_text.is_empty() {
-                    reasoning_parts.push(reasoning_text.clone());
-                    // Remove reasoning section from main content
-                    main_content.replace_range(start..(end + close_tag.len()), "");
-                }
+            if !reasoning_text.is_empty() {
+                reasoning_parts.push(reasoning_text.clone());
+                // Remove reasoning section from main content
+                main_content.replace_range(start..(end + close_tag.len()), "");
             }
         }
     }
@@ -325,31 +292,6 @@ mod tests {
     }
 
     #[test]
-    fn test_serialize_messages_openai_format() {
-        let request = LLMRequest {
-            messages: vec![
-                Message {
-                    role: "user".to_string(),
-                    content: "Hello".to_string(),
-                },
-                Message {
-                    role: "assistant".to_string(),
-                    content: "Hi".to_string(),
-                },
-            ],
-            model: "gpt-4".to_string(),
-            temperature: Some(0.5),
-            max_tokens: Some(200),
-            ..Default::default()
-        };
-
-        let json = serialize_messages_openai_format(&request, "test");
-        assert_eq!(json["model"], "gpt-4");
-        assert_eq!(json["messages"].as_array().unwrap().len(), 2);
-        assert_eq!(json["temperature"], 0.5);
-        assert_eq!(json["max_tokens"], 200);
-    }
-
     #[test]
     fn test_parse_response_openai_format() {
         let response = serde_json::json!({

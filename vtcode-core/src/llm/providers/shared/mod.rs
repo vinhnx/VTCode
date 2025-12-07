@@ -173,12 +173,12 @@ pub fn append_text_with_reasoning(
         }
     }
 
-    if let Some(cleaned_text) = cleaned {
-        if !cleaned_text.is_empty() {
-            aggregated_content.push_str(&cleaned_text);
-            telemetry.on_content_delta(&cleaned_text);
-            deltas.push_content(&cleaned_text);
-        }
+    if let Some(cleaned_text) = cleaned
+        && !cleaned_text.is_empty()
+    {
+        aggregated_content.push_str(&cleaned_text);
+        telemetry.on_content_delta(&cleaned_text);
+        deltas.push_content(&cleaned_text);
     }
 }
 
@@ -200,11 +200,11 @@ pub fn append_reasoning_segments(
 
         if let Some(cleaned_text) = cleaned {
             let trimmed = cleaned_text.trim();
-            if !trimmed.is_empty() {
-                if let Some(delta) = reasoning.push(trimmed) {
-                    telemetry.on_reasoning_delta(&delta);
-                    emitted.push(delta);
-                }
+            if !trimmed.is_empty()
+                && let Some(delta) = reasoning.push(trimmed)
+            {
+                telemetry.on_reasoning_delta(&delta);
+                emitted.push(delta);
             }
         }
     } else if let Some(delta) = reasoning.push(text) {

@@ -1856,6 +1856,7 @@ mod tests {
         );
         assert_eq!(
             ModelId::default_subagent_for_provider(Provider::Moonshot),
+            ModelId::MoonshotV18k
         );
 
         assert_eq!(
@@ -1864,6 +1865,7 @@ mod tests {
         );
         assert_eq!(
             ModelId::default_single_for_provider(Provider::Moonshot),
+            ModelId::MoonshotV18k
         );
         assert_eq!(
             ModelId::default_single_for_provider(Provider::Ollama),

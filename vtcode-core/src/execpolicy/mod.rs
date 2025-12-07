@@ -4,6 +4,7 @@ use std::path::{Component, Path, PathBuf};
 use tokio::fs;
 
 use anyhow::{Context, Result, anyhow};
+use crate::utils::path::canonicalize_workspace;
 
 /// Helper to validate flags in arguments (reduces duplication in 10+ validators)
 /// Returns error if any flag not in allowed_flags is found
@@ -947,12 +948,12 @@ fn ensure_safe_sed_command(value: &str) -> Result<()> {
 }
 
 async fn ensure_within_workspace(normalized_root: &Path, candidate: &Path) -> Result<()> {
-    let canonical_root = fs::canonicalize(normalized_root).await.with_context(|| {
-        format!(
-            "failed to canonicalize workspace root '{}'",
-            normalized_root.display()
-        )
-    })?;
+    let canonical_root = tokio::task::spawn_blocking({
+        let root = normalized_root.to_path_buf();
+        move || canonicalize_workspace(&root)
+    })
+    .await
+    .context("failed to spawn canonicalization task")?;
 
     if normalized_root == candidate {
         return Ok(());

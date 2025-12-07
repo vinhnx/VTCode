@@ -187,22 +187,31 @@ impl TerminalSurface {
     }
 }
 
+pub struct TuiOptions {
+    pub theme: InlineTheme,
+    pub placeholder: Option<String>,
+    pub surface_preference: UiSurfacePreference,
+    pub inline_rows: u16,
+    pub show_timeline_pane: bool,
+    pub event_callback: Option<InlineEventCallback>,
+    pub custom_prompts: Option<crate::prompts::CustomPromptRegistry>,
+}
+
 pub async fn run_tui(
     mut commands: UnboundedReceiver<InlineCommand>,
     events: UnboundedSender<InlineEvent>,
-    theme: InlineTheme,
-    placeholder: Option<String>,
-    surface_preference: UiSurfacePreference,
-    inline_rows: u16,
-    show_timeline_pane: bool,
-    event_callback: Option<InlineEventCallback>,
-    custom_prompts: Option<crate::prompts::CustomPromptRegistry>,
+    options: TuiOptions,
 ) -> Result<()> {
-    let surface = TerminalSurface::detect(surface_preference, inline_rows)?;
-    let mut session = Session::new(theme, placeholder, surface.rows(), show_timeline_pane);
+    let surface = TerminalSurface::detect(options.surface_preference, options.inline_rows)?;
+    let mut session = Session::new(
+        options.theme,
+        options.placeholder,
+        surface.rows(),
+        options.show_timeline_pane,
+    );
 
     // Pre-load custom prompts if provided
-    if let Some(prompts) = custom_prompts {
+    if let Some(prompts) = options.custom_prompts {
         session.set_custom_prompts(prompts);
     }
 
@@ -240,7 +249,7 @@ pub async fn run_tui(
         &events,
         &mut input_listener,
         event_channels,
-        event_callback,
+        options.event_callback,
     )
     .await;
 

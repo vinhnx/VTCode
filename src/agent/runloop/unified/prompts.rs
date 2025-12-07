@@ -32,7 +32,7 @@ pub(crate) async fn read_system_prompt(workspace: &Path, session_addendum: Optio
 When providing code examples, ensure they are efficient, safe, and follow Rust idioms. Always consider the broader context of the workspace and existing code architecture."#.to_string()
     };
 
-    if let Some(overview) = vtcode_core::utils::utils::build_project_overview(workspace).await {
+    if let Some(overview) = vtcode_core::utils::common::build_project_overview(workspace).await {
         prompt.push_str("\n\n## PROJECT OVERVIEW\n");
         prompt.push_str(&overview.as_prompt_block());
     }

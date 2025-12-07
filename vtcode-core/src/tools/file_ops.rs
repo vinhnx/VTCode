@@ -5,6 +5,7 @@ use super::types::*;
 use crate::config::constants::diff;
 use crate::tools::grep_file::{GrepSearchInput, GrepSearchManager};
 use crate::utils::image_processing::read_image_file;
+use crate::utils::path::canonicalize_workspace;
 use crate::utils::vtcodegitignore::should_exclude_file;
 use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
@@ -32,15 +33,7 @@ pub struct FileOpsTool {
 impl FileOpsTool {
     pub fn new(workspace_root: PathBuf, grep_search: Arc<GrepSearchManager>) -> Self {
         // grep_file manager is unused; keep param to avoid broad call-site churn
-        let canonical_workspace_root =
-            std::fs::canonicalize(&workspace_root).unwrap_or_else(|error| {
-                warn!(
-                    path = %workspace_root.display(),
-                    %error,
-                    "Failed to canonicalize workspace root; falling back to provided path"
-                );
-                workspace_root.clone()
-            });
+        let canonical_workspace_root = canonicalize_workspace(&workspace_root);
 
         Self {
             workspace_root,
@@ -55,6 +48,12 @@ impl FileOpsTool {
         path.strip_prefix(&self.workspace_root)
             .unwrap_or(path)
             .to_string_lossy()
+    }
+
+    /// Get relative path as JSON value (for API responses)
+    #[inline]
+    fn relative_path_json(&self, path: &Path) -> String {
+        self.relative_path(path).into_owned()
     }
 
     /// Execute basic directory listing
@@ -368,7 +367,7 @@ impl FileOpsTool {
                 let is_dir = entry.file_type().is_dir();
                 items.push(json!({
                     "name": name,
-                    "path": path.strip_prefix(&self.workspace_root).unwrap_or(path).to_string_lossy(),
+                    "path": self.relative_path_json(path),
                     "type": if is_dir { "directory" } else { "file" },
                     "depth": entry.depth()
                 }));
@@ -419,7 +418,7 @@ impl FileOpsTool {
                     "success": true,
                     "found": true,
                     "name": name,
-                    "path": path.strip_prefix(&self.workspace_root).unwrap_or(path).to_string_lossy(),
+                    "path": self.relative_path_json(path),
                     "type": if is_dir { "directory" } else { "file" },
                     "mode": "find_name"
                 }));
@@ -530,7 +529,9 @@ impl FileOpsTool {
             .to_string_lossy()
             .to_string();
 
-        let mut items = Vec::new();
+        let mut items = Vec::with_capacity(
+            dir_contents.get(&relative_path as &str).map_or(0, |c| c.len())
+        );
 
         if let Some(contents) = dir_contents.get(&relative_path) {
             for (name, entry_type) in contents {
@@ -629,8 +630,8 @@ impl FileOpsTool {
             .await
             .context("grep_file search failed for find_content")?;
 
-        let mut seen_paths = std::collections::HashSet::new();
-        let mut items = Vec::new();
+        let mut seen_paths = std::collections::HashSet::with_capacity(result.matches.len());
+        let mut items = Vec::with_capacity(result.matches.len());
 
         for entry in result.matches {
             let data = entry.get("data").and_then(|d| d.as_object());
@@ -1626,6 +1627,16 @@ impl Tool for FileOpsTool {
             input.path = input.path.strip_prefix("/workspace/").unwrap().to_string();
         } else if input.path == "/workspace" {
             input.path = ".".to_string();
+        }
+
+        // Block root directory listing to prevent loops
+        let normalized_path = input.path.trim_start_matches("./").trim_start_matches('/');
+        if normalized_path.is_empty() || normalized_path == "." {
+            return Err(anyhow!(
+                "Error: list_files on root directory is blocked to prevent infinite loops. \
+                 Please specify a subdirectory like 'src/', 'vtcode-core/src/', 'tests/', etc. \
+                 Use grep_file with a pattern to search across the entire workspace."
+            ));
         }
 
         let mode_clone = input.mode.clone();

@@ -154,18 +154,18 @@ impl ValidatedMcpClientConfig {
         }
 
         // Validate timeouts
-        if let Some(startup_timeout) = self.original.startup_timeout_seconds {
-            if startup_timeout > 300 {
-                // Max 5 minutes
-                errors.push(ValidationError::InvalidStartupTimeout(startup_timeout));
-            }
+        if let Some(startup_timeout) = self.original.startup_timeout_seconds
+            && startup_timeout > 300
+        {
+            // Max 5 minutes
+            errors.push(ValidationError::InvalidStartupTimeout(startup_timeout));
         }
 
-        if let Some(tool_timeout) = self.original.tool_timeout_seconds {
-            if tool_timeout > 3600 {
-                // Max 1 hour
-                errors.push(ValidationError::InvalidToolTimeout(tool_timeout));
-            }
+        if let Some(tool_timeout) = self.original.tool_timeout_seconds
+            && tool_timeout > 3600
+        {
+            // Max 1 hour
+            errors.push(ValidationError::InvalidToolTimeout(tool_timeout));
         }
 
         // Validate provider configurations

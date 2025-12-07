@@ -52,6 +52,7 @@ pub enum TaskOutcome {
         max_tool_loops: usize,
         actual_tool_loops: usize,
     },
+    LoopDetected,
     Unknown,
 }
 
@@ -62,8 +63,8 @@ impl TaskOutcome {
 
     pub fn description(&self) -> String {
         match self {
-            Self::Success => "Task completed successfully".to_owned(),
-            Self::StoppedNoAction => "Stopped after agent signaled no further actions".to_owned(),
+            Self::Success => "Task completed successfully".into(),
+            Self::StoppedNoAction => "Stopped after agent signaled no further actions".into(),
             Self::TurnLimitReached {
                 max_turns,
                 actual_turns,
@@ -78,7 +79,8 @@ impl TaskOutcome {
                 "Stopped after reaching tool loop limit (max: {}, reached: {})",
                 max_tool_loops, actual_tool_loops
             ),
-            Self::Unknown => "Task outcome could not be determined".to_owned(),
+            Self::LoopDetected => "Stopped due to infinite loop detection".into(),
+            Self::Unknown => "Task outcome could not be determined".into(),
         }
     }
 
@@ -88,6 +90,7 @@ impl TaskOutcome {
             Self::StoppedNoAction => "stopped_no_action",
             Self::TurnLimitReached { .. } => "turn_limit_reached",
             Self::ToolLoopLimitReached { .. } => "tool_loop_limit_reached",
+            Self::LoopDetected => "loop_detected",
             Self::Unknown => "unknown",
         }
     }

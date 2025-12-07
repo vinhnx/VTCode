@@ -316,6 +316,7 @@ You can monitor budget with: `TokenUsageStats` shows breakdown by component.
 -   **build/test**: System extracts error + 2 context lines, discards verbose padding.
 -   **git**: System shows hash + subject, skips full diffs automatically.
 -   **pty commands**: Output auto-truncated at MAX_TOOL_RESPONSE_TOKENS (25K)
+-   **CRITICAL - Already Rendered Output**: When tool result has `"output_already_rendered": true` (e.g., git diff, git show, git log), DO NOT repeat the output in your response. The UI has already displayed it visually. Simply acknowledge completion with a brief message like "Done" or describe what changed without repeating the diff content.
 
 ### Persistent Memory & Long-Horizon Tasks (Context-Aware)
 **IMPORTANT**: VT Code has built-in token tracking. Monitor usage and adapt strategy:
@@ -803,8 +804,8 @@ impl Default for SystemPromptConfig {
 
 /// Generate system instruction
 pub async fn generate_system_instruction(_config: &SystemPromptConfig) -> Content {
-    // default_system_prompt() returns &'static str, convert to String
-    Content::system_text(default_system_prompt().to_string())
+    // OPTIMIZATION: default_system_prompt() is &'static str, use directly
+    Content::system_text(default_system_prompt())
 }
 
 /// Read AGENTS.md file if present and extract agent guidelines
@@ -825,7 +826,10 @@ pub async fn compose_system_instruction_text(
     project_root: &Path,
     vtcode_config: Option<&crate::config::VTCodeConfig>,
 ) -> String {
-    let mut instruction = default_system_prompt().to_string();
+    // OPTIMIZATION: Pre-allocate with estimated capacity
+    let base_len = default_system_prompt().len();
+    let mut instruction = String::with_capacity(base_len + 2048);
+    instruction.push_str(default_system_prompt());
 
     if let Some(cfg) = vtcode_config {
         instruction.push_str("\n\n## CONFIGURATION AWARENESS\n");
@@ -995,12 +999,12 @@ fn format_instruction_path(path: &Path, project_root: &Path, home_dir: Option<&P
 
 /// Generate a lightweight system instruction for simple operations
 pub fn generate_lightweight_instruction() -> Content {
-    // DEFAULT_LIGHTWEIGHT_PROMPT is &'static str, convert to String
-    Content::system_text(DEFAULT_LIGHTWEIGHT_PROMPT.to_string())
+    // OPTIMIZATION: DEFAULT_LIGHTWEIGHT_PROMPT is &'static str, use directly
+    Content::system_text(DEFAULT_LIGHTWEIGHT_PROMPT)
 }
 
 /// Generate a specialized system instruction for advanced operations
 pub fn generate_specialized_instruction() -> Content {
-    // DEFAULT_SPECIALIZED_PROMPT is &'static str, convert to String
-    Content::system_text(DEFAULT_SPECIALIZED_PROMPT.to_string())
+    // OPTIMIZATION: DEFAULT_SPECIALIZED_PROMPT is &'static str, use directly
+    Content::system_text(DEFAULT_SPECIALIZED_PROMPT)
 }
