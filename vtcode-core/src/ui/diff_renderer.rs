@@ -686,7 +686,7 @@ impl DiffChatRenderer {
         let mut output = String::new();
 
         // Header with warning indicator
-        output.push_str("\n⚠ ");
+        output.push_str("\n[WARN] ");
         output.push_str(diff_constants::SUPPRESSION_MESSAGE);
         output.push_str("\n\n");
 

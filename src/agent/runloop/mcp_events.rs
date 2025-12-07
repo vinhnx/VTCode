@@ -23,10 +23,10 @@ impl McpEventStatus {
     #[inline]
     pub fn symbol(self) -> &'static str {
         match self {
-            Self::Pending => "~",
-            Self::Success => "✓",
-            Self::Failure => "✗",
-            Self::Cancelled => "✕",
+            Self::Pending => "[~]",
+            Self::Success => "[OK]",
+            Self::Failure => "[NO]",
+            Self::Cancelled => "[X]",
         }
     }
 
@@ -306,10 +306,10 @@ mod tests {
         let mut event = McpEvent::new("time".to_string(), "get_current_time".to_string(), None);
         event.success(Some(serde_json::json!({"time": "12:00"})));
 
-        assert_eq!(event.compact_title(), "[✓] MCP time `get_current_time`");
+        assert_eq!(event.compact_title(), "[OK] MCP time `get_current_time`");
 
         let detailed = event.detailed_title();
-        assert!(detailed.contains("[✓]"));
+        assert!(detailed.contains("[OK]"));
         assert!(detailed.contains("get_current_time"));
         assert!(detailed.contains("time"));
         assert!(detailed.contains("success"));

@@ -86,10 +86,10 @@ impl ErrorSeverity {
 
     pub fn icon(&self) -> &'static str {
         match self {
-            ErrorSeverity::Info => "ℹ",
-            ErrorSeverity::Warning => "⚠",
-            ErrorSeverity::Error => "✕",
-            ErrorSeverity::Critical => "✗",
+            ErrorSeverity::Info => "[I]",
+            ErrorSeverity::Warning => "[W]",
+            ErrorSeverity::Error => "[E]",
+            ErrorSeverity::Critical => "[C]",
         }
     }
 }
@@ -377,10 +377,10 @@ mod tests {
 
     #[test]
     fn test_error_severity_icon() {
-        assert_eq!(ErrorSeverity::Info.icon(), "ℹ");
-        assert_eq!(ErrorSeverity::Warning.icon(), "⚠");
-        assert_eq!(ErrorSeverity::Error.icon(), "✕");
-        assert_eq!(ErrorSeverity::Critical.icon(), "✗");
+        assert_eq!(ErrorSeverity::Info.icon(), "[I]");
+        assert_eq!(ErrorSeverity::Warning.icon(), "[W]");
+        assert_eq!(ErrorSeverity::Error.icon(), "[E]");
+        assert_eq!(ErrorSeverity::Critical.icon(), "[C]");
     }
 
     #[test]

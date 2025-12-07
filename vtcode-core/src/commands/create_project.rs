@@ -10,8 +10,8 @@ use serde_json::json;
 /// Helper to print tool execution result with consistent formatting
 fn print_result(action: &str, result: &Result<serde_json::Value>) {
     match result {
-        Ok(_) => println!("   {} {}", style("✓").green(), action),
-        Err(e) => println!("   {} {}: {}", style("✗").red(), action, e),
+        Ok(_) => println!("   {} {}", style("[+]").green(), action),
+        Err(e) => println!("   {} {}: {}", style("[X]").red(), action, e),
     }
 }
 
@@ -226,7 +226,7 @@ Cargo.lock
                 && let Some(files_array) = files.as_array()
                 && !files_array.is_empty()
             {
-                println!("   {} Project structure verified", style("✓").green());
+                println!("   {} Project structure verified", style("[+]").green());
             }
         }
         Err(e) => println!(

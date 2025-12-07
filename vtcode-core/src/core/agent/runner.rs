@@ -11,6 +11,7 @@ use crate::core::agent::conversation::{
 use crate::core::agent::events::{EventSink, ExecEventRecorder};
 pub use crate::core::agent::task::{ContextItem, Task, TaskOutcome, TaskResults};
 use crate::core::agent::types::AgentType;
+use crate::core::context_optimizer::ContextOptimizer;
 use crate::core::loop_detector::LoopDetector;
 use crate::exec::events::{CommandExecutionStatus, ThreadEvent};
 use crate::gemini::{Content, Part, Tool};
@@ -31,6 +32,10 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tokio::time::{Duration, timeout};
 use tracing::{info, warn};
+
+// Role constants to avoid repeated allocations
+const ROLE_USER: &str = "user";
+const ROLE_MODEL: &str = "model";
 
 macro_rules! runner_println {
     ($runner:expr, $($arg:tt)*) => {
@@ -78,6 +83,7 @@ impl ApiFailureTracker {
 
 /// Format tool result for display in the TUI.
 /// Limits verbose output from web_fetch to avoid overwhelming the terminal.
+#[inline]
 pub fn format_tool_result_for_display(tool_name: &str, result: &Value) -> String {
     match tool_name {
         tools::WEB_FETCH => {
@@ -172,6 +178,7 @@ pub fn format_tool_result_for_display(tool_name: &str, result: &Value) -> String
     }
 }
 
+#[inline]
 fn record_turn_duration(
     turn_durations: &mut Vec<u128>,
     recorded: &mut bool,
@@ -207,8 +214,8 @@ struct TaskRunState {
     consecutive_tool_loops: usize,
     max_tool_loop_streak: usize,
     tool_loop_limit_hit: bool,
-    // Optimization: Track conversation length to avoid rebuilding messages unnecessarily
-    last_conversation_len: usize,
+    // Optimization: Track last processed message index for incremental Gemini message building
+    last_processed_message_idx: usize,
 }
 
 impl TaskRunState {
@@ -228,11 +235,11 @@ impl TaskRunState {
             completion_outcome: TaskOutcome::Unknown,
             turns_executed: 0,
             turn_durations_ms: Vec::with_capacity(max_tool_loops), // Pre-allocate for expected number of turns
+            last_processed_message_idx: 0,
             max_tool_loops,
             consecutive_tool_loops: 0,
             max_tool_loop_streak: 0,
             tool_loop_limit_hit: false,
-            last_conversation_len: 0,
         }
     }
 
@@ -309,7 +316,6 @@ impl TaskRunState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
 
     #[test]
     fn record_turn_duration_records_once() {
@@ -423,6 +429,8 @@ pub struct AgentRunner {
     loop_detector: RefCell<LoopDetector>,
     /// API failure tracking for exponential backoff
     failure_tracker: RefCell<ApiFailureTracker>,
+    /// Context optimizer for token budget management
+    context_optimizer: RefCell<ContextOptimizer>,
 }
 
 impl AgentRunner {
@@ -467,34 +475,34 @@ impl AgentRunner {
     /// Create informative progress message based on operation type
     fn create_progress_message(&self, operation: &str, details: Option<&str>) -> String {
         match operation {
-            "thinking" => "Analyzing request and planning approach...".to_owned(),
+            "thinking" => "Analyzing request and planning approach...".into(),
             "processing" => format!("Processing turn with {} model", self.client.model_id()),
             "tool_call" => {
                 if let Some(tool) = details {
                     format!("Executing {} tool for task completion", tool)
                 } else {
-                    "Executing tool to gather information".to_owned()
+                    "Executing tool to gather information".into()
                 }
             }
             "file_read" => {
                 if let Some(file) = details {
                     format!("Reading {} to understand structure", file)
                 } else {
-                    "Reading file to analyze content".to_owned()
+                    "Reading file to analyze content".into()
                 }
             }
             "file_write" => {
                 if let Some(file) = details {
                     format!("Writing changes to {}", file)
                 } else {
-                    "Writing file with requested changes".to_owned()
+                    "Writing file with requested changes".into()
                 }
             }
             "search" => {
                 if let Some(pattern) = details {
                     format!("Searching codebase for '{}'", pattern)
                 } else {
-                    "Searching codebase for relevant information".to_owned()
+                    "Searching codebase for relevant information".into()
                 }
             }
             "terminal" => {
@@ -504,15 +512,15 @@ impl AgentRunner {
                         cmd.split(' ').next().unwrap_or(cmd)
                     )
                 } else {
-                    "Executing terminal command".to_owned()
+                    "Executing terminal command".into()
                 }
             }
-            "completed" => "Task completed successfully!".to_owned(),
+            "completed" => "Task completed successfully!".into(),
             "error" => {
                 if let Some(err) = details {
                     format!("Error encountered: {}", err)
                 } else {
-                    "An error occurred during execution".to_owned()
+                    "An error occurred during execution".into()
                 }
             }
             _ => format!("{}...", operation),
@@ -561,14 +569,15 @@ impl AgentRunner {
             &failure_text,
         );
         event_recorder.warning(&failure_text);
+        // Move failure_text into warnings first, then reference for conversation
+        task_state.warnings.push(failure_text.clone());
         task_state.conversation.push(Content {
-            role: "user".to_owned(),
+            role: ROLE_USER.into(),
             parts: vec![Part::Text {
-                text: failure_text.clone(),
+                text: failure_text,
                 thought_signature: None,
             }],
         });
-        task_state.warnings.push(failure_text);
         if let Some(call_id) = tool_response_id {
             let error_payload = serde_json::json!({ "error": error.to_string() }).to_string();
             task_state
@@ -596,7 +605,7 @@ impl AgentRunner {
         let mut streaming_response: Option<crate::llm::provider::LLMResponse> = None;
 
         if supports_streaming {
-            // OPTIMIZATION: Clone only needed for fallback path
+            // OPTIMIZATION: Try streaming first without cloning request
             match self.provider_client.stream(request.clone()).await {
                 Ok(mut stream) => {
                     while let Some(event) = stream.next().await {
@@ -795,6 +804,7 @@ impl AgentRunner {
             max_turns: defaults::DEFAULT_FULL_AUTO_MAX_TURNS,
             loop_detector: RefCell::new(LoopDetector::new()),
             failure_tracker: RefCell::new(ApiFailureTracker::new()),
+            context_optimizer: RefCell::new(ContextOptimizer::new()),
         })
     }
 
@@ -939,9 +949,27 @@ impl AgentRunner {
         let max_tool_loops = cfg.tools.max_tool_loops.max(1);
 
         let mut task_state = TaskRunState::new(conversation, conversation_messages, max_tool_loops);
+        // Pre-reserve capacity for conversation messages to avoid reallocations
+        // Typical: 2-3 messages per turn (user input + assistant response + potential tool calls)
+        task_state.conversation_messages.reserve(self.max_turns * 3);
 
         // Agent execution loop uses max_turns for conversation flow
         for turn in 0..self.max_turns {
+            // Check token budget before each turn
+            let utilization = {
+                let context_opt = self.context_optimizer.borrow();
+                context_opt.utilization().await
+            };
+            if utilization > 0.90 {
+                // At 90%+ utilization, warn and consider stopping
+                warn!("Token budget at {:.1}% - approaching limit", utilization * 100.0);
+                task_state.warnings.push(format!(
+                    "Token budget at {}% - approaching context limit",
+                    (utilization * 100.0) as u32
+                ));
+                // Continue but warn - actual compaction handled by ContextOptimizer internally
+            }
+
             if task_state.has_completed {
                 task_state.completion_outcome = TaskOutcome::Success;
                 break;
@@ -974,14 +1002,28 @@ impl AgentRunner {
                 .map(|m| m.provider())
                 .unwrap_or(ModelProvider::Gemini);
 
-            // Optimize: Only rebuild messages for Gemini if conversation has changed
+            // Optimize: Only rebuild messages for Gemini incrementally from last processed index
             if matches!(provider_kind, ModelProvider::Gemini)
-                && task_state.conversation.len() != task_state.last_conversation_len
+                && task_state.conversation.len() > task_state.last_processed_message_idx
             {
-                let rebuilt =
-                    build_messages_from_conversation(&system_instruction, &task_state.conversation);
-                task_state.conversation_messages = rebuilt;
-                task_state.last_conversation_len = task_state.conversation.len();
+                // Incremental append instead of full rebuild
+                for content in &task_state.conversation[task_state.last_processed_message_idx..] {
+                    let mut text = String::new();
+                    for part in &content.parts {
+                        if let Part::Text { text: part_text, .. } = part {
+                            if !text.is_empty() {
+                                text.push('\n');
+                            }
+                            text.push_str(part_text);
+                        }
+                    }
+                    let message = match content.role.as_str() {
+                        "model" => Message::assistant(text),
+                        _ => Message::user(text),
+                    };
+                    task_state.conversation_messages.push(message);
+                }
+                task_state.last_processed_message_idx = task_state.conversation.len();
             }
 
             let request_messages = task_state.conversation_messages.clone();
@@ -992,13 +1034,11 @@ impl AgentRunner {
             // WebFetch already returns a `next_action_hint` telling the model to analyze
             // `content` with `prompt`. The router-level model selection can be extended
             // separately to map such follow-ups to a small/fast model.
-            let effective_model = self.model.clone();
-
             let request = LLMRequest {
                 messages: request_messages,
                 system_prompt: Some(system_instruction.clone()),
                 tools: Some(tools.clone()),
-                model: effective_model,
+                model: self.model.clone(),
                 max_tokens: Some(2000),
                 temperature: Some(0.7),
                 stream: supports_streaming,
@@ -1082,7 +1122,7 @@ impl AgentRunner {
                             event_recorder.agent_message(&response_text);
                         }
                         task_state.conversation.push(Content {
-                            role: "model".to_owned(),
+                            role: ROLE_MODEL.into(),
                             parts: vec![Part::Text {
                                 text: response_text.clone(),
                                 thought_signature: None,
@@ -1132,12 +1172,11 @@ impl AgentRunner {
 
                 if let Some(tool_calls) = effective_tool_calls.filter(|tc| !tc.is_empty()) {
                     had_tool_call = true;
-                    let tool_calls_for_message = tool_calls.clone();
-
+                    // Clone tool_calls once for message, move original for processing
                     task_state.conversation_messages.push(
                         Message::assistant_with_tools(
                             response_text.clone(),
-                            tool_calls_for_message,
+                            tool_calls.clone(),
                         )
                         .with_reasoning(reasoning.clone()),
                     );
@@ -1183,7 +1222,7 @@ impl AgentRunner {
                                     runner_println!(self, "{}", style(&warning).red().bold());
                                     task_state.warnings.push(warning.clone());
                                     task_state.conversation.push(Content {
-                                        role: "user".to_owned(),
+                                        role: ROLE_USER.to_owned(),
                                         parts: vec![Part::Text {
                                             text: warning,
                                             thought_signature: None,
@@ -1211,9 +1250,10 @@ impl AgentRunner {
                             tool_calls.len()
                         );
 
-                        let futures: Vec<_> = tool_calls
-                            .iter()
-                            .map(|call| {
+                        // Pre-allocate futures with exact capacity
+                        let mut futures = Vec::with_capacity(tool_calls.len());
+                        for call in &tool_calls {
+                            futures.push((|| {
                                 let name = call
                                     .function
                                     .as_ref()
@@ -1227,7 +1267,6 @@ impl AgentRunner {
                                 let tool_registry = self.tool_registry.clone();
 
                                 // OPTIMIZATION: Loop check already done before parallel execution
-                                // No need to check again here - saves duplicate borrow_mut calls
                                 async move {
                                     let mut registry = tool_registry;
                                     registry.initialize_async().await.ok();
@@ -1237,8 +1276,8 @@ impl AgentRunner {
                                         );
                                     (name, args, call_id, result)
                                 }
-                            })
-                            .collect();
+                            })());
+                        }
 
                         let results = join_all(futures).await;
 
@@ -1258,11 +1297,17 @@ impl AgentRunner {
                                         )
                                     );
 
-                                    let tool_result = serde_json::to_string(&result)?;
+                                    // Optimize result through context optimizer (same as sequential path)
+                                    let optimized_result = {
+                                        let mut context_opt = self.context_optimizer.borrow_mut();
+                                        context_opt.optimize_result(&name, result).await
+                                    };
+
+                                    let tool_result = serde_json::to_string(&optimized_result)?;
                                     let display_text =
-                                        format_tool_result_for_display(&name, &result);
+                                        format_tool_result_for_display(&name, &optimized_result);
                                     task_state.conversation.push(Content {
-                                        role: "user".to_owned(),
+                                        role: ROLE_USER.to_owned(),
                                         parts: vec![Part::Text {
                                             text: display_text,
                                             thought_signature: None,
@@ -1280,21 +1325,15 @@ impl AgentRunner {
                                     );
                                 }
                                 Err(e) => {
+                                    let error_msg = format!("Error executing {}: {}", name, e);
                                     runner_println!(
                                         self,
                                         "{} {}",
                                         agent_prefix,
-                                        format!(
-                                            "{} {} tool failed: {}",
-                                            style("(ERR)").red(),
-                                            name,
-                                            e
-                                        )
+                                        format!("{} {}", style("(ERR)").red(), error_msg)
                                     );
-
-                                    let error_msg = format!("Error executing {}: {}", name, e);
                                     task_state.conversation.push(Content {
-                                        role: "user".to_owned(),
+                                        role: ROLE_USER.into(),
                                         parts: vec![Part::Text {
                                             text: error_msg.clone(),
                                             thought_signature: None,
@@ -1337,7 +1376,7 @@ impl AgentRunner {
 
                                     // Add error to conversation and halt
                                     task_state.conversation.push(Content {
-                                        role: "user".to_owned(),
+                                        role: ROLE_USER.into(),
                                         parts: vec![Part::Text {
                                             text: warning,
                                             thought_signature: None,
@@ -1362,6 +1401,17 @@ impl AgentRunner {
 
                             let command_event = event_recorder.command_started(&name);
 
+                            // Safety: Validate tool name before execution
+                            if !self.is_valid_tool(&name) {
+                                runner_println!(
+                                    self,
+                                    "{} Invalid tool: {}",
+                                    agent_prefix,
+                                    style(&name).red().bold()
+                                );
+                                continue;
+                            }
+
                             match self.execute_tool(&name, &args).await {
                                 Ok(result) => {
                                     runner_println!(
@@ -1375,12 +1425,18 @@ impl AgentRunner {
                                         )
                                     );
 
-                                    let tool_result = serde_json::to_string(&result)?;
+                                    // Optimize tool result through context optimizer before sending to LLM
+                                    let optimized_result = {
+                                        let mut context_opt = self.context_optimizer.borrow_mut();
+                                        context_opt.optimize_result(&name, result).await
+                                    };
+
+                                    let tool_result = serde_json::to_string(&optimized_result)?;
                                     // For display: use limited version to avoid overwhelming TUI
                                     let display_text =
-                                        format_tool_result_for_display(&name, &result);
+                                        format_tool_result_for_display(&name, &optimized_result);
                                     task_state.conversation.push(Content {
-                                        role: "user".to_owned(),
+                                        role: ROLE_USER.to_owned(),
                                         parts: vec![Part::Text {
                                             text: display_text,
                                             thought_signature: None,
@@ -1429,7 +1485,7 @@ impl AgentRunner {
                         event_recorder.agent_message(&response_text);
                     }
                     task_state.conversation.push(Content {
-                        role: "model".to_owned(),
+                        role: ROLE_MODEL.into(),
                         parts: vec![Part::Text {
                             text: response_text.clone(),
                             thought_signature: None,
@@ -1441,8 +1497,8 @@ impl AgentRunner {
                 }
 
                 if !task_state.has_completed {
-                    let response_lower = response_text.to_lowercase();
-                    let completion_indicators = [
+                    // Use const to avoid repeated allocations
+                    const COMPLETION_INDICATORS: &[&str] = &[
                         "task completed",
                         "task done",
                         "finished",
@@ -1460,7 +1516,8 @@ impl AgentRunner {
                         "task execution complete",
                         "operation finished",
                     ];
-                    let is_completed = completion_indicators
+                    let response_lower = response_text.to_lowercase();
+                    let is_completed = COMPLETION_INDICATORS
                         .iter()
                         .any(|&indicator| response_lower.contains(indicator));
                     let has_explicit_completion = response_lower.contains("the task is complete")
@@ -1644,7 +1701,7 @@ impl AgentRunner {
                                             let display_text =
                                                 format_tool_result_for_display(name, &result);
                                             task_state.conversation.push(Content {
-                                                role: "user".to_owned(), // Gemini API only accepts "user" and "model"
+                                                role: ROLE_USER.to_owned(), // Gemini API only accepts "user" and "model"
                                                 parts: vec![Part::Text {
                                                     text: display_text,
                                                     thought_signature: None,
@@ -1721,7 +1778,7 @@ impl AgentRunner {
                                     let display_text =
                                         format_tool_result_for_display(name, &result);
                                     task_state.conversation.push(Content {
-                                        role: "user".to_owned(), // Gemini API only accepts "user" and "model"
+                                        role: ROLE_USER.to_owned(), // Gemini API only accepts "user" and "model"
                                         parts: vec![Part::Text {
                                             text: display_text,
                                             thought_signature: None,
@@ -1810,7 +1867,7 @@ impl AgentRunner {
                                             let display_text =
                                                 format_tool_result_for_display(&func_name, &result);
                                             task_state.conversation.push(Content {
-                                                role: "user".to_owned(), // Gemini API only accepts "user" and "model"
+                                                role: ROLE_USER.to_owned(), // Gemini API only accepts "user" and "model"
                                                 parts: vec![Part::Text {
                                                     text: display_text,
                                                     thought_signature: None,
@@ -1856,7 +1913,7 @@ impl AgentRunner {
                                     event_recorder.warning(&error_msg);
                                     task_state.warnings.push(error_msg.clone());
                                     task_state.conversation.push(Content {
-                                        role: "user".to_owned(), // Gemini API only accepts "user" and "model"
+                                        role: ROLE_USER.to_owned(), // Gemini API only accepts "user" and "model"
                                         parts: vec![Part::Text {
                                             text: error_msg,
                                             thought_signature: None,
@@ -1869,7 +1926,7 @@ impl AgentRunner {
                             event_recorder.warning(&error_msg);
                             task_state.warnings.push(error_msg.clone());
                             task_state.conversation.push(Content {
-                                role: "user".to_owned(), // Gemini API only accepts "user" and "model"
+                                role: ROLE_USER.to_owned(), // Gemini API only accepts "user" and "model"
                                 parts: vec![Part::Text {
                                     text: error_msg,
                                     thought_signature: None,
@@ -1913,7 +1970,7 @@ impl AgentRunner {
                                     let display_text =
                                         format_tool_result_for_display(tool_name, &result);
                                     task_state.conversation.push(Content {
-                                        role: "user".to_owned(), // Gemini API only accepts "user" and "model"
+                                        role: ROLE_USER.to_owned(), // Gemini API only accepts "user" and "model"
                                         parts: vec![Part::Text {
                                             text: display_text,
                                             thought_signature: None,
@@ -1960,7 +2017,7 @@ impl AgentRunner {
                         );
                         event_recorder.agent_message(response.content.trim());
                         task_state.conversation.push(Content {
-                            role: "model".to_owned(),
+                            role: ROLE_MODEL.to_owned(),
                             parts: vec![Part::Text {
                                 text: response.content.clone(),
                                 thought_signature: None,
@@ -1976,7 +2033,7 @@ impl AgentRunner {
                     );
                     event_recorder.agent_message(response.content.trim());
                     task_state.conversation.push(Content {
-                        role: "model".to_owned(),
+                        role: ROLE_MODEL.to_owned(),
                         parts: vec![Part::Text {
                             text: response.content.clone(),
                             thought_signature: None,
@@ -2247,6 +2304,30 @@ impl AgentRunner {
         } else {
             true
         }
+    }
+
+    /// Validate if a tool name is safe and known
+    #[inline]
+    fn is_valid_tool(&self, tool_name: &str) -> bool {
+        // Check against known safe tools
+        matches!(
+            tool_name,
+            tools::READ_FILE
+                | tools::WRITE_FILE
+                | tools::EDIT_FILE
+                | tools::APPLY_PATCH
+                | tools::LIST_FILES
+                | tools::GREP_FILE
+                | tools::RUN_PTY_CMD
+                | tools::WEB_FETCH
+                | tools::SEARCH_TOOLS
+                | tools::EXECUTE_CODE
+                | tools::SAVE_SKILL
+                | tools::LOAD_SKILL
+                | tools::UPDATE_PLAN
+                | tools::GET_ERRORS
+                | "shell" // Legacy alias
+        )
     }
 
     /// Execute a tool by name with given arguments

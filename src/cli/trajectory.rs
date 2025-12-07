@@ -158,11 +158,11 @@ pub async fn handle_trajectory_command(
         tools.sort_by(|a, b| b.1.cmp(&a.1));
         for (i, (name, ok, err, rate)) in tools.into_iter().take(top).enumerate() {
             let status = if rate >= 0.9 {
-                style("✓").green()
+                style("[OK]").green()
             } else if rate >= 0.7 {
-                style("⚠").yellow()
+                style("[W]").yellow()
             } else {
-                style("✗").red()
+                style("[NO]").red()
             };
             println!(
                 "{:>2}. {:<20} {} ok: {:<4} err: {:<4} success: {:>5.1}%",

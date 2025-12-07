@@ -30,9 +30,9 @@ pub async fn handle_validate_command(
     if check_api || all {
         println!("{}", style("Checking API connectivity...").dim());
         match check_api_connectivity(&config).await {
-            Ok(_) => println!("  {} API connectivity OK", style("✓").green()),
+            Ok(_) => println!("  {} API connectivity OK", style("[+]").green()),
             Err(e) => {
-                println!("  {} API connectivity failed: {}", style("✗").red(), e);
+                println!("  {} API connectivity failed: {}", style("[X]").red(), e);
                 all_checks = false;
             }
         }
@@ -42,9 +42,9 @@ pub async fn handle_validate_command(
     if check_filesystem || all {
         println!("{}", style("Checking filesystem permissions...").dim());
         match check_filesystem_permissions(&config).await {
-            Ok(_) => println!("  {} Filesystem permissions OK", style("✓").green()),
+            Ok(_) => println!("  {} Filesystem permissions OK", style("[+]").green()),
             Err(e) => {
-                println!("  {} Filesystem permissions issue: {}", style("✗").red(), e);
+                println!("  {} Filesystem permissions issue: {}", style("[X]").red(), e);
                 all_checks = false;
             }
         }

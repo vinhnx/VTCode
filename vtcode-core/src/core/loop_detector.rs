@@ -6,9 +6,13 @@ use crate::config::constants::tools;
 use std::collections::{HashMap, VecDeque};
 use std::time::Instant;
 
-const MAX_SAME_TOOL_CALLS: usize = 3; // Lowered from 5 for faster detection
+// Separate limits for different operation types to reduce false positives
+const MAX_READONLY_TOOL_CALLS: usize = 10; // read_file, grep_file, list_files
+const MAX_WRITE_TOOL_CALLS: usize = 3;     // write_file, edit_file, apply_patch
+const MAX_COMMAND_TOOL_CALLS: usize = 5;   // shell, run_pty_cmd
+const MAX_OTHER_TOOL_CALLS: usize = 3;     // Other tools (default)
 const DETECTION_WINDOW: usize = 10;
-const HARD_LIMIT_MULTIPLIER: usize = 2; // Hard stop at 2x soft limit (6 calls)
+const HARD_LIMIT_MULTIPLIER: usize = 2; // Hard stop at 2x soft limit
 
 /// Normalize tool arguments for consistent loop detection.
 /// This ensures path variations like ".", "", "./" are treated as the same root path.
@@ -116,19 +120,28 @@ impl LoopDetector {
     fn check_for_loops(&mut self, tool_name: &str) -> Option<String> {
         let count = self.tool_counts.get(tool_name).copied().unwrap_or(0);
 
+        // Determine tool-specific limits
+        let max_calls = match tool_name {
+            tools::READ_FILE | tools::GREP_FILE | tools::LIST_FILES => MAX_READONLY_TOOL_CALLS,
+            tools::WRITE_FILE | tools::EDIT_FILE | "apply_patch" => MAX_WRITE_TOOL_CALLS,
+            tools::RUN_PTY_CMD | "shell" => MAX_COMMAND_TOOL_CALLS,
+            _ => MAX_OTHER_TOOL_CALLS,
+        };
+
         // Hard limit check - immediate halt
-        if count >= MAX_SAME_TOOL_CALLS * HARD_LIMIT_MULTIPLIER {
+        let hard_limit = max_calls * HARD_LIMIT_MULTIPLIER;
+        if count >= hard_limit {
             return Some(format!(
-                "🛑 CRITICAL: Tool '{}' called {} times (hard limit: {}). Execution halted to prevent infinite loop.\n\
+                "CRITICAL: Tool '{}' called {} times (hard limit: {}). Execution halted to prevent infinite loop.\n\
                  Agent must reformulate task or request user guidance.",
                 tool_name,
                 count,
-                MAX_SAME_TOOL_CALLS * HARD_LIMIT_MULTIPLIER
+                hard_limit
             ));
         }
 
         // Soft limit - warning with cooldown and alternative suggestions
-        if count >= MAX_SAME_TOOL_CALLS {
+        if count >= max_calls {
             let now = Instant::now();
             let should_warn = self
                 .last_warning
@@ -142,14 +155,14 @@ impl LoopDetector {
                     .unwrap_or_else(|| "Consider a different approach.".to_string());
 
                 return Some(format!(
-                    "⚠️  Loop detected: '{}' called {} times in last {} operations.\n\n\
+                    "Loop detected: '{}' called {} times in last {} operations.\n\n\
                      {}\n\n\
                      Hard limit at {} calls.",
                     tool_name,
                     count,
                     DETECTION_WINDOW,
                     alternatives,
-                    MAX_SAME_TOOL_CALLS * HARD_LIMIT_MULTIPLIER
+                    hard_limit
                 ));
             }
         }
@@ -160,7 +173,13 @@ impl LoopDetector {
     /// Check if hard limit is exceeded (should halt execution)
     pub fn is_hard_limit_exceeded(&self, tool_name: &str) -> bool {
         let count = self.tool_counts.get(tool_name).copied().unwrap_or(0);
-        count >= MAX_SAME_TOOL_CALLS * HARD_LIMIT_MULTIPLIER
+        let max_calls = match tool_name {
+            tools::READ_FILE | tools::GREP_FILE | tools::LIST_FILES => MAX_READONLY_TOOL_CALLS,
+            tools::WRITE_FILE | tools::EDIT_FILE | "apply_patch" => MAX_WRITE_TOOL_CALLS,
+            tools::RUN_PTY_CMD | "shell" => MAX_COMMAND_TOOL_CALLS,
+            _ => MAX_OTHER_TOOL_CALLS,
+        };
+        count >= max_calls * HARD_LIMIT_MULTIPLIER
     }
 
     /// Get current call count for a tool
@@ -279,10 +298,10 @@ mod tests {
         let mut detector = LoopDetector::new();
         let args = json!({"path": "/src"});
 
-        // With soft limit at 3, we should get warning on 3rd call
-        for i in 0..MAX_SAME_TOOL_CALLS {
+        // list_files uses MAX_READONLY_TOOL_CALLS (10)
+        for i in 0..MAX_READONLY_TOOL_CALLS {
             let warning = detector.record_call(tools::LIST_FILES, &args);
-            if i < MAX_SAME_TOOL_CALLS - 1 {
+            if i < MAX_READONLY_TOOL_CALLS - 1 {
                 assert!(warning.is_none());
             } else {
                 assert!(warning.is_some());
@@ -296,10 +315,11 @@ mod tests {
         let mut detector = LoopDetector::new();
         let args = json!({"pattern": "test"});
 
-        // Fill up to hard limit
-        for i in 0..MAX_SAME_TOOL_CALLS * HARD_LIMIT_MULTIPLIER {
+        // grep_file uses MAX_READONLY_TOOL_CALLS (10), hard limit is 20
+        let hard_limit = MAX_READONLY_TOOL_CALLS * HARD_LIMIT_MULTIPLIER;
+        for i in 0..hard_limit {
             let result = detector.record_call(tools::GREP_FILE, &args);
-            if i >= MAX_SAME_TOOL_CALLS * HARD_LIMIT_MULTIPLIER - 1 {
+            if i >= hard_limit - 1 {
                 assert!(result.is_some());
                 assert!(result.unwrap().contains("CRITICAL"));
             }

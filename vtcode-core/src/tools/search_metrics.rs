@@ -135,7 +135,7 @@ impl SearchMetrics {
         use std::fmt::Write;
         // Pre-allocate with reasonable estimate for metrics summary
         let mut output = String::with_capacity(512);
-        output.push_str("🔍 Search Metrics Summary\n");
+        output.push_str("[SEARCH] Metrics Summary\n");
         let _ = writeln!(output, "  Total searches: {}", self.total_searches);
         let _ = writeln!(output, "  Total tokens: {}", self.total_tokens);
         let _ = writeln!(

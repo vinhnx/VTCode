@@ -3,9 +3,9 @@
 //! This module is deprecated as of Dec 2025. All usage has been migrated to UnifiedCache.
 //!
 //! **Migration completed**:
-//! - ✅ improvements_registry_ext.rs → UnifiedCache
-//! - ✅ async_middleware.rs → UnifiedCache
-//! - ✅ ui/tui/session/performance.rs → UnifiedCache
+//! - [DONE] improvements_registry_ext.rs → UnifiedCache
+//! - [DONE] async_middleware.rs → UnifiedCache
+//! - [DONE] ui/tui/session/performance.rs → UnifiedCache
 //!
 //! **Why deprecated**: Duplicate implementation of LRU caching.
 //! UnifiedCache provides the same functionality with better integration.
@@ -91,7 +91,8 @@ impl<K: Clone + Eq + std::hash::Hash + std::fmt::Debug, V: Clone + std::fmt::Deb
         K: std::borrow::Borrow<Q>,
         Q: std::hash::Hash + Eq + ?Sized,
     {
-        let mut entries = self.entries.write().unwrap();
+        let mut entries = self.entries.write()
+            .expect("Cache RwLock poisoned - this indicates a panic in another thread");
 
         // Use get directly instead of contains_key + get
         if let Some(entry) = entries.get(key) {
@@ -127,7 +128,8 @@ impl<K: Clone + Eq + std::hash::Hash + std::fmt::Debug, V: Clone + std::fmt::Deb
 
     /// Put value in cache
     pub fn put(&self, key: K, value: V) -> Result<(), String> {
-        let mut entries = self.entries.write().unwrap();
+        let mut entries = self.entries.write()
+            .expect("Cache RwLock poisoned - this indicates a panic in another thread");
 
         // Check if key already exists - if so, just update (no eviction needed)
         if entries.contains_key(&key) {
@@ -155,7 +157,8 @@ impl<K: Clone + Eq + std::hash::Hash + std::fmt::Debug, V: Clone + std::fmt::Deb
 
     /// Insert an Arc<V> directly into the cache without cloning the value.
     pub fn put_arc(&self, key: K, value: Arc<V>) -> Result<(), String> {
-        let mut entries = self.entries.write().unwrap();
+        let mut entries = self.entries.write()
+            .expect("Cache RwLock poisoned - this indicates a panic in another thread");
 
         let now = Instant::now();
         let new_entry = CacheEntry {
@@ -208,13 +211,15 @@ impl<K: Clone + Eq + std::hash::Hash + std::fmt::Debug, V: Clone + std::fmt::Deb
 
     /// Get cache size
     pub fn size(&self) -> usize {
-        let entries = self.entries.read().unwrap();
+        let entries = self.entries.read()
+            .expect("Cache RwLock poisoned - this indicates a panic in another thread");
         entries.len()
     }
 
     /// Clear expired entries
     pub fn evict_expired(&self) -> usize {
-        let mut entries = self.entries.write().unwrap();
+        let mut entries = self.entries.write()
+            .expect("Cache RwLock poisoned - this indicates a panic in another thread");
         let before = entries.len();
 
         entries.retain(|_, entry| !entry.is_expired());
@@ -233,12 +238,15 @@ impl<K: Clone + Eq + std::hash::Hash + std::fmt::Debug, V: Clone + std::fmt::Deb
 
     /// Clear all entries
     pub fn clear(&self) {
-        self.entries.write().unwrap().clear();
+        self.entries.write()
+            .expect("Cache RwLock poisoned - this indicates a panic in another thread")
+            .clear();
     }
 
     /// Get cache stats
     pub fn stats(&self) -> CacheStats {
-        let entries = self.entries.read().unwrap();
+        let entries = self.entries.read()
+            .expect("Cache RwLock poisoned - this indicates a panic in another thread");
         let expired_count = entries.values().filter(|e| e.is_expired()).count();
 
         CacheStats {
