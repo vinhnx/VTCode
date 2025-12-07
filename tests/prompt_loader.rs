@@ -128,7 +128,7 @@ fn actual_prompt_file_validation() {
         );
     } else {
         println!(
-            "ℹ️  System prompt file does not exist at: {}",
+            "[INFO] System prompt file does not exist at: {}",
             prompt_path.display()
         );
         println!("   This is expected if prompts/system.md hasn't been created yet.");
@@ -159,7 +159,7 @@ fn prompt_directory_structure() {
             }
 
             if !prompt_files.is_empty() {
-                println!("📁 Found prompt files: {:?}", prompt_files);
+                println!("[FILES] Found prompt files: {:?}", prompt_files);
 
                 // Verify system.md is among them if any exist
                 if prompt_files.len() > 1 {
@@ -171,7 +171,7 @@ fn prompt_directory_structure() {
             }
         }
     } else {
-        println!("ℹ️  Prompts directory does not exist yet. This is expected for new setups.");
+        println!("[INFO] Prompts directory does not exist yet. This is expected for new setups.");
     }
 }
 

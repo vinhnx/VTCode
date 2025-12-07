@@ -24,7 +24,7 @@ impl StatusIndicator {
             StatusIndicator::Ready => "●",
             StatusIndicator::Executing => "◐",
             StatusIndicator::Unavailable => "○",
-            StatusIndicator::Error => "✕",
+            StatusIndicator::Error => "[E]",
         }
     }
 
@@ -200,7 +200,7 @@ mod tests {
         assert_eq!(StatusIndicator::Ready.symbol(), "●");
         assert_eq!(StatusIndicator::Executing.symbol(), "◐");
         assert_eq!(StatusIndicator::Unavailable.symbol(), "○");
-        assert_eq!(StatusIndicator::Error.symbol(), "✕");
+        assert_eq!(StatusIndicator::Error.symbol(), "[E]");
     }
 
     #[test]

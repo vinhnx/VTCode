@@ -29,9 +29,9 @@ impl MessageType {
     pub fn prefix(&self) -> &'static str {
         match self {
             MessageType::Info => "[INFO]",
-            MessageType::Success => "[✓]",
-            MessageType::Error => "[✗]",
-            MessageType::Warning => "[⚠]",
+            MessageType::Success => "[OK]",
+            MessageType::Error => "[ERR]",
+            MessageType::Warning => "[W]",
         }
     }
 }
@@ -147,9 +147,9 @@ mod tests {
     #[test]
     fn test_message_type_prefix() {
         assert_eq!(MessageType::Info.prefix(), "[INFO]");
-        assert_eq!(MessageType::Success.prefix(), "[✓]");
-        assert_eq!(MessageType::Error.prefix(), "[✗]");
-        assert_eq!(MessageType::Warning.prefix(), "[⚠]");
+        assert_eq!(MessageType::Success.prefix(), "[OK]");
+        assert_eq!(MessageType::Error.prefix(), "[ERR]");
+        assert_eq!(MessageType::Warning.prefix(), "[W]");
     }
 
     #[test]
@@ -192,7 +192,7 @@ mod tests {
 
         let output = channel.formatted_output().unwrap();
         assert!(output.contains("[INFO]"));
-        assert!(output.contains("[✗]"));
+        assert!(output.contains("[ERR]"));
         assert!(output.contains("Info message"));
         assert!(output.contains("Error message"));
     }

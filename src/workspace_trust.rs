@@ -100,7 +100,7 @@ pub async fn ensure_workspace_trust(
 
 fn render_prompt(workspace: &Path, require_full_auto_upgrade: bool) {
     println!();
-    print_prompt_line("⚠ Workspace Trust Required", PromptTone::Heading);
+    print_prompt_line("[WARN] Workspace Trust Required", PromptTone::Heading);
     println!();
     print_prompt_line(
         "VT Code can execute code and access files in your workspace.",

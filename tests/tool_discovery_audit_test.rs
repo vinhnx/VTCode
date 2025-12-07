@@ -182,12 +182,12 @@ fn audit_tool_system_completeness() {
     println!("  In ACP: {}/{}", tools_in_acp.len(), audit_entries.len());
 
     if !missing_policies.is_empty() {
-        println!("\n  ⚠️  TOOLS WITHOUT POLICIES: {:?}", missing_policies);
+        println!("\n  [WARN] TOOLS WITHOUT POLICIES: {:?}", missing_policies);
     }
 
     if !missing_declarations.is_empty() {
         println!(
-            "\n  ℹ️  TOOLS WITHOUT DECLARATIONS: {:?}",
+            "\n  [INFO] TOOLS WITHOUT DECLARATIONS: {:?}",
             missing_declarations
         );
         println!("      (Some tools may intentionally not have LLM declarations)");

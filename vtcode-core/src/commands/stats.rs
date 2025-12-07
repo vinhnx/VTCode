@@ -82,7 +82,7 @@ fn display_text_stats(config: &AgentConfig, metrics: &PerformanceMetrics, detail
     );
 
     if detailed {
-        println!("\n{} System Information:", style("💻").dim());
+        println!("\n{} System Information:", style("[SYS]").dim());
         println!(
             "  Rust Version: {}",
             style(env!("CARGO_PKG_RUST_VERSION")).cyan()

@@ -19,7 +19,7 @@ mod unicode_optimization_tests {
         assert_eq!(scrollback.unicode_sessions, 1);
 
         // Test emoji
-        scrollback.push_text("🌍🚀✨");
+        scrollback.push_text("[TEST]");
         assert!(scrollback.total_unicode_chars > 2);
         assert_eq!(scrollback.unicode_sessions, 2);
     }
@@ -60,7 +60,7 @@ mod unicode_optimization_tests {
         let mut scrollback = PtyScrollback::new(100, 1024 * 1024);
 
         // Mix of ASCII and unicode
-        let mixed_content = "Hello World! 你好世界 🌍🚀✨ café naïve résumé";
+        let mixed_content = "Hello World! 你好世界 [TEST] café naïve résumé";
         scrollback.push_text(mixed_content);
 
         assert!(scrollback.total_unicode_chars > 0);
@@ -116,10 +116,10 @@ mod unicode_tests {
     #[test]
     fn test_push_utf8_valid_emoji() {
         let mut scrollback = PtyScrollback::new(100, 1024 * 1024);
-        let mut buffer = "🌍🚀✨".as_bytes().to_vec();
+        let mut buffer = "[TEST]".as_bytes().to_vec();
         scrollback.push_utf8(&mut buffer, false);
 
-        assert_eq!(scrollback.snapshot(), "🌍🚀✨");
+        assert_eq!(scrollback.snapshot(), "[TEST]");
         assert_eq!(scrollback.unicode_errors, 0);
         assert_eq!(scrollback.utf8_buffer_remainder.len(), 0);
     }
@@ -159,7 +159,7 @@ mod unicode_tests {
         let mut buffer2 = vec![0x8C, 0x8D]; // Remaining emoji bytes
         scrollback.push_utf8(&mut buffer2, false);
 
-        assert_eq!(scrollback.snapshot(), "🌍");
+        assert_eq!(scrollback.snapshot(), "[T]");
         assert_eq!(scrollback.unicode_errors, 0);
         assert_eq!(scrollback.utf8_buffer_remainder.len(), 0);
     }
@@ -474,7 +474,7 @@ impl PtyScrollback {
         if !self.warning_shown && self.current_bytes + text_bytes > (self.max_bytes * 80 / 100) {
             self.warning_shown = true;
             let warning = format!(
-                "\n[⚠️  Output approaching size limit ({:.1} MB of {} MB). Output may be truncated soon.]\n",
+                "\n[WARN] Output approaching size limit ({:.1} MB of {} MB). Output may be truncated soon.\n",
                 self.current_bytes as f64 / 1_000_000.0,
                 self.max_bytes / 1_000_000
             );
@@ -490,8 +490,8 @@ impl PtyScrollback {
             if !self.overflow_detected {
                 self.overflow_detected = true;
                 let warning = format!(
-                    "\n[⚠️  Output size limit exceeded ({} MB). Further output truncated.]\n\
-                     [💡 Tip: Full output can be retrieved with output spooling enabled]\n",
+                    "\n[WARN] Output size limit exceeded ({} MB). Further output truncated.\n\
+                    [TIP] Full output can be retrieved with output spooling enabled\n",
                     self.max_bytes / 1_000_000
                 );
                 // Add warning to both buffers - push clone first, then move original

@@ -538,16 +538,16 @@ impl ContextOptimizer {
         let util = self.utilization().await;
         if util >= CHECKPOINT_THRESHOLD {
             format!(
-                "⚠️  Token budget at {:.1}% - checkpoint recommended",
+                "[WARN] Token budget at {:.1}% - checkpoint recommended",
                 util * 100.0
             )
         } else if util >= COMPACT_THRESHOLD {
             format!(
-                "⚠️  Token budget at {:.1}% - compaction active",
+                "[WARN] Token budget at {:.1}% - compaction active",
                 util * 100.0
             )
         } else {
-            format!("✓ Token budget at {:.1}%", util * 100.0)
+            format!("[OK] Token budget at {:.1}%", util * 100.0)
         }
     }
 }

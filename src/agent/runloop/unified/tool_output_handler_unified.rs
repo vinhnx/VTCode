@@ -373,7 +373,7 @@ async fn handle_tool_blocked<C: ToolOutputContext>(
         .log_tool_call(working_history_len_estimate(), name, &blocked_json, false);
 
     // Render blocked output
-    render_tool_call_summary_with_status(ctx.renderer(), name, args_val, "⚠", Some(1))?;
+    render_tool_call_summary_with_status(ctx.renderer(), name, args_val, "[WARN]", Some(1))?;
     Ok(())
 }
 

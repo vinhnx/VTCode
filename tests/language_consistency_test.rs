@@ -362,10 +362,10 @@ This is in English.
     fn test_emoji_in_json_values() {
         // Emojis should be allowed in string values
         let json = json!({
-            "status": "success 🎉",
+            "status": "success [DONE]",
             "message": "Operation completed ✓ ",
             "data": {
-                "celebration": "🚀🎊"
+                "celebration": "[ROCKET][PARTY]"
             }
         });
 

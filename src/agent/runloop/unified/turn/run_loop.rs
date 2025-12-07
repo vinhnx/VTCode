@@ -2229,7 +2229,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                         );
 
                         // Autonomous policy feedback (Requirement 3.x/5.x)
-                        let policy = autonomous_executor.get_policy(&name, &args_val);
+                        let policy = autonomous_executor.get_policy(name, &args_val);
                         match policy {
                             AutonomousPolicy::AutoExecute => {
                                 // no-op for verbosity

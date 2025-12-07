@@ -79,7 +79,7 @@ pub async fn handle_init_command(registry: &mut ToolRegistry, workspace: &Path) 
 
     println!(
         "{} {}",
-        style("✓").green().bold(),
+        style("[OK]").green().bold(),
         style("AGENTS.md generated successfully!").green()
     );
     println!("{} {}", style(" Location:").blue(), report.path.display());

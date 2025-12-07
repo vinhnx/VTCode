@@ -376,7 +376,7 @@ impl AutonomousExecutor {
             let is_destructive = self.is_destructive_command(cmd);
 
             let warning = if is_destructive {
-                "\n⚠️  WARNING: This command is potentially destructive!"
+                "\n[WARN] WARNING: This command is potentially destructive!"
             } else {
                 ""
             };

@@ -44,7 +44,7 @@ mod path_environment_tests {
                 }
                 Err(_) => {
                     // which command itself might not be available on all systems
-                    println!("⚠ Could not check for {}", cmd);
+                    println!("[WARN] Could not check for {}", cmd);
                 }
             }
         }
@@ -67,12 +67,12 @@ mod path_environment_tests {
                     if output.status.success() {
                         println!("✓ {} is available", tool);
                     } else {
-                        println!("⚠ {} exists but returned error", tool);
+                        println!("[WARN] {} exists but returned error", tool);
                     }
                 }
                 Err(_) => {
                     // Tool not installed - that's expected on some systems
-                    println!("⚠ {} not installed (this is OK)", tool);
+                    println!("[INFO] {} not installed (this is OK)", tool);
                 }
             }
         }
@@ -147,11 +147,11 @@ mod path_environment_tests {
                         "cargo --version should output cargo info"
                     );
                 } else {
-                    println!("⚠ cargo exists but returned error status");
+                    println!("[WARN] cargo exists but returned error status");
                 }
             }
             Err(e) => {
-                println!("⚠ cargo not found in PATH: {}", e);
+                println!("[WARN] cargo not found in PATH: {}", e);
                 println!("  This is expected if Rust is not installed");
             }
         }
