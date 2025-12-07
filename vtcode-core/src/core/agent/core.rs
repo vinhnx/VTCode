@@ -73,7 +73,7 @@ impl Agent {
         // Update session info
         self.session_info.start_time = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_else(|_| std::time::Duration::from_secs(0))
             .as_secs();
 
         if self.config.verbose {
