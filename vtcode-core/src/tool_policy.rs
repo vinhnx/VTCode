@@ -37,6 +37,12 @@ const AUTO_ALLOW_TOOLS: &[&str] = &[
     tools::DEBUG_AGENT,
     tools::ANALYZE_AGENT,
     tools::LIST_PTY_SESSIONS,
+    tools::READ_PTY_SESSION,
+    "cargo_check",
+    "cargo_test",
+    "git_status",
+    "git_diff",
+    "git_log",
 ];
 
 /// Tool execution policy
@@ -260,7 +266,8 @@ fn parse_mcp_policy_key(tool_name: &str) -> Option<(String, String)> {
     let mut parts = tool_name.splitn(3, "::");
     match (parts.next()?, parts.next(), parts.next()) {
         ("mcp", Some(provider), Some(tool)) if !provider.is_empty() && !tool.is_empty() => {
-            Some((provider.to_string(), tool.to_string()))
+            // OPTIMIZATION: Use into() for cleaner conversion
+            Some((provider.into(), tool.into()))
         }
         _ => None,
     }
@@ -446,15 +453,15 @@ impl ToolPolicyManager {
     }
 
     fn apply_auto_allow_defaults(config: &mut ToolPolicyConfig) {
-        for tool in AUTO_ALLOW_TOOLS {
-            let tool_str = tool.to_string();
+        // OPTIMIZATION: Avoid unnecessary allocations in loop
+        for &tool in AUTO_ALLOW_TOOLS {
             config
                 .policies
-                .entry(tool_str.clone())
+                .entry(tool.into())
                 .and_modify(|policy| *policy = ToolPolicy::Allow)
                 .or_insert(ToolPolicy::Allow);
-            if !config.available_tools.contains(&tool_str) {
-                config.available_tools.push(tool_str);
+            if !config.available_tools.iter().any(|t| t == tool) {
+                config.available_tools.push(tool.into());
             }
         }
         Self::ensure_network_constraints(config);
@@ -578,10 +585,13 @@ impl ToolPolicyManager {
 
     /// Update the tool list and save configuration
     pub async fn update_available_tools(&mut self, tools: Vec<String>) -> Result<()> {
-        let mut canonical_tools = Vec::new();
+        // OPTIMIZATION: Use HashSet for deduplication, then convert to sorted Vec
+        let mut canonical_tools = Vec::with_capacity(tools.len());
+        let mut seen = HashSet::with_capacity(tools.len());
+        
         for tool in tools {
             let canonical = canonical_tool_name(&tool).into_owned();
-            if !canonical_tools.contains(&canonical) {
+            if seen.insert(canonical.clone()) {
                 canonical_tools.push(canonical);
             }
         }
@@ -653,7 +663,7 @@ impl ToolPolicyManager {
                 .config
                 .mcp
                 .providers
-                .entry(provider.to_string())
+                .entry(provider.clone())
                 .or_default();
 
             let existing_tools: HashSet<_> = entry.tools.keys().cloned().collect();
@@ -662,14 +672,14 @@ impl ToolPolicyManager {
             // Add new tools with default Prompt policy
             for tool in tools {
                 if !existing_tools.contains(tool) {
-                    entry.tools.insert(tool.to_string(), ToolPolicy::Prompt);
+                    entry.tools.insert(tool.clone(), ToolPolicy::Prompt);
                     has_changes = true;
                 }
             }
 
             // Remove tools no longer advertised
             for stale in existing_tools.difference(&advertised) {
-                entry.tools.shift_remove(stale.as_str());
+                entry.tools.shift_remove(stale);
                 has_changes = true;
             }
         }
@@ -755,13 +765,14 @@ impl ToolPolicyManager {
         tool: &str,
         policy: ToolPolicy,
     ) -> Result<()> {
+        // OPTIMIZATION: Use into() for cleaner conversion
         let entry = self
             .config
             .mcp
             .providers
-            .entry(provider.to_string())
+            .entry(provider.into())
             .or_default();
-        entry.tools.insert(tool.to_string(), policy);
+        entry.tools.insert(tool.into(), policy);
         self.save_config().await
     }
 

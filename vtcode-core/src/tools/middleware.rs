@@ -38,9 +38,9 @@ impl MiddlewareResult {
 /// Errors that can occur during middleware chain execution
 #[derive(Debug, Clone)]
 pub enum MiddlewareError {
-    ExecutionFailed(String),
-    ValidationFailed(String),
-    CacheFailed(String),
+    ExecutionFailed(&'static str),
+    ValidationFailed(&'static str),
+    CacheFailed(&'static str),
     TimeoutExceeded,
     Cancelled,
 }
@@ -165,27 +165,31 @@ impl Middleware for LoggingMiddleware {
         request: ToolRequest,
         next: Box<dyn Fn(ToolRequest) -> MiddlewareResult + Send + Sync>,
     ) -> MiddlewareResult {
+        // Capture values before moving request
+        let tool_name = request.tool_name.clone();
+        let request_id = request.metadata.request_id.clone();
+
         // Use tracing with static level
         tracing::debug!(
-            tool = %request.tool_name,
-            request_id = %request.metadata.request_id,
+            tool = %tool_name,
+            request_id = %request_id,
             arguments = %request.arguments,
             "tool_execution_started"
         );
 
         let start = std::time::Instant::now();
-        let mut result = next(request.clone());
+        let mut result = next(request);
         let duration = start.elapsed().as_millis() as u64;
 
         if result.success {
             tracing::debug!(
-                tool = %request.tool_name,
+                tool = %tool_name,
                 duration_ms = duration,
                 "tool_execution_completed"
             );
         } else {
             tracing::error!(
-                tool = %request.tool_name,
+                tool = %tool_name,
                 error = ?result.error,
                 "tool_execution_failed"
             );
@@ -195,7 +199,7 @@ impl Middleware for LoggingMiddleware {
         result
             .metadata
             .layers_executed
-            .push(self.name().to_string());
+            .push("logging".into());
         result
     }
 }
@@ -244,19 +248,16 @@ impl Middleware for CachingMiddleware {
         // Check cache
         if let Ok(cache) = self.cache.read() {
             if let Some(cached) = cache.get(&key) {
-                let mut result = MiddlewareResult {
+                return MiddlewareResult {
                     success: true,
-                    // Return an owned String; callers expect owned Strings
-                    result: Some(cached.as_ref().clone()),
+                    result: Some((**cached).clone()),
                     error: None,
-                    metadata: ExecutionMetadata::default(),
+                    metadata: ExecutionMetadata {
+                        from_cache: true,
+                        layers_executed: vec!["caching".into()],
+                        ..Default::default()
+                    },
                 };
-                result.metadata.from_cache = true;
-                result
-                    .metadata
-                    .layers_executed
-                    .push(self.name().to_string());
-                return result;
             }
         }
 
@@ -274,7 +275,7 @@ impl Middleware for CachingMiddleware {
         result
             .metadata
             .layers_executed
-            .push(self.name().to_string());
+            .push("caching".into());
         result
     }
 }
@@ -311,28 +312,24 @@ impl Middleware for RetryMiddleware {
         request: ToolRequest,
         next: Box<dyn Fn(ToolRequest) -> MiddlewareResult + Send + Sync>,
     ) -> MiddlewareResult {
-        let mut result = MiddlewareResult {
-            success: false,
-            result: None,
-            error: Some(MiddlewareError::ExecutionFailed("not executed".to_owned())),
-            metadata: ExecutionMetadata::default(),
-        };
+        // Try once, then retry with clones
+        let mut result = next(request.clone());
 
-        for attempt in 0..self.max_attempts {
-            if attempt > 0 {
+        if !result.success && self.max_attempts > 1 {
+            for attempt in 1..self.max_attempts {
                 let backoff = self.backoff_duration(attempt - 1);
                 std::thread::sleep(std::time::Duration::from_millis(backoff));
                 result.metadata.retry_count = attempt;
-            }
 
-            result = next(request.clone());
+                result = next(request.clone());
 
-            if result.success {
-                break;
+                if result.success {
+                    break;
+                }
             }
         }
 
-        result.metadata.layers_executed.push(self.name().to_owned());
+        result.metadata.layers_executed.push("retry".into());
         result
     }
 }
@@ -350,7 +347,7 @@ impl ValidationMiddleware {
     fn validate_request(&self, request: &ToolRequest) -> Result<(), MiddlewareError> {
         if request.tool_name.is_empty() {
             return Err(MiddlewareError::ValidationFailed(
-                "tool_name is empty".to_owned(),
+                "tool_name is empty",
             ));
         }
 
@@ -390,7 +387,7 @@ impl Middleware for ValidationMiddleware {
         result
             .metadata
             .layers_executed
-            .push(self.name().to_string());
+            .push("validation".into());
         result
     }
 }
@@ -417,21 +414,34 @@ impl MiddlewareChain {
     where
         F: Fn(ToolRequest) -> MiddlewareResult + Send + Sync + 'static,
     {
-        if self.middlewares.is_empty() {
-            return executor(request);
-        }
+        let executor = std::sync::Arc::new(executor);
 
-        // Apply middlewares in reverse order (first in list = outermost wrapper)
-        let mut result = executor(request.clone());
+        // Factory for creating the tail of the chain (executor)
+        let mut factory: std::sync::Arc<
+            dyn Fn() -> Box<dyn Fn(ToolRequest) -> MiddlewareResult + Send + Sync> + Send + Sync,
+        > = std::sync::Arc::new(move || {
+            let executor = executor.clone();
+            Box::new(move |req| executor(req))
+        });
 
+        // Wrap with middlewares in reverse order
         for middleware in self.middlewares.iter().rev() {
-            // Re-execute through this middleware
-            let current_mw = middleware.clone();
-            let executor_fn = Box::new(move |_req: ToolRequest| result.clone());
-            result = current_mw.execute(request.clone(), executor_fn);
+            let mw = middleware.clone();
+            let next_factory = factory.clone();
+
+            factory = std::sync::Arc::new(move || {
+                let mw = mw.clone();
+                let next_factory = next_factory.clone();
+                Box::new(move |req| {
+                    let next = next_factory();
+                    mw.execute(req, next)
+                })
+            });
         }
 
-        result
+        // Execute the full chain
+        let root_fn = factory();
+        root_fn(request)
     }
 }
 

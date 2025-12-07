@@ -40,7 +40,7 @@ impl ProviderCapabilities {
     /// Detect capabilities for a given provider and model
     pub fn detect(provider: &dyn LLMProvider, model: &str) -> Self {
         Self {
-            provider_name: provider.name().to_owned(),
+            provider_name: provider.name().into(),
             streaming: provider.supports_streaming(),
             advanced_reasoning: provider.supports_reasoning(model),
             reasoning_effort: provider.supports_reasoning_effort(model),
@@ -48,7 +48,7 @@ impl ProviderCapabilities {
             parallel_tools: provider.supports_parallel_tool_config(model),
             structured_output: provider.supports_structured_output(model),
             context_caching: provider.supports_context_caching(model),
-            model: model.to_owned(),
+            model: model.into(),
             context_size: provider.effective_context_size(model),
         }
     }

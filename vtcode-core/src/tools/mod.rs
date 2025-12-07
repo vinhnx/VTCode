@@ -152,6 +152,7 @@ pub mod traits;
 pub mod tree_sitter;
 pub mod types;
 pub mod web_fetch;
+pub mod autonomous_executor;
 
 // Production-grade improvements modules
 pub mod async_middleware;
@@ -171,6 +172,7 @@ mod improvements_integration_tests;
 mod improvements_real_workflow_tests;
 
 // Re-export main types and traits for backward compatibility
+pub use autonomous_executor::{AutonomousExecutor, AutonomousPolicy};
 pub use cache::FileCache;
 pub use command_cache::PermissionCache;
 pub use command_resolver::CommandResolver;

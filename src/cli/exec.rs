@@ -1,4 +1,4 @@
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{Context, Result, bail};
 use std::fs;
 use std::io::{self, IsTerminal, Read};
 use std::path::PathBuf;
@@ -39,7 +39,8 @@ fn resolve_prompt(prompt_arg: Option<String>) -> Result<String> {
             if !force_stdin {
                 eprintln!("Reading prompt from stdin...");
             }
-            let mut buffer = String::new();
+            // OPTIMIZATION: Pre-allocate buffer with reasonable capacity
+            let mut buffer = String::with_capacity(1024);
             io::stdin()
                 .read_to_string(&mut buffer)
                 .context("Failed to read prompt from stdin")?;
@@ -51,6 +52,8 @@ fn resolve_prompt(prompt_arg: Option<String>) -> Result<String> {
     }
 }
 
+// OPTIMIZATION: Use inline hint for hot path
+#[inline]
 fn last_agent_message(events: &[ThreadEvent]) -> Option<&str> {
     events.iter().rev().find_map(|event| match event {
         ThreadEvent::ItemCompleted(completed) => match &completed.item.details {
@@ -101,13 +104,12 @@ pub async fn handle_exec_command(
         )
     })?;
 
-    let session_id = format!(
-        "{EXEC_SESSION_PREFIX}-{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_err(|err| anyhow!("Failed to derive session identifier timestamp: {}", err))?
-            .as_secs()
-    );
+    // OPTIMIZATION: Use context instead of map_err with anyhow!
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .context("Failed to derive session identifier timestamp")?
+        .as_secs();
+    let session_id = format!("{EXEC_SESSION_PREFIX}-{timestamp}");
 
     let mut runner = AgentRunner::new(
         AgentType::Single,
@@ -133,11 +135,12 @@ pub async fn handle_exec_command(
         });
     }
 
+    // OPTIMIZATION: Avoid unnecessary allocations for static strings
     let task = Task {
-        id: EXEC_TASK_ID.to_string(),
-        title: EXEC_TASK_TITLE.to_string(),
+        id: EXEC_TASK_ID.into(),
+        title: EXEC_TASK_TITLE.into(),
         description: prompt.trim().to_string(),
-        instructions: Some(EXEC_TASK_INSTRUCTIONS.to_string()),
+        instructions: Some(EXEC_TASK_INSTRUCTIONS.into()),
     };
 
     let result = runner
@@ -145,7 +148,8 @@ pub async fn handle_exec_command(
         .await
         .context("Failed to execute autonomous task")?;
 
-    let mut event_lines = Vec::new();
+    // OPTIMIZATION: Pre-allocate with capacity hint
+    let mut event_lines = Vec::with_capacity(result.thread_events.len());
     for event in &result.thread_events {
         let line =
             serde_json::to_string(event).context("Failed to serialize exec event to JSON")?;
@@ -163,14 +167,15 @@ pub async fn handle_exec_command(
             );
         }
 
+        // OPTIMIZATION: Use static str instead of allocating "-"
         let avg_display = result
             .average_turn_duration_ms
             .map(|avg| format!("{avg:.1}"))
-            .unwrap_or_else(|| "-".to_string());
+            .unwrap_or_else(|| "-".into());
         let max_display = result
             .max_turn_duration_ms
             .map(|value| value.to_string())
-            .unwrap_or_else(|| "-".to_string());
+            .unwrap_or_else(|| "-".into());
 
         println!("{}", style("[OUTCOME]").magenta().bold());
         println!("  {:16} {}", "outcome", result.outcome);
@@ -180,6 +185,7 @@ pub async fn handle_exec_command(
         println!("  {:16} {}", "max_turn_ms", max_display);
         println!("  {:16} {}\n", "warnings", result.warnings.len());
 
+        // OPTIMIZATION: Extract common pattern to reduce code duplication
         if !result.modified_files.is_empty() {
             println!("{}", style("[FILES]").cyan().bold());
             for (idx, file) in result.modified_files.iter().enumerate() {

@@ -238,15 +238,16 @@ impl ToolDiscoveryCache {
 
     /// Cache all tools for a provider
     pub fn cache_all_tools(&self, provider_name: &str, tools: Vec<McpToolInfo>) {
-        let provider_key = provider_name.to_string();
+        // OPTIMIZATION: Avoid unnecessary string allocation
+        let provider_key = provider_name;
         
         // Update all tools cache
         let mut all_tools_cache = self.all_tools_cache.write().unwrap();
-        all_tools_cache.insert(provider_key.clone(), tools.clone());
+        all_tools_cache.insert(provider_key.into(), tools.clone());
 
         // Update last refresh time
         let mut last_refresh = self.last_refresh.write().unwrap();
-        last_refresh.insert(provider_key, Instant::now());
+        last_refresh.insert(provider_key.into(), Instant::now());
 
         // Update bloom filter with all tool names
         let mut bloom_filter = self.bloom_filter.write().unwrap();
@@ -422,8 +423,10 @@ impl CachedToolDiscovery {
         }
 
         // Parameter names contain keyword
+        // OPTIMIZATION: Avoid double conversion - check if schema debug contains keyword
         if let Some(input_schema) = &tool.input_schema {
-            if input_schema.to_string().to_lowercase().contains(keyword) {
+            let schema_str = format!("{:?}", input_schema);
+            if schema_str.to_lowercase().contains(keyword) {
                 score += 0.2;
             }
         }

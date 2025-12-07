@@ -54,13 +54,13 @@ impl Session {
         let mut status_area = None;
         let mut status_line = None;
 
-        if area.height >= 2 {
-            if let Some(line) = self.render_input_status_line(area.width) {
-                let block_height = area.height.saturating_sub(1).max(1);
-                input_area.height = block_height;
-                status_area = Some(Rect::new(area.x, area.y + block_height, area.width, 1));
-                status_line = Some(line);
-            }
+        if area.height >= 2
+            && let Some(line) = self.render_input_status_line(area.width)
+        {
+            let block_height = area.height.saturating_sub(1).max(1);
+            input_area.height = block_height;
+            status_area = Some(Rect::new(area.x, area.y + block_height, area.width, 1));
+            status_line = Some(line);
         }
 
         // Determine if we're in full auto trust mode and adjust styling accordingly
@@ -153,12 +153,13 @@ impl Session {
         let mut cursor_set = cursor_pos == 0;
 
         for (idx, ch) in input_content.char_indices() {
-            if !cursor_set && cursor_pos == idx {
-                if let Some(current) = buffers.last() {
-                    cursor_line_idx = buffers.len() - 1;
-                    cursor_column = current.prefix_width + current.text_width;
-                    cursor_set = true;
-                }
+            if !cursor_set
+                && cursor_pos == idx
+                && let Some(current) = buffers.last()
+            {
+                cursor_line_idx = buffers.len() - 1;
+                cursor_column = current.prefix_width + current.text_width;
+                cursor_set = true;
             }
 
             if ch == '\n' {
@@ -197,20 +198,21 @@ impl Session {
             }
 
             let end = idx + ch.len_utf8();
-            if !cursor_set && cursor_pos == end {
-                if let Some(current) = buffers.last() {
-                    cursor_line_idx = buffers.len() - 1;
-                    cursor_column = current.prefix_width + current.text_width;
-                    cursor_set = true;
-                }
+            if !cursor_set
+                && cursor_pos == end
+                && let Some(current) = buffers.last()
+            {
+                cursor_line_idx = buffers.len() - 1;
+                cursor_column = current.prefix_width + current.text_width;
+                cursor_set = true;
             }
         }
 
-        if !cursor_set {
-            if let Some(current) = buffers.last() {
-                cursor_line_idx = buffers.len() - 1;
-                cursor_column = current.prefix_width + current.text_width;
-            }
+        if !cursor_set
+            && let Some(current) = buffers.last()
+        {
+            cursor_line_idx = buffers.len() - 1;
+            cursor_column = current.prefix_width + current.text_width;
         }
 
         InputLayout {

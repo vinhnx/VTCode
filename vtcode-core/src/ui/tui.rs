@@ -7,7 +7,7 @@ pub mod alternate_screen;
 mod session;
 mod style;
 mod theme_parser;
-mod tui;
+mod runner;
 mod types;
 
 pub use style::{convert_style, theme_from_styles};
@@ -19,7 +19,7 @@ pub use types::{
     SecurePromptConfig,
 };
 
-use tui::run_tui;
+use runner::{run_tui, TuiOptions};
 
 pub fn spawn_session(
     theme: InlineTheme,
@@ -57,13 +57,15 @@ pub fn spawn_session_with_prompts(
         if let Err(error) = run_tui(
             command_rx,
             event_tx,
-            theme,
-            placeholder,
-            surface_preference,
-            inline_rows,
-            show_timeline_pane,
-            event_callback,
-            custom_prompts,
+            TuiOptions {
+                theme,
+                placeholder,
+                surface_preference,
+                inline_rows,
+                show_timeline_pane,
+                event_callback,
+                custom_prompts,
+            },
         )
         .await
         {

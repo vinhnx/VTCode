@@ -140,7 +140,7 @@ impl UnicodeValidationContext {
 
 /// Global unicode monitor instance
 use std::sync::LazyLock;
-pub static UNICODE_MONITOR: LazyLock<UnicodeMonitor> = LazyLock::new(|| UnicodeMonitor::new());
+pub static UNICODE_MONITOR: LazyLock<UnicodeMonitor> = LazyLock::new(UnicodeMonitor::new);
 
 #[cfg(test)]
 mod tests {

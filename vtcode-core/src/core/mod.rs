@@ -50,8 +50,10 @@ pub mod token_budget;
 pub mod token_constants;
 pub mod token_estimator;
 pub mod trajectory;
+pub mod context_optimizer;
 
 // Re-export main types
+pub use context_optimizer::ContextOptimizer;
 pub use context_pruner::{
     ContextEfficiency, ContextPruner, MessageMetrics, MessageType, RetentionDecision, SemanticScore,
 };

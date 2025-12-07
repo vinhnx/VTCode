@@ -323,16 +323,11 @@ impl McpClient {
         }
 
         // Check for path traversal in file-related arguments
-        if self.config.security.validation.path_traversal_protection {
-            if let Some(path) = args.get("path").and_then(|v| v.as_str()) {
-                if path.contains("../")
-                    || path.starts_with("../")
-                    || path.contains("..\\")
-                    || path.starts_with("..\\")
-                {
-                    return Err(anyhow::anyhow!("Path traversal detected in arguments"));
-                }
-            }
+        if self.config.security.validation.path_traversal_protection
+            && let Some(path) = args.get("path").and_then(|v| v.as_str())
+            && (path.contains("../") || path.starts_with("../") || path.contains("..\\") || path.starts_with("..\\"))
+        {
+            return Err(anyhow::anyhow!("Path traversal detected in arguments"));
         }
 
         Ok(())
@@ -654,10 +649,10 @@ impl McpClient {
             ));
         }
 
-        if let Some(provider) = self.provider_for_tool(tool_name) {
-            if let Some(found) = self.providers.read().get(&provider) {
-                return Ok(found.clone());
-            }
+        if let Some(provider) = self.provider_for_tool(tool_name)
+            && let Some(found) = self.providers.read().get(&provider)
+        {
+            return Ok(found.clone());
         }
 
         let allowlist = self.allowlist.read().clone();
@@ -696,10 +691,10 @@ impl McpClient {
 
         match self.collect_tools(true).await {
             Ok(_) => {
-                if let Some(provider) = self.provider_for_tool(tool_name) {
-                    if let Some(found) = self.providers.read().get(&provider) {
-                        return Ok(found.clone());
-                    }
+                if let Some(provider) = self.provider_for_tool(tool_name)
+                    && let Some(found) = self.providers.read().get(&provider)
+                {
+                    return Ok(found.clone());
                 }
             }
             Err(err) => {
@@ -717,10 +712,10 @@ impl McpClient {
     }
 
     async fn resolve_provider_for_resource(&self, uri: &str) -> Result<Arc<McpProvider>> {
-        if let Some(provider) = self.provider_for_resource(uri) {
-            if let Some(found) = self.providers.read().get(&provider) {
-                return Ok(found.clone());
-            }
+        if let Some(provider) = self.provider_for_resource(uri)
+            && let Some(found) = self.providers.read().get(&provider)
+        {
+            return Ok(found.clone());
         }
 
         let allowlist = self.allowlist.read().clone();
@@ -749,10 +744,10 @@ impl McpClient {
     }
 
     async fn resolve_provider_for_prompt(&self, prompt_name: &str) -> Result<Arc<McpProvider>> {
-        if let Some(provider) = self.provider_for_prompt(prompt_name) {
-            if let Some(found) = self.providers.read().get(&provider) {
-                return Ok(found.clone());
-            }
+        if let Some(provider) = self.provider_for_prompt(prompt_name)
+            && let Some(found) = self.providers.read().get(&provider)
+        {
+            return Ok(found.clone());
         }
 
         let allowlist = self.allowlist.read().clone();
@@ -827,10 +822,12 @@ impl McpClient {
     }
 
     fn build_initialize_params(&self, provider: &McpProvider) -> InitializeRequestParams {
-        let mut capabilities = ClientCapabilities::default();
-        capabilities.roots = Some(ClientCapabilitiesRoots {
-            list_changed: Some(true),
-        });
+        let mut capabilities = ClientCapabilities {
+            roots: Some(ClientCapabilitiesRoots {
+                list_changed: Some(true),
+            }),
+            ..Default::default()
+        };
 
         if self.elicitation_handler.is_some() {
             let mut elicitation_capability = Map::new();
@@ -1164,10 +1161,10 @@ impl McpProvider {
         allowlist: &McpAllowListConfig,
         timeout: Option<Duration>,
     ) -> Result<bool> {
-        if let Some(tools) = &*self.tools_cache.lock().await {
-            if let Some(tool) = tools.iter().find(|tool| tool.name == tool_name) {
-                return Ok(schema_requires_field(&tool.input_schema, field));
-            }
+        if let Some(tools) = &*self.tools_cache.lock().await
+            && let Some(tool) = tools.iter().find(|tool| tool.name == tool_name)
+        {
+            return Ok(schema_requires_field(&tool.input_schema, field));
         }
 
         match self.refresh_tools(allowlist, timeout).await {

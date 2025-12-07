@@ -247,9 +247,9 @@ fn parse_start_tag<'a>(lower: &'a str, start: usize) -> Option<ParsedTag<'a>> {
     }
 
     let name = &lower[name_start..index];
-    let category = if REASONING_TAGS.iter().any(|candidate| *candidate == name) {
+    let category = if REASONING_TAGS.contains(&name) {
         TagCategory::Reasoning
-    } else if ANSWER_TAGS.iter().any(|candidate| *candidate == name) {
+    } else if ANSWER_TAGS.contains(&name) {
         TagCategory::Answer
     } else {
         return None;
