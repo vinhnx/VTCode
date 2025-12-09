@@ -34,6 +34,7 @@ pub const ERR_PARSE_SKILL_METADATA: &str = "failed to parse skill metadata";
 pub const ERR_WRITE_SKILL_DOCS: &str = "failed to write skill documentation";
 pub const ERR_DELETE_SKILL: &str = "failed to delete skill";
 pub const ERR_READ_SKILLS_DIR: &str = "failed to read skills directory";
+pub const ERR_TOOL_DENIED: &str = "tool denied or unavailable by policy";
 
 // Audit/Logging errors
 pub const ERR_CREATE_AUDIT_DIR: &str = "Failed to create audit directory";

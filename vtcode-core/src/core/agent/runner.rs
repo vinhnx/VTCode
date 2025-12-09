@@ -24,6 +24,7 @@ use crate::prompts::system::compose_system_instruction_text;
 use crate::tools::{ToolRegistry, build_function_declarations};
 
 use crate::utils::colors::style;
+use crate::utils::error_messages::ERR_TOOL_DENIED;
 use anyhow::{Result, anyhow};
 use futures::StreamExt;
 use serde_json::Value;
@@ -600,6 +601,47 @@ impl AgentRunner {
                 .task_state
                 .conversation_messages
                 .push(Message::tool_response(call_id.to_owned(), error_payload));
+        }
+    }
+
+    fn record_tool_denied(
+        &self,
+        agent_prefix: &str,
+        task_state: &mut TaskRunState,
+        event_recorder: &mut ExecEventRecorder,
+        call_id: &str,
+        tool_name: &str,
+        command_event: Option<&crate::core::agent::events::ActiveCommandHandle>,
+    ) {
+        let detail = format!("{ERR_TOOL_DENIED}: {tool_name}");
+        runner_println!(
+            self,
+            "{} {}",
+            agent_prefix,
+            format!("{} {}", style("(WARN)").yellow().bold(), detail)
+        );
+        task_state.warnings.push(detail.clone());
+        task_state.conversation.push(Content {
+            role: ROLE_USER.into(),
+            parts: vec![Part::Text {
+                text: detail.clone(),
+                thought_signature: None,
+            }],
+        });
+        let error_payload = serde_json::json!({ "error": detail }).to_string();
+        task_state
+            .conversation_messages
+            .push(Message::tool_response(call_id.to_owned(), error_payload));
+
+        if let Some(event) = command_event {
+            event_recorder.command_finished(
+                event,
+                CommandExecutionStatus::Failed,
+                None,
+                &detail,
+            );
+        } else {
+            event_recorder.warning(&detail);
         }
     }
 
@@ -1319,14 +1361,14 @@ impl AgentRunner {
                             let call_id = call.id.clone();
 
                             if !self.is_valid_tool(&name).await {
-                                let warning = format!("Skipped denied or unknown tool: {}", name);
-                                runner_println!(
-                                    self,
-                                    "{} {}",
-                                    agent_prefix,
-                                    style(&warning).yellow().bold()
+                                self.record_tool_denied(
+                                    &agent_prefix,
+                                    &mut task_state,
+                                    &mut event_recorder,
+                                    &call_id,
+                                    &name,
+                                    None,
                                 );
-                                task_state.warnings.push(warning);
                                 continue;
                             }
 
@@ -1468,15 +1510,14 @@ impl AgentRunner {
 
                             // Safety: Validate tool name before execution
                             if !self.is_valid_tool(&name).await {
-                                runner_println!(
-                                    self,
-                                    "{} Invalid tool: {}",
-                                    agent_prefix,
-                                    style(&name).red().bold()
+                                self.record_tool_denied(
+                                    &agent_prefix,
+                                    &mut task_state,
+                                    &mut event_recorder,
+                                    &call.id,
+                                    &name,
+                                    Some(&command_event),
                                 );
-                                task_state
-                                    .warnings
-                                    .push(format!("Skipped denied or unknown tool: {}", name));
                                 continue;
                             }
 
