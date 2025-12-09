@@ -35,13 +35,7 @@ fn test_all_tools_have_policies() {
         "execute_code",
         "update_plan",
         "search_tools",
-        // Skill management
-        "save_skill",
-        "load_skill",
-        "list_skills",
-        "search_skills",
         // Diagnostics
-        "get_errors",
         "debug_agent",
         "analyze_agent",
         // Web operations
@@ -72,11 +66,6 @@ fn test_all_tools_have_policies() {
             "execute_code",
             "update_plan",
             "search_tools",
-            "save_skill",
-            "load_skill",
-            "list_skills",
-            "search_skills",
-            "get_errors",
             "debug_agent",
             "analyze_agent",
             "web_fetch",
@@ -110,7 +99,7 @@ fn test_tool_policy_categories_documented() {
         ("create_file", "Allow - controlled create"),
         ("delete_file", "Prompt - destructive"),
         ("apply_patch", "Prompt - destructive"),
-        ("run_pty_cmd", "Allow - execution allowed"),
+        ("run_pty_cmd", "Prompt - execution with approval"),
         ("create_pty_session", "Allow - session management"),
         ("read_pty_session", "Allow - read-only session access"),
         ("list_pty_sessions", "Allow - non-destructive list"),
@@ -120,11 +109,6 @@ fn test_tool_policy_categories_documented() {
         ("execute_code", "Prompt - code execution risk"),
         ("update_plan", "Allow - internal planning"),
         ("search_tools", "Allow - metadata query"),
-        ("save_skill", "Allow - skill persistence"),
-        ("load_skill", "Allow - skill loading"),
-        ("list_skills", "Allow - non-destructive list"),
-        ("search_skills", "Allow - metadata query"),
-        ("get_errors", "Allow - diagnostic read-only"),
         ("debug_agent", "Allow - diagnostic read-only"),
         ("analyze_agent", "Allow - diagnostic read-only"),
         ("web_fetch", "Prompt - network access"),
@@ -138,7 +122,7 @@ fn test_tool_policy_categories_documented() {
 
     assert_eq!(
         tool_policies.len(),
-        26,
+        21,
         "Policy count mismatch - verify all tools documented"
     );
 }
@@ -166,11 +150,6 @@ fn test_no_tools_in_constants_without_declarations() {
         "execute_code",
         "update_plan",
         "search_tools",
-        "save_skill",
-        "load_skill",
-        "list_skills",
-        "search_skills",
-        "get_errors",
         "debug_agent",
         "analyze_agent",
         "web_fetch",
@@ -183,7 +162,6 @@ fn test_no_tools_in_constants_without_declarations() {
             "run_pty_cmd",
             "search_tools",
             "execute_code",
-            "get_errors",
             "debug_agent",
             "analyze_agent",
             "read_file",
@@ -205,8 +183,7 @@ fn test_no_tools_in_constants_without_declarations() {
         .map(|s| *s),
     );
 
-    // Note: list_files, save_skill, load_skill, list_skills, search_skills
-    // may not have declarations and need investigation
+    // Note: list_files may not have declarations and need investigation
     let tools_in_constants_set: HashSet<_> = tools_in_constants.iter().map(|s| *s).collect();
     let missing_declarations: Vec<_> = tools_in_constants_set
         .difference(&tools_with_declarations)
@@ -248,11 +225,6 @@ fn test_acp_tool_subset_is_documented() {
             "execute_code",
             "update_plan",
             "search_tools",
-            "save_skill",
-            "load_skill",
-            "list_skills",
-            "search_skills",
-            "get_errors",
             "debug_agent",
             "analyze_agent",
             "web_fetch",
@@ -294,7 +266,6 @@ fn test_tool_policy_consistency() {
         ("write_file", "Allow"),
         ("edit_file", "Allow"),
         ("create_file", "Allow"),
-        ("run_pty_cmd", "Allow"),
         ("create_pty_session", "Allow"),
         ("read_pty_session", "Allow"),
         ("list_pty_sessions", "Allow"),
@@ -302,16 +273,12 @@ fn test_tool_policy_consistency() {
         ("close_pty_session", "Allow"),
         ("update_plan", "Allow"),
         ("search_tools", "Allow"),
-        ("save_skill", "Allow"),
-        ("load_skill", "Allow"),
-        ("list_skills", "Allow"),
-        ("search_skills", "Allow"),
-        ("get_errors", "Allow"),
         ("debug_agent", "Allow"),
         ("analyze_agent", "Allow"),
         // Prompt category: requires user confirmation
         ("delete_file", "Prompt"),
         ("apply_patch", "Prompt"),
+        ("run_pty_cmd", "Prompt"),
         ("send_pty_input", "Prompt"),
         ("execute_code", "Prompt"),
         ("web_fetch", "Prompt"),
@@ -324,7 +291,7 @@ fn test_tool_policy_consistency() {
 
     assert_eq!(
         expected_policies.len(),
-        26,
+        21,
         "Policy mapping completeness check"
     );
 }

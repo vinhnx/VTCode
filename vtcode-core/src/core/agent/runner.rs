@@ -1277,11 +1277,7 @@ impl AgentRunner {
                             if let Some(func) = &call.function {
                                 matches!(
                                     func.name.as_str(),
-                                    "list_files"
-                                        | "read_file"
-                                        | "grep_file"
-                                        | "search_tools"
-                                        | "get_errors"
+                                    "list_files" | "read_file" | "grep_file" | "search_tools"
                                 )
                             } else {
                                 false

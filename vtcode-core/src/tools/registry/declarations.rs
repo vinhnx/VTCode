@@ -302,18 +302,6 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
             }),
         },
         FunctionDeclaration {
-            name: tools::GET_ERRORS.to_string(),
-            description: "Aggregate recent error traces from session archives and tool outputs. Useful for diagnosing runtime failures, patterns, and suggested recovery actions.".to_string(),
-            parameters: json!({
-                "type": "object",
-                "properties": {
-                    "scope": {"type": "string", "enum": ["archive", "session"], "description": "Scope to analyze: 'archive' (all sessions) or 'session' (current session).", "default": "archive"},
-                    "limit": {"type": "integer", "description": "Number of recent sessions/errors to analyze (default: 5).", "default": 5},
-                    "detailed": {"type": "boolean", "description": "Include detailed stack traces and suggestions (default: false).", "default": false}
-                }
-            }),
-        },
-        FunctionDeclaration {
             name: tools::DEBUG_AGENT.to_string(),
             description: "Return diagnostic information about the agent environment: current configuration, available tools, workspace state, and system info. Useful for troubleshooting setup issues.".to_string(),
             parameters: json!({"type": "object", "properties": {}}),
@@ -322,83 +310,6 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
             name: tools::ANALYZE_AGENT.to_string(),
             description: "Return analysis of agent behavior: tool usage patterns, failure rates, context window usage, and performance metrics. Useful for understanding tool interaction patterns.".to_string(),
             parameters: json!({"type": "object", "properties": {}}),
-        },
-
-        FunctionDeclaration {
-            name: "save_skill".to_string(),
-            description: "Save a reusable skill (code function) to .vtcode/skills/ for later use. Skills can be shared and loaded across conversations and sessions.".to_string(),
-            parameters: json!({
-                "type": "object",
-                "properties": {
-                    "name": {"type": "string", "description": "Skill name in snake_case (e.g., 'filter_test_files'). Must be unique."},
-                    "code": {"type": "string", "description": "Function/method implementation (Python 3 or JavaScript). Must define a callable named 'main'."},
-                    "language": {
-                        "type": "string",
-                        "enum": ["python3", "javascript"],
-                        "description": "Programming language for the skill."
-                    },
-                    "description": {"type": "string", "description": "Brief description of what the skill does and its use cases."},
-                    "inputs": {
-                        "type": "array",
-                        "description": "List of input parameters the skill accepts.",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "name": {"type": "string", "description": "Parameter name."},
-                                "type": {"type": "string", "description": "Parameter type (e.g., 'string', 'array', 'object')."},
-                                "description": {"type": "string", "description": "Parameter description."},
-                                "required": {"type": "boolean", "description": "Whether this parameter is required."}
-                            }
-                        }
-                    },
-                    "output": {"type": "string", "description": "Description of what the skill returns (type and format)."},
-                    "tags": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "Tags for categorizing and discovering skills (e.g., ['files', 'filtering', 'data'])."
-                    },
-                    "examples": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "Usage examples showing how to call the skill with sample input."
-                    }
-                },
-                "required": ["name", "code", "language", "description", "output"]
-            }),
-        },
-
-        FunctionDeclaration {
-            name: "load_skill".to_string(),
-            description: "Load and retrieve a saved skill by name, including its code, documentation, inputs, and examples.".to_string(),
-            parameters: json!({
-                "type": "object",
-                "properties": {
-                    "name": {"type": "string", "description": "Skill name to load (must match exactly)."}
-                },
-                "required": ["name"]
-            }),
-        },
-
-        FunctionDeclaration {
-            name: "list_skills".to_string(),
-            description: "List all available saved skills in the workspace, including metadata (name, description, tags, last modified).".to_string(),
-            parameters: json!({
-                "type": "object",
-                "properties": {}
-            }),
-        },
-
-        FunctionDeclaration {
-            name: "search_skills".to_string(),
-            description: "Search for skills by keyword, skill name, description, or tag. Returns matching skills with relevance scores.".to_string(),
-            parameters: json!({
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string", "description": "Search term to find skills (searches name, description, and tags)."},
-                    "limit": {"type": "integer", "description": "Maximum number of results to return (default: 10).", "default": 10}
-                },
-                "required": ["query"]
-            }),
         },
 
         // ============================================================

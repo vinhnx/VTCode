@@ -47,14 +47,8 @@ fn audit_tool_system_completeness() {
         // Planning and introspection
         ("update_plan", "Update internal task plan"),
         ("search_tools", "Search available tools"),
-        ("get_errors", "Get recorded errors from session"),
         ("debug_agent", "Debug agent state"),
         ("analyze_agent", "Analyze agent behavior"),
-        // Skill management
-        ("save_skill", "Save reusable skill/pattern"),
-        ("load_skill", "Load saved skill"),
-        ("list_skills", "List available skills"),
-        ("search_skills", "Search skills by name/description"),
         // Web operations
         ("web_fetch", "Fetch web page content"),
     ];
@@ -81,11 +75,6 @@ fn audit_tool_system_completeness() {
         "execute_code",
         "update_plan",
         "search_tools",
-        "save_skill",
-        "load_skill",
-        "list_skills",
-        "search_skills",
-        "get_errors",
         "debug_agent",
         "analyze_agent",
         "web_fetch",
@@ -97,7 +86,6 @@ fn audit_tool_system_completeness() {
         "run_pty_cmd",
         "search_tools",
         "execute_code",
-        "get_errors",
         "debug_agent",
         "analyze_agent",
         "read_file",
@@ -236,11 +224,7 @@ fn audit_tool_categories() {
         ("Planning & Meta", vec!["update_plan", "search_tools"]),
         (
             "Diagnostic & Introspection",
-            vec!["get_errors", "debug_agent", "analyze_agent"],
-        ),
-        (
-            "Skill Management",
-            vec!["save_skill", "load_skill", "list_skills", "search_skills"],
+            vec!["debug_agent", "analyze_agent"],
         ),
         ("Network", vec!["web_fetch"]),
     ]);
@@ -278,7 +262,6 @@ fn audit_tool_policy_distribution() {
                 "write_file",
                 "edit_file",
                 "create_file",
-                "run_pty_cmd",
                 "create_pty_session",
                 "read_pty_session",
                 "list_pty_sessions",
@@ -286,11 +269,6 @@ fn audit_tool_policy_distribution() {
                 "close_pty_session",
                 "update_plan",
                 "search_tools",
-                "save_skill",
-                "load_skill",
-                "list_skills",
-                "search_skills",
-                "get_errors",
                 "debug_agent",
                 "analyze_agent",
             ],
@@ -300,6 +278,7 @@ fn audit_tool_policy_distribution() {
             vec![
                 "delete_file",
                 "apply_patch",
+                "run_pty_cmd",
                 "send_pty_input",
                 "execute_code",
                 "web_fetch",
@@ -365,11 +344,6 @@ fn audit_acp_tool_selection_reasoning() {
         ("web_fetch", "Network access restricted in editor"),
         ("update_plan", "Internal agent feature, not for editor"),
         ("search_tools", "Metadata query, local-only use"),
-        ("save_skill", "VTCode-specific persistence"),
-        ("load_skill", "VTCode-specific feature"),
-        ("list_skills", "VTCode-specific feature"),
-        ("search_skills", "VTCode-specific feature"),
-        ("get_errors", "Internal diagnostics"),
         ("debug_agent", "Internal diagnostics"),
         ("analyze_agent", "Internal diagnostics"),
         (

@@ -1168,7 +1168,7 @@ impl ToolRegistry {
     /// This prevents accidental bypass of permission gates for arbitrary tools.
     pub fn mark_tool_preapproved(&mut self, name: &str) {
         // Allowlist of tools that can be preapproved (typically for slash commands)
-        const PREAPPROVABLE_TOOLS: &[&str] = &["debug_agent", "analyze_agent", "get_errors"];
+        const PREAPPROVABLE_TOOLS: &[&str] = &["debug_agent", "analyze_agent"];
 
         if PREAPPROVABLE_TOOLS.contains(&name) {
             self.policy_gateway.preapprove(name);

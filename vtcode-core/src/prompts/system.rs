@@ -193,7 +193,7 @@ VT Code tracks token usage in real-time with configurable thresholds:
 | MCP discovery | search_tools | Prefer before external fetches |
 | Code execution | execute_code | Filter/transform 100+ items |
 | Plan tracking | update_plan | 4+ step tasks with dependencies |
-| Debugging | get_errors, debug_agent | Build errors, diagnose behavior |
+| Debugging | debug_agent | Diagnose behavior |
 
 ### Tool Invocation Format (JSON Objects ONLY)
 **CRITICAL**: All tools use JSON objects with named parameters. Never use function call syntax.

@@ -134,24 +134,6 @@ pub(super) fn builtin_tool_registrations() -> Vec<ToolRegistration> {
             ToolRegistry::execute_code_executor,
         ),
         ToolRegistration::new(
-            "save_skill",
-            CapabilityLevel::Bash,
-            false,
-            ToolRegistry::save_skill_executor,
-        ),
-        ToolRegistration::new(
-            "load_skill",
-            CapabilityLevel::Bash,
-            false,
-            ToolRegistry::load_skill_executor,
-        ),
-        ToolRegistration::new(
-            "list_skills",
-            CapabilityLevel::Basic,
-            false,
-            ToolRegistry::list_skills_executor,
-        ),
-        ToolRegistration::new(
             tools::DEBUG_AGENT,
             CapabilityLevel::Basic,
             false,
@@ -162,18 +144,6 @@ pub(super) fn builtin_tool_registrations() -> Vec<ToolRegistration> {
             CapabilityLevel::Basic,
             false,
             ToolRegistry::analyze_agent_executor,
-        ),
-        ToolRegistration::new(
-            tools::GET_ERRORS,
-            CapabilityLevel::Basic,
-            false,
-            ToolRegistry::get_errors_executor,
-        ),
-        ToolRegistration::new(
-            "search_skills",
-            CapabilityLevel::Basic,
-            false,
-            ToolRegistry::search_skills_executor,
         ),
     ]
 }

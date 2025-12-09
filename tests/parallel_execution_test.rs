@@ -20,7 +20,7 @@ mod parallel_execution_tests {
         // - Mixed read/write tools: Sequential execution (safety)
 
         println!("Parallel execution feature implemented in AgentRunner");
-        println!("Read-only tools: list_files, read_file, grep_file, search_tools, get_errors");
+        println!("Read-only tools: list_files, read_file, grep_file, search_tools");
         println!("Execution mode: Parallel when 2+ read-only tools called together");
     }
 

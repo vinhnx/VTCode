@@ -175,7 +175,7 @@ const DEFAULT_TOOL_POLICIES: &[(&str, ToolPolicy)] = &[
     (tools::DELETE_FILE, ToolPolicy::Prompt),
     (tools::APPLY_PATCH, ToolPolicy::Prompt),
     // PTY/Terminal operations
-    (tools::RUN_PTY_CMD, ToolPolicy::Allow),
+    (tools::RUN_PTY_CMD, ToolPolicy::Prompt),
     (tools::CREATE_PTY_SESSION, ToolPolicy::Allow),
     (tools::READ_PTY_SESSION, ToolPolicy::Allow),
     (tools::LIST_PTY_SESSIONS, ToolPolicy::Allow),
@@ -187,14 +187,7 @@ const DEFAULT_TOOL_POLICIES: &[(&str, ToolPolicy)] = &[
     // Planning and meta tools
     (tools::UPDATE_PLAN, ToolPolicy::Allow),
     (tools::SEARCH_TOOLS, ToolPolicy::Allow),
-    // Skill management (non-destructive)
-    (tools::SAVE_SKILL, ToolPolicy::Allow),
-    (tools::LOAD_SKILL, ToolPolicy::Allow),
-    (tools::LIST_SKILLS, ToolPolicy::Allow),
-    (tools::SEARCH_SKILLS, ToolPolicy::Allow),
     // Diagnostic and introspection tools
-    // GET_ERRORS: Requires session state inspection (diagnostic, low risk)
-    (tools::GET_ERRORS, ToolPolicy::Allow),
     // DEBUG_AGENT: Low-level agent state inspection (diagnostic, read-only)
     (tools::DEBUG_AGENT, ToolPolicy::Allow),
     // ANALYZE_AGENT: Analyzes agent behavior patterns (diagnostic, read-only)

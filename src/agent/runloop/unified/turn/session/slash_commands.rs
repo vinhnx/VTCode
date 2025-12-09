@@ -163,32 +163,6 @@ pub async fn handle_outcome(
                 }
             }
             ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
-            // If the GET_ERRORS tool is registered, call it to get a summary of recent errors
-            if ctx.tool_registry.has_tool(tools_consts::GET_ERRORS).await {
-                ctx.tool_registry
-                    .mark_tool_preapproved(tools_consts::GET_ERRORS);
-                match ctx
-                    .tool_registry
-                    .execute_tool_ref(
-                        tools_consts::GET_ERRORS,
-                        &serde_json::json!({ "scope": "archive", "limit": 3 }),
-                    )
-                    .await
-                {
-                    Ok(value) => {
-                        ctx.renderer
-                            .line(MessageStyle::Info, "Recent errors (via get_errors):")?;
-                        ctx.renderer
-                            .line(MessageStyle::Output, &value.to_string())?;
-                    }
-                    Err(err) => {
-                        ctx.renderer.line(
-                            MessageStyle::Error,
-                            &format!("Failed to run get_errors tool: {}", err),
-                        )?;
-                    }
-                }
-            }
             Ok(SlashCommandControl::Continue)
         }
         SlashCommandOutcome::AnalyzeAgent => {
@@ -277,32 +251,6 @@ pub async fn handle_outcome(
             }
 
             ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
-            // Use GET_ERRORS to augment analysis when available
-            if ctx.tool_registry.has_tool(tools_consts::GET_ERRORS).await {
-                ctx.tool_registry
-                    .mark_tool_preapproved(tools_consts::GET_ERRORS);
-                match ctx
-                    .tool_registry
-                    .execute_tool_ref(
-                        tools_consts::GET_ERRORS,
-                        &serde_json::json!({ "scope": "archive", "limit": 5 }),
-                    )
-                    .await
-                {
-                    Ok(value) => {
-                        ctx.renderer
-                            .line(MessageStyle::Info, "get_errors analysis:")?;
-                        ctx.renderer
-                            .line(MessageStyle::Output, &value.to_string())?;
-                    }
-                    Err(err) => {
-                        ctx.renderer.line(
-                            MessageStyle::Error,
-                            &format!("Failed to run get_errors tool: {}", err),
-                        )?;
-                    }
-                }
-            }
             Ok(SlashCommandControl::Continue)
         }
         SlashCommandOutcome::ThemeChanged(theme_id) => {

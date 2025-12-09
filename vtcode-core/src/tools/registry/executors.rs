@@ -48,6 +48,7 @@ const BUILD_OUTPUT_COMMANDS: &[&str] = &[
 use super::ToolRegistry;
 
 impl ToolRegistry {
+    #[allow(dead_code)]
     pub(super) fn get_errors_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move {
             #[derive(serde::Deserialize)]
@@ -1048,6 +1049,7 @@ impl ToolRegistry {
         })
     }
 
+    #[allow(dead_code)]
     pub(super) fn save_skill_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
         let workspace_root = self.workspace_root_owned();
         Box::pin(async move {
@@ -1133,6 +1135,7 @@ impl ToolRegistry {
         })
     }
 
+    #[allow(dead_code)]
     pub(super) fn load_skill_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
         let workspace_root = self.workspace_root_owned();
         Box::pin(async move {
@@ -1164,6 +1167,7 @@ impl ToolRegistry {
         })
     }
 
+    #[allow(dead_code)]
     pub(super) fn list_skills_executor(&mut self, _args: Value) -> BoxFuture<'_, Result<Value>> {
         let workspace_root = self.workspace_root_owned();
         Box::pin(async move {
@@ -1179,6 +1183,7 @@ impl ToolRegistry {
         })
     }
 
+    #[allow(dead_code)]
     pub(super) fn search_skills_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
         let workspace_root = self.workspace_root_owned();
         Box::pin(async move {
