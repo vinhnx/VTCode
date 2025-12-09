@@ -44,6 +44,7 @@ impl IncrementalSystemPrompt {
         config_hash: u64,
         context_hash: u64,
         retry_attempts: usize,
+        context: &SystemPromptContext,
     ) -> String {
         let read_guard = self.cached_prompt.read().await;
 
@@ -65,6 +66,7 @@ impl IncrementalSystemPrompt {
             config_hash,
             context_hash,
             retry_attempts,
+            context,
         )
         .await
     }
@@ -76,6 +78,7 @@ impl IncrementalSystemPrompt {
         config_hash: u64,
         context_hash: u64,
         retry_attempts: usize,
+        context: &SystemPromptContext,
     ) -> String {
         let mut write_guard = self.cached_prompt.write().await;
 
@@ -89,7 +92,7 @@ impl IncrementalSystemPrompt {
         }
 
         // Build the new prompt
-        let new_content = self.build_prompt_content(base_system_prompt, retry_attempts);
+        let new_content = self.build_prompt_content(base_system_prompt, retry_attempts, context);
 
         // Update cache
         write_guard.content = new_content.clone();
@@ -101,17 +104,43 @@ impl IncrementalSystemPrompt {
     }
 
     /// Actually build the prompt content (this is where the logic goes)
-    fn build_prompt_content(&self, base_system_prompt: &str, retry_attempts: usize) -> String {
-        // For now, just return the base prompt, but this is where we could add
-        // retry-specific modifications, context-aware adjustments, etc.
+    fn build_prompt_content(
+        &self,
+        base_system_prompt: &str,
+        retry_attempts: usize,
+        context: &SystemPromptContext,
+    ) -> String {
+        use std::fmt::Write;
+
+        let mut prompt = String::with_capacity(base_system_prompt.len() + 128);
+        prompt.push_str(base_system_prompt);
+
         if retry_attempts > 0 {
-            format!(
-                "{}\n\nNote: This is attempt #{} at completing the task.",
-                base_system_prompt, retry_attempts
-            )
-        } else {
-            base_system_prompt.to_string()
+            let _ = writeln!(
+                prompt,
+                "\n\nNote: This is attempt #{} at completing the task.",
+                retry_attempts
+            );
         }
+
+        let has_context = context.conversation_length > 0
+            || context.tool_usage_count > 0
+            || context.error_count > 0
+            || context.token_usage_ratio > 0.0;
+
+        if has_context {
+            let _ = writeln!(prompt, "\n[Context]");
+            let _ = writeln!(prompt, "- turns: {}", context.conversation_length);
+            let _ = writeln!(prompt, "- tool_calls: {}", context.tool_usage_count);
+            let _ = writeln!(prompt, "- errors: {}", context.error_count);
+            let _ = writeln!(
+                prompt,
+                "- token_usage: {:.2}%",
+                context.token_usage_ratio * 100.0
+            );
+        }
+
+        prompt
     }
 
     /// Clear the cached prompt (useful when configuration changes)
@@ -192,13 +221,23 @@ mod tests {
     async fn test_incremental_prompt_caching() {
         let prompt_builder = IncrementalSystemPrompt::new();
         let base_prompt = "Test system prompt";
+        let context = SystemPromptContext {
+            conversation_length: 2,
+            tool_usage_count: 1,
+            error_count: 0,
+            token_usage_ratio: 0.1,
+        };
 
         // First call - should build from scratch
-        let prompt1 = prompt_builder.get_system_prompt(base_prompt, 1, 1, 0).await;
+        let prompt1 = prompt_builder
+            .get_system_prompt(base_prompt, 1, 1, 0, &context)
+            .await;
         assert_eq!(prompt1, base_prompt);
 
         // Second call with same parameters - should use cache
-        let prompt2 = prompt_builder.get_system_prompt(base_prompt, 1, 1, 0).await;
+        let prompt2 = prompt_builder
+            .get_system_prompt(base_prompt, 1, 1, 0, &context)
+            .await;
         assert_eq!(prompt2, base_prompt);
 
         // Verify cache stats
@@ -211,12 +250,22 @@ mod tests {
     async fn test_incremental_prompt_rebuild() {
         let prompt_builder = IncrementalSystemPrompt::new();
         let base_prompt = "Test system prompt";
+        let context = SystemPromptContext {
+            conversation_length: 1,
+            tool_usage_count: 0,
+            error_count: 0,
+            token_usage_ratio: 0.0,
+        };
 
         // Build initial prompt
-        let _ = prompt_builder.get_system_prompt(base_prompt, 1, 1, 0).await;
+        let _ = prompt_builder
+            .get_system_prompt(base_prompt, 1, 1, 0, &context)
+            .await;
 
         // Rebuild with different retry attempts
-        let prompt = prompt_builder.rebuild_prompt(base_prompt, 1, 1, 1).await;
+        let prompt = prompt_builder
+            .rebuild_prompt(base_prompt, 1, 1, 1, &context)
+            .await;
 
         assert!(prompt.contains("attempt #1"));
     }
