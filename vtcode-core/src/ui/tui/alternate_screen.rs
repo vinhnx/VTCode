@@ -97,8 +97,7 @@ impl AlternateScreenSession {
         // Enable keyboard enhancements if supported
         if supports_keyboard_enhancement()
             .context("failed to query keyboard enhancement support")?
-        {
-            if execute!(
+            && execute!(
                 stdout,
                 PushKeyboardEnhancementFlags(
                     KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
@@ -107,9 +106,8 @@ impl AlternateScreenSession {
                 )
             )
             .is_ok()
-            {
-                session.original_state.keyboard_enhancements_pushed = true;
-            }
+        {
+            session.original_state.keyboard_enhancements_pushed = true;
         }
 
         Ok(session)
@@ -165,31 +163,31 @@ impl AlternateScreenSession {
         // Restore in reverse order of setup
 
         // Pop keyboard enhancements
-        if self.original_state.keyboard_enhancements_pushed {
-            if let Err(e) = execute!(stdout, PopKeyboardEnhancementFlags) {
-                errors.push(format!("failed to pop keyboard enhancement flags: {}", e));
-            }
+        if self.original_state.keyboard_enhancements_pushed
+            && let Err(e) = execute!(stdout, PopKeyboardEnhancementFlags)
+        {
+            errors.push(format!("failed to pop keyboard enhancement flags: {}", e));
         }
 
         // Disable focus change
-        if self.original_state.focus_change_enabled {
-            if let Err(e) = execute!(stdout, DisableFocusChange) {
-                errors.push(format!("failed to disable focus change: {}", e));
-            }
+        if self.original_state.focus_change_enabled
+            && let Err(e) = execute!(stdout, DisableFocusChange)
+        {
+            errors.push(format!("failed to disable focus change: {}", e));
         }
 
         // Disable bracketed paste
-        if self.original_state.bracketed_paste_enabled {
-            if let Err(e) = execute!(stdout, DisableBracketedPaste) {
-                errors.push(format!("failed to disable bracketed paste: {}", e));
-            }
+        if self.original_state.bracketed_paste_enabled
+            && let Err(e) = execute!(stdout, DisableBracketedPaste)
+        {
+            errors.push(format!("failed to disable bracketed paste: {}", e));
         }
 
         // Disable raw mode
-        if self.original_state.raw_mode_enabled {
-            if let Err(e) = disable_raw_mode() {
-                errors.push(format!("failed to disable raw mode: {}", e));
-            }
+        if self.original_state.raw_mode_enabled
+            && let Err(e) = disable_raw_mode()
+        {
+            errors.push(format!("failed to disable raw mode: {}", e));
         }
 
         // Leave alternate screen

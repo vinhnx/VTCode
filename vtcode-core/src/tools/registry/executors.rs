@@ -569,24 +569,23 @@ impl ToolRegistry {
             }
 
             // Validate glob_pattern for security
-            if let Some(glob_pattern) = &payload.glob_pattern {
-                if glob_pattern.contains("..") || glob_pattern.starts_with('/') {
-                    return Err(anyhow!(
-                        "glob_pattern must be a relative path and cannot contain '..' or start with '/'"
-                    ));
-                }
+            if let Some(glob_pattern) = &payload.glob_pattern
+                && (glob_pattern.contains("..") || glob_pattern.starts_with('/'))
+            {
+                return Err(anyhow!(
+                    "glob_pattern must be a relative path and cannot contain '..' or start with '/'"
+                ));
             }
 
             // Validate type_pattern for basic security (only allow alphanumeric, hyphens, underscores)
-            if let Some(type_pattern) = &payload.type_pattern {
-                if !type_pattern
+            if let Some(type_pattern) = &payload.type_pattern
+                && !type_pattern
                     .chars()
                     .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
-                {
-                    return Err(anyhow!(
-                        "type_pattern can only contain alphanumeric characters, hyphens, and underscores"
-                    ));
-                }
+            {
+                return Err(anyhow!(
+                    "type_pattern can only contain alphanumeric characters, hyphens, and underscores"
+                ));
             }
 
             let input = GrepSearchInput {
@@ -644,18 +643,18 @@ impl ToolRegistry {
                 let mut dirs = Vec::new();
                 if let Ok(entries) = std::fs::read_dir(workspace_root) {
                     for entry in entries.flatten() {
-                        if entry.path().is_dir() {
-                            if let Some(name) = entry.file_name().to_str() {
-                                // Skip hidden directories and common non-code dirs
-                                if !name.starts_with('.')
-                                    && name != "target"
-                                    && name != "node_modules"
-                                    && name != "dist"
-                                    && name != "__pycache__"
-                                    && name != "build"
-                                {
-                                    dirs.push(name.to_string());
-                                }
+                        if entry.path().is_dir()
+                            && let Some(name) = entry.file_name().to_str()
+                        {
+                            // Skip hidden directories and common non-code dirs
+                            if !name.starts_with('.')
+                                && name != "target"
+                                && name != "node_modules"
+                                && name != "dist"
+                                && name != "__pycache__"
+                                && name != "build"
+                            {
+                                dirs.push(name.to_string());
                             }
                         }
                     }
@@ -947,7 +946,7 @@ impl ToolRegistry {
                     use std::process::Command;
                     use tempfile::NamedTempFile;
 
-                    let result = match language {
+                    match language {
                         Language::Python3 => {
                             let output = Command::new("python3")
                                 .arg("-c")
@@ -986,9 +985,7 @@ impl ToolRegistry {
                                 json_result: None,
                             }
                         }
-                    };
-
-                    result
+                    }
                 }
             };
 
@@ -1407,29 +1404,24 @@ impl ToolRegistry {
                                 // Parse context to find at which line to apply the changes
                                 // Format is typically: @@ -old_start,old_count +new_start,new_count @@
                                 let parts: Vec<&str> = ctx.split_whitespace().collect();
-                                if parts.len() >= 3 {
-                                    if let Some(old_part) = parts.get(1) {
-                                        if let Some(range_str) = old_part.strip_prefix('-') {
-                                            let range_parts: Vec<&str> =
-                                                range_str.split(',').collect();
-                                            if let (Some(start_str), Some(_count_str)) =
-                                                (range_parts.first(), range_parts.get(1))
-                                            {
-                                                if let Ok(start_line) = start_str.parse::<usize>() {
-                                                    let start_idx = start_line.saturating_sub(1); // Convert to 0-indexed
+                                if parts.len() >= 3
+                                    && let Some(old_part) = parts.get(1)
+                                    && let Some(range_str) = old_part.strip_prefix('-')
+                                {
+                                    let range_parts: Vec<&str> = range_str.split(',').collect();
+                                    if let (Some(start_str), Some(_count_str)) =
+                                        (range_parts.first(), range_parts.get(1))
+                                        && let Ok(start_line) = start_str.parse::<usize>()
+                                    {
+                                        let start_idx = start_line.saturating_sub(1); // Convert to 0-indexed
 
-                                                    // Add lines from old content up to this chunk position
-                                                    while current_old_line_idx < start_idx
-                                                        && current_old_line_idx < old_lines.len()
-                                                    {
-                                                        new_lines.push(
-                                                            old_lines[current_old_line_idx]
-                                                                .to_string(),
-                                                        );
-                                                        current_old_line_idx += 1;
-                                                    }
-                                                }
-                                            }
+                                        // Add lines from old content up to this chunk position
+                                        while current_old_line_idx < start_idx
+                                            && current_old_line_idx < old_lines.len()
+                                        {
+                                            new_lines
+                                                .push(old_lines[current_old_line_idx].to_string());
+                                            current_old_line_idx += 1;
                                         }
                                     }
                                 }
@@ -1742,10 +1734,10 @@ impl ToolRegistry {
 
         loop {
             // Read any available output
-            if let Ok(Some(new_output)) = self.pty_manager().read_session_output(session_id, true) {
-                if !new_output.is_empty() {
-                    output.push_str(&new_output);
-                }
+            if let Ok(Some(new_output)) = self.pty_manager().read_session_output(session_id, true)
+                && !new_output.is_empty()
+            {
+                output.push_str(&new_output);
             }
 
             // Check if session has completed
@@ -2087,10 +2079,10 @@ impl ToolRegistry {
         }
 
         // Add the input that was sent as stdin (if it's valid UTF-8)
-        if !input.buffer.is_empty() {
-            if let Ok(input_str) = std::str::from_utf8(&input.buffer) {
-                response.insert("stdin".to_string(), Value::String(input_str.to_string()));
-            }
+        if !input.buffer.is_empty()
+            && let Ok(input_str) = std::str::from_utf8(&input.buffer)
+        {
+            response.insert("stdin".to_string(), Value::String(input_str.to_string()));
         }
 
         // Add status information
@@ -2283,13 +2275,13 @@ fn parse_command_parts(
     if parts.is_empty() {
         let mut entries: Vec<(usize, String)> = Vec::with_capacity(50); // Pre-allocate for typical patch size
         for (k, v) in payload.iter() {
-            if let Some(idx_str) = k.strip_prefix("command.") {
-                if let Ok(idx) = idx_str.parse::<usize>() {
-                    let Some(seg) = v.as_str() else {
-                        return Err(anyhow!("command array must contain only strings"));
-                    };
-                    entries.push((idx, seg.to_string()));
-                }
+            if let Some(idx_str) = k.strip_prefix("command.")
+                && let Ok(idx) = idx_str.parse::<usize>()
+            {
+                let Some(seg) = v.as_str() else {
+                    return Err(anyhow!("command array must contain only strings"));
+                };
+                entries.push((idx, seg.to_string()));
             }
         }
         if !entries.is_empty() {
@@ -2473,22 +2465,22 @@ fn snapshot_to_map(
     response.insert("rows".to_string(), Value::from(rows));
     response.insert("cols".to_string(), Value::from(cols));
 
-    if options.include_screen {
-        if let Some(screen) = screen_contents {
-            response.insert(
-                "screen_contents".to_string(),
-                Value::String(strip_ansi(&screen)),
-            );
-        }
+    if options.include_screen
+        && let Some(screen) = screen_contents
+    {
+        response.insert(
+            "screen_contents".to_string(),
+            Value::String(strip_ansi(&screen)),
+        );
     }
 
-    if options.include_scrollback {
-        if let Some(scrollback) = scrollback {
-            response.insert(
-                "scrollback".to_string(),
-                Value::String(strip_ansi(&scrollback)),
-            );
-        }
+    if options.include_scrollback
+        && let Some(scrollback) = scrollback
+    {
+        response.insert(
+            "scrollback".to_string(),
+            Value::String(strip_ansi(&scrollback)),
+        );
     }
 
     response
@@ -3042,16 +3034,18 @@ fn build_ephemeral_pty_response(
     });
 
     // Add CRITICAL signals for exit code 127 to ABSOLUTELY PREVENT retry loops
-    if completed && code == Some(127) {
-        if let Value::Object(ref mut obj) = response {
-            // Add multiple explicit "STOP" signals to prevent agent from trying workarounds
-            obj.insert("fatal_error".to_string(), Value::Bool(true));
-            obj.insert("do_not_attempt_workarounds".to_string(), Value::Bool(true));
-            obj.insert("do_not_retry".to_string(), Value::Bool(true));
-            obj.insert("final".to_string(), Value::Bool(true));
+    if completed
+        && code == Some(127)
+        && let Value::Object(ref mut obj) = response
+    {
+        // Add multiple explicit "STOP" signals to prevent agent from trying workarounds
+        obj.insert("fatal_error".to_string(), Value::Bool(true));
+        obj.insert("do_not_attempt_workarounds".to_string(), Value::Bool(true));
+        obj.insert("do_not_retry".to_string(), Value::Bool(true));
+        obj.insert("final".to_string(), Value::Bool(true));
 
-            // CRITICAL: Direct instruction to agent not to retry
-            obj.insert(
+        // CRITICAL: Direct instruction to agent not to retry
+        obj.insert(
                 "agent_instruction".to_string(),
                 Value::String(
                     "AGENT: Do NOT run any more commands related to this tool. Do NOT try different shells. \
@@ -3062,28 +3056,28 @@ fn build_ephemeral_pty_response(
                 ),
             );
 
-            // Comprehensive explanation of why retrying won't work
-            obj.insert(
-                "critical_note".to_string(),
-                Value::String(
-                    "EXIT CODE 127 IS FINAL. The operating system shell searched the entire PATH \
+        // Comprehensive explanation of why retrying won't work
+        obj.insert(
+            "critical_note".to_string(),
+            Value::String(
+                "EXIT CODE 127 IS FINAL. The operating system shell searched the entire PATH \
                      and could not find this executable. This is NOT a shell compatibility issue. \
                      Retrying with bash, sh, zsh, or different escaping WILL FAIL. \
                      The ONLY solutions are: (1) Install the tool, (2) Add its directory to PATH, \
                      (3) Use a different tool. Read the 'output' field for specific instructions."
-                        .to_string(),
-                ),
-            );
-            obj.insert(
-                "suggestion".to_string(),
-                Value::String(
-                    "DO NOT RETRY with: different shells, diagnostic commands (which/--version), \
+                    .to_string(),
+            ),
+        );
+        obj.insert(
+            "suggestion".to_string(),
+            Value::String(
+                "DO NOT RETRY with: different shells, diagnostic commands (which/--version), \
                      shell wrappers (bash -lc, sh -lc), or any command variations. \
                      This will cause an infinite loop of exit code 127 errors."
-                        .to_string(),
-                ),
-            );
-            obj.insert(
+                    .to_string(),
+            ),
+        );
+        obj.insert(
                 "error_explanation".to_string(),
                 Value::String(
                     "Exit code 127: Command not found. The OS searched PATH. The tool is not installed \
@@ -3091,7 +3085,6 @@ fn build_ephemeral_pty_response(
                         .to_string(),
                 ),
             );
-        }
     }
 
     response
@@ -3187,10 +3180,8 @@ fn extract_build_errors_and_summary(output: &str, max_tokens: usize) -> String {
                     extracted.push(j);
                 }
             }
-        } else if is_summary {
-            if !extracted.contains(&i) {
-                extracted.push(i);
-            }
+        } else if is_summary && !extracted.contains(&i) {
+            extracted.push(i);
         }
 
         i += 1;
@@ -3212,11 +3203,11 @@ fn extract_build_errors_and_summary(output: &str, max_tokens: usize) -> String {
     let mut last_idx: Option<usize> = None;
 
     for &idx in &extracted {
-        if let Some(last) = last_idx {
-            if idx > last + 1 {
-                let skipped = idx - last - 1;
-                let _ = writeln!(result, "\n[... {} lines skipped ...]", skipped);
-            }
+        if let Some(last) = last_idx
+            && idx > last + 1
+        {
+            let skipped = idx - last - 1;
+            let _ = writeln!(result, "\n[... {} lines skipped ...]", skipped);
         }
         result.push_str(lines[idx]);
         result.push('\n');
@@ -3344,30 +3335,30 @@ fn normalize_natural_language_command(command: &str) -> String {
     ];
     let lowered = trimmed.to_ascii_lowercase();
     for connector in TRAILING_CONNECTORS {
-        if let Some(idx) = lowered.rfind(connector) {
-            if idx > 0 {
-                let candidate = trimmed[..idx].trim_end();
-                if !candidate.is_empty() {
-                    return candidate.to_string();
-                }
+        if let Some(idx) = lowered.rfind(connector)
+            && idx > 0
+        {
+            let candidate = trimmed[..idx].trim_end();
+            if !candidate.is_empty() {
+                return candidate.to_string();
             }
         }
     }
 
     // Pattern: "git <subcommand> on <path>" -> "git <subcommand> <path>"
     // Examples: "git diff on file.rs", "git log on src/", "git status on ."
-    if let Some(git_idx) = trimmed.find("git ") {
-        if let Some(on_idx) = trimmed.find(" on ") {
-            // Ensure "on" comes after "git" and is not part of another word
-            if on_idx > git_idx {
-                let before_on = &trimmed[..on_idx];
-                let after_on = &trimmed[on_idx + 4..]; // Skip " on "
+    if let Some(git_idx) = trimmed.find("git ")
+        && let Some(on_idx) = trimmed.find(" on ")
+    {
+        // Ensure "on" comes after "git" and is not part of another word
+        if on_idx > git_idx {
+            let before_on = &trimmed[..on_idx];
+            let after_on = &trimmed[on_idx + 4..]; // Skip " on "
 
-                // Only normalize if "on" is followed by a path-like argument
-                // (not empty and doesn't look like another command)
-                if !after_on.trim().is_empty() && !after_on.trim().starts_with('-') {
-                    return format!("{} {}", before_on, after_on);
-                }
+            // Only normalize if "on" is followed by a path-like argument
+            // (not empty and doesn't look like another command)
+            if !after_on.trim().is_empty() && !after_on.trim().starts_with('-') {
+                return format!("{} {}", before_on, after_on);
             }
         }
     }
@@ -3419,10 +3410,10 @@ fn strip_markdown_code_formatting(input: &str) -> String {
 }
 
 fn should_use_windows_command_tokenizer(shell_hint: Option<&str>) -> bool {
-    if let Some(shell) = shell_hint {
-        if is_windows_shell(shell) {
-            return true;
-        }
+    if let Some(shell) = shell_hint
+        && is_windows_shell(shell)
+    {
+        return true;
     }
 
     cfg!(windows)

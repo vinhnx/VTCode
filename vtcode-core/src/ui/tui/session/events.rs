@@ -12,10 +12,10 @@ pub(super) fn handle_event(
 ) {
     match event {
         CrosstermEvent::Key(key) => {
-            if matches!(key.kind, KeyEventKind::Press) {
-                if let Some(outbound) = process_key(session, key) {
-                    session.emit_inline_event(&outbound, events, callback);
-                }
+            if matches!(key.kind, KeyEventKind::Press)
+                && let Some(outbound) = process_key(session, key)
+            {
+                session.emit_inline_event(&outbound, events, callback);
             }
         }
         CrosstermEvent::Mouse(MouseEvent { kind, .. }) => match kind {
@@ -29,12 +29,12 @@ pub(super) fn handle_event(
                 session.check_file_reference_trigger();
                 session.check_prompt_reference_trigger();
                 session.mark_dirty();
-            } else if let Some(modal) = session.modal.as_mut() {
-                if let (Some(list), Some(search)) = (modal.list.as_mut(), modal.search.as_mut()) {
-                    search.insert(&content);
-                    list.apply_search(&search.query);
-                    session.mark_dirty();
-                }
+            } else if let Some(modal) = session.modal.as_mut()
+                && let (Some(list), Some(search)) = (modal.list.as_mut(), modal.search.as_mut())
+            {
+                search.insert(&content);
+                list.apply_search(&search.query);
+                session.mark_dirty();
             }
         }
         CrosstermEvent::Resize(_, rows) => {
@@ -159,14 +159,14 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             }
 
             if session.file_palette_active {
-                if let Some(palette) = session.file_palette.as_ref() {
-                    if let Some(entry) = palette.get_selected() {
-                        let file_path = entry.path.clone();
-                        session.insert_file_reference(&file_path);
-                        session.close_file_palette();
-                        session.mark_dirty();
-                        return Some(InlineEvent::FileSelected(file_path));
-                    }
+                if let Some(palette) = session.file_palette.as_ref()
+                    && let Some(entry) = palette.get_selected()
+                {
+                    let file_path = entry.path.clone();
+                    session.insert_file_reference(&file_path);
+                    session.close_file_palette();
+                    session.mark_dirty();
+                    return Some(InlineEvent::FileSelected(file_path));
                 }
                 return None;
             }

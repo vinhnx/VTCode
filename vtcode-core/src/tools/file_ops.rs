@@ -265,7 +265,7 @@ impl FileOpsTool {
                     sample_names.join(", ")
                 )
             } else {
-                format!("Empty directory")
+                "Empty directory".to_string()
             };
 
             Some(format!(
@@ -378,13 +378,13 @@ impl FileOpsTool {
 
         // Add overflow indication if we found more items than max_items
         let mut result = self.paginate_and_format(items, count, input, "recursive", Some(pattern));
-        if total_found > input.max_items {
-            if let Some(obj) = result.as_object_mut() {
-                obj.insert(
-                    "overflow".to_string(),
-                    json!(format!("[+{} more items]", total_found - input.max_items)),
-                );
-            }
+        if total_found > input.max_items
+            && let Some(obj) = result.as_object_mut()
+        {
+            obj.insert(
+                "overflow".to_string(),
+                json!(format!("[+{} more items]", total_found - input.max_items)),
+            );
         }
         Ok(result)
     }
@@ -809,13 +809,11 @@ impl FileOpsTool {
         output["sorted_by"] = json!("size_desc");
 
         // Add overflow indication if we have more items than max_items
-        if has_overflow {
-            if let Some(obj) = output.as_object_mut() {
-                obj.insert(
-                    "overflow".to_string(),
-                    json!(format!("[+{} more items]", total_entries - effective_max)),
-                );
-            }
+        if has_overflow && let Some(obj) = output.as_object_mut() {
+            obj.insert(
+                "overflow".to_string(),
+                json!(format!("[+{} more items]", total_entries - effective_max)),
+            );
         }
 
         let note = format!(
@@ -1208,10 +1206,10 @@ impl FileOpsTool {
             "bytes_written": input.content.len()
         });
 
-        if let Some(preview) = diff_preview {
-            if let Some(object) = response.as_object_mut() {
-                object.insert("diff_preview".to_string(), preview);
-            }
+        if let Some(preview) = diff_preview
+            && let Some(object) = response.as_object_mut()
+        {
+            object.insert("diff_preview".to_string(), preview);
         }
 
         Ok(response)

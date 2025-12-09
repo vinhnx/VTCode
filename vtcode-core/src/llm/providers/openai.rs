@@ -394,16 +394,12 @@ impl OpenAIProvider {
                     }
                     "shell" => {
                         // For shell, treat as function tool with flat format
-                        if let Some(func) = &tool.function {
-                            Some(json!({
+                        tool.function.as_ref().map(|func| json!({
                                 "type": "function",
                                 "name": &func.name,
                                 "description": &func.description,
                                 "parameters": &func.parameters
                             }))
-                        } else {
-                            None
-                        }
                     }
                     "custom" => {
                         // GPT-5 custom tool - use custom format
@@ -427,8 +423,7 @@ impl OpenAIProvider {
                         if has_builtin_apply_patch {
                             return None;
                         }
-                        if let Some(grammar) = &tool.grammar {
-                            Some(json!({
+                        tool.grammar.as_ref().map(|grammar| json!({
                                 "type": "custom",
                                 "name": "apply_patch_grammar",
                                 "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool.",
@@ -438,9 +433,6 @@ impl OpenAIProvider {
                                     "definition": &grammar.definition
                                 }
                             }))
-                        } else {
-                            None
-                        }
                     }
                     _ => {
                         // Unknown tool type - treat as function tool with flat format

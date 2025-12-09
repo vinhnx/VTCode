@@ -96,11 +96,11 @@ fn agent_prefix_spans(
         ));
     }
 
-    if let Some(label) = &labels.agent {
-        if !label.is_empty() {
-            let label_style = ratatui_style_from_inline(&prefix_style_fn(line), theme.foreground);
-            spans.push(Span::styled(label.clone(), label_style));
-        }
+    if let Some(label) = &labels.agent
+        && !label.is_empty()
+    {
+        let label_style = ratatui_style_from_inline(&prefix_style_fn(line), theme.foreground);
+        spans.push(Span::styled(label.clone(), label_style));
     }
 
     spans

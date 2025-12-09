@@ -365,22 +365,22 @@ impl TreeSitterAnalyzer {
                             documentation: None,
                         });
                     }
-                } else if kind == "variable_assignment" {
-                    if let Some(name_node) = self.find_child_by_type(node, "word") {
-                        let name = &source_code[name_node.start_byte()..name_node.end_byte()];
-                        symbols.push(SymbolInfo {
-                            name: name.to_string(),
-                            kind: SymbolKind::Variable,
-                            position: Position {
-                                row: node.start_position().row,
-                                column: node.start_position().column,
-                                byte_offset: node.start_byte(),
-                            },
-                            scope: parent_scope.clone(),
-                            signature: None,
-                            documentation: None,
-                        });
-                    }
+                } else if kind == "variable_assignment"
+                    && let Some(name_node) = self.find_child_by_type(node, "word")
+                {
+                    let name = &source_code[name_node.start_byte()..name_node.end_byte()];
+                    symbols.push(SymbolInfo {
+                        name: name.to_string(),
+                        kind: SymbolKind::Variable,
+                        position: Position {
+                            row: node.start_position().row,
+                            column: node.start_position().column,
+                            byte_offset: node.start_byte(),
+                        },
+                        scope: parent_scope.clone(),
+                        signature: None,
+                        documentation: None,
+                    });
                 }
             }
             _ => {
@@ -428,12 +428,8 @@ impl TreeSitterAnalyzer {
         type_name: &str,
     ) -> Option<tree_sitter::Node<'a>> {
         let mut cursor = node.walk();
-        for child in node.children(&mut cursor) {
-            if child.kind() == type_name {
-                return Some(child);
-            }
-        }
-        None
+        node.children(&mut cursor)
+            .find(|&child| child.kind() == type_name)
     }
 
     /// Extract dependencies from a syntax tree

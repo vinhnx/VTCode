@@ -87,10 +87,10 @@ pub(crate) fn compute_extra_search_paths(
     let mut seen = HashSet::new();
 
     for entry in entries {
-        if let Some(path) = expand_entry(entry, workspace_root) {
-            if seen.insert(path.clone()) {
-                results.push(path);
-            }
+        if let Some(path) = expand_entry(entry, workspace_root)
+            && seen.insert(path.clone())
+        {
+            results.push(path);
         }
     }
 

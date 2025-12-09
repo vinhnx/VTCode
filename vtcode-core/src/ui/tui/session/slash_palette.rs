@@ -45,10 +45,10 @@ pub fn command_range(input: &str, cursor: usize) -> Option<SlashCommandRange> {
         }
     }
 
-    if let Some(range) = active_range {
-        if range.end > range.start {
-            return Some(range);
-        }
+    if let Some(range) = active_range
+        && range.end > range.start
+    {
+        return Some(range);
     }
 
     last_range.filter(|range| range.end > range.start)
@@ -197,21 +197,22 @@ impl SlashPalette {
             .strip_prefix(PROMPT_INVOKE_PREFIX)
             .or_else(|| prefix.strip_prefix(LEGACY_PROMPT_INVOKE_PREFIX))
         {
-            if let Some(ref registry) = self.custom_prompts {
-                if registry.enabled() && !registry.is_empty() {
-                    let normalized = normalize_query(search_part);
+            if let Some(ref registry) = self.custom_prompts
+                && registry.enabled()
+                && !registry.is_empty()
+            {
+                let normalized = normalize_query(search_part);
 
-                    // Find matching custom prompts
-                    for prompt in registry.iter() {
-                        if search_part.is_empty()
-                            || prompt.name.to_lowercase().starts_with(&normalized)
-                            || prompt
-                                .description
-                                .as_ref()
-                                .is_some_and(|desc| desc.to_lowercase().contains(&normalized))
-                        {
-                            new_suggestions.push(SlashPaletteSuggestion::Custom(prompt.clone()));
-                        }
+                // Find matching custom prompts
+                for prompt in registry.iter() {
+                    if search_part.is_empty()
+                        || prompt.name.to_lowercase().starts_with(&normalized)
+                        || prompt
+                            .description
+                            .as_ref()
+                            .is_some_and(|desc| desc.to_lowercase().contains(&normalized))
+                    {
+                        new_suggestions.push(SlashPaletteSuggestion::Custom(prompt.clone()));
                     }
                 }
             }
@@ -223,14 +224,15 @@ impl SlashPalette {
                 new_suggestions.push(SlashPaletteSuggestion::Static(command));
             }
 
-            if let Some(ref registry) = self.custom_prompts {
-                if registry.enabled() && !registry.is_empty() {
-                    new_suggestions.extend(
-                        registry
-                            .iter()
-                            .map(|p| SlashPaletteSuggestion::Custom(p.clone())),
-                    );
-                }
+            if let Some(ref registry) = self.custom_prompts
+                && registry.enabled()
+                && !registry.is_empty()
+            {
+                new_suggestions.extend(
+                    registry
+                        .iter()
+                        .map(|p| SlashPaletteSuggestion::Custom(p.clone())),
+                );
             }
         } else {
             // Handle regular slash commands

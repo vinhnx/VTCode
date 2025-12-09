@@ -87,11 +87,11 @@ impl FileColorizer {
         }
 
         // For extension patterns, also try general file type
-        if key.starts_with("*.") {
-            if let Some(style) = self.ls_colors_map.get("fi") {
-                // regular file
-                return Some(*style);
-            }
+        if key.starts_with("*.")
+            && let Some(style) = self.ls_colors_map.get("fi")
+        {
+            // regular file
+            return Some(*style);
         }
 
         None
@@ -108,15 +108,14 @@ impl FileColorizer {
         }
 
         // Check for common executable patterns
-        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-            if name.ends_with(".sh")
+        if let Some(name) = path.file_name().and_then(|n| n.to_str())
+            && (name.ends_with(".sh")
                 || name.ends_with(".py")
                 || name.ends_with(".rb")
                 || name.ends_with(".pl")
-                || name.ends_with(".php")
-            {
-                return "ex".to_string(); // executable
-            }
+                || name.ends_with(".php"))
+        {
+            return "ex".to_string(); // executable
         }
 
         // Check for special file types based on name

@@ -34,6 +34,12 @@ pub struct SearchMetrics {
     expensive_threshold: usize,
 }
 
+impl Default for SearchMetrics {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SearchMetrics {
     /// Create new search metrics tracker
     pub fn new() -> Self {

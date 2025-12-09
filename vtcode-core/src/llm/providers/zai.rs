@@ -112,30 +112,29 @@ impl ZAIProvider {
             });
             let mut skip_message = false;
 
-            if msg.role == MessageRole::Assistant {
-                if let Some(tool_calls) = &msg.tool_calls {
-                    if !tool_calls.is_empty() {
-                        let tool_calls_json: Vec<Value> = tool_calls
-                            .iter()
-                            .filter_map(|tc| {
-                                if let Some(ref func) = tc.function {
-                                    active_tool_call_ids.insert(tc.id.clone());
-                                    Some(json!({
-                                        "id": tc.id,
-                                        "type": "function",
-                                        "function": {
-                                            "name": func.name,
-                                            "arguments": func.arguments,
-                                        }
-                                    }))
-                                } else {
-                                    None
+            if msg.role == MessageRole::Assistant
+                && let Some(tool_calls) = &msg.tool_calls
+                && !tool_calls.is_empty()
+            {
+                let tool_calls_json: Vec<Value> = tool_calls
+                    .iter()
+                    .filter_map(|tc| {
+                        if let Some(ref func) = tc.function {
+                            active_tool_call_ids.insert(tc.id.clone());
+                            Some(json!({
+                                "id": tc.id,
+                                "type": "function",
+                                "function": {
+                                    "name": func.name,
+                                    "arguments": func.arguments,
                                 }
-                            })
-                            .collect();
-                        message["tool_calls"] = Value::Array(tool_calls_json);
-                    }
-                }
+                            }))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                message["tool_calls"] = Value::Array(tool_calls_json);
             }
 
             if msg.role == MessageRole::Tool {
@@ -174,10 +173,10 @@ impl ZAIProvider {
             payload["temperature"] = json!(temperature);
         }
 
-        if let Some(tools) = &request.tools {
-            if let Some(serialized) = serialize_tools_openai_format(tools) {
-                payload["tools"] = Value::Array(serialized);
-            }
+        if let Some(tools) = &request.tools
+            && let Some(serialized) = serialize_tools_openai_format(tools)
+        {
+            payload["tools"] = Value::Array(serialized);
         }
 
         if let Some(choice) = &request.tool_choice {

@@ -84,12 +84,12 @@ impl CommandTool {
         }
 
         // Require explicit confirmation for high-risk operations even if policy allows them
-        if is_risky_command(&command) && !confirm_ok {
+        if is_risky_command(command) && !confirm_ok {
             return Err(anyhow!(
                 "Command appears destructive; set the `confirm` field to true to proceed."
             ));
         }
-        if is_risky_command(&command) && confirm_ok {
+        if is_risky_command(command) && confirm_ok {
             // Record audit for the explicitly confirmed destructive command
             log_audit_for_command(
                 &format_command(command),

@@ -49,10 +49,10 @@ impl ToolPolicyGateway {
         available.sort();
         available.dedup();
 
-        if let Some(ref mut policy) = self.tool_policy {
-            if let Err(err) = policy.update_available_tools(available).await {
-                eprintln!("Warning: Failed to update tool policies: {}", err);
-            }
+        if let Some(ref mut policy) = self.tool_policy
+            && let Err(err) = policy.update_available_tools(available).await
+        {
+            eprintln!("Warning: Failed to update tool policies: {}", err);
         }
     }
 

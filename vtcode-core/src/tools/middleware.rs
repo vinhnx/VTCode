@@ -270,38 +270,36 @@ impl Middleware for CachingMiddleware {
         let key = Self::cache_key(&request.tool_name, &request.arguments);
 
         // Check cache and staleness
-        if let Ok(cache) = self.cache.read() {
-            if let Some(entry) = cache.get(&key) {
-                if !self.is_stale(entry) {
-                    return MiddlewareResult {
-                        success: true,
-                        result: Some((*entry.value).clone()),
-                        error: None,
-                        metadata: ExecutionMetadata {
-                            from_cache: true,
-                            layers_executed: vec![LAYER_CACHING.into()],
-                            ..Default::default()
-                        },
-                    };
-                }
-            }
+        if let Ok(cache) = self.cache.read()
+            && let Some(entry) = cache.get(&key)
+            && !self.is_stale(entry)
+        {
+            return MiddlewareResult {
+                success: true,
+                result: Some((*entry.value).clone()),
+                error: None,
+                metadata: ExecutionMetadata {
+                    from_cache: true,
+                    layers_executed: vec![LAYER_CACHING.into()],
+                    ..Default::default()
+                },
+            };
         }
 
         // Execute and cache result
         let mut result = next(request);
 
-        if result.success {
-            if let Some(ref output) = result.result {
-                if let Ok(mut cache) = self.cache.write() {
-                    cache.insert(
-                        key,
-                        CacheEntry {
-                            value: Arc::new(output.clone()),
-                            timestamp: std::time::Instant::now(),
-                        },
-                    );
-                }
-            }
+        if result.success
+            && let Some(ref output) = result.result
+            && let Ok(mut cache) = self.cache.write()
+        {
+            cache.insert(
+                key,
+                CacheEntry {
+                    value: Arc::new(output.clone()),
+                    timestamp: std::time::Instant::now(),
+                },
+            );
         }
 
         result.metadata.layers_executed.push(LAYER_CACHING.into());

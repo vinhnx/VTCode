@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
 /// Configuration for the improvements system
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ImprovementsConfig {
     /// Similarity scoring configuration
     pub similarity: SimilarityConfig,
@@ -138,19 +138,6 @@ pub struct FallbackConfig {
 
     /// Enable exponential backoff
     pub enable_exponential_backoff: bool,
-}
-
-impl Default for ImprovementsConfig {
-    fn default() -> Self {
-        Self {
-            similarity: SimilarityConfig::default(),
-            time_decay: TimeDecayConfig::default(),
-            patterns: PatternConfig::default(),
-            cache: CacheConfig::default(),
-            context: ContextConfig::default(),
-            fallback: FallbackConfig::default(),
-        }
-    }
 }
 
 impl Default for SimilarityConfig {

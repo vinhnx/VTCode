@@ -64,6 +64,12 @@ pub struct CodeNavigator {
     position_map: HashMap<Position, SymbolInfo>,
 }
 
+impl Default for CodeNavigator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CodeNavigator {
     pub fn new() -> Self {
         Self {
@@ -301,11 +307,7 @@ impl NavigationUtils {
 
     /// Get the path from root to a specific node
     pub fn get_node_path(root: &SyntaxNode, target: &SyntaxNode) -> Vec<String> {
-        fn traverse<'a>(
-            current: &'a SyntaxNode,
-            target: &SyntaxNode,
-            path: &mut Vec<String>,
-        ) -> bool {
+        fn traverse(current: &SyntaxNode, target: &SyntaxNode, path: &mut Vec<String>) -> bool {
             path.push(current.kind.clone());
             if std::ptr::eq(current, target) {
                 return true;
@@ -329,11 +331,7 @@ impl NavigationUtils {
 
     /// Calculate distance between two positions
     pub fn calculate_distance(pos1: &Position, pos2: &Position) -> usize {
-        if pos1.byte_offset < pos2.byte_offset {
-            pos2.byte_offset - pos1.byte_offset
-        } else {
-            pos1.byte_offset - pos2.byte_offset
-        }
+        pos2.byte_offset.abs_diff(pos1.byte_offset)
     }
 
     /// Find the nearest symbol to a position

@@ -265,39 +265,39 @@ impl ResultScorer for GrepScorer {
         match result {
             Value::Object(map) => {
                 // Count matches
-                if let Some(matches) = map.get("matches") {
-                    if let Some(count) = matches.as_array() {
-                        metadata.result_count = count.len();
+                if let Some(matches) = map.get("matches")
+                    && let Some(count) = matches.as_array()
+                {
+                    metadata.result_count = count.len();
 
-                        // High confidence if specific matches
-                        metadata.confidence = if count.len() > 5 {
-                            0.85
-                        } else if !count.is_empty() {
-                            0.80
-                        } else {
-                            1.0 // High confidence in "no matches"
-                        };
+                    // High confidence if specific matches
+                    metadata.confidence = if count.len() > 5 {
+                        0.85
+                    } else if !count.is_empty() {
+                        0.80
+                    } else {
+                        1.0 // High confidence in "no matches"
+                    };
 
-                        metadata.relevance = 0.75; // Grep results are usually relevant
+                    metadata.relevance = 0.75; // Grep results are usually relevant
 
-                        metadata.completeness = if count.len() < 1000 {
-                            ResultCompleteness::Complete
-                        } else {
-                            ResultCompleteness::Partial
-                        };
+                    metadata.completeness = if count.len() < 1000 {
+                        ResultCompleteness::Complete
+                    } else {
+                        ResultCompleteness::Partial
+                    };
 
-                        // Lower false positive chance for specific patterns
-                        metadata.false_positive_likelihood = 0.05;
-                    }
+                    // Lower false positive chance for specific patterns
+                    metadata.false_positive_likelihood = 0.05;
                 }
 
                 // Track line count
-                if let Some(lines) = map.get("line_count") {
-                    if let Some(n) = lines.as_u64() {
-                        metadata
-                            .tool_metrics
-                            .insert("line_count".to_string(), Value::Number(n.into()));
-                    }
+                if let Some(lines) = map.get("line_count")
+                    && let Some(n) = lines.as_u64()
+                {
+                    metadata
+                        .tool_metrics
+                        .insert("line_count".to_string(), Value::Number(n.into()));
                 }
             }
             Value::Array(arr) => {
@@ -328,17 +328,17 @@ impl ResultScorer for FindScorer {
 
         match result {
             Value::Object(map) => {
-                if let Some(files) = map.get("files") {
-                    if let Some(file_arr) = files.as_array() {
-                        metadata.result_count = file_arr.len();
-                        metadata.confidence = if file_arr.is_empty() {
-                            1.0 // High confidence in "no files"
-                        } else {
-                            0.90 // Very high confidence in file paths
-                        };
-                        metadata.relevance = 0.80;
-                        metadata.completeness = ResultCompleteness::Complete;
-                    }
+                if let Some(files) = map.get("files")
+                    && let Some(file_arr) = files.as_array()
+                {
+                    metadata.result_count = file_arr.len();
+                    metadata.confidence = if file_arr.is_empty() {
+                        1.0 // High confidence in "no files"
+                    } else {
+                        0.90 // Very high confidence in file paths
+                    };
+                    metadata.relevance = 0.80;
+                    metadata.completeness = ResultCompleteness::Complete;
                 }
             }
             Value::Array(arr) => {
@@ -373,10 +373,10 @@ impl ResultScorer for TreeSitterScorer {
                 metadata.confidence = 0.95;
                 metadata.relevance = 0.85;
 
-                if let Some(nodes) = map.get("nodes") {
-                    if let Some(arr) = nodes.as_array() {
-                        metadata.result_count = arr.len();
-                    }
+                if let Some(nodes) = map.get("nodes")
+                    && let Some(arr) = nodes.as_array()
+                {
+                    metadata.result_count = arr.len();
                 }
 
                 metadata.completeness = if metadata.result_count > 0 {
@@ -421,11 +421,11 @@ impl ResultScorer for ShellScorer {
                     metadata.completeness = ResultCompleteness::Empty;
                 }
 
-                if let Some(output) = map.get("stdout") {
-                    if let Some(s) = output.as_str() {
-                        metadata.result_count = s.lines().count();
-                        metadata.relevance = 0.70;
-                    }
+                if let Some(output) = map.get("stdout")
+                    && let Some(s) = output.as_str()
+                {
+                    metadata.result_count = s.lines().count();
+                    metadata.relevance = 0.70;
                 }
             }
             _ => {

@@ -187,11 +187,11 @@ impl MarkdownLine {
         if text.is_empty() {
             return;
         }
-        if let Some(last) = self.segments.last_mut() {
-            if last.style == style {
-                last.text.push_str(text);
-                return;
-            }
+        if let Some(last) = self.segments.last_mut()
+            && last.style == style
+        {
+            last.text.push_str(text);
+            return;
         }
         self.segments.push(MarkdownSegment::new(style, text));
     }
@@ -805,17 +805,15 @@ fn flush_current_line(
     theme_styles: &ThemeStyles,
     base_style: Style,
 ) {
-    if current_line.segments.is_empty() {
-        if pending_list_prefix.is_some() {
-            ensure_prefix(
-                current_line,
-                blockquote_depth,
-                list_stack,
-                pending_list_prefix,
-                theme_styles,
-                base_style,
-            );
-        }
+    if current_line.segments.is_empty() && pending_list_prefix.is_some() {
+        ensure_prefix(
+            current_line,
+            blockquote_depth,
+            list_stack,
+            pending_list_prefix,
+            theme_styles,
+            base_style,
+        );
     }
 
     if !current_line.segments.is_empty() {
@@ -899,18 +897,18 @@ fn highlight_code_block(
     let mut augmented_prefix = prefix_segments.to_vec();
     augmented_prefix.push(PrefixSegment::new(base_style, CODE_EXTRA_INDENT));
 
-    if let Some(config) = highlight_config.filter(|cfg| cfg.enabled) {
-        if let Some(highlighted) = try_highlight(code, language, config) {
-            for segments in highlighted {
-                let mut line = MarkdownLine::default();
-                line.prepend_segments(&augmented_prefix);
-                for (style, text) in segments {
-                    line.push_segment(style, &text);
-                }
-                lines.push(line);
+    if let Some(config) = highlight_config.filter(|cfg| cfg.enabled)
+        && let Some(highlighted) = try_highlight(code, language, config)
+    {
+        for segments in highlighted {
+            let mut line = MarkdownLine::default();
+            line.prepend_segments(&augmented_prefix);
+            for (style, text) in segments {
+                line.push_segment(style, &text);
             }
-            return lines;
+            lines.push(line);
         }
+        return lines;
     }
 
     for raw_line in LinesWithEndings::from(code) {
@@ -1006,10 +1004,10 @@ fn load_theme(theme_name: &str, cache: bool) -> Theme {
     if let Some(theme) = defaults.themes.get(theme_name).cloned() {
         if cache {
             let mut guard = THEME_CACHE.write();
-            if guard.len() >= MAX_THEME_CACHE_SIZE {
-                if let Some(first_key) = guard.keys().next().cloned() {
-                    guard.remove(&first_key);
-                }
+            if guard.len() >= MAX_THEME_CACHE_SIZE
+                && let Some(first_key) = guard.keys().next().cloned()
+            {
+                guard.remove(&first_key);
             }
             guard.insert(theme_name.to_owned(), theme.clone());
         }

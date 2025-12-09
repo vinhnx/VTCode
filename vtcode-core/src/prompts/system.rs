@@ -412,16 +412,16 @@ pub async fn compose_system_instruction_text(
         }
 
         if !cfg.commands.allow_list.is_empty() {
-            let _ = write!(
+            let _ = writeln!(
                 instruction,
-                "- **Allowed commands**: {} commands in allow list\n",
+                "- **Allowed commands**: {} commands in allow list",
                 cfg.commands.allow_list.len()
             );
         }
         if !cfg.commands.deny_list.is_empty() {
-            let _ = write!(
+            let _ = writeln!(
                 instruction,
-                "- **Denied commands**: {} commands in deny list\n",
+                "- **Denied commands**: {} commands in deny list",
                 cfg.commands.deny_list.len()
             );
         }
@@ -429,14 +429,14 @@ pub async fn compose_system_instruction_text(
         if cfg.pty.enabled {
             instruction.push_str("- **PTY functionality**: Enabled\n");
             let (rows, cols) = (cfg.pty.default_rows, cfg.pty.default_cols);
-            let _ = write!(
+            let _ = writeln!(
                 instruction,
-                "- **Default terminal size**: {} rows × {} columns\n",
+                "- **Default terminal size**: {} rows × {} columns",
                 rows, cols
             );
-            let _ = write!(
+            let _ = writeln!(
                 instruction,
-                "- **PTY command timeout**: {} seconds\n",
+                "- **PTY command timeout**: {} seconds",
                 cfg.pty.command_timeout_seconds
             );
         } else {
@@ -448,9 +448,9 @@ pub async fn compose_system_instruction_text(
         } else {
             "disabled (manual guardrails)".to_owned()
         };
-        let _ = write!(
+        let _ = writeln!(
             instruction,
-            "- **Loop guards**: max {} tool loops per turn; identical call limit: {}\n",
+            "- **Loop guards**: max {} tool loops per turn; identical call limit: {}",
             cfg.tools.max_tool_loops.max(1),
             repeated_desc
         );
@@ -576,15 +576,15 @@ fn format_instruction_path(path: &Path, project_root: &Path, home_dir: Option<&P
         }
     }
 
-    if let Some(home) = home_dir {
-        if let Ok(relative) = path.strip_prefix(home) {
-            let display = relative.display().to_string();
-            if display.is_empty() {
-                return "~".to_string();
-            }
-
-            return format!("~/{display}");
+    if let Some(home) = home_dir
+        && let Ok(relative) = path.strip_prefix(home)
+    {
+        let display = relative.display().to_string();
+        if display.is_empty() {
+            return "~".to_string();
         }
+
+        return format!("~/{display}");
     }
 
     path.display().to_string()

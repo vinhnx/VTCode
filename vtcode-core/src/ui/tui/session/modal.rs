@@ -1206,11 +1206,11 @@ impl ModalListState {
                 if let Some(divider_index) = pending_divider.take() {
                     indices.push(divider_index);
                 }
-                if let Some(header_index) = current_header {
-                    if !header_included {
-                        indices.push(header_index);
-                        header_included = true;
-                    }
+                if let Some(header_index) = current_header
+                    && !header_included
+                {
+                    indices.push(header_index);
+                    header_included = true;
                 }
                 indices.push(index);
             }

@@ -1432,28 +1432,26 @@ fn schema_requires_field(schema: &Value, field: &str) -> bool {
             }
 
             for keyword in ["allOf", "anyOf", "oneOf"] {
-                if let Some(subschemas) = map.get(keyword).and_then(Value::as_array) {
-                    if subschemas
+                if let Some(subschemas) = map.get(keyword).and_then(Value::as_array)
+                    && subschemas
                         .iter()
                         .any(|subschema| schema_requires_field(subschema, field))
-                    {
-                        return true;
-                    }
-                }
-            }
-
-            if let Some(items) = map.get("items") {
-                if schema_requires_field(items, field) {
+                {
                     return true;
                 }
             }
 
-            if let Some(properties) = map.get("properties").and_then(Value::as_object) {
-                if let Some(property_schema) = properties.get(field) {
-                    if schema_requires_field(property_schema, field) {
-                        return true;
-                    }
-                }
+            if let Some(items) = map.get("items")
+                && schema_requires_field(items, field)
+            {
+                return true;
+            }
+
+            if let Some(properties) = map.get("properties").and_then(Value::as_object)
+                && let Some(property_schema) = properties.get(field)
+                && schema_requires_field(property_schema, field)
+            {
+                return true;
             }
 
             false
@@ -1931,14 +1929,12 @@ impl ClientHandler for LoggingClientHandler {
 
                 match handler.handle_elicitation(&provider, payload).await {
                     Ok(response) => {
-                        if let Err(error) = validate_elicitation_payload(
+                        validate_elicitation_payload(
                             provider.as_str(),
                             validator.as_ref(),
                             &response.action,
                             response.content.as_ref(),
-                        ) {
-                            return Err(error);
-                        }
+                        )?;
                         info!(
                             provider = provider.as_str(),
                             message = message.as_str(),
@@ -2249,18 +2245,18 @@ pub fn validate_mcp_config(config: &McpClientConfig) -> Result<()> {
     }
 
     // Validate timeouts
-    if let Some(startup_timeout) = config.startup_timeout_seconds {
-        if startup_timeout > 300 {
-            // Max 5 minutes
-            return Err(anyhow::anyhow!("Startup timeout cannot exceed 300 seconds"));
-        }
+    if let Some(startup_timeout) = config.startup_timeout_seconds
+        && startup_timeout > 300
+    {
+        // Max 5 minutes
+        return Err(anyhow::anyhow!("Startup timeout cannot exceed 300 seconds"));
     }
 
-    if let Some(tool_timeout) = config.tool_timeout_seconds {
-        if tool_timeout > 3600 {
-            // Max 1 hour
-            return Err(anyhow::anyhow!("Tool timeout cannot exceed 3600 seconds"));
-        }
+    if let Some(tool_timeout) = config.tool_timeout_seconds
+        && tool_timeout > 3600
+    {
+        // Max 1 hour
+        return Err(anyhow::anyhow!("Tool timeout cannot exceed 3600 seconds"));
     }
 
     // Validate provider configurations

@@ -252,7 +252,7 @@ impl CustomPrompt {
     fn from_contents(name: &str, path: &Path, contents: &str) -> Result<Option<Self>> {
         let (frontmatter, body) = split_frontmatter(contents)
             .with_context(|| format!("failed to parse frontmatter in {}", path.display()))?;
-        let body = body.trim_start_matches(|ch| ch == '\n' || ch == '\r');
+        let body = body.trim_start_matches(['\n', '\r']);
         if body.trim().is_empty() {
             warn!(
                 "custom prompt `{}` has no content after frontmatter; skipping",
@@ -435,10 +435,10 @@ impl PromptInvocation {
             Some(positional.join(" "))
         };
 
-        if !named.contains_key("TASK") {
-            if let Some(all) = &all_arguments {
-                named.insert("TASK".to_owned(), all.clone());
-            }
+        if !named.contains_key("TASK")
+            && let Some(all) = &all_arguments
+        {
+            named.insert("TASK".to_owned(), all.clone());
         }
 
         Ok(Self {
@@ -526,7 +526,7 @@ fn is_markdown_file(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
-fn split_frontmatter<'a>(contents: &'a str) -> Result<(Option<CustomPromptFrontmatter>, &'a str)> {
+fn split_frontmatter(contents: &str) -> Result<(Option<CustomPromptFrontmatter>, &str)> {
     let Some(remaining) = contents.strip_prefix("---") else {
         return Ok((None, contents));
     };

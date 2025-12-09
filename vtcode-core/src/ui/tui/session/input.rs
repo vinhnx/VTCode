@@ -244,14 +244,11 @@ impl Session {
             spans.push(Span::styled(self.prompt_prefix.clone(), prompt_style));
 
             if let Some(placeholder) = &self.placeholder {
-                let placeholder_style =
-                    self.placeholder_style
-                        .clone()
-                        .unwrap_or_else(|| InlineTextStyle {
-                            color: Some(AnsiColorEnum::Rgb(PLACEHOLDER_COLOR)),
-                            bg_color: None,
-                            effects: Effects::ITALIC,
-                        });
+                let placeholder_style = self.placeholder_style.clone().unwrap_or(InlineTextStyle {
+                    color: Some(AnsiColorEnum::Rgb(PLACEHOLDER_COLOR)),
+                    bg_color: None,
+                    effects: Effects::ITALIC,
+                });
                 let style = ratatui_style_from_inline(
                     &placeholder_style,
                     Some(AnsiColorEnum::Rgb(PLACEHOLDER_COLOR)),

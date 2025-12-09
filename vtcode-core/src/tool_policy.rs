@@ -363,12 +363,12 @@ impl ToolPolicyManager {
     pub async fn new_with_config_path<P: Into<PathBuf>>(config_path: P) -> Result<Self> {
         let config_path = config_path.into();
 
-        if let Some(parent) = config_path.parent() {
-            if !tokio::fs::try_exists(parent).await.unwrap_or(false) {
-                tokio::fs::create_dir_all(parent).await.with_context(|| {
-                    format!("{} at {}", ERR_CREATE_POLICY_DIR, parent.display())
-                })?;
-            }
+        if let Some(parent) = config_path.parent()
+            && !tokio::fs::try_exists(parent).await.unwrap_or(false)
+        {
+            tokio::fs::create_dir_all(parent)
+                .await
+                .with_context(|| format!("{} at {}", ERR_CREATE_POLICY_DIR, parent.display()))?;
         }
 
         let config = Self::load_or_create_config(&config_path).await?;
@@ -493,12 +493,12 @@ impl ToolPolicyManager {
     }
 
     async fn write_config(path: &Path, config: &ToolPolicyConfig) -> Result<()> {
-        if let Some(parent) = path.parent() {
-            if !tokio::fs::try_exists(parent).await.unwrap_or(false) {
-                tokio::fs::create_dir_all(parent).await.with_context(|| {
-                    format!("{} at {}", ERR_CREATE_POLICY_DIR, parent.display())
-                })?;
-            }
+        if let Some(parent) = path.parent()
+            && !tokio::fs::try_exists(parent).await.unwrap_or(false)
+        {
+            tokio::fs::create_dir_all(parent)
+                .await
+                .with_context(|| format!("{} at {}", ERR_CREATE_POLICY_DIR, parent.display()))?;
         }
 
         let serialized = serde_json::to_string_pretty(config)
@@ -573,7 +573,7 @@ impl ToolPolicyManager {
         }
 
         // Clone once to avoid borrow issues with self.apply_config_policy
-        let tools: Vec<_> = self.config.available_tools.iter().cloned().collect();
+        let tools: Vec<_> = self.config.available_tools.to_vec();
         for tool in tools {
             let config_policy = Self::resolve_config_policy(tools_config, &tool);
             self.apply_config_policy(&tool, config_policy);

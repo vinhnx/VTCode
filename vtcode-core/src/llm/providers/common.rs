@@ -50,12 +50,11 @@ where
     F: FnOnce(&Value) -> Option<LLMRequest>,
 {
     let trimmed = prompt.trim_start();
-    if trimmed.starts_with('{') {
-        if let Ok(value) = serde_json::from_str::<Value>(trimmed) {
-            if let Some(request) = parse_json(&value) {
-                return request;
-            }
-        }
+    if trimmed.starts_with('{')
+        && let Ok(value) = serde_json::from_str::<Value>(trimmed)
+        && let Some(request) = parse_json(&value)
+    {
+        return request;
     }
     make_default_request(prompt, model)
 }
@@ -86,12 +85,12 @@ pub fn override_base_url(
         }
     }
 
-    if let Some(var_name) = env_var_name {
-        if let Ok(value) = std::env::var(var_name) {
-            let trimmed = value.trim();
-            if !trimmed.is_empty() {
-                return trimmed.to_string();
-            }
+    if let Some(var_name) = env_var_name
+        && let Ok(value) = std::env::var(var_name)
+    {
+        let trimmed = value.trim();
+        if !trimmed.is_empty() {
+            return trimmed.to_string();
         }
     }
 

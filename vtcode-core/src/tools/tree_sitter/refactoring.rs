@@ -81,6 +81,12 @@ pub struct RefactoringEngine {
     analysis_cache: HashMap<String, SyntaxTree>,
 }
 
+impl Default for RefactoringEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RefactoringEngine {
     pub fn new() -> Self {
         Self {

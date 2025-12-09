@@ -138,14 +138,12 @@ impl CommandPolicyEvaluator {
             } else {
                 "allow_regex match".to_string()
             }
+        } else if self.matches_prefix(cmd, &self.deny_prefixes) {
+            format!("deny_list match: {}", cmd)
+        } else if Self::matches_any(&self.deny_glob_regexes, cmd) {
+            "deny_glob match".to_string()
         } else {
-            if self.matches_prefix(cmd, &self.deny_prefixes) {
-                format!("deny_list match: {}", cmd)
-            } else if Self::matches_any(&self.deny_glob_regexes, cmd) {
-                "deny_glob match".to_string()
-            } else {
-                "deny_regex match".to_string()
-            }
+            "deny_regex match".to_string()
         };
 
         // Cache the result
