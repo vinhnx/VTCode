@@ -2913,6 +2913,92 @@ struct PtyEphemeralCapture {
     duration: Duration,
 }
 
+struct PtyFollowUp {
+    summary: String,
+    warnings: Vec<String>,
+    errors: Vec<String>,
+    prompt: Option<String>,
+}
+
+fn summarize_pty_output(
+    output: &str,
+    exit_code: Option<i32>,
+    command: &[String],
+    duration: Duration,
+    completed: bool,
+) -> PtyFollowUp {
+    const MAX_SCAN_LINES: usize = 200;
+    const MAX_FINDINGS: usize = 5;
+
+    let mut warnings = Vec::new();
+    let mut errors = Vec::new();
+
+    for line in output.lines().take(MAX_SCAN_LINES) {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        let lower = trimmed.to_lowercase();
+        if lower.contains("warning") && warnings.len() < MAX_FINDINGS {
+            warnings.push(trimmed.to_string());
+            continue;
+        }
+
+        if lower.contains("error") && errors.len() < MAX_FINDINGS {
+            errors.push(trimmed.to_string());
+        }
+    }
+
+    let command_display = if command.is_empty() {
+        "<empty command>".to_string()
+    } else {
+        join(command.iter().map(|part| part.as_str()))
+    };
+
+    let status = if !completed {
+        "running".to_string()
+    } else if exit_code == Some(0) {
+        "succeeded".to_string()
+    } else if let Some(code) = exit_code {
+        format!("finished with exit code {code}")
+    } else {
+        "finished".to_string()
+    };
+
+    let mut summary = format!("{command_display}: {status}");
+    if completed {
+        summary.push_str(&format!(" ({:.1}s)", duration.as_secs_f32()));
+    }
+    if !warnings.is_empty() {
+        summary.push_str(&format!(" | warnings: {}", warnings.len()));
+    }
+    if !errors.is_empty() {
+        summary.push_str(&format!(" | errors: {}", errors.len()));
+    }
+
+    let prompt = if !completed {
+        None
+    } else if exit_code == Some(0) && !warnings.is_empty() {
+        Some(format!(
+            "{} warning{} detected. Should I address them now?",
+            warnings.len(),
+            if warnings.len() == 1 { "" } else { "s" }
+        ))
+    } else if exit_code.is_some_and(|code| code != 0) {
+        Some("Command failed. Investigate and fix the errors?".to_string())
+    } else {
+        None
+    };
+
+    PtyFollowUp {
+        summary,
+        warnings,
+        errors,
+        prompt,
+    }
+}
+
 fn build_ephemeral_pty_response(
     setup: &PtyCommandSetup,
     capture: PtyEphemeralCapture,
@@ -2934,7 +3020,7 @@ fn build_ephemeral_pty_response(
     let status = if completed { "completed" } else { "running" };
 
     // Build a clear message for the agent based on status
-    let (message, output_override) = if completed {
+    let (mut message, output_override) = if completed {
         if let Some(exit_code) = code {
             if exit_code == 0 {
                 ("Command completed successfully".to_string(), None)
@@ -2992,6 +3078,27 @@ fn build_ephemeral_pty_response(
     // Use the override output if available (for exit code 127), otherwise use actual output
     let final_output = output_override.as_ref().unwrap_or(&output);
 
+    let follow_up = summarize_pty_output(final_output, code, &setup.command, duration, completed);
+    if completed && code == Some(0) && !follow_up.warnings.is_empty() {
+        message = format!(
+            "Command completed successfully with {} warning{}",
+            follow_up.warnings.len(),
+            if follow_up.warnings.len() == 1 {
+                ""
+            } else {
+                "s"
+            }
+        );
+    } else if completed && code.is_some_and(|c| c != 0 && c != 127) && !follow_up.errors.is_empty()
+    {
+        message = format!(
+            "Command failed with exit code {} ({} error{})",
+            code.unwrap_or_default(),
+            follow_up.errors.len(),
+            if follow_up.errors.len() == 1 { "" } else { "s" }
+        );
+    }
+
     // Detect if this is a git diff command - output is already rendered visually
     let has_git = setup
         .command
@@ -3008,10 +3115,45 @@ fn build_ephemeral_pty_response(
     });
     let is_git_diff = has_git && has_diff_cmd;
 
+    // Build annotated output for the agent (keeps raw content + follow-up hints)
+    let mut cleaned_output = strip_ansi(final_output);
+    let mut follow_lines: Vec<String> = Vec::new();
+    follow_lines.push(format!("Follow-up: {}", follow_up.summary));
+    if !follow_up.warnings.is_empty() {
+        let mut shown = 0usize;
+        for warning in follow_up.warnings.iter().take(3) {
+            follow_lines.push(format!("warning: {}", warning));
+            shown += 1;
+        }
+        if follow_up.warnings.len() > shown {
+            follow_lines.push(format!(
+                "(+{} more warnings)",
+                follow_up.warnings.len() - shown
+            ));
+        }
+    }
+    if !follow_up.errors.is_empty() {
+        let mut shown = 0usize;
+        for error in follow_up.errors.iter().take(3) {
+            follow_lines.push(format!("error: {}", error));
+            shown += 1;
+        }
+        if follow_up.errors.len() > shown {
+            follow_lines.push(format!("(+{} more errors)", follow_up.errors.len() - shown));
+        }
+    }
+    if let Some(prompt) = &follow_up.prompt {
+        follow_lines.push(format!("Next: {}", prompt));
+    }
+    if !follow_lines.is_empty() {
+        cleaned_output.push_str("\n\n");
+        cleaned_output.push_str(&follow_lines.join("\n"));
+    }
+
     let mut response = json!({
         "success": true,
         "command": setup.command.clone(),
-        "output": strip_ansi(final_output),
+        "output": cleaned_output,
         "code": code,
         "exit_code": code,
         "status": status,
@@ -3032,6 +3174,18 @@ fn build_ephemeral_pty_response(
         "duration_ms": if completed { duration.as_millis() } else { 0 },
         "output_already_rendered": is_git_diff,
     });
+
+    if let Value::Object(ref mut obj) = response {
+        obj.insert(
+            "follow_up".to_string(),
+            json!({
+                "summary": follow_up.summary,
+                "warnings": follow_up.warnings,
+                "errors": follow_up.errors,
+                "prompt": follow_up.prompt,
+            }),
+        );
+    }
 
     // Add CRITICAL signals for exit code 127 to ABSOLUTELY PREVENT retry loops
     if completed

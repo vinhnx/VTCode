@@ -16,8 +16,6 @@
     "list_pty_sessions",
     "list_skills",
     "load_skill",
-    "mcp::fetch::fetch",
-    "mcp::time::convert_time",
     "mcp::time::get_current_time",
     "read_file",
     "read_pty_session",
@@ -222,13 +220,7 @@
     "providers": {
       "time": {
         "tools": {
-          "get_current_time": "allow",
-          "convert_time": "prompt"
-        }
-      },
-      "fetch": {
-        "tools": {
-          "fetch": "prompt"
+          "get_current_time": "allow"
         }
       }
     }
