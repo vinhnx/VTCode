@@ -170,6 +170,13 @@ VT Code tracks token usage in real-time with configurable thresholds:
 
 ## III. SEMANTIC UNDERSTANDING & TOOL STRATEGY
 
+### Tool Safety & Validation (Fail-Safe Execution)
+- Validate every tool payload: required params present, absolute paths quoted, stay within WORKSPACE_DIR. Confirm parent directories before creating/modifying files; prefer read-only tools first.
+- Confirm destructive or long-running commands with a dry-run/`--check` when available; require confirmation for rm/force-push/external paths.
+- Loop guards: cache outputs and avoid repeating identical tool calls; after 3 low-signal calls, reassess approach instead of looping.
+- Retry policy: retry at most once for transient errors (timeouts, rate limits, network); never retry on validation errors.
+- Context-aware execution: prefer MCP discovery before shell; avoid starting new PTY sessions when an existing terminal is running the same command; reuse prior findings instead of re-reading the same files.
+
 ### Tool Decision Tree
 
 | Goal | Tool | Notes |
@@ -295,6 +302,8 @@ const DEFAULT_LIGHTWEIGHT_PROMPT: &str = r#"You are VT Code, a coding agent. Be 
 - Use `read_file` with `max_tokens` to limit output for large files (don't read entire 5000+ line files)
 - Make surgical edits with `edit_file` (preferred), use `create_file` for new files, `write_file` for complete rewrites, `apply_patch` for complex multi-hunk edits
 - Run commands with `run_pty_cmd`, always quote file paths with double quotes
+- Validate tool inputs: required params present, absolute paths quoted, stay within WORKSPACE_DIR; confirm parents before creating/modifying files
+- Avoid repeating identical tool calls; reassess after 3 low-signal calls; retry once for transient errors only
 - Cache results—don't repeat searches or tool calls with same parameters
 - Once solved, stop immediately
 - Report actual progress, not intentions
@@ -338,6 +347,8 @@ const DEFAULT_SPECIALIZED_PROMPT: &str = r#"You are a specialized coding agent f
 - **File modification**: `edit_file` for surgical changes (preferred), `create_file` for new files, `write_file` for complete rewrites, `apply_patch` for complex multi-hunk updates
 - **Commands**: `run_pty_cmd` with quoted paths (`"file with spaces.txt"`)
 - **Multi-file changes**: Identify all files first, then modify in dependency order
+- **Validation**: Ensure required params are present, absolute paths are quoted, parents exist; stay within WORKSPACE_DIR and prefer read-only tools first
+- **Retries & loops**: Retry once for transient errors (timeouts, rate limits); after 3 low-signal tool calls, reassess instead of repeating identical calls
 
 **Guidelines:**
 - For multiple files: identify all affected files first, then modify in dependency order
