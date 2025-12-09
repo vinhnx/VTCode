@@ -21,7 +21,6 @@ const SAFE_AUTONOMOUS_TOOLS: &[&str] = &[
     tools::LIST_FILES,
     tools::READ_FILE,
     tools::SEARCH_TOOLS,
-    tools::GET_ERRORS,
     tools::DEBUG_AGENT,
     tools::ANALYZE_AGENT,
     tools::LIST_PTY_SESSIONS,

@@ -95,31 +95,11 @@ pub(crate) async fn refine_user_prompt_if_enabled(
                 "troubleshoot",
                 "diagnose",
             ];
-            let error_triggers = [
-                "error",
-                "failed",
-                "problem",
-                "issue",
-                "bug",
-                "crash",
-                "exception",
-                "not working",
-            ];
-
             if debug_triggers.iter().any(|token| lower.contains(token)) {
-                let base_message = format!(
-                    "{}\n\nNote: For diagnostics, prefer using tools: get_errors (with detailed=true for comprehensive analysis), debug_agent, analyze_agent, search_tools.",
+                format!(
+                    "{}\n\nNote: For diagnostics, prefer using tools: debug_agent, analyze_agent, search_tools.",
                     text
-                );
-
-                if error_triggers.iter().any(|token| lower.contains(token)) {
-                    format!(
-                        "{}\n\nFor error-focused diagnostics, run: get_errors with scope='all' and detailed=true to identify root causes and get self-fix suggestions.",
-                        base_message
-                    )
-                } else {
-                    base_message
-                }
+                )
             } else {
                 text
             }

@@ -1203,7 +1203,6 @@ impl ZedAgent {
         let restricted_tools = [
             "debug_agent",   // Internal diagnostic tool
             "analyze_agent", // Internal diagnostic tool
-            "get_errors",    // Internal diagnostic tool
             "execute_code",  // Code execution tool - dangerous for external clients
         ];
 

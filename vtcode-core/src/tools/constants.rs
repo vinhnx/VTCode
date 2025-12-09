@@ -4,7 +4,7 @@
 //! to reduce code duplication and ensure consistency.
 
 /// Standard error patterns used for error detection across tools
-/// These patterns are used in get_errors, grep operations, and error analysis
+/// These patterns are used in grep operations and error analysis
 pub const ERROR_DETECTION_PATTERNS: &[&str] = &[
     "error",
     "failed",
