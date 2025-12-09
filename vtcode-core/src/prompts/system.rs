@@ -100,6 +100,7 @@ Loop until task 100% complete OR token budget exceeds alert threshold:
 - Make surgical edits with edit_file (preferred for 1-5 line changes)
 - Use create_file for new files, write_file for complete rewrites
 - Run commands with run_pty_cmd, always quote file paths
+- After any PTY command completes, summarize stdout/stderr, flag warnings/errors, and ask whether to apply fixes before proceeding
 - Apply fixes immediately, verify with tests
 
 **4. VERIFY (Lightweight Checks)**
