@@ -634,12 +634,7 @@ impl AgentRunner {
             .push(Message::tool_response(call_id.to_owned(), error_payload));
 
         if let Some(event) = command_event {
-            event_recorder.command_finished(
-                event,
-                CommandExecutionStatus::Failed,
-                None,
-                &detail,
-            );
+            event_recorder.command_finished(event, CommandExecutionStatus::Failed, None, &detail);
         } else {
             event_recorder.warning(&detail);
         }
