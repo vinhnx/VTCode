@@ -2263,6 +2263,30 @@ pub(crate) async fn run_single_agent_loop_unified(
                                 .unwrap_or_else(|_| "{}".to_string())
                         );
 
+                        // Autonomous executor safety: block early if loop or destructive
+                        if let Some(block_reason) =
+                            autonomous_executor.should_block(name, &args_val)
+                        {
+                            renderer.line(MessageStyle::Error, &block_reason)?;
+                            working_history.push(uni::Message::system(block_reason));
+                            continue;
+                        }
+
+                        if let Err(err) = autonomous_executor.validate_args(name, &args_val) {
+                            let msg = format!("Blocked '{}' due to invalid args: {}", name, err);
+                            renderer.line(MessageStyle::Error, &msg)?;
+                            working_history.push(uni::Message::system(msg));
+                            continue;
+                        }
+
+                        if let Some(loop_notice) =
+                            autonomous_executor.record_tool_call(name, &args_val)
+                        {
+                            renderer.line(MessageStyle::Error, &loop_notice)?;
+                            working_history.push(uni::Message::system(loop_notice));
+                            continue;
+                        }
+
                         // Autonomous policy feedback (Requirement 3.x/5.x)
                         let policy = autonomous_executor.get_policy(name, &args_val);
                         match policy {
@@ -2543,6 +2567,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                         has_more,
                                     } => {
                                         tool_spinner.finish();
+                                        autonomous_executor.record_execution(name, true);
                                         // Reset the repeat counter on successful execution
                                         repeated_tool_attempts.remove(&signature_key);
                                         if let Some(res) = run_turn_handle_tool_success(
@@ -2581,6 +2606,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                     }
                                     ToolExecutionStatus::Failure { error } => {
                                         tool_spinner.finish();
+                                        autonomous_executor.record_execution(name, false);
 
                                         // Increment failure counter for this tool signature
                                         let failed_attempts = repeated_tool_attempts
@@ -2614,6 +2640,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                     }
                                     ToolExecutionStatus::Timeout { error } => {
                                         tool_spinner.finish();
+                                        autonomous_executor.record_execution(name, false);
 
                                         // Increment failure counter for timeout as well
                                         let failed_attempts = repeated_tool_attempts
@@ -2641,6 +2668,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                     }
                                     ToolExecutionStatus::Cancelled => {
                                         tool_spinner.finish();
+                                        autonomous_executor.record_execution(name, false);
 
                                         let res = run_turn_handle_tool_cancelled(
                                             name,
