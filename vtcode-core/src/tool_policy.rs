@@ -151,17 +151,14 @@ fn mcp_provider_config_with(extra: (&str, Vec<&str>)) -> BTreeMap<String, Vec<St
 }
 
 fn default_secure_mcp_allowlist() -> McpAllowListConfig {
-    let mut allowlist = McpAllowListConfig::default();
-    allowlist.enforce = true;
-
-    allowlist.default.logging = Some(
+    let default_logging = Some(
         MCP_DEFAULT_LOGGING_EVENTS
             .iter()
             .map(|s| (*s).into())
             .collect(),
     );
 
-    allowlist.default.configuration = Some(BTreeMap::from([
+    let default_configuration = Some(BTreeMap::from([
         (
             "client".into(),
             vec![
@@ -194,67 +191,84 @@ fn default_secure_mcp_allowlist() -> McpAllowListConfig {
         ),
     ]));
 
-    let mut time_rules = McpAllowListRules::default();
-    time_rules.tools = Some(vec![
-        "get_*".into(),
-        "list_*".into(),
-        "convert_timezone".into(),
-        "describe_timezone".into(),
-        "time_*".into(),
-    ]);
-    time_rules.resources = Some(vec!["timezone:*".into(), "location:*".into()]);
-    time_rules.logging = Some(mcp_standard_logging());
-    time_rules.configuration = Some(mcp_provider_config_with((
-        "time",
-        vec!["local_timezone_override"],
-    )));
+    let time_rules = McpAllowListRules {
+        tools: Some(vec![
+            "get_*".into(),
+            "list_*".into(),
+            "convert_timezone".into(),
+            "describe_timezone".into(),
+            "time_*".into(),
+        ]),
+        resources: Some(vec!["timezone:*".into(), "location:*".into()]),
+        logging: Some(mcp_standard_logging()),
+        configuration: Some(mcp_provider_config_with((
+            "time",
+            vec!["local_timezone_override"],
+        ))),
+        ..Default::default()
+    };
+
+    let context_rules = McpAllowListRules {
+        tools: Some(vec![
+            "search_*".into(),
+            "fetch_*".into(),
+            "list_*".into(),
+            "context7_*".into(),
+            "get_*".into(),
+        ]),
+        resources: Some(vec![
+            "docs::*".into(),
+            "snippets::*".into(),
+            "repositories::*".into(),
+            "context7::*".into(),
+        ]),
+        prompts: Some(vec![
+            "context7::*".into(),
+            "support::*".into(),
+            "docs::*".into(),
+        ]),
+        logging: Some(mcp_standard_logging()),
+        configuration: Some(mcp_provider_config_with((
+            "context7",
+            vec!["workspace", "search_scope", "max_results"],
+        ))),
+        ..Default::default()
+    };
+
+    let seq_rules = McpAllowListRules {
+        tools: Some(vec![
+            "plan".into(),
+            "critique".into(),
+            "reflect".into(),
+            "decompose".into(),
+            "sequential_*".into(),
+        ]),
+        prompts: Some(vec![
+            "sequential-thinking::*".into(),
+            "plan".into(),
+            "reflect".into(),
+            "critique".into(),
+        ]),
+        logging: Some(mcp_standard_logging()),
+        configuration: Some(mcp_provider_config_with((
+            "sequencing",
+            vec!["max_depth", "max_branches"],
+        ))),
+        ..Default::default()
+    };
+
+    let mut allowlist = McpAllowListConfig {
+        enforce: true,
+        default: McpAllowListRules {
+            logging: default_logging,
+            configuration: default_configuration,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
     allowlist.providers.insert("time".into(), time_rules);
-
-    let mut context_rules = McpAllowListRules::default();
-    context_rules.tools = Some(vec![
-        "search_*".into(),
-        "fetch_*".into(),
-        "list_*".into(),
-        "context7_*".into(),
-        "get_*".into(),
-    ]);
-    context_rules.resources = Some(vec![
-        "docs::*".into(),
-        "snippets::*".into(),
-        "repositories::*".into(),
-        "context7::*".into(),
-    ]);
-    context_rules.prompts = Some(vec![
-        "context7::*".into(),
-        "support::*".into(),
-        "docs::*".into(),
-    ]);
-    context_rules.logging = Some(mcp_standard_logging());
-    context_rules.configuration = Some(mcp_provider_config_with((
-        "context7",
-        vec!["workspace", "search_scope", "max_results"],
-    )));
     allowlist.providers.insert("context7".into(), context_rules);
-
-    let mut seq_rules = McpAllowListRules::default();
-    seq_rules.tools = Some(vec![
-        "plan".into(),
-        "critique".into(),
-        "reflect".into(),
-        "decompose".into(),
-        "sequential_*".into(),
-    ]);
-    seq_rules.prompts = Some(vec![
-        "sequential-thinking::*".into(),
-        "plan".into(),
-        "reflect".into(),
-        "critique".into(),
-    ]);
-    seq_rules.logging = Some(mcp_standard_logging());
-    seq_rules.configuration = Some(mcp_provider_config_with((
-        "sequencing",
-        vec!["max_depth", "max_branches"],
-    )));
     allowlist
         .providers
         .insert("sequential-thinking".into(), seq_rules);

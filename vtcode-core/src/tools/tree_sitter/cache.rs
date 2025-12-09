@@ -104,7 +104,7 @@ impl AstCache {
         let key = CacheKey::new(content, language);
 
         // Use get directly to avoid double lookup
-        if self.cache.get(&key).is_some() {
+        if self.cache.contains_key(&key) {
             self.update_access_order(&key);
             self.stats.hits += 1;
             true

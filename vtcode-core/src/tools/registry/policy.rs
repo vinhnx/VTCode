@@ -290,13 +290,9 @@ impl ToolPolicyGateway {
                 ToolPolicy::Deny => Ok(ToolPermissionDecision::Deny),
                 ToolPolicy::Prompt => {
                     // Check if low-risk by using risk scorer
-                    if Self::should_auto_approve_by_risk(normalized) {
-                        policy_manager
-                            .set_policy(normalized, ToolPolicy::Allow)
-                            .await?;
-                        self.preapproved_tools.insert(normalized.to_string());
-                        Ok(ToolPermissionDecision::Allow)
-                    } else if ToolPolicyManager::is_auto_allow_tool(normalized) {
+                    if Self::should_auto_approve_by_risk(normalized)
+                        || ToolPolicyManager::is_auto_allow_tool(normalized)
+                    {
                         policy_manager
                             .set_policy(normalized, ToolPolicy::Allow)
                             .await?;

@@ -361,7 +361,7 @@ impl OpenAIProvider {
     /// Per OpenAI documentation (see GIT_TOOL example):
     /// - Function tools use FLAT format: {"type": "function", "name": "...", "description": "...", "parameters": {...}}
     /// - Built-in tools like apply_patch use: {"type": "apply_patch"} (no other fields)
-    /// Note: Cannot have both built-in apply_patch AND a function named "apply_patch"
+    ///   Note: Cannot have both built-in apply_patch AND a function named "apply_patch"
     fn serialize_tools_for_responses(tools: &[ToolDefinition]) -> Option<Value> {
         if tools.is_empty() {
             return None;
