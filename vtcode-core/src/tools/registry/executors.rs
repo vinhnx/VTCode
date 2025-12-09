@@ -3099,6 +3099,10 @@ fn build_ephemeral_pty_response(
         );
     }
 
+    if let Some(prompt) = &follow_up.prompt {
+        message = format!("{} · {}", message, prompt);
+    }
+
     // Detect if this is a git diff command - output is already rendered visually
     let has_git = setup
         .command
@@ -3185,6 +3189,9 @@ fn build_ephemeral_pty_response(
                 "prompt": follow_up.prompt,
             }),
         );
+        if let Some(prompt) = follow_up.prompt {
+            obj.insert("follow_up_prompt".to_string(), Value::String(prompt));
+        }
     }
 
     // Add CRITICAL signals for exit code 127 to ABSOLUTELY PREVENT retry loops

@@ -240,47 +240,6 @@ pub(crate) async fn render_terminal_command_panel(
         renderer.line(MessageStyle::Info, &format!("✓ {}", exit_badge))?;
     }
 
-    if let Some(follow_up) = unwrapped_payload
-        .get("follow_up")
-        .and_then(Value::as_object)
-    {
-        if let Some(summary) = follow_up.get("summary").and_then(Value::as_str) {
-            renderer.line(MessageStyle::Info, &format!("Follow-up: {}", summary))?;
-        }
-
-        if let Some(warnings) = follow_up.get("warnings").and_then(Value::as_array) {
-            let mut shown = 0usize;
-            for warning in warnings.iter().filter_map(Value::as_str).take(3) {
-                renderer.line(MessageStyle::Info, &format!("warning: {}", warning))?;
-                shown += 1;
-            }
-            if warnings.len() > shown {
-                renderer.line(
-                    MessageStyle::Info,
-                    &format!("(+{} more warnings)", warnings.len() - shown),
-                )?;
-            }
-        }
-
-        if let Some(errors) = follow_up.get("errors").and_then(Value::as_array) {
-            let mut shown = 0usize;
-            for error in errors.iter().filter_map(Value::as_str).take(3) {
-                renderer.line(MessageStyle::Error, &format!("error: {}", error))?;
-                shown += 1;
-            }
-            if errors.len() > shown {
-                renderer.line(
-                    MessageStyle::Error,
-                    &format!("(+{} more errors)", errors.len() - shown),
-                )?;
-            }
-        }
-
-        if let Some(prompt) = follow_up.get("prompt").and_then(Value::as_str) {
-            renderer.line(MessageStyle::Response, prompt)?;
-        }
-    }
-
     Ok(())
 }
 
