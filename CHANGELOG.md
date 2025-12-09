@@ -3,6 +3,51 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Version 0.43.0] - 2025-11-09
+# [Version 0.47.13] - 2025-12-10
+
+
+### Features
+    - feat: update tool policy and enhance loop detection functionality
+    - feat: implement tool call safety validation and execution tracking
+
+
+### Refactors
+    - refactor: remove deprecated tools and update tool policies
+    - refactor: update tool policy and streamline follow-up handling
+    - refactor: enhance PTY command output summarization and follow-up handling
+    - refactor: enhance context management and prompt generation
+    - refactor: enhance system prompts with improved tool safety and execution guidelines
+    - refactor: implement tool execution retry logic and enhance error handling
+    - refactor: enhance tool policy and prompt clarity
+    - refactor: implement tool denial handling in agent runner
+    - refactor: enhance McpAllowListConfig structure and improve rule definitions
+    - refactor: improve code clarity and consistency in multiple modules
+    - refactor: streamline conditional checks and improve code readability
+    - refactor: unify token budget constants and improve context management
+    - refactor: update tool policy and enhance tool validation
+    - refactor: improve code formatting and structure across multiple files
+    - refactor: implement API failure tracking with exponential backoff; optimize tool caching and navigation
+    - refactor: optimize core agent execution and consolidate utility modules
+    - refactor: introduce warning and error handling methods in AgentRunner; streamline tool failure logging and path normalization utilities
+    - refactor: update model configurations to use OpenRouter for Moonshot models; remove deprecated entries and enhance model support
+    - refactor: enhance reasoning model support and update tool policies; remove deprecated Moonshot models
+
+
+### Documentation
+    - docs: update changelog for v0.47.12 [skip ci]
+    - docs: update changelog for v0.47.11 [skip ci]
+    - docs: update changelog for v0.47.10 [skip ci]
+
+
+### Chores
+    - chore: update VSCode extension package.json to v0.47.12 [skip ci]
+    - chore: update npm package.json to v0.47.12 [skip ci]
+    - chore: release v0.47.12
+    - chore: release v0.47.11
+    - chore: update dependencies and improve code formatting
+    - chore: release v0.47.10
+    - chore: update VSCode extension package.json to v0.47.9 [skip ci]
+    - chore: update npm package.json to v0.47.9 [skip ci]
 # [Version 0.47.12] - 2025-12-08
 
 
