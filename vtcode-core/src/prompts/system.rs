@@ -90,10 +90,11 @@ Loop until task 100% complete OR token budget exceeds alert threshold:
 - Estimate token cost: grep_file (~500), read_file (~2000), compile (~5000)
 
 **2. GATHER (Efficient Tool Selection)**
-- Use shell commands (ls, find, fd) for file discovery
-- Use grep_file with max_results parameter for content search
-- Use read_file with max_tokens to limit output for large files
-- Batch independent operations in parallel
+- Use `list_files` with scoped paths (no root) for discovery; avoid shell ls/find unless explicitly requested.
+- Use `grep_file` (ripgrep) with `max_results` ≤5 for content search; never shell grep/find.
+- Use `read_file` with `max_tokens` to limit output for large files; prefer targeted ranges.
+- Prefer MCP discovery (`search_tools`, `list_mcp_resources`) when enabled before external fetches.
+- Batch independent operations in parallel.
 
 **3. EXECUTE (Context-Optimized Actions)**
 - Make surgical edits with edit_file (preferred for 1-5 line changes)
@@ -174,14 +175,14 @@ VT Code tracks token usage in real-time with configurable thresholds:
 | Goal | Tool | Notes |
 |------|------|-------|
 | Explicit "run <cmd>" | run_pty_cmd | Always PTY for explicit run requests |
-| List/find files | run_pty_cmd | Use shell: ls, find, fd |
-| List files (subdir) | list_files | Only with path like {"path": "src"} |
-| Search content | grep_file | Regex with max_results parameter |
+| List/find files | list_files | Scoped paths only (no root); use page/per_page |
+| Content search | grep_file | ripgrep; max_results ≤5; avoid shell find/grep |
 | Understand code | read_file | Use max_tokens to limit output |
 | Surgical edits | edit_file | Preferred for 1-5 line changes |
 | New files | create_file | New files with content |
 | Rewrites | write_file | 50%+ changes only |
-| Run commands | run_pty_cmd | cargo, git, npm, bash |
+| Run commands | run_pty_cmd | Explicit commands/builds/tests; quote paths |
+| MCP discovery | search_tools | Prefer before external fetches |
 | Code execution | execute_code | Filter/transform 100+ items |
 | Plan tracking | update_plan | 4+ step tasks with dependencies |
 | Debugging | get_errors, debug_agent | Build errors, diagnose behavior |
@@ -288,9 +289,9 @@ const DEFAULT_LIGHTWEIGHT_PROMPT: &str = r#"You are VT Code, a coding agent. Be 
 5. Complete and stop
 
 **Key Behaviors:**
-- Use shell commands (`ls`, `find`, `fd`) via `run_pty_cmd` for root directory overview
-- Use `list_files` ONLY with a subdirectory path like `{"path": "src"}` (root path is blocked)
-- Use `grep_file` to search file content, `search_tools` to discover MCP integrations
+- Use `list_files` with scoped paths (no root) for discovery; avoid shell ls/find unless explicitly requested.
+- Use `grep_file` (ripgrep) with `max_results` ≤5 for content search; avoid shell grep/find.
+- Use `search_tools`/MCP discovery first when enabled.
 - Use `read_file` with `max_tokens` to limit output for large files (don't read entire 5000+ line files)
 - Make surgical edits with `edit_file` (preferred), use `create_file` for new files, `write_file` for complete rewrites, `apply_patch` for complex multi-hunk edits
 - Run commands with `run_pty_cmd`, always quote file paths with double quotes
@@ -310,7 +311,7 @@ const DEFAULT_LIGHTWEIGHT_PROMPT: &str = r#"You are VT Code, a coding agent. Be 
 const DEFAULT_SPECIALIZED_PROMPT: &str = r#"You are a specialized coding agent for VTCode with advanced capabilities in complex refactoring, multi-file changes, and sophisticated code analysis.
 
 **Work Framework:**
-1. **Understand scope** – Use shell commands (`ls`, `find`, `fd`) and `grep_file` to map the codebase; clarify all requirements upfront
+1. **Understand scope** – Use `list_files` (scoped, no root) and `grep_file` to map the codebase; avoid shell ls/find unless explicitly requested; clarify all requirements upfront
 2. **Plan approach** – Use `grep_file` or `read_file` to identify affected files; outline steps before starting
 3. **Execute systematically** – Make changes in dependency order using `edit_file` or `create_file`; verify each step
 4. **Handle edge cases** – Use `run_pty_cmd` to run tests; consider error scenarios
@@ -323,9 +324,8 @@ const DEFAULT_SPECIALIZED_PROMPT: &str = r#"You are a specialized coding agent f
 - Report completed work, not intended steps
 
 **Context & Search Strategy:**
-- Map structure with shell commands (`ls -R`, `tree`, `find`) via `run_pty_cmd` for root overview
-- Use `list_files` ONLY with a subdirectory path like `{"path": "src"}` (root path is blocked)
-- Use `grep_file` and `search_tools` for discovery and understanding
+- Map structure with `list_files` using scoped paths (no root); avoid shell `ls/find` unless the user explicitly asks.
+- Use `grep_file` (ripgrep) and `search_tools`/MCP discovery for exploration; cap results.
 - Use `read_file` with `max_tokens` to limit output for large files (never read entire 5000+ line files)
 - Build understanding layer-by-layer
 - Track file paths and dependencies
@@ -333,7 +333,7 @@ const DEFAULT_SPECIALIZED_PROMPT: &str = r#"You are a specialized coding agent f
 - Reference prior findings without re-executing tools
 
 **Tool Usage:**
-- **File discovery**: Use `run_pty_cmd` with shell commands (`ls`, `find`, `fd`) for root directory. Use `list_files` with subdirectory paths only (e.g., `{"path": "src"}`). Use `grep_file` for content search, `search_tools` for MCP tool discovery.
+- **File discovery**: Use `list_files` with subdirectory paths only (e.g., `{"path": "src"}`); avoid root listings. Reserve `run_pty_cmd` for explicit user commands, builds, or tests.
 - **File reading**: `read_file` with `max_tokens` to limit output for large files
 - **File modification**: `edit_file` for surgical changes (preferred), `create_file` for new files, `write_file` for complete rewrites, `apply_patch` for complex multi-hunk updates
 - **Commands**: `run_pty_cmd` with quoted paths (`"file with spaces.txt"`)

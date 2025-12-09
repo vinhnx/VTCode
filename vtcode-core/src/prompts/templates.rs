@@ -43,7 +43,7 @@ impl PromptTemplates {
 
     /// Get tool usage prompt
     pub fn tool_usage_prompt() -> &'static str {
-        "You have tools for files, search, and shell. Plan before calling tools; choose the most specific tool. Prefer small, targeted calls. Default to response_format='concise' and paginate long results with page/per_page (default per_page=50). If a tool truncates output or returns guidance, follow it. Use unambiguous args (e.g., path, max_results)."
+        "You have tools for files, search, and shell. Plan before calling tools; choose the most specific tool. Prefer `grep_file` (ripgrep) and `list_files` with scoped paths (no root); avoid shell ls/find/grep unless explicitly requested or running builds/tests. Keep calls small (cap matches at 5) and targeted. Default to response_format='concise' and paginate long results with page/per_page (default per_page=50). Prefer MCP discovery tools first when enabled. If a tool truncates output or returns guidance, follow it. Use unambiguous args (e.g., path, max_results)."
     }
 
     /// Get workspace context prompt
