@@ -422,7 +422,7 @@ impl AgentBehaviorAnalyzer {
             } else {
                 // Decrease success rate
                 let alpha = 0.3;
-                pattern.success_rate *= (1.0 - alpha);
+                pattern.success_rate *= 1.0 - alpha;
             }
 
             debug!(

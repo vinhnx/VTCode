@@ -72,7 +72,7 @@ impl Session {
         let measured = paragraph.line_count(width);
         let resolved = u16::try_from(measured).unwrap_or(u16::MAX);
         // Limit to max 3 lines to accommodate suggestions
-        resolved.min(3).max(ui::INLINE_HEADER_HEIGHT)
+        resolved.clamp(ui::INLINE_HEADER_HEIGHT, 3)
     }
 
     pub(super) fn build_header_paragraph(&self, lines: &[Line<'static>]) -> Paragraph<'static> {
