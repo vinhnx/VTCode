@@ -449,17 +449,17 @@ pub(super) fn insert_text(session: &mut Session, text: &str) {
     let mut remaining_newlines = remaining_newline_capacity(session);
     let sanitized: String = text
         .chars()
-        .filter_map(|ch| {
+        .filter(|ch| {
             if matches!(ch, '\r' | '\u{7f}') {
-                return None;
+                return false;
             }
-            if ch == '\n' {
+            if *ch == '\n' {
                 if remaining_newlines == 0 {
-                    return None;
+                    return false;
                 }
                 remaining_newlines = remaining_newlines.saturating_sub(1);
             }
-            Some(ch)
+            true
         })
         .collect();
     if sanitized.is_empty() {
