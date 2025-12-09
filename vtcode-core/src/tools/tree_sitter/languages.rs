@@ -532,8 +532,8 @@ impl LanguageAnalyzer {
     fn extract_functions(&self, node: &SyntaxNode) -> Vec<SymbolInfo> {
         let mut functions = Vec::new();
 
-        if node.kind.contains("function") || node.kind.contains("method") {
-            if let Some(name_node) = node
+        if (node.kind.contains("function") || node.kind.contains("method"))
+            && let Some(name_node) = node
                 .named_children
                 .get("name")
                 .and_then(|children| children.first())
@@ -547,28 +547,27 @@ impl LanguageAnalyzer {
                         .get("word")
                         .and_then(|children| children.first())
                 })
-            {
-                let function = SymbolInfo {
-                    name: name_node.text.clone(),
-                    kind: if node.kind.contains("method") {
-                        SymbolKind::Method
+        {
+            let function = SymbolInfo {
+                name: name_node.text.clone(),
+                kind: if node.kind.contains("method") {
+                    SymbolKind::Method
+                } else {
+                    SymbolKind::Function
+                },
+                position: name_node.start_position.clone(),
+                scope: Some(
+                    if node.kind.contains("method") {
+                        "method"
                     } else {
-                        SymbolKind::Function
-                    },
-                    position: name_node.start_position.clone(),
-                    scope: Some(
-                        if node.kind.contains("method") {
-                            "method"
-                        } else {
-                            "function"
-                        }
-                        .to_owned(),
-                    ),
-                    signature: self.extract_signature(node),
-                    documentation: self.extract_documentation(node),
-                };
-                functions.push(function);
-            }
+                        "function"
+                    }
+                    .to_owned(),
+                ),
+                signature: self.extract_signature(node),
+                documentation: self.extract_documentation(node),
+            };
+            functions.push(function);
         }
 
         // Recursively extract from children
@@ -582,31 +581,29 @@ impl LanguageAnalyzer {
     fn extract_classes(&self, node: &SyntaxNode) -> Vec<SymbolInfo> {
         let mut classes = Vec::new();
 
-        if node.kind.contains("class")
+        if (node.kind.contains("class")
             || node.kind.contains("struct")
-            || node.kind.contains("interface")
-        {
-            if let Some(name_node) = node
+            || node.kind.contains("interface"))
+            && let Some(name_node) = node
                 .named_children
                 .get("name")
                 .and_then(|children| children.first())
-            {
-                let kind = match node.kind.as_str() {
-                    k if k.contains("interface") => SymbolKind::Interface,
-                    k if k.contains("struct") => SymbolKind::Struct,
-                    _ => SymbolKind::Class,
-                };
+        {
+            let kind = match node.kind.as_str() {
+                k if k.contains("interface") => SymbolKind::Interface,
+                k if k.contains("struct") => SymbolKind::Struct,
+                _ => SymbolKind::Class,
+            };
 
-                let class = SymbolInfo {
-                    name: name_node.text.clone(),
-                    kind,
-                    position: name_node.start_position.clone(),
-                    scope: Some("class".to_owned()),
-                    signature: None,
-                    documentation: self.extract_documentation(node),
-                };
-                classes.push(class);
-            }
+            let class = SymbolInfo {
+                name: name_node.text.clone(),
+                kind,
+                position: name_node.start_position.clone(),
+                scope: Some("class".to_owned()),
+                signature: None,
+                documentation: self.extract_documentation(node),
+            };
+            classes.push(class);
         }
 
         // Recursively extract from children

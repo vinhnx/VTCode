@@ -509,19 +509,18 @@ impl GrepSearchManager {
             let file = &prefix[..prefix_end];
 
             // Apply glob filtering
-            if let Some(pattern) = &glob_filter {
-                if !pattern.matches(file) {
-                    continue;
-                }
+            if let Some(pattern) = &glob_filter
+                && !pattern.matches(file)
+            {
+                continue;
             }
 
             // Check file size if max_file_size is specified
-            if let Some(max_size) = input.max_file_size {
-                if let Ok(metadata) = std::fs::metadata(file) {
-                    if metadata.len() as usize > max_size {
-                        continue;
-                    }
-                }
+            if let Some(max_size) = input.max_file_size
+                && let Ok(metadata) = std::fs::metadata(file)
+                && metadata.len() as usize > max_size
+            {
+                continue;
             }
 
             // Check if file is hidden and respect include_hidden setting
@@ -593,38 +592,37 @@ impl GrepSearchManager {
             );
 
             // Check cache first if available
-            if let Some(ref cache) = cache {
-                if let Some(cached_result) = Self::cached_result(cache, &input) {
-                    #[expect(clippy::unwrap_used)]
-                    let mut st = search_state.lock().unwrap();
-                    st.last_result = Some(cached_result);
-                    return;
-                }
+            if let Some(ref cache) = cache
+                && let Some(cached_result) = Self::cached_result(cache, &input)
+            {
+                #[expect(clippy::unwrap_used)]
+                let mut st = search_state.lock().unwrap();
+                st.last_result = Some(cached_result);
+                return;
             }
 
             let search_result = GrepSearchManager::execute_with_backends(&input);
 
             let is_cancelled = cancellation_token.load(Ordering::Relaxed);
-            if !is_cancelled {
-                if let Ok(matches) = search_result {
-                    if !matches.is_empty() {
-                        let result = GrepSearchResult {
-                            query: query.clone(),
-                            matches,
-                        };
+            if !is_cancelled
+                && let Ok(matches) = search_result
+                && !matches.is_empty()
+            {
+                let result = GrepSearchResult {
+                    query: query.clone(),
+                    matches,
+                };
 
-                        // Cache the result if cache is available
-                        if let Some(ref cache) = cache {
-                            if GrepSearchCache::should_cache(&result) {
-                                cache.put(&input, result.clone());
-                            }
-                        }
-
-                        #[expect(clippy::unwrap_used)]
-                        let mut st = search_state.lock().unwrap();
-                        st.last_result = Some(result);
-                    }
+                // Cache the result if cache is available
+                if let Some(ref cache) = cache
+                    && GrepSearchCache::should_cache(&result)
+                {
+                    cache.put(&input, result.clone());
                 }
+
+                #[expect(clippy::unwrap_used)]
+                let mut st = search_state.lock().unwrap();
+                st.last_result = Some(result);
             }
 
             // Reset the active search state

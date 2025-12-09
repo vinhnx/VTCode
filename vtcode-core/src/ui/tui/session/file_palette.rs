@@ -233,10 +233,10 @@ impl FilePalette {
         let query_lower = query.to_lowercase();
 
         // Bonus for matching in filename (last path segment)
-        if let Some(filename) = path.rsplit('/').next() {
-            if filename.to_lowercase().contains(&query_lower) {
-                adjusted_score += 500;
-            }
+        if let Some(filename) = path.rsplit('/').next()
+            && filename.to_lowercase().contains(&query_lower)
+        {
+            adjusted_score += 500;
         }
 
         Some(adjusted_score)

@@ -140,14 +140,14 @@ impl Session {
     /// Check if the current input should trigger the prompt palette
     pub(super) fn check_prompt_reference_trigger(&mut self) {
         // Initialize prompt palette on-demand if it doesn't exist
-        if self.prompt_palette.is_none() {
-            if let Some(registry) = &self.custom_prompts {
-                if registry.enabled() && !registry.is_empty() {
-                    let mut palette = PromptPalette::new();
-                    palette.load_prompts(registry.iter());
-                    self.prompt_palette = Some(palette);
-                }
-            }
+        if self.prompt_palette.is_none()
+            && let Some(registry) = &self.custom_prompts
+            && registry.enabled()
+            && !registry.is_empty()
+        {
+            let mut palette = PromptPalette::new();
+            palette.load_prompts(registry.iter());
+            self.prompt_palette = Some(palette);
         }
 
         if let Some(palette) = self.prompt_palette.as_mut() {

@@ -32,11 +32,11 @@ fn compact_tools_format(tools_str: &str) -> String {
 
     for part in parts {
         let trimmed = part.trim();
-        if let Some(num_str) = trimmed.strip_prefix("allow ") {
-            if let Ok(num) = num_str.parse::<i32>() {
-                allow_count = num;
-                break; // We found the allow count, no need to continue
-            }
+        if let Some(num_str) = trimmed.strip_prefix("allow ")
+            && let Ok(num) = num_str.parse::<i32>()
+        {
+            allow_count = num;
+            break; // We found the allow count, no need to continue
         }
     }
 

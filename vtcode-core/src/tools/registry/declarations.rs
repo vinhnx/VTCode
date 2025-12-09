@@ -47,10 +47,10 @@ fn insert_string_property_with_default(
         "description": description,
     });
 
-    if let Some(default_value) = default {
-        if let Value::Object(ref mut obj) = value {
-            obj.insert("default".to_string(), json!(default_value));
-        }
+    if let Some(default_value) = default
+        && let Value::Object(ref mut obj) = value
+    {
+        obj.insert("default".to_string(), json!(default_value));
     }
 
     properties.insert(key.to_string(), value);
@@ -79,10 +79,10 @@ fn insert_bool_property(
         "description": description,
     });
 
-    if let Some(default_value) = default {
-        if let Value::Object(ref mut obj) = value {
-            obj.insert("default".to_string(), json!(default_value));
-        }
+    if let Some(default_value) = default
+        && let Value::Object(ref mut obj) = value
+    {
+        obj.insert("default".to_string(), json!(default_value));
     }
 
     properties.insert(key.to_string(), value);

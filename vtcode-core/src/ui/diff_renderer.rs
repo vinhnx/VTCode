@@ -460,13 +460,14 @@ impl DiffRenderer {
             // Check if we can find a match within context window
             let mut found = false;
             for i in 1..=self.context_lines {
-                if old_end + i < old_lines.len() && new_end + i < new_lines.len() {
-                    if old_lines[old_end + i] == new_lines[new_end + i] {
-                        old_end += i;
-                        new_end += i;
-                        found = true;
-                        break;
-                    }
+                if old_end + i < old_lines.len()
+                    && new_end + i < new_lines.len()
+                    && old_lines[old_end + i] == new_lines[new_end + i]
+                {
+                    old_end += i;
+                    new_end += i;
+                    found = true;
+                    break;
                 }
             }
 
@@ -810,13 +811,14 @@ pub fn generate_unified_diff(old_content: &str, new_content: &str, filename: &st
         let mut context_found = false;
         for i in 0..3 {
             // Look ahead 3 lines for context
-            if end_old + i < old_lines.len() && end_new + i < new_lines.len() {
-                if old_lines[end_old + i] == new_lines[end_new + i] {
-                    end_old += i;
-                    end_new += i;
-                    context_found = true;
-                    break;
-                }
+            if end_old + i < old_lines.len()
+                && end_new + i < new_lines.len()
+                && old_lines[end_old + i] == new_lines[end_new + i]
+            {
+                end_old += i;
+                end_new += i;
+                context_found = true;
+                break;
             }
         }
 
@@ -830,9 +832,9 @@ pub fn generate_unified_diff(old_content: &str, new_content: &str, filename: &st
         let new_count = end_new - start_new;
 
         use std::fmt::Write;
-        let _ = write!(
+        let _ = writeln!(
             diff,
-            "@@ -{},{} +{},{} @@\n",
+            "@@ -{},{} +{},{} @@",
             start_old + 1,
             old_count,
             start_new + 1,

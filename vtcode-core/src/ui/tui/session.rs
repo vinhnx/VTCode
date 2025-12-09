@@ -261,12 +261,12 @@ impl Session {
         if matches!(kind, InlineMessageKind::Agent | InlineMessageKind::Error)
             && self.thinking_spinner.is_active
         {
-            if let Some(spinner_idx) = self.thinking_spinner.spinner_line_index {
-                if spinner_idx < self.lines.len() {
-                    self.lines.remove(spinner_idx);
-                    // Invalidate transcript cache to ensure fresh render
-                    self.transcript_cache = None;
-                }
+            if let Some(spinner_idx) = self.thinking_spinner.spinner_line_index
+                && spinner_idx < self.lines.len()
+            {
+                self.lines.remove(spinner_idx);
+                // Invalidate transcript cache to ensure fresh render
+                self.transcript_cache = None;
             }
             self.thinking_spinner.stop();
         }

@@ -309,19 +309,17 @@ impl CodeAnalyzer {
     fn extract_go_dependencies(&self, node: &SyntaxNode, deps: &mut Vec<DependencyInfo>) {
         if node.kind == "import_declaration" {
             for child in &node.children {
-                if let Some(spec_node) = child.named_children.get("spec") {
-                    if let Some(path_node) =
+                if let Some(spec_node) = child.named_children.get("spec")
+                    && let Some(path_node) =
                         spec_node.first().and_then(|n| n.named_children.get("path"))
-                    {
-                        if let Some(string_node) = path_node.first() {
-                            deps.push(DependencyInfo {
-                                name: string_node.text.clone(),
-                                kind: DependencyKind::Import,
-                                source: "import".to_string(),
-                                position: string_node.start_position.clone(),
-                            });
-                        }
-                    }
+                    && let Some(string_node) = path_node.first()
+                {
+                    deps.push(DependencyInfo {
+                        name: string_node.text.clone(),
+                        kind: DependencyKind::Import,
+                        source: "import".to_string(),
+                        position: string_node.start_position.clone(),
+                    });
                 }
             }
         }
@@ -334,15 +332,15 @@ impl CodeAnalyzer {
     fn extract_java_dependencies(&self, node: &SyntaxNode, deps: &mut Vec<DependencyInfo>) {
         if node.kind == "import_declaration" {
             for child in &node.children {
-                if let Some(name_node) = child.named_children.get("qualified_name") {
-                    if let Some(name) = name_node.first() {
-                        deps.push(DependencyInfo {
-                            name: name.text.clone(),
-                            kind: DependencyKind::Import,
-                            source: "import".to_string(),
-                            position: name.start_position.clone(),
-                        });
-                    }
+                if let Some(name_node) = child.named_children.get("qualified_name")
+                    && let Some(name) = name_node.first()
+                {
+                    deps.push(DependencyInfo {
+                        name: name.text.clone(),
+                        kind: DependencyKind::Import,
+                        source: "import".to_string(),
+                        position: name.start_position.clone(),
+                    });
                 }
             }
         }
@@ -356,15 +354,15 @@ impl CodeAnalyzer {
     fn extract_swift_dependencies(&self, node: &SyntaxNode, deps: &mut Vec<DependencyInfo>) {
         if node.kind == "import_declaration" {
             for child in &node.children {
-                if let Some(path_node) = child.named_children.get("path") {
-                    if let Some(path) = path_node.first() {
-                        deps.push(DependencyInfo {
-                            name: path.text.clone(),
-                            kind: DependencyKind::Import,
-                            source: "import".to_string(),
-                            position: path.start_position.clone(),
-                        });
-                    }
+                if let Some(path_node) = child.named_children.get("path")
+                    && let Some(path) = path_node.first()
+                {
+                    deps.push(DependencyInfo {
+                        name: path.text.clone(),
+                        kind: DependencyKind::Import,
+                        source: "import".to_string(),
+                        position: path.start_position.clone(),
+                    });
                 }
             }
         }
@@ -380,20 +378,17 @@ impl CodeAnalyzer {
 
         // Check for long functions
         for symbol in symbols {
-            if matches!(symbol.kind, SymbolKind::Function | SymbolKind::Method) {
-                if let Some(signature) = &symbol.signature {
-                    if signature.len() > 100 {
-                        issues.push(AnalysisIssue {
-                            level: IssueLevel::Info,
-                            category: IssueCategory::Maintainability,
-                            message: format!("Long function signature: {}", symbol.name),
-                            position: symbol.position.clone(),
-                            suggestion: Some(
-                                "Consider breaking down into smaller functions".to_string(),
-                            ),
-                        });
-                    }
-                }
+            if matches!(symbol.kind, SymbolKind::Function | SymbolKind::Method)
+                && let Some(signature) = &symbol.signature
+                && signature.len() > 100
+            {
+                issues.push(AnalysisIssue {
+                    level: IssueLevel::Info,
+                    category: IssueCategory::Maintainability,
+                    message: format!("Long function signature: {}", symbol.name),
+                    position: symbol.position.clone(),
+                    suggestion: Some("Consider breaking down into smaller functions".to_string()),
+                });
             }
         }
 

@@ -21,6 +21,12 @@ pub struct SystemPromptCache {
     entries: RwLock<HashMap<String, String>>,
 }
 
+impl Default for SystemPromptCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SystemPromptCache {
     pub fn new() -> Self {
         Self {

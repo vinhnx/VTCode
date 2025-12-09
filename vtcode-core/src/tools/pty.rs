@@ -346,22 +346,22 @@ impl CommandEchoState {
 
             let mut matched_byte = false;
             loop {
-                if let Some(&expected) = self.command_bytes.get(self.matched) {
-                    if byte == expected {
-                        self.matched += 1;
-                        index += 1;
-                        if self.matched == self.command_bytes.len() {
-                            self.consumed_once = true;
-                            self.pending_newline = self.require_newline;
-                            self.matched = if self.command_bytes.len() > 1 {
-                                self.failure[self.matched - 1]
-                            } else {
-                                0
-                            };
-                        }
-                        matched_byte = true;
-                        break;
+                if let Some(&expected) = self.command_bytes.get(self.matched)
+                    && byte == expected
+                {
+                    self.matched += 1;
+                    index += 1;
+                    if self.matched == self.command_bytes.len() {
+                        self.consumed_once = true;
+                        self.pending_newline = self.require_newline;
+                        self.matched = if self.command_bytes.len() > 1 {
+                            self.failure[self.matched - 1]
+                        } else {
+                            0
+                        };
                     }
+                    matched_byte = true;
+                    break;
                 }
 
                 if self.matched == 0 {
@@ -618,10 +618,10 @@ impl PtyScrollback {
                     let valid_up_to = error.valid_up_to();
                     if valid_up_to > 0 {
                         // Process valid portion
-                        if let Ok(valid) = std::str::from_utf8(&buffer[..valid_up_to]) {
-                            if !valid.is_empty() {
-                                self.push_text(valid);
-                            }
+                        if let Ok(valid) = std::str::from_utf8(&buffer[..valid_up_to])
+                            && !valid.is_empty()
+                        {
+                            self.push_text(valid);
                         }
                         buffer.drain(..valid_up_to);
 
@@ -1539,13 +1539,13 @@ impl PtyManager {
         // 3. Join reader thread
         {
             let mut thread_guard = handle.reader_thread.lock();
-            if let Some(reader_thread) = thread_guard.take() {
-                if let Err(panic) = reader_thread.join() {
-                    warn!(
-                        "PTY session '{}' reader thread panicked: {:?}",
-                        session_id, panic
-                    );
-                }
+            if let Some(reader_thread) = thread_guard.take()
+                && let Err(panic) = reader_thread.join()
+            {
+                warn!(
+                    "PTY session '{}' reader thread panicked: {:?}",
+                    session_id, panic
+                );
             }
         }
 
@@ -1608,10 +1608,10 @@ fn set_command_environment(
 
     // Ensure HOME is set - this is crucial for proper path expansion in cargo and other tools
     let home_key = OsString::from("HOME");
-    if !env_map.contains_key(&home_key) {
-        if let Some(home_dir) = dirs::home_dir() {
-            env_map.insert(home_key.clone(), OsString::from(home_dir.as_os_str()));
-        }
+    if !env_map.contains_key(&home_key)
+        && let Some(home_dir) = dirs::home_dir()
+    {
+        env_map.insert(home_key.clone(), OsString::from(home_dir.as_os_str()));
     }
 
     let path_key = OsString::from("PATH");

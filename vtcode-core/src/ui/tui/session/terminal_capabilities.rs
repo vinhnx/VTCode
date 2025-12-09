@@ -47,18 +47,18 @@ pub fn supports_unicode_box_drawing() -> bool {
     }
 
     // Check LANG environment variable for UTF-8 locale
-    if let Ok(lang) = env::var("LANG") {
-        if lang.to_lowercase().contains("utf-8") || lang.to_lowercase().contains("utf8") {
-            return true;
-        }
+    if let Ok(lang) = env::var("LANG")
+        && (lang.to_lowercase().contains("utf-8") || lang.to_lowercase().contains("utf8"))
+    {
+        return true;
     }
 
     // Check LC_ALL and LC_CTYPE for UTF-8
     for var in &["LC_ALL", "LC_CTYPE"] {
-        if let Ok(locale) = env::var(var) {
-            if locale.to_lowercase().contains("utf-8") || locale.to_lowercase().contains("utf8") {
-                return true;
-            }
+        if let Ok(locale) = env::var(var)
+            && (locale.to_lowercase().contains("utf-8") || locale.to_lowercase().contains("utf8"))
+        {
+            return true;
         }
     }
 

@@ -126,11 +126,7 @@ impl ToolExecutionHistory {
     pub fn get_recent_records(&self, count: usize) -> Vec<ToolExecutionRecord> {
         let records = self.records.read().unwrap();
         let records_len = records.len();
-        let start = if count > records_len {
-            0
-        } else {
-            records_len - count
-        };
+        let start = records_len.saturating_sub(count);
         records.iter().skip(start).cloned().collect()
     }
 
@@ -427,11 +423,11 @@ impl ToolRegistry {
         let mut tools = self.inventory.available_tools();
 
         // Add MCP tools if available
-        if let Some(mcp_client) = &self.mcp_client {
-            if let Ok(mcp_tools) = mcp_client.list_mcp_tools().await {
-                for tool in mcp_tools {
-                    tools.push(format!("mcp_{}", tool.name));
-                }
+        if let Some(mcp_client) = &self.mcp_client
+            && let Ok(mcp_tools) = mcp_client.list_mcp_tools().await
+        {
+            for tool in mcp_tools {
+                tools.push(format!("mcp_{}", tool.name));
             }
         }
 
@@ -498,10 +494,10 @@ impl ToolRegistry {
                     return true;
                 }
                 // Check if it's an alias
-                if let Some(resolved_name) = self.resolve_mcp_tool_alias(tool_name).await {
-                    if resolved_name != tool_name {
-                        return true;
-                    }
+                if let Some(resolved_name) = self.resolve_mcp_tool_alias(tool_name).await
+                    && resolved_name != tool_name
+                {
+                    return true;
                 }
             }
         }
@@ -605,13 +601,14 @@ impl ToolRegistry {
             return Ok(());
         }
 
-        if self.mcp_client.is_some() && self.mcp_tool_index.is_empty() {
-            if let Err(err) = self.refresh_mcp_tools().await {
-                warn!(
-                    error = %err,
-                    "Failed to refresh MCP tools during registry initialization"
-                );
-            }
+        if self.mcp_client.is_some()
+            && self.mcp_tool_index.is_empty()
+            && let Err(err) = self.refresh_mcp_tools().await
+        {
+            warn!(
+                error = %err,
+                "Failed to refresh MCP tools during registry initialization"
+            );
         }
 
         self.sync_policy_catalog().await;
@@ -920,7 +917,8 @@ impl ToolRegistry {
         // PTY session will be automatically cleaned up when _pty_guard is dropped
 
         // Handle the execution result and record it
-        let execution_result = match result {
+
+        match result {
             Ok(value) => {
                 let normalized_value = normalize_tool_output(value);
 
@@ -951,9 +949,7 @@ impl ToolRegistry {
 
                 Ok(error.to_json_value())
             }
-        };
-
-        execution_result
+        }
     }
 
     /// Set the MCP client for this registry

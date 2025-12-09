@@ -739,9 +739,7 @@ impl OpenRouterProvider {
         let tool_restricted = if let Ok(model_id) = ModelId::from_str(resolved_model) {
             !model_id.supports_tool_calls()
         } else {
-            models::openrouter::TOOL_UNAVAILABLE_MODELS
-                .iter()
-                .any(|candidate| *candidate == resolved_model)
+            models::openrouter::TOOL_UNAVAILABLE_MODELS.contains(&resolved_model)
         };
 
         if tools_requested && tool_restricted {
@@ -1595,7 +1593,7 @@ impl OpenRouterProvider {
             let reasoning_details = message
                 .get("reasoning_details")
                 .and_then(|rd| rd.as_array())
-                .map(|arr| arr.clone());
+                .cloned();
 
             let mut reasoning_segments: Vec<String> = Vec::new();
 
@@ -1699,7 +1697,7 @@ impl OpenRouterProvider {
         let mut reasoning_buffer = ReasoningBuffer::default();
         let mut tool_call_builders: Vec<ToolCallBuilder> = Vec::new();
         let mut deltas = StreamDelta::default();
-        let telemetry = OpenRouterStreamTelemetry::default();
+        let telemetry = OpenRouterStreamTelemetry;
 
         if let Some(content_value) = message.get("content") {
             process_content_value(
@@ -1729,7 +1727,7 @@ impl OpenRouterProvider {
         let reasoning_details = message
             .get("reasoning_details")
             .and_then(|rd| rd.as_array())
-            .map(|arr| arr.clone());
+            .cloned();
 
         let mut reasoning_segments: Vec<String> = Vec::new();
 
@@ -1842,9 +1840,7 @@ impl LLMProvider for OpenRouterProvider {
         if let Ok(model_id) = ModelId::from_str(requested) {
             return model_id.is_reasoning_variant();
         }
-        models::openrouter::REASONING_MODELS
-            .iter()
-            .any(|candidate| *candidate == requested)
+        models::openrouter::REASONING_MODELS.contains(&requested)
     }
 
     fn supports_reasoning(&self, model: &str) -> bool {
@@ -1862,9 +1858,7 @@ impl LLMProvider for OpenRouterProvider {
             return model_id.supports_tool_calls();
         }
 
-        !models::openrouter::TOOL_UNAVAILABLE_MODELS
-            .iter()
-            .any(|candidate| *candidate == requested)
+        !models::openrouter::TOOL_UNAVAILABLE_MODELS.contains(&requested)
     }
 
     async fn stream(&self, request: LLMRequest) -> Result<LLMStream, LLMError> {
@@ -1879,7 +1873,7 @@ impl LLMProvider for OpenRouterProvider {
             let mut usage: Option<Usage> = None;
             let mut finish_reason = FinishReason::Stop;
             let mut done = false;
-            let telemetry = OpenRouterStreamTelemetry::default();
+            let telemetry = OpenRouterStreamTelemetry;
 
             while let Some(chunk_result) = body_stream.next().await {
                 let chunk = chunk_result.map_err(|err| {

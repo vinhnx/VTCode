@@ -236,11 +236,11 @@ impl AsyncMiddleware for AsyncCachingMiddleware {
         let result = next(request).await;
 
         // Cache successful result (migrated to UnifiedCache)
-        if result.success {
-            if let Some(ref output) = result.output {
-                let size = output.len() as u64;
-                self.cache.write().insert(key, output.clone(), size);
-            }
+        if result.success
+            && let Some(ref output) = result.output
+        {
+            let size = output.len() as u64;
+            self.cache.write().insert(key, output.clone(), size);
         }
 
         result

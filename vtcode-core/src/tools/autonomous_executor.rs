@@ -142,13 +142,13 @@ impl AutonomousExecutor {
 
             // Check call count and provide early warning
             let count = detector.get_call_count(tool_name);
-            if count >= 3 {
-                if let Some(suggestion) = detector.suggest_alternative(tool_name) {
-                    return Some(format!(
-                        "Tool '{}' called {} times. Consider alternative approach:\n{}",
-                        tool_name, count, suggestion
-                    ));
-                }
+            if count >= 3
+                && let Some(suggestion) = detector.suggest_alternative(tool_name)
+            {
+                return Some(format!(
+                    "Tool '{}' called {} times. Consider alternative approach:\n{}",
+                    tool_name, count, suggestion
+                ));
             }
         }
         None
@@ -172,10 +172,10 @@ impl AutonomousExecutor {
         }
 
         // Check for destructive shell commands
-        if tool_name == "shell" || tool_name == tools::RUN_PTY_CMD {
-            if let Some(cmd) = args.get("command").and_then(|v| v.as_str()) {
-                return self.is_destructive_command(cmd);
-            }
+        if (tool_name == "shell" || tool_name == tools::RUN_PTY_CMD)
+            && let Some(cmd) = args.get("command").and_then(|v| v.as_str())
+        {
+            return self.is_destructive_command(cmd);
         }
 
         false
@@ -255,10 +255,10 @@ impl AutonomousExecutor {
                 let canonical_path = path_obj.canonicalize().ok();
                 let canonical_workspace = workspace.canonicalize().ok();
 
-                if let (Some(p), Some(w)) = (canonical_path, canonical_workspace) {
-                    if p.starts_with(&w) {
-                        return Ok(());
-                    }
+                if let (Some(p), Some(w)) = (canonical_path, canonical_workspace)
+                    && p.starts_with(&w)
+                {
+                    return Ok(());
                 }
             }
 
@@ -276,15 +276,11 @@ impl AutonomousExecutor {
             // Resolve the path and check if it stays within workspace
             if let Some(workspace) = &self.workspace_dir {
                 let resolved = workspace.join(path_str);
-                if let Ok(canonical) = resolved.canonicalize() {
-                    if let Ok(canonical_workspace) = workspace.canonicalize() {
-                        if !canonical.starts_with(&canonical_workspace) {
-                            anyhow::bail!(
-                                "Path traversal escapes workspace boundary: {}",
-                                path_str
-                            );
-                        }
-                    }
+                if let Ok(canonical) = resolved.canonicalize()
+                    && let Ok(canonical_workspace) = workspace.canonicalize()
+                    && !canonical.starts_with(&canonical_workspace)
+                {
+                    anyhow::bail!("Path traversal escapes workspace boundary: {}", path_str);
                 }
             }
         }

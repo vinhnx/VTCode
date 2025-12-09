@@ -136,8 +136,8 @@ impl<K: Clone + Eq + std::hash::Hash + std::fmt::Debug, V: Clone + std::fmt::Deb
             .expect("Cache RwLock poisoned - this indicates a panic in another thread");
 
         // Check if key already exists - if so, just update (no eviction needed)
-        if entries.contains_key(&key) {
-            entries.insert(key, CacheEntry::new(value, self.default_ttl));
+        if let std::collections::hash_map::Entry::Occupied(mut e) = entries.entry(key) {
+            e.insert(CacheEntry::new(value, self.default_ttl));
             return Ok(());
         }
 
@@ -175,8 +175,8 @@ impl<K: Clone + Eq + std::hash::Hash + std::fmt::Debug, V: Clone + std::fmt::Deb
         };
 
         // Check if key already exists - if so, just update (no eviction needed)
-        if entries.contains_key(&key) {
-            entries.insert(key, new_entry);
+        if let std::collections::hash_map::Entry::Occupied(mut e) = entries.entry(key) {
+            e.insert(new_entry);
             return Ok(());
         }
 
