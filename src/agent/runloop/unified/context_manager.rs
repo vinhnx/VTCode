@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{Result, bail};
 use tracing::{debug, warn};
 
 use crate::agent::runloop::context::{
@@ -228,6 +228,9 @@ impl ContextManager {
         attempt_history: &[uni::Message],
         retry_attempts: usize,
     ) -> Result<String> {
+        if self.base_system_prompt.trim().is_empty() {
+            bail!("Base system prompt is empty; cannot build prompt");
+        }
         // Create configuration and context hashes for cache invalidation
         let config = SystemPromptConfig {
             base_prompt: self.base_system_prompt.clone(),
@@ -264,6 +267,7 @@ impl ContextManager {
                 config.hash(),
                 context.hash(),
                 retry_attempts,
+                &context,
             )
             .await;
 

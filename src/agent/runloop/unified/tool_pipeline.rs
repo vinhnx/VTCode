@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::Error;
+use anyhow::{Error, anyhow};
 use serde_json::Value;
 use tokio::sync::Notify;
 use tokio::task::JoinHandle;
@@ -132,16 +132,28 @@ pub(crate) async fn run_tool_call(
     _vt_cfg: Option<&VTCodeConfig>,
     turn_index: usize,
 ) -> Result<ToolPipelineOutcome, anyhow::Error> {
-    let name = call
-        .function
-        .as_ref()
-        .expect("Tool call must have function")
-        .name
-        .as_str()
-        .to_string();
-    let args_val = call
-        .parsed_arguments()
-        .unwrap_or_else(|_| serde_json::json!({}));
+    let function = match call.function.as_ref() {
+        Some(func) => func,
+        None => {
+            return Ok(ToolPipelineOutcome::from_status(
+                ToolExecutionStatus::Failure {
+                    error: anyhow!("Tool call missing function"),
+                },
+            ));
+        }
+    };
+
+    let name = function.name.as_str().to_string();
+    let args_val = match call.parsed_arguments() {
+        Ok(args) => args,
+        Err(err) => {
+            return Ok(ToolPipelineOutcome::from_status(
+                ToolExecutionStatus::Failure {
+                    error: anyhow!(err),
+                },
+            ));
+        }
+    };
 
     // Pre-flight permission check
     match ensure_tool_permission(
