@@ -119,64 +119,61 @@ pub fn format_tool_result_for_display(tool_name: &str, result: &Value) -> String
         }
         tools::GREP_FILE => {
             // Show max 5 matches, indicate overflow
-            if let Some(obj) = result.as_object() {
-                if let Some(matches) = obj.get("matches").and_then(|v| v.as_array()) {
-                    if matches.len() > 5 {
-                        let truncated: Vec<_> = matches.iter().take(5).cloned().collect();
-                        let overflow = matches.len() - 5;
-                        let summary = serde_json::json!({
-                            "matches": truncated,
-                            "overflow": format!("[+{} more matches]", overflow),
-                            "total": matches.len()
-                        });
-                        return format!("Tool {} result: {}", tool_name, summary);
-                    }
-                }
+            if let Some(obj) = result.as_object()
+                && let Some(matches) = obj.get("matches").and_then(|v| v.as_array())
+                && matches.len() > 5
+            {
+                let truncated: Vec<_> = matches.iter().take(5).cloned().collect();
+                let overflow = matches.len() - 5;
+                let summary = serde_json::json!({
+                    "matches": truncated,
+                    "overflow": format!("[+{} more matches]", overflow),
+                    "total": matches.len()
+                });
+                return format!("Tool {} result: {}", tool_name, summary);
             }
             format!("Tool {} result: {}", tool_name, result)
         }
         tools::LIST_FILES => {
             // Summarize if 50+ items
-            if let Some(obj) = result.as_object() {
-                if let Some(files) = obj.get("files").and_then(|v| v.as_array()) {
-                    if files.len() > 50 {
-                        let sample: Vec<_> = files.iter().take(5).cloned().collect();
-                        let summary = serde_json::json!({
-                            "total_files": files.len(),
-                            "sample": sample,
-                            "note": format!("Showing 5 of {} files", files.len())
-                        });
-                        return format!("Tool {} result: {}", tool_name, summary);
-                    }
-                }
+            if let Some(obj) = result.as_object()
+                && let Some(files) = obj.get("files").and_then(|v| v.as_array())
+                && files.len() > 50
+            {
+                let sample: Vec<_> = files.iter().take(5).cloned().collect();
+                let summary = serde_json::json!({
+                    "total_files": files.len(),
+                    "sample": sample,
+                    "note": format!("Showing 5 of {} files", files.len())
+                });
+                return format!("Tool {} result: {}", tool_name, summary);
             }
             format!("Tool {} result: {}", tool_name, result)
         }
         tools::RUN_PTY_CMD | "shell" => {
             // Extract errors + 2 context lines for build output
-            if let Some(obj) = result.as_object() {
-                if let Some(stdout) = obj.get("stdout").and_then(|v| v.as_str()) {
-                    if stdout.len() > 2000 && (stdout.contains("error") || stdout.contains("Error"))
-                    {
-                        let lines: Vec<&str> = stdout.lines().collect();
-                        let mut extracted = Vec::new();
-                        for (i, line) in lines.iter().enumerate() {
-                            if line.to_lowercase().contains("error") {
-                                let start = i.saturating_sub(2);
-                                let end = (i + 3).min(lines.len());
-                                extracted.extend_from_slice(&lines[start..end]);
-                                extracted.push("...");
-                            }
-                        }
-                        if !extracted.is_empty() {
-                            let compact = serde_json::json!({
-                                "exit_code": obj.get("exit_code"),
-                                "errors": extracted.join("\n"),
-                                "note": "Showing error lines + context only"
-                            });
-                            return format!("Tool {} result: {}", tool_name, compact);
-                        }
+            if let Some(obj) = result.as_object()
+                && let Some(stdout) = obj.get("stdout").and_then(|v| v.as_str())
+                && stdout.len() > 2000
+                && (stdout.contains("error") || stdout.contains("Error"))
+            {
+                let lines: Vec<&str> = stdout.lines().collect();
+                let mut extracted = Vec::new();
+                for (i, line) in lines.iter().enumerate() {
+                    if line.to_lowercase().contains("error") {
+                        let start = i.saturating_sub(2);
+                        let end = (i + 3).min(lines.len());
+                        extracted.extend_from_slice(&lines[start..end]);
+                        extracted.push("...");
                     }
+                }
+                if !extracted.is_empty() {
+                    let compact = serde_json::json!({
+                        "exit_code": obj.get("exit_code"),
+                        "errors": extracted.join("\n"),
+                        "note": "Showing error lines + context only"
+                    });
+                    return format!("Tool {} result: {}", tool_name, compact);
                 }
             }
             format!("Tool {} result: {}", tool_name, result)
@@ -223,6 +220,13 @@ struct TaskRunState {
     tool_loop_limit_hit: bool,
     // Optimization: Track last processed message index for incremental Gemini message building
     last_processed_message_idx: usize,
+}
+
+struct ToolFailureContext<'a> {
+    agent_prefix: &'a str,
+    task_state: &'a mut TaskRunState,
+    event_recorder: &'a mut ExecEventRecorder,
+    command_event: &'a crate::core::agent::events::ActiveCommandHandle,
 }
 
 impl TaskRunState {
@@ -562,10 +566,7 @@ impl AgentRunner {
 
     fn record_tool_failure(
         &self,
-        agent_prefix: &str,
-        task_state: &mut TaskRunState,
-        event_recorder: &mut ExecEventRecorder,
-        command_event: &crate::core::agent::events::ActiveCommandHandle,
+        failure_ctx: &mut ToolFailureContext<'_>,
         tool_name: &str,
         error: &anyhow::Error,
         tool_response_id: Option<&str>,
@@ -574,19 +575,19 @@ impl AgentRunner {
         runner_println!(
             self,
             "{} {}",
-            agent_prefix,
+            failure_ctx.agent_prefix,
             format!("{} {}", style("(ERR)").red().bold(), failure_text)
         );
-        event_recorder.command_finished(
-            command_event,
+        failure_ctx.event_recorder.command_finished(
+            failure_ctx.command_event,
             CommandExecutionStatus::Failed,
             None,
             &failure_text,
         );
-        event_recorder.warning(&failure_text);
+        failure_ctx.event_recorder.warning(&failure_text);
         // Move failure_text into warnings first, then reference for conversation
-        task_state.warnings.push(failure_text.clone());
-        task_state.conversation.push(Content {
+        failure_ctx.task_state.warnings.push(failure_text.clone());
+        failure_ctx.task_state.conversation.push(Content {
             role: ROLE_USER.into(),
             parts: vec![Part::Text {
                 text: failure_text,
@@ -595,10 +596,25 @@ impl AgentRunner {
         });
         if let Some(call_id) = tool_response_id {
             let error_payload = serde_json::json!({ "error": error.to_string() }).to_string();
-            task_state
+            failure_ctx
+                .task_state
                 .conversation_messages
                 .push(Message::tool_response(call_id.to_owned(), error_payload));
         }
+    }
+
+    async fn optimize_tool_result(&self, name: &str, result: Value) -> Value {
+        let mut optimizer = {
+            let mut opt_ref = self.context_optimizer.borrow_mut();
+            std::mem::take(&mut *opt_ref)
+        };
+
+        let optimized = optimizer.optimize_result(name, result).await;
+
+        let mut opt_ref = self.context_optimizer.borrow_mut();
+        *opt_ref = optimizer;
+
+        optimized
     }
 
     async fn collect_provider_response(
@@ -987,8 +1003,12 @@ impl AgentRunner {
         for turn in 0..self.max_turns {
             // Check token budget before each turn
             let utilization = {
-                let context_opt = self.context_optimizer.borrow();
-                context_opt.utilization().await
+                let token_budget = self.context_optimizer.borrow().token_budget();
+                if let Some(budget) = token_budget {
+                    budget.usage_ratio().await
+                } else {
+                    0.0
+                }
             };
             if utilization > 0.90 {
                 // At 90%+ utilization, warn and consider stopping
@@ -1299,8 +1319,7 @@ impl AgentRunner {
                             let call_id = call.id.clone();
 
                             if !self.is_valid_tool(&name).await {
-                                let warning =
-                                    format!("Skipped denied or unknown tool: {}", name);
+                                let warning = format!("Skipped denied or unknown tool: {}", name);
                                 runner_println!(
                                     self,
                                     "{} {}",
@@ -1346,10 +1365,8 @@ impl AgentRunner {
                                     );
 
                                     // Optimize result through context optimizer (same as sequential path)
-                                    let optimized_result = {
-                                        let mut context_opt = self.context_optimizer.borrow_mut();
-                                        context_opt.optimize_result(&name, result).await
-                                    };
+                                    let optimized_result =
+                                        self.optimize_tool_result(&name, result).await;
 
                                     let tool_result = serde_json::to_string(&optimized_result)?;
                                     let display_text =
@@ -1477,10 +1494,8 @@ impl AgentRunner {
                                     );
 
                                     // Optimize tool result through context optimizer before sending to LLM
-                                    let optimized_result = {
-                                        let mut context_opt = self.context_optimizer.borrow_mut();
-                                        context_opt.optimize_result(&name, result).await
-                                    };
+                                    let optimized_result =
+                                        self.optimize_tool_result(&name, result).await;
 
                                     let tool_result = serde_json::to_string(&optimized_result)?;
                                     // For display: use limited version to avoid overwhelming TUI
@@ -1515,11 +1530,14 @@ impl AgentRunner {
                                     }
                                 }
                                 Err(e) => {
+                                    let mut failure_ctx = ToolFailureContext {
+                                        agent_prefix: &agent_prefix,
+                                        task_state: &mut task_state,
+                                        event_recorder: &mut event_recorder,
+                                        command_event: &command_event,
+                                    };
                                     self.record_tool_failure(
-                                        &agent_prefix,
-                                        &mut task_state,
-                                        &mut event_recorder,
-                                        &command_event,
+                                        &mut failure_ctx,
                                         &name,
                                         &e,
                                         Some(call.id.as_str()),
@@ -1778,11 +1796,14 @@ impl AgentRunner {
                                             }
                                         }
                                         Err(e) => {
+                                            let mut failure_ctx = ToolFailureContext {
+                                                agent_prefix: &agent_prefix,
+                                                task_state: &mut task_state,
+                                                event_recorder: &mut event_recorder,
+                                                command_event: &command_event,
+                                            };
                                             self.record_tool_failure(
-                                                &agent_prefix,
-                                                &mut task_state,
-                                                &mut event_recorder,
-                                                &command_event,
+                                                &mut failure_ctx,
                                                 name,
                                                 &e,
                                                 None,
@@ -1855,15 +1876,13 @@ impl AgentRunner {
                                     }
                                 }
                                 Err(e) => {
-                                    self.record_tool_failure(
-                                        &agent_prefix,
-                                        &mut task_state,
-                                        &mut event_recorder,
-                                        &command_event,
-                                        name,
-                                        &e,
-                                        None,
-                                    );
+                                    let mut failure_ctx = ToolFailureContext {
+                                        agent_prefix: &agent_prefix,
+                                        task_state: &mut task_state,
+                                        event_recorder: &mut event_recorder,
+                                        command_event: &command_event,
+                                    };
+                                    self.record_tool_failure(&mut failure_ctx, name, &e, None);
                                 }
                             }
                         }
@@ -1944,11 +1963,14 @@ impl AgentRunner {
                                             }
                                         }
                                         Err(e) => {
+                                            let mut failure_ctx = ToolFailureContext {
+                                                agent_prefix: &agent_prefix,
+                                                task_state: &mut task_state,
+                                                event_recorder: &mut event_recorder,
+                                                command_event: &command_event,
+                                            };
                                             self.record_tool_failure(
-                                                &agent_prefix,
-                                                &mut task_state,
-                                                &mut event_recorder,
-                                                &command_event,
+                                                &mut failure_ctx,
                                                 &func_name,
                                                 &e,
                                                 None,
@@ -2047,15 +2069,13 @@ impl AgentRunner {
                                     }
                                 }
                                 Err(e) => {
-                                    self.record_tool_failure(
-                                        &agent_prefix,
-                                        &mut task_state,
-                                        &mut event_recorder,
-                                        &command_event,
-                                        tool_name,
-                                        &e,
-                                        None,
-                                    );
+                                    let mut failure_ctx = ToolFailureContext {
+                                        agent_prefix: &agent_prefix,
+                                        task_state: &mut task_state,
+                                        event_recorder: &mut event_recorder,
+                                        command_event: &command_event,
+                                    };
+                                    self.record_tool_failure(&mut failure_ctx, tool_name, &e, None);
                                 }
                             }
                         }
@@ -2379,8 +2399,7 @@ impl AgentRunner {
         if let Ok(policy_manager) = self.tool_registry.policy_manager() {
             return matches!(
                 policy_manager.get_policy(canonical),
-                crate::tool_policy::ToolPolicy::Allow
-                    | crate::tool_policy::ToolPolicy::Prompt
+                crate::tool_policy::ToolPolicy::Allow | crate::tool_policy::ToolPolicy::Prompt
             );
         }
 

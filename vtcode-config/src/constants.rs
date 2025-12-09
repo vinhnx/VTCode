@@ -161,9 +161,9 @@ pub mod models {
 
     // Moonshot.ai models (direct API)
     pub mod moonshot {
-        // Moonshot Kimi K2 models are now available via OpenRouter
-        // Use OpenRouter variants: moonshotai/kimi-k2-0905, moonshotai/kimi-k2-thinking, moonshotai/kimi-k2:free
-        pub const SUPPORTED_MODELS: &[&str] = &[];
+        // Legacy Moonshot direct API models (kept for compatibility with tests)
+        pub const DEFAULT_MODEL: &str = "kimi-k2-0905";
+        pub const SUPPORTED_MODELS: &[&str] = &[DEFAULT_MODEL];
     }
 
     // OpenRouter models (extensible via vtcode.toml)
@@ -534,7 +534,7 @@ pub mod ui {
     pub const MODAL_CONTENT_VERTICAL_PADDING: u16 = 6;
     pub const MODAL_INSTRUCTIONS_TITLE: &str = "";
     pub const MODAL_INSTRUCTIONS_BULLET: &str = "•";
-    pub const INLINE_HEADER_HEIGHT: u16 = 4;
+    pub const INLINE_HEADER_HEIGHT: u16 = 3;
     pub const INLINE_INPUT_HEIGHT: u16 = 4;
     pub const INLINE_INPUT_MAX_LINES: usize = 10;
     pub const INLINE_NAVIGATION_PERCENT: u16 = 28;

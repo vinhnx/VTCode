@@ -795,7 +795,7 @@ async fn truncate_content_by_tokens(
     let char_count = content.len();
     let bracket_count: usize = content
         .chars()
-        .filter(|c| CODE_INDICATOR_CHARS.contains(*c))
+        .filter(|c| CODE_INDICATOR_CHARS.contains(c))
         .count();
     let is_code = bracket_count > (char_count / CODE_DETECTION_THRESHOLD);
     let head_ratio = if is_code {

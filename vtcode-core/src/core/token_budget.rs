@@ -3,9 +3,9 @@
 //! This module implements token counting and budget tracking to manage
 //! the attention budget of LLMs. It helps track token usage and monitor
 //! thresholds for awareness of context size.
-
-/// Maximum tokens allowed per tool response (token-based truncation limit)
-pub const MAX_TOOL_RESPONSE_TOKENS: usize = 25_000;
+//!
+//! Uses unified token constants from `token_constants.rs` for all thresholds
+//! to ensure consistency across the system.
 
 use crate::utils::current_timestamp;
 use anyhow::{Context, Result, anyhow};
@@ -22,8 +22,9 @@ use tracing::{debug, warn};
 
 use super::token_constants::{
     CODE_DETECTION_THRESHOLD, CODE_INDICATOR_CHARS, CODE_TOKEN_MULTIPLIER,
-    LONG_WORD_CHAR_REDUCTION, LONG_WORD_SCALE_FACTOR, LONG_WORD_THRESHOLD, MIN_TOKEN_COUNT,
-    TOKENS_PER_CHARACTER, TOKENS_PER_LINE,
+    DEFAULT_MAX_CONTEXT_TOKENS, LONG_WORD_CHAR_REDUCTION, LONG_WORD_SCALE_FACTOR,
+    LONG_WORD_THRESHOLD, MIN_TOKEN_COUNT, THRESHOLD_ALERT, THRESHOLD_WARNING, TOKENS_PER_CHARACTER,
+    TOKENS_PER_LINE,
 };
 
 /// Token budget configuration
@@ -46,9 +47,9 @@ pub struct TokenBudgetConfig {
 impl Default for TokenBudgetConfig {
     fn default() -> Self {
         Self {
-            max_context_tokens: 128_000,
-            warning_threshold: 0.75,
-            alert_threshold: 0.85,
+            max_context_tokens: DEFAULT_MAX_CONTEXT_TOKENS,
+            warning_threshold: THRESHOLD_WARNING,
+            alert_threshold: THRESHOLD_ALERT,
             model: "gpt-5".to_owned(),
             tokenizer_id: None,
             detailed_tracking: false,
@@ -93,17 +94,23 @@ impl TokenUsageStats {
         }
     }
 
-    /// Calculate percentage of max context used
+    /// Calculate percentage of max context used (accounts for fixed system prompt)
     pub fn usage_percentage(&self, max_tokens: usize) -> f64 {
         self.usage_ratio(max_tokens) * 100.0
     }
 
-    /// Calculate ratio (0.0-1.0) of max context used
+    /// Calculate ratio (0.0-1.0) of max context used (subtract system prompt headroom)
     pub fn usage_ratio(&self, max_tokens: usize) -> f64 {
         if max_tokens == 0 || self.total_tokens == 0 {
             return 0.0;
         }
-        self.total_tokens as f64 / max_tokens as f64
+
+        let usable_max = max_tokens.saturating_sub(self.system_prompt_tokens);
+        if usable_max == 0 {
+            return 0.0;
+        }
+
+        self.total_tokens as f64 / usable_max as f64
     }
 
     /// Check if alert threshold is exceeded
@@ -378,10 +385,16 @@ impl TokenBudgetManager {
             .await
     }
 
-    /// Get remaining tokens in budget
+    /// Get remaining tokens in budget (after accounting for system prompt headroom)
     pub async fn remaining_tokens(&self) -> usize {
-        self.get_usage_stats(|stats, max_tokens| max_tokens.saturating_sub(stats.total_tokens))
-            .await
+        self.get_usage_stats(|stats, max_tokens| {
+            let usable_max = max_tokens.saturating_sub(stats.system_prompt_tokens);
+            let variable_tokens = stats
+                .total_tokens
+                .saturating_sub(stats.system_prompt_tokens);
+            usable_max.saturating_sub(variable_tokens)
+        })
+        .await
     }
 
     /// Generic method to get usage statistics without duplicate locking
@@ -437,15 +450,23 @@ impl TokenBudgetManager {
         let config = self.config.read().await;
         let components = self.component_tokens.read().await;
 
+        let effective_max = config
+            .max_context_tokens
+            .saturating_sub(stats.system_prompt_tokens);
         let usage_ratio = stats.usage_ratio(config.max_context_tokens);
         let usage_pct = usage_ratio * 100.0;
-        let remaining = config.max_context_tokens.saturating_sub(stats.total_tokens);
+        let remaining = effective_max.saturating_sub(
+            stats
+                .total_tokens
+                .saturating_sub(stats.system_prompt_tokens),
+        );
 
         let mut report = format!(
             "Token Budget Report\n\
              ==================\n\
              Total Tokens: {}/{} ({:.1}%)\n\
-             Remaining: {} tokens\n\n\
+             Effective Max (minus system prompt): {}\n\
+             Remaining (post-system): {} tokens\n\n\
              Breakdown by Category:\n\
              - System Prompt: {} tokens\n\
              - User Messages: {} tokens\n\
@@ -455,6 +476,7 @@ impl TokenBudgetManager {
             stats.total_tokens,
             config.max_context_tokens,
             usage_pct,
+            effective_max,
             remaining,
             stats.system_prompt_tokens,
             stats.user_messages_tokens,
@@ -613,7 +635,7 @@ fn approximate_token_count(text: &str) -> usize {
     // Code (has brackets/braces): increase estimate
     let bracket_count: usize = text
         .chars()
-        .filter(|c| CODE_INDICATOR_CHARS.contains(*c))
+        .filter(|c| CODE_INDICATOR_CHARS.contains(c))
         .count();
     let is_likely_code = bracket_count > (char_count / CODE_DETECTION_THRESHOLD);
     let result = if is_likely_code {

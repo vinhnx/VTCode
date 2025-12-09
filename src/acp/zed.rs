@@ -27,7 +27,7 @@ use std::mem::discriminant;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{Mutex, mpsc, oneshot};
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 use tracing::{error, info, warn};
 use url::Url;
@@ -370,7 +370,7 @@ struct ZedAgent {
     session_update_tx: mpsc::UnboundedSender<NotificationEnvelope>,
     acp_tool_registry: Rc<AcpToolRegistry>,
     permission_prompter: Rc<dyn AcpPermissionPrompter>,
-    local_tool_registry: RefCell<CoreToolRegistry>,
+    local_tool_registry: Mutex<CoreToolRegistry>,
     file_ops_tool: Option<FileOpsTool>,
     client_capabilities: Rc<RefCell<Option<acp::ClientCapabilities>>>,
 }
@@ -460,7 +460,7 @@ impl ZedAgent {
             session_update_tx,
             acp_tool_registry,
             permission_prompter,
-            local_tool_registry: RefCell::new(core_tool_registry),
+            local_tool_registry: Mutex::new(core_tool_registry),
             file_ops_tool,
             client_capabilities: Rc::new(RefCell::new(None)),
         }
@@ -1219,7 +1219,7 @@ impl ZedAgent {
         }
 
         let result = {
-            let mut registry = self.local_tool_registry.borrow_mut();
+            let mut registry = self.local_tool_registry.lock().await;
             registry.execute_tool_ref(tool_name, args).await
         };
         match result {

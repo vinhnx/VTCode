@@ -1205,37 +1205,28 @@ mod tests {
             .input_manager
             .set_cursor(session.input_manager.content().len());
 
-        let title_line = session.header_title_line();
-        let title_text: String = title_line
-            .spans
-            .iter()
-            .map(|span| span.content.clone().into_owned())
-            .collect();
-        let provider_badge = format!(
-            "[{}]",
-            session.header_provider_short_value().to_ascii_uppercase()
-        );
-        assert!(title_text.contains(&provider_badge));
-        assert!(title_text.contains(&session.header_model_short_value()));
-        let reasoning_label = format!("({})", session.header_reasoning_short_value());
-        assert!(title_text.contains(&reasoning_label));
+        let lines = session.header_lines();
+        assert_eq!(lines.len(), 1);
 
-        let meta_line = session.header_meta_line();
-        let meta_text: String = meta_line
+        let line_text: String = lines[0]
             .spans
             .iter()
             .map(|span| span.content.clone().into_owned())
             .collect();
+        assert!(line_text.contains(&session.header_provider_short_value()));
+        assert!(line_text.contains(&session.header_model_short_value()));
+        let reasoning_label = format!("Reasoning: {}", session.header_reasoning_short_value());
+        assert!(line_text.contains(&reasoning_label));
         let mode_label = session.header_mode_short_label();
-        assert!(meta_text.contains(&mode_label));
+        assert!(line_text.contains(&mode_label));
         for value in session.header_chain_values() {
-            assert!(meta_text.contains(&value));
+            assert!(line_text.contains(&value));
         }
         // Removed assertion for HEADER_MCP_PREFIX since we're no longer showing MCP info in header
-        assert!(!meta_text.contains("Languages"));
-        assert!(!meta_text.contains(ui::HEADER_STATUS_LABEL));
-        assert!(!meta_text.contains(ui::HEADER_MESSAGES_LABEL));
-        assert!(!meta_text.contains(ui::HEADER_INPUT_LABEL));
+        assert!(!line_text.contains("Languages"));
+        assert!(!line_text.contains(ui::HEADER_STATUS_LABEL));
+        assert!(!line_text.contains(ui::HEADER_MESSAGES_LABEL));
+        assert!(!line_text.contains(ui::HEADER_INPUT_LABEL));
     }
 
     #[test]
@@ -1260,13 +1251,9 @@ mod tests {
             .set_cursor(session.input_manager.content().len());
 
         let lines = session.header_lines();
-        assert_eq!(lines.len(), 3);
+        assert_eq!(lines.len(), 1);
 
-        let Some(line) = lines.get(2) else {
-            panic!("Expected at least 3 header lines");
-        };
-
-        let summary: String = line
+        let summary: String = lines[0]
             .spans
             .iter()
             .map(|span| span.content.clone().into_owned())
@@ -1295,9 +1282,9 @@ mod tests {
             .set_cursor(session.input_manager.content().len());
 
         let lines = session.header_lines();
-        assert_eq!(lines.len(), 3);
+        assert_eq!(lines.len(), 1);
 
-        let summary: String = lines[2]
+        let summary: String = lines[0]
             .spans
             .iter()
             .map(|span| span.content.clone().into_owned())
@@ -1332,13 +1319,9 @@ mod tests {
             .set_cursor(session.input_manager.content().len());
 
         let lines = session.header_lines();
-        assert_eq!(lines.len(), 3);
+        assert_eq!(lines.len(), 1);
 
-        let Some(line) = lines.get(2) else {
-            panic!("Expected at least 3 header lines");
-        };
-
-        let summary: String = line
+        let summary: String = lines[0]
             .spans
             .iter()
             .map(|span| span.content.clone().into_owned())

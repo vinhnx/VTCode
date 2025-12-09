@@ -19,6 +19,9 @@ use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, UiSurfacePrefer
 use vtcode_core::core::agent::snapshots::{SnapshotConfig, SnapshotManager};
 use vtcode_core::core::decision_tracker::{Action as DTAction, DecisionOutcome};
 use vtcode_core::core::router::{Router, TaskClass};
+use vtcode_core::core::token_constants::{
+    THRESHOLD_ALERT, THRESHOLD_COMPACT, THRESHOLD_EMERGENCY, THRESHOLD_WARNING,
+};
 use vtcode_core::llm::error_display;
 use vtcode_core::llm::provider::{self as uni};
 use vtcode_core::tools::ApprovalRecorder;
@@ -1705,6 +1708,8 @@ pub(crate) async fn run_single_agent_loop_unified(
             let mut turn_modified_files: BTreeSet<PathBuf> = BTreeSet::new();
             let mut budget_warned_75 = false;
             let mut budget_warned_85 = false;
+            let mut budget_warned_90 = false;
+            let mut budget_warned_emergency = false;
             let tool_repeat_limit = vt_cfg
                 .as_ref()
                 .map(|cfg| cfg.tools.max_repeated_tool_calls)
@@ -1805,21 +1810,47 @@ pub(crate) async fn run_single_agent_loop_unified(
                 }
 
                 // Token budget warnings (Requirement 2.1/2.2/5.5)
+                // Using unified thresholds from token_constants
                 if token_budget_enabled {
                     let usage = token_budget.usage_ratio().await;
-                    if usage >= 0.85 && !budget_warned_85 {
+                    if usage >= THRESHOLD_EMERGENCY && !budget_warned_emergency {
                         let msg = format!(
-                            "Token budget high: {:.1}% used. Checkpoint or compaction recommended.",
-                            usage * 100.0
+                            "Token budget critical: {:.1}% used (emergency threshold {}%). Checkpoint immediately.",
+                            usage * 100.0,
+                            (THRESHOLD_EMERGENCY * 100.0) as u32
+                        );
+                        renderer.line(MessageStyle::Error, &msg)?;
+                        working_history.push(uni::Message::system(msg.clone()));
+                        budget_warned_emergency = true;
+                        budget_warned_90 = true;
+                        budget_warned_85 = true;
+                        budget_warned_75 = true;
+                    } else if usage >= THRESHOLD_COMPACT && !budget_warned_90 {
+                        let msg = format!(
+                            "Token budget compact mode: {:.1}% used (compact threshold {}%). Pruning context and truncating tool outputs.",
+                            usage * 100.0,
+                            (THRESHOLD_COMPACT * 100.0) as u32
+                        );
+                        renderer.line(MessageStyle::Status, &msg)?;
+                        working_history.push(uni::Message::system(msg.clone()));
+                        budget_warned_90 = true;
+                        budget_warned_85 = true;
+                        budget_warned_75 = true;
+                    } else if usage >= THRESHOLD_ALERT && !budget_warned_85 {
+                        let msg = format!(
+                            "Token budget high: {:.1}% used (alert threshold {}%). Checkpoint or compaction recommended.",
+                            usage * 100.0,
+                            (THRESHOLD_ALERT * 100.0) as u32
                         );
                         renderer.line(MessageStyle::Error, &msg)?;
                         working_history.push(uni::Message::system(msg.clone()));
                         budget_warned_85 = true;
                         budget_warned_75 = true; // implied
-                    } else if usage >= 0.75 && !budget_warned_75 {
+                    } else if usage >= THRESHOLD_WARNING && !budget_warned_75 {
                         let msg = format!(
-                            "Token budget warning: {:.1}% used. I will compact outputs.",
-                            usage * 100.0
+                            "Token budget warning: {:.1}% used (warning threshold {}%). I will compact outputs.",
+                            usage * 100.0,
+                            (THRESHOLD_WARNING * 100.0) as u32
                         );
                         renderer.line(MessageStyle::Info, &msg)?;
                         working_history.push(uni::Message::system(msg.clone()));

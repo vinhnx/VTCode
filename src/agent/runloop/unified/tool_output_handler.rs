@@ -283,7 +283,7 @@ mod tests {
     use vtcode_core::core::trajectory::TrajectoryLogger;
     use vtcode_core::tools::ApprovalRecorder;
     use vtcode_core::tools::registry::ToolRegistry;
-    use vtcode_core::tools::result_cache::CacheKey;
+    use vtcode_core::tools::result_cache::ToolCacheKey;
     use vtcode_core::ui::theme;
     use vtcode_core::ui::tui::{spawn_session, theme_from_styles};
 
@@ -299,7 +299,7 @@ mod tests {
 
         // Initialize a small cache and insert an entry for /tmp/foo.txt
         let cache = Arc::new(RwLock::new(ToolResultCache::new(8)));
-        let key = CacheKey::new("read_file", "{}", "/tmp/foo.txt");
+        let key = ToolCacheKey::new("read_file", "{}", "/tmp/foo.txt");
         {
             let mut c = cache.write().await;
             c.insert_arc(key.clone(), Arc::new("{}".to_string()));
@@ -404,7 +404,7 @@ mod tests {
         let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
 
         let cache = Arc::new(RwLock::new(ToolResultCache::new(8)));
-        let key = CacheKey::new("read_file", "{}", "/tmp/foo.txt");
+        let key = ToolCacheKey::new("read_file", "{}", "/tmp/foo.txt");
         {
             let mut c = cache.write().await;
             c.insert_arc(key.clone(), Arc::new("{}".to_string()));

@@ -1,7 +1,7 @@
 use crate::agent::runloop::unified::tool_output_handler::handle_pipeline_output_renderer;
 use crate::agent::runloop::unified::state::SessionStats;
 use crate::agent::runloop::mcp_events::McpPanelState;
-use vtcode_core::tools::result_cache::{ToolResultCache, CacheKey};
+use vtcode_core::tools::result_cache::{ToolResultCache, ToolCacheKey};
 use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_core::core::token_budget::TokenBudgetManager;
 use serde_json::json;
@@ -16,7 +16,7 @@ async fn handle_pipeline_output_renderer_invalidates_cache_and_records_tool() {
     let cache = Arc::new(RwLock::new(ToolResultCache::new(16)));
 
     // Insert a cache entry for `/workspace/modified.txt` with read_file
-    let key = CacheKey::new("read_file", "{}", "/workspace/modified.txt");
+    let key = ToolCacheKey::new("read_file", "{}", "/workspace/modified.txt");
     {
         let mut c = cache.write().await;
         c.insert(key.clone(), "old output".to_string());
@@ -24,7 +24,7 @@ async fn handle_pipeline_output_renderer_invalidates_cache_and_records_tool() {
     }
 
     // Build an outcome that indicates the file was modified
-    let outcome = vtcode_core::tools::result_cache::CacheKey::new;
+    let outcome = vtcode_core::tools::result_cache::ToolCacheKey::new;
     let pipeline_outcome = crate::agent::runloop::unified::tool_pipeline::ToolPipelineOutcome::from_status(
         crate::agent::runloop::unified::tool_pipeline::ToolExecutionStatus::Success {
             output: json!({"stdout": "ok"}),

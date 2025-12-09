@@ -116,6 +116,9 @@ pub async fn wait_for_redraw_complete() -> Result<(), anyhow::Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use vtcode_core::config::types::UiSurfacePreference;
+    use vtcode_core::ui::theme;
+    use vtcode_core::ui::tui::{spawn_session, theme_from_styles};
 
     #[tokio::test]
     async fn test_redraw_sync() {
@@ -136,9 +139,17 @@ mod tests {
     async fn test_redraw_rate_limiting() {
         let manager = UiSyncManager::new();
 
-        // First redraw should work
-        let (sender, _rx) = tokio::sync::mpsc::unbounded_channel();
-        let handle = InlineHandle { sender }; // lightweight test handle
+        // First redraw should work using a real inline handle
+        let session = spawn_session(
+            theme_from_styles(&theme::active_styles()),
+            None,
+            UiSurfacePreference::default(),
+            10,
+            false,
+            None,
+        )
+        .expect("spawn inline session");
+        let handle = session.clone_inline_handle();
         manager.force_redraw_sync(&handle).await.unwrap();
 
         // Immediate second redraw should be skipped due to rate limiting
