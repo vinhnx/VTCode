@@ -8,6 +8,7 @@
 
 use crate::config::constants::tools;
 use crate::core::token_budget::{TokenBudgetManager, TokenUsageStats};
+use crate::core::token_constants::{THRESHOLD_CHECKPOINT, THRESHOLD_COMPACT};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -16,9 +17,12 @@ use std::path::Path;
 use std::sync::Arc;
 use tokio::fs;
 
-/// Context budget thresholds
-const COMPACT_THRESHOLD: f64 = 0.90; // Start compacting at 90%
-const CHECKPOINT_THRESHOLD: f64 = 0.95; // Create checkpoint at 95%
+// Re-export unified constants for backward compatibility and clarity
+/// Compact threshold: Begin compacting at 90% usage
+pub const COMPACT_THRESHOLD: f64 = THRESHOLD_COMPACT;
+
+/// Checkpoint threshold: Create checkpoint at 95% usage
+pub const CHECKPOINT_THRESHOLD: f64 = THRESHOLD_CHECKPOINT;
 
 /// Maximum results to show per tool
 const MAX_GREP_RESULTS: usize = 5;
@@ -88,6 +92,11 @@ impl ContextOptimizer {
         }
     }
 
+    /// Get a cloned token budget handle for external async use
+    pub fn token_budget(&self) -> Option<Arc<TokenBudgetManager>> {
+        self.token_budget.clone()
+    }
+
     /// Check if checkpoint is needed
     pub async fn needs_checkpoint(&self) -> bool {
         self.utilization().await >= CHECKPOINT_THRESHOLD
@@ -148,91 +157,88 @@ impl ContextOptimizer {
 
     /// Optimize grep results - max 5 matches, indicate overflow
     fn optimize_grep_result(&self, result: Value) -> Value {
-        if let Some(obj) = result.as_object() {
-            if let Some(matches) = obj.get("matches").and_then(|v| v.as_array()) {
-                if matches.len() > MAX_GREP_RESULTS {
-                    let truncated: Vec<_> =
-                        matches.iter().take(MAX_GREP_RESULTS).cloned().collect();
-                    let overflow = matches.len() - MAX_GREP_RESULTS;
-                    return serde_json::json!({
-                        "matches": truncated,
-                        "overflow": format!("[+{} more matches]", overflow),
-                        "total": matches.len(),
-                        "note": "Showing top 5 most relevant matches"
-                    });
-                }
-            }
+        if let Some(obj) = result.as_object()
+            && let Some(matches) = obj.get("matches").and_then(|v| v.as_array())
+            && matches.len() > MAX_GREP_RESULTS
+        {
+            let truncated: Vec<_> = matches.iter().take(MAX_GREP_RESULTS).cloned().collect();
+            let overflow = matches.len() - MAX_GREP_RESULTS;
+            return serde_json::json!({
+                "matches": truncated,
+                "overflow": format!("[+{} more matches]", overflow),
+                "total": matches.len(),
+                "note": "Showing top 5 most relevant matches"
+            });
         }
         result
     }
 
     /// Optimize list_files - summarize if 50+ items
     fn optimize_list_files_result(&self, result: Value) -> Value {
-        if let Some(obj) = result.as_object() {
-            if let Some(files) = obj.get("files").and_then(|v| v.as_array()) {
-                if files.len() > MAX_LIST_FILES {
-                    let sample: Vec<_> = files.iter().take(5).cloned().collect();
-                    return serde_json::json!({
-                        "total_files": files.len(),
-                        "sample": sample,
-                        "note": format!("Showing 5 of {} files. Use grep_file for specific patterns.", files.len())
-                    });
-                }
-            }
+        if let Some(obj) = result.as_object()
+            && let Some(files) = obj.get("files").and_then(|v| v.as_array())
+            && files.len() > MAX_LIST_FILES
+        {
+            let sample: Vec<_> = files.iter().take(5).cloned().collect();
+            return serde_json::json!({
+                "total_files": files.len(),
+                "sample": sample,
+                "note": format!("Showing 5 of {} files. Use grep_file for specific patterns.", files.len())
+            });
         }
         result
     }
 
     /// Optimize read_file - truncate based on max_tokens parameter or default limits
     fn optimize_read_file_result(&self, result: Value) -> Value {
-        if let Some(obj) = result.as_object() {
-            if let Some(content) = obj.get("content").and_then(|v| v.as_str()) {
-                // Check if max_tokens was specified in the result
-                let max_tokens = obj
-                    .get("max_tokens")
-                    .and_then(|v| v.as_u64())
-                    .map(|v| v as usize);
+        if let Some(obj) = result.as_object()
+            && let Some(content) = obj.get("content").and_then(|v| v.as_str())
+        {
+            // Check if max_tokens was specified in the result
+            let max_tokens = obj
+                .get("max_tokens")
+                .and_then(|v| v.as_u64())
+                .map(|v| v as usize);
 
-                // Estimate tokens (rough: 1 token ≈ 4 chars)
-                let estimated_tokens = content.len() / 4;
-                let lines: Vec<_> = content.lines().collect();
+            // Estimate tokens (rough: 1 token ≈ 4 chars)
+            let estimated_tokens = content.len() / 4;
+            let lines: Vec<_> = content.lines().collect();
 
-                // Determine if we need to truncate based on tokens or lines
-                let should_truncate = if let Some(max_tok) = max_tokens {
-                    estimated_tokens > max_tok
+            // Determine if we need to truncate based on tokens or lines
+            let should_truncate = if let Some(max_tok) = max_tokens {
+                estimated_tokens > max_tok
+            } else {
+                lines.len() > MAX_FILE_LINES
+            };
+
+            if should_truncate {
+                let target_tokens = max_tokens.unwrap_or(MAX_FILE_LINES * 20); // ~20 tokens per line
+                let target_chars = target_tokens * 4;
+
+                let truncated = if content.len() > target_chars {
+                    // Truncate by characters, then find last complete line
+                    let partial = &content[..target_chars];
+                    if let Some(last_newline) = partial.rfind('\n') {
+                        &partial[..last_newline]
+                    } else {
+                        partial
+                    }
                 } else {
-                    lines.len() > MAX_FILE_LINES
+                    // Truncate by lines
+                    &lines[..MAX_FILE_LINES.min(lines.len())].join("\n")
                 };
 
-                if should_truncate {
-                    let target_tokens = max_tokens.unwrap_or(MAX_FILE_LINES * 20); // ~20 tokens per line
-                    let target_chars = target_tokens * 4;
+                let truncated_lines = truncated.lines().count();
 
-                    let truncated = if content.len() > target_chars {
-                        // Truncate by characters, then find last complete line
-                        let partial = &content[..target_chars];
-                        if let Some(last_newline) = partial.rfind('\n') {
-                            &partial[..last_newline]
-                        } else {
-                            partial
-                        }
-                    } else {
-                        // Truncate by lines
-                        &lines[..MAX_FILE_LINES.min(lines.len())].join("\n")
-                    };
-
-                    let truncated_lines = truncated.lines().count();
-
-                    return serde_json::json!({
-                        "content": truncated,
-                        "truncated": true,
-                        "total_lines": lines.len(),
-                        "showing_lines": truncated_lines,
-                        "estimated_tokens": estimated_tokens,
-                        "max_tokens": max_tokens,
-                        "note": "File truncated. Use read_file with start_line/end_line for specific sections."
-                    });
-                }
+                return serde_json::json!({
+                    "content": truncated,
+                    "truncated": true,
+                    "total_lines": lines.len(),
+                    "showing_lines": truncated_lines,
+                    "estimated_tokens": estimated_tokens,
+                    "max_tokens": max_tokens,
+                    "note": "File truncated. Use read_file with start_line/end_line for specific sections."
+                });
             }
         }
         result
@@ -240,41 +246,39 @@ impl ContextOptimizer {
 
     /// Optimize command output - extract errors only
     fn optimize_command_result(&self, result: Value) -> Value {
-        if let Some(obj) = result.as_object() {
-            if let Some(stdout) = obj.get("stdout").and_then(|v| v.as_str()) {
-                // Extract error lines + 2 context lines
-                let lines: Vec<_> = stdout.lines().collect();
-                if lines.len() > 100 {
-                    let error_lines: Vec<_> = lines
-                        .iter()
-                        .enumerate()
-                        .filter(|(_, line)| {
-                            line.contains("error:")
-                                || line.contains("Error:")
-                                || line.contains("ERROR")
-                        })
-                        .flat_map(|(i, _)| {
-                            let start = i.saturating_sub(2);
-                            let end = (i + 3).min(lines.len());
-                            lines[start..end].iter().map(|s| s.to_string())
-                        })
-                        .collect();
+        if let Some(obj) = result.as_object()
+            && let Some(stdout) = obj.get("stdout").and_then(|v| v.as_str())
+        {
+            // Extract error lines + 2 context lines
+            let lines: Vec<_> = stdout.lines().collect();
+            if lines.len() > 100 {
+                let error_lines: Vec<_> = lines
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, line)| {
+                        line.contains("error:") || line.contains("Error:") || line.contains("ERROR")
+                    })
+                    .flat_map(|(i, _)| {
+                        let start = i.saturating_sub(2);
+                        let end = (i + 3).min(lines.len());
+                        lines[start..end].iter().map(|s| s.to_string())
+                    })
+                    .collect();
 
-                    if !error_lines.is_empty() {
-                        return serde_json::json!({
-                            "errors": error_lines,
-                            "total_lines": lines.len(),
-                            "note": "Showing error lines with context. Full output available if needed."
-                        });
-                    }
-
-                    // No errors, just show summary
+                if !error_lines.is_empty() {
                     return serde_json::json!({
-                        "status": "completed",
+                        "errors": error_lines,
                         "total_lines": lines.len(),
-                        "note": "Command completed successfully. Output truncated."
+                        "note": "Showing error lines with context. Full output available if needed."
                     });
                 }
+
+                // No errors, just show summary
+                return serde_json::json!({
+                    "status": "completed",
+                    "total_lines": lines.len(),
+                    "note": "Command completed successfully. Output truncated."
+                });
             }
         }
         result
@@ -425,16 +429,16 @@ impl ContextOptimizer {
             }
 
             // Preserve error messages
-            if let Some(stderr) = obj.get("stderr").and_then(|v| v.as_str()) {
-                if !stderr.is_empty() {
-                    // Keep first 200 chars of stderr
-                    let truncated = if stderr.len() > 200 {
-                        format!("{}...", &stderr[..200])
-                    } else {
-                        stderr.to_string()
-                    };
-                    preserved.insert("stderr".to_string(), json!(truncated));
-                }
+            if let Some(stderr) = obj.get("stderr").and_then(|v| v.as_str())
+                && !stderr.is_empty()
+            {
+                // Keep first 200 chars of stderr
+                let truncated = if stderr.len() > 200 {
+                    format!("{}...", &stderr[..200])
+                } else {
+                    stderr.to_string()
+                };
+                preserved.insert("stderr".to_string(), json!(truncated));
             }
 
             // Preserve error lines from stdout
@@ -549,6 +553,12 @@ impl ContextOptimizer {
         } else {
             format!("[OK] Token budget at {:.1}%", util * 100.0)
         }
+    }
+}
+
+impl Default for ContextOptimizer {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

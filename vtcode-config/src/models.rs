@@ -1706,7 +1706,7 @@ mod tests {
         assert!(ollama_models.contains(&ModelId::OllamaQwen3Coder480bCloud));
         assert!(ollama_models.contains(&ModelId::OllamaGlm46Cloud));
         assert!(ollama_models.contains(&ModelId::OllamaMinimaxM2Cloud));
-        assert_eq!(ollama_models.len(), 8); // Removed OllamaKimiK21tCloud
+        assert_eq!(ollama_models.len(), 7); // Removed OllamaKimiK21tCloud
 
         let lmstudio_models = ModelId::models_for_provider(Provider::LmStudio);
         assert!(lmstudio_models.contains(&ModelId::LmStudioMetaLlama38BInstruct));

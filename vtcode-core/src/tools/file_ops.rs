@@ -1860,7 +1860,7 @@ impl FileOpsTool {
         let char_count = content.len();
         let bracket_count: usize = content
             .chars()
-            .filter(|c| crate::core::token_constants::CODE_INDICATOR_CHARS.contains(*c))
+            .filter(|c| crate::core::token_constants::CODE_INDICATOR_CHARS.contains(c))
             .count();
         let is_code =
             bracket_count > (char_count / crate::core::token_constants::CODE_DETECTION_THRESHOLD);

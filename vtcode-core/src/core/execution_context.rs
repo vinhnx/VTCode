@@ -81,16 +81,18 @@ impl ExecutionContext {
     /// Update compact mode based on current token budget usage
     ///
     /// This method checks the token budget usage and automatically activates
-    /// the appropriate compact mode:
-    /// - Normal: < 90% usage
-    /// - Compact: 90-95% usage
-    /// - Checkpoint: > 95% usage
+    /// the appropriate compact mode using unified thresholds from token_constants:
+    /// - Normal: < THRESHOLD_COMPACT (90%) usage
+    /// - Compact: THRESHOLD_COMPACT-THRESHOLD_CHECKPOINT (90-95%) usage
+    /// - Checkpoint: > THRESHOLD_CHECKPOINT (95%) usage
     pub async fn update_compact_mode_from_budget(&self) -> Result<CompactMode> {
+        use crate::core::token_constants::{THRESHOLD_CHECKPOINT, THRESHOLD_COMPACT};
+
         let usage_ratio = self.token_budget.usage_ratio().await;
 
-        let new_mode = if usage_ratio >= 0.95 {
+        let new_mode = if usage_ratio >= THRESHOLD_CHECKPOINT {
             CompactMode::Checkpoint
-        } else if usage_ratio >= 0.90 {
+        } else if usage_ratio >= THRESHOLD_COMPACT {
             CompactMode::Compact
         } else {
             CompactMode::Normal

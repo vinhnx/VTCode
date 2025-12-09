@@ -49,6 +49,7 @@ pub mod pruning_decisions;
 pub mod router;
 pub mod timeout_detector;
 pub mod token_budget;
+pub mod token_budget_constants;
 pub mod token_constants;
 pub mod token_estimator;
 pub mod trajectory;
@@ -62,3 +63,6 @@ pub use execution_context::ExecutionContext;
 pub use pruning_decisions::{
     PruningDecision, PruningDecisionLedger, PruningReport, RetentionChoice,
 };
+
+// Re-export all token budget constants for easy access
+pub use token_budget_constants::*;

@@ -43,6 +43,10 @@ fn compact_tools_format(tools_str: &str) -> String {
     allow_count.to_string()
 }
 
+fn line_is_empty(spans: &[Span<'static>]) -> bool {
+    spans.len() == 1 && spans.first().is_some_and(|span| span.content.is_empty())
+}
+
 impl Session {
     pub(super) fn render_header(&self, frame: &mut Frame<'_>, area: Rect, lines: &[Line<'static>]) {
         frame.render_widget(Clear, area);
@@ -56,19 +60,7 @@ impl Session {
     }
 
     pub(super) fn header_lines(&self) -> Vec<Line<'static>> {
-        let mut lines = vec![self.header_title_line(), self.header_meta_line()];
-
-        // Prioritize suggestions when input is empty or starts with /
-        if self.should_show_suggestions() {
-            if let Some(suggestions) = self.header_suggestions_line() {
-                lines.push(suggestions);
-            }
-        } else if let Some(highlights) = self.header_highlights_line() {
-            lines.push(highlights);
-        }
-
-        lines.truncate(3);
-        lines
+        vec![self.header_compact_line()]
     }
 
     pub(super) fn header_height_from_lines(&self, width: u16, lines: &[Line<'static>]) -> u16 {
@@ -141,20 +133,17 @@ impl Session {
 
         if !provider.is_empty() {
             let capitalized_provider = capitalize_first_letter(&provider);
-            let badge = format!("[{}]", capitalized_provider);
             let mut style = self.header_primary_style();
             style = style.add_modifier(Modifier::BOLD);
-            spans.push(Span::styled(badge, style));
+            spans.push(Span::styled(capitalized_provider, style));
         }
 
         if !model.is_empty() {
             if !spans.is_empty() {
                 spans.push(Span::raw(" "));
             }
-            let agent_model_label = "Model: ";
             let mut style = self.header_primary_style();
             style = style.add_modifier(Modifier::ITALIC);
-            spans.push(Span::styled(agent_model_label, style));
             spans.push(Span::styled(model, style));
         }
 
@@ -164,8 +153,57 @@ impl Session {
             }
             let mut style = self.header_secondary_style();
             style = style.add_modifier(Modifier::ITALIC | Modifier::DIM);
-            spans.push(Span::styled(format!("({})", reasoning), style));
+            spans.push(Span::styled(format!("Reasoning: {}", reasoning), style));
         }
+
+        if spans.is_empty() {
+            spans.push(Span::raw(String::new()));
+        }
+
+        Line::from(spans)
+    }
+
+    fn header_compact_line(&self) -> Line<'static> {
+        let mut spans = self.header_title_line().spans;
+        if line_is_empty(&spans) {
+            spans.clear();
+        }
+
+        let mut meta_spans = self.header_meta_line().spans;
+        if line_is_empty(&meta_spans) {
+            meta_spans.clear();
+        }
+
+        let mut tail_spans = if self.should_show_suggestions() {
+            self.header_suggestions_line()
+        } else {
+            self.header_highlights_line()
+        }
+        .map(|line| line.spans)
+        .unwrap_or_default();
+
+        if line_is_empty(&tail_spans) {
+            tail_spans.clear();
+        }
+
+        let separator_style = self.header_secondary_style();
+        let separator = Span::styled(
+            ui::HEADER_MODE_PRIMARY_SEPARATOR.to_owned(),
+            separator_style,
+        );
+
+        let mut append_section = |section: &mut Vec<Span<'static>>| {
+            if section.is_empty() {
+                return;
+            }
+            if !spans.is_empty() {
+                spans.push(separator.clone());
+            }
+            spans.append(section);
+        };
+
+        append_section(&mut meta_spans);
+        append_section(&mut tail_spans);
 
         if spans.is_empty() {
             spans.push(Span::raw(String::new()));
@@ -320,10 +358,7 @@ impl Session {
         let mut first_section = true;
         let mode_label = self.header_mode_short_label();
         if !mode_label.trim().is_empty() {
-            spans.push(Span::styled(
-                mode_label,
-                self.header_primary_style().add_modifier(Modifier::BOLD),
-            ));
+            spans.push(Span::styled(mode_label, self.header_primary_style()));
             first_section = false;
         }
 

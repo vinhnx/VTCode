@@ -2659,6 +2659,15 @@ mod tests {
     }
 
     #[test]
+    fn normalize_trailing_and_report_clause() {
+        let result = normalize_natural_language_command("cargo clippy and report");
+        assert_eq!(result, "cargo clippy");
+
+        let result = normalize_natural_language_command("npm test and show output");
+        assert_eq!(result, "npm test");
+    }
+
+    #[test]
     fn detects_windows_shell_name_variants() {
         assert!(should_use_windows_command_tokenizer(Some(
             "C:/Windows/System32/cmd.exe"
@@ -3322,6 +3331,28 @@ fn tokenize_command_string(command: &str, _shell_hint: Option<&str>) -> Result<V
 /// Handles common patterns like "git diff on file.rs" -> "git diff file.rs"
 fn normalize_natural_language_command(command: &str) -> String {
     let trimmed = command.trim();
+
+    // Drop trailing natural-language clauses like "and report" that should not be
+    // forwarded to the shell command.
+    const TRAILING_CONNECTORS: [&str; 6] = [
+        " and report",
+        " and show",
+        " and display",
+        " and tell me",
+        " and give",
+        " and summarize",
+    ];
+    let lowered = trimmed.to_ascii_lowercase();
+    for connector in TRAILING_CONNECTORS {
+        if let Some(idx) = lowered.rfind(connector) {
+            if idx > 0 {
+                let candidate = trimmed[..idx].trim_end();
+                if !candidate.is_empty() {
+                    return candidate.to_string();
+                }
+            }
+        }
+    }
 
     // Pattern: "git <subcommand> on <path>" -> "git <subcommand> <path>"
     // Examples: "git diff on file.rs", "git log on src/", "git status on ."

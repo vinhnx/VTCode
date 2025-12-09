@@ -771,7 +771,7 @@ mod tests {
         let permission_cache_arc = Arc::new(tokio::sync::RwLock::new(ToolPermissionCache::new()));
         {
             let mut cache = permission_cache_arc.write().await;
-            cache.cache_grant("test_tool", PermissionGrant::Permanent);
+            cache.cache_grant("test_tool".to_string(), PermissionGrant::Permanent);
         }
 
         let result_cache = Arc::new(tokio::sync::RwLock::new(ToolResultCache::new(10)));
@@ -800,7 +800,11 @@ mod tests {
             traj: &traj,
         };
 
-        let call = vtcode_core::llm::provider::ToolCall::function("call_1", "test_tool", "{}");
+        let call = vtcode_core::llm::provider::ToolCall::function(
+            "call_1".to_string(),
+            "test_tool".to_string(),
+            "{}".to_string(),
+        );
         let ctrl_c_state = Arc::new(CtrlCState::new());
         let ctrl_c_notify = Arc::new(Notify::new());
 

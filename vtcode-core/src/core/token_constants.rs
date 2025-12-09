@@ -1,101 +1,241 @@
-//! Token budget approximation constants
+//! Unified token budget constants
 //!
-//! This module defines all magic numbers used in token counting and truncation logic.
-//! Extracted for reusability and clarity.
+//! Single source of truth for all token budget-related constants used throughout
+//! the system for context management, budgeting, and execution control.
+//!
+//! All values are centralized here to ensure consistency across:
+//! - System prompts and instructions
+//! - Token budget manager
+//! - Context optimization
+//! - Agent execution loops
+//! - Tool response handling
+//!
+//! ## Threshold Hierarchy
+//!
+//! Token usage progresses through these stages (as % of max context):
+//! 1. **Normal** (0-75%): Full operation, no restrictions
+//! 2. **Warning** (75-85%): Start consolidating outputs
+//! 3. **Compact** (85-90%): Begin progressive compaction
+//! 4. **Alert/Critical** (90-94%): Aggressive pruning and compaction
+//! 5. **Checkpoint** (>95%): Create progress checkpoint, prepare context reset
+//!
+//! ## Model Defaults
+//!
+//! - **Max Context**: 128K tokens (standard for most models)
+//! - **Max Tool Response**: 25K tokens per tool call
+//! - **Timeout**: 12K tokens for PTY output
 
-/// Estimated tokens per character in regular text/code
-/// Based on empirical observations: ~1 token per 3.5 characters
-/// More conservative than 4.0 to account for punctuation becoming separate tokens
-pub const TOKENS_PER_CHARACTER: f64 = 3.5;
+use crate::core::token_budget_constants as budget;
 
-/// Threshold for word length (chars) that triggers extra token allocation
-/// Words longer than this get extra token consideration
-pub const LONG_WORD_THRESHOLD: usize = 8;
+/// ============================================================================
+/// PERCENTAGE THRESHOLDS (Normalized 0.0-1.0)
+/// ============================================================================
+/// Normal operation threshold: < 75% usage
+/// At this point, operation is unrestricted and no token management is needed.
+pub const THRESHOLD_NORMAL: f64 = budget::THRESHOLD_NORMAL;
 
-/// Character reduction threshold for calculating extra tokens from long words
-pub const LONG_WORD_CHAR_REDUCTION: usize = 6;
+/// Warning threshold: 75% usage
+/// Start consolidating outputs and removing verbose logging.
+pub const THRESHOLD_WARNING: f64 = budget::THRESHOLD_WARNING;
 
-/// Scaling factor for extra tokens from long words
-/// Used as: (word_count * extra_tokens / LONG_WORD_SCALE_FACTOR)
-pub const LONG_WORD_SCALE_FACTOR: usize = 10;
+/// Conservative threshold: 70% usage (safety-first checks)
+pub const THRESHOLD_CONSERVATIVE: f64 = budget::THRESHOLD_CONSERVATIVE;
 
-/// Estimated tokens per non-empty line in structured output
-/// Used for logs, diffs, and other line-oriented output
-/// Based on observation: ~15 tokens per line on average
-pub const TOKENS_PER_LINE: usize = 15;
+/// Compact threshold: 90% usage
+/// Begin progressive compaction of context history.
+pub const THRESHOLD_COMPACT: f64 = budget::THRESHOLD_COMPACT;
 
-/// Character ratio threshold for code detection
-/// Content is considered "code" if bracket count > (char_count / CODE_DETECTION_THRESHOLD)
-pub const CODE_DETECTION_THRESHOLD: usize = 20;
+/// Alert threshold: 85% usage
+/// Aggressive pruning of context. Used by TokenBudgetManager as default alert.
+pub const THRESHOLD_ALERT: f64 = budget::THRESHOLD_ALERT;
 
-/// Characters that indicate code (brackets, operators, separators)
-pub const CODE_INDICATOR_CHARS: &str = "{}[]<>()=;:,";
+/// Checkpoint threshold: 95% usage
+/// Create .progress.md checkpoint and prepare for context reset.
+pub const THRESHOLD_CHECKPOINT: f64 = budget::THRESHOLD_CHECKPOINT;
 
-/// Percentage increase for token estimation when content is detected as code
-/// Code typically has more fragments (brackets, operators) than regular text
-/// Used as: (estimate * CODE_TOKEN_MULTIPLIER).ceil()
-pub const CODE_TOKEN_MULTIPLIER: f64 = 1.1;
+/// Critical threshold for aggressive pruning
+pub const THRESHOLD_CRITICAL: f64 = budget::THRESHOLD_CRITICAL;
 
-/// Head allocation ratio for code content (%)
-/// When truncating code, allocate 50% to head, 50% to tail
-/// Rationale: logic distributed throughout file
-pub const CODE_HEAD_RATIO_PERCENT: usize = 50;
+/// Emergency threshold prior to checkpoint
+pub const THRESHOLD_EMERGENCY: f64 = budget::THRESHOLD_EMERGENCY;
 
-/// Head allocation ratio for log/output content (%)
-/// When truncating logs, allocate 40% to head, 60% to tail
-/// Rationale: errors and summaries appear at end
-pub const LOG_HEAD_RATIO_PERCENT: usize = 40;
+/// ============================================================================
+/// TOKEN APPROXIMATION CONSTANTS (For fallback token counting)
+/// ============================================================================
+/// Approximate tokens per character for English prose
+pub const TOKENS_PER_CHARACTER: f64 = budget::TOKENS_PER_CHARACTER;
 
-/// Default minimum token result
-/// Ensures we never return 0 tokens for non-empty content
-pub const MIN_TOKEN_COUNT: usize = 1;
+/// Approximate tokens per line for structured output (logs, diffs)
+pub const TOKENS_PER_LINE: usize = budget::TOKENS_PER_LINE;
 
-/// Display-level constants (UI safety limits, not semantic)
-/// These apply AFTER token-based truncation to prevent TUI lag
-/// Maximum line length in characters to prevent TUI hang
-/// Long lines are wrapped or truncated at display time
-pub const MAX_LINE_LENGTH_FOR_DISPLAY: usize = 150;
+/// Minimum token count to return (avoid 0 estimates)
+pub const MIN_TOKEN_COUNT: usize = budget::MIN_TOKEN_COUNT;
 
-/// Maximum number of lines to show in inline mode rendering
-/// Full output spooled to .vtcode/tool-output/ for later review
-pub const INLINE_STREAM_MAX_LINES_LIMIT: usize = 30;
+/// Characters that indicate code (brackets, operators, etc.)
+pub const CODE_INDICATOR_CHARS: &[char] = budget::CODE_INDICATOR_CHARS;
 
-/// Maximum code lines to show in code fence blocks
-/// Semantic content already truncated by token limit upstream
-pub const MAX_CODE_LINES_FOR_DISPLAY: usize = 500;
+/// Threshold for code detection (% of text containing code indicators)
+pub const CODE_DETECTION_THRESHOLD: usize = budget::CODE_DETECTION_THRESHOLD;
 
-/// Maximum content width for code fence rendering (characters)
-pub const CODE_FENCE_MAX_WIDTH: usize = 96;
+/// Head ratio percentage for code truncation
+pub const CODE_HEAD_RATIO_PERCENT: usize = budget::CODE_HEAD_RATIO_PERCENT;
 
-/// Character reduction for code fence content margins
-/// Applied as: MAX_WIDTH.saturating_sub(FENCE_MARGIN)
-pub const CODE_FENCE_MARGIN: usize = 4;
+/// Head ratio percentage for log/text truncation
+pub const LOG_HEAD_RATIO_PERCENT: usize = budget::LOG_HEAD_RATIO_PERCENT;
+
+/// Multiplier for code token counts (code is denser than prose)
+pub const CODE_TOKEN_MULTIPLIER: f64 = budget::CODE_TOKEN_MULTIPLIER;
+
+/// Long word threshold for token adjustment
+pub const LONG_WORD_THRESHOLD: usize = budget::LONG_WORD_THRESHOLD;
+
+/// Reduction factor for long word analysis
+pub const LONG_WORD_CHAR_REDUCTION: usize = budget::LONG_WORD_CHAR_REDUCTION;
+
+/// Scale factor for long word calculations
+pub const LONG_WORD_SCALE_FACTOR: usize = budget::LONG_WORD_SCALE_FACTOR;
+
+/// ============================================================================
+/// TOKEN LIMITS (Absolute Values)
+/// ============================================================================
+/// Maximum context tokens per model (configurable)
+/// Standard default: 128,000 tokens
+/// Used by TokenBudgetConfig::default() and most LLM providers
+pub const DEFAULT_MAX_CONTEXT_TOKENS: usize = budget::DEFAULT_MAX_CONTEXT_TOKENS;
+
+/// Maximum tokens allowed per tool response
+/// All tool outputs are truncated at this limit to prevent context explosion
+/// Must be significantly less than max_context to leave room for conversation
+pub const MAX_TOOL_RESPONSE_TOKENS: usize = budget::MAX_TOOL_RESPONSE_TOKENS;
+
+/// Maximum tokens for PTY output (terminal commands)
+/// Shell/command outputs are truncated at this limit
+pub const MAX_PTY_OUTPUT_TOKENS: usize = budget::MAX_PTY_OUTPUT_TOKENS;
+
+/// Model output token limit (for model-generated content)
+/// Standard maximum tokens for model responses
+pub const MODEL_OUTPUT_TOKEN_LIMIT: usize = budget::MODEL_OUTPUT_TOKEN_LIMIT;
+
+/// ============================================================================
+/// ALTERNATIVE THRESHOLDS (For comparison/reference)
+/// ============================================================================
+/// Minimum confidence threshold for fallback chains
+pub const MIN_CONFIDENCE_THRESHOLD: f64 = budget::MIN_CONFIDENCE_THRESHOLD;
+
+/// Relevance score threshold
+pub const RELEVANCE_THRESHOLD: f64 = budget::RELEVANCE_THRESHOLD;
+
+/// Pattern similarity threshold for loop detection
+pub const PATTERN_SIMILARITY_THRESHOLD: f64 = budget::PATTERN_SIMILARITY_THRESHOLD;
+
+/// Quality score threshold
+pub const QUALITY_THRESHOLD: f64 = budget::QUALITY_THRESHOLD;
+
+/// High quality threshold
+pub const HIGH_QUALITY_THRESHOLD: f64 = budget::HIGH_QUALITY_THRESHOLD;
+
+/// Conservative threshold (50% usage)
+pub const CONSERVATIVE_THRESHOLD: f64 = budget::THRESHOLD_CONSERVATIVE;
+
+/// ============================================================================
+/// CONVENIENCE FUNCTIONS
+/// ============================================================================
+/// Check if usage is in normal state (< 75%)
+pub fn is_normal_usage(ratio: f64) -> bool {
+    ratio < THRESHOLD_NORMAL
+}
+
+/// Check if usage is in warning state (75-85%)
+pub fn is_warning_usage(ratio: f64) -> bool {
+    (THRESHOLD_WARNING..THRESHOLD_ALERT).contains(&ratio)
+}
+
+/// Check if usage is in compact state (85-90%)
+pub fn is_compact_usage(ratio: f64) -> bool {
+    (THRESHOLD_ALERT..THRESHOLD_COMPACT).contains(&ratio)
+}
+
+/// Check if usage is in alert state (90-95%)
+pub fn is_alert_usage(ratio: f64) -> bool {
+    (THRESHOLD_COMPACT..THRESHOLD_CHECKPOINT).contains(&ratio)
+}
+
+/// Check if usage requires checkpoint (> 95%)
+pub fn requires_checkpoint(ratio: f64) -> bool {
+    ratio >= THRESHOLD_CHECKPOINT
+}
+
+/// Get human-readable status for usage ratio
+pub fn status_for_ratio(ratio: f64) -> &'static str {
+    match () {
+        _ if requires_checkpoint(ratio) => "CHECKPOINT",
+        _ if is_alert_usage(ratio) => "ALERT",
+        _ if is_compact_usage(ratio) => "COMPACT",
+        _ if is_warning_usage(ratio) => "WARNING",
+        _ => "NORMAL",
+    }
+}
+
+/// Calculate tokens used given a ratio and max tokens
+pub fn tokens_at_ratio(ratio: f64, max_tokens: usize) -> usize {
+    ((ratio * max_tokens as f64).ceil()) as usize
+}
+
+/// Calculate ratio given tokens used and max tokens
+pub fn ratio_from_tokens(used: usize, max_tokens: usize) -> f64 {
+    if max_tokens == 0 {
+        0.0
+    } else {
+        used as f64 / max_tokens as f64
+    }
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn token_constants_are_positive() {
-        assert!(TOKENS_PER_CHARACTER > 0.0);
-        assert!(LONG_WORD_THRESHOLD > 0);
-        assert!(LONG_WORD_CHAR_REDUCTION > 0);
-        assert!(LONG_WORD_SCALE_FACTOR > 0);
-        assert!(TOKENS_PER_LINE > 0);
-        assert!(CODE_DETECTION_THRESHOLD > 0);
-        assert!(CODE_TOKEN_MULTIPLIER > 1.0);
+    fn test_threshold_ordering() {
+        assert!(THRESHOLD_NORMAL < THRESHOLD_ALERT);
+        assert!(THRESHOLD_ALERT < THRESHOLD_COMPACT);
+        assert!(THRESHOLD_COMPACT < THRESHOLD_CHECKPOINT);
     }
 
     #[test]
-    fn head_ratios_are_valid_percentages() {
-        assert!(CODE_HEAD_RATIO_PERCENT <= 100);
-        assert!(LOG_HEAD_RATIO_PERCENT <= 100);
-        assert!(CODE_HEAD_RATIO_PERCENT > 0);
-        assert!(LOG_HEAD_RATIO_PERCENT > 0);
+    fn test_status_functions() {
+        assert!(is_normal_usage(0.5));
+        assert!(is_warning_usage(0.80));
+        assert!(is_compact_usage(0.88));
+        assert!(is_alert_usage(0.92));
+        assert!(requires_checkpoint(0.96));
     }
 
     #[test]
-    fn code_detection_chars_not_empty() {
-        assert!(!CODE_INDICATOR_CHARS.is_empty());
+    fn test_status_labels() {
+        assert_eq!(status_for_ratio(0.5), "NORMAL");
+        assert_eq!(status_for_ratio(0.80), "WARNING");
+        assert_eq!(status_for_ratio(0.88), "COMPACT");
+        assert_eq!(status_for_ratio(0.92), "ALERT");
+        assert_eq!(status_for_ratio(0.96), "CHECKPOINT");
+    }
+
+    #[test]
+    fn test_token_calculations() {
+        // At 75%, 128K tokens = 96K
+        assert_eq!(tokens_at_ratio(0.75, 128_000), 96_000);
+
+        // At 85%, 128K tokens = 108.8K
+        assert_eq!(tokens_at_ratio(0.85, 128_000), 108_800);
+
+        // Reverse calculation
+        assert!((ratio_from_tokens(96_000, 128_000) - 0.75).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_token_limits() {
+        // Verify relationships
+        assert!(MAX_TOOL_RESPONSE_TOKENS < DEFAULT_MAX_CONTEXT_TOKENS);
+        assert!(MAX_PTY_OUTPUT_TOKENS < MAX_TOOL_RESPONSE_TOKENS);
+        assert!(MODEL_OUTPUT_TOKEN_LIMIT < MAX_PTY_OUTPUT_TOKENS);
     }
 }

@@ -2,16 +2,28 @@
 //!
 //! This module provides utilities to help agents understand and manage
 //! their token budget and context window effectively.
+//!
+//! NOTE: Uses unified token constants from vtcode-core/src/core/token_constants.rs
+//! for consistency across the system. These are re-exported for convenience.
 
-/// Token budget thresholds (in percentage)
+/// Token budget thresholds (in percentage) - re-exported from unified constants
 pub mod thresholds {
-    pub const NORMAL: f64 = 0.75; // <75%: Normal operation
-    pub const WARNING: f64 = 0.85; // 75-85%: Start consolidating
-    pub const CRITICAL: f64 = 0.90; // >85%: Checkpoint required
+    use vtcode_core::core::token_constants::{
+        THRESHOLD_ALERT, THRESHOLD_COMPACT, THRESHOLD_WARNING,
+    };
+
+    /// Normal threshold: <75% usage
+    pub const NORMAL: f64 = THRESHOLD_WARNING; // <75%: Normal operation
+
+    /// Warning threshold: 75-85% usage
+    pub const WARNING: f64 = THRESHOLD_ALERT; // 75-85%: Start consolidating
+
+    /// Critical threshold: >85% usage
+    pub const CRITICAL: f64 = THRESHOLD_COMPACT; // >85%: Checkpoint required
 }
 
-/// Maximum tool response tokens
-pub const MAX_TOOL_RESPONSE_TOKENS: usize = 25_000;
+// Re-export for backward compatibility
+pub use vtcode_core::core::token_constants::MAX_TOOL_RESPONSE_TOKENS;
 
 /// Context status based on token usage
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -59,7 +59,7 @@ fn test_provider_auto_detection() {
         Some("xai".to_string())
     );
     assert_eq!(
-        factory.provider_from_model(models::MOONSHOT_KIMI_K2_TURBO_PREVIEW),
+        factory.provider_from_model("kimi-k2-0905"),
         Some("moonshot".to_string())
     );
     assert_eq!(
@@ -96,11 +96,7 @@ fn test_unified_client_creation() {
     let xai = create_provider_for_model(models::xai::GROK_4, "test_key".to_string(), None);
     assert!(xai.is_ok());
 
-    let moonshot = create_provider_for_model(
-        models::MOONSHOT_KIMI_K2_TURBO_PREVIEW,
-        "test_key".to_string(),
-        None,
-    );
+    let moonshot = create_provider_for_model("kimi-k2-0905", "test_key".to_string(), None);
     assert!(moonshot.is_ok());
 
     let ollama = create_provider_for_model(models::ollama::DEFAULT_MODEL, String::new(), None);
