@@ -12,7 +12,9 @@ use tracing::warn;
 use super::progress::ProgressReporter;
 use vtcode_core::exec::cancellation;
 use vtcode_core::tools::registry::ToolErrorType;
-use vtcode_core::tools::registry::{ToolExecutionError, ToolRegistry, ToolTimeoutCategory};
+use vtcode_core::tools::registry::{
+    ToolExecutionError, ToolRegistry, ToolTimeoutCategory, classify_error,
+};
 
 use super::run_loop_context::RunLoopContext;
 use super::state::CtrlCState;
@@ -27,6 +29,8 @@ use vtcode_core::config::loader::VTCodeConfig;
 /// Default timeout for tool execution if no policy is configured
 const DEFAULT_TOOL_TIMEOUT: Duration = Duration::from_secs(300);
 const TOOL_TIMEOUT_WARNING_HEADROOM: Duration = Duration::from_secs(5);
+const MAX_TOOL_RETRIES: usize = 2;
+const RETRY_BACKOFF_BASE: Duration = Duration::from_millis(200);
 
 /// Status of a tool execution with progress information
 #[derive(Debug)]
@@ -370,6 +374,57 @@ async fn execute_tool_with_progress(
     progress_reporter: &ProgressReporter,
     tool_timeout: Duration,
 ) -> ToolExecutionStatus {
+    // Execute first attempt
+    let mut attempt = 0usize;
+    let mut status = run_single_tool_attempt(
+        registry,
+        name,
+        args,
+        ctrl_c_state,
+        ctrl_c_notify,
+        progress_reporter,
+        tool_timeout,
+    )
+    .await;
+
+    // Retry on recoverable errors with bounded backoff
+    while let Some(delay) = retry_delay_for_status(&status, attempt) {
+        attempt += 1;
+        progress_reporter
+            .set_message(format!(
+                "Retrying {} (attempt {}/{}) after {}ms...",
+                name,
+                attempt + 1,
+                MAX_TOOL_RETRIES + 1,
+                delay.as_millis()
+            ))
+            .await;
+        tokio::time::sleep(delay).await;
+
+        status = run_single_tool_attempt(
+            registry,
+            name,
+            args,
+            ctrl_c_state,
+            ctrl_c_notify,
+            progress_reporter,
+            tool_timeout,
+        )
+        .await;
+    }
+
+    status
+}
+
+async fn run_single_tool_attempt(
+    registry: &mut ToolRegistry,
+    name: &str,
+    args: &Value,
+    ctrl_c_state: &Arc<CtrlCState>,
+    ctrl_c_notify: &Arc<Notify>,
+    progress_reporter: &ProgressReporter,
+    tool_timeout: Duration,
+) -> ToolExecutionStatus {
     let start_time = std::time::Instant::now();
 
     let warning_cancel_token = CancellationToken::new();
@@ -380,7 +435,6 @@ async fn execute_tool_with_progress(
         tool_timeout,
     );
 
-    // Phase 1: Preparation (0-15%)
     progress_reporter
         .set_message(format!("Preparing {}...", name))
         .await;
@@ -392,27 +446,22 @@ async fn execute_tool_with_progress(
         return ToolExecutionStatus::Cancelled;
     }
 
-    // Phase 2: Setup (15-25%)
     progress_reporter
         .set_message(format!("Setting up {} execution...", name))
         .await;
     progress_reporter.set_progress(20).await;
 
     let status = loop {
-        // Create a fresh clone of registry for each iteration
         let mut registry_clone = registry.clone();
 
         if ctrl_c_state.is_cancel_requested() || ctrl_c_state.is_exit_requested() {
             return ToolExecutionStatus::Cancelled;
         }
 
-        // Phase 3: Active execution (25-85%)
         progress_reporter
             .set_message(format!("Executing {}...", name))
             .await;
 
-        // Use elapsed time to estimate progress during execution
-        // Most tools complete within a few seconds, so we'll show progress based on time
         let elapsed = start_time.elapsed();
         let estimated_progress = if elapsed < std::time::Duration::from_millis(500) {
             30
@@ -426,15 +475,11 @@ async fn execute_tool_with_progress(
         progress_reporter.set_progress(estimated_progress).await;
 
         let token = CancellationToken::new();
-        // Use reference to args to avoid cloning
         let exec_future = cancellation::with_tool_cancellation(token.clone(), async move {
-            // Tool execution in progress (already set above)
             progress_reporter.set_progress(40).await;
 
-            // Execute the tool with reference to avoid clone
             let result = registry_clone.execute_tool_ref(name, args).await;
 
-            // Phase 4: Processing results (85-95%)
             progress_reporter
                 .set_message(format!("Processing {} results...", name))
                 .await;
@@ -500,7 +545,6 @@ async fn execute_tool_with_progress(
                         progress_reporter
                             .set_message(format!("{} timed out", name))
                             .await;
-                        // Determine timeout category for proper error reporting
                         let timeout_category = registry.timeout_category_for(name).await;
                         create_timeout_error(name, timeout_category, Some(tool_timeout))
                     }
@@ -515,6 +559,38 @@ async fn execute_tool_with_progress(
     }
 
     status
+}
+
+fn retry_delay_for_status(status: &ToolExecutionStatus, attempt: usize) -> Option<Duration> {
+    if attempt >= MAX_TOOL_RETRIES {
+        return None;
+    }
+
+    match status {
+        ToolExecutionStatus::Timeout { error } => {
+            if error.is_recoverable {
+                Some(backoff_for_attempt(attempt))
+            } else {
+                None
+            }
+        }
+        ToolExecutionStatus::Failure { error } => {
+            let error_type = classify_error(error);
+            if matches!(
+                error_type,
+                ToolErrorType::Timeout | ToolErrorType::NetworkError
+            ) {
+                Some(backoff_for_attempt(attempt))
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
+fn backoff_for_attempt(attempt: usize) -> Duration {
+    RETRY_BACKOFF_BASE * ((attempt + 1) as u32)
 }
 
 /// Process the output from a tool execution and convert it to a ToolExecutionStatus
