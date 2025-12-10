@@ -314,38 +314,48 @@ pub fn render_markdown_to_lines(
         }
 
         match event {
-            MarkdownEvent::Start(tag) => handle_start_tag(
-                tag,
-                &mut style_stack,
-                &mut blockquote_depth,
-                &mut list_stack,
-                &mut pending_list_prefix,
-                theme_styles,
-                base_style,
-                &mut code_block,
-            ),
-            MarkdownEvent::End(tag) => handle_end_tag(
-                tag,
-                &mut style_stack,
-                &mut blockquote_depth,
-                &mut list_stack,
-                &mut pending_list_prefix,
-                &mut lines,
-                &mut current_line,
-                theme_styles,
-                base_style,
-            ),
-            MarkdownEvent::Text(text) => append_text(
-                &text,
-                &mut current_line,
-                &mut lines,
-                &style_stack,
-                blockquote_depth,
-                &list_stack,
-                &mut pending_list_prefix,
-                theme_styles,
-                base_style,
-            ),
+            MarkdownEvent::Start(tag) => {
+                let mut context = MarkdownContext {
+                    style_stack: &mut style_stack,
+                    blockquote_depth: &mut blockquote_depth,
+                    list_stack: &mut list_stack,
+                    pending_list_prefix: &mut pending_list_prefix,
+                    lines: &mut lines,
+                    current_line: &mut current_line,
+                    theme_styles,
+                    base_style,
+                    code_block: &mut code_block,
+                };
+                handle_start_tag(tag, &mut context);
+            }
+            MarkdownEvent::End(tag) => {
+                let mut context = MarkdownContext {
+                    style_stack: &mut style_stack,
+                    blockquote_depth: &mut blockquote_depth,
+                    list_stack: &mut list_stack,
+                    pending_list_prefix: &mut pending_list_prefix,
+                    lines: &mut lines,
+                    current_line: &mut current_line,
+                    theme_styles,
+                    base_style,
+                    code_block: &mut code_block,
+                };
+                handle_end_tag(tag, &mut context);
+            }
+            MarkdownEvent::Text(text) => {
+                let mut context = MarkdownContext {
+                    style_stack: &mut style_stack,
+                    blockquote_depth: &mut blockquote_depth,
+                    list_stack: &mut list_stack,
+                    pending_list_prefix: &mut pending_list_prefix,
+                    lines: &mut lines,
+                    current_line: &mut current_line,
+                    theme_styles,
+                    base_style,
+                    code_block: &mut code_block,
+                };
+                append_text(&text, &mut context);
+            }
             MarkdownEvent::Code(code_text) => {
                 ensure_prefix(
                     &mut current_line,
@@ -358,17 +368,18 @@ pub fn render_markdown_to_lines(
                 current_line.push_segment(inline_code_style(theme_styles, base_style), &code_text);
             }
             MarkdownEvent::SoftBreak => {
-                append_text(
-                    " ",
-                    &mut current_line,
-                    &mut lines,
-                    &style_stack,
-                    blockquote_depth,
-                    &list_stack,
-                    &mut pending_list_prefix,
+                let mut context = MarkdownContext {
+                    style_stack: &mut style_stack,
+                    blockquote_depth: &mut blockquote_depth,
+                    list_stack: &mut list_stack,
+                    pending_list_prefix: &mut pending_list_prefix,
+                    lines: &mut lines,
+                    current_line: &mut current_line,
                     theme_styles,
                     base_style,
-                );
+                    code_block: &mut code_block,
+                };
+                append_text(" ", &mut context);
             }
             MarkdownEvent::HardBreak => {
                 flush_current_line(
@@ -409,28 +420,34 @@ pub fn render_markdown_to_lines(
                 let marker = if checked { "[x] " } else { "[ ] " };
                 current_line.push_segment(base_style, marker);
             }
-            MarkdownEvent::Html(html) => append_text(
-                &html,
-                &mut current_line,
-                &mut lines,
-                &style_stack,
-                blockquote_depth,
-                &list_stack,
-                &mut pending_list_prefix,
-                theme_styles,
-                base_style,
-            ),
-            MarkdownEvent::FootnoteReference(reference) => append_text(
-                &format!("[^{}]", reference),
-                &mut current_line,
-                &mut lines,
-                &style_stack,
-                blockquote_depth,
-                &list_stack,
-                &mut pending_list_prefix,
-                theme_styles,
-                base_style,
-            ),
+            MarkdownEvent::Html(html) => {
+                let mut context = MarkdownContext {
+                    style_stack: &mut style_stack,
+                    blockquote_depth: &mut blockquote_depth,
+                    list_stack: &mut list_stack,
+                    pending_list_prefix: &mut pending_list_prefix,
+                    lines: &mut lines,
+                    current_line: &mut current_line,
+                    theme_styles,
+                    base_style,
+                    code_block: &mut code_block,
+                };
+                append_text(&html, &mut context);
+            }
+            MarkdownEvent::FootnoteReference(reference) => {
+                let mut context = MarkdownContext {
+                    style_stack: &mut style_stack,
+                    blockquote_depth: &mut blockquote_depth,
+                    list_stack: &mut list_stack,
+                    pending_list_prefix: &mut pending_list_prefix,
+                    lines: &mut lines,
+                    current_line: &mut current_line,
+                    theme_styles,
+                    base_style,
+                    code_block: &mut code_block,
+                };
+                append_text(&format!("[^{}]", reference), &mut context);
+            }
         }
     }
 
@@ -503,79 +520,98 @@ fn collect_markdown_events<'a>(parser: Parser<'a>) -> Vec<MarkdownEvent> {
         .collect()
 }
 
-fn handle_start_tag(
-    tag: MarkdownTag,
-    style_stack: &mut Vec<Style>,
-    blockquote_depth: &mut usize,
-    list_stack: &mut Vec<ListState>,
-    pending_list_prefix: &mut Option<String>,
-    theme_styles: &ThemeStyles,
+struct MarkdownContext<'a> {
+    style_stack: &'a mut Vec<Style>,
+    blockquote_depth: &'a mut usize,
+    list_stack: &'a mut Vec<ListState>,
+    pending_list_prefix: &'a mut Option<String>,
+    lines: &'a mut Vec<MarkdownLine>,
+    current_line: &'a mut MarkdownLine,
+    theme_styles: &'a ThemeStyles,
     base_style: Style,
-    code_block: &mut Option<CodeBlockState>,
-) {
+    code_block: &'a mut Option<CodeBlockState>,
+}
+
+fn handle_start_tag(tag: MarkdownTag, context: &mut MarkdownContext<'_>) {
     match tag {
         MarkdownTag::Paragraph => {}
         MarkdownTag::Heading(level) => {
-            style_stack.push(heading_style(level, theme_styles, base_style));
+            context.style_stack.push(heading_style(
+                level,
+                context.theme_styles,
+                context.base_style,
+            ));
         }
         MarkdownTag::BlockQuote => {
-            *blockquote_depth += 1;
+            *context.blockquote_depth += 1;
         }
         MarkdownTag::List(start) => {
-            let depth = list_stack.len();
+            let depth = context.list_stack.len();
             let kind = start
                 .map(|value| ListKind::Ordered {
                     next: max(1, value),
                 })
                 .unwrap_or(ListKind::Unordered);
-            list_stack.push(ListState {
+            context.list_stack.push(ListState {
                 kind,
                 depth,
                 continuation: String::new(),
             });
         }
         MarkdownTag::Item => {
-            if let Some(state) = list_stack.last_mut() {
+            if let Some(state) = context.list_stack.last_mut() {
                 let indent = " ".repeat(state.depth * LIST_INDENT_WIDTH);
                 match &mut state.kind {
                     ListKind::Unordered => {
                         let bullet = format!("{}- ", indent);
                         state.continuation = format!("{}  ", indent);
-                        *pending_list_prefix = Some(bullet);
+                        *context.pending_list_prefix = Some(bullet);
                     }
                     ListKind::Ordered { next } => {
                         let bullet = format!("{}{}. ", indent, *next);
                         let width = bullet.len().saturating_sub(indent.len());
                         state.continuation = format!("{}{}", indent, " ".repeat(width));
-                        *pending_list_prefix = Some(bullet);
+                        *context.pending_list_prefix = Some(bullet);
                         *next += 1;
                     }
                 }
             }
         }
         MarkdownTag::Emphasis => {
-            let style = style_stack.last().copied().unwrap_or(base_style).italic();
-            style_stack.push(style);
+            let style = context
+                .style_stack
+                .last()
+                .copied()
+                .unwrap_or(context.base_style)
+                .italic();
+            context.style_stack.push(style);
         }
         MarkdownTag::Strong => {
-            let style = style_stack.last().copied().unwrap_or(base_style).bold();
-            style_stack.push(style);
+            let style = context
+                .style_stack
+                .last()
+                .copied()
+                .unwrap_or(context.base_style)
+                .bold();
+            context.style_stack.push(style);
         }
         MarkdownTag::Strikethrough => {
-            let style = style_stack
+            let style = context
+                .style_stack
                 .last()
                 .copied()
-                .unwrap_or(base_style)
+                .unwrap_or(context.base_style)
                 .strikethrough();
-            style_stack.push(style);
+            context.style_stack.push(style);
         }
         MarkdownTag::Link | MarkdownTag::Image => {
-            let style = style_stack
+            let style = context
+                .style_stack
                 .last()
                 .copied()
-                .unwrap_or(base_style)
+                .unwrap_or(context.base_style)
                 .underline();
-            style_stack.push(style);
+            context.style_stack.push(style);
         }
         MarkdownTag::CodeBlock(kind) => {
             let language = match kind {
@@ -586,7 +622,7 @@ fn handle_start_tag(
                     .map(|lang| lang.to_owned()),
                 CodeBlockKind::Indented => None,
             };
-            *code_block = Some(CodeBlockState {
+            *context.code_block = Some(CodeBlockState {
                 language,
                 buffer: String::new(),
             });
@@ -600,90 +636,84 @@ fn handle_start_tag(
     }
 }
 
-fn handle_end_tag(
-    tag: MarkdownTag,
-    style_stack: &mut Vec<Style>,
-    blockquote_depth: &mut usize,
-    list_stack: &mut Vec<ListState>,
-    pending_list_prefix: &mut Option<String>,
-    lines: &mut Vec<MarkdownLine>,
-    current_line: &mut MarkdownLine,
-    theme_styles: &ThemeStyles,
-    base_style: Style,
-) {
+fn handle_end_tag(tag: MarkdownTag, context: &mut MarkdownContext<'_>) {
     match tag {
         MarkdownTag::Paragraph => {
             flush_current_line(
-                lines,
-                current_line,
-                *blockquote_depth,
-                list_stack,
-                pending_list_prefix,
-                theme_styles,
-                base_style,
+                context.lines,
+                context.current_line,
+                *context.blockquote_depth,
+                context.list_stack,
+                context.pending_list_prefix,
+                context.theme_styles,
+                context.base_style,
             );
-            push_blank_line(lines);
+            push_blank_line(context.lines);
         }
         MarkdownTag::Heading(..) => {
             flush_current_line(
-                lines,
-                current_line,
-                *blockquote_depth,
-                list_stack,
-                pending_list_prefix,
-                theme_styles,
-                base_style,
+                context.lines,
+                context.current_line,
+                *context.blockquote_depth,
+                context.list_stack,
+                context.pending_list_prefix,
+                context.theme_styles,
+                context.base_style,
             );
-            if !style_stack.is_empty() {
-                style_stack.pop();
+            if !context.style_stack.is_empty() {
+                context.style_stack.pop();
             }
-            push_blank_line(lines);
+            push_blank_line(context.lines);
         }
         MarkdownTag::BlockQuote => {
             flush_current_line(
-                lines,
-                current_line,
-                *blockquote_depth,
-                list_stack,
-                pending_list_prefix,
-                theme_styles,
-                base_style,
+                context.lines,
+                context.current_line,
+                *context.blockquote_depth,
+                context.list_stack,
+                context.pending_list_prefix,
+                context.theme_styles,
+                context.base_style,
             );
-            if *blockquote_depth > 0 {
-                *blockquote_depth -= 1;
+            if *context.blockquote_depth > 0 {
+                *context.blockquote_depth -= 1;
             }
         }
         MarkdownTag::List(_) => {
             flush_current_line(
-                lines,
-                current_line,
-                *blockquote_depth,
-                list_stack,
-                pending_list_prefix,
-                theme_styles,
-                base_style,
+                context.lines,
+                context.current_line,
+                *context.blockquote_depth,
+                context.list_stack,
+                context.pending_list_prefix,
+                context.theme_styles,
+                context.base_style,
             );
-            if list_stack.pop().is_some() {
-                if let Some(state) = list_stack.last() {
-                    pending_list_prefix.replace(state.continuation.clone());
+            if context.list_stack.pop().is_some() {
+                if let Some(state) = context.list_stack.last() {
+                    context
+                        .pending_list_prefix
+                        .replace(state.continuation.clone());
                 } else {
-                    pending_list_prefix.take();
+                    context.pending_list_prefix.take();
                 }
             }
-            push_blank_line(lines);
+            push_blank_line(context.lines);
         }
         MarkdownTag::Item => {
             flush_current_line(
-                lines,
-                current_line,
-                *blockquote_depth,
-                list_stack,
-                pending_list_prefix,
-                theme_styles,
-                base_style,
+                context.lines,
+                context.current_line,
+                *context.blockquote_depth,
+                context.list_stack,
+                context.pending_list_prefix,
+                context.theme_styles,
+                context.base_style,
             );
-            if let Some(state) = list_stack.last() {
-                pending_list_prefix.replace(state.continuation.clone());
+            if let Some(state) = context.list_stack.last() {
+                context
+                    .pending_list_prefix
+                    .replace(state.continuation.clone());
             }
         }
         MarkdownTag::Emphasis
@@ -691,7 +721,7 @@ fn handle_end_tag(
         | MarkdownTag::Strikethrough
         | MarkdownTag::Link
         | MarkdownTag::Image => {
-            style_stack.pop();
+            context.style_stack.pop();
         }
         MarkdownTag::CodeBlock(_) => {}
         MarkdownTag::Table
@@ -703,18 +733,12 @@ fn handle_end_tag(
     }
 }
 
-fn append_text(
-    text: &str,
-    current_line: &mut MarkdownLine,
-    lines: &mut Vec<MarkdownLine>,
-    style_stack: &[Style],
-    blockquote_depth: usize,
-    list_stack: &[ListState],
-    pending_list_prefix: &mut Option<String>,
-    theme_styles: &ThemeStyles,
-    base_style: Style,
-) {
-    let style = style_stack.last().copied().unwrap_or(base_style);
+fn append_text(text: &str, context: &mut MarkdownContext<'_>) {
+    let style = context
+        .style_stack
+        .last()
+        .copied()
+        .unwrap_or(context.base_style);
 
     let mut start = 0usize;
     let mut chars = text.char_indices().peekable();
@@ -723,16 +747,16 @@ fn append_text(
             let segment = &text[start..idx];
             if !segment.is_empty() {
                 ensure_prefix(
-                    current_line,
-                    blockquote_depth,
-                    list_stack,
-                    pending_list_prefix,
-                    theme_styles,
-                    base_style,
+                    context.current_line,
+                    *context.blockquote_depth,
+                    context.list_stack,
+                    context.pending_list_prefix,
+                    context.theme_styles,
+                    context.base_style,
                 );
-                current_line.push_segment(style, segment);
+                context.current_line.push_segment(style, segment);
             }
-            lines.push(std::mem::take(current_line));
+            context.lines.push(std::mem::take(context.current_line));
             start = idx + ch.len_utf8();
 
             // Skip consecutive newlines to prevent multiple blank lines
@@ -755,14 +779,14 @@ fn append_text(
         let remaining = &text[start..];
         if !remaining.is_empty() {
             ensure_prefix(
-                current_line,
-                blockquote_depth,
-                list_stack,
-                pending_list_prefix,
-                theme_styles,
-                base_style,
+                context.current_line,
+                *context.blockquote_depth,
+                context.list_stack,
+                context.pending_list_prefix,
+                context.theme_styles,
+                context.base_style,
             );
-            current_line.push_segment(style, remaining);
+            context.current_line.push_segment(style, remaining);
         }
     }
 }

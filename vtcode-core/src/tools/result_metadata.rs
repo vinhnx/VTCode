@@ -364,8 +364,10 @@ pub struct TreeSitterScorer;
 
 impl ResultScorer for TreeSitterScorer {
     fn score(&self, result: &Value) -> ResultMetadata {
-        let mut metadata = ResultMetadata::default();
-        metadata.content_types = vec!["code".to_string(), "ast".to_string()];
+        let mut metadata = ResultMetadata {
+            content_types: vec!["code".to_string(), "ast".to_string()],
+            ..ResultMetadata::default()
+        };
 
         match result {
             Value::Object(map) => {

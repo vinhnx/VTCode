@@ -196,32 +196,32 @@ impl CodeAnalyzer {
         // Extract imports based on language
         match tree.language {
             LanguageSupport::Rust => {
-                self.extract_rust_dependencies(&tree.root, &mut dependencies);
+                Self::extract_rust_dependencies(&tree.root, &mut dependencies);
             }
             LanguageSupport::Python => {
-                self.extract_python_dependencies(&tree.root, &mut dependencies);
+                Self::extract_python_dependencies(&tree.root, &mut dependencies);
             }
             LanguageSupport::JavaScript | LanguageSupport::TypeScript => {
-                self.extract_js_dependencies(&tree.root, &mut dependencies);
+                Self::extract_js_dependencies(&tree.root, &mut dependencies);
             }
             LanguageSupport::Go => {
-                self.extract_go_dependencies(&tree.root, &mut dependencies);
+                Self::extract_go_dependencies(&tree.root, &mut dependencies);
             }
             LanguageSupport::Java => {
-                self.extract_java_dependencies(&tree.root, &mut dependencies);
+                Self::extract_java_dependencies(&tree.root, &mut dependencies);
             }
             LanguageSupport::Bash => {
-                self.extract_bash_dependencies(&tree.root, &mut dependencies);
+                Self::extract_bash_dependencies(&tree.root, &mut dependencies);
             }
             LanguageSupport::Swift => {
-                self.extract_swift_dependencies(&tree.root, &mut dependencies);
+                Self::extract_swift_dependencies(&tree.root, &mut dependencies);
             }
         }
 
         dependencies
     }
 
-    fn extract_bash_dependencies(&self, node: &SyntaxNode, deps: &mut Vec<DependencyInfo>) {
+    fn extract_bash_dependencies(node: &SyntaxNode, deps: &mut Vec<DependencyInfo>) {
         if node.kind == "command" {
             let trimmed = node.text.trim_start();
 
@@ -244,11 +244,11 @@ impl CodeAnalyzer {
         }
 
         for child in &node.children {
-            self.extract_bash_dependencies(child, deps);
+            Self::extract_bash_dependencies(child, deps);
         }
     }
 
-    fn extract_rust_dependencies(&self, node: &SyntaxNode, deps: &mut Vec<DependencyInfo>) {
+    fn extract_rust_dependencies(node: &SyntaxNode, deps: &mut Vec<DependencyInfo>) {
         if node.kind == "use_declaration"
             && let Some(path_node) = node
                 .named_children
@@ -264,11 +264,11 @@ impl CodeAnalyzer {
         }
 
         for child in &node.children {
-            self.extract_rust_dependencies(child, deps);
+            Self::extract_rust_dependencies(child, deps);
         }
     }
 
-    fn extract_python_dependencies(&self, node: &SyntaxNode, deps: &mut Vec<DependencyInfo>) {
+    fn extract_python_dependencies(node: &SyntaxNode, deps: &mut Vec<DependencyInfo>) {
         if node.kind == "import_statement" || node.kind == "import_from_statement" {
             for child in &node.children {
                 if child.kind == "dotted_name" {
@@ -283,11 +283,11 @@ impl CodeAnalyzer {
         }
 
         for child in &node.children {
-            self.extract_python_dependencies(child, deps);
+            Self::extract_python_dependencies(child, deps);
         }
     }
 
-    fn extract_js_dependencies(&self, node: &SyntaxNode, deps: &mut Vec<DependencyInfo>) {
+    fn extract_js_dependencies(node: &SyntaxNode, deps: &mut Vec<DependencyInfo>) {
         if node.kind == "import_statement" {
             for child in &node.children {
                 if child.kind == "string" {
@@ -302,11 +302,11 @@ impl CodeAnalyzer {
         }
 
         for child in &node.children {
-            self.extract_js_dependencies(child, deps);
+            Self::extract_js_dependencies(child, deps);
         }
     }
 
-    fn extract_go_dependencies(&self, node: &SyntaxNode, deps: &mut Vec<DependencyInfo>) {
+    fn extract_go_dependencies(node: &SyntaxNode, deps: &mut Vec<DependencyInfo>) {
         if node.kind == "import_declaration" {
             for child in &node.children {
                 if let Some(spec_node) = child.named_children.get("spec")
@@ -325,11 +325,11 @@ impl CodeAnalyzer {
         }
 
         for child in &node.children {
-            self.extract_go_dependencies(child, deps);
+            Self::extract_go_dependencies(child, deps);
         }
     }
 
-    fn extract_java_dependencies(&self, node: &SyntaxNode, deps: &mut Vec<DependencyInfo>) {
+    fn extract_java_dependencies(node: &SyntaxNode, deps: &mut Vec<DependencyInfo>) {
         if node.kind == "import_declaration" {
             for child in &node.children {
                 if let Some(name_node) = child.named_children.get("qualified_name")
@@ -346,12 +346,12 @@ impl CodeAnalyzer {
         }
 
         for child in &node.children {
-            self.extract_java_dependencies(child, deps);
+            Self::extract_java_dependencies(child, deps);
         }
     }
 
     #[allow(dead_code)]
-    fn extract_swift_dependencies(&self, node: &SyntaxNode, deps: &mut Vec<DependencyInfo>) {
+    fn extract_swift_dependencies(node: &SyntaxNode, deps: &mut Vec<DependencyInfo>) {
         if node.kind == "import_declaration" {
             for child in &node.children {
                 if let Some(path_node) = child.named_children.get("path")
@@ -368,7 +368,7 @@ impl CodeAnalyzer {
         }
 
         for child in &node.children {
-            self.extract_swift_dependencies(child, deps);
+            Self::extract_swift_dependencies(child, deps);
         }
     }
 
@@ -441,7 +441,7 @@ impl CodeAnalyzer {
         let mut max_nesting_depth = 0;
 
         // Calculate complexity based on language-specific constructs
-        self.calculate_language_complexity(
+        Self::calculate_language_complexity(
             &tree.root,
             &mut cyclomatic_complexity,
             &mut cognitive_complexity,
@@ -496,7 +496,6 @@ impl CodeAnalyzer {
     }
 
     fn calculate_language_complexity(
-        &self,
         node: &SyntaxNode,
         cc: &mut usize,
         cognitive: &mut usize,
@@ -536,7 +535,7 @@ impl CodeAnalyzer {
 
         // Recursively calculate for children
         for child in &node.children {
-            self.calculate_language_complexity(child, cc, cognitive, depth + 1, max_depth);
+            Self::calculate_language_complexity(child, cc, cognitive, depth + 1, max_depth);
         }
     }
 

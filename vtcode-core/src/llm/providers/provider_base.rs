@@ -25,36 +25,52 @@ pub trait FromProviderConfig: Sized {
     fn from_provider_config(config: ProviderConfig) -> Self;
 }
 
+pub struct ProviderConfigDefaults<T, F>
+where
+    F: Fn(&ProviderPromptCachingConfig) -> &T,
+{
+    pub default_model: &'static str,
+    pub default_base_url: &'static str,
+    pub env_var_base_url: Option<&'static str>,
+    pub cache_extractor: F,
+    pub cache_validator: fn(&PromptCachingConfig, &T) -> bool,
+}
+
+pub struct ProviderConfigParams<T, F>
+where
+    F: Fn(&ProviderPromptCachingConfig) -> &T,
+{
+    pub api_key: Option<String>,
+    pub model: Option<String>,
+    pub base_url: Option<String>,
+    pub prompt_cache: Option<PromptCachingConfig>,
+    pub defaults: ProviderConfigDefaults<T, F>,
+}
+
 /// Helper function to build provider configuration from common parameters
-pub fn build_provider_config<T, F>(
-    api_key: Option<String>,
-    model: Option<String>,
-    base_url: Option<String>,
-    prompt_cache: Option<PromptCachingConfig>,
-    default_model: &'static str,
-    default_base_url: &'static str,
-    env_var_base_url: Option<&'static str>,
-    cache_extractor: F,
-    cache_validator: fn(&PromptCachingConfig, &T) -> bool,
-) -> ProviderConfig
+pub fn build_provider_config<T, F>(params: ProviderConfigParams<T, F>) -> ProviderConfig
 where
     F: Fn(&ProviderPromptCachingConfig) -> &T,
     T: Clone + Default + serde::Serialize,
 {
-    let api_key_value = api_key.unwrap_or_default();
-    let model_value = resolve_model(model, default_model);
-    let base_url_value = override_base_url(default_base_url, base_url, env_var_base_url);
+    let api_key_value = params.api_key.unwrap_or_default();
+    let model_value = resolve_model(params.model, params.defaults.default_model);
+    let base_url_value = override_base_url(
+        params.defaults.default_base_url,
+        params.base_url,
+        params.defaults.env_var_base_url,
+    );
 
-    let (prompt_cache_enabled, prompt_cache_settings) = if let Some(ref prompt_cache) = prompt_cache
-    {
-        extract_prompt_cache_settings(
-            Some(prompt_cache.clone()),
-            |providers| cache_extractor(providers),
-            cache_validator,
-        )
-    } else {
-        (false, T::default())
-    };
+    let (prompt_cache_enabled, prompt_cache_settings) =
+        if let Some(ref prompt_cache) = params.prompt_cache {
+            extract_prompt_cache_settings(
+                Some(prompt_cache.clone()),
+                |providers| (params.defaults.cache_extractor)(providers),
+                params.defaults.cache_validator,
+            )
+        } else {
+            (false, T::default())
+        };
 
     ProviderConfig {
         api_key: Arc::from(api_key_value.as_str()),
@@ -105,15 +121,19 @@ macro_rules! impl_provider_constructors {
                 _timeouts: Option<$crate::config::TimeoutsConfig>,
             ) -> Self {
                 let config = $crate::llm::providers::provider_base::build_provider_config(
-                    api_key,
-                    model,
-                    base_url,
-                    prompt_cache,
-                    $default_model,
-                    $default_base_url,
-                    $env_var,
-                    $cache_extractor,
-                    $cache_validator,
+                    $crate::llm::providers::provider_base::ProviderConfigParams {
+                        api_key,
+                        model,
+                        base_url,
+                        prompt_cache,
+                        defaults: $crate::llm::providers::provider_base::ProviderConfigDefaults {
+                            default_model: $default_model,
+                            default_base_url: $default_base_url,
+                            env_var_base_url: $env_var,
+                            cache_extractor: $cache_extractor,
+                            cache_validator: $cache_validator,
+                        },
+                    },
                 );
 
                 <Self as $crate::llm::providers::provider_base::FromProviderConfig>::from_provider_config(config)

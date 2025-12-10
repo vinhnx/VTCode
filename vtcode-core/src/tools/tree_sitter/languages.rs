@@ -521,10 +521,10 @@ impl LanguageAnalyzer {
         symbols.extend(self.extract_classes(&tree.root));
 
         // Extract variables
-        symbols.extend(self.extract_variables(&tree.root));
+        symbols.extend(Self::extract_variables(&tree.root));
 
         // Extract imports
-        symbols.extend(self.extract_imports(&tree.root));
+        symbols.extend(Self::extract_imports(&tree.root));
 
         symbols
     }
@@ -614,7 +614,7 @@ impl LanguageAnalyzer {
         classes
     }
 
-    fn extract_variables(&self, node: &SyntaxNode) -> Vec<SymbolInfo> {
+    fn extract_variables(node: &SyntaxNode) -> Vec<SymbolInfo> {
         let mut variables = Vec::new();
 
         if node.kind.contains("variable")
@@ -645,13 +645,13 @@ impl LanguageAnalyzer {
 
         // Recursively extract from children
         for child in &node.children {
-            variables.extend(self.extract_variables(child));
+            variables.extend(Self::extract_variables(child));
         }
 
         variables
     }
 
-    fn extract_imports(&self, node: &SyntaxNode) -> Vec<SymbolInfo> {
+    fn extract_imports(node: &SyntaxNode) -> Vec<SymbolInfo> {
         let mut imports = Vec::new();
 
         if node.kind.contains("import") {
@@ -673,7 +673,7 @@ impl LanguageAnalyzer {
 
         // Recursively extract from children
         for child in &node.children {
-            imports.extend(self.extract_imports(child));
+            imports.extend(Self::extract_imports(child));
         }
 
         imports

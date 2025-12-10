@@ -447,17 +447,17 @@ impl TreeSitterAnalyzer {
                 self.extract_rust_dependencies(root_node, &mut dependencies)?;
             }
             LanguageSupport::Python => {
-                self.extract_python_dependencies(root_node, &mut dependencies)?;
+                Self::extract_python_dependencies(root_node, &mut dependencies)?;
             }
             LanguageSupport::JavaScript | LanguageSupport::TypeScript => {
-                self.extract_js_dependencies(root_node, &mut dependencies)?;
+                Self::extract_js_dependencies(root_node, &mut dependencies)?;
             }
             LanguageSupport::Bash => {
-                self.extract_basic_dependencies(root_node, &mut dependencies)?;
+                Self::extract_basic_dependencies(root_node, &mut dependencies)?;
             }
             _ => {
                 // For other languages, do a basic extraction
-                self.extract_basic_dependencies(root_node, &mut dependencies)?;
+                Self::extract_basic_dependencies(root_node, &mut dependencies)?;
             }
         }
 
@@ -518,7 +518,6 @@ impl TreeSitterAnalyzer {
 
     /// Extract Python dependencies
     fn extract_python_dependencies(
-        &self,
         node: tree_sitter::Node,
         dependencies: &mut Vec<DependencyInfo>,
     ) -> Result<()> {
@@ -541,7 +540,7 @@ impl TreeSitterAnalyzer {
 
         // Recursively process children
         for child in node.children(&mut cursor) {
-            self.extract_python_dependencies(child, dependencies)?;
+            Self::extract_python_dependencies(child, dependencies)?;
         }
 
         Ok(())
@@ -549,7 +548,6 @@ impl TreeSitterAnalyzer {
 
     /// Extract JavaScript/TypeScript dependencies
     fn extract_js_dependencies(
-        &self,
         node: tree_sitter::Node,
         dependencies: &mut Vec<DependencyInfo>,
     ) -> Result<()> {
@@ -572,7 +570,7 @@ impl TreeSitterAnalyzer {
 
         // Recursively process children
         for child in node.children(&mut cursor) {
-            self.extract_js_dependencies(child, dependencies)?;
+            Self::extract_js_dependencies(child, dependencies)?;
         }
 
         Ok(())
@@ -580,7 +578,6 @@ impl TreeSitterAnalyzer {
 
     /// Extract basic dependencies (fallback)
     fn extract_basic_dependencies(
-        &self,
         node: tree_sitter::Node,
         dependencies: &mut Vec<DependencyInfo>,
     ) -> Result<()> {
@@ -603,7 +600,7 @@ impl TreeSitterAnalyzer {
 
         // Recursively process children
         for child in node.children(&mut cursor) {
-            self.extract_basic_dependencies(child, dependencies)?;
+            Self::extract_basic_dependencies(child, dependencies)?;
         }
 
         Ok(())
@@ -624,7 +621,7 @@ impl TreeSitterAnalyzer {
         let mut variables_count = 0;
         let mut imports_count = 0;
 
-        self.count_nodes_recursive(
+        Self::count_nodes_recursive(
             root_node,
             &mut functions_count,
             &mut classes_count,
@@ -665,7 +662,6 @@ impl TreeSitterAnalyzer {
 
     /// Recursively count different types of nodes
     fn count_nodes_recursive(
-        &self,
         node: tree_sitter::Node,
         functions_count: &mut usize,
         classes_count: &mut usize,
@@ -692,7 +688,7 @@ impl TreeSitterAnalyzer {
         // Recursively process children
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
-            self.count_nodes_recursive(
+            Self::count_nodes_recursive(
                 child,
                 functions_count,
                 classes_count,

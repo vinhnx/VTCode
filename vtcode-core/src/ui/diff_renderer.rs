@@ -381,10 +381,10 @@ impl DiffRenderer {
                         self.find_difference(&old_lines, &new_lines, old_idx, new_idx);
 
                     // Add removed lines
-                    for i in old_idx..old_end {
+                    for (i, line) in old_lines.iter().enumerate().take(old_end).skip(old_idx) {
                         lines.push(DiffLine {
                             line_type: DiffLineType::Removed,
-                            content: old_lines[i].to_owned(),
+                            content: line.to_string(),
                             line_number_old: Some(i + 1),
                             line_number_new: None,
                         });
@@ -392,10 +392,10 @@ impl DiffRenderer {
                     }
 
                     // Add added lines
-                    for i in new_idx..new_end {
+                    for (i, line) in new_lines.iter().enumerate().take(new_end).skip(new_idx) {
                         lines.push(DiffLine {
                             line_type: DiffLineType::Added,
-                            content: new_lines[i].to_owned(),
+                            content: line.to_string(),
                             line_number_old: None,
                             line_number_new: Some(i + 1),
                         });
