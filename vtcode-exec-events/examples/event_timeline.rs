@@ -12,20 +12,20 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("# execution timeline (JSONL)");
     for event in &timeline {
         let json = serde_json::to_string(event)?;
-        println!("{}", json);
+        println!("{json}");
     }
 
     println!("\n# completed commands");
     for event in &timeline {
-        if let ThreadEvent::ItemCompleted(ItemCompletedEvent { item }) = event {
-            if let ThreadItemDetails::CommandExecution(command) = &item.details {
-                println!(
-                    "{} => status={} exit_code={:?}",
-                    command.command,
-                    status_label(&command.status),
-                    command.exit_code
-                );
-            }
+        if let ThreadEvent::ItemCompleted(ItemCompletedEvent { item }) = event
+            && let ThreadItemDetails::CommandExecution(command) = &item.details
+        {
+            println!(
+                "{} => status={} exit_code={:?}",
+                command.command,
+                status_label(&command.status),
+                command.exit_code
+            );
         }
     }
 

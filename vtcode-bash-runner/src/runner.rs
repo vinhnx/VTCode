@@ -383,13 +383,13 @@ where
     }
 
     fn ensure_mutation_target_within_workspace(&self, candidate: &Path) -> Result<()> {
-        if let Ok(metadata) = fs::symlink_metadata(candidate) {
-            if metadata.file_type().is_symlink() {
-                let canonical = candidate
-                    .canonicalize()
-                    .with_context(|| format!("failed to canonicalize `{}`", candidate.display()))?;
-                return self.ensure_within_workspace(&canonical);
-            }
+        if let Ok(metadata) = fs::symlink_metadata(candidate)
+            && metadata.file_type().is_symlink()
+        {
+            let canonical = candidate
+                .canonicalize()
+                .with_context(|| format!("failed to canonicalize `{}`", candidate.display()))?;
+            return self.ensure_within_workspace(&canonical);
         }
 
         if candidate.exists() {
@@ -474,7 +474,10 @@ mod tests {
 
     impl CommandExecutor for RecordingExecutor {
         fn execute(&self, invocation: &CommandInvocation) -> Result<CommandOutput> {
-            self.invocations.lock().unwrap().push(invocation.clone());
+            self.invocations
+                .lock()
+                .map_err(|e| anyhow!("executor lock poisoned: {e}"))?
+                .push(invocation.clone());
             Ok(CommandOutput {
                 status: CommandStatus::new(true, Some(0)),
                 stdout: String::new(),
@@ -484,28 +487,33 @@ mod tests {
     }
 
     #[test]
-    fn cd_updates_working_directory() {
-        let dir = TempDir::new().unwrap();
+    fn cd_updates_working_directory() -> Result<()> {
+        let dir = TempDir::new()?;
         let nested = dir.path().join("nested");
-        std::fs::create_dir(&nested).unwrap();
+        std::fs::create_dir(&nested)?;
         let runner = BashRunner::new(
             dir.path().to_path_buf(),
             RecordingExecutor::default(),
             AllowAllPolicy,
         );
-        let mut runner = runner.unwrap();
-        runner.cd("nested").unwrap();
+        let mut runner = runner?;
+        runner.cd("nested")?;
         assert_eq!(runner.working_dir(), nested);
+        Ok(())
     }
 
     #[test]
-    fn mkdir_records_invocation() {
-        let dir = TempDir::new().unwrap();
+    fn mkdir_records_invocation() -> Result<()> {
+        let dir = TempDir::new()?;
         let executor = RecordingExecutor::default();
         let runner = BashRunner::new(dir.path().to_path_buf(), executor.clone(), AllowAllPolicy);
-        runner.unwrap().mkdir("new_dir", true).unwrap();
-        let invocations = executor.invocations.lock().unwrap();
+        runner?.mkdir("new_dir", true)?;
+        let invocations = executor
+            .invocations
+            .lock()
+            .map_err(|e| anyhow!("executor lock poisoned: {e}"))?;
         assert_eq!(invocations.len(), 1);
         assert_eq!(invocations[0].category, CommandCategory::CreateDirectory);
+        Ok(())
     }
 }

@@ -462,9 +462,10 @@ pub struct ErrorItem {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::error::Error;
 
     #[test]
-    fn thread_event_round_trip() {
+    fn thread_event_round_trip() -> Result<(), Box<dyn Error>> {
         let event = ThreadEvent::TurnCompleted(TurnCompletedEvent {
             usage: Usage {
                 input_tokens: 1,
@@ -473,10 +474,11 @@ mod tests {
             },
         });
 
-        let json = serde_json::to_string(&event).expect("serialize");
-        let restored: ThreadEvent = serde_json::from_str(&json).expect("deserialize");
+        let json = serde_json::to_string(&event)?;
+        let restored: ThreadEvent = serde_json::from_str(&json)?;
 
         assert_eq!(restored, event);
+        Ok(())
     }
 
     #[test]
@@ -494,7 +496,7 @@ mod tests {
 
     #[cfg(feature = "serde-json")]
     #[test]
-    fn versioned_json_round_trip() {
+    fn versioned_json_round_trip() -> Result<(), Box<dyn Error>> {
         let event = ThreadEvent::ItemCompleted(ItemCompletedEvent {
             item: ThreadItem {
                 id: "item-1".to_string(),
@@ -504,10 +506,11 @@ mod tests {
             },
         });
 
-        let payload = crate::json::versioned_to_string(&event).expect("serialize");
-        let restored = crate::json::versioned_from_str(&payload).expect("deserialize");
+        let payload = crate::json::versioned_to_string(&event)?;
+        let restored = crate::json::versioned_from_str(&payload)?;
 
         assert_eq!(restored.schema_version, EVENT_SCHEMA_VERSION);
         assert_eq!(restored.event, event);
+        Ok(())
     }
 }

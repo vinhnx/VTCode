@@ -1,3 +1,4 @@
+#![allow(clippy::too_many_arguments)]
 mod slash_commands;
 
 use anyhow::{Context, Result};

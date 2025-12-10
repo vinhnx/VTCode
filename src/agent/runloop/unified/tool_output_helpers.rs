@@ -1,5 +1,5 @@
 //! Helper functions to eliminate code duplication in tool output handlers
-#![allow(dead_code)]
+#![allow(dead_code, clippy::too_many_arguments)]
 
 use crate::agent::runloop::mcp_events::McpPanelState;
 use crate::agent::runloop::unified::state::SessionStats;

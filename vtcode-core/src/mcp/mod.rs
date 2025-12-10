@@ -2328,7 +2328,6 @@ mod tests {
     use super::*;
     use crate::config::mcp::{McpStdioServerConfig, McpTransportConfig};
     use serde_json::json;
-    use vtcode_config::constants::app;
 
     struct EnvGuard {
         key: &'static str,

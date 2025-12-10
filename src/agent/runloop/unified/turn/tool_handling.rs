@@ -1,3 +1,4 @@
+#![allow(clippy::too_many_arguments)]
 use anyhow::Result;
 use std::collections::BTreeSet;
 use std::path::PathBuf;

@@ -778,12 +778,19 @@ mod tests {
 
     #[test]
     fn test_allowlist_provider_override() {
-        let mut config = McpAllowListConfig::default();
-        config.enforce = true;
-        config.default.tools = Some(vec!["get_*".to_string()]);
+        let mut config = McpAllowListConfig {
+            enforce: true,
+            default: McpAllowListRules {
+                tools: Some(vec!["get_*".to_string()]),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
 
-        let mut provider_rules = McpAllowListRules::default();
-        provider_rules.tools = Some(vec!["list_*".to_string()]);
+        let provider_rules = McpAllowListRules {
+            tools: Some(vec!["list_*".to_string()]),
+            ..Default::default()
+        };
         config
             .providers
             .insert("context7".to_string(), provider_rules);
@@ -796,22 +803,28 @@ mod tests {
 
     #[test]
     fn test_allowlist_configuration_rules() {
-        let mut config = McpAllowListConfig::default();
-        config.enforce = true;
+        let mut config = McpAllowListConfig {
+            enforce: true,
+            default: McpAllowListRules {
+                configuration: Some(BTreeMap::from([(
+                    "ui".to_string(),
+                    vec!["mode".to_string(), "max_events".to_string()],
+                )])),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
 
-        let mut default_rules = McpAllowListRules::default();
-        default_rules.configuration = Some(BTreeMap::from([(
-            "ui".to_string(),
-            vec!["mode".to_string(), "max_events".to_string()],
-        )]));
-        config.default = default_rules;
-
-        let mut provider_rules = McpAllowListRules::default();
-        provider_rules.configuration = Some(BTreeMap::from([(
-            "provider".to_string(),
-            vec!["max_concurrent_requests".to_string()],
-        )]));
-        config.providers.insert("time".to_string(), provider_rules);
+        let provider_rules = McpAllowListRules {
+            configuration: Some(BTreeMap::from([(
+                "provider".to_string(),
+                vec!["max_concurrent_requests".to_string()],
+            )])),
+            ..Default::default()
+        };
+        config
+            .providers
+            .insert("time".to_string(), provider_rules);
 
         assert!(config.is_configuration_allowed(None, "ui", "mode"));
         assert!(!config.is_configuration_allowed(None, "ui", "show_provider_names"));
@@ -825,12 +838,19 @@ mod tests {
 
     #[test]
     fn test_allowlist_resource_override() {
-        let mut config = McpAllowListConfig::default();
-        config.enforce = true;
-        config.default.resources = Some(vec!["docs/*".to_string()]);
+        let mut config = McpAllowListConfig {
+            enforce: true,
+            default: McpAllowListRules {
+                resources: Some(vec!["docs/*".to_string()]),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
 
-        let mut provider_rules = McpAllowListRules::default();
-        provider_rules.resources = Some(vec!["journals/*".to_string()]);
+        let provider_rules = McpAllowListRules {
+            resources: Some(vec!["journals/*".to_string()]),
+            ..Default::default()
+        };
         config
             .providers
             .insert("context7".to_string(), provider_rules);
@@ -843,12 +863,19 @@ mod tests {
 
     #[test]
     fn test_allowlist_logging_override() {
-        let mut config = McpAllowListConfig::default();
-        config.enforce = true;
-        config.default.logging = Some(vec!["info".to_string(), "debug".to_string()]);
+        let mut config = McpAllowListConfig {
+            enforce: true,
+            default: McpAllowListRules {
+                logging: Some(vec!["info".to_string(), "debug".to_string()]),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
 
-        let mut provider_rules = McpAllowListRules::default();
-        provider_rules.logging = Some(vec!["audit".to_string()]);
+        let provider_rules = McpAllowListRules {
+            logging: Some(vec!["audit".to_string()]),
+            ..Default::default()
+        };
         config
             .providers
             .insert("sequential".to_string(), provider_rules);

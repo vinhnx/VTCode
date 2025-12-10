@@ -123,8 +123,10 @@ mod tests {
 
     #[test]
     fn zero_ceiling_disables_limit() {
-        let mut config = TimeoutsConfig::default();
-        config.default_ceiling_seconds = 0;
+        let config = TimeoutsConfig {
+            default_ceiling_seconds: 0,
+            ..Default::default()
+        };
         assert!(config.validate().is_ok());
         assert!(
             config
@@ -135,11 +137,16 @@ mod tests {
 
     #[test]
     fn warning_threshold_bounds_are_enforced() {
-        let mut config = TimeoutsConfig::default();
-        config.warning_threshold_percent = 0;
-        assert!(config.validate().is_err());
+        let config_low = TimeoutsConfig {
+            warning_threshold_percent: 0,
+            ..Default::default()
+        };
+        assert!(config_low.validate().is_err());
 
-        config.warning_threshold_percent = 100;
-        assert!(config.validate().is_err());
+        let config_high = TimeoutsConfig {
+            warning_threshold_percent: 100,
+            ..Default::default()
+        };
+        assert!(config_high.validate().is_err());
     }
 }

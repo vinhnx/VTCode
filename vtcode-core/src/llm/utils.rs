@@ -292,7 +292,6 @@ mod tests {
     }
 
     #[test]
-    #[test]
     fn test_parse_response_openai_format() {
         let response = serde_json::json!({
             "choices": [{

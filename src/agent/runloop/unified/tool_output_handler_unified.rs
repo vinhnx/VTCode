@@ -2,7 +2,7 @@
 //!
 //! This module provides a single, generic implementation for handling tool execution
 //! outcomes that can be used by all the different context types.
-#![allow(dead_code)]
+#![allow(dead_code, clippy::too_many_arguments)]
 
 use crate::agent::runloop::mcp_events::McpPanelState;
 use crate::agent::runloop::unified::state::SessionStats;

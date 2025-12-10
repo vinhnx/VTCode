@@ -136,12 +136,9 @@ pub(crate) fn select_line_style(
     ls: &LsStyles,
 ) -> Option<AnsiStyle> {
     match tool_name {
-        Some(name)
-            if matches!(
-                name,
-                tools::RUN_PTY_CMD | tools::WRITE_FILE | tools::EDIT_FILE | tools::APPLY_PATCH
-            ) =>
-        {
+        Some(
+            tools::RUN_PTY_CMD | tools::WRITE_FILE | tools::EDIT_FILE | tools::APPLY_PATCH,
+        ) => {
             let trimmed = line.trim_start();
             if trimmed.starts_with("diff --")
                 || trimmed.starts_with("index ")

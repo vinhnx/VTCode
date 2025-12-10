@@ -992,8 +992,10 @@ impl ZedAgent {
                 && permission_override.is_none()
                 && !session.cancel_flag.get()
             {
-                let mut in_progress_fields = acp::ToolCallUpdateFields::default();
-                in_progress_fields.status = Some(acp::ToolCallStatus::InProgress);
+                let in_progress_fields = acp::ToolCallUpdateFields {
+                    status: Some(acp::ToolCallStatus::InProgress),
+                    ..Default::default()
+                };
                 let progress_update = acp::ToolCallUpdate {
                     id: call_id.clone(),
                     fields: in_progress_fields,
@@ -1037,8 +1039,10 @@ impl ZedAgent {
                 report = ToolExecutionReport::cancelled(&func_ref.name);
             }
 
-            let mut update_fields = acp::ToolCallUpdateFields::default();
-            update_fields.status = Some(report.status);
+            let mut update_fields = acp::ToolCallUpdateFields {
+                status: Some(report.status),
+                ..Default::default()
+            };
             if !report.content.is_empty() {
                 update_fields.content = Some(report.content.clone());
             }

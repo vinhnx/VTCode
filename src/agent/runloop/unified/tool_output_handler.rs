@@ -1,3 +1,4 @@
+#![allow(clippy::too_many_arguments)]
 use crate::agent::runloop::mcp_events::McpPanelState;
 use crate::agent::runloop::unified::state::SessionStats;
 use crate::agent::runloop::unified::tool_output_helpers::{

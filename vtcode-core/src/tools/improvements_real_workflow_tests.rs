@@ -3,10 +3,13 @@
 //! These tests demonstrate how the improved system works together
 //! in practical scenarios matching real VTCode usage.
 
+#![allow(deprecated)]
+#![allow(clippy::deprecated)]
 #[cfg(test)]
+#[allow(deprecated)]
 mod real_workflow_tests {
     use crate::tools::{
-        DetectedPattern, EventType, ExecutionEvent, LruCache, ObservabilityContext, PatternEngine,
+        DetectedPattern, ExecutionEvent, LruCache, ObservabilityContext, PatternEngine,
         ToolRegistryImprovement,
     };
     use std::sync::Arc;

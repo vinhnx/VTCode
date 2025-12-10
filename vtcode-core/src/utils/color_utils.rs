@@ -187,7 +187,7 @@ pub fn desaturate_color(color: &Color, amount: f32) -> Option<Color> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use anstyle::{AnsiColor, RgbColor};
+    use anstyle::RgbColor;
 
     #[test]
     fn test_hex_to_color() {
