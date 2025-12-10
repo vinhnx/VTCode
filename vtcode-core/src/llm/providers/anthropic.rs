@@ -1036,7 +1036,6 @@ impl LLMProvider for AnthropicProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::TimeoutsConfig;
     use crate::config::core::PromptCachingConfig;
     use crate::llm::provider::{Message, ToolDefinition};
     use serde_json::{Value, json};

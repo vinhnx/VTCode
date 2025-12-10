@@ -1,3 +1,4 @@
+#![allow(clippy::too_many_arguments)]
 use anyhow::Result;
 use crossterm::terminal::disable_raw_mode;
 use std::io::{self, Write};

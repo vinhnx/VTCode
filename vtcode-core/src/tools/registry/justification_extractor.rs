@@ -117,7 +117,7 @@ impl JustificationExtractor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::decision_tracker::{Action, DecisionContext, DecisionOutcome, ResponseType};
+    use crate::core::decision_tracker::{Action, DecisionContext, DecisionOutcome};
     use std::collections::HashMap;
     use std::time::{SystemTime, UNIX_EPOCH};
 

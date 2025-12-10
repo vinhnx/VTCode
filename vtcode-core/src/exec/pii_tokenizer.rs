@@ -278,44 +278,49 @@ impl Default for PiiTokenizer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use anyhow::Result;
 
     #[test]
-    fn test_detect_email() {
-        let tokenizer = PiiTokenizer::new().expect("PII tokenizer should initialize");
+    fn test_detect_email() -> Result<()> {
+        let tokenizer = PiiTokenizer::new()?;
         let text = "Contact me at john@example.com for more info";
-        let detected = tokenizer.detect_pii(text).unwrap();
+        let detected = tokenizer.detect_pii(text)?;
 
         assert!(!detected.is_empty());
         assert!(detected.iter().any(|d| d.pii_type == PiiType::Email));
+        Ok(())
     }
 
     #[test]
-    fn test_detect_phone() {
-        let tokenizer = PiiTokenizer::new();
+    fn test_detect_phone() -> Result<()> {
+        let tokenizer = PiiTokenizer::new()?;
         let text = "Call me at 555-123-4567";
-        let detected = tokenizer.detect_pii(text).unwrap();
+        let detected = tokenizer.detect_pii(text)?;
 
         assert!(!detected.is_empty());
         assert!(detected.iter().any(|d| d.pii_type == PiiType::PhoneNumber));
+        Ok(())
     }
 
     #[test]
-    fn test_tokenize_string() {
-        let tokenizer = PiiTokenizer::new();
+    fn test_tokenize_string() -> Result<()> {
+        let tokenizer = PiiTokenizer::new()?;
         let text = "Email: john@example.com, Phone: 555-123-4567";
-        let (tokenized, tokens) = tokenizer.tokenize_string(text).unwrap();
+        let (tokenized, tokens) = tokenizer.tokenize_string(text)?;
 
         assert!(tokenized.contains("__PII_"));
         assert!(!tokenized.contains("john@example.com"));
         assert!(!tokens.is_empty());
+        Ok(())
     }
 
     #[test]
-    fn test_no_pii_detected() {
-        let tokenizer = PiiTokenizer::new();
+    fn test_no_pii_detected() -> Result<()> {
+        let tokenizer = PiiTokenizer::new()?;
         let text = "This is regular text with no sensitive information";
-        let detected = tokenizer.detect_pii(text).unwrap();
+        let detected = tokenizer.detect_pii(text)?;
 
         assert!(detected.is_empty());
+        Ok(())
     }
 }

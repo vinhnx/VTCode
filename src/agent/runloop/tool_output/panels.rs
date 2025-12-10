@@ -110,14 +110,12 @@ pub(crate) fn wrap_text(text: &str, width: usize) -> Vec<String> {
             let mut remaining = word;
             while !remaining.is_empty() {
                 let mut byte_len = remaining.len();
-                let mut chars_taken = 0;
 
-                for (idx, ch) in remaining.char_indices() {
+                for (chars_taken, (idx, ch)) in remaining.char_indices().enumerate() {
                     if chars_taken == width {
                         byte_len = idx;
                         break;
                     }
-                    chars_taken += 1;
                     byte_len = idx + ch.len_utf8();
                 }
 

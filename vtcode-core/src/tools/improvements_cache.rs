@@ -2,6 +2,8 @@
 //!
 //! This module is deprecated as of Dec 2025. All usage has been migrated to UnifiedCache.
 //!
+#![allow(deprecated)]
+#![allow(clippy::deprecated)]
 //! **Migration completed**:
 //! - [DONE] improvements_registry_ext.rs → UnifiedCache
 //! - [DONE] async_middleware.rs → UnifiedCache
@@ -281,6 +283,7 @@ pub struct CacheStats {
 }
 
 #[cfg(test)]
+#[allow(deprecated)]
 mod tests {
     use super::*;
 

@@ -137,8 +137,6 @@ pub fn create_http_transport(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn test_transport_creation() {
         // Test transport creation with configuration

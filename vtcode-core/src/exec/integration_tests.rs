@@ -12,6 +12,7 @@ mod tests {
     use crate::exec::{
         AgentBehaviorAnalyzer, ExecutionConfig, PiiTokenizer, Skill, SkillManager, SkillMetadata,
     };
+    use anyhow::Result;
     use chrono;
     use tempfile;
 
@@ -128,18 +129,18 @@ result = {"test": double_value(21)}
     // ============================================================================
 
     #[test]
-    fn test_pii_protection_in_execution() {
+    fn test_pii_protection_in_execution() -> Result<()> {
         // Create a PII tokenizer
-        let tokenizer = PiiTokenizer::new();
+        let tokenizer = PiiTokenizer::new()?;
 
         // Step 1: Detect PII patterns
         let text_with_pii = "Email: john@example.com, SSN: 123-45-6789";
 
-        let detected = tokenizer.detect_pii(text_with_pii).unwrap();
+        let detected = tokenizer.detect_pii(text_with_pii)?;
         assert!(!detected.is_empty());
 
         // Step 2: Verify we can tokenize
-        let (tokenized, _tokens) = tokenizer.tokenize_string(text_with_pii).unwrap();
+        let (tokenized, _tokens) = tokenizer.tokenize_string(text_with_pii)?;
 
         // Step 3: Verify tokenized version doesn't contain plaintext PII
         assert!(!tokenized.contains("john@example.com"));
@@ -147,9 +148,10 @@ result = {"test": double_value(21)}
         assert!(tokenized.contains("__PII_"));
 
         // Step 4: Verify we can detokenize
-        let detokenized = tokenizer.detokenize_string(&tokenized).unwrap();
+        let detokenized = tokenizer.detokenize_string(&tokenized)?;
         assert!(detokenized.contains("john@example.com"));
         assert!(detokenized.contains("123-45-6789"));
+        Ok(())
     }
 
     // ============================================================================

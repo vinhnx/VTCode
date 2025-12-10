@@ -33,6 +33,7 @@ mod selection;
 pub use selection::ModelSelectionResult;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(clippy::enum_variant_names)]
 enum PickerStep {
     AwaitModel,
     AwaitReasoning,
@@ -68,6 +69,7 @@ pub enum ModelPickerStart {
 }
 
 impl ModelPickerState {
+    #[allow(clippy::new_ret_no_self)]
     pub async fn new(
         renderer: &mut AnsiRenderer,
         current_reasoning: ReasoningEffortLevel,

@@ -1,3 +1,4 @@
+#![allow(clippy::too_many_arguments)]
 //! Tool output rendering with token-aware truncation
 //!
 //! This module handles formatting and displaying tool output to the user.
