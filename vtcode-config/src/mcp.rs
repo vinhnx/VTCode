@@ -822,9 +822,7 @@ mod tests {
             )])),
             ..Default::default()
         };
-        config
-            .providers
-            .insert("time".to_string(), provider_rules);
+        config.providers.insert("time".to_string(), provider_rules);
 
         assert!(config.is_configuration_allowed(None, "ui", "mode"));
         assert!(!config.is_configuration_allowed(None, "ui", "show_provider_names"));
