@@ -256,10 +256,10 @@ pub(super) fn recalculate_transcript_rows(session: &mut Session) {
 }
 
 /// Generic palette rendering helper to avoid duplication
-fn render_palette_generic<F>(
-    session: &mut Session,
-    frame: &mut Frame<'_>,
-    viewport: Rect,
+struct PaletteRenderParams<F>
+where
+    F: for<'a> Fn(&Session, &'a str, bool) -> ListItem<'static>,
+{
     is_active: bool,
     title: String,
     items: Vec<(usize, String, bool)>, // (index, display_text, is_selected)
@@ -267,29 +267,37 @@ fn render_palette_generic<F>(
     has_more: bool,
     more_text: String,
     render_item: F,
+}
+
+fn render_palette_generic<F>(
+    session: &mut Session,
+    frame: &mut Frame<'_>,
+    viewport: Rect,
+    params: PaletteRenderParams<F>,
 ) where
-    F: Fn(&Session, &str, bool) -> ListItem<'static>,
+    F: for<'a> Fn(&Session, &'a str, bool) -> ListItem<'static>,
 {
-    if !is_active || viewport.height == 0 || viewport.width == 0 || session.modal.is_some() {
+    if !params.is_active || viewport.height == 0 || viewport.width == 0 || session.modal.is_some() {
         return;
     }
 
-    if items.is_empty() {
+    if params.items.is_empty() {
         return;
     }
 
     // Calculate width hint
     let mut width_hint = 40u16;
-    for (_, display_text, _) in &items {
+    for (_, display_text, _) in &params.items {
         width_hint = width_hint.max(measure_text_width(display_text) + 4);
     }
 
-    let modal_height = items.len() + instructions.len() + 2 + if has_more { 1 } else { 0 };
+    let modal_height =
+        params.items.len() + params.instructions.len() + 2 + if params.has_more { 1 } else { 0 };
     let area = compute_modal_area(viewport, width_hint, modal_height, 0, 0, true);
 
     frame.render_widget(Clear, area);
     let block = Block::default()
-        .title(title)
+        .title(params.title)
         .borders(Borders::ALL)
         .border_type(terminal_capabilities::get_border_type())
         .style(default_style(session))
@@ -301,22 +309,25 @@ fn render_palette_generic<F>(
         return;
     }
 
-    let layout = ModalListLayout::new(inner, instructions.len());
+    let layout = ModalListLayout::new(inner, params.instructions.len());
     if let Some(text_area) = layout.text_area {
-        let paragraph = Paragraph::new(instructions).wrap(Wrap { trim: true });
+        let paragraph = Paragraph::new(params.instructions).wrap(Wrap { trim: true });
         frame.render_widget(paragraph, text_area);
     }
 
-    let mut list_items: Vec<ListItem> = items
+    let mut list_items: Vec<ListItem> = params
+        .items
         .iter()
-        .map(|(_, display_text, is_selected)| render_item(session, display_text, *is_selected))
+        .map(|(_, display_text, is_selected)| {
+            (params.render_item)(session, display_text.as_str(), *is_selected)
+        })
         .collect();
 
-    if has_more {
+    if params.has_more {
         let continuation_style =
             default_style(session).add_modifier(Modifier::DIM | Modifier::ITALIC);
         list_items.push(ListItem::new(Line::from(Span::styled(
-            more_text,
+            params.more_text,
             continuation_style,
         ))));
     }
@@ -380,35 +391,37 @@ fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, viewport: R
         session,
         frame,
         viewport,
-        true, // is_active already checked above
-        title,
-        generic_items,
-        instructions,
-        has_more,
-        more_text,
-        |session, display_text, is_selected| {
-            let base_style = if is_selected {
-                modal_list_highlight_style(session)
-            } else {
-                default_style(session)
-            };
+        PaletteRenderParams {
+            is_active: true, // is_active already checked above
+            title,
+            items: generic_items,
+            instructions,
+            has_more,
+            more_text,
+            render_item: |session, display_text: &str, is_selected| {
+                let base_style = if is_selected {
+                    modal_list_highlight_style(session)
+                } else {
+                    default_style(session)
+                };
 
-            // Apply file-specific styling
-            let mut style = base_style;
+                // Apply file-specific styling
+                let mut style = base_style;
 
-            // Add icon prefix based on file type
-            let (prefix, is_dir) = if display_text.ends_with("/ ") {
-                ("↳  ", true)
-            } else {
-                ("  · ", false)
-            };
+                // Add icon prefix based on file type
+                let (prefix, is_dir) = if display_text.ends_with("/ ") {
+                    ("↳  ", true)
+                } else {
+                    ("  · ", false)
+                };
 
-            if is_dir {
-                style = style.add_modifier(Modifier::BOLD);
-            }
+                if is_dir {
+                    style = style.add_modifier(Modifier::BOLD);
+                }
 
-            let display = format!("{}{}", prefix, display_text.trim_end_matches("/ "));
-            ListItem::new(Line::from(Span::styled(display, style)))
+                let display = format!("{}{}", prefix, display_text.trim_end_matches("/ "));
+                ListItem::new(Line::from(Span::styled(display, style)))
+            },
         },
     );
 }
@@ -528,22 +541,24 @@ fn render_prompt_palette(session: &mut Session, frame: &mut Frame<'_>, viewport:
         session,
         frame,
         viewport,
-        true, // is_active already checked above
-        title,
-        generic_items,
-        instructions,
-        has_more,
-        more_text,
-        |session, display_text, is_selected| {
-            let base_style = if is_selected {
-                modal_list_highlight_style(session)
-            } else {
-                default_style(session)
-            };
+        PaletteRenderParams {
+            is_active: true, // is_active already checked above
+            title,
+            items: generic_items,
+            instructions,
+            has_more,
+            more_text,
+            render_item: |session, display_text: &str, is_selected| {
+                let base_style = if is_selected {
+                    modal_list_highlight_style(session)
+                } else {
+                    default_style(session)
+                };
 
-            // Format: "  · prompt-name"
-            let display = format!("  · {}", display_text);
-            ListItem::new(Line::from(Span::styled(display, base_style)))
+                // Format: "  · prompt-name"
+                let display = format!("  · {}", display_text);
+                ListItem::new(Line::from(Span::styled(display, base_style)))
+            },
         },
     );
 }

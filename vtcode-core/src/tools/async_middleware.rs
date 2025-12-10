@@ -59,7 +59,7 @@ impl AsyncMiddlewareChain {
         }
     }
 
-    pub fn add(mut self, middleware: Arc<dyn AsyncMiddleware>) -> Self {
+    pub fn with_middleware(mut self, middleware: Arc<dyn AsyncMiddleware>) -> Self {
         self.middlewares.push(middleware);
         self
     }

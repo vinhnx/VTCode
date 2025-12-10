@@ -43,7 +43,7 @@ impl ThemeConfig {
     }
 
     /// Create default theme configuration
-    pub fn default() -> Self {
+    pub fn new() -> Self {
         Self::default_config()
     }
 
@@ -55,6 +55,12 @@ impl ThemeConfig {
             status: StatusColors::default(),
             files: FileColors::default(),
         }
+    }
+}
+
+impl Default for ThemeConfig {
+    fn default() -> Self {
+        Self::default_config()
     }
 }
 

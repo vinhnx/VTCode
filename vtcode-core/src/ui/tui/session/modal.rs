@@ -846,8 +846,12 @@ fn highlight_segments(
             let byte_end = byte_start + needle.len();
             let start_index = char_offsets.partition_point(|offset| *offset < byte_start);
             let end_index = char_offsets.partition_point(|offset| *offset < byte_end);
-            for index in start_index..end_index.min(char_count) {
-                highlight_flags[index] = true;
+            for flag in highlight_flags
+                .iter_mut()
+                .take(end_index.min(char_count))
+                .skip(start_index)
+            {
+                *flag = true;
             }
             search_start = byte_end;
         }

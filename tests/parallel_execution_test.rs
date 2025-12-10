@@ -5,8 +5,6 @@
 
 #[cfg(test)]
 mod parallel_execution_tests {
-    use std::time::Instant;
-
     #[test]
     fn test_parallel_execution_concept() {
         // Conceptual test - actual implementation would require:

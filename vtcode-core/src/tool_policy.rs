@@ -229,7 +229,6 @@ fn default_secure_mcp_allowlist() -> McpAllowListConfig {
             "context7",
             vec!["workspace", "search_scope", "max_results"],
         ))),
-        ..Default::default()
     };
 
     let seq_rules = McpAllowListRules {
@@ -240,6 +239,7 @@ fn default_secure_mcp_allowlist() -> McpAllowListConfig {
             "decompose".into(),
             "sequential_*".into(),
         ]),
+        resources: None,
         prompts: Some(vec![
             "sequential-thinking::*".into(),
             "plan".into(),
@@ -251,7 +251,6 @@ fn default_secure_mcp_allowlist() -> McpAllowListConfig {
             "sequencing",
             vec!["max_depth", "max_branches"],
         ))),
-        ..Default::default()
     };
 
     let mut allowlist = McpAllowListConfig {

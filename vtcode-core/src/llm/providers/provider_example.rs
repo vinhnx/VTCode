@@ -6,7 +6,10 @@
 use crate::config::core::{AnthropicPromptCacheSettings, PromptCachingConfig, ProviderPromptCachingConfig};
 use crate::config::{TimeoutsConfig, constants::{env_vars, models, urls}};
 use crate::llm::providers::common::{extract_prompt_cache_settings, override_base_url, resolve_model};
-use crate::llm::providers::provider_base::{FromProviderConfig, ProviderConfig, build_provider_config};
+use crate::llm::providers::provider_base::{
+    build_provider_config, FromProviderConfig, ProviderConfig, ProviderConfigDefaults,
+    ProviderConfigParams,
+};
 use crate::llm::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse};
 use async_trait::async_trait;
 use reqwest::Client as HttpClient;
@@ -96,17 +99,21 @@ impl ExampleAnthropicProvider {
         _timeouts: Option<TimeoutsConfig>,
     ) -> Self {
         // Use the shared builder function to handle all the common logic
-        let mut config = build_provider_config(
+        let mut config = build_provider_config(ProviderConfigParams {
             api_key,
             model,
             base_url,
             prompt_cache,
-            models::anthropic::DEFAULT_MODEL,
-            urls::ANTHROPIC_API_BASE,
-            Some(env_vars::ANTHROPIC_BASE_URL),
-            |providers| &providers.anthropic,
-            |cfg, provider_settings| cfg.enabled && provider_settings.enabled,
-        );
+            defaults: ProviderConfigDefaults {
+                default_model: models::anthropic::DEFAULT_MODEL,
+                default_base_url: urls::ANTHROPIC_API_BASE,
+                env_var_base_url: Some(env_vars::ANTHROPIC_BASE_URL),
+                cache_extractor: |providers| &providers.anthropic,
+                cache_validator: |cfg, provider_settings| {
+                    cfg.enabled && provider_settings.enabled
+                },
+            },
+        });
 
         // Provider-specific customization: handle Minimax special case
         if config.model.as_ref() == models::minimax::MINIMAX_M2 {
@@ -136,25 +143,25 @@ impl FromProviderConfig for ExampleAnthropicProvider {
 }
 
 /// Comparison: Original vs. Optimized
-/// 
+///
 /// ORIGINAL (80% duplicate code across providers):
 /// ```rust
 /// pub fn from_config(
 ///     api_key: Option<String>,
-///     model: Option<String>, 
+///     model: Option<String>,
 ///     base_url: Option<String>,
 ///     prompt_cache: Option<PromptCachingConfig>,
 ///     _timeouts: Option<TimeoutsConfig>,
 /// ) -> Self {
 ///     let api_key_value = api_key.unwrap_or_default();
 ///     let model_value = resolve_model(model, models::anthropic::DEFAULT_MODEL);
-/// 
+///
 ///     let (prompt_cache_enabled, prompt_cache_settings) = extract_prompt_cache_settings(
 ///         prompt_cache,
 ///         |providers| &providers.anthropic,
 ///         |cfg, provider_settings| cfg.enabled && provider_settings.enabled,
 ///     );
-/// 
+///
 ///     let base_url_value = if model_value.as_str() == models::minimax::MINIMAX_M2 {
 ///         Self::resolve_minimax_base_url(base_url)
 ///     } else {
@@ -164,7 +171,7 @@ impl FromProviderConfig for ExampleAnthropicProvider {
 ///             Some(env_vars::ANTHROPIC_BASE_URL),
 ///         )
 ///     };
-/// 
+///
 ///     Self {
 ///         api_key: Arc::from(api_key_value.as_str()),
 ///         http_client: HttpClient::new(),
@@ -180,7 +187,7 @@ impl FromProviderConfig for ExampleAnthropicProvider {
 /// ```rust
 /// pub fn from_config(
 ///     api_key: Option<String>,
-///     model: Option<String>, 
+///     model: Option<String>,
 ///     base_url: Option<String>,
 ///     prompt_cache: Option<PromptCachingConfig>,
 ///     _timeouts: Option<TimeoutsConfig>,
@@ -194,13 +201,13 @@ impl FromProviderConfig for ExampleAnthropicProvider {
 ///         |providers| &providers.anthropic,
 ///         |cfg, provider_settings| cfg.enabled && provider_settings.enabled,
 ///     );
-/// 
+///
 ///     // Provider-specific customization: handle Minimax special case
 ///     if config.model.as_ref() == models::minimax::MINIMAX_M2 {
 ///         let base_url_value = Self::resolve_minimax_base_url(Some(config.base_url.to_string()));
 ///         config.base_url = Arc::from(base_url_value.as_str());
 ///     }
-/// 
+///
 ///     // Create the provider using the trait
 ///     <Self as FromProviderConfig>::from_provider_config(config)
 /// }

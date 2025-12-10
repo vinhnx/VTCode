@@ -1624,6 +1624,7 @@ impl ToolRegistry {
 
         let mut capture = result.1;
         let snapshot = result.2;
+        let mut truncated = false;
 
         // Apply smart truncation to prevent context overflow
         // This is critical for commands like `cargo clippy` that can produce 8000+ lines
@@ -1641,6 +1642,7 @@ impl ToolRegistry {
                 // Smart extraction: prioritize errors/warnings for build output
                 capture.output =
                     extract_build_errors_and_summary(&capture.output, setup.max_tokens);
+                truncated = true;
             } else {
                 // Generic head+tail truncation for other commands
                 use crate::core::agent::runloop::token_trunc::truncate_content_by_tokens;
@@ -1653,6 +1655,7 @@ impl ToolRegistry {
 
                 if was_truncated {
                     capture.output = truncated_output;
+                    truncated = true;
                 }
             }
 
@@ -1663,6 +1666,7 @@ impl ToolRegistry {
                     &capture.output,
                     DEFAULT_PTY_OUTPUT_BYTE_FUSE,
                 );
+                truncated = true;
             }
 
             // Add truncation notice if output was reduced
@@ -1679,7 +1683,13 @@ impl ToolRegistry {
             }
         }
 
-        let response = build_ephemeral_pty_response(&setup, capture, snapshot);
+        let response = build_ephemeral_pty_response(
+            &setup,
+            capture,
+            snapshot,
+            truncated,
+            pty_capabilities_from_config(self.pty_config()),
+        );
         Ok(response)
     }
 
@@ -1939,7 +1949,23 @@ impl ToolRegistry {
             }
         }
 
-        Ok(Value::Object(response))
+        let mut value = Value::Object(response);
+        let stdout = value
+            .get("scrollback")
+            .or_else(|| value.get("screen_contents"))
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        add_unified_metadata(
+            &mut value,
+            stdout,
+            is_completed,
+            Some(is_completed.is_some()),
+            None,
+            Some(false),
+            pty_capabilities_from_config(self.pty_config()),
+        );
+
+        Ok(value)
     }
 
     async fn execute_list_pty_sessions(&self) -> Result<Value> {
@@ -1954,11 +1980,21 @@ impl ToolRegistry {
             )));
         }
 
-        Ok(json!({
+        let mut value = json!({
             "success": true,
             "sessions": identifiers,
             "details": details,
-        }))
+        });
+        add_unified_metadata(
+            &mut value,
+            None,
+            None,
+            None,
+            None,
+            Some(false),
+            pty_capabilities_from_config(self.pty_config()),
+        );
+        Ok(value)
     }
 
     async fn execute_close_pty_session(&mut self, args: Value) -> Result<Value> {
@@ -1995,7 +2031,23 @@ impl ToolRegistry {
             }
         }
 
-        Ok(Value::Object(response))
+        let mut value = Value::Object(response);
+        let stdout = value
+            .get("scrollback")
+            .or_else(|| value.get("screen_contents"))
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        add_unified_metadata(
+            &mut value,
+            stdout,
+            exit_code,
+            Some(exit_code.is_some()),
+            None,
+            Some(false),
+            pty_capabilities_from_config(self.pty_config()),
+        );
+
+        Ok(value)
     }
 
     async fn execute_send_pty_input(&mut self, args: Value) -> Result<Value> {
@@ -2102,7 +2154,22 @@ impl ToolRegistry {
             }
         }
 
-        Ok(Value::Object(response))
+        let mut value = Value::Object(response);
+        let stdout = value
+            .get("output")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        add_unified_metadata(
+            &mut value,
+            stdout,
+            is_completed,
+            Some(is_completed.is_some()),
+            None,
+            Some(false),
+            pty_capabilities_from_config(self.pty_config()),
+        );
+
+        Ok(value)
     }
 
     async fn execute_read_pty_session(&mut self, args: Value) -> Result<Value> {
@@ -2194,7 +2261,22 @@ impl ToolRegistry {
             }
         }
 
-        Ok(Value::Object(response))
+        let mut value = Value::Object(response);
+        let stdout = value
+            .get("output")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        add_unified_metadata(
+            &mut value,
+            stdout,
+            is_completed,
+            Some(is_completed.is_some()),
+            None,
+            Some(false),
+            pty_capabilities_from_config(self.pty_config()),
+        );
+
+        Ok(value)
     }
 
     async fn execute_resize_pty_session(&mut self, args: Value) -> Result<Value> {
@@ -2493,6 +2575,127 @@ fn snapshot_to_map(
 
 fn strip_ansi(text: &str) -> String {
     crate::utils::ansi_parser::strip_ansi(text)
+}
+
+fn compute_output_stats(text: &str) -> Value {
+    json!({
+        "bytes": text.as_bytes().len(),
+        "lines": text.lines().count(),
+        "unicode_metrics": Value::Null,
+    })
+}
+
+fn add_unified_metadata(
+    value: &mut Value,
+    stdout: Option<String>,
+    exit_code: Option<i32>,
+    is_exited: Option<bool>,
+    duration_ms: Option<u128>,
+    truncated: Option<bool>,
+    capabilities: Value,
+) {
+    if let Value::Object(obj) = value {
+        if let Some(stdout) = stdout {
+            obj.entry("stdout".to_string())
+                .or_insert(Value::String(stdout.clone()));
+            obj.entry("stats".to_string())
+                .or_insert(compute_output_stats(&stdout));
+        } else if !obj.contains_key("stats") {
+            obj.insert(
+                "stats".to_string(),
+                json!({"bytes": 0, "lines": 0, "unicode_metrics": Value::Null}),
+            );
+        }
+
+        if let Some(code) = exit_code {
+            obj.entry("exit_code".to_string())
+                .or_insert(Value::Number(code.into()));
+        }
+
+        if let Some(done) = is_exited {
+            obj.entry("is_exited".to_string())
+                .or_insert(Value::Bool(done));
+        }
+
+        if let Some(ms) = duration_ms {
+            let ms_u64 = ms as u64;
+            obj.entry("duration_ms".to_string())
+                .or_insert(Value::Number(ms_u64.into()));
+        }
+
+        if let Some(flag) = truncated {
+            obj.entry("truncated".to_string())
+                .or_insert(Value::Bool(flag));
+        }
+
+        obj.entry("capabilities".to_string())
+            .or_insert(capabilities);
+    }
+}
+
+fn pty_capabilities_from_config(config: &PtyConfig) -> Value {
+    json!({
+        "platform": std::env::consts::OS,
+        "supports_login_shell": !cfg!(windows),
+        "supports_resize": true,
+        "max_sessions": config.max_sessions,
+        "max_scrollback_bytes": config.max_scrollback_bytes,
+        "supports_unicode_metrics": true,
+    })
+}
+
+#[cfg(test)]
+mod unified_metadata_tests {
+    use super::*;
+
+    #[test]
+    fn adds_stats_and_capabilities_when_stdout_present() {
+        let mut value = json!({});
+        add_unified_metadata(
+            &mut value,
+            Some("hello\nworld".to_string()),
+            Some(0),
+            Some(true),
+            Some(123),
+            Some(true),
+            json!({"supports_resize": true}),
+        );
+
+        let obj = value.as_object().expect("object");
+        assert_eq!(
+            obj.get("stdout").and_then(|v| v.as_str()),
+            Some("hello\nworld")
+        );
+        let stats = obj.get("stats").and_then(|v| v.as_object()).expect("stats");
+        assert_eq!(stats.get("bytes").and_then(|v| v.as_u64()), Some(11));
+        assert_eq!(stats.get("lines").and_then(|v| v.as_u64()), Some(2));
+        assert_eq!(obj.get("exit_code").and_then(|v| v.as_i64()), Some(0));
+        assert_eq!(obj.get("is_exited").and_then(|v| v.as_bool()), Some(true));
+        assert_eq!(obj.get("duration_ms").and_then(|v| v.as_u64()), Some(123));
+        assert_eq!(obj.get("truncated").and_then(|v| v.as_bool()), Some(true));
+        assert!(obj.get("capabilities").is_some());
+    }
+
+    #[test]
+    fn adds_defaults_when_stdout_missing() {
+        let mut value = json!({});
+        add_unified_metadata(
+            &mut value,
+            None,
+            None,
+            None,
+            None,
+            Some(false),
+            json!({"supports_resize": true}),
+        );
+
+        let obj = value.as_object().expect("object");
+        let stats = obj.get("stats").and_then(|v| v.as_object()).expect("stats");
+        assert_eq!(stats.get("bytes").and_then(|v| v.as_u64()), Some(0));
+        assert_eq!(stats.get("lines").and_then(|v| v.as_u64()), Some(0));
+        assert_eq!(obj.get("truncated").and_then(|v| v.as_bool()), Some(false));
+        assert!(obj.get("capabilities").is_some());
+    }
 }
 
 #[cfg(test)]
@@ -3008,6 +3211,8 @@ fn build_ephemeral_pty_response(
     setup: &PtyCommandSetup,
     capture: PtyEphemeralCapture,
     snapshot: VTCodePtySession,
+    truncated: bool,
+    capabilities: Value,
 ) -> Value {
     let PtyEphemeralCapture {
         output,
@@ -3252,6 +3457,16 @@ fn build_ephemeral_pty_response(
                 ),
             );
     }
+
+    add_unified_metadata(
+        &mut response,
+        Some(strip_ansi(final_output)),
+        code,
+        Some(completed),
+        Some(duration.as_millis()),
+        Some(truncated),
+        capabilities,
+    );
 
     response
 }

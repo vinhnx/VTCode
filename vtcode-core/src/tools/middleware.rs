@@ -580,7 +580,7 @@ impl MiddlewareChain {
         }
     }
 
-    pub fn add(mut self, middleware: Arc<dyn Middleware>) -> Self {
+    pub fn with_middleware(mut self, middleware: Arc<dyn Middleware>) -> Self {
         self.middlewares.push(middleware);
         self
     }
@@ -590,12 +590,12 @@ impl MiddlewareChain {
         self,
         analyzer: Arc<std::sync::RwLock<crate::exec::agent_optimization::AgentBehaviorAnalyzer>>,
     ) -> Self {
-        self.add(Arc::new(MetricsMiddleware::new(analyzer)))
+        self.with_middleware(Arc::new(MetricsMiddleware::new(analyzer)))
     }
 
     /// Add circuit breaker middleware with failure threshold
     pub fn with_circuit_breaker(self, threshold: f64) -> Self {
-        self.add(Arc::new(CircuitBreakerMiddleware::new(threshold)))
+        self.with_middleware(Arc::new(CircuitBreakerMiddleware::new(threshold)))
     }
 
     /// Execute request through the middleware chain with a synchronous executor
