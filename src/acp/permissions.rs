@@ -93,11 +93,13 @@ where
         tool: SupportedTool,
         args: &Value,
     ) -> Result<Option<ToolExecutionReport>, AcpError> {
-        let mut fields = acp::ToolCallUpdateFields::default();
-        fields.title = Some(call.title.clone());
-        fields.kind = Some(tool.kind());
-        fields.status = Some(acp::ToolCallStatus::Pending);
-        fields.raw_input = Some(args.clone());
+        let fields = acp::ToolCallUpdateFields {
+            title: Some(call.title.clone()),
+            kind: Some(tool.kind()),
+            status: Some(acp::ToolCallStatus::Pending),
+            raw_input: Some(args.clone()),
+            ..Default::default()
+        };
 
         let request = acp::RequestPermissionRequest {
             session_id: session_id.clone(),
