@@ -135,29 +135,26 @@ pub(crate) fn select_line_style(
     git: &GitStyles,
     ls: &LsStyles,
 ) -> Option<AnsiStyle> {
-    match tool_name {
-        Some(
-            tools::RUN_PTY_CMD | tools::WRITE_FILE | tools::EDIT_FILE | tools::APPLY_PATCH,
-        ) => {
-            let trimmed = line.trim_start();
-            if trimmed.starts_with("diff --")
-                || trimmed.starts_with("index ")
-                || trimmed.starts_with("@@")
-            {
-                return git.header;
-            }
-
-            if trimmed.starts_with('+') {
-                return git.add;
-            }
-            if trimmed.starts_with('-') {
-                return git.remove;
-            }
-            if let Some(style) = ls.style_for_line(trimmed) {
-                return Some(style);
-            }
+    if let Some(tools::RUN_PTY_CMD | tools::WRITE_FILE | tools::EDIT_FILE | tools::APPLY_PATCH) =
+        tool_name
+    {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("diff --")
+            || trimmed.starts_with("index ")
+            || trimmed.starts_with("@@")
+        {
+            return git.header;
         }
-        _ => {}
+
+        if trimmed.starts_with('+') {
+            return git.add;
+        }
+        if trimmed.starts_with('-') {
+            return git.remove;
+        }
+        if let Some(style) = ls.style_for_line(trimmed) {
+            return Some(style);
+        }
     }
     None
 }

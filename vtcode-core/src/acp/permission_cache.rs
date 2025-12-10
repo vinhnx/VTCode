@@ -303,10 +303,7 @@ mod tests {
         cache.cache_grant(once_path.clone(), PermissionGrant::Once);
         cache.cache_grant(session_path.clone(), PermissionGrant::Session);
         cache.cache_grant(denied_path.clone(), PermissionGrant::Denied);
-        cache.cache_grant(
-            temp_denied_path.clone(),
-            PermissionGrant::TemporaryDenial,
-        );
+        cache.cache_grant(temp_denied_path.clone(), PermissionGrant::TemporaryDenial);
 
         // "Once" and "TemporaryDenial" grants can't be reused
         assert!(!cache.can_use_cached(&once_path));
@@ -345,10 +342,7 @@ mod tests {
         let temp_denied_path = test_path("temp_denied.rs");
 
         cache.cache_grant(denied_path.clone(), PermissionGrant::Denied);
-        cache.cache_grant(
-            temp_denied_path.clone(),
-            PermissionGrant::TemporaryDenial,
-        );
+        cache.cache_grant(temp_denied_path.clone(), PermissionGrant::TemporaryDenial);
 
         // Both should be identified correctly
         assert!(cache.is_denied(&denied_path));
