@@ -45,6 +45,9 @@
 
 ## Installation
 
+[![Run in Smithery](https://smithery.ai/badge/skills/vinhnx)](https://smithery.ai/skills?ns=vinhnx&utm_source=github&utm_medium=badge)
+
+
 **macOS & Linux:**
 ```bash
 curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.sh | bash
