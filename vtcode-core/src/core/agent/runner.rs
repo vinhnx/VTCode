@@ -45,6 +45,7 @@ const MAX_STREAMING_FAILURES: u8 = 2;
 const LOOP_THROTTLE_BASE_MS: u64 = 75;
 const LOOP_THROTTLE_MAX_MS: u64 = 500;
 const STREAMING_COOLDOWN_SECS: u64 = 60;
+const IDLE_TURN_LIMIT: usize = 3;
 
 macro_rules! runner_println {
     ($runner:expr, $($arg:tt)*) => {
@@ -227,6 +228,7 @@ struct TaskRunState {
     consecutive_tool_loops: usize,
     max_tool_loop_streak: usize,
     tool_loop_limit_hit: bool,
+    consecutive_idle_turns: usize,
     // Optimization: Track last processed message index for incremental Gemini message building
     last_processed_message_idx: usize,
 }
@@ -260,6 +262,7 @@ impl TaskRunState {
             consecutive_tool_loops: 0,
             max_tool_loop_streak: 0,
             tool_loop_limit_hit: false,
+            consecutive_idle_turns: 0,
         }
     }
 
@@ -2046,8 +2049,28 @@ impl AgentRunner {
                             task_state.record_turn(&turn_started_at, &mut turn_recorded);
                             tool_loop_limit_triggered = true;
                         }
+                        task_state.consecutive_idle_turns = 0;
                     } else {
                         task_state.reset_tool_loop_guard();
+                        if !task_state.has_completed {
+                            task_state.consecutive_idle_turns =
+                                task_state.consecutive_idle_turns.saturating_add(1);
+                            if task_state.consecutive_idle_turns >= IDLE_TURN_LIMIT {
+                                let warning_message = format!(
+                                    "No tool calls or completion for {} consecutive turns; halting to avoid idle loop",
+                                    task_state.consecutive_idle_turns
+                                );
+                                self.record_warning(
+                                    &agent_prefix,
+                                    &mut task_state,
+                                    &mut event_recorder,
+                                    warning_message,
+                                );
+                                task_state.completion_outcome = TaskOutcome::StoppedNoAction;
+                                task_state.record_turn(&turn_started_at, &mut turn_recorded);
+                                break;
+                            }
+                        }
                     }
 
                     if tool_loop_limit_triggered {
