@@ -3,6 +3,45 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Version 0.43.0] - 2025-11-09
+# [Version 0.47.16] - 2025-12-11
+
+
+### Features
+    - feat: enhance logging and error handling in orchestrator and agent components
+    - feat: improve tracing initialization and error handling in main
+    - feat: implement idle turn detection and management in task execution
+    - feat: improve HTTP client pool handling and enhance caching middleware
+    - feat: enhance loop detection and rate limiting in tool execution
+    - feat: implement timeout management for streaming and generation requests
+    - feat: implement streaming failure management and cooldown mechanism
+    - feat: enhance agent logging and improve markdown rendering
+    - feat: introduce reinforcement learning optimization and enhance configuration
+    - feat: add new dependencies and improve error handling in main
+    - feat: enhance grep result optimization and tool registration
+    - feat: enhance timeout configuration and adaptive timeout handling
+    - feat: add search_replace tool and enhance file operations
+
+
+### Refactors
+    - refactor: enhance loop detection logic and add tests
+    - refactor: simplify line style selection logic in tool output
+    - refactor: streamline initialization and error handling in various modules
+    - refactor: simplify ToolCallUpdateFields initialization
+    - refactor: update tool policy and improve middleware handling
+
+
+### Documentation
+    - docs: update changelog for v0.47.15 [skip ci]
+    - docs: update changelog for v0.47.14 [skip ci]
+
+
+### Chores
+    - chore: update VSCode extension package.json to v0.47.15 [skip ci]
+    - chore: update npm package.json to v0.47.15 [skip ci]
+    - chore: release v0.47.15
+    - chore: release v0.47.14
+    - chore: update VSCode extension package.json to v0.47.13 [skip ci]
+    - chore: update npm package.json to v0.47.13 [skip ci]
 # [Version 0.47.15] - 2025-12-11
 
 
