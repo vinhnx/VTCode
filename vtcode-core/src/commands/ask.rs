@@ -14,7 +14,7 @@ pub async fn handle_ask_command(config: AgentConfig, prompt: Vec<String>) -> Res
         .model
         .parse::<ModelId>()
         .map_err(|_| anyhow::anyhow!("Invalid model: {}", config.model))?;
-    let mut client = make_client(config.api_key.clone(), model_id);
+    let mut client = make_client(config.api_key.clone(), model_id)?;
     let prompt_text = prompt.join(" ");
 
     if config.verbose {

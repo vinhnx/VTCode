@@ -7,8 +7,17 @@ use crate::llm::provider::{LLMError, LLMRequest, LLMResponse, Message, ToolDefin
 use async_trait::async_trait;
 use reqwest::{Client as HttpClient, StatusCode};
 use serde_json::Value;
+use std::collections::HashMap;
+use std::sync::{Arc, LazyLock, Mutex};
 use std::time::Duration;
-use tokio::time::sleep;
+use tokio::sync::{OwnedSemaphorePermit, Semaphore};
+use tokio::time::{sleep, timeout};
+
+const DEFAULT_MAX_INFLIGHT_PER_MODEL: usize = 4;
+const RATE_LIMIT_ACQUIRE_TIMEOUT: Duration = Duration::from_secs(10);
+
+static MODEL_LIMITERS: LazyLock<Mutex<HashMap<String, Arc<Semaphore>>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// Base configuration shared by all providers
 #[derive(Debug, Clone)]
@@ -161,6 +170,7 @@ pub trait BaseProvider: Send + Sync {
 
     /// Execute LLM request with common error handling and retry logic
     async fn execute_request(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
+        let _permit = acquire_model_permit(&self.config().model).await?;
         let client = self.config().build_http_client()?;
         let max_retries = self.config().max_retries;
 
@@ -280,4 +290,24 @@ fn backoff_duration(attempt: u32) -> Duration {
     const BASE_MS: u64 = 200;
     let backoff_ms = BASE_MS.saturating_mul(2_u64.saturating_pow(capped_attempt));
     Duration::from_millis(backoff_ms.min(5_000))
+}
+
+fn limiter_for_model(model: &str) -> Arc<Semaphore> {
+    if let Ok(mut guard) = MODEL_LIMITERS.lock() {
+        guard
+            .entry(model.to_string())
+            .or_insert_with(|| Arc::new(Semaphore::new(DEFAULT_MAX_INFLIGHT_PER_MODEL)))
+            .clone()
+    } else {
+        Arc::new(Semaphore::new(DEFAULT_MAX_INFLIGHT_PER_MODEL))
+    }
+}
+
+async fn acquire_model_permit(model: &str) -> Result<OwnedSemaphorePermit, LLMError> {
+    let limiter = limiter_for_model(model);
+    match timeout(RATE_LIMIT_ACQUIRE_TIMEOUT, limiter.acquire_owned()).await {
+        Ok(Ok(permit)) => Ok(permit),
+        Ok(Err(_)) => Err(LLMError::RateLimit),
+        Err(_) => Err(LLMError::RateLimit),
+    }
 }

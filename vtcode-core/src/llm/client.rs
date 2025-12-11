@@ -16,16 +16,13 @@ pub type AnyClient = Box<dyn LLMClient>;
 
 /// Create a client based on the model ID
 /// Uses the existing factory pattern from factory.rs
-pub fn make_client(api_key: String, model: ModelId) -> AnyClient {
+pub fn make_client(api_key: String, model: ModelId) -> Result<AnyClient, LLMError> {
+    let model_id = model.to_string();
     // Use factory to create provider
-    let provider = super::factory::create_provider_for_model(&model.to_string(), api_key, None)
-        .expect("Failed to create provider");
+    let provider = super::factory::create_provider_for_model(&model_id, api_key, None)?;
 
     // Wrap in a simple client adapter
-    Box::new(ProviderClientAdapter {
-        provider,
-        model_id: model.to_string(),
-    })
+    Ok(Box::new(ProviderClientAdapter { provider, model_id }))
 }
 
 /// Adapter to use LLMProvider as LLMClient

@@ -1029,7 +1029,7 @@ impl AgentRunner {
         verbosity: Option<VerbosityLevel>,
     ) -> Result<Self> {
         // Create client based on model
-        let client: AnyClient = make_client(api_key.clone(), model);
+        let client: AnyClient = make_client(api_key.clone(), model)?;
 
         // Create unified provider client for tool calling
         let provider_client = create_provider_for_model(model.as_str(), api_key.clone(), None)
