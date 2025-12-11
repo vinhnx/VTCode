@@ -5,6 +5,7 @@
 use anyhow::{Context, Result, bail};
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::OnceLock;
 
 use crate::config::FullAutoConfig;
 use crate::config::loader::VTCodeConfig;
@@ -66,6 +67,12 @@ impl Default for ValidationResult {
 
 /// Load and parse models.json
 fn load_models_json() -> Result<JsonValue> {
+    static MODELS_CACHE: OnceLock<JsonValue> = OnceLock::new();
+
+    if let Some(cached) = MODELS_CACHE.get() {
+        return Ok(cached.clone());
+    }
+
     // Try to load from docs/models.json relative to current dir or workspace
     let paths = [
         std::path::PathBuf::from("docs/models.json"),
@@ -77,8 +84,10 @@ fn load_models_json() -> Result<JsonValue> {
         if path.exists() {
             let content = std::fs::read_to_string(path)
                 .with_context(|| format!("Failed to read {}", path.display()))?;
-            return serde_json::from_str(&content)
-                .context("Failed to parse docs/models.json. Check JSON syntax.");
+            let parsed: JsonValue = serde_json::from_str(&content)
+                .context("Failed to parse docs/models.json. Check JSON syntax.")?;
+            let _ = MODELS_CACHE.set(parsed.clone());
+            return Ok(parsed);
         }
     }
 

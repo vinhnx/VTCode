@@ -8,6 +8,7 @@ use async_trait::async_trait;
 use reqwest::{Client as HttpClient, StatusCode};
 use serde_json::Value;
 use std::time::Duration;
+use tokio::time::sleep;
 
 /// Base configuration shared by all providers
 #[derive(Debug, Clone)]
@@ -183,6 +184,7 @@ pub trait BaseProvider: Send + Sync {
                                                 if attempt < max_retries
                                                     && should_retry_status(status)
                                                 {
+                                                    sleep(backoff_duration(attempt)).await;
                                                     last_error = Some(handle_http_error(
                                                         status,
                                                         &error_text,
@@ -204,6 +206,7 @@ pub trait BaseProvider: Send + Sync {
                                             // Not JSON - treat as error text
                                             if attempt < max_retries && should_retry_status(status)
                                             {
+                                                sleep(backoff_duration(attempt)).await;
                                                 last_error = Some(handle_http_error(
                                                     status,
                                                     &text,
@@ -235,6 +238,7 @@ pub trait BaseProvider: Send + Sync {
                         Err(e) => {
                             let error = LLMError::Network(format!("Request failed: {}", e));
                             if attempt < max_retries {
+                                sleep(backoff_duration(attempt)).await;
                                 last_error = Some(error);
                                 continue;
                             }
@@ -268,4 +272,12 @@ fn should_retry_status(status: StatusCode) -> bool {
             | StatusCode::SERVICE_UNAVAILABLE
             | StatusCode::GATEWAY_TIMEOUT
     )
+}
+
+/// Exponential backoff with an upper bound to reduce provider hammering
+fn backoff_duration(attempt: u32) -> Duration {
+    let capped_attempt = attempt.min(5);
+    const BASE_MS: u64 = 200;
+    let backoff_ms = BASE_MS.saturating_mul(2_u64.saturating_pow(capped_attempt));
+    Duration::from_millis(backoff_ms.min(5_000))
 }
