@@ -28,7 +28,7 @@ use crate::tools::{ToolRegistry, build_function_declarations};
 
 use crate::utils::colors::style;
 use crate::utils::error_messages::ERR_TOOL_DENIED;
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
 use futures::StreamExt;
 use serde_json::Value;
 use std::cell::RefCell;
@@ -955,7 +955,8 @@ impl AgentRunner {
 
         let max_repeated_tool_calls = config_value.tools.max_repeated_tool_calls.max(1);
         let config = Arc::new(config_value);
-        let tool_registry = ToolRegistry::new(workspace.clone()).await;
+        let mut tool_registry = ToolRegistry::new(workspace.clone()).await;
+        tool_registry.set_harness_session(session_id.clone());
         let loop_detector = LoopDetector::with_max_repeated_calls(max_repeated_tool_calls);
 
         Ok(Self {
@@ -1066,6 +1067,13 @@ impl AgentRunner {
         task: &Task,
         contexts: &[ContextItem],
     ) -> Result<TaskResults> {
+        // Align harness context with runner session/task for structured telemetry
+        self.tool_registry
+            .set_harness_session(self.session_id.clone());
+        self.tool_registry
+            .set_harness_task(Some(task.id.clone()));
+
+        let result = {
         // Agent execution status
         let agent_prefix = format!("[{}]", self.agent_type);
         // OPTIMIZATION: Avoid cloning session_id repeatedly by using reference
@@ -2602,6 +2610,10 @@ impl AgentRunner {
 
         // Return task results
         Ok(task_state.into_results(summary, thread_events, total_duration_ms))
+        };
+
+        self.tool_registry.set_harness_task(None);
+        result
     }
 
     /// Build available tools for this agent type
@@ -2672,6 +2684,11 @@ impl AgentRunner {
 
     /// Execute a tool by name with given arguments
     async fn execute_tool(&self, tool_name: &str, args: &Value) -> Result<Value> {
+        // Fail fast if tool is denied or missing to avoid tight retry loops
+        if !self.is_valid_tool(tool_name).await {
+            return Err(anyhow!("{}: {}", ERR_TOOL_DENIED, tool_name));
+        }
+
         // Enforce per-agent shell policies for RUN_PTY_CMD
         let is_shell = tool_name == tools::RUN_PTY_CMD;
         if is_shell {
@@ -2804,28 +2821,35 @@ impl AgentRunner {
         let mut registry = self.tool_registry.clone();
 
         // Initialize async components
-        registry.initialize_async().await?;
+        registry
+            .initialize_async()
+            .await
+            .context("Failed to initialize tool registry before execution")?;
 
         // Try with simple adaptive retry (up to 2 retries)
         let mut delay = std::time::Duration::from_millis(200);
+        let mut last_error: Option<anyhow::Error> = None;
         for attempt in 0..3 {
             match registry.execute_tool_ref(tool_name, args).await {
                 Ok(result) => return Ok(result),
-                Err(_e) if attempt < 2 => {
+                Err(e) if attempt < 2 => {
+                    last_error = Some(e);
                     tokio::time::sleep(delay).await;
                     delay = delay.saturating_mul(2);
                     continue;
                 }
                 Err(e) => {
-                    return Err(anyhow!(
-                        "Tool '{}' not found or failed to execute: {}",
-                        tool_name,
-                        e
-                    ));
+                    last_error = Some(e);
                 }
             }
         }
-        unreachable!()
+        Err(anyhow!(
+            "Tool '{}' failed after retries: {}",
+            tool_name,
+            last_error
+                .map(|e| e.to_string())
+                .unwrap_or_else(|| "unknown error".to_string())
+        ))
     }
 
     /// Generate a meaningful summary of the task execution

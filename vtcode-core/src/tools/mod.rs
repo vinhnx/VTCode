@@ -142,6 +142,7 @@ pub mod mcp;
 pub mod names;
 pub(crate) mod path_env;
 pub mod plan;
+pub mod plugins;
 pub mod pty;
 pub mod registry;
 pub mod result_cache;
@@ -198,6 +199,7 @@ pub use registry::{
     ToolJustification, ToolRegistration, ToolRegistry, ToolRiskContext, ToolRiskScorer, ToolSource,
     WorkspaceTrust,
 };
+pub use plugins::{PluginHandle, PluginInstaller, PluginManifest, PluginRuntime, PluginId};
 pub use result_cache::{ToolCacheKey, ToolResultCache};
 pub use result_metadata::{
     EnhancedToolResult, ResultCompleteness, ResultMetadata, ResultScorer, ScorerRegistry,

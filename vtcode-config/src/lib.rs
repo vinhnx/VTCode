@@ -50,9 +50,11 @@ pub use acp::{
 pub use api_keys::ApiKeySources;
 pub use context::{ContextFeaturesConfig, LedgerConfig};
 pub use core::{
-    AgentConfig, AgentCustomPromptsConfig, AgentOnboardingConfig, AutomationConfig, CommandsConfig,
-    FullAutoConfig, ModelConfig, PromptCachingConfig, ProviderPromptCachingConfig, SecurityConfig,
-    ToolPolicy, ToolsConfig, WebFetchConfig,
+    ActorCriticConfig, AgentConfig, AgentCustomPromptsConfig, AgentOnboardingConfig,
+    AutomationConfig, BanditConfig, CommandsConfig, FullAutoConfig, ModelConfig,
+    PluginRuntimeConfig, PluginTrustLevel, PromptCachingConfig, ProviderPromptCachingConfig,
+    ReinforcementLearningConfig, RlStrategy, RewardShapingConfig, SecurityConfig, ToolPolicy,
+    ToolsConfig, WebFetchConfig,
 };
 pub use debug::{DebugConfig, TraceLevel};
 pub use defaults::{

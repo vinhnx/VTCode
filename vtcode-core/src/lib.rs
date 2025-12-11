@@ -140,7 +140,11 @@ pub mod instructions;
 pub mod llm;
 pub mod mcp;
 pub mod metrics;
+pub mod diagnostics;
 pub mod models;
+pub mod orchestrator;
+pub mod security;
+pub mod telemetry;
 pub mod project_doc;
 pub mod prompts;
 pub mod safety;
@@ -162,7 +166,9 @@ pub use config::types::{
 };
 pub use config::{
     AgentClientProtocolConfig, AgentClientProtocolTransport, AgentClientProtocolZedConfig,
-    AgentClientProtocolZedToolsConfig, AgentConfig, VTCodeConfig, WorkspaceTrustLevel,
+    AgentClientProtocolZedToolsConfig, ActorCriticConfig, AgentConfig, BanditConfig,
+    PluginRuntimeConfig, PluginTrustLevel, ReinforcementLearningConfig, RlStrategy,
+    RewardShapingConfig, VTCodeConfig, WorkspaceTrustLevel,
 };
 pub use core::agent::core::Agent;
 pub use core::agent::runner::AgentRunner;
@@ -183,6 +189,16 @@ pub use exec::events::{
 pub use exec::{CodeExecutor, ExecutionConfig, ExecutionResult, Language};
 pub use gemini::{Content, FunctionDeclaration, Part};
 pub use llm::{AnyClient, make_client};
+pub use diagnostics::{
+    DiagnosticReport, HealthSample, LabeledAction, PredictiveMonitor, RecoveryAction,
+    RecoveryPlaybook,
+};
+pub use orchestrator::{
+    DistributedOrchestrator, ExecutionTarget, ExecutorRegistry, LocalExecutor, ScheduledWork,
+    WorkExecutor,
+};
+pub use telemetry::{TelemetryEvent, TelemetryPipeline};
+pub use security::{IntegrityTag, PayloadEnvelope, ZeroTrustContext};
 pub use mcp::{
     tool_discovery::{DetailLevel, ToolDiscovery, ToolDiscoveryResult},
     validate_mcp_config,

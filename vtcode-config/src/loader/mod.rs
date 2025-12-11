@@ -5,7 +5,7 @@ use crate::acp::AgentClientProtocolConfig;
 use crate::context::ContextFeaturesConfig;
 use crate::core::{
     AgentConfig, AutomationConfig, CommandsConfig, ModelConfig, PermissionsConfig,
-    PromptCachingConfig, SecurityConfig, ToolsConfig,
+    PromptCachingConfig, ReinforcementLearningConfig, SecurityConfig, ToolsConfig,
 };
 use crate::debug::DebugConfig;
 use crate::defaults::{self, ConfigDefaultsProvider, SyntaxHighlightingDefaults};
@@ -155,6 +155,10 @@ pub struct VTCodeConfig {
     /// Automation configuration
     #[serde(default)]
     pub automation: AutomationConfig,
+
+    /// Optimization and reinforcement learning configuration
+    #[serde(default)]
+    pub optimization: ReinforcementLearningConfig,
 
     /// Prompt cache configuration (local + provider integration)
     #[serde(default)]

@@ -119,6 +119,7 @@ pub mod style_helpers;
 pub mod transcript;
 pub mod unicode_monitor;
 pub mod vtcodegitignore;
+pub mod migration;
 
 pub use anstyle_utils::*;
 pub use cached_style_parser::CachedStyleParser;

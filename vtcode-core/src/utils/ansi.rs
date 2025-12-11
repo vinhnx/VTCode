@@ -368,12 +368,12 @@ impl AnsiRenderer {
         if lines.is_empty() {
             lines.push(MarkdownLine::default());
         }
-        
+
         // Pre-allocate buffer for markdown output if rendering many lines
         if lines.len() > 10 {
             self.buffer.reserve(lines.len() * 80);
         }
-        
+
         for line in lines {
             self.write_markdown_line(style, indent, line)?;
         }
@@ -768,7 +768,8 @@ impl InlineSink {
         // Note: ansi-to-tui may have issues with UTF-8 multi-byte chars mixed with ANSI codes,
         // so we validate UTF-8 integrity after parsing
         if let Ok(parsed) = text.as_bytes().into_text() {
-            let mut converted_lines = Vec::with_capacity(parsed.lines.len().max(line_count_estimate));
+            let mut converted_lines =
+                Vec::with_capacity(parsed.lines.len().max(line_count_estimate));
             let mut plain_lines = Vec::with_capacity(parsed.lines.len().max(line_count_estimate));
             let base_style = RatatuiStyle::default().patch(parsed.style);
 
@@ -870,36 +871,36 @@ impl InlineSink {
         // creating a separate inline entry for each line. This prevents the
         // UI from showing a separate line per original line of tool output.
         if kind == InlineMessageKind::User || kind == InlineMessageKind::Tool {
-           let mut combined_segments = Vec::new();
-           let mut combined_plain = String::new();
+            let mut combined_segments = Vec::new();
+            let mut combined_plain = String::new();
 
-           for (mut segments, plain) in converted_lines.into_iter().zip(plain_lines.into_iter()) {
-               if !combined_segments.is_empty() {
-                   combined_segments.push(InlineSegment {
-                       text: "\n".to_owned(),
-                       style: Arc::clone(&fallback_arc),
-                   });
-                   combined_plain.push('\n');
-               }
+            for (mut segments, plain) in converted_lines.into_iter().zip(plain_lines.into_iter()) {
+                if !combined_segments.is_empty() {
+                    combined_segments.push(InlineSegment {
+                        text: "\n".to_owned(),
+                        style: Arc::clone(&fallback_arc),
+                    });
+                    combined_plain.push('\n');
+                }
 
-               if !indent.is_empty() && !plain.is_empty() {
-                   segments.insert(
-                       0,
-                       InlineSegment {
-                           text: indent.to_string(),
-                           style: Arc::clone(&fallback_arc),
-                       },
-                   );
-                   combined_plain.insert_str(0, indent);
-               } else if !indent.is_empty() && plain.is_empty() {
-                   segments.insert(
-                       0,
-                       InlineSegment {
-                           text: indent.to_string(),
-                           style: Arc::clone(&fallback_arc),
-                       },
-                   );
-               }
+                if !indent.is_empty() && !plain.is_empty() {
+                    segments.insert(
+                        0,
+                        InlineSegment {
+                            text: indent.to_string(),
+                            style: Arc::clone(&fallback_arc),
+                        },
+                    );
+                    combined_plain.insert_str(0, indent);
+                } else if !indent.is_empty() && plain.is_empty() {
+                    segments.insert(
+                        0,
+                        InlineSegment {
+                            text: indent.to_string(),
+                            style: Arc::clone(&fallback_arc),
+                        },
+                    );
+                }
 
                 combined_segments.extend(segments);
                 combined_plain.push_str(&plain);
@@ -908,26 +909,26 @@ impl InlineSink {
             self.handle.append_line(kind, combined_segments);
             crate::utils::transcript::append(&combined_plain);
         } else {
-           let fallback_arc_opt = if !indent.is_empty() {
-               Some(Arc::new(fallback.clone()))
-           } else {
-               None
-           };
-           for (mut segments, mut plain) in
-               converted_lines.into_iter().zip(plain_lines.into_iter())
-           {
-               if let Some(ref style_arc) = fallback_arc_opt {
-                   if !plain.is_empty() {
-                       segments.insert(
-                           0,
-                           InlineSegment {
-                               text: indent.to_string(),
-                               style: Arc::clone(style_arc),
-                           },
-                       );
-                       plain.insert_str(0, indent);
-                   }
-               }
+            let fallback_arc_opt = if !indent.is_empty() {
+                Some(Arc::new(fallback.clone()))
+            } else {
+                None
+            };
+            for (mut segments, mut plain) in
+                converted_lines.into_iter().zip(plain_lines.into_iter())
+            {
+                if let Some(ref style_arc) = fallback_arc_opt {
+                    if !plain.is_empty() {
+                        segments.insert(
+                            0,
+                            InlineSegment {
+                                text: indent.to_string(),
+                                style: Arc::clone(style_arc),
+                            },
+                        );
+                        plain.insert_str(0, indent);
+                    }
+                }
 
                 if segments.is_empty() {
                     self.handle.append_line(kind, Vec::new());

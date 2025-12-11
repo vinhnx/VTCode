@@ -120,6 +120,14 @@ impl ModeTool for MyTool {
 -   **Plugin-ready architecture** for external development
 -   **Performance optimized** with intelligent caching
 
+## RL Optimization Loop (Adaptive Action Selection)
+
+-   **Module:** `vtcode-core/src/llm/rl` (bandit and actor-critic implementations)
+-   **Config:** `[optimization]` with `strategy = "bandit" | "actor_critic"` plus reward shaping knobs
+-   **Signals:** Success/timeout + latency feed `RewardSignal`, stored in a rolling `RewardLedger`
+-   **Usage:** Construct `RlEngine::from_config(&VTCodeConfig::optimization)` and call `select(actions, PolicyContext)`; on completion emit `apply_reward`
+-   **Goal:** Prefer low-latency, high-success actions (e.g., choose edge vs cloud executors) while remaining pluggable for future policies
+
 ## Training & Evaluation Alignment
 
 To operationalize the staged training paradigm introduced in `docs/research/kimi_dev_agentless_training.md`, VT Code couples its
