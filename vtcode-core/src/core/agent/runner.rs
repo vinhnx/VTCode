@@ -773,6 +773,10 @@ impl AgentRunner {
             .config()
             .timeouts
             .ceiling_duration(self.config().timeouts.streaming_ceiling_seconds);
+        let generation_deadline = self
+            .config()
+            .timeouts
+            .ceiling_duration(self.config().timeouts.default_ceiling_seconds);
         let mut streaming_disabled = false;
         if supports_streaming {
             if let Some(last_failure) = *self.streaming_last_failure.borrow()
@@ -949,7 +953,7 @@ impl AgentRunner {
             ..request.clone()
         };
 
-        let generation_result = if let Some(limit) = streaming_deadline {
+        let generation_result = if let Some(limit) = generation_deadline {
             tokio::time::timeout(limit, self.provider_client.generate(fallback_request)).await
         } else {
             Ok(self.provider_client.generate(fallback_request).await)
@@ -975,7 +979,7 @@ impl AgentRunner {
             }
             Err(_) => {
                 self.failure_tracker.borrow_mut().record_failure();
-                let warning = match streaming_deadline {
+                let warning = match generation_deadline {
                     Some(limit) => format!("LLM request timed out after {:?}", limit),
                     None => "LLM request timed out".to_string(),
                 };
@@ -1168,6 +1172,14 @@ impl AgentRunner {
         self.tool_registry
             .set_harness_session(self.session_id.clone());
         self.tool_registry.set_harness_task(Some(task.id.clone()));
+
+        // Ensure the tool registry is ready before entering the turn loop to avoid per-turn reinit.
+        if let Err(err) = self.tool_registry.initialize_async().await {
+            warn!(
+                error = %err,
+                "Tool registry initialization failed at task start"
+            );
+        }
 
         let result = {
             // Agent execution status
@@ -1692,13 +1704,6 @@ impl AgentRunner {
 
                             if should_halt {
                                 break;
-                            }
-
-                            if let Err(err) = self.tool_registry.initialize_async().await {
-                                warn!(
-                                    error = %err,
-                                    "Failed to initialize tool registry before parallel execution"
-                                );
                             }
 
                             runner_println!(
