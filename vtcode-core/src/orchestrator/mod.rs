@@ -3,10 +3,13 @@
 mod executor;
 mod scheduler;
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, anyhow};
 use serde_json::Value;
 use std::fmt;
 use std::sync::Arc;
+use std::time::Duration;
+use tokio::time::timeout;
+use tracing::{debug, warn};
 
 pub use executor::{ExecutorRegistry, LocalExecutor, WorkExecutor};
 pub use scheduler::Scheduler;
@@ -96,8 +99,22 @@ impl DistributedOrchestrator {
                 .get(&target_key)
                 .context("executor not registered for target")?;
 
-            let result = executor.execute(work).await?;
-            return Ok(Some(result));
+            // Prevent long-running executors from blocking the queue forever.
+            let exec_deadline = Duration::from_secs(30);
+            match timeout(exec_deadline, executor.execute(work)).await {
+                Ok(result) => {
+                    debug!(target = %target_key, "executor finished work item");
+                    return Ok(Some(result?));
+                }
+                Err(_) => {
+                    warn!(target = %target_key, "executor timed out after {:?}", exec_deadline);
+                    return Err(anyhow!(
+                        "executor for target {} timed out after {:?}",
+                        target_key,
+                        exec_deadline
+                    ));
+                }
+            }
         }
 
         Ok(None)

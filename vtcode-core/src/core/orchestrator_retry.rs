@@ -8,6 +8,7 @@ use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant};
 use tokio::time::sleep;
+use tracing::{info, warn};
 
 /// Configuration for retry behavior
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -103,40 +104,40 @@ impl RetryManager {
         for attempt in 0..=self.config.max_retries {
             self.stats.total_attempts += 1;
 
-            eprintln!(
-                "Attempt {}/{} for {} using model {}",
-                attempt + 1,
-                self.config.max_retries + 1,
-                operation_name,
-                primary_model
+            info!(
+                attempt = attempt + 1,
+                max_attempts = self.config.max_retries + 1,
+                operation = operation_name,
+                model = ?primary_model,
+                "retry attempt starting"
             );
 
             match operation(*primary_model).await {
                 Ok(result) => {
                     if attempt > 0 {
                         self.stats.successful_retries += 1;
-                        eprintln!(
-                            "Operation '{}' succeeded on attempt {} with model {}",
-                            operation_name,
-                            attempt + 1,
-                            primary_model
+                        info!(
+                            attempt = attempt + 1,
+                            operation = operation_name,
+                            model = ?primary_model,
+                            "operation succeeded after retry"
                         );
                     }
                     return Ok(result);
                 }
                 Err(err) => {
-                    eprintln!(
-                        "Attempt {}/{} failed for {} with model {}: {}",
-                        attempt + 1,
-                        self.config.max_retries + 1,
-                        operation_name,
-                        primary_model,
-                        err
+                    warn!(
+                        attempt = attempt + 1,
+                        max_attempts = self.config.max_retries + 1,
+                        operation = operation_name,
+                        model = ?primary_model,
+                        error = %err,
+                        "operation attempt failed"
                     );
 
                     // Check if this error should be retried
                     if !is_retryable_error(&err) {
-                        eprintln!("Error is not retryable, failing immediately: {}", err);
+                        warn!(operation = operation_name, error = %err, "non-retryable error");
                         return Err(err);
                     }
 
@@ -145,11 +146,11 @@ impl RetryManager {
                         let backoff_duration = Duration::from_secs(delay_secs);
                         self.stats.total_backoff_time += backoff_duration;
 
-                        eprintln!(
-                            "Waiting {} seconds before retry {} for {}",
+                        info!(
                             delay_secs,
-                            attempt + 2,
-                            operation_name
+                            next_attempt = attempt + 2,
+                            operation = operation_name,
+                            "backing off before retry"
                         );
 
                         sleep(backoff_duration).await;
@@ -168,39 +169,39 @@ impl RetryManager {
 
         // If we have a fallback model and primary failed, try fallback
         if let Some(fallback) = fallback_model {
-            eprintln!(
-                "Primary model {} failed after {} attempts. Trying fallback model {}",
-                primary_model,
-                self.config.max_retries + 1,
-                fallback
+            warn!(
+                operation = operation_name,
+                attempts = self.config.max_retries + 1,
+                primary_model = ?primary_model,
+                fallback_model = ?fallback,
+                "primary model failed; attempting fallback"
             );
             self.stats.fallback_activations += 1;
 
             match operation(*fallback).await {
                 Ok(result) => {
-                    eprintln!(
-                        "Fallback model {} succeeded for operation '{}'",
-                        fallback, operation_name
-                    );
+                    info!(operation = operation_name, model = ?fallback, "fallback model succeeded");
                     return Ok(result);
                 }
                 Err(err) => {
-                    eprintln!(
-                        "Fallback model {} also failed for operation '{}': {}",
-                        fallback, operation_name, err
+                    warn!(
+                        operation = operation_name,
+                        model = ?fallback,
+                        error = %err,
+                        "fallback model failed"
                     );
                 }
             }
         }
 
         let total_time = start_time.elapsed();
-        eprintln!(
-            "Operation '{}' failed completely after {} attempts and {} total time. Primary model: {}, Fallback model: {:?}",
-            operation_name,
-            self.config.max_retries + 1,
-            humantime::format_duration(total_time),
-            primary_model,
-            fallback_model
+        warn!(
+            operation = operation_name,
+            attempts = self.config.max_retries + 1,
+            total_time = %humantime::format_duration(total_time),
+            primary_model = ?primary_model,
+            fallback_model = ?fallback_model,
+            "operation failed after retries"
         );
 
         Err(anyhow!(
