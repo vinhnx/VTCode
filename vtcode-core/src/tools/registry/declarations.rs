@@ -716,8 +716,10 @@ pub fn build_function_declarations_for_level(level: CapabilityLevel) -> Vec<Func
 
 fn apply_metadata_overrides(declarations: &mut [FunctionDeclaration]) {
     let registrations = builtin_tool_registrations();
-    let mut metadata_by_name: HashMap<&str, _> =
-        registrations.iter().map(|r| (r.name(), r.metadata())).collect();
+    let mut metadata_by_name: HashMap<&str, _> = registrations
+        .iter()
+        .map(|r| (r.name(), r.metadata()))
+        .collect();
 
     for decl in declarations.iter_mut() {
         if let Some(meta) = metadata_by_name.remove(decl.name.as_str()) {
@@ -742,10 +744,7 @@ fn annotate_parameters(params: &mut Value, meta: &super::registration::ToolMetad
     }
 
     if !meta.aliases().is_empty() {
-        map.insert(
-            "x-aliases".to_string(),
-            json!(meta.aliases().to_vec()),
-        );
+        map.insert("x-aliases".to_string(), json!(meta.aliases().to_vec()));
     }
 
     if let Some(schema) = meta.config_schema() {

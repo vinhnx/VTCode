@@ -14,7 +14,7 @@ use crate::core::agent::types::AgentType;
 use crate::core::context_optimizer::ContextOptimizer;
 use crate::core::loop_detector::LoopDetector;
 use crate::exec::events::{CommandExecutionStatus, ThreadEvent};
-use crate::gemini::{Content, Part, Tool};
+use crate::gemini::{Content, Part, SystemInstruction, Tool};
 use crate::llm::factory::create_provider_for_model;
 use crate::llm::provider as uni_provider;
 use crate::llm::provider::{FunctionDefinition, LLMRequest, Message, ToolCall, ToolDefinition};
@@ -547,6 +547,68 @@ impl AgentRunner {
         }
     }
 
+    fn summarize_conversation_if_needed(
+        &self,
+        system_instruction: &SystemInstruction,
+        task_state: &mut TaskRunState,
+        preserve_recent_turns: usize,
+        utilization: f64,
+    ) {
+        if utilization < 0.90 {
+            return;
+        }
+
+        if task_state.conversation.len() <= preserve_recent_turns {
+            return;
+        }
+
+        let split_at = task_state
+            .conversation
+            .len()
+            .saturating_sub(preserve_recent_turns);
+        if split_at == 0 {
+            return;
+        }
+
+        let summarize_list = |items: &[String]| -> String {
+            const MAX_ITEMS: usize = 5;
+            if items.is_empty() {
+                return "none".into();
+            }
+            let shown: Vec<&str> = items.iter().take(MAX_ITEMS).map(|s| s.as_str()).collect();
+            if items.len() > MAX_ITEMS {
+                format!("{} [+{} more]", shown.join(", "), items.len() - MAX_ITEMS)
+            } else {
+                shown.join(", ")
+            }
+        };
+
+        let summary = format!(
+            "Summarized {} earlier turns to stay within context budget. Files: {}; Commands: {}; Warnings: {}.",
+            split_at,
+            summarize_list(&task_state.modified_files),
+            summarize_list(&task_state.executed_commands),
+            summarize_list(
+                &task_state
+                    .warnings
+                    .iter()
+                    .map(|w| w.to_string())
+                    .collect::<Vec<_>>()
+            ),
+        );
+
+        let mut new_conversation = Vec::with_capacity(1 + preserve_recent_turns);
+        new_conversation.push(Content::user_parts(vec![Part::Text {
+            text: summary,
+            thought_signature: None,
+        }]));
+        new_conversation.extend_from_slice(&task_state.conversation[split_at..]);
+        task_state.conversation = new_conversation;
+        task_state.conversation_messages =
+            build_messages_from_conversation(system_instruction, &task_state.conversation);
+        task_state.last_processed_message_idx = task_state.conversation.len();
+    }
+
     fn record_warning(
         &self,
         agent_prefix: &str,
@@ -1077,17 +1139,154 @@ impl AgentRunner {
                 turn + 1
             );
 
-            let parallel_tool_config = if self
+            // Model routing: choose per-turn model and reasoning effort
+            let latest_user = task_state
+                .conversation
+                .iter()
+                .rev()
+                .find(|c| c.role == ROLE_USER)
+                .and_then(|c| {
+                    c.parts.iter().find_map(|p| match p {
+                        Part::Text { text, .. } => Some(text.as_str()),
+                        _ => None,
+                    })
+                })
+                .unwrap_or("");
+            let trimmed_user: String = latest_user.chars().take(1000).collect();
+            let route_input = format!(
+                "Task: {}\nDescription: {}\nInstructions: {}\nLatest user: {}",
+                task.title,
+                task.description,
+                task.instructions.clone().unwrap_or_default(),
+                trimmed_user
+            );
+            let cfg = self.config();
+            let mut route_decision: RouteDecision = if cfg.router.enabled {
+                Router::route(cfg, &cfg.agent, &route_input)
+            } else {
+                RouteDecision {
+                    class: TaskClass::Standard,
+                    selected_model: self.model.clone(),
+                }
+            };
+
+            // Heuristic bias: prefer fast models for read/search-oriented turns
+            let user_lower = trimmed_user.to_lowercase();
+            let fast_hint = user_lower.contains("read")
+                || user_lower.contains("grep")
+                || user_lower.contains("search")
+                || user_lower.contains("list");
+            if fast_hint
+                && matches!(
+                    route_decision.class,
+                    TaskClass::Standard | TaskClass::Complex
+                )
+            {
+                route_decision.class = TaskClass::RetrievalHeavy;
+            }
+
+            if let Some(last_tool) = task_state.executed_commands.last() {
+                let lower = last_tool.to_lowercase();
+                let is_read_like =
+                    lower.contains("read") || lower.contains("list") || lower.contains("grep");
+                let is_write_like =
+                    lower.contains("write") || lower.contains("edit") || lower.contains("patch");
+
+                if is_read_like && !matches!(route_decision.class, TaskClass::RetrievalHeavy) {
+                    route_decision.class = TaskClass::RetrievalHeavy;
+                } else if is_write_like
+                    && matches!(
+                        route_decision.class,
+                        TaskClass::Standard | TaskClass::RetrievalHeavy
+                    )
+                {
+                    route_decision.class = TaskClass::CodegenHeavy;
+                }
+            }
+
+            let (read_count, write_count) = task_state.executed_commands.iter().rev().take(3).fold(
+                (0f64, 0f64),
+                |mut acc, cmd| {
+                    let lower = cmd.to_lowercase();
+                    let weight = if acc.0 + acc.1 == 0.0 {
+                        3.0
+                    } else if acc.0 + acc.1 < 2.0 {
+                        2.0
+                    } else {
+                        1.0
+                    };
+                    if lower.contains("read") || lower.contains("list") || lower.contains("grep") {
+                        acc.0 += weight;
+                    }
+                    if lower.contains("write") || lower.contains("edit") || lower.contains("patch")
+                    {
+                        acc.1 += weight;
+                    }
+                    acc
+                },
+            );
+            let user_len = trimmed_user.len();
+            let mut read_score = read_count;
+            let mut write_score = write_count;
+            if user_len < 200 {
+                read_score *= 1.5;
+            } else if user_len > 400 {
+                write_score *= 1.25;
+            }
+
+            if read_score > write_score
+                && !matches!(route_decision.class, TaskClass::RetrievalHeavy)
+            {
+                route_decision.class = TaskClass::RetrievalHeavy;
+            } else if write_score > read_score
+                && matches!(
+                    route_decision.class,
+                    TaskClass::Standard | TaskClass::RetrievalHeavy
+                )
+            {
+                route_decision.class = TaskClass::CodegenHeavy;
+            }
+
+            let turn_model = if route_decision.selected_model.trim().is_empty() {
+                self.model.clone()
+            } else {
+                route_decision.selected_model.clone()
+            };
+
+            let mut turn_reasoning = self.reasoning_effort;
+            match route_decision.class {
+                TaskClass::Simple | TaskClass::RetrievalHeavy => {
+                    turn_reasoning = Some(ReasoningEffortLevel::Low);
+                }
+                TaskClass::Complex | TaskClass::CodegenHeavy => {
+                    turn_reasoning = Some(turn_reasoning.unwrap_or(ReasoningEffortLevel::High));
+                }
+                TaskClass::Standard => {}
+            }
+
+            // Context compaction before the request
+            self.summarize_conversation_if_needed(
+                &system_instruction,
+                &mut task_state,
+                cfg.context.preserve_recent_turns,
+                utilization,
+            );
+
+            let parallel_tool_config = if matches!(
+                route_decision.class,
+                TaskClass::Simple | TaskClass::RetrievalHeavy
+            ) {
+                None
+            } else if self
                 .provider_client
-                .supports_parallel_tool_config(&self.model)
+                .supports_parallel_tool_config(&turn_model)
             {
                 Some(crate::llm::provider::ParallelToolConfig::anthropic_optimized())
             } else {
                 None
             };
 
-            let provider_kind = self
-                .model
+            let provider_kind = turn_model
                 .parse::<ModelId>()
                 .map(|m| m.provider())
                 .unwrap_or(ModelProvider::Gemini);
@@ -1131,7 +1330,7 @@ impl AgentRunner {
                 messages: request_messages,
                 system_prompt: Some(system_instruction.clone()),
                 tools: Some(tools.clone()),
-                model: self.model.clone(),
+                model: turn_model.clone(),
                 max_tokens: Some(2000),
                 temperature: Some(0.7),
                 stream: supports_streaming,
@@ -1139,8 +1338,8 @@ impl AgentRunner {
                 tool_choice: None,
                 parallel_tool_calls: None,
                 parallel_tool_config,
-                reasoning_effort: if self.provider_client.supports_reasoning_effort(&self.model) {
-                    self.reasoning_effort
+                reasoning_effort: if self.provider_client.supports_reasoning_effort(&turn_model) {
+                    turn_reasoning
                 } else {
                     None
                 },

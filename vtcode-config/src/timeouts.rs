@@ -19,6 +19,15 @@ pub struct TimeoutsConfig {
     /// Percentage (0-100) of the ceiling after which the UI should warn.
     #[serde(default = "TimeoutsConfig::default_warning_threshold_percent")]
     pub warning_threshold_percent: u8,
+    /// Adaptive timeout decay ratio (0.1-1.0). Lower relaxes faster back to ceiling.
+    #[serde(default = "TimeoutsConfig::default_decay_ratio")]
+    pub adaptive_decay_ratio: f64,
+    /// Number of consecutive successes before relaxing adaptive ceiling.
+    #[serde(default = "TimeoutsConfig::default_success_streak")]
+    pub adaptive_success_streak: u32,
+    /// Minimum timeout floor in milliseconds when applying adaptive clamps.
+    #[serde(default = "TimeoutsConfig::default_min_floor_ms")]
+    pub adaptive_min_floor_ms: u64,
 }
 
 impl Default for TimeoutsConfig {
@@ -29,6 +38,9 @@ impl Default for TimeoutsConfig {
             mcp_ceiling_seconds: Self::default_mcp_ceiling_seconds(),
             streaming_ceiling_seconds: Self::default_streaming_ceiling_seconds(),
             warning_threshold_percent: Self::default_warning_threshold_percent(),
+            adaptive_decay_ratio: Self::default_decay_ratio(),
+            adaptive_success_streak: Self::default_success_streak(),
+            adaptive_min_floor_ms: Self::default_min_floor_ms(),
         }
     }
 }
@@ -56,6 +68,18 @@ impl TimeoutsConfig {
         80
     }
 
+    const fn default_decay_ratio() -> f64 {
+        0.875
+    }
+
+    const fn default_success_streak() -> u32 {
+        5
+    }
+
+    const fn default_min_floor_ms() -> u64 {
+        1_000
+    }
+
     /// Convert the configured threshold into a fraction (0.0-1.0).
     pub fn warning_threshold_fraction(&self) -> f32 {
         f32::from(self.warning_threshold_percent) / 100.0
@@ -74,6 +98,19 @@ impl TimeoutsConfig {
         ensure!(
             self.warning_threshold_percent > 0 && self.warning_threshold_percent < 100,
             "timeouts.warning_threshold_percent must be between 1 and 99",
+        );
+
+        ensure!(
+            (0.1..=1.0).contains(&self.adaptive_decay_ratio),
+            "timeouts.adaptive_decay_ratio must be between 0.1 and 1.0"
+        );
+        ensure!(
+            self.adaptive_success_streak > 0,
+            "timeouts.adaptive_success_streak must be at least 1"
+        );
+        ensure!(
+            self.adaptive_min_floor_ms >= 100,
+            "timeouts.adaptive_min_floor_ms must be at least 100ms"
         );
 
         ensure!(

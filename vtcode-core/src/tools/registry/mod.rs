@@ -47,12 +47,12 @@ use crate::tools::mcp::build_mcp_registration;
 use crate::tools::names::canonical_tool_name;
 use crate::tools::pty::PtyManager;
 use crate::tools::{PlanSummary, TaskPlan};
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tracing::{debug, trace, warn};
 
 use super::plan::PlanManager;
@@ -116,6 +116,11 @@ pub struct ToolExecutionRecord {
     pub timestamp: SystemTime,
     pub success: bool,
     pub context: HarnessContextSnapshot,
+    pub timeout_category: Option<String>,
+    pub base_timeout_ms: Option<u64>,
+    pub adaptive_timeout_ms: Option<u64>,
+    pub effective_timeout_ms: Option<u64>,
+    pub circuit_breaker: bool,
 }
 
 impl ToolExecutionRecord {
@@ -129,6 +134,11 @@ impl ToolExecutionRecord {
         args: Value,
         error_msg: String,
         context: HarnessContextSnapshot,
+        timeout_category: Option<String>,
+        base_timeout_ms: Option<u64>,
+        adaptive_timeout_ms: Option<u64>,
+        effective_timeout_ms: Option<u64>,
+        circuit_breaker: bool,
     ) -> Self {
         Self {
             tool_name,
@@ -140,6 +150,11 @@ impl ToolExecutionRecord {
             timestamp: SystemTime::now(),
             success: false,
             context,
+            timeout_category,
+            base_timeout_ms,
+            adaptive_timeout_ms,
+            effective_timeout_ms,
+            circuit_breaker,
         }
     }
 
@@ -153,6 +168,11 @@ impl ToolExecutionRecord {
         args: Value,
         result: Value,
         context: HarnessContextSnapshot,
+        timeout_category: Option<String>,
+        base_timeout_ms: Option<u64>,
+        adaptive_timeout_ms: Option<u64>,
+        effective_timeout_ms: Option<u64>,
+        circuit_breaker: bool,
     ) -> Self {
         Self {
             tool_name,
@@ -164,6 +184,11 @@ impl ToolExecutionRecord {
             timestamp: SystemTime::now(),
             success: true,
             context,
+            timeout_category,
+            base_timeout_ms,
+            adaptive_timeout_ms,
+            effective_timeout_ms,
+            circuit_breaker,
         }
     }
 }
@@ -355,6 +380,92 @@ impl ToolTimeoutPolicy {
     }
 }
 
+#[derive(Debug, Clone, Default)]
+struct ToolFailureTracker {
+    consecutive_failures: u32,
+}
+
+impl ToolFailureTracker {
+    fn record_failure(&mut self) {
+        self.consecutive_failures = self.consecutive_failures.saturating_add(1);
+    }
+
+    fn reset(&mut self) {
+        self.consecutive_failures = 0;
+    }
+
+    fn should_circuit_break(&self) -> bool {
+        self.consecutive_failures >= 3
+    }
+
+    fn backoff_duration(&self) -> Duration {
+        let base_ms = 500;
+        let max_ms = 10_000;
+        let backoff_ms = base_ms * 2_u64.pow(self.consecutive_failures.saturating_sub(1).min(8));
+        Duration::from_millis(backoff_ms.min(max_ms))
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+struct ToolLatencyStats {
+    samples: VecDeque<Duration>,
+    max_samples: usize,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct AdaptiveTimeoutTuning {
+    decay_ratio: f64,
+    success_streak: u32,
+    min_floor_ms: u64,
+}
+
+impl Default for AdaptiveTimeoutTuning {
+    fn default() -> Self {
+        Self {
+            decay_ratio: 0.875,  // relax toward ceiling by 12.5%
+            success_streak: 5,   // decay after 5 consecutive successes
+            min_floor_ms: 1_000, // never clamp below 1s
+        }
+    }
+}
+
+fn load_adaptive_tuning_from_config(
+    timeouts: &crate::config::TimeoutsConfig,
+) -> AdaptiveTimeoutTuning {
+    AdaptiveTimeoutTuning {
+        decay_ratio: timeouts.adaptive_decay_ratio,
+        success_streak: timeouts.adaptive_success_streak,
+        min_floor_ms: timeouts.adaptive_min_floor_ms,
+    }
+}
+
+impl ToolLatencyStats {
+    fn new(max_samples: usize) -> Self {
+        Self {
+            samples: VecDeque::with_capacity(max_samples),
+            max_samples,
+        }
+    }
+
+    fn record(&mut self, duration: Duration) {
+        if self.samples.len() >= self.max_samples {
+            self.samples.pop_front();
+        }
+        self.samples.push_back(duration);
+    }
+
+    fn percentile(&self, pct: f64) -> Option<Duration> {
+        if self.samples.is_empty() {
+            return None;
+        }
+        let mut sorted: Vec<Duration> = self.samples.iter().copied().collect();
+        sorted.sort_unstable();
+        let idx =
+            ((pct.clamp(0.0, 1.0)) * (sorted.len().saturating_sub(1) as f64)).round() as usize;
+        sorted.get(idx).copied()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct HarnessContext {
     session_id: String,
@@ -412,6 +523,13 @@ pub struct ToolRegistry {
     timeout_policy: ToolTimeoutPolicy,
     execution_history: ToolExecutionHistory,
     harness_context: HarnessContext,
+    adaptive_timeout_ceiling: HashMap<ToolTimeoutCategory, Duration>,
+    failure_trackers: HashMap<ToolTimeoutCategory, ToolFailureTracker>,
+    success_trackers: HashMap<ToolTimeoutCategory, u32>,
+    latency_stats: HashMap<ToolTimeoutCategory, ToolLatencyStats>,
+    adaptive_tuning: AdaptiveTimeoutTuning,
+    mcp_healthy: bool,
+    mcp_last_failed: Option<SystemTime>,
     initialized: bool,
 }
 
@@ -505,10 +623,18 @@ impl ToolRegistry {
             timeout_policy: ToolTimeoutPolicy::default(),
             execution_history: ToolExecutionHistory::new(100), // Keep last 100 executions
             harness_context: HarnessContext::default(),
+            adaptive_timeout_ceiling: HashMap::new(),
+            failure_trackers: HashMap::new(),
+            success_trackers: HashMap::new(),
+            latency_stats: HashMap::new(),
+            adaptive_tuning: AdaptiveTimeoutTuning::default(),
+            mcp_healthy: true,
+            mcp_last_failed: None,
             initialized: false,
         };
 
         registry.sync_policy_catalog().await;
+        registry.initialize_resiliency_trackers();
         registry
     }
 
@@ -820,10 +946,278 @@ impl ToolRegistry {
         } else {
             self.timeout_policy = policy;
         }
+
+        self.adaptive_tuning = load_adaptive_tuning_from_config(timeouts);
     }
 
     pub fn timeout_policy(&self) -> &ToolTimeoutPolicy {
         &self.timeout_policy
+    }
+
+    fn initialize_resiliency_trackers(&mut self) {
+        let categories = [
+            ToolTimeoutCategory::Default,
+            ToolTimeoutCategory::Pty,
+            ToolTimeoutCategory::Mcp,
+        ];
+        for category in categories {
+            self.failure_trackers
+                .entry(category)
+                .or_insert_with(ToolFailureTracker::default);
+            self.success_trackers.entry(category).or_insert(0);
+            self.latency_stats
+                .entry(category)
+                .or_insert_with(|| ToolLatencyStats::new(50));
+            self.adaptive_timeout_ceiling
+                .entry(category)
+                .or_insert_with(|| Duration::from_secs(0));
+        }
+    }
+
+    fn effective_timeout(&self, category: ToolTimeoutCategory) -> Option<Duration> {
+        let base = self.timeout_policy.ceiling_for(category);
+        let adaptive = self.adaptive_timeout_ceiling.get(&category).copied();
+
+        match (base, adaptive) {
+            (Some(b), Some(a)) if a.as_millis() > 0 => Some(std::cmp::min(b, a)),
+            (Some(b), _) => Some(b),
+            (None, Some(a)) if a.as_millis() > 0 => Some(a),
+            _ => None,
+        }
+    }
+
+    fn decay_adaptive_timeout(&mut self, category: ToolTimeoutCategory) {
+        if let Some(adaptive) = self.adaptive_timeout_ceiling.get_mut(&category) {
+            if adaptive.as_millis() == 0 {
+                return;
+            }
+            let before = *adaptive;
+            if let Some(base) = self.timeout_policy.ceiling_for(category) {
+                if *adaptive < base {
+                    let relaxed_ms = ((*adaptive).as_millis() as f64
+                        * (1.0 / self.adaptive_tuning.decay_ratio))
+                        as u128;
+                    let relaxed = Duration::from_millis(relaxed_ms as u64);
+                    *adaptive = std::cmp::min(relaxed, base);
+                }
+            } else {
+                // If no base, relax upward modestly
+                let relaxed = Duration::from_millis(
+                    ((*adaptive).as_millis() as f64 * (1.0 / self.adaptive_tuning.decay_ratio))
+                        as u64,
+                );
+                *adaptive = relaxed;
+            }
+
+            let floor = Duration::from_millis(self.adaptive_tuning.min_floor_ms);
+            if *adaptive < floor {
+                *adaptive = floor;
+            }
+
+            if *adaptive != before {
+                debug!(
+                    category = %category.label(),
+                    previous_ms = %before.as_millis(),
+                    new_ms = %adaptive.as_millis(),
+                    decay_ratio = %self.adaptive_tuning.decay_ratio,
+                    "Adaptive timeout relaxed after success streak"
+                );
+            }
+        }
+    }
+
+    fn record_tool_failure(&mut self, category: ToolTimeoutCategory) -> bool {
+        let tracker = self
+            .failure_trackers
+            .entry(category)
+            .or_insert_with(ToolFailureTracker::default);
+        tracker.record_failure();
+        self.success_trackers.insert(category, 0);
+        tracker.should_circuit_break()
+    }
+
+    fn reset_tool_failure(&mut self, category: ToolTimeoutCategory) {
+        if let Some(tracker) = self.failure_trackers.get_mut(&category) {
+            tracker.reset();
+        }
+        self.success_trackers.insert(category, 0);
+    }
+
+    fn record_tool_latency(&mut self, category: ToolTimeoutCategory, duration: Duration) {
+        let stats = self
+            .latency_stats
+            .entry(category)
+            .or_insert_with(|| ToolLatencyStats::new(50));
+        stats.record(duration);
+
+        if let Some(p95) = stats.percentile(0.95) {
+            if let Some(ceiling) = self.timeout_policy.ceiling_for(category) {
+                if p95 > ceiling {
+                    warn!(
+                        category = %category.label(),
+                        p95_ms = %p95.as_millis(),
+                        ceiling_ms = %ceiling.as_millis(),
+                        "Observed p95 tool latency exceeds configured ceiling; consider adjusting timeouts"
+                    );
+                    let adjusted = std::cmp::min(
+                        ceiling,
+                        std::cmp::max(
+                            Duration::from_millis(self.adaptive_tuning.min_floor_ms),
+                            scale_duration(p95, 11, 10),
+                        ),
+                    );
+                    self.adaptive_timeout_ceiling.insert(category, adjusted);
+                    debug!(
+                        category = %category.label(),
+                        new_ceiling_ms = %adjusted.as_millis(),
+                        "Adaptive timeout ceiling applied from p95 latency"
+                    );
+                }
+            } else {
+                // No ceiling configured; derive one from p95 with headroom
+                let derived = std::cmp::max(
+                    Duration::from_millis(self.adaptive_tuning.min_floor_ms),
+                    scale_duration(p95, 12, 10),
+                );
+                self.adaptive_timeout_ceiling.insert(category, derived);
+                debug!(
+                    category = %category.label(),
+                    new_ceiling_ms = %derived.as_millis(),
+                    "Adaptive timeout ceiling derived from p95 latency without static ceiling"
+                );
+            }
+        }
+    }
+
+    fn should_circuit_break(&self, category: ToolTimeoutCategory) -> Option<Duration> {
+        self.failure_trackers
+            .get(&category)
+            .filter(|tracker| tracker.should_circuit_break())
+            .map(|tracker| tracker.backoff_duration())
+    }
+
+    fn sanitize_tool_output(value: Value, is_mcp: bool) -> Value {
+        let (entry_fuse, depth_fuse, token_fuse, byte_fuse) = Self::fuse_limits();
+
+        let trimmed = Self::clamp_value_recursive(&value, entry_fuse, depth_fuse);
+
+        let serialized = trimmed.to_string();
+        let approx_tokens = serialized.len() / 4;
+        if serialized.len() > byte_fuse || approx_tokens > token_fuse {
+            let truncated = serialized.chars().take(byte_fuse).collect::<String>();
+            return json!({
+                "content": truncated,
+                "truncated": true,
+                "note": if is_mcp {
+                    "MCP tool result truncated to protect context budget"
+                } else {
+                    "Tool result truncated to protect context budget"
+                },
+                "approx_tokens": approx_tokens,
+                "byte_fuse": byte_fuse
+            });
+        }
+        trimmed
+    }
+
+    fn clamp_value_recursive(value: &Value, entry_fuse: usize, depth: usize) -> Value {
+        if depth == 0 {
+            return value.clone();
+        }
+        match value {
+            Value::Array(arr) => {
+                if arr.is_empty() {
+                    return Value::Array(Vec::new());
+                }
+                let overflow = arr.len().saturating_sub(entry_fuse);
+                let trimmed: Vec<Value> = arr
+                    .iter()
+                    .take(entry_fuse)
+                    .map(|v| Self::clamp_value_recursive(v, entry_fuse, depth - 1))
+                    .collect();
+                if overflow > 0 {
+                    let approx_tokens = trimmed
+                        .iter()
+                        .map(|v| v.to_string().len() / 4)
+                        .sum::<usize>();
+                    json!({
+                        "truncated": true,
+                        "note": "Array truncated to protect context budget",
+                        "total_entries": arr.len(),
+                        "entries": trimmed,
+                        "overflow": overflow,
+                        "approx_tokens": approx_tokens
+                    })
+                } else {
+                    Value::Array(trimmed)
+                }
+            }
+            Value::Object(map) => {
+                if map.is_empty() {
+                    return Value::Object(serde_json::Map::new());
+                }
+                let overflow = map.len().saturating_sub(entry_fuse);
+                let mut head = serde_json::Map::new();
+                for (k, v) in map.iter().take(entry_fuse) {
+                    head.insert(
+                        k.clone(),
+                        Self::clamp_value_recursive(v, entry_fuse, depth - 1),
+                    );
+                }
+                if overflow > 0 {
+                    let approx_tokens = head
+                        .iter()
+                        .map(|(k, v)| (k.len() + v.to_string().len()) / 4)
+                        .sum::<usize>();
+                    json!({
+                        "truncated": true,
+                        "note": "Object truncated to protect context budget",
+                        "total_entries": map.len(),
+                        "entries": head,
+                        "overflow": overflow,
+                        "approx_tokens": approx_tokens
+                    })
+                } else {
+                    Value::Object(head)
+                }
+            }
+            _ => value.clone(),
+        }
+    }
+
+    fn fuse_limits() -> (usize, usize, usize, usize) {
+        let entry_fuse = std::env::var("VTCODE_FUSE_ENTRY")
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok())
+            .filter(|v| *v >= 10)
+            .unwrap_or(200);
+        let depth_fuse = std::env::var("VTCODE_FUSE_DEPTH")
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok())
+            .filter(|v| *v >= 1)
+            .unwrap_or(3);
+        let token_fuse = std::env::var("VTCODE_FUSE_TOKEN")
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok())
+            .filter(|v| *v >= 1_000)
+            .unwrap_or(50_000);
+        let byte_fuse = std::env::var("VTCODE_FUSE_BYTES")
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok())
+            .filter(|v| *v >= 10_000)
+            .unwrap_or(200_000);
+        (entry_fuse, depth_fuse, token_fuse, byte_fuse)
+    }
+
+    fn scale_duration(duration: Duration, num: u32, denom: u32) -> Duration {
+        if denom == 0 {
+            return duration;
+        }
+        let millis = duration.as_millis();
+        let scaled = millis
+            .saturating_mul(num as u128)
+            .saturating_div(denom as u128);
+        Duration::from_millis(scaled as u64)
     }
 
     pub async fn timeout_category_for(&mut self, name: &str) -> ToolTimeoutCategory {
@@ -874,6 +1268,18 @@ impl ToolRegistry {
         let context_snapshot = self.harness_context_snapshot();
         let context_payload = context_snapshot.to_json();
 
+        let timeout_category = self.timeout_category_for(tool_name).await;
+
+        if let Some(backoff) = self.should_circuit_break(timeout_category) {
+            warn!(
+                tool = %tool_name,
+                category = %timeout_category.label(),
+                delay_ms = %backoff.as_millis(),
+                "Circuit breaker active for tool category; backing off before execution"
+            );
+            tokio::time::sleep(backoff).await;
+        }
+
         let execution_span = tracing::debug_span!(
             "tool_execution",
             tool = %tool_name,
@@ -903,6 +1309,17 @@ impl ToolRegistry {
                 "Resolved tool alias to canonical name"
             );
         }
+
+        let base_timeout_ms = self
+            .timeout_policy
+            .ceiling_for(timeout_category)
+            .map(|d| d.as_millis() as u64);
+        let adaptive_timeout_ms = self
+            .adaptive_timeout_ceiling
+            .get(&timeout_category)
+            .filter(|d| d.as_millis() > 0)
+            .map(|d| d.as_millis() as u64);
+        let timeout_category_label = Some(timeout_category.label().to_string());
 
         // LOOP DETECTION: Check if we're calling the same tool repeatedly with identical params
         let (is_loop, repeat_count, _) = self.execution_history.detect_loop(tool_name, args);
@@ -936,6 +1353,11 @@ impl ToolRegistry {
                     args_for_recording,
                     "Tool execution denied by policy".to_string(),
                     context_snapshot.clone(),
+                    timeout_category_label.clone(),
+                    base_timeout_ms,
+                    adaptive_timeout_ms,
+                    None,
+                    false,
                 ));
 
             return Ok(error.to_json_value());
@@ -959,6 +1381,11 @@ impl ToolRegistry {
                     args_for_recording,
                     "Tool execution denied by policy".to_string(),
                     context_snapshot.clone(),
+                    timeout_category_label.clone(),
+                    base_timeout_ms,
+                    adaptive_timeout_ms,
+                    None,
+                    false,
                 ));
 
             return Ok(error.to_json_value());
@@ -986,6 +1413,11 @@ impl ToolRegistry {
                         args_for_recording,
                         format!("Failed to apply policy constraints: {}", err),
                         context_snapshot.clone(),
+                        timeout_category_label.clone(),
+                        base_timeout_ms,
+                        adaptive_timeout_ms,
+                        None,
+                        false,
                     ));
 
                 return Ok(error.to_json_value());
@@ -1061,6 +1493,11 @@ impl ToolRegistry {
                         args_for_recording,
                         format!("Failed to resolve MCP tool '{}': {}", display_name, err),
                         context_snapshot.clone(),
+                        timeout_category_label.clone(),
+                        base_timeout_ms,
+                        adaptive_timeout_ms,
+                        None,
+                        false,
                     ));
 
                 return Ok(error.to_json_value());
@@ -1081,9 +1518,100 @@ impl ToolRegistry {
                     args_for_recording,
                     format!("Unknown tool: {}", display_name),
                     context_snapshot.clone(),
+                    timeout_category_label.clone(),
+                    base_timeout_ms,
+                    adaptive_timeout_ms,
+                    None,
+                    false,
                 ));
 
             return Ok(error.to_json_value());
+        }
+
+        const MCP_COOLDOWN: Duration = Duration::from_secs(10);
+        if is_mcp_tool {
+            if let Some(last_failed) = self.mcp_last_failed {
+                if let Ok(elapsed) = last_failed.elapsed() {
+                    if elapsed < MCP_COOLDOWN {
+                        let error = ToolExecutionError::new(
+                            tool_name_owned.clone(),
+                            ToolErrorType::ExecutionError,
+                            "MCP provider cooling down after failure; skipping execution"
+                                .to_string(),
+                        );
+                        let payload = json!({
+                            "error": error.to_json_value(),
+                            "mcp_unhealthy": true,
+                            "note": "MCP provider cooling down after failure; execution skipped",
+                            "last_failed_at": self.mcp_last_failed
+                                .and_then(|ts| ts.duration_since(SystemTime::UNIX_EPOCH).ok())
+                                .map(|d| d.as_secs()),
+                            "cooldown_seconds": MCP_COOLDOWN.as_secs(),
+                            "mcp_provider": mcp_provider,
+                        });
+                        warn!(
+                            tool = %tool_name_owned,
+                            payload = %payload,
+                            "Skipping MCP tool execution due to cooldown"
+                        );
+                        self.execution_history
+                            .add_record(ToolExecutionRecord::failure(
+                                tool_name_owned,
+                                requested_name.clone(),
+                                is_mcp_tool,
+                                mcp_provider.clone(),
+                                args_for_recording,
+                                "MCP provider in cooldown; execution skipped".to_string(),
+                                context_snapshot.clone(),
+                                timeout_category_label.clone(),
+                                base_timeout_ms,
+                                adaptive_timeout_ms,
+                                None,
+                                false,
+                            ));
+                        return Ok(payload);
+                    }
+                }
+            }
+        }
+
+        if is_mcp_tool && !self.mcp_healthy {
+            let error = ToolExecutionError::new(
+                tool_name_owned.clone(),
+                ToolErrorType::ExecutionError,
+                "MCP provider unhealthy; skipping tool execution until refresh succeeds"
+                    .to_string(),
+            );
+            let payload = json!({
+                "error": error.to_json_value(),
+                "mcp_unhealthy": true,
+                "note": "MCP provider unhealthy; execution skipped",
+                "last_failed_at": self.mcp_last_failed
+                    .and_then(|ts| ts.duration_since(SystemTime::UNIX_EPOCH).ok())
+                    .map(|d| d.as_secs()),
+                "mcp_provider": mcp_provider,
+            });
+            warn!(
+                tool = %tool_name_owned,
+                payload = %payload,
+                "Skipping MCP tool execution due to unhealthy provider"
+            );
+            self.execution_history
+                .add_record(ToolExecutionRecord::failure(
+                    tool_name_owned,
+                    requested_name,
+                    is_mcp_tool,
+                    mcp_provider.clone(),
+                    args_for_recording,
+                    "MCP provider unhealthy; execution skipped".to_string(),
+                    context_snapshot.clone(),
+                    timeout_category_label.clone(),
+                    base_timeout_ms,
+                    adaptive_timeout_ms,
+                    None,
+                    false,
+                ));
+            return Ok(payload);
         }
 
         debug!(
@@ -1125,6 +1653,11 @@ impl ToolRegistry {
                             args_for_recording,
                             "Failed to start PTY session".to_string(),
                             context_snapshot.clone(),
+                            timeout_category_label.clone(),
+                            base_timeout_ms,
+                            adaptive_timeout_ms,
+                            None,
+                            false,
                         ));
 
                     return Ok(error.to_json_value());
@@ -1136,48 +1669,96 @@ impl ToolRegistry {
 
         // Execute the appropriate tool based on its type
         // The _pty_guard will automatically decrement the session count when dropped
-        let result = if is_mcp_tool {
-            let mcp_name =
-                mcp_tool_name.expect("mcp_tool_name should be set when is_mcp_tool is true");
-            self.execute_mcp_tool(&mcp_name, args).await
-        } else if let Some(registration) = self.inventory.registration_for(tool_name) {
-            // Log deprecation warning if tool is deprecated
-            if registration.is_deprecated() {
-                if let Some(msg) = registration.deprecation_message() {
-                    warn!("Tool '{}' is deprecated: {}", tool_name, msg);
-                } else {
-                    warn!(
-                        "Tool '{}' is deprecated and may be removed in a future version",
-                        tool_name
-                    );
+        let execution_started_at = Instant::now();
+        let exec_future = async {
+            if is_mcp_tool {
+                let mcp_name =
+                    mcp_tool_name.expect("mcp_tool_name should be set when is_mcp_tool is true");
+                self.execute_mcp_tool(&mcp_name, args).await
+            } else if let Some(registration) = self.inventory.registration_for(tool_name) {
+                // Log deprecation warning if tool is deprecated
+                if registration.is_deprecated() {
+                    if let Some(msg) = registration.deprecation_message() {
+                        warn!("Tool '{}' is deprecated: {}", tool_name, msg);
+                    } else {
+                        warn!(
+                            "Tool '{}' is deprecated and may be removed in a future version",
+                            tool_name
+                        );
+                    }
+                }
+
+                let handler = registration.handler();
+                match handler {
+                    ToolHandler::RegistryFn(executor) => executor(self, args).await,
+                    ToolHandler::TraitObject(tool) => tool.execute(args).await,
+                }
+            } else {
+                // This should theoretically never happen since we checked tool_exists above
+                let error = ToolExecutionError::new(
+                    tool_name_owned.clone(),
+                    ToolErrorType::ToolNotFound,
+                    "Tool not found in registry".to_string(),
+                );
+
+                self.execution_history
+                    .add_record(ToolExecutionRecord::failure(
+                        tool_name_owned,
+                        requested_name,
+                        is_mcp_tool,
+                        mcp_provider,
+                        args_for_recording,
+                        "Tool not found in registry".to_string(),
+                        context_snapshot.clone(),
+                        None,
+                    ));
+
+                return Ok(error.to_json_value());
+            }
+        };
+
+        let effective_timeout = self.effective_timeout(timeout_category);
+        let effective_timeout_ms = effective_timeout.map(|d| d.as_millis() as u64);
+
+        let result = if let Some(limit) = effective_timeout {
+            debug!(
+                tool = %tool_name_owned,
+                category = %timeout_category.label(),
+                timeout_ms = %limit.as_millis(),
+                "Executing tool with effective timeout"
+            );
+            match tokio::time::timeout(limit, exec_future).await {
+                Ok(res) => res,
+                Err(_) => {
+                    let timeout_ms = limit.as_millis() as u64;
+                    let timeout_payload = json!({
+                        "error": {
+                            "message": format!("Tool execution timed out after {:?} (category: {})", limit, timeout_category.label()),
+                            "timeout_category": timeout_category.label(),
+                            "timeout_ms": timeout_ms,
+                            "circuit_breaker": false,
+                        }
+                    });
+                    self.execution_history
+                        .add_record(ToolExecutionRecord::failure(
+                            tool_name_owned,
+                            requested_name,
+                            is_mcp_tool,
+                            mcp_provider,
+                            args_for_recording,
+                            "Tool execution timed out".to_string(),
+                            context_snapshot.clone(),
+                            timeout_category_label.clone(),
+                            base_timeout_ms,
+                            adaptive_timeout_ms,
+                            Some(timeout_ms),
+                            false,
+                        ));
+                    return Ok(timeout_payload);
                 }
             }
-
-            let handler = registration.handler();
-            match handler {
-                ToolHandler::RegistryFn(executor) => executor(self, args).await,
-                ToolHandler::TraitObject(tool) => tool.execute(args).await,
-            }
         } else {
-            // This should theoretically never happen since we checked tool_exists above
-            let error = ToolExecutionError::new(
-                tool_name_owned.clone(),
-                ToolErrorType::ToolNotFound,
-                "Tool not found in registry".to_string(),
-            );
-
-            self.execution_history
-                .add_record(ToolExecutionRecord::failure(
-                    tool_name_owned,
-                    requested_name,
-                    is_mcp_tool,
-                    mcp_provider,
-                    args_for_recording,
-                    "Tool not found in registry".to_string(),
-                    context_snapshot.clone(),
-                ));
-
-            return Ok(error.to_json_value());
+            exec_future.await
         };
 
         // PTY session will be automatically cleaned up when _pty_guard is dropped
@@ -1186,7 +1767,17 @@ impl ToolRegistry {
 
         match result {
             Ok(value) => {
-                let normalized_value = normalize_tool_output(value);
+                self.reset_tool_failure(timeout_category);
+                if let Some(counter) = self.success_trackers.get_mut(&timeout_category) {
+                    *counter = counter.saturating_add(1);
+                    if *counter >= self.adaptive_tuning.success_streak {
+                        self.decay_adaptive_timeout(timeout_category);
+                        *counter = 0;
+                    }
+                }
+                self.record_tool_latency(timeout_category, execution_started_at.elapsed());
+                let sanitized_value = Self::sanitize_tool_output(value, is_mcp_tool);
+                let normalized_value = normalize_tool_output(sanitized_value);
 
                 self.execution_history
                     .add_record(ToolExecutionRecord::success(
@@ -1197,6 +1788,11 @@ impl ToolRegistry {
                         args_for_recording,
                         normalized_value.clone(),
                         context_snapshot.clone(),
+                        timeout_category_label.clone(),
+                        base_timeout_ms,
+                        adaptive_timeout_ms,
+                        effective_timeout_ms,
+                        false,
                     ));
 
                 Ok(normalized_value)
@@ -1210,6 +1806,28 @@ impl ToolRegistry {
                     err.to_string(),
                 );
 
+                let tripped = self.record_tool_failure(timeout_category);
+                if tripped {
+                    warn!(
+                        tool = %tool_name_owned,
+                        category = %timeout_category.label(),
+                        "Tool circuit breaker tripped after consecutive failures"
+                    );
+                }
+
+                let mut payload = error.to_json_value();
+                if let Some(obj) = payload.get_mut("error").and_then(|v| v.as_object_mut()) {
+                    obj.insert(
+                        "timeout_category".into(),
+                        serde_json::Value::String(timeout_category.label().to_string()),
+                    );
+                    obj.insert(
+                        "timeout_ms".into(),
+                        serde_json::Value::from(effective_timeout_ms.unwrap_or(0)),
+                    );
+                    obj.insert("circuit_breaker".into(), serde_json::Value::Bool(tripped));
+                }
+
                 self.execution_history
                     .add_record(ToolExecutionRecord::failure(
                         tool_name_owned,
@@ -1219,9 +1837,14 @@ impl ToolRegistry {
                         args_for_recording,
                         format!("Tool execution failed: {}", err),
                         context_snapshot.clone(),
+                        timeout_category_label.clone(),
+                        base_timeout_ms,
+                        adaptive_timeout_ms,
+                        effective_timeout_ms,
+                        tripped,
                     ));
 
-                Ok(error.to_json_value())
+                Ok(payload)
             }
         }
     }
@@ -1341,7 +1964,42 @@ impl ToolRegistry {
                 mcp_client.get_status().provider_count
             );
 
-            let tools = mcp_client.list_mcp_tools().await?;
+            let mut tools: Option<Vec<McpToolInfo>> = None;
+            let mut last_err: Option<anyhow::Error> = None;
+            for attempt in 0..3 {
+                match mcp_client.list_mcp_tools().await {
+                    Ok(list) => {
+                        tools = Some(list);
+                        break;
+                    }
+                    Err(err) => {
+                        last_err = Some(err);
+                        let jitter = ((attempt as u64 * 37) % 80) as u64;
+                        let pow = 2_u64.saturating_pow(attempt.min(4) as u32); // cap exponent
+                        let backoff =
+                            Duration::from_millis(200 * pow + jitter).min(Duration::from_secs(3));
+                        warn!(
+                            attempt = attempt + 1,
+                            delay_ms = %backoff.as_millis(),
+                            "Failed to list MCP tools, retrying with backoff"
+                        );
+                        tokio::time::sleep(backoff).await;
+                    }
+                }
+            }
+
+            let tools = match tools {
+                Some(list) => list,
+                None => {
+                    warn!(
+                        error = %last_err.unwrap_or_else(|| anyhow::anyhow!("unknown MCP error")),
+                        "Failed to refresh MCP tools after retries; keeping existing cache"
+                    );
+                    self.mcp_healthy = false;
+                    self.mcp_last_failed = Some(SystemTime::now());
+                    return Ok(());
+                }
+            };
             let mut provider_map: HashMap<String, Vec<String>> = HashMap::new();
 
             for tool in &tools {
@@ -1389,6 +2047,8 @@ impl ToolRegistry {
             }
 
             self.sync_policy_catalog().await;
+            self.mcp_healthy = true;
+            self.mcp_last_failed = None;
             Ok(())
         } else {
             debug!("No MCP client configured, nothing to refresh");
