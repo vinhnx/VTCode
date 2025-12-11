@@ -285,6 +285,7 @@ pub struct CacheStats {
 #[cfg(test)]
 #[allow(deprecated)]
 mod tests {
+    #![allow(deprecated)]
     use super::*;
 
     #[test]

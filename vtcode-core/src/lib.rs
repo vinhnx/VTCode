@@ -253,14 +253,14 @@ mod tests {
     async fn test_tool_registry_integration() {
         use crate::config::constants::tools;
 
-        let temp_dir = TempDir::new().context("Failed to create temp dir")?;
-        std::env::set_current_dir(&temp_dir).context("Failed to create temp dir")?;
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        std::env::set_current_dir(&temp_dir).expect("Failed to change dir");
 
         let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
         registry
             .initialize_async()
             .await
-            .context("Failed to create temp dir")?;
+            .expect("Failed to init registry");
 
         // Test that we can execute basic tools
         let list_args = serde_json::json!({
@@ -270,20 +270,20 @@ mod tests {
         let result = registry.execute_tool(tools::LIST_FILES, list_args).await;
         assert!(result.is_ok());
 
-        let response: serde_json::Value = result.context("Failed to create temp dir")?;
+        let response: serde_json::Value = result.expect("Failed to execute list_files");
         assert_eq!(response["success"], serde_json::Value::Bool(true));
         assert!(response["items"].is_array());
     }
 
     #[tokio::test]
     async fn test_pty_basic_command() {
-        let temp_dir = TempDir::new().context("Failed to create temp dir")?;
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let workspace = temp_dir.path().to_path_buf();
-        let mut registry = ToolRegistry::new(&workspace).await;
+        let mut registry = ToolRegistry::new(workspace.clone()).await;
         registry
             .initialize_async()
             .await
-            .context("Failed to create temp dir")?;
+            .expect("Failed to init registry");
 
         // Test a simple PTY command
         let args = serde_json::json!({
@@ -293,26 +293,26 @@ mod tests {
 
         let result = registry.execute_tool("run_pty_cmd", args).await;
         assert!(result.is_ok());
-        let response: serde_json::Value = result.context("Failed to create temp dir")?;
+        let response: serde_json::Value = result.expect("Failed to run PTY");
         assert_eq!(response["success"], true);
         assert_eq!(response["code"], 0);
         assert!(
             response["output"]
                 .as_str()
-                .context("Failed to create temp dir")?
+                .expect("Failed to read PTY output")
                 .contains("Hello, PTY!")
         );
     }
 
     #[tokio::test]
     async fn test_pty_session_management() {
-        let temp_dir = TempDir::new().context("Failed to create temp dir")?;
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let workspace = temp_dir.path().to_path_buf();
-        let mut registry = ToolRegistry::new(&workspace).await;
+        let mut registry = ToolRegistry::new(workspace.clone()).await;
         registry
             .initialize_async()
             .await
-            .context("Failed to create temp dir")?;
+            .expect("Failed to init registry");
 
         // Test creating a PTY session
         let args = serde_json::json!({
@@ -322,7 +322,7 @@ mod tests {
 
         let result = registry.execute_tool("create_pty_session", args).await;
         assert!(result.is_ok());
-        let response: serde_json::Value = result.context("Failed to create temp dir")?;
+        let response: serde_json::Value = result.expect("Failed to create PTY session");
         assert_eq!(response["success"], true);
         assert_eq!(response["session_id"], "test_session");
 
@@ -330,11 +330,11 @@ mod tests {
         let args = serde_json::json!({});
         let result = registry.execute_tool("list_pty_sessions", args).await;
         assert!(result.is_ok());
-        let response: serde_json::Value = result.context("Failed to create temp dir")?;
+        let response: serde_json::Value = result.expect("Failed to list PTY sessions");
         assert!(
             response["sessions"]
                 .as_array()
-                .context("Failed to create temp dir")?
+                .expect("Failed to read sessions array")
                 .contains(&"test_session".into())
         );
 
@@ -345,7 +345,7 @@ mod tests {
 
         let result = registry.execute_tool("close_pty_session", args).await;
         assert!(result.is_ok());
-        let response: serde_json::Value = result.context("Failed to create temp dir")?;
+        let response: serde_json::Value = result.expect("Failed to close PTY session");
         assert_eq!(response["success"], true);
         assert_eq!(response["session_id"], "test_session");
     }

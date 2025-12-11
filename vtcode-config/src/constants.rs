@@ -754,6 +754,7 @@ pub mod tools {
     pub const DELETE_FILE: &str = "delete_file";
     pub const CREATE_FILE: &str = "create_file";
     pub const APPLY_PATCH: &str = "apply_patch";
+    pub const SEARCH_REPLACE: &str = "search_replace";
     pub const UPDATE_PLAN: &str = "update_plan";
     pub const WEB_FETCH: &str = "web_fetch";
     pub const SEARCH_TOOLS: &str = "search_tools";

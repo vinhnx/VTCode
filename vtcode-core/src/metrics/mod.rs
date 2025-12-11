@@ -426,7 +426,6 @@ mod tests {
         collector.record_pii_detection("email".to_owned());
 
         let summary = collector.get_summary();
-        assert!(summary.session_duration_ms >= 0);
         assert_eq!(summary.discovery.total_queries, 1);
         assert_eq!(summary.security.pii_detections, 1);
     }

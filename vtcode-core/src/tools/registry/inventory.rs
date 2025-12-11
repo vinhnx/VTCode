@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use super::registration::ToolRegistration;
+use super::registration::{ToolMetadata, ToolRegistration};
 use crate::tools::command::CommandTool;
 use crate::tools::file_ops::FileOpsTool;
 use crate::tools::grep_file::GrepSearchManager;
@@ -79,6 +79,7 @@ impl ToolInventory {
 
     pub fn register_tool(&mut self, registration: ToolRegistration) -> anyhow::Result<()> {
         let name = registration.name().to_owned();
+        let aliases = registration.metadata().aliases().to_vec();
 
         // Use entry API to check and insert in one operation
         use std::collections::hash_map::Entry;
@@ -97,7 +98,14 @@ impl ToolInventory {
 
         // Add to frequently used set if it's a common tool
         if self.is_common_tool(&name) {
-            self.frequently_used.insert(name);
+            self.frequently_used.insert(name.clone());
+        }
+
+        // Register aliases associated with this tool
+        for alias in aliases {
+            let target = name.clone();
+            // Avoid overwriting existing alias mappings
+            self.aliases.entry(alias).or_insert_with(|| target);
         }
 
         // Clean up old cache entries if needed
@@ -136,6 +144,18 @@ impl ToolInventory {
 
     pub fn available_tools(&self) -> Vec<String> {
         self.tools.keys().cloned().collect()
+    }
+
+    pub fn registered_aliases(&self) -> Vec<String> {
+        self.aliases.keys().cloned().collect()
+    }
+
+    /// Snapshot registration metadata for policy/catalog synchronization
+    pub fn registration_metadata(&self) -> Vec<(String, ToolMetadata)> {
+        self.tools
+            .iter()
+            .map(|(name, entry)| (name.clone(), entry.registration.metadata().clone()))
+            .collect()
     }
 
     /// Check if a tool is commonly used

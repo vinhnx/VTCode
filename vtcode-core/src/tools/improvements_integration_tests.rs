@@ -197,7 +197,7 @@ mod tests {
     fn test_middleware_retry() {
         let middleware = RetryMiddleware::new(3, 10, 100);
 
-        let mut attempt_count = 0;
+        let mut _attempt_count = 0;
         let request = ToolRequest {
             tool_name: "retry_tool".to_owned(),
             arguments: "arg".to_owned(),
@@ -223,8 +223,8 @@ mod tests {
     #[test]
     fn test_middleware_chain_order() {
         let chain = MiddlewareChain::new()
-            .add(Arc::new(LoggingMiddleware::new(tracing::Level::DEBUG)))
-            .add(Arc::new(CachingMiddleware::new()));
+            .with_middleware(Arc::new(LoggingMiddleware::new(tracing::Level::DEBUG)))
+            .with_middleware(Arc::new(CachingMiddleware::new()));
 
         let request = ToolRequest {
             tool_name: "chain_test".to_owned(),
@@ -368,8 +368,8 @@ mod tests {
         let obs = Arc::new(ObservabilityContext::noop());
 
         let chain = MiddlewareChain::new()
-            .add(Arc::new(ValidationMiddleware::new(obs)))
-            .add(Arc::new(CachingMiddleware::new()));
+            .with_middleware(Arc::new(ValidationMiddleware::new(obs)))
+            .with_middleware(Arc::new(CachingMiddleware::new()));
 
         let request = ToolRequest {
             tool_name: "test".to_owned(),

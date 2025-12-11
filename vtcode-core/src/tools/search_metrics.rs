@@ -227,7 +227,7 @@ mod tests {
 
     #[test]
     fn test_identifies_expensive_searches() {
-        let mut metrics = SearchMetrics::with_expensive_threshold(5000).new();
+        let mut metrics = SearchMetrics::new().with_expensive_threshold(5000);
         // This will be expensive (12500 tokens estimated)
         metrics.record_search("common_pattern", 100, 50000, 50, 50);
 
@@ -237,7 +237,7 @@ mod tests {
 
     #[test]
     fn test_expensive_searches() {
-        let mut metrics = SearchMetrics::with_expensive_threshold(5000).new();
+        let mut metrics = SearchMetrics::new().with_expensive_threshold(5000);
         metrics.record_search("pattern1", 10, 10000, 20, 5);
         metrics.record_search("pattern2", 5, 2000, 10, 2);
         metrics.record_search("pattern3", 50, 30000, 100, 20);
@@ -261,7 +261,7 @@ mod tests {
 
     #[test]
     fn test_sampling_ratio() {
-        let mut metrics = SearchMetrics::with_expensive_threshold(10000).new();
+        let mut metrics = SearchMetrics::new().with_expensive_threshold(10000);
 
         // Non-expensive search should not be sampled
         metrics.record_search("cheap", 10, 5000, 10, 5);
@@ -287,7 +287,7 @@ mod tests {
 
     #[test]
     fn test_should_sample_results() {
-        let mut metrics = SearchMetrics::with_expensive_threshold(5000).new();
+        let mut metrics = SearchMetrics::new().with_expensive_threshold(5000);
         metrics.record_search("cheap", 10, 2000, 10, 5);
         metrics.record_search("expensive", 100, 50000, 100, 50);
 
@@ -318,7 +318,7 @@ mod tests {
 
     #[test]
     fn test_stats() {
-        let mut metrics = SearchMetrics::with_expensive_threshold(5000).new();
+        let mut metrics = SearchMetrics::new().with_expensive_threshold(5000);
         metrics.record_search("cheap", 10, 2000, 10, 5);
         metrics.record_search("expensive", 100, 50000, 100, 50);
 

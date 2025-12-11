@@ -36,6 +36,20 @@ const MAX_SEARCH_RESULTS: NonZeroUsize = NonZeroUsize::new(5).unwrap();
 /// Number of threads to use for searching
 const NUM_SEARCH_THREADS: NonZeroUsize = NonZeroUsize::new(2).unwrap();
 
+/// Maximum bytes to keep in a single grep response before truncation.
+const DEFAULT_MAX_RESULT_BYTES: usize = 32 * 1024;
+
+/// Default timeout for blocking grep invocations.
+const DEFAULT_SEARCH_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Default ignore globs to avoid noisy vendor/build directories.
+const DEFAULT_IGNORE_GLOBS: &[&str] = &[
+    "**/.git/**",
+    "**/node_modules/**",
+    "**/target/**",
+    "**/.cursor/**",
+];
+
 /// How long to wait after a keystroke before firing the first search when none
 /// is currently running. Keeps early queries more meaningful.
 const SEARCH_DEBOUNCE: Duration = Duration::from_millis(150);
@@ -66,6 +80,9 @@ pub struct GrepSearchInput {
     pub column: Option<bool>,         // Show column numbers
     pub only_matching: Option<bool>,  // Show only matching parts
     pub trim: Option<bool>,           // Trim whitespace from matches
+    pub max_result_bytes: Option<usize>, // Optional truncation threshold (bytes)
+    pub timeout: Option<Duration>,    // Optional timeout for blocking grep
+    pub extra_ignore_globs: Option<Vec<String>>, // Additional ignore globs
 }
 
 impl GrepSearchInput {
@@ -93,6 +110,9 @@ impl GrepSearchInput {
             column: None,
             only_matching: None,
             trim: None,
+            max_result_bytes: None,
+            timeout: None,
+            extra_ignore_globs: None,
         }
     }
 
@@ -120,6 +140,9 @@ impl GrepSearchInput {
             column: Some(false),
             only_matching: Some(false),
             trim: Some(false),
+            max_result_bytes: Some(DEFAULT_MAX_RESULT_BYTES),
+            timeout: Some(DEFAULT_SEARCH_TIMEOUT),
+            extra_ignore_globs: None,
         }
     }
 }
@@ -136,6 +159,7 @@ fn is_hidden_path(path: &str) -> bool {
 pub struct GrepSearchResult {
     pub query: String,
     pub matches: Vec<serde_json::Value>,
+    pub truncated: bool,
 }
 
 /// State machine for grep_file orchestration.
@@ -184,6 +208,7 @@ impl GrepSearchManager {
         cache.get(input).map(|cached| GrepSearchResult {
             query: cached.query.clone(),
             matches: cached.matches.clone(),
+            truncated: cached.truncated,
         })
     }
 
@@ -273,7 +298,7 @@ impl GrepSearchManager {
         st.last_result.clone()
     }
 
-    fn execute_with_backends(input: &GrepSearchInput) -> Result<Vec<Value>> {
+    fn execute_with_backends(input: &GrepSearchInput) -> Result<(Vec<Value>, bool)> {
         match Self::run_ripgrep_backend(input) {
             Ok(matches) => Ok(matches),
             Err(err) => {
@@ -299,7 +324,7 @@ impl GrepSearchManager {
         }
     }
 
-    fn run_ripgrep_backend(input: &GrepSearchInput) -> Result<Vec<Value>> {
+    fn run_ripgrep_backend(input: &GrepSearchInput) -> Result<(Vec<Value>, bool)> {
         use std::process::Command;
 
         let mut cmd = Command::new("rg");
@@ -390,6 +415,17 @@ impl GrepSearchManager {
             cmd.arg("--glob").arg(glob_pattern);
         }
 
+        if input.respect_ignore_files.unwrap_or(true) {
+            for pattern in DEFAULT_IGNORE_GLOBS {
+                cmd.arg("--glob").arg(format!("!{}", pattern));
+            }
+            if let Some(extra) = &input.extra_ignore_globs {
+                for pattern in extra {
+                    cmd.arg("--glob").arg(format!("!{}", pattern));
+                }
+            }
+        }
+
         if let Some(context_lines) = input.context_lines {
             cmd.arg("--context").arg(context_lines.to_string());
         }
@@ -417,11 +453,39 @@ impl GrepSearchManager {
             }
         }
 
-        Ok(matches)
+        Ok(Self::finalize_matches(matches, input))
+    }
+
+    fn finalize_matches(mut matches: Vec<Value>, input: &GrepSearchInput) -> (Vec<Value>, bool) {
+        let mut truncated = false;
+        let max_results = input.max_results.unwrap_or(MAX_SEARCH_RESULTS.get());
+        if matches.len() > max_results {
+            matches.truncate(max_results);
+            truncated = true;
+        }
+
+        if let Some(limit) = input.max_result_bytes {
+            let mut total = 0usize;
+            let mut kept = Vec::with_capacity(matches.len());
+            for entry in matches.into_iter() {
+                let bytes = serde_json::to_vec(&entry)
+                    .map(|v| v.len())
+                    .unwrap_or_default();
+                if total + bytes > limit {
+                    truncated = true;
+                    break;
+                }
+                total += bytes;
+                kept.push(entry);
+            }
+            matches = kept;
+        }
+
+        (matches, truncated)
     }
 
     #[cfg(not(docsrs))]
-    fn run_perg_backend(input: &GrepSearchInput) -> Result<Vec<Value>> {
+    fn run_perg_backend(input: &GrepSearchInput) -> Result<(Vec<Value>, bool)> {
         let mut pattern = input.pattern.clone();
         if input.literal.unwrap_or(false) {
             pattern = escape(&pattern);
@@ -544,13 +608,13 @@ impl GrepSearchManager {
             }));
         }
 
-        Ok(matches)
+        Ok(Self::finalize_matches(matches, input))
     }
 
     #[cfg(docsrs)]
-    fn run_perg_backend(_input: &GrepSearchInput) -> Result<Vec<Value>> {
+    fn run_perg_backend(_input: &GrepSearchInput) -> Result<(Vec<Value>, bool)> {
         // When building docs.rs, return an empty result since perg functionality is not available
-        Ok(Vec::new())
+        Ok((Vec::new(), false))
     }
 
     fn is_ripgrep_missing(err: &AnyhowError) -> bool {
@@ -605,12 +669,13 @@ impl GrepSearchManager {
 
             let is_cancelled = cancellation_token.load(Ordering::Relaxed);
             if !is_cancelled
-                && let Ok(matches) = search_result
+                && let Ok((matches, truncated)) = search_result
                 && !matches.is_empty()
             {
                 let result = GrepSearchResult {
                     query: query.clone(),
                     matches,
+                    truncated,
                 };
 
                 // Cache the result if cache is available
@@ -648,12 +713,20 @@ impl GrepSearchManager {
         let query = input.pattern.clone();
         let input_clone = input.clone();
 
-        let matches =
-            spawn_blocking(move || GrepSearchManager::execute_with_backends(&input_clone))
-                .await
-                .context("ripgrep search worker panicked")??;
+        let timeout = input.timeout.unwrap_or(DEFAULT_SEARCH_TIMEOUT);
+        let (matches, truncated) = tokio::time::timeout(
+            timeout,
+            spawn_blocking(move || GrepSearchManager::execute_with_backends(&input_clone)),
+        )
+        .await
+        .context("ripgrep search timed out")?
+        .context("ripgrep search worker panicked")??;
 
-        let result = GrepSearchResult { query, matches };
+        let result = GrepSearchResult {
+            query,
+            matches,
+            truncated,
+        };
 
         // Cache the result if it's worth caching (non-empty, successful)
         if GrepSearchCache::should_cache(&result) {
@@ -661,5 +734,24 @@ impl GrepSearchManager {
         }
 
         Ok(result)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn finalize_matches_respects_max_bytes() {
+        let mut input = GrepSearchInput::with_defaults("pat".into(), ".".into());
+        input.max_result_bytes = Some(8);
+        input.max_results = Some(5);
+
+        let matches = vec![json!({"text": "12345"}), json!({"text": "6789"})];
+
+        let (kept, truncated) = GrepSearchManager::finalize_matches(matches, &input);
+        assert!(truncated);
+        assert_eq!(kept.len(), 1);
     }
 }

@@ -141,10 +141,7 @@ mod tests {
         metrics.record_detection("email".to_owned());
         metrics.record_detection("ssn".to_owned());
 
-        assert_eq!(
-            metrics.get_most_detected_pattern(),
-            Some("email".to_owned())
-        );
+        assert_eq!(metrics.get_most_detected_pattern(), Some("email"));
     }
 
     #[test]

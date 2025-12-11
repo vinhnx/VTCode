@@ -824,6 +824,7 @@ mod tests {
         let config = StreamingConfig {
             chunk_timeout: Duration::from_secs(10),
             first_chunk_timeout: Duration::from_secs(30),
+            total_timeout: Duration::from_secs(120),
             buffer_size: 512,
         };
 

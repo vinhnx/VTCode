@@ -88,6 +88,8 @@ pub struct WriteInput {
     #[serde(alias = "contents", alias = "text", alias = "data")]
     pub content: String,
     #[serde(default)]
+    pub overwrite: bool,
+    #[serde(default)]
     pub encoding: Option<String>,
     #[serde(default = "default_write_mode", alias = "write_mode")]
     pub mode: String,
@@ -209,7 +211,7 @@ fn default_list_path() -> String {
     ".".into()
 }
 fn default_write_mode() -> String {
-    "overwrite".into()
+    "fail_if_exists".into()
 }
 
 // Search path default

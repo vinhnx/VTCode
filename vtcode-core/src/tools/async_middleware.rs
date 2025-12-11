@@ -4,6 +4,7 @@
 //! Suitable for tokio-based systems handling LLM operations.
 
 use crate::tools::improvements_errors::ObservabilityContext;
+use serde_json::{Map, Value};
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -84,6 +85,45 @@ impl Default for AsyncMiddlewareChain {
     }
 }
 
+fn normalize_context(context: &str) -> String {
+    let mut normalized = Map::new();
+    let parsed: Value = serde_json::from_str(context).unwrap_or_else(|_| Value::Object(Map::new()));
+
+    if let Some(session) = parsed.get("session_id").and_then(Value::as_str) {
+        if !session.is_empty() {
+            normalized.insert("session_id".into(), Value::String(session.to_string()));
+        }
+    }
+
+    if let Some(task) = parsed.get("task_id").and_then(Value::as_str) {
+        if !task.is_empty() {
+            normalized.insert("task_id".into(), Value::String(task.to_string()));
+        }
+    }
+
+    if let Some(version) = parsed.get("plan_version").and_then(Value::as_u64) {
+        normalized.insert("plan_version".into(), Value::Number(version.into()));
+    }
+
+    if let Some(plan) = parsed.get("plan_summary").and_then(Value::as_object) {
+        let mut summary = Map::new();
+        if let Some(status) = plan.get("status").and_then(Value::as_str) {
+            summary.insert("status".into(), Value::String(status.to_string()));
+        }
+        if let Some(total) = plan.get("total_steps").and_then(Value::as_u64) {
+            summary.insert("total_steps".into(), Value::Number(total.into()));
+        }
+        if let Some(completed) = plan.get("completed_steps").and_then(Value::as_u64) {
+            summary.insert("completed_steps".into(), Value::Number(completed.into()));
+        }
+        if !summary.is_empty() {
+            normalized.insert("plan_summary".into(), Value::Object(summary));
+        }
+    }
+
+    serde_json::to_string(&Value::Object(normalized)).unwrap_or_else(|_| "{}".to_string())
+}
+
 /// Async logging middleware
 pub struct AsyncLoggingMiddleware {
     obs_context: Arc<ObservabilityContext>,
@@ -115,9 +155,47 @@ impl AsyncMiddleware for AsyncLoggingMiddleware {
         >,
     ) -> ToolResult {
         let tool_name = request.tool_name.clone();
+        let normalized_context = normalize_context(&request.context);
+        let context_json: Option<Value> = serde_json::from_str(&normalized_context).ok();
+        let session_id = context_json
+            .as_ref()
+            .and_then(|v| v.get("session_id").and_then(|s| s.as_str()))
+            .unwrap_or("");
+        let task_id = context_json
+            .as_ref()
+            .and_then(|v| v.get("task_id").and_then(|s| s.as_str()))
+            .unwrap_or("");
+        let plan_summary = context_json
+            .as_ref()
+            .and_then(|v| v.get("plan_summary"));
+        let plan_status = plan_summary
+            .and_then(|v| v.get("status").and_then(|s| s.as_str()))
+            .unwrap_or("");
+        let plan_total_steps = plan_summary
+            .and_then(|v| v.get("total_steps").and_then(|n| n.as_u64()))
+            .unwrap_or(0);
+        let plan_completed_steps = plan_summary
+            .and_then(|v| v.get("completed_steps").and_then(|n| n.as_u64()))
+            .unwrap_or(0);
+        let plan_version = context_json
+            .as_ref()
+            .and_then(|v| v.get("plan_version").and_then(|n| n.as_u64()))
+            .unwrap_or(0);
+
         tracing::debug!(
             tool = %tool_name,
+            session_id = %session_id,
+            task_id = %task_id,
+            plan_version,
+            plan_status = %plan_status,
+            plan_total_steps,
+            plan_completed_steps,
             "tool execution started"
+        );
+        tracing::trace!(
+            tool = %tool_name,
+            context = %normalized_context,
+            "tool execution context payload"
         );
 
         let start = Instant::now();
@@ -130,6 +208,13 @@ impl AsyncMiddleware for AsyncLoggingMiddleware {
             tracing::debug!(
                 tool = %tool_name,
                 duration_ms = duration,
+                session_id = %session_id,
+                task_id = %task_id,
+                plan_version,
+                plan_status = %plan_status,
+                plan_total_steps,
+                plan_completed_steps,
+                from_cache = result.from_cache,
                 "tool execution completed"
             );
             self.obs_context.event(
@@ -142,6 +227,14 @@ impl AsyncMiddleware for AsyncLoggingMiddleware {
             tracing::error!(
                 tool = %tool_name,
                 error = ?result.error,
+                session_id = %context_json
+                    .as_ref()
+                    .and_then(|v| v.get("session_id").and_then(|s| s.as_str()))
+                    .unwrap_or(""),
+                task_id = %context_json
+                    .as_ref()
+                    .and_then(|v| v.get("task_id").and_then(|s| s.as_str()))
+                    .unwrap_or(""),
                 "tool execution failed"
             );
         }
@@ -183,12 +276,16 @@ impl AsyncCachingMiddleware {
         }
     }
 
-    fn cache_key(tool: &str, args: &str) -> String {
+    fn cache_key(tool: &str, args: &str, context: &str) -> String {
         // Use a hashed key to avoid creating large string cache keys while still uniquely identifying args
         use std::collections::hash_map::DefaultHasher;
         use std::hash::Hasher;
         let mut hasher = DefaultHasher::new();
         hasher.write(args.as_bytes());
+        let normalized = normalize_context(context);
+        if !normalized.is_empty() {
+            hasher.write(normalized.as_bytes());
+        }
         format!("{}::{}", tool, hasher.finish())
     }
 }
@@ -212,7 +309,11 @@ impl AsyncMiddleware for AsyncCachingMiddleware {
                 + 'a,
         >,
     ) -> ToolResult {
-        let key = AsyncCacheKey(Self::cache_key(&request.tool_name, &request.arguments));
+        let key = AsyncCacheKey(Self::cache_key(
+            &request.tool_name,
+            &request.arguments,
+            &request.context,
+        ));
 
         // Check cache (migrated to UnifiedCache)
         if let Some(cached) = self.cache.write().get_owned(&key) {
@@ -341,6 +442,25 @@ impl AsyncMiddleware for AsyncRetryMiddleware {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::future::Future;
+    use std::pin::Pin;
+
+    fn make_executor(
+        output: &'static str,
+    ) -> Box<dyn Fn(ToolRequest) -> Pin<Box<dyn Future<Output = ToolResult> + Send>> + Send + Sync>
+    {
+        Box::new(move |_req: ToolRequest| {
+            Box::pin(async move {
+                ToolResult {
+                    success: true,
+                    output: Some(output.to_string()),
+                    error: None,
+                    duration_ms: 0,
+                    from_cache: false,
+                }
+            })
+        })
+    }
 
     #[tokio::test]
     async fn test_async_logging_middleware() {
@@ -353,22 +473,11 @@ mod tests {
             context: "ctx".to_string(),
         };
 
-        let executor = |_req: ToolRequest| {
-            Box::pin(async move {
-                ToolResult {
-                    success: true,
-                    output: Some("result".to_string()),
-                    error: None,
-                    duration_ms: 0,
-                    from_cache: false,
-                }
-            })
-        };
+        let executor = make_executor("result");
 
-        let result = middleware.execute(request, Box::new(executor)).await;
+        let result = middleware.execute(request, executor).await;
 
         assert!(result.success);
-        assert!(result.duration_ms >= 0);
     }
 
     #[tokio::test]
@@ -383,35 +492,15 @@ mod tests {
         };
 
         // First call
-        let executor1 = |_req: ToolRequest| {
-            Box::pin(async move {
-                ToolResult {
-                    success: true,
-                    output: Some("result1".to_string()),
-                    error: None,
-                    duration_ms: 0,
-                    from_cache: false,
-                }
-            })
-        };
+        let executor1 = make_executor("result1");
 
-        let result1 = cache.execute(request.clone(), Box::new(executor1)).await;
+        let result1 = cache.execute(request.clone(), executor1).await;
         assert!(!result1.from_cache);
 
         // Second call (should be cached)
-        let executor2 = |_req: ToolRequest| {
-            Box::pin(async move {
-                ToolResult {
-                    success: true,
-                    output: Some("result2".to_string()),
-                    error: None,
-                    duration_ms: 0,
-                    from_cache: false,
-                }
-            })
-        };
+        let executor2 = make_executor("result2");
 
-        let result2 = cache.execute(request, Box::new(executor2)).await;
+        let result2 = cache.execute(request, executor2).await;
         assert!(result2.from_cache);
         assert_eq!(result2.output, Some("result1".to_string())); // Returns cached value
     }

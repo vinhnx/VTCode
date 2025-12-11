@@ -17,6 +17,11 @@ struct SearchCacheKey {
     max_results: usize,
     glob_pattern: Option<String>,
     type_pattern: Option<String>,
+    max_result_bytes: Option<usize>,
+    respect_ignore_files: bool,
+    search_hidden: bool,
+    search_binary: bool,
+    literal: bool,
 }
 
 impl From<&GrepSearchInput> for SearchCacheKey {
@@ -28,6 +33,11 @@ impl From<&GrepSearchInput> for SearchCacheKey {
             max_results: input.max_results.unwrap_or(5), // AGENTS.md requires max 5 results
             glob_pattern: input.glob_pattern.clone(),
             type_pattern: input.type_pattern.clone(),
+            max_result_bytes: input.max_result_bytes,
+            respect_ignore_files: input.respect_ignore_files.unwrap_or(true),
+            search_hidden: input.search_hidden.unwrap_or(false),
+            search_binary: input.search_binary.unwrap_or(false),
+            literal: input.literal.unwrap_or(false),
         }
     }
 }
@@ -110,6 +120,9 @@ mod tests {
             column: None,
             only_matching: None,
             trim: None,
+            max_result_bytes: None,
+            timeout: None,
+            extra_ignore_globs: None,
         }
     }
 
@@ -132,6 +145,7 @@ mod tests {
         let result = GrepSearchResult {
             query: "test".to_string(),
             matches: vec![serde_json::json!({"file": "test.rs", "line": 1})],
+            truncated: false,
         };
 
         // Cache miss
@@ -144,5 +158,6 @@ mod tests {
         let cached = cache.get(&input).unwrap();
         assert_eq!(cached.query, result.query);
         assert_eq!(cached.matches.len(), result.matches.len());
+        assert_eq!(cached.truncated, result.truncated);
     }
 }

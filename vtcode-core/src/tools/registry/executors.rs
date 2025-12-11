@@ -34,6 +34,91 @@ use crate::config::constants::defaults::{
 const RUN_PTY_POLL_TIMEOUT_SECS: u64 = 5;
 // For known long-running commands, wait longer before returning partial output
 const RUN_PTY_POLL_TIMEOUT_LONG_RUNNING: u64 = 30;
+const SEARCH_REPLACE_MAX_BYTES: usize = 2 * 1024 * 1024;
+
+// Conservative PTY command policy inspired by bash allow/deny defaults.
+const PTY_DENY_PREFIXES: &[&str] = &[
+    "bash -i",
+    "sh -i",
+    "zsh -i",
+    "fish -i",
+    "python -i",
+    "python3 -i",
+    "ipython",
+    "nano",
+    "vim",
+    "vi",
+    "emacs",
+    "top",
+    "htop",
+    "less",
+    "more",
+    "screen",
+    "tmux",
+];
+
+const PTY_DENY_STANDALONE: &[&str] = &["python", "python3", "bash", "sh", "zsh", "fish"];
+
+#[allow(dead_code)]
+const PTY_ALLOW_PREFIXES: &[&str] = &[
+    "pwd",
+    "whoami",
+    "ls",
+    "git status",
+    "git diff",
+    "git log",
+    "stat",
+    "which",
+    "echo",
+    "cat",
+];
+
+fn enforce_pty_command_policy(display_command: &str, confirm: bool) -> Result<()> {
+    let lower = display_command.to_ascii_lowercase();
+    let trimmed = lower.trim();
+    let is_standalone = trimmed.split_whitespace().count() == 1;
+
+    let deny_match = PTY_DENY_PREFIXES
+        .iter()
+        .any(|prefix| trimmed.starts_with(prefix));
+    let standalone_denied = is_standalone && PTY_DENY_STANDALONE.iter().any(|cmd| trimmed == *cmd);
+
+    if deny_match || standalone_denied {
+        if confirm {
+            return Ok(());
+        }
+        return Err(anyhow!(
+            "Command '{}' is blocked by PTY safety policy. Set confirm=true to force execution.",
+            display_command
+        ));
+    }
+
+    // Allowlisted commands are simply allowed; we rely on general policy for others.
+    Ok(())
+}
+
+fn matches_context(
+    content: &str,
+    idx: usize,
+    search_len: usize,
+    before: Option<&str>,
+    after: Option<&str>,
+) -> bool {
+    if let Some(prefix) = before {
+        if !content[..idx].ends_with(prefix) {
+            return false;
+        }
+    }
+
+    if let Some(suffix) = after {
+        let end = idx.saturating_add(search_len);
+        if end > content.len() || !content[end..].starts_with(suffix) {
+            return false;
+        }
+    }
+
+    true
+}
 
 const LONG_RUNNING_COMMANDS: &[&str] = &[
     "cargo", "npm", "yarn", "pnpm", "pip", "python", "make", "docker",
@@ -507,6 +592,12 @@ impl ToolRegistry {
                 only_matching: Option<bool>,
                 #[serde(default)]
                 trim: Option<bool>,
+                #[serde(default)]
+                max_result_bytes: Option<usize>,
+                #[serde(default)]
+                timeout_secs: Option<u64>,
+                #[serde(default)]
+                extra_ignore_globs: Option<Vec<String>>,
             }
 
             fn default_grep_path() -> String {
@@ -610,6 +701,9 @@ impl ToolRegistry {
                 column: payload.column,
                 only_matching: payload.only_matching,
                 trim: payload.trim,
+                max_result_bytes: payload.max_result_bytes,
+                timeout: payload.timeout_secs.map(Duration::from_secs),
+                extra_ignore_globs: payload.extra_ignore_globs,
             };
 
             let result = manager
@@ -791,6 +885,122 @@ impl ToolRegistry {
 
     pub(super) fn apply_patch_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move { self.execute_apply_patch(args).await })
+    }
+
+    pub(super) fn search_replace_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
+        let file_ops = self.inventory.file_ops_tool().clone();
+        Box::pin(async move {
+            #[derive(Debug, Deserialize)]
+            struct SearchReplaceInput {
+                #[serde(alias = "file_path", alias = "filepath", alias = "target_path")]
+                path: String,
+                #[serde(alias = "query", alias = "pattern")]
+                search: String,
+                #[serde(alias = "replacement", alias = "new_text")]
+                replace: String,
+                #[serde(default)]
+                max_replacements: Option<usize>,
+                #[serde(default = "default_backup")]
+                backup: bool,
+                #[serde(default)]
+                before: Option<String>,
+                #[serde(default)]
+                after: Option<String>,
+            }
+
+            const fn default_backup() -> bool {
+                true
+            }
+
+            let input: SearchReplaceInput = serde_json::from_value(args)
+                .context("search_replace requires path, search, replace")?;
+
+            if input.search.is_empty() {
+                return Err(anyhow!("search_replace requires non-empty 'search' string"));
+            }
+
+            let path = file_ops
+                .normalize_user_path(&input.path)
+                .await
+                .with_context(|| format!("Failed to resolve path '{}'", input.path))?;
+
+            let metadata = fs::metadata(&path)
+                .await
+                .with_context(|| format!("Failed to read metadata for '{}'", path.display()))?;
+            if metadata.len() as usize > SEARCH_REPLACE_MAX_BYTES {
+                return Err(anyhow!(
+                    "File '{}' exceeds search/replace safety limit ({} bytes)",
+                    path.display(),
+                    SEARCH_REPLACE_MAX_BYTES
+                ));
+            }
+
+            let original = fs::read_to_string(&path)
+                .await
+                .with_context(|| format!("Failed to read '{}'", path.display()))?;
+
+            let mut replaced = String::with_capacity(original.len());
+            let mut last_index = 0usize;
+            let mut replacements = 0usize;
+            let search_len = input.search.len();
+
+            for (idx, _) in original.match_indices(&input.search) {
+                if let Some(max) = input.max_replacements {
+                    if replacements >= max {
+                        break;
+                    }
+                }
+
+                if !matches_context(
+                    &original,
+                    idx,
+                    search_len,
+                    input.before.as_deref(),
+                    input.after.as_deref(),
+                ) {
+                    continue;
+                }
+
+                replaced.push_str(&original[last_index..idx]);
+                replaced.push_str(&input.replace);
+                last_index = idx + search_len;
+                replacements += 1;
+            }
+
+            replaced.push_str(&original[last_index..]);
+
+            if replacements == 0 {
+                return Ok(json!({
+                    "success": true,
+                    "replacements": 0,
+                    "unchanged": true,
+                }));
+            }
+
+            if input.backup {
+                let mut backup_path = path.clone();
+                let backup_ext = backup_path
+                    .extension()
+                    .and_then(|ext| ext.to_str())
+                    .map(|ext| format!("{ext}.bak"))
+                    .unwrap_or_else(|| "bak".to_string());
+                backup_path.set_extension(backup_ext);
+                fs::write(&backup_path, &original).await.with_context(|| {
+                    format!("Failed to write backup '{}'", backup_path.display())
+                })?;
+            }
+
+            fs::write(&path, &replaced).await.with_context(|| {
+                format!("Failed to write updated content to '{}'", path.display())
+            })?;
+
+            Ok(json!({
+                "success": true,
+                "replacements": replacements,
+                "path": path.display().to_string(),
+                "backup_created": input.backup,
+            }))
+        })
     }
 
     pub(super) fn update_plan_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
@@ -1540,6 +1750,10 @@ impl ToolRegistry {
             .get("login")
             .and_then(|value| value.as_bool())
             .unwrap_or(true);
+        let confirm = payload
+            .get("confirm")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false);
 
         {
             let normalized_shell = normalized_shell_name(&shell_program);
@@ -1595,8 +1809,15 @@ impl ToolRegistry {
             .map(|v| v as usize)
             .unwrap_or(DEFAULT_PTY_OUTPUT_MAX_TOKENS);
 
+        let display_command = if should_use_windows_command_tokenizer(Some(&shell_program)) {
+            join_windows_command(&command)
+        } else {
+            join(command.iter().map(|part| part.as_str()))
+        };
+
         Ok(PtyCommandSetup {
             command,
+            display_command,
             working_dir_path,
             working_dir_display,
             session_id: generate_session_id("run"),
@@ -1604,6 +1825,7 @@ impl ToolRegistry {
             cols,
             timeout_secs,
             max_tokens,
+            confirm,
         })
     }
 
@@ -1612,6 +1834,8 @@ impl ToolRegistry {
         if setup.command.is_empty() {
             return Err(anyhow!("PTY command cannot be empty"));
         }
+
+        enforce_pty_command_policy(&setup.display_command, setup.confirm)?;
 
         // Execute the PTY command exactly once.
         // We do NOT retry on exit code (application error) because:
@@ -2476,6 +2700,7 @@ fn parse_session_id(payload: &Map<String, Value>, missing_error: &str) -> Result
 
 struct PtyCommandSetup {
     command: Vec<String>,
+    display_command: String,
     working_dir_path: PathBuf,
     working_dir_display: String,
     session_id: String,
@@ -2485,6 +2710,7 @@ struct PtyCommandSetup {
     /// Maximum tokens for output truncation. Defaults to DEFAULT_PTY_OUTPUT_MAX_TOKENS.
     /// Set to 0 to disable truncation (not recommended for large outputs).
     max_tokens: usize,
+    confirm: bool,
 }
 
 impl PtyCommandSetup {
@@ -3645,6 +3871,56 @@ fn join_windows_command(parts: &[String]) -> String {
         .join(" ")
 }
 
+#[allow(dead_code)]
+fn tokenize_windows_command(command: &str) -> Result<Vec<String>> {
+    let mut parts = Vec::new();
+    let mut current = String::new();
+    let mut chars = command.chars().peekable();
+    let mut in_quotes = false;
+    let mut backslashes = 0usize;
+
+    while let Some(ch) = chars.next() {
+        match ch {
+            '"' => {
+                // In Windows parsing, an even number of preceding backslashes escapes them,
+                // an odd number escapes the quote.
+                if backslashes % 2 == 0 {
+                    in_quotes = !in_quotes;
+                }
+                current.push('"');
+                backslashes = 0;
+            }
+            '\\' => {
+                backslashes += 1;
+                current.push(ch);
+            }
+            ' ' | '\t' if !in_quotes => {
+                if !current.is_empty() {
+                    parts.push(current.trim_matches('"').to_string());
+                    current.clear();
+                }
+                backslashes = 0;
+            }
+            _ => {
+                if backslashes > 0 {
+                    backslashes = 0;
+                }
+                current.push(ch);
+            }
+        }
+    }
+
+    if in_quotes {
+        return Err(anyhow!("unterminated quotes in command"));
+    }
+
+    if !current.is_empty() {
+        parts.push(current.trim_matches('"').to_string());
+    }
+
+    Ok(parts)
+}
+
 fn quote_windows_argument(arg: &str) -> String {
     if arg.is_empty() {
         return "\"\"".to_string();
@@ -3942,5 +4218,53 @@ fn is_long_running_command(command_parts: &[String]) -> bool {
             .any(|&long_cmd| basename.starts_with(long_cmd) || basename == long_cmd)
     } else {
         false
+    }
+}
+
+#[cfg(test)]
+mod search_replace_exec_tests {
+    use super::*;
+    use serde_json::json;
+    use tempfile::TempDir;
+
+    #[tokio::test]
+    async fn search_replace_replaces_and_backups() -> Result<()> {
+        let temp_dir = TempDir::new().unwrap();
+        let workspace_root = temp_dir.path().to_path_buf();
+        let file_path = workspace_root.join("sample.txt");
+
+        fs::write(&file_path, "hello world\nhello again\n")
+            .await
+            .expect("write fixture");
+
+        let mut registry = ToolRegistry::new(workspace_root.clone()).await;
+        registry.allow_all_tools().await.ok();
+
+        let response = registry
+            .search_replace_executor(json!({
+                "path": file_path.to_string_lossy(),
+                "search": "hello",
+                "replace": "hi",
+                "max_replacements": 1
+            }))
+            .await?;
+
+        assert_eq!(
+            response.get("replacements").and_then(|v| v.as_u64()),
+            Some(1)
+        );
+        let updated = fs::read_to_string(&file_path)
+            .await
+            .expect("read updated file");
+        assert!(updated.contains("hi"));
+        assert!(updated.contains("hello again"));
+
+        let backup_exists = file_path
+            .with_extension("txt.bak")
+            .try_exists()
+            .unwrap_or(false);
+        assert!(backup_exists);
+
+        Ok(())
     }
 }

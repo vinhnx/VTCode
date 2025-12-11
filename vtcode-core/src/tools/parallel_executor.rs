@@ -232,7 +232,7 @@ mod tests {
     fn test_planner_no_conflicts() {
         let planner = ParallelExecutionPlanner::new();
 
-        let calls = vec![
+        let _calls = vec![
             (
                 "grep".to_string(),
                 Arc::new(json!({"pattern": "test"})),

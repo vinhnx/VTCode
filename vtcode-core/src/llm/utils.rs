@@ -285,8 +285,8 @@ mod tests {
         let request = parse_chat_request_openai_format(&json, "default-model").unwrap();
         assert_eq!(request.model, "gpt-4");
         assert_eq!(request.messages.len(), 2);
-        assert_eq!(request.messages[0].role, "user");
-        assert_eq!(request.messages[0].content, "Hello");
+        assert_eq!(request.messages[0].role, MessageRole::User);
+        assert_eq!(request.messages[0].content.as_text(), "Hello");
         assert_eq!(request.temperature, Some(0.7));
         assert_eq!(request.max_tokens, Some(100));
     }
@@ -308,10 +308,10 @@ mod tests {
         });
 
         let result = parse_response_openai_format(response, "test", false, None).unwrap();
-        assert_eq!(result.content, "Hello world");
-        assert_eq!(result.input_tokens, 10);
-        assert_eq!(result.output_tokens, 5);
-        assert_eq!(result.model, "gpt-4");
+        assert_eq!(result.content.as_deref(), Some("Hello world"));
+        let usage = result.usage.expect("usage should be present");
+        assert_eq!(usage.prompt_tokens, 10);
+        assert_eq!(usage.completion_tokens, 5);
     }
 
     #[test]

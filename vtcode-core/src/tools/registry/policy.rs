@@ -44,6 +44,10 @@ impl ToolPolicyGateway {
         }
     }
 
+    pub fn has_policy_manager(&self) -> bool {
+        self.tool_policy.is_some()
+    }
+
     pub async fn sync_available_tools(&mut self, mut available: Vec<String>, mcp_keys: &[String]) {
         available.extend(mcp_keys.iter().cloned());
         available.sort();

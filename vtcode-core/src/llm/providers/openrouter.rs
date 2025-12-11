@@ -2085,6 +2085,7 @@ mod tests {
             max_tokens: None,
             temperature: None,
             stream: false,
+            output_format: None,
             tool_choice: Some(ToolChoice::Any),
             parallel_tool_calls: Some(true),
             parallel_tool_config: None,

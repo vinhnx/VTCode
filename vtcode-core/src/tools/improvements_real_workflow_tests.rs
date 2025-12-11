@@ -79,7 +79,7 @@ mod real_workflow_tests {
     /// Test: Detecting when user is stuck in a loop
     #[test]
     fn test_workflow_loop_detection() {
-        let obs = Arc::new(ObservabilityContext::noop());
+        let _obs = Arc::new(ObservabilityContext::noop());
         let engine = PatternEngine::new(100, 20);
 
         // User runs the same command 3 times
@@ -106,7 +106,7 @@ mod real_workflow_tests {
     /// Test: Detecting refinement - user improving their approach
     #[test]
     fn test_workflow_refinement_detection() {
-        let obs = Arc::new(ObservabilityContext::noop());
+        let _obs = Arc::new(ObservabilityContext::noop());
         let engine = PatternEngine::new(100, 20);
 
         // User iteratively improves their search
@@ -139,7 +139,7 @@ mod real_workflow_tests {
     /// Test: Multiple tools with similar results (convergence)
     #[test]
     fn test_workflow_convergence_detection() {
-        let obs = Arc::new(ObservabilityContext::noop());
+        let _obs = Arc::new(ObservabilityContext::noop());
         let engine = PatternEngine::new(100, 20);
 
         // User tries different tools, all working equally well

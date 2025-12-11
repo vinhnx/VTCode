@@ -234,7 +234,8 @@ mod tests {
         let path1 = test_path("file1.rs");
         let path2 = test_path("file2.rs");
 
-        cache.cache_grant(path1, PermissionGrant::Session);
+        let path1_for_cache = path1.clone();
+        cache.cache_grant(path1_for_cache, PermissionGrant::Session);
 
         // 3 hits
         cache.get_permission(&path1);
@@ -284,8 +285,10 @@ mod tests {
         let denied_path = test_path("secret.txt");
         let allowed_path = test_path("public.txt");
 
-        cache.cache_grant(denied_path.clone(), PermissionGrant::Denied);
-        cache.cache_grant(allowed_path, PermissionGrant::Session);
+        let denied_for_cache = denied_path.clone();
+        let allowed_for_cache = allowed_path.clone();
+        cache.cache_grant(denied_for_cache, PermissionGrant::Denied);
+        cache.cache_grant(allowed_for_cache, PermissionGrant::Session);
 
         assert!(cache.is_denied(&denied_path));
         assert!(!cache.is_denied(&allowed_path));

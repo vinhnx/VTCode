@@ -316,6 +316,9 @@ mod tests {
             startup_timeout_seconds: Some(60),
             tool_timeout_seconds: Some(300),
             experimental_use_rmcp_client: false,
+            connection_pooling_enabled: true,
+            tool_cache_capacity: 128,
+            connection_timeout_seconds: 30,
             security: Default::default(),
         }
     }

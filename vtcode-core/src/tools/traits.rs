@@ -3,8 +3,11 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use serde_json::Value;
+use std::borrow::Cow;
 use std::path::PathBuf;
 use std::sync::Arc;
+
+use crate::tool_policy::ToolPolicy;
 
 /// Core trait for all agent tools
 #[async_trait]
@@ -22,6 +25,41 @@ pub trait Tool: Send + Sync {
     fn validate_args(&self, _args: &Value) -> Result<()> {
         // Default implementation - tools can override for specific validation
         Ok(())
+    }
+
+    /// Optional JSON schema for the tool's parameters, if available.
+    fn parameter_schema(&self) -> Option<Value> {
+        None
+    }
+
+    /// Optional JSON schema for the tool's configuration, if available.
+    fn config_schema(&self) -> Option<Value> {
+        None
+    }
+
+    /// Optional JSON schema describing state persisted by the tool, if any.
+    fn state_schema(&self) -> Option<Value> {
+        None
+    }
+
+    /// Optional prompt path metadata (e.g., for loading companion prompts).
+    fn prompt_path(&self) -> Option<Cow<'static, str>> {
+        None
+    }
+
+    /// Default execution policy for this tool.
+    fn default_permission(&self) -> ToolPolicy {
+        ToolPolicy::Prompt
+    }
+
+    /// Optional allowlist patterns the tool considers pre-approved.
+    fn allow_patterns(&self) -> Option<&'static [&'static str]> {
+        None
+    }
+
+    /// Optional denylist patterns the tool considers blocked.
+    fn deny_patterns(&self) -> Option<&'static [&'static str]> {
+        None
     }
 }
 
