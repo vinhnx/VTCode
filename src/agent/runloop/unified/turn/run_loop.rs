@@ -1742,7 +1742,8 @@ pub(crate) async fn run_single_agent_loop_unified(
             let mut tool_call_safety = ToolCallSafetyValidator::new();
             tool_call_safety.set_limits(max_tool_loops, max_tool_loops.saturating_mul(3));
             tool_call_safety.start_turn();
-            let autonomous_executor = AutonomousExecutor::new();
+            let mut autonomous_executor = AutonomousExecutor::new();
+            autonomous_executor.set_workspace_dir(config.workspace.clone());
 
             async fn run_turn_preamble(
                 ctrl_c_state: &Arc<crate::agent::runloop::unified::state::CtrlCState>,

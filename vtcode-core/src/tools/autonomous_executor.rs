@@ -10,9 +10,10 @@ use crate::config::constants::tools;
 use crate::core::loop_detector::LoopDetector;
 use anyhow::{Context, Result};
 use serde_json::Value;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
+use std::time::{Duration, Instant};
 use tracing::warn;
 
 /// Tools that are always safe to execute autonomously
@@ -77,6 +78,9 @@ pub struct AutonomousExecutor {
     loop_detector: Arc<RwLock<LoopDetector>>,
     execution_stats: Arc<RwLock<HashMap<String, ToolStats>>>,
     workspace_dir: Option<PathBuf>,
+    rate_limit_window: Duration,
+    rate_limit_max_calls: usize,
+    rate_history: Arc<RwLock<HashMap<String, VecDeque<Instant>>>>,
 }
 
 impl AutonomousExecutor {
@@ -97,7 +101,13 @@ impl AutonomousExecutor {
             destructive_tools: DESTRUCTIVE_TOOLS.iter().map(|s| s.to_string()).collect(),
             loop_detector,
             execution_stats: Arc::new(RwLock::new(HashMap::new())),
-            workspace_dir: std::env::var("WORKSPACE_DIR").ok().map(PathBuf::from),
+            workspace_dir: std::env::var("WORKSPACE_DIR")
+                .ok()
+                .map(PathBuf::from)
+                .or_else(|| std::env::current_dir().ok()),
+            rate_limit_window: Duration::from_secs(10),
+            rate_limit_max_calls: 5,
+            rate_history: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -130,6 +140,13 @@ impl AutonomousExecutor {
     /// Check if tool should be blocked due to loop detection
     /// Returns Some(message) if blocked, None if allowed
     pub fn should_block(&self, tool_name: &str, _args: &Value) -> Option<String> {
+        if self.is_rate_limited(tool_name) {
+            return Some(format!(
+                "Tool '{}' temporarily blocked: rate limit exceeded ({} calls in {:?}).",
+                tool_name, self.rate_limit_max_calls, self.rate_limit_window
+            ));
+        }
+
         if let Ok(detector) = self.loop_detector.read() {
             // Check if hard limit already exceeded
             if detector.is_hard_limit_exceeded(tool_name) {
@@ -156,6 +173,7 @@ impl AutonomousExecutor {
     /// Record tool call in loop detector
     /// Returns warning message if loop detected
     pub fn record_tool_call(&self, tool_name: &str, args: &Value) -> Option<String> {
+        self.record_rate_history(tool_name);
         if let Ok(mut detector) = self.loop_detector.write() {
             detector.record_call(tool_name, args)
         } else {
@@ -281,7 +299,21 @@ impl AutonomousExecutor {
                 {
                     anyhow::bail!("Path traversal escapes workspace boundary: {}", path_str);
                 }
+            } else {
+                anyhow::bail!(
+                    "Path traversal blocked: workspace boundary is unknown for '{}'",
+                    path_str
+                );
             }
+        }
+
+        // If workspace directory is unknown, conservatively block writes to avoid escaping boundaries.
+        if self.workspace_dir.is_none() {
+            anyhow::bail!(
+                "Workspace directory is not set; refusing to write to relative path '{}'. \
+                 Set WORKSPACE_DIR or call set_workspace_dir().",
+                path_str
+            );
         }
 
         Ok(())
@@ -430,6 +462,35 @@ impl AutonomousExecutor {
 impl Default for AutonomousExecutor {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl AutonomousExecutor {
+    fn record_rate_history(&self, tool_name: &str) {
+        let now = Instant::now();
+        if let Ok(mut history) = self.rate_history.write() {
+            let entries = history.entry(tool_name.to_string()).or_default();
+            entries.push_back(now);
+            while let Some(front) = entries.front()
+                && now.duration_since(*front) > self.rate_limit_window
+            {
+                entries.pop_front();
+            }
+        }
+    }
+
+    fn is_rate_limited(&self, tool_name: &str) -> bool {
+        let now = Instant::now();
+        if let Ok(mut history) = self.rate_history.write() {
+            let entries = history.entry(tool_name.to_string()).or_default();
+            while let Some(front) = entries.front()
+                && now.duration_since(*front) > self.rate_limit_window
+            {
+                entries.pop_front();
+            }
+            return entries.len() >= self.rate_limit_max_calls;
+        }
+        false
     }
 }
 

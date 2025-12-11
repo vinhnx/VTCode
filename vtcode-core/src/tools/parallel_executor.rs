@@ -1,5 +1,6 @@
 //! Parallel tool execution with safe batching and conflict detection
 
+use crate::config::constants::tools;
 use anyhow::Result;
 use futures::future::{BoxFuture, join_all};
 use serde_json::Value;
@@ -46,16 +47,57 @@ impl ParallelExecutionPlanner {
 
         // Define conflict relationships (read-write, write-write)
         let conflicts: Vec<(&'static str, Vec<&'static str>)> = vec![
-            ("read_file", vec!["write_file", "edit_file", "delete_file"]),
-            ("list_files", vec!["write_file", "edit_file", "delete_file"]),
-            ("grep", vec!["write_file", "edit_file"]),
             (
-                "write_file",
-                vec!["read_file", "list_files", "write_file", "edit_file"],
+                tools::READ_FILE,
+                vec![
+                    tools::WRITE_FILE,
+                    tools::EDIT_FILE,
+                    tools::DELETE_FILE,
+                    tools::APPLY_PATCH,
+                ],
             ),
             (
-                "edit_file",
-                vec!["read_file", "list_files", "write_file", "edit_file"],
+                tools::LIST_FILES,
+                vec![
+                    tools::WRITE_FILE,
+                    tools::EDIT_FILE,
+                    tools::DELETE_FILE,
+                    tools::APPLY_PATCH,
+                ],
+            ),
+            (
+                tools::GREP_FILE,
+                vec![tools::WRITE_FILE, tools::EDIT_FILE, tools::APPLY_PATCH],
+            ),
+            (
+                tools::WRITE_FILE,
+                vec![
+                    tools::READ_FILE,
+                    tools::LIST_FILES,
+                    tools::WRITE_FILE,
+                    tools::EDIT_FILE,
+                    tools::APPLY_PATCH,
+                ],
+            ),
+            (
+                tools::EDIT_FILE,
+                vec![
+                    tools::READ_FILE,
+                    tools::LIST_FILES,
+                    tools::WRITE_FILE,
+                    tools::EDIT_FILE,
+                    tools::APPLY_PATCH,
+                ],
+            ),
+            (
+                tools::APPLY_PATCH,
+                vec![
+                    tools::READ_FILE,
+                    tools::LIST_FILES,
+                    tools::WRITE_FILE,
+                    tools::EDIT_FILE,
+                    tools::APPLY_PATCH,
+                ],
             ),
         ];
 
@@ -234,28 +276,28 @@ mod tests {
 
         let _calls = vec![
             (
-                "grep".to_string(),
+                tools::GREP_FILE.to_string(),
                 Arc::new(json!({"pattern": "test"})),
                 "id1".to_string(),
             ),
             (
-                "list_files".to_string(),
+                tools::LIST_FILES.to_string(),
                 Arc::new(json!({"path": "."})),
                 "id2".to_string(),
             ),
         ];
 
         // These shouldn't conflict
-        assert!(!planner.conflicts("grep", "list_files"));
+        assert!(!planner.conflicts(tools::GREP_FILE, tools::LIST_FILES));
     }
 
     #[test]
     fn test_planner_with_conflicts() {
         let planner = ParallelExecutionPlanner::new();
 
-        assert!(planner.conflicts("read_file", "write_file"));
-        assert!(planner.conflicts("write_file", "read_file"));
-        assert!(planner.conflicts("write_file", "write_file"));
+        assert!(planner.conflicts(tools::READ_FILE, tools::WRITE_FILE));
+        assert!(planner.conflicts(tools::WRITE_FILE, tools::READ_FILE));
+        assert!(planner.conflicts(tools::WRITE_FILE, tools::WRITE_FILE));
     }
 
     #[test]
@@ -264,16 +306,20 @@ mod tests {
 
         let calls = vec![
             (
-                "read_file".to_string(),
+                tools::READ_FILE.to_string(),
                 Arc::new(json!({})),
                 "id1".to_string(),
             ),
             (
-                "write_file".to_string(),
+                tools::WRITE_FILE.to_string(),
                 Arc::new(json!({})),
                 "id2".to_string(),
             ),
-            ("grep".to_string(), Arc::new(json!({})), "id3".to_string()),
+            (
+                tools::GREP_FILE.to_string(),
+                Arc::new(json!({})),
+                "id3".to_string(),
+            ),
         ];
 
         let groups = planner.plan(&calls);
