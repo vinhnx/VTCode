@@ -627,12 +627,39 @@ fn handle_start_tag(tag: MarkdownTag, context: &mut MarkdownContext<'_>) {
                 buffer: String::new(),
             });
         }
-        MarkdownTag::Table
-        | MarkdownTag::TableHead
-        | MarkdownTag::TableRow
-        | MarkdownTag::TableCell
-        | MarkdownTag::FootnoteDefinition
-        | MarkdownTag::HtmlBlock => {}
+        MarkdownTag::Table => {
+            // Begin table rendering
+            flush_current_line(
+                context.lines,
+                context.current_line,
+                *context.blockquote_depth,
+                context.list_stack,
+                context.pending_list_prefix,
+                context.theme_styles,
+                context.base_style,
+            );
+            push_blank_line(context.lines);
+        }
+        MarkdownTag::TableRow => {
+            // Ensure we're on a fresh line for each row
+            flush_current_line(
+                context.lines,
+                context.current_line,
+                *context.blockquote_depth,
+                context.list_stack,
+                context.pending_list_prefix,
+                context.theme_styles,
+                context.base_style,
+            );
+        }
+        MarkdownTag::TableHead | MarkdownTag::TableCell => {
+            // Add separator between cells
+            context.current_line.segments.push(MarkdownSegment::new(
+                context.base_style,
+                " | ",
+            ));
+        }
+        MarkdownTag::FootnoteDefinition | MarkdownTag::HtmlBlock => {}
     }
 }
 
@@ -724,12 +751,35 @@ fn handle_end_tag(tag: MarkdownTag, context: &mut MarkdownContext<'_>) {
             context.style_stack.pop();
         }
         MarkdownTag::CodeBlock(_) => {}
-        MarkdownTag::Table
-        | MarkdownTag::TableHead
-        | MarkdownTag::TableRow
-        | MarkdownTag::TableCell
-        | MarkdownTag::FootnoteDefinition
-        | MarkdownTag::HtmlBlock => {}
+        MarkdownTag::Table => {
+            // End table rendering
+            flush_current_line(
+                context.lines,
+                context.current_line,
+                *context.blockquote_depth,
+                context.list_stack,
+                context.pending_list_prefix,
+                context.theme_styles,
+                context.base_style,
+            );
+            push_blank_line(context.lines);
+        }
+        MarkdownTag::TableRow => {
+            // End of row
+            flush_current_line(
+                context.lines,
+                context.current_line,
+                *context.blockquote_depth,
+                context.list_stack,
+                context.pending_list_prefix,
+                context.theme_styles,
+                context.base_style,
+            );
+        }
+        MarkdownTag::TableHead | MarkdownTag::TableCell => {
+            // Cell styling handled in start tag, just mark end
+        }
+        MarkdownTag::FootnoteDefinition | MarkdownTag::HtmlBlock => {}
     }
 }
 

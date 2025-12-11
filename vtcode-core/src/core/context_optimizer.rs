@@ -155,19 +155,61 @@ impl ContextOptimizer {
         optimized
     }
 
-    /// Optimize grep results - max 5 matches, indicate overflow
+    /// Optimize grep results - dedupe, cap to top matches, and mark overflow
     fn optimize_grep_result(&self, result: Value) -> Value {
         if let Some(obj) = result.as_object()
             && let Some(matches) = obj.get("matches").and_then(|v| v.as_array())
-            && matches.len() > MAX_GREP_RESULTS
         {
-            let truncated: Vec<_> = matches.iter().take(MAX_GREP_RESULTS).cloned().collect();
-            let overflow = matches.len() - MAX_GREP_RESULTS;
+            // Deduplicate by path + line to reduce noisy repeats
+            let mut seen = std::collections::HashSet::new();
+            let mut deduped = Vec::with_capacity(matches.len());
+            for m in matches {
+                let path = m
+                    .get("path")
+                    .or_else(|| m.get("file"))
+                    .and_then(|p| p.as_str().map(str::to_owned));
+                let line = m
+                    .get("line")
+                    .or_else(|| m.get("line_number"))
+                    .and_then(|l| l.as_i64());
+                let key = (path.clone(), line);
+
+                // Only dedupe when we have a stable anchor (path or line). Otherwise keep all.
+                if path.is_some() || line.is_some() {
+                    if seen.insert(key) {
+                        deduped.push(m.clone());
+                    }
+                } else {
+                    deduped.push(m.clone());
+                }
+            }
+
+            let total = deduped.len();
+
+            if total > MAX_GREP_RESULTS {
+                let truncated: Vec<_> = deduped.iter().take(MAX_GREP_RESULTS).cloned().collect();
+                let overflow = total - MAX_GREP_RESULTS;
+                return serde_json::json!({
+                    "matches": truncated,
+                    "overflow": format!("[+{} more matches]", overflow),
+                    "total": total,
+                    "note": "Showing top 5 unique matches (by path/line)"
+                });
+            }
+
+            // Keep deduped result even when under the limit to avoid repeats
+            if total != matches.len() {
+                return serde_json::json!({
+                    "matches": deduped,
+                    "total": total,
+                    "note": "unique grep matches (collapsed by path/line)"
+                });
+            }
+
             return serde_json::json!({
-                "matches": truncated,
-                "overflow": format!("[+{} more matches]", overflow),
-                "total": matches.len(),
-                "note": "Showing top 5 most relevant matches"
+                "matches": deduped,
+                "total": total,
+                "note": "grep results normalized"
             });
         }
         result
@@ -230,15 +272,26 @@ impl ContextOptimizer {
 
                 let truncated_lines = truncated.lines().count();
 
-                return serde_json::json!({
-                    "content": truncated,
-                    "truncated": true,
-                    "total_lines": lines.len(),
-                    "showing_lines": truncated_lines,
-                    "estimated_tokens": estimated_tokens,
-                    "max_tokens": max_tokens,
-                    "note": "File truncated. Use read_file with start_line/end_line for specific sections."
-                });
+                // Preserve path metadata if present to keep breadcrumb in compacted output
+                let mut truncated_obj = serde_json::Map::new();
+                if let Some(path) = obj.get("path").or_else(|| obj.get("file")) {
+                    truncated_obj.insert("path".to_string(), path.clone());
+                }
+
+                truncated_obj.extend([
+                    ("content".to_string(), json!(truncated)),
+                    ("truncated".to_string(), json!(true)),
+                    ("total_lines".to_string(), json!(lines.len())),
+                    ("showing_lines".to_string(), json!(truncated_lines)),
+                    ("estimated_tokens".to_string(), json!(estimated_tokens)),
+                    ("max_tokens".to_string(), json!(max_tokens)),
+                    (
+                        "note".to_string(),
+                        json!("File truncated. Use read_file with start_line/end_line for specific sections."),
+                    ),
+                ]);
+
+                return Value::Object(truncated_obj);
             }
         }
         result
@@ -573,7 +626,7 @@ mod tests {
         let mut optimizer = ContextOptimizer::new();
 
         let matches: Vec<_> = (0..20)
-            .map(|i| json!({"line": i, "text": "match"}))
+            .map(|i| json!({"line": i, "path": "src/main.rs", "text": "match"}))
             .collect();
         let result = json!({"matches": matches});
 
@@ -582,6 +635,23 @@ mod tests {
         let opt_matches = optimized["matches"].as_array().unwrap();
         assert_eq!(opt_matches.len(), MAX_GREP_RESULTS);
         assert!(optimized["overflow"].is_string());
+    }
+
+    #[tokio::test]
+    async fn test_grep_deduplicates_by_path_and_line() {
+        let mut optimizer = ContextOptimizer::new();
+        let matches = vec![
+            json!({"line": 10, "path": "src/lib.rs", "text": "hit A"}),
+            json!({"line": 10, "path": "src/lib.rs", "text": "hit A duplicate"}),
+            json!({"line": 20, "path": "src/lib.rs", "text": "hit B"}),
+        ];
+        let result = json!({"matches": matches});
+
+        let optimized = optimizer.optimize_result(tools::GREP_FILE, result).await;
+        let opt_matches = optimized["matches"].as_array().unwrap();
+        assert_eq!(opt_matches.len(), 2);
+        assert_eq!(optimized["total"], 2);
+        assert!(optimized["note"].as_str().unwrap().contains("unique"));
     }
 
     #[tokio::test]

@@ -733,19 +733,19 @@ impl InlineSink {
                 let mut segments = Vec::new();
                 let mut plain_line = String::new();
                 let line_style = base_style.patch(line.style);
-
+            
                 for span in &line.spans {
-                    // Clone content as a Cow<str> - which should always be valid UTF-8
-                    let content = span.content.clone().into_owned();
+                    // Use as_ref() to avoid unnecessary clone - Cow is already optimized
+                    let content = span.content.as_ref();
                     if content.is_empty() {
                         continue;
                     }
-
+            
                     let span_style = line_style.patch(span.style);
                     let inline_style = self.inline_style_from_ratatui(span_style, fallback);
-                    plain_line.push_str(&content);
+                    plain_line.push_str(content);
                     segments.push(InlineSegment {
-                        text: content,
+                        text: content.to_string(),
                         style: inline_style,
                     });
                 }
@@ -838,11 +838,12 @@ impl InlineSink {
                 }
 
                 if !indent.is_empty() && !plain.is_empty() {
+                    let fallback_clone = fallback.clone();
                     segments.insert(
                         0,
                         InlineSegment {
                             text: indent.to_string(),
-                            style: fallback.clone(),
+                            style: fallback_clone,
                         },
                     );
                     combined_plain.insert_str(0, indent);
@@ -863,18 +864,25 @@ impl InlineSink {
             self.handle.append_line(kind, combined_segments);
             crate::utils::transcript::append(&combined_plain);
         } else {
+            let fallback_clone = if !indent.is_empty() {
+                Some(fallback.clone())
+            } else {
+                None
+            };
             for (mut segments, mut plain) in
                 converted_lines.into_iter().zip(plain_lines.into_iter())
             {
-                if !indent.is_empty() && !plain.is_empty() {
-                    segments.insert(
-                        0,
-                        InlineSegment {
-                            text: indent.to_string(),
-                            style: fallback.clone(),
-                        },
-                    );
-                    plain.insert_str(0, indent);
+                if let Some(ref style) = fallback_clone {
+                    if !plain.is_empty() {
+                        segments.insert(
+                            0,
+                            InlineSegment {
+                                text: indent.to_string(),
+                                style: style.clone(),
+                            },
+                        );
+                        plain.insert_str(0, indent);
+                    }
                 }
 
                 if segments.is_empty() {
