@@ -27,6 +27,7 @@ pub use acp::{
 };
 pub use api_keys::ApiKeySources;
 pub use context::{ContextFeaturesConfig, LedgerConfig};
+pub use core::{ActorCriticConfig, BanditConfig, RewardShapingConfig, RlStrategy};
 pub use core::{
     AgentConfig, AgentCustomPromptsConfig, AgentOnboardingConfig, AutomationConfig, CommandsConfig,
     FullAutoConfig, ModelConfig, PermissionsConfig, PromptCachingConfig,
@@ -34,9 +35,6 @@ pub use core::{
     ToolsConfig,
 };
 pub use core::{PluginRuntimeConfig, PluginTrustLevel};
-pub use core::{
-    ActorCriticConfig, BanditConfig, RewardShapingConfig, RlStrategy,
-};
 pub use defaults::{
     ConfigDefaultsProvider, ContextStoreDefaults, PerformanceDefaults, ScenarioDefaults,
     SyntaxHighlightingDefaults, WorkspacePathsDefaults, current_config_defaults,

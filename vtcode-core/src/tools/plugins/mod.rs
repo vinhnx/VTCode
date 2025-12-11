@@ -9,8 +9,8 @@ use tokio::fs;
 use tokio::sync::RwLock;
 
 use crate::config::{PluginRuntimeConfig, PluginTrustLevel};
-use crate::tools::registry::ToolRegistration;
 use crate::tools::ToolRegistry;
+use crate::tools::registry::ToolRegistration;
 use crate::utils::error_messages::{ERR_DESERIALIZE, ERR_READ_FILE};
 
 pub type PluginId = String;
@@ -111,10 +111,7 @@ impl PluginRuntime {
         Ok(manifest.normalized(self.config.default_trust))
     }
 
-    pub async fn register_manifest(
-        &self,
-        manifest_path: impl AsRef<Path>,
-    ) -> Result<PluginHandle> {
+    pub async fn register_manifest(&self, manifest_path: impl AsRef<Path>) -> Result<PluginHandle> {
         let path = manifest_path.as_ref();
         ensure!(
             self.config.enabled,

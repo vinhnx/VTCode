@@ -1,5 +1,8 @@
 use crate::config::constants::ui;
 use crate::ui::tui::session::slash;
+use std::fs::OpenOptions;
+use std::io::Write;
+use std::time::{SystemTime, UNIX_EPOCH};
 /// Text editing and cursor movement operations for Session
 ///
 /// This module handles all text manipulation and cursor navigation including:
@@ -50,6 +53,44 @@ impl Session {
         }
         self.input_manager.insert_text(&sanitized);
         slash::update_slash_suggestions(self);
+    }
+
+    /// Insert pasted text without enforcing the inline newline cap.
+    ///
+    /// This preserves the full block (including large multi-line pastes) so the
+    /// agent receives the exact content instead of dropping line breaks after
+    /// hitting the interactive input's visual limit.
+    pub(super) fn insert_paste_text(&mut self, text: &str) {
+        let sanitized: String = text
+            .chars()
+            .filter(|&ch| ch != '\r' && ch != '\u{7f}')
+            .collect();
+
+        if sanitized.is_empty() {
+            return;
+        }
+
+        self.input_manager.insert_text(&sanitized);
+        slash::update_slash_suggestions(self);
+
+        // #region agent log
+        if let Ok(mut file) = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open("/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.cursor/debug.log")
+        {
+            let _ = writeln!(
+                file,
+                "{{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H2\",\"location\":\"session/editing.rs:insert_paste_text\",\"message\":\"insert_paste_text sanitized\",\"data\":{{\"len\":{},\"newline_count\":{}}},\"timestamp\":{}}}",
+                sanitized.len(),
+                sanitized.matches('\n').count(),
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis()
+            );
+        }
+        // #endregion
     }
 
     /// Calculate remaining newline capacity in the input field

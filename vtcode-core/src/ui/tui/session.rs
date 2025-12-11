@@ -772,13 +772,14 @@ mod tests {
     use crate::ui::tui::style::ratatui_style_from_inline;
     use crate::ui::tui::{InlineSegment, InlineTextStyle, InlineTheme};
     use chrono::Utc;
-    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    use crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers};
     use ratatui::{
         Terminal,
         backend::TestBackend,
         style::{Color, Modifier},
         text::{Line, Span},
     };
+    use tokio::sync::mpsc;
 
     const VIEW_ROWS: u16 = 14;
     const VIEW_WIDTH: u16 = 100;
@@ -920,6 +921,20 @@ mod tests {
             session.input_manager.cursor(),
             session.input_manager.content().len()
         );
+    }
+
+    #[test]
+    fn paste_preserves_all_newlines() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+        let pasted = (0..15)
+            .map(|i| format!("line {}", i))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let (tx, _rx) = mpsc::unbounded_channel();
+
+        session.handle_event(CrosstermEvent::Paste(pasted.clone()), &tx, None);
+
+        assert_eq!(session.input_manager.content(), pasted);
     }
 
     #[test]

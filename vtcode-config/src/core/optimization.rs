@@ -2,17 +2,12 @@ use serde::{Deserialize, Serialize};
 
 /// Reinforcement learning strategy selection.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum RlStrategy {
+    #[default]
     Bandit,
     ActorCritic,
-}
-
-impl Default for RlStrategy {
-    fn default() -> Self {
-        RlStrategy::Bandit
-    }
 }
 
 /// Bandit policy parameters.

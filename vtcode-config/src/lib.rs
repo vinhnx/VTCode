@@ -53,7 +53,7 @@ pub use core::{
     ActorCriticConfig, AgentConfig, AgentCustomPromptsConfig, AgentOnboardingConfig,
     AutomationConfig, BanditConfig, CommandsConfig, FullAutoConfig, ModelConfig,
     PluginRuntimeConfig, PluginTrustLevel, PromptCachingConfig, ProviderPromptCachingConfig,
-    ReinforcementLearningConfig, RlStrategy, RewardShapingConfig, SecurityConfig, ToolPolicy,
+    ReinforcementLearningConfig, RewardShapingConfig, RlStrategy, SecurityConfig, ToolPolicy,
     ToolsConfig, WebFetchConfig,
 };
 pub use debug::{DebugConfig, TraceLevel};

@@ -3,7 +3,6 @@
 //! This module is deprecated as of Dec 2025. All usage has been migrated to UnifiedCache.
 //!
 #![allow(deprecated)]
-#![allow(clippy::deprecated)]
 //! **Migration completed**:
 //! - [DONE] improvements_registry_ext.rs → UnifiedCache
 //! - [DONE] async_middleware.rs → UnifiedCache
@@ -22,7 +21,6 @@
 //! - LRU eviction policy with configurable max size
 //! - TTL enforcement (automatic and on-access)
 //! - Observability hooks for cache operations
-#![allow(deprecated)]
 
 use crate::tools::improvements_errors::{EventType, ObservabilityContext};
 use std::collections::HashMap;

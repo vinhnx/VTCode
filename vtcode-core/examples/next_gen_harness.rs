@@ -40,7 +40,9 @@ async fn main() -> anyhow::Result<()> {
 
     // Emit startup telemetry.
     let telemetry = TelemetryPipeline::new(config.telemetry.clone());
-    telemetry.record(TelemetryEvent::new("next_gen_boot", 1.0)).await?;
+    telemetry
+        .record(TelemetryEvent::new("next_gen_boot", 1.0))
+        .await?;
 
     Ok(())
 }

@@ -99,7 +99,10 @@ pub async fn run_modern_tui(
                                 // which causes latency. The session.mark_dirty() is called by scroll methods.
                             }
                             Event::Paste(content) => {
-                                session.insert_text(&content);
+                                session.insert_paste_text(&content);
+                                session.check_file_reference_trigger();
+                                session.check_prompt_reference_trigger();
+                                session.mark_dirty();
                             }
                             Event::FocusGained => {
                                 // Handle focus gained

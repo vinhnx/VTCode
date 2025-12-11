@@ -193,13 +193,13 @@ pub use plan::{
     PlanCompletionState, PlanManager, PlanStep, PlanSummary, PlanUpdateResult, StepStatus,
     TaskPlan, UpdatePlanArgs,
 };
+pub use plugins::{PluginHandle, PluginId, PluginInstaller, PluginManifest, PluginRuntime};
 pub use pty::{PtyCommandRequest, PtyCommandResult, PtyManager};
 pub use registry::{
     ApprovalPattern, ApprovalRecorder, JustificationExtractor, JustificationManager, RiskLevel,
     ToolJustification, ToolRegistration, ToolRegistry, ToolRiskContext, ToolRiskScorer, ToolSource,
     WorkspaceTrust,
 };
-pub use plugins::{PluginHandle, PluginInstaller, PluginManifest, PluginRuntime, PluginId};
 pub use result_cache::{ToolCacheKey, ToolResultCache};
 pub use result_metadata::{
     EnhancedToolResult, ResultCompleteness, ResultMetadata, ResultScorer, ScorerRegistry,

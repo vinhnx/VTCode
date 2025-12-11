@@ -2,21 +2,16 @@ use serde::{Deserialize, Serialize};
 
 /// Trust model for third-party plugins.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum PluginTrustLevel {
     /// Default sandboxed mode; restricts elevated capabilities.
+    #[default]
     Sandbox,
     /// Explicitly trusted plugins that may request expanded capabilities.
     Trusted,
     /// Untrusted plugins run with strict isolation.
     Untrusted,
-}
-
-impl Default for PluginTrustLevel {
-    fn default() -> Self {
-        PluginTrustLevel::Sandbox
-    }
 }
 
 /// Runtime configuration for dynamic plugin loading.

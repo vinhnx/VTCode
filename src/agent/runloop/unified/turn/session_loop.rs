@@ -5,10 +5,12 @@ use anyhow::{Context, Result};
 use chrono::Local;
 use crossterm::terminal::disable_raw_mode;
 use std::collections::VecDeque;
+use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
+use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::Notify;
 
 use crate::agent::runloop::unified::turn::session::slash_commands;
@@ -893,6 +895,26 @@ pub(crate) async fn run_single_agent_loop_unified(
                     uni::MessageContent::text(input.to_string())
                 }
             };
+
+            // #region agent log
+            if let Ok(mut file) = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open("/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.cursor/debug.log")
+            {
+                let _ = writeln!(
+                    file,
+                    "{{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H3\",\"location\":\"session_loop.rs:parse_at_patterns\",\"message\":\"pre-parse user input\",\"data\":{{\"len\":{},\"newline_count\":{},\"starts_with_cmd\":{}}},\"timestamp\":{}}}",
+                    input.len(),
+                    input.matches('\n').count(),
+                    input.starts_with('/'),
+                    SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_millis()
+                );
+            }
+            // #endregion
 
             // Apply prompt refinement if enabled
             let refined_content = match &processed_content {

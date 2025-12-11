@@ -21,6 +21,10 @@ pub struct PolicyDecision {
 
 #[async_trait]
 pub trait ReinforcementPolicy: Send + Sync {
-    async fn select_action(&self, actions: &[String], context: &PolicyContext) -> Result<PolicyDecision>;
+    async fn select_action(
+        &self,
+        actions: &[String],
+        context: &PolicyContext,
+    ) -> Result<PolicyDecision>;
     async fn update_reward(&self, action: &str, signal: &RewardSignal) -> Result<()>;
 }

@@ -5,6 +5,7 @@ mod scheduler;
 
 use anyhow::{Context, Result};
 use serde_json::Value;
+use std::fmt;
 use std::sync::Arc;
 
 pub use executor::{ExecutorRegistry, LocalExecutor, WorkExecutor};
@@ -19,13 +20,13 @@ pub enum ExecutionTarget {
     Custom(String),
 }
 
-impl ToString for ExecutionTarget {
-    fn to_string(&self) -> String {
+impl fmt::Display for ExecutionTarget {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ExecutionTarget::Cloud => "cloud".into(),
-            ExecutionTarget::Edge => "edge".into(),
-            ExecutionTarget::OnPrem => "on-prem".into(),
-            ExecutionTarget::Custom(name) => name.clone(),
+            ExecutionTarget::Cloud => write!(f, "cloud"),
+            ExecutionTarget::Edge => write!(f, "edge"),
+            ExecutionTarget::OnPrem => write!(f, "on-prem"),
+            ExecutionTarget::Custom(name) => write!(f, "{name}"),
         }
     }
 }
@@ -40,7 +41,12 @@ pub struct ScheduledWork {
 }
 
 impl ScheduledWork {
-    pub fn new(id: impl Into<String>, target: ExecutionTarget, payload: Value, metadata: Value) -> Self {
+    pub fn new(
+        id: impl Into<String>,
+        target: ExecutionTarget,
+        payload: Value,
+        metadata: Value,
+    ) -> Self {
         Self {
             id: id.into(),
             target,
@@ -51,7 +57,6 @@ impl ScheduledWork {
 }
 
 /// Main orchestrator that coordinates scheduling and execution.
-#[derive(Debug)]
 pub struct DistributedOrchestrator {
     scheduler: Scheduler,
     executors: ExecutorRegistry,
@@ -60,9 +65,9 @@ pub struct DistributedOrchestrator {
 impl DistributedOrchestrator {
     pub fn new() -> Self {
         let mut executors = ExecutorRegistry::default();
-        executors.register("cloud", Arc::new(LocalExecutor::default()));
-        executors.register("edge", Arc::new(LocalExecutor::default()));
-        executors.register("on-prem", Arc::new(LocalExecutor::default()));
+        executors.register("cloud", Arc::new(LocalExecutor));
+        executors.register("edge", Arc::new(LocalExecutor));
+        executors.register("on-prem", Arc::new(LocalExecutor));
 
         Self {
             scheduler: Scheduler::new(),
@@ -70,7 +75,11 @@ impl DistributedOrchestrator {
         }
     }
 
-    pub fn register_executor(&mut self, target: impl Into<String>, executor: Arc<dyn WorkExecutor>) {
+    pub fn register_executor(
+        &mut self,
+        target: impl Into<String>,
+        executor: Arc<dyn WorkExecutor>,
+    ) {
         self.executors.register(target, executor);
     }
 
@@ -96,6 +105,12 @@ impl DistributedOrchestrator {
 
     pub async fn queue_depth(&self) -> usize {
         self.scheduler.queue_depth().await
+    }
+}
+
+impl Default for DistributedOrchestrator {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

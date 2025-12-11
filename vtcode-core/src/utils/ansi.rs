@@ -14,8 +14,10 @@ use anstream::{AutoStream, ColorChoice};
 use anstyle::{Ansi256Color, AnsiColor, Color as AnsiColorEnum, Effects, Reset, RgbColor, Style};
 use anyhow::{Result, anyhow};
 use ratatui::style::{Color as RatColor, Modifier as RatModifier, Style as RatatuiStyle};
+use std::fs::OpenOptions;
 use std::io::{self, Write};
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Styles available for rendering messages
 #[derive(Clone, Copy, Debug)]
@@ -98,14 +100,17 @@ impl AnsiRenderer {
         highlight_config: SyntaxHighlightingConfig,
     ) -> Self {
         let mut renderer = Self::stdout();
-        renderer.highlight_config = highlight_config;
-        renderer.sink = Some(InlineSink::new(handle));
+        renderer.highlight_config = highlight_config.clone();
+        renderer.sink = Some(InlineSink::new(handle, highlight_config));
         renderer.last_line_was_empty = false;
         renderer
     }
 
     /// Override the syntax highlighting configuration.
     pub fn set_highlight_config(&mut self, config: SyntaxHighlightingConfig) {
+        if let Some(sink) = &mut self.sink {
+            sink.set_highlight_config(config.clone());
+        }
         self.highlight_config = config;
     }
 
@@ -542,6 +547,7 @@ impl AnsiRenderer {
 
 struct InlineSink {
     handle: InlineHandle,
+    highlight_config: SyntaxHighlightingConfig,
 }
 
 impl InlineSink {
@@ -601,7 +607,29 @@ impl InlineSink {
         let fallback = self.resolve_fallback_style(base_style);
         let fallback_arc = Arc::new(fallback.clone());
         let theme_styles = theme::active_styles();
-        let mut rendered = render_markdown_to_lines(text, base_style, &theme_styles, None);
+        // #region agent log
+        if let Ok(mut file) = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open("/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.cursor/debug.log")
+        {
+            let _ = writeln!(
+                file,
+                "{{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H4\",\"location\":\"utils/ansi.rs:prepare_markdown_lines\",\"message\":\"inline sink markdown render\",\"data\":{{\"highlight_passed\":false,\"indent_len\":{},\"base_fg\":{}}},\"timestamp\":{}}}",
+                indent.len(),
+                base_style.get_fg_color().is_some(),
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis()
+            );
+        }
+        // #endregion
+        let highlight_cfg = self
+            .highlight_config
+            .enabled
+            .then_some(&self.highlight_config);
+        let mut rendered = render_markdown_to_lines(text, base_style, &theme_styles, highlight_cfg);
 
         if rendered.is_empty() {
             rendered.push(MarkdownLine::default());
@@ -695,8 +723,15 @@ impl InlineSink {
         crate::utils::transcript::replace_last(count, plain);
     }
 
-    fn new(handle: InlineHandle) -> Self {
-        Self { handle }
+    fn new(handle: InlineHandle, highlight_config: SyntaxHighlightingConfig) -> Self {
+        Self {
+            handle,
+            highlight_config,
+        }
+    }
+
+    fn set_highlight_config(&mut self, highlight_config: SyntaxHighlightingConfig) {
+        self.highlight_config = highlight_config;
     }
 
     fn show_list_modal(
@@ -1042,7 +1077,7 @@ mod tests {
     #[test]
     fn convert_plain_lines_preserves_ansi_styles() {
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-        let sink = InlineSink::new(InlineHandle { sender });
+        let sink = InlineSink::new(InlineHandle { sender }, SyntaxHighlightingConfig::default());
         let fallback = InlineTextStyle {
             color: Some(AnsiColorEnum::Ansi(AnsiColor::Green)),
             bg_color: None,
@@ -1068,7 +1103,7 @@ mod tests {
     #[test]
     fn convert_plain_lines_retains_trailing_newline() {
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-        let sink = InlineSink::new(InlineHandle { sender });
+        let sink = InlineSink::new(InlineHandle { sender }, SyntaxHighlightingConfig::default());
         let fallback = InlineTextStyle::default();
 
         let (converted, plain) = sink.convert_plain_lines("hello\n", &fallback);
@@ -1083,7 +1118,8 @@ mod tests {
     fn write_multiline_combines_tool_lines() {
         use crate::ui::InlineCommand;
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
-        let mut sink = InlineSink::new(InlineHandle { sender });
+        let mut sink =
+            InlineSink::new(InlineHandle { sender }, SyntaxHighlightingConfig::default());
         let style = InlineTextStyle::default();
         // Use Tool kind to verify that multiple lines are combined into a single AppendLine command
         let kind = InlineMessageKind::Tool;
@@ -1099,6 +1135,32 @@ mod tests {
             }
         }
         assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn prepare_markdown_lines_uses_syntax_highlighting_config() {
+        let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+        let mut config = SyntaxHighlightingConfig::default();
+        config.enabled = true;
+        config.enabled_languages = vec!["rust".to_string()];
+        let sink = InlineSink::new(InlineHandle { sender }, config);
+        let base_style = MessageStyle::Response.style();
+        let markdown = "```rust\nlet value = 1;\n```";
+
+        let (prepared, plain, _) = sink.prepare_markdown_lines(markdown, "", base_style);
+
+        let (segments, plain_line) = prepared
+            .iter()
+            .zip(plain.iter())
+            .find(|(_, line)| line.contains("let value = 1;"))
+            .expect("code line exists");
+
+        assert!(
+            segments.len() > 2,
+            "expected highlighted segments, got {}, line: {}",
+            segments.len(),
+            plain_line
+        );
     }
 
     #[test]
