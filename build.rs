@@ -1,7 +1,7 @@
 fn main() {
     // Suppress macOS malloc warnings in build output
     #[cfg(target_os = "macos")]
-    {
+    unsafe {
         std::env::set_var("MallocStackLogging", "0");
         std::env::set_var("MALLOCSTACKTOOLSDIR", "");
     }
