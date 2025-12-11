@@ -178,6 +178,7 @@ pub mod token_metrics;
 pub mod tool_bridge;
 pub mod types;
 pub mod utils; // Shared utilities for request/response processing
+pub mod rl;
 
 #[cfg(test)]
 mod error_display_test;
@@ -197,3 +198,7 @@ pub use tool_bridge::{
 
 pub use token_metrics::{TokenCounter, TokenMetrics, TokenTypeMetrics};
 pub use types::{BackendKind, LLMError, LLMResponse};
+pub use rl::{
+    ActorCriticPolicy, EpsilonGreedyBandit, PolicyContext, PolicyDecision, ReinforcementPolicy,
+    RewardLedger, RewardSignal, RlEngine,
+};

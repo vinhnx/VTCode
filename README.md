@@ -47,18 +47,20 @@
 
 [![Run in Smithery](https://smithery.ai/badge/skills/vinhnx)](https://smithery.ai/skills?ns=vinhnx&utm_source=github&utm_medium=badge)
 
-
 **macOS & Linux:**
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.sh | bash
 ```
 
 **Windows (PowerShell):**
+
 ```powershell
 irm https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.ps1 | iex
 ```
 
 **Other Distribution Channels:**
+
 ```bash
 # Cargo
 cargo install vtcode
@@ -101,6 +103,27 @@ VT Code supports a rich set of configuration options, with preferences stored in
 -   **Security Settings**: Configure human-in-the-loop approval and workspace boundaries
 -   **Performance Tuning**: Adjust context limits, timeouts, and caching behavior
 
+### RL Optimization Loop
+
+-   Adaptive action selection via bandit (default) or actor-critic strategies
+-   Reward shaping from latency/success signals; opt-in under `[optimization]`
+-   Hot-swappable to favor low-latency targets (cloud/edge/on-prem executors)
+
+```toml
+[optimization]
+enabled = true
+strategy = "bandit" # or "actor_critic"
+
+[optimization.bandit]
+exploration_epsilon = 0.1
+latency_weight = 0.35
+
+[optimization.reward_shaping]
+success_reward = 1.0
+timeout_penalty = -0.8
+latency_penalty_weight = 0.25
+```
+
 For full configuration options, see [Configuration](./docs/config/CONFIGURATION_PRECEDENCE.md).
 
 ---
@@ -133,13 +156,13 @@ See [Security Model](./docs/SECURITY_MODEL.md) for details.
 ### Docs & Examples
 
 -   [**Installation**](./docs/installation/README.md)
-     -   [Native Installers](./docs/installation/NATIVE_INSTALLERS.md)
-     -   [Quick Reference](./docs/installation/QUICK_REFERENCE.md)
+    -   [Native Installers](./docs/installation/NATIVE_INSTALLERS.md)
+    -   [Quick Reference](./docs/installation/QUICK_REFERENCE.md)
 -   [**Getting started**](./docs/user-guide/getting-started.md)
-     -   [Interactive mode](./docs/user-guide/interactive-mode.md)
-     -   [Command line interface](./docs/user-guide/commands.md)
-     -   [Custom prompts](./docs/user-guide/custom-prompts.md)
-     -   [Configuration](./docs/config/CONFIGURATION_PRECEDENCE.md)
+    -   [Interactive mode](./docs/user-guide/interactive-mode.md)
+    -   [Command line interface](./docs/user-guide/commands.md)
+    -   [Custom prompts](./docs/user-guide/custom-prompts.md)
+    -   [Configuration](./docs/config/CONFIGURATION_PRECEDENCE.md)
 -   [**AI Provider Setup**](./docs/PROVIDER_GUIDES.md) - Complete guides for configuring different LLM providers:
     -   [OpenAI, Anthropic, Google Gemini](./docs/user-guide/getting-started.md#configure-your-llm-provider)
     -   [OpenRouter](./docs/providers/openrouter.md)
@@ -155,17 +178,17 @@ See [Security Model](./docs/SECURITY_MODEL.md) for details.
 -   [**Custom Prompts**](./docs/user-guide/custom-prompts.md)
 -   [**Exec Mode**](./docs/user-guide/exec-mode.md)
 -   [**Development**](./docs/development/README.md)
-     -   [Testing](./docs/development/testing.md)
-     -   [CI/CD](./docs/development/ci-cd.md)
+    -   [Testing](./docs/development/testing.md)
+    -   [CI/CD](./docs/development/ci-cd.md)
 -   [**FAQ**](./docs/FAQ.md) - Frequently asked questions about VT Code
 -   [**TUI & Async Guides**](./docs/guides/)
-     -   [Event Handling](./docs/guides/tui-event-handling.md) - Terminal event architecture and patterns
-     -   [Async Architecture](./docs/guides/async-architecture.md) - Tokio async/await design and best practices
-     -   [Rendering Best Practices](./docs/guides/terminal-rendering-best-practices.md) - Widget rendering and display optimization
+    -   [Event Handling](./docs/guides/tui-event-handling.md) - Terminal event architecture and patterns
+    -   [Async Architecture](./docs/guides/async-architecture.md) - Tokio async/await design and best practices
+    -   [Rendering Best Practices](./docs/guides/terminal-rendering-best-practices.md) - Widget rendering and display optimization
 -   [**Ratatui Integration**](./docs/RATATUI_IMPROVEMENTS_SUMMARY.md) - Complete integration of Ratatui FAQ best practices
-     -   [Summary](./docs/RATATUI_IMPROVEMENTS_SUMMARY.md) - Overview of all improvements
-     -   [FAQ Integration](./docs/RATATUI_FAQ_INTEGRATION.md) - Mapping of FAQ topics to code
-     -   [Async Improvements](./docs/ASYNC_IMPROVEMENTS.md) - Tokio best practices applied
+    -   [Summary](./docs/RATATUI_IMPROVEMENTS_SUMMARY.md) - Overview of all improvements
+    -   [FAQ Integration](./docs/RATATUI_FAQ_INTEGRATION.md) - Mapping of FAQ topics to code
+    -   [Async Improvements](./docs/ASYNC_IMPROVEMENTS.md) - Tokio best practices applied
 -   [**Architecture**](./docs/ARCHITECTURE.md)
 -   [**Security**](./docs/SECURITY_MODEL.md)
     -   [Security Model](./docs/SECURITY_MODEL.md)

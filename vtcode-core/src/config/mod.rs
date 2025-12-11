@@ -30,7 +30,12 @@ pub use context::{ContextFeaturesConfig, LedgerConfig};
 pub use core::{
     AgentConfig, AgentCustomPromptsConfig, AgentOnboardingConfig, AutomationConfig, CommandsConfig,
     FullAutoConfig, ModelConfig, PermissionsConfig, PromptCachingConfig,
-    ProviderPromptCachingConfig, SecurityConfig, ToolPolicy, ToolsConfig,
+    ProviderPromptCachingConfig, ReinforcementLearningConfig, SecurityConfig, ToolPolicy,
+    ToolsConfig,
+};
+pub use core::{PluginRuntimeConfig, PluginTrustLevel};
+pub use core::{
+    ActorCriticConfig, BanditConfig, RewardShapingConfig, RlStrategy,
 };
 pub use defaults::{
     ConfigDefaultsProvider, ContextStoreDefaults, PerformanceDefaults, ScenarioDefaults,

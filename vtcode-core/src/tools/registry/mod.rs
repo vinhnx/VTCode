@@ -2179,6 +2179,11 @@ impl ToolRegistry {
         self.execution_history.get_recent_records(count)
     }
 
+    /// Get recent tool executions (successes and failures)
+    pub fn get_recent_tool_records(&self, count: usize) -> Vec<ToolExecutionRecord> {
+        self.execution_history.get_recent_records(count)
+    }
+
     /// Get recent tool execution failures
     pub fn get_recent_tool_failures(&self, count: usize) -> Vec<ToolExecutionRecord> {
         self.execution_history.get_recent_failures(count)
@@ -2207,6 +2212,7 @@ mod tests {
     use serde_json::json;
     use std::time::Duration;
     use tempfile::TempDir;
+    use crate::tools::plan::{PlanCompletionState, PlanStep, StepStatus, UpdatePlanArgs};
 
     const CUSTOM_TOOL_NAME: &str = "custom_test_tool";
 
@@ -2261,6 +2267,70 @@ mod tests {
             .execute_tool(CUSTOM_TOOL_NAME, json!({"input": "value"}))
             .await?;
         assert!(response["success"].as_bool().unwrap_or(false));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn harness_snapshot_tracks_session_task_and_plan() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+
+        registry.set_harness_session("session-test");
+        registry.set_harness_task(Some("task-123".to_owned()));
+
+        let plan_manager = registry.plan_manager();
+        let updated_plan = plan_manager.update_plan(UpdatePlanArgs {
+            explanation: Some("ensure snapshot captures plan state".to_owned()),
+            plan: vec![PlanStep {
+                step: "do-a-thing".to_owned(),
+                status: StepStatus::InProgress,
+            }],
+        })?;
+
+        let snapshot = registry.harness_context_snapshot();
+
+        assert_eq!(snapshot.session_id, "session-test");
+        assert_eq!(snapshot.task_id.as_deref(), Some("task-123"));
+        assert_eq!(snapshot.plan_version, updated_plan.version);
+        assert_eq!(snapshot.plan_summary.total_steps, 1);
+        assert_eq!(snapshot.plan_summary.status, PlanCompletionState::InProgress);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn execution_history_records_harness_context() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+
+        registry.set_harness_session("session-history");
+        registry.set_harness_task(Some("task-history".to_owned()));
+
+        registry.register_tool(ToolRegistration::from_tool_instance(
+            CUSTOM_TOOL_NAME,
+            CapabilityLevel::CodeSearch,
+            CustomEchoTool,
+        ))?;
+        registry.allow_all_tools().await?;
+
+        let args = json!({"input": "value"});
+        let response = registry.execute_tool(CUSTOM_TOOL_NAME, args.clone()).await?;
+        assert!(response["success"].as_bool().unwrap_or(false));
+
+        let records = registry.get_recent_tool_records(1);
+        let record = records.first().expect("execution record captured");
+        assert_eq!(record.tool_name, CUSTOM_TOOL_NAME);
+        assert_eq!(record.context.session_id, "session-history");
+        assert_eq!(record.context.task_id.as_deref(), Some("task-history"));
+        assert_eq!(record.args, args);
+        assert!(record.success);
+
+        let current_plan = registry.current_plan();
+        assert_eq!(
+            record.context.plan_summary.total_steps,
+            current_plan.summary.total_steps
+        );
+
         Ok(())
     }
 

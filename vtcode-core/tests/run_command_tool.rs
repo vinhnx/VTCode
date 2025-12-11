@@ -1,15 +1,15 @@
 use anyhow::Result;
 use serde_json::json;
-use tempfile::tempdir;
 use vtcode_core::config::constants::tools;
-use vtcode_core::tools::ToolRegistry;
+
+mod support;
+use support::TestHarness;
 
 #[tokio::test]
 async fn run_command_uses_pty_backend() -> Result<()> {
-    let temp_dir = tempdir()?;
-    std::fs::write(temp_dir.path().join("sample.txt"), "hello")?;
-
-    let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+    let harness = TestHarness::new()?;
+    harness.write_file("sample.txt", "hello")?;
+    let mut registry = harness.registry().await;
 
     let response = registry
         .execute_tool(
@@ -34,10 +34,9 @@ async fn run_command_uses_pty_backend() -> Result<()> {
 
 #[tokio::test]
 async fn run_command_accepts_indexed_arguments_zero_based() -> Result<()> {
-    let temp_dir = tempdir()?;
-    std::fs::write(temp_dir.path().join("sample.txt"), "hello")?;
-
-    let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+    let harness = TestHarness::new()?;
+    harness.write_file("sample.txt", "hello")?;
+    let mut registry = harness.registry().await;
 
     let response = registry
         .execute_tool(
@@ -59,10 +58,9 @@ async fn run_command_accepts_indexed_arguments_zero_based() -> Result<()> {
 
 #[tokio::test]
 async fn run_command_accepts_indexed_arguments_one_based() -> Result<()> {
-    let temp_dir = tempdir()?;
-    std::fs::write(temp_dir.path().join("sample2.txt"), "hello2")?;
-
-    let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+    let harness = TestHarness::new()?;
+    harness.write_file("sample2.txt", "hello2")?;
+    let mut registry = harness.registry().await;
 
     let response = registry
         .execute_tool(

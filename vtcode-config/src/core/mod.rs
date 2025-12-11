@@ -3,15 +3,18 @@ pub mod automation;
 pub mod commands;
 pub mod model;
 pub mod permissions;
+pub mod plugins;
 pub mod prompt_cache;
 pub mod security;
 pub mod tools;
+pub mod optimization;
 
 pub use agent::{AgentConfig, AgentCustomPromptsConfig, AgentOnboardingConfig};
 pub use automation::{AutomationConfig, FullAutoConfig};
 pub use commands::CommandsConfig;
 pub use model::ModelConfig;
 pub use permissions::PermissionsConfig;
+pub use plugins::{PluginRuntimeConfig, PluginTrustLevel};
 pub use prompt_cache::{
     AnthropicPromptCacheSettings, DeepSeekPromptCacheSettings, GeminiPromptCacheMode,
     GeminiPromptCacheSettings, MoonshotPromptCacheSettings, OpenAIPromptCacheSettings,
@@ -20,3 +23,6 @@ pub use prompt_cache::{
 };
 pub use security::SecurityConfig;
 pub use tools::{ToolPolicy, ToolsConfig, WebFetchConfig};
+pub use optimization::{
+    ActorCriticConfig, BanditConfig, ReinforcementLearningConfig, RlStrategy, RewardShapingConfig,
+};

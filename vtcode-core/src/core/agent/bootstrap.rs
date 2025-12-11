@@ -6,19 +6,24 @@
 //! applications or exposing a reduced open-source surface area) without relying
 //! on the binary crate's internal setup.
 
+use std::fs;
+use std::path::Path;
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result};
 
 use crate::config::models::ModelId;
 use crate::config::types::{AgentConfig, SessionInfo};
+use crate::utils::error_messages::{ERR_CREATE_DIR, ERR_GET_METADATA};
 
 use crate::core::decision_tracker::DecisionTracker;
 use crate::core::error_recovery::ErrorRecoveryManager;
+use crate::ctx_err;
 use crate::llm::{AnyClient, make_client};
 use crate::tools::ToolRegistry;
 use crate::tools::tree_sitter::TreeSitterAnalyzer;
+use tracing::warn;
 
 /// Collection of dependencies required by the [`Agent`](super::core::Agent).
 ///
@@ -103,6 +108,8 @@ impl<'config> AgentComponentBuilder<'config> {
 
     /// Build the component set, lazily constructing any missing dependencies.
     pub async fn build(mut self) -> Result<AgentComponentSet> {
+        ensure_workspace_ready(&self.config.workspace)?;
+
         let client = match self.client.take() {
             Some(client) => client,
             None => create_llm_client(self.config)?,
@@ -157,15 +164,52 @@ fn create_llm_client(config: &AgentConfig) -> Result<AnyClient> {
 fn create_session_info() -> Result<SessionInfo> {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .context("System time is before the UNIX epoch")?;
+        .map_err(|err| err.duration());
 
-    Ok(SessionInfo {
-        session_id: format!("session_{}", now.as_secs()),
-        start_time: now.as_secs(),
+    Ok(build_session_info(now))
+}
+
+fn build_session_info(duration: Result<Duration, Duration>) -> SessionInfo {
+    let (start_time, session_id) = match duration {
+        Ok(duration) => {
+            let secs = duration.as_secs();
+            (secs, format!("session_{}", secs))
+        }
+        Err(delta) => {
+            let fallback = delta.as_secs();
+            warn!(
+                fallback_seconds = fallback,
+                "System time is before UNIX epoch; using fallback session id"
+            );
+            (fallback, format!("session_fallback_{}", fallback))
+        }
+    };
+
+    SessionInfo {
+        session_id,
+        start_time,
         total_turns: 0,
         total_decisions: 0,
         error_count: 0,
-    })
+    }
+}
+
+fn ensure_workspace_ready(workspace_root: &Path) -> Result<()> {
+    if workspace_root.exists() {
+        let metadata = fs::metadata(workspace_root)
+            .with_context(|| ctx_err!(ERR_GET_METADATA, workspace_root.display()))?;
+
+        anyhow::ensure!(
+            metadata.is_dir(),
+            "Workspace path is not a directory: {}",
+            workspace_root.display()
+        );
+    } else {
+        fs::create_dir_all(workspace_root)
+            .with_context(|| ctx_err!(ERR_CREATE_DIR, workspace_root.display()))?;
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -263,5 +307,49 @@ mod tests {
             Arc::as_ptr(&components.tool_registry),
             Arc::as_ptr(&registry)
         );
+    }
+
+    #[test]
+    fn session_info_uses_fallback_when_clock_is_before_epoch() {
+        let info = build_session_info(Err(Duration::from_secs(42)));
+        assert_eq!(info.session_id, "session_fallback_42");
+        assert_eq!(info.start_time, 42);
+        assert_eq!(info.total_turns, 0);
+    }
+
+    #[tokio::test]
+    async fn rejects_non_directory_workspace() {
+        let temp_dir = tempfile::tempdir().expect("temp dir");
+        let file_path = temp_dir.path().join("not_dir");
+        std::fs::write(&file_path, "not a dir").expect("write file");
+
+        let agent_config = AgentConfig {
+            workspace: file_path.clone(),
+            ..sample_config(temp_dir.path())
+        };
+
+        let result = AgentComponentBuilder::new(&agent_config).build().await;
+        assert!(result.is_err(), "expected workspace validation to fail");
+    }
+
+    fn sample_config(workspace: &std::path::Path) -> AgentConfig {
+        AgentConfig {
+            model: models::GEMINI_2_5_FLASH_PREVIEW.to_string(),
+            api_key: "test-api-key".to_owned(),
+            provider: Provider::Gemini.to_string(),
+            api_key_env: Provider::Gemini.default_api_key_env().to_string(),
+            workspace: workspace.to_path_buf(),
+            verbose: false,
+            theme: "default".to_owned(),
+            reasoning_effort: ReasoningEffortLevel::default(),
+            ui_surface: UiSurfacePreference::Inline,
+            prompt_cache: PromptCachingConfig::default(),
+            model_source: ModelSelectionSource::WorkspaceConfig,
+            custom_api_keys: BTreeMap::new(),
+            checkpointing_enabled: DEFAULT_CHECKPOINTS_ENABLED,
+            checkpointing_storage_dir: None,
+            checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
+            checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
+        }
     }
 }

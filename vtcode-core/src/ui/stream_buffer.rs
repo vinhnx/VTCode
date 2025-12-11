@@ -17,7 +17,7 @@ pub struct StreamConfig {
 impl Default for StreamConfig {
     fn default() -> Self {
         Self {
-            batch_size: 20,      // Flush every 20 lines
+            batch_size: 20,          // Flush every 20 lines
             max_buffer_bytes: 65536, // 64KB max buffer
         }
     }
@@ -216,7 +216,7 @@ mod tests {
             batch_size: 5,
             max_buffer_bytes: usize::MAX,
         });
-        
+
         for i in 0..5 {
             let segment = InlineSegment {
                 text: format!("line {}", i),
@@ -238,7 +238,7 @@ mod tests {
             batch_size: 100,
             max_buffer_bytes: 50,
         });
-        
+
         let segment = InlineSegment {
             text: "x".repeat(60),
             style: std::sync::Arc::new(Default::default()),
@@ -255,7 +255,7 @@ mod tests {
             style: std::sync::Arc::new(Default::default()),
         };
         buffer.append_line(vec![segment]);
-        
+
         let flushed = buffer.flush();
         assert_eq!(flushed.len(), 1);
         assert!(buffer.is_empty());
@@ -265,7 +265,7 @@ mod tests {
     fn test_streaming_context() {
         let mut ctx = StreamingContext::new(InlineMessageKind::Agent);
         assert_eq!(ctx.total_lines, 0);
-        
+
         let segment = InlineSegment {
             text: "test".to_string(),
             style: std::sync::Arc::new(Default::default()),
@@ -279,7 +279,7 @@ mod tests {
         let predictor = AllocationPredictor::new();
         let estimate = predictor.estimate_total_bytes(100);
         assert!(estimate > 0);
-        
+
         let batch = predictor.optimal_batch_size(10000);
         assert!(batch > 0 && batch <= 50);
     }

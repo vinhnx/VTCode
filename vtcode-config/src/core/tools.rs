@@ -2,6 +2,7 @@ use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
 use crate::constants::{defaults, tools};
+use crate::core::plugins::PluginRuntimeConfig;
 
 /// Tools configuration
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -36,6 +37,10 @@ pub struct ToolsConfig {
     /// Web Fetch tool security configuration
     #[serde(default)]
     pub web_fetch: WebFetchConfig,
+
+    /// Dynamic plugin runtime configuration
+    #[serde(default)]
+    pub plugins: PluginRuntimeConfig,
 }
 
 /// Web Fetch tool security configuration
@@ -99,6 +104,7 @@ impl Default for ToolsConfig {
             max_tool_loops: default_max_tool_loops(),
             max_repeated_tool_calls: default_max_repeated_tool_calls(),
             web_fetch: WebFetchConfig::default(),
+            plugins: PluginRuntimeConfig::default(),
         }
     }
 }

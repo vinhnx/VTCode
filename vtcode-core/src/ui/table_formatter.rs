@@ -58,7 +58,10 @@ pub struct TableFormatter {
 impl TableFormatter {
     /// Create a new table formatter with specified columns
     pub fn new(columns: Vec<TableColumn>, use_unicode: bool) -> Self {
-        Self { columns, use_unicode }
+        Self {
+            columns,
+            use_unicode,
+        }
     }
 
     /// Measure all content and update column widths
@@ -106,7 +109,12 @@ impl TableFormatter {
             Alignment::Center => {
                 let left_pad = padding / 2;
                 let right_pad = padding - left_pad;
-                format!("{}{}{}", " ".repeat(left_pad), content, " ".repeat(right_pad))
+                format!(
+                    "{}{}{}",
+                    " ".repeat(left_pad),
+                    content,
+                    " ".repeat(right_pad)
+                )
             }
             Alignment::Right => {
                 format!("{}{}", " ".repeat(padding), content)
@@ -138,15 +146,9 @@ impl TableFormatter {
 
     /// Render header row with separator line
     pub fn render_header(&self) -> Vec<String> {
-        let headers: Vec<String> = self.columns
-            .iter()
-            .map(|col| col.header.clone())
-            .collect();
+        let headers: Vec<String> = self.columns.iter().map(|col| col.header.clone()).collect();
 
-        vec![
-            self.render_row(&headers),
-            self.render_separator(),
-        ]
+        vec![self.render_row(&headers), self.render_separator()]
     }
 
     /// Render entire table with header, rows, and footer
@@ -179,7 +181,11 @@ impl TableFormatter {
         }
 
         // Bottom border
-        let (left, right) = if self.use_unicode { ('└', '┘') } else { ('+', '+') };
+        let (left, right) = if self.use_unicode {
+            ('└', '┘')
+        } else {
+            ('+', '+')
+        };
         let mut bottom_border = String::from(left);
         for (idx, column) in self.columns.iter().enumerate() {
             bottom_border.push_str(&line.to_string().repeat(column.width + 2));
@@ -198,7 +204,11 @@ impl TableFormatter {
     pub fn total_width(&self) -> usize {
         // Left border (1) + cells with padding (each 2) + separators (n-1) + right border (1)
         let content_width: usize = self.columns.iter().map(|c| c.width + 2).sum();
-        let separators = if self.columns.is_empty() { 0 } else { self.columns.len() - 1 };
+        let separators = if self.columns.is_empty() {
+            0
+        } else {
+            self.columns.len() - 1
+        };
         1 + content_width + separators + 1
     }
 
@@ -282,14 +292,8 @@ mod tests {
 
     #[test]
     fn test_unicode_vs_ascii() {
-        let unicode_fmt = TableFormatter::new(
-            vec![TableColumn::new("A", Alignment::Left)],
-            true,
-        );
-        let ascii_fmt = TableFormatter::new(
-            vec![TableColumn::new("A", Alignment::Left)],
-            false,
-        );
+        let unicode_fmt = TableFormatter::new(vec![TableColumn::new("A", Alignment::Left)], true);
+        let ascii_fmt = TableFormatter::new(vec![TableColumn::new("A", Alignment::Left)], false);
 
         let unicode_sep = unicode_fmt.render_separator();
         let ascii_sep = ascii_fmt.render_separator();
