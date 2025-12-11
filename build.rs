@@ -1,4 +1,11 @@
 fn main() {
+    // Suppress macOS malloc warnings in build output
+    #[cfg(target_os = "macos")]
+    {
+        std::env::set_var("MallocStackLogging", "0");
+        std::env::set_var("MALLOCSTACKTOOLSDIR", "");
+    }
+
     let git_output = std::process::Command::new("git")
         .args(["rev-parse", "--git-dir"])
         .output()

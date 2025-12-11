@@ -5,6 +5,12 @@
 
 set -e
 
+# Suppress macOS malloc warnings
+export MallocStackLogging=0
+export MALLOCSTACKTOOLSDIR=""
+export MallocErrorAbort=0
+export MallocNanoZone=0
+
 echo "VTCODE - Debug Mode (Fast Build)"
 echo "=================================="
 
@@ -67,4 +73,4 @@ if [[ -n "$WORKSPACE" ]]; then
 fi
 
 # Run with advanced features enabled by default
-cargo run --  "${EXTRA_ARGS[@]}" --show-file-diffs --debug chat
+cargo run -- "${EXTRA_ARGS[@]}" --show-file-diffs --debug chat
