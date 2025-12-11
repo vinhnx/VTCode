@@ -3,6 +3,38 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Version 0.43.0] - 2025-11-09
+# [Version 0.47.14] - 2025-12-11
+
+
+### Refactors
+    - refactor: simplify line style selection logic in tool output
+    - refactor: streamline initialization and error handling in various modules
+    - refactor: simplify ToolCallUpdateFields initialization
+    - refactor: update tool policy and improve middleware handling
+    - refactor: remove deprecated tools and update tool policies
+    - refactor: update tool policy and streamline follow-up handling
+    - refactor: enhance PTY command output summarization and follow-up handling
+    - refactor: enhance context management and prompt generation
+    - refactor: enhance system prompts with improved tool safety and execution guidelines
+    - refactor: implement tool execution retry logic and enhance error handling
+    - refactor: enhance tool policy and prompt clarity
+    - refactor: implement tool denial handling in agent runner
+    - refactor: enhance McpAllowListConfig structure and improve rule definitions
+    - refactor: improve code clarity and consistency in multiple modules
+    - refactor: streamline conditional checks and improve code readability
+    - refactor: unify token budget constants and improve context management
+
+
+### Documentation
+    - docs: update changelog for v0.47.13 [skip ci]
+
+
+### Chores
+    - chore: update VSCode extension package.json to v0.47.13 [skip ci]
+    - chore: update npm package.json to v0.47.13 [skip ci]
+    - chore: release v0.47.13
+    - chore: update VSCode extension package.json to v0.47.12 [skip ci]
+    - chore: update npm package.json to v0.47.12 [skip ci]
 # [Version 0.47.13] - 2025-12-10
 
 
