@@ -65,13 +65,11 @@ impl<'a> SystemPromptGenerator<'a> {
             let mut tools = self.context.available_tools.clone();
 
             // Sort tools by numeric suffix when present to avoid lexicographic mis-ordering
-            tools.sort_by(|a, b| {
-                match (numeric_suffix(a), numeric_suffix(b)) {
-                    (Some(na), Some(nb)) => na.cmp(&nb),
-                    (Some(_), None) => std::cmp::Ordering::Less,
-                    (None, Some(_)) => std::cmp::Ordering::Greater,
-                    _ => a.cmp(b),
-                }
+            tools.sort_by(|a, b| match (numeric_suffix(a), numeric_suffix(b)) {
+                (Some(na), Some(nb)) => na.cmp(&nb),
+                (Some(_), None) => std::cmp::Ordering::Less,
+                (None, Some(_)) => std::cmp::Ordering::Greater,
+                _ => a.cmp(b),
             });
             tools.dedup();
             let overflow = tools.len().saturating_sub(10);

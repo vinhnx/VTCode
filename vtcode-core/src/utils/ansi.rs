@@ -7,14 +7,15 @@ use crate::ui::tui::{
     InlineSegment, InlineTextStyle, SecurePromptConfig, convert_style as convert_to_inline_style,
     theme_from_styles,
 };
+use crate::utils::ansi_capabilities::AnsiCapabilities;
 use crate::utils::transcript;
 use ansi_to_tui::IntoText;
 use anstream::{AutoStream, ColorChoice};
 use anstyle::{Ansi256Color, AnsiColor, Color as AnsiColorEnum, Effects, Reset, RgbColor, Style};
-use anstyle_query::{clicolor, clicolor_force, no_color, term_supports_color};
 use anyhow::{Result, anyhow};
 use ratatui::style::{Color as RatColor, Modifier as RatModifier, Style as RatatuiStyle};
 use std::io::{self, Write};
+use std::sync::Arc;
 
 /// Styles available for rendering messages
 #[derive(Clone, Copy, Debug)]
@@ -67,13 +68,14 @@ pub struct AnsiRenderer {
     sink: Option<InlineSink>,
     last_line_was_empty: bool,
     highlight_config: SyntaxHighlightingConfig,
+    capabilities: AnsiCapabilities,
 }
 
 impl AnsiRenderer {
     /// Create a new renderer for stdout
     pub fn stdout() -> Self {
-        let color =
-            clicolor_force() || (!no_color() && clicolor().unwrap_or_else(term_supports_color));
+        let capabilities = AnsiCapabilities::detect();
+        let color = capabilities.supports_color();
         let choice = if color {
             ColorChoice::Auto
         } else {
@@ -86,6 +88,7 @@ impl AnsiRenderer {
             sink: None,
             last_line_was_empty: false,
             highlight_config: SyntaxHighlightingConfig::default(),
+            capabilities,
         }
     }
 
@@ -146,6 +149,31 @@ impl AnsiRenderer {
         self.sink.is_some()
     }
 
+    /// Get the terminal's detected ANSI capabilities
+    pub fn capabilities(&self) -> &AnsiCapabilities {
+        &self.capabilities
+    }
+
+    /// Check if unicode should be used for formatting (tables, boxes, etc.)
+    pub fn should_use_unicode_formatting(&self) -> bool {
+        self.capabilities.should_use_unicode_boxes()
+    }
+
+    /// Check if 256-color output is supported
+    pub fn supports_256_colors(&self) -> bool {
+        self.capabilities.supports_256_colors()
+    }
+
+    /// Check if true color (24-bit) output is supported
+    pub fn supports_true_color(&self) -> bool {
+        self.capabilities.supports_true_color()
+    }
+
+    /// Check if should use unicode characters based on terminal capabilities
+    pub fn should_use_unicode(&self) -> bool {
+        self.capabilities.unicode_support
+    }
+
     pub fn show_list_modal(
         &mut self,
         title: &str,
@@ -155,7 +183,7 @@ impl AnsiRenderer {
         search: Option<InlineListSearchConfig>,
     ) {
         if let Some(sink) = &self.sink {
-            sink.show_list_modal(title.to_string(), lines, items, selected, search);
+            sink.show_list_modal(title.into(), lines, items, selected, search);
         }
     }
 
@@ -166,7 +194,7 @@ impl AnsiRenderer {
         prompt_label: String,
     ) {
         if let Some(sink) = &self.sink {
-            sink.show_secure_prompt_modal(title.to_string(), lines, prompt_label);
+            sink.show_secure_prompt_modal(title.into(), lines, prompt_label);
         }
     }
 
@@ -191,10 +219,14 @@ impl AnsiRenderer {
     pub fn flush(&mut self, style: MessageStyle) -> Result<()> {
         if let Some(sink) = &mut self.sink {
             let indent = style.indent();
-            let line = self.buffer.clone();
             // Track if this line is empty
-            self.last_line_was_empty = line.is_empty() && indent.is_empty();
-            sink.write_line(style.style(), indent, &line, Self::message_kind(style))?;
+            self.last_line_was_empty = self.buffer.is_empty() && indent.is_empty();
+            sink.write_line(
+                style.style(),
+                indent,
+                &self.buffer,
+                Self::message_kind(style),
+            )?;
             self.buffer.clear();
             return Ok(());
         }
@@ -336,6 +368,12 @@ impl AnsiRenderer {
         if lines.is_empty() {
             lines.push(MarkdownLine::default());
         }
+        
+        // Pre-allocate buffer for markdown output if rendering many lines
+        if lines.len() > 10 {
+            self.buffer.reserve(lines.len() * 80);
+        }
+        
         for line in lines {
             self.write_markdown_line(style, indent, line)?;
         }
@@ -398,6 +436,7 @@ impl AnsiRenderer {
 
         if let Some(sink) = &mut self.sink {
             let fallback = sink.resolve_fallback_style(base_style);
+            let fallback_arc = Arc::new(fallback.clone());
             let mut prepared: Vec<Vec<InlineSegment>> = Vec::new();
             let mut plain_lines: Vec<String> = Vec::new();
 
@@ -408,8 +447,8 @@ impl AnsiRenderer {
                         segments.insert(
                             0,
                             InlineSegment {
-                                text: indent.to_string(),
-                                style: fallback.clone(),
+                                text: indent.to_owned(),
+                                style: Arc::clone(&fallback_arc),
                             },
                         );
                         plain_line.insert_str(0, indent);
@@ -560,6 +599,7 @@ impl InlineSink {
         base_style: Style,
     ) -> (Vec<Vec<InlineSegment>>, Vec<String>, bool) {
         let fallback = self.resolve_fallback_style(base_style);
+        let fallback_arc = Arc::new(fallback.clone());
         let theme_styles = theme::active_styles();
         let mut rendered = render_markdown_to_lines(text, base_style, &theme_styles, None);
 
@@ -571,8 +611,9 @@ impl InlineSink {
         let mut plain = Vec::with_capacity(rendered.len());
 
         for line in rendered {
-            let mut segments = Vec::new();
-            let mut plain_line = String::new();
+            // Pre-allocate segments and plain text with estimated capacity
+            let mut segments = Vec::with_capacity(line.segments.len());
+            let mut plain_line = String::with_capacity(120);
 
             let has_content = line
                 .segments
@@ -582,7 +623,7 @@ impl InlineSink {
             if !indent.is_empty() && has_content {
                 segments.push(InlineSegment {
                     text: indent.to_string(),
-                    style: fallback.clone(),
+                    style: Arc::clone(&fallback_arc),
                 });
                 plain_line.push_str(indent);
             }
@@ -603,7 +644,7 @@ impl InlineSink {
                 plain_line.push_str(&segment.text);
                 segments.push(InlineSegment {
                     text: segment.text,
-                    style: inline_style,
+                    style: Arc::new(inline_style),
                 });
             }
 
@@ -706,7 +747,7 @@ impl InlineSink {
         let text_style = self.resolve_fallback_style(style);
         InlineSegment {
             text: text.to_string(),
-            style: text_style,
+            style: Arc::new(text_style),
         }
     }
 
@@ -715,38 +756,41 @@ impl InlineSink {
         text: &str,
         fallback: &InlineTextStyle,
     ) -> (Vec<Vec<InlineSegment>>, Vec<String>) {
+        let fallback_arc = Arc::new(fallback.clone());
         if text.is_empty() {
             return (vec![Vec::new()], vec![String::new()]);
         }
 
         let had_trailing_newline = text.ends_with('\n');
+        let line_count_estimate = text.as_bytes().iter().filter(|&&b| b == b'\n').count() + 1;
 
         // Attempt to parse ANSI codes, with fallback to plain text
         // Note: ansi-to-tui may have issues with UTF-8 multi-byte chars mixed with ANSI codes,
         // so we validate UTF-8 integrity after parsing
         if let Ok(parsed) = text.as_bytes().into_text() {
-            let mut converted_lines = Vec::with_capacity(parsed.lines.len().max(1));
-            let mut plain_lines = Vec::with_capacity(parsed.lines.len().max(1));
+            let mut converted_lines = Vec::with_capacity(parsed.lines.len().max(line_count_estimate));
+            let mut plain_lines = Vec::with_capacity(parsed.lines.len().max(line_count_estimate));
             let base_style = RatatuiStyle::default().patch(parsed.style);
 
             for line in &parsed.lines {
-                let mut segments = Vec::new();
-                let mut plain_line = String::new();
+                // Pre-allocate segments based on typical span count (3-5 spans per line)
+                let mut segments = Vec::with_capacity(line.spans.len());
+                let mut plain_line = String::with_capacity(80);
                 let line_style = base_style.patch(line.style);
-            
+
                 for span in &line.spans {
                     // Use as_ref() to avoid unnecessary clone - Cow is already optimized
                     let content = span.content.as_ref();
                     if content.is_empty() {
                         continue;
                     }
-            
+
                     let span_style = line_style.patch(span.style);
                     let inline_style = self.inline_style_from_ratatui(span_style, fallback);
                     plain_line.push_str(content);
                     segments.push(InlineSegment {
                         text: content.to_string(),
-                        style: inline_style,
+                        style: Arc::new(inline_style),
                     });
                 }
 
@@ -777,7 +821,7 @@ impl InlineSink {
             if !line.is_empty() {
                 segments.push(InlineSegment {
                     text: line.to_string(),
-                    style: fallback.clone(),
+                    style: Arc::clone(&fallback_arc),
                 });
             }
             converted_lines.push(segments);
@@ -819,43 +863,43 @@ impl InlineSink {
         }
 
         let fallback = self.resolve_fallback_style(style);
+        let fallback_arc = Arc::new(fallback.clone());
         let (converted_lines, plain_lines) = self.convert_plain_lines(text, &fallback);
 
         // Combine multiple lines into a single append for User and Tool to avoid
         // creating a separate inline entry for each line. This prevents the
         // UI from showing a separate line per original line of tool output.
         if kind == InlineMessageKind::User || kind == InlineMessageKind::Tool {
-            let mut combined_segments = Vec::new();
-            let mut combined_plain = String::new();
+           let mut combined_segments = Vec::new();
+           let mut combined_plain = String::new();
 
-            for (mut segments, plain) in converted_lines.into_iter().zip(plain_lines.into_iter()) {
-                if !combined_segments.is_empty() {
-                    combined_segments.push(InlineSegment {
-                        text: "\n".to_owned(),
-                        style: fallback.clone(),
-                    });
-                    combined_plain.push('\n');
-                }
+           for (mut segments, plain) in converted_lines.into_iter().zip(plain_lines.into_iter()) {
+               if !combined_segments.is_empty() {
+                   combined_segments.push(InlineSegment {
+                       text: "\n".to_owned(),
+                       style: Arc::clone(&fallback_arc),
+                   });
+                   combined_plain.push('\n');
+               }
 
-                if !indent.is_empty() && !plain.is_empty() {
-                    let fallback_clone = fallback.clone();
-                    segments.insert(
-                        0,
-                        InlineSegment {
-                            text: indent.to_string(),
-                            style: fallback_clone,
-                        },
-                    );
-                    combined_plain.insert_str(0, indent);
-                } else if !indent.is_empty() && plain.is_empty() {
-                    segments.insert(
-                        0,
-                        InlineSegment {
-                            text: indent.to_string(),
-                            style: fallback.clone(),
-                        },
-                    );
-                }
+               if !indent.is_empty() && !plain.is_empty() {
+                   segments.insert(
+                       0,
+                       InlineSegment {
+                           text: indent.to_string(),
+                           style: Arc::clone(&fallback_arc),
+                       },
+                   );
+                   combined_plain.insert_str(0, indent);
+               } else if !indent.is_empty() && plain.is_empty() {
+                   segments.insert(
+                       0,
+                       InlineSegment {
+                           text: indent.to_string(),
+                           style: Arc::clone(&fallback_arc),
+                       },
+                   );
+               }
 
                 combined_segments.extend(segments);
                 combined_plain.push_str(&plain);
@@ -864,26 +908,26 @@ impl InlineSink {
             self.handle.append_line(kind, combined_segments);
             crate::utils::transcript::append(&combined_plain);
         } else {
-            let fallback_clone = if !indent.is_empty() {
-                Some(fallback.clone())
-            } else {
-                None
-            };
-            for (mut segments, mut plain) in
-                converted_lines.into_iter().zip(plain_lines.into_iter())
-            {
-                if let Some(ref style) = fallback_clone {
-                    if !plain.is_empty() {
-                        segments.insert(
-                            0,
-                            InlineSegment {
-                                text: indent.to_string(),
-                                style: style.clone(),
-                            },
-                        );
-                        plain.insert_str(0, indent);
-                    }
-                }
+           let fallback_arc_opt = if !indent.is_empty() {
+               Some(Arc::new(fallback.clone()))
+           } else {
+               None
+           };
+           for (mut segments, mut plain) in
+               converted_lines.into_iter().zip(plain_lines.into_iter())
+           {
+               if let Some(ref style_arc) = fallback_arc_opt {
+                   if !plain.is_empty() {
+                       segments.insert(
+                           0,
+                           InlineSegment {
+                               text: indent.to_string(),
+                               style: Arc::clone(style_arc),
+                           },
+                       );
+                       plain.insert_str(0, indent);
+                   }
+               }
 
                 if segments.is_empty() {
                     self.handle.append_line(kind, Vec::new());
@@ -912,6 +956,7 @@ impl InlineSink {
             return;
         }
         let fallback = self.resolve_fallback_style(style);
+        let fallback_arc = Arc::new(fallback.clone());
         let (converted_lines, _) = self.convert_plain_lines(text, &fallback);
         let line_count = converted_lines.len();
 
@@ -923,7 +968,7 @@ impl InlineSink {
                         kind,
                         InlineSegment {
                             text: "\n".to_owned(),
-                            style: fallback.clone(),
+                            style: Arc::clone(&fallback_arc),
                         },
                     );
                 }
@@ -1057,6 +1102,7 @@ mod tests {
 
     #[test]
     fn line_function_no_trailing_empty_line() {
+        use crate::utils::ansi_capabilities::AnsiCapabilities;
         use anstream::{AutoStream, ColorChoice};
 
         // Create a renderer that doesn't output to stdout
@@ -1068,6 +1114,7 @@ mod tests {
             sink: None,
             last_line_was_empty: false,
             highlight_config: SyntaxHighlightingConfig::default(),
+            capabilities: AnsiCapabilities::detect(),
         };
 
         // This should not create an extra empty line after "line 2"

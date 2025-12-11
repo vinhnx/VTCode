@@ -205,7 +205,7 @@ fn display_message_now(text: &str, kind: InlineMessageKind, style: &InlineTextSt
             kind,
             vec![InlineSegment {
                 text: text.to_string(),
-                style: style.clone(),
+                style: std::sync::Arc::new(style.clone()),
             }],
         );
     }

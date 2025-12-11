@@ -18,6 +18,9 @@ const LIST_INDENT_WIDTH: usize = 2;
 const CODE_EXTRA_INDENT: &str = "    ";
 const MAX_THEME_CACHE_SIZE: usize = 32;
 
+// Box-drawing character for table cells (replaces pipe separator)
+const TABLE_VERTICAL: &str = "│";
+
 #[derive(Clone, Debug)]
 enum MarkdownEvent {
     Start(MarkdownTag),
@@ -563,7 +566,13 @@ fn handle_start_tag(tag: MarkdownTag, context: &mut MarkdownContext<'_>) {
                 let indent = " ".repeat(state.depth * LIST_INDENT_WIDTH);
                 match &mut state.kind {
                     ListKind::Unordered => {
-                        let bullet = format!("{}- ", indent);
+                        // Use better bullet character: • (U+2022) for nested, then ◦, ▪
+                        let bullet_char = match state.depth % 3 {
+                            0 => "•",
+                            1 => "◦",
+                            _ => "▪",
+                        };
+                        let bullet = format!("{}{} ", indent, bullet_char);
                         state.continuation = format!("{}  ", indent);
                         *context.pending_list_prefix = Some(bullet);
                     }
@@ -653,10 +662,10 @@ fn handle_start_tag(tag: MarkdownTag, context: &mut MarkdownContext<'_>) {
             );
         }
         MarkdownTag::TableHead | MarkdownTag::TableCell => {
-            // Add separator between cells
+            // Add separator between cells using box-drawing character
             context.current_line.segments.push(MarkdownSegment::new(
-                context.base_style,
-                " | ",
+                context.theme_styles.secondary.italic(),
+                TABLE_VERTICAL,
             ));
         }
         MarkdownTag::FootnoteDefinition | MarkdownTag::HtmlBlock => {}
@@ -1097,5 +1106,67 @@ fn load_theme(theme_name: &str, cache: bool) -> Theme {
             .next()
             .map(|(_, theme)| theme)
             .unwrap_or_default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_markdown_unordered_list_bullets() {
+        let markdown = r#"
+- Item 1
+- Item 2
+  - Nested 1
+  - Nested 2
+- Item 3
+"#;
+
+        let lines = render_markdown(markdown);
+        let output: String = lines
+            .iter()
+            .map(|line| {
+                line.segments
+                    .iter()
+                    .map(|seg| seg.text.as_str())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        // Check for bullet characters (• for depth 0, ◦ for depth 1, etc.)
+        assert!(
+            output.contains("•") || output.contains("◦") || output.contains("▪"),
+            "Should use Unicode bullet characters instead of dashes"
+        );
+    }
+
+    #[test]
+    fn test_markdown_table_box_drawing() {
+        let markdown = r#"
+| Header 1 | Header 2 |
+|----------|----------|
+| Cell 1   | Cell 2   |
+| Cell 3   | Cell 4   |
+"#;
+
+        let lines = render_markdown(markdown);
+        let output: String = lines
+            .iter()
+            .map(|line| {
+                line.segments
+                    .iter()
+                    .map(|seg| seg.text.as_str())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        // Check for box-drawing character (│ instead of |)
+        assert!(
+            output.contains("│"),
+            "Should use box-drawing character (│) for table cells instead of pipe"
+        );
     }
 }
