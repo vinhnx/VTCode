@@ -789,7 +789,7 @@ mod tests {
     fn make_segment(text: &str) -> InlineSegment {
         InlineSegment {
             text: text.to_string(),
-            style: InlineTextStyle::default(),
+            style: std::sync::Arc::new(InlineTextStyle::default()),
         }
     }
 
@@ -1514,7 +1514,7 @@ mod tests {
             InlineMessageKind::Tool,
             InlineSegment {
                 text: "```rust\nfn demo() {}\n```".to_string(),
-                style: InlineTextStyle::default(),
+                style: std::sync::Arc::new(InlineTextStyle::default()),
             },
         );
 
@@ -1556,7 +1556,7 @@ mod tests {
             InlineMessageKind::Pty,
             vec![InlineSegment {
                 text: "first output".to_string(),
-                style: InlineTextStyle::default(),
+                style: std::sync::Arc::new(InlineTextStyle::default()),
             }],
         );
 
@@ -1605,7 +1605,7 @@ mod tests {
                 InlineMessageKind::Pty,
                 vec![InlineSegment {
                     text: label,
-                    style: InlineTextStyle::default(),
+                    style: std::sync::Arc::new(InlineTextStyle::default()),
                 }],
             );
         }
@@ -1803,7 +1803,7 @@ mod tests {
             InlineMessageKind::Tool,
             vec![InlineSegment {
                 text: "    result line".to_string(),
-                style: detail_style,
+                style: std::sync::Arc::new(detail_style),
             }],
         );
 

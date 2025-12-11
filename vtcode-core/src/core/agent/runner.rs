@@ -474,9 +474,7 @@ impl AgentRunner {
             workspace: self._workspace.clone(),
             verbose: false,
             theme: cfg.agent.theme.clone(),
-            reasoning_effort: self
-                .reasoning_effort
-                .unwrap_or(cfg.agent.reasoning_effort),
+            reasoning_effort: self.reasoning_effort.unwrap_or(cfg.agent.reasoning_effort),
             ui_surface: cfg.agent.ui_surface,
             prompt_cache: cfg.prompt_cache.clone(),
             model_source: ModelSelectionSource::WorkspaceConfig,

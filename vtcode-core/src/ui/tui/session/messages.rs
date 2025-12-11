@@ -161,7 +161,7 @@ impl Session {
                 && line.kind == kind
             {
                 if let Some(last) = line.segments.last_mut()
-                    && last.style == *style
+                    && &*last.style == style
                 {
                     last.text.push_str(text);
                     appended = true;
@@ -170,7 +170,7 @@ impl Session {
                 if !appended {
                     line.segments.push(InlineSegment {
                         text: text.to_owned(),
-                        style: style.clone(),
+                        style: std::sync::Arc::new(style.clone()),
                     });
                     appended = true;
                     mark_revision = true;
@@ -202,7 +202,7 @@ impl Session {
             if let Some(line) = self.lines.last_mut() {
                 line.segments.push(InlineSegment {
                     text: text.to_owned(),
-                    style: style.clone(),
+                    style: std::sync::Arc::new(style.clone()),
                 });
                 line.revision = revision;
             }
@@ -215,7 +215,7 @@ impl Session {
             kind,
             segments: vec![InlineSegment {
                 text: text.to_owned(),
-                style: style.clone(),
+                style: std::sync::Arc::new(style.clone()),
             }],
             revision,
         });

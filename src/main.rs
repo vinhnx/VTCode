@@ -10,6 +10,7 @@ use std::io::{self, Read};
 use vtcode::startup::StartupContext;
 use vtcode_core::cli::args::{Cli, Commands};
 use vtcode_core::config::api_keys::load_dotenv;
+use vtcode_core::ui::tui::panic_hook;
 // FullTui import removed – not used in this binary.
 
 mod agent;
@@ -21,8 +22,12 @@ mod workspace_trust;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    panic_hook::init_panic_hook();
+
     // Load .env (non-fatal if missing)
-    load_dotenv().ok();
+    if let Err(err) = load_dotenv() {
+        eprintln!("warning: failed to load .env: {err}");
+    }
 
     process_hardening::apply_process_hardening()
         .context("failed to apply process hardening safeguards")?;
@@ -43,7 +48,9 @@ async fn main() -> Result<()> {
     let args = Cli::parse();
 
     // Initialize tracing based on both RUST_LOG env var and config
-    initialize_tracing(&args).await.ok();
+    if let Err(err) = initialize_tracing(&args).await {
+        eprintln!("warning: failed to initialize tracing from environment: {err}");
+    }
 
     if args.print.is_some() && args.command.is_some() {
         anyhow::bail!(
@@ -57,12 +64,17 @@ async fn main() -> Result<()> {
         GlobalColorChoice::Never.write_global();
     }
 
-    let startup = StartupContext::from_cli_args(&args).await?;
+    let startup = StartupContext::from_cli_args(&args)
+        .await
+        .context("failed to initialize VTCode startup context")?;
     cli::set_workspace_env(&startup.workspace);
 
     // Initialize tracing based on config if enabled
     if startup.config.debug.enable_tracing {
-        initialize_tracing_from_config(&startup.config).ok();
+        if let Err(err) = initialize_tracing_from_config(&startup.config) {
+            eprintln!("warning: failed to initialize tracing from config: {err}");
+            tracing::warn!(error = %err, "failed to initialize tracing from config");
+        }
     }
 
     let cfg = &startup.config;

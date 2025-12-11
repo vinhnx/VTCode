@@ -1771,19 +1771,18 @@ impl ToolRegistry {
         match result {
             Ok(value) => {
                 self.reset_tool_failure(timeout_category);
-                let should_decay = if let Some(counter) =
-                    self.success_trackers.get_mut(&timeout_category)
-                {
-                    *counter = counter.saturating_add(1);
-                    if *counter >= self.adaptive_tuning.success_streak {
-                        *counter = 0;
-                        true
+                let should_decay =
+                    if let Some(counter) = self.success_trackers.get_mut(&timeout_category) {
+                        *counter = counter.saturating_add(1);
+                        if *counter >= self.adaptive_tuning.success_streak {
+                            *counter = 0;
+                            true
+                        } else {
+                            false
+                        }
                     } else {
                         false
-                    }
-                } else {
-                    false
-                };
+                    };
                 if should_decay {
                     self.decay_adaptive_timeout(timeout_category);
                 }

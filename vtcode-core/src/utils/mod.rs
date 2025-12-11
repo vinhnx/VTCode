@@ -97,6 +97,7 @@
 //! ```
 
 pub mod ansi;
+pub mod ansi_capabilities;
 pub mod ansi_codes;
 pub mod ansi_parser;
 pub mod anstyle_utils;

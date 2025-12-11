@@ -167,7 +167,7 @@ impl InlineTextStyle {
 #[derive(Clone, Debug, Default)]
 pub struct InlineSegment {
     pub text: String,
-    pub style: InlineTextStyle,
+    pub style: std::sync::Arc<InlineTextStyle>,
 }
 
 #[derive(Clone, Debug, Default)]

@@ -191,6 +191,7 @@ indexmap = { version = "2.12", features = ["serde"] }
 rand = "0.9"
 regex = "1.12"
 assert_cmd = "2.1"
+predicates = "3.1"
 insta = "1.39"
 
 [target.'cfg(windows)'.dependencies]

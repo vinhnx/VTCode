@@ -28,29 +28,15 @@ pub fn init_panic_hook() {
             let _ = restore_terminal_on_panic();
         }
 
-        // For debug builds, use better-panic for developer-friendly stack traces
-        #[cfg(debug_assertions)]
-        {
-            better_panic::Settings::auto()
-                .most_recent_first(false) // Show most recent frames first for easier debugging
-                .lineno_suffix(true) // Include line numbers for precise location info
-                .verbosity(better_panic::Verbosity::Full) // Maximum detail for debugging
-                .create_panic_handler()(panic_info);
-        }
-
-        // For release builds, provide a cleaner panic message without full stack trace
-        #[cfg(not(debug_assertions))]
-        {
-            eprintln!("VTCode encountered a critical error and needs to shut down.");
-            eprintln!("Error details: {}", panic_info);
-            eprintln!("If you encounter this issue, please report it to the VTCode team.");
-        }
+        eprintln!("VTCode encountered a critical error and needs to shut down.");
+        eprintln!("Error details: {}", panic_info);
+        eprintln!("If you encounter this issue, please report it to the VTCode team.");
 
         // Call the original hook as well, in case other code has registered hooks
         original_hook(panic_info);
 
         // Exit with failure code
-        std::process::exit(libc::EXIT_FAILURE);
+        std::process::exit(1);
     }));
 }
 

@@ -741,7 +741,7 @@ fn append_text(
             && line.kind == kind
         {
             if let Some(last) = line.segments.last_mut()
-                && last.style == *style
+                && &*last.style == style
             {
                 last.text.push_str(text);
                 appended = true;
@@ -750,7 +750,7 @@ fn append_text(
             if !appended {
                 line.segments.push(crate::ui::tui::types::InlineSegment {
                     text: text.to_owned(),
-                    style: style.clone(),
+                    style: std::sync::Arc::new(style.clone()),
                 });
                 appended = true;
                 mark_revision = true;
@@ -782,7 +782,7 @@ fn append_text(
         if let Some(line) = session.lines.last_mut() {
             line.segments.push(crate::ui::tui::types::InlineSegment {
                 text: text.to_owned(),
-                style: style.clone(),
+                style: std::sync::Arc::new(style.clone()),
             });
             line.revision = revision;
         }
@@ -795,7 +795,7 @@ fn append_text(
         kind,
         segments: vec![crate::ui::tui::types::InlineSegment {
             text: text.to_owned(),
-            style: style.clone(),
+            style: std::sync::Arc::new(style.clone()),
         }],
         revision,
     });

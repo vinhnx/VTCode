@@ -4,6 +4,7 @@ use tokio::sync::mpsc;
 use crate::config::types::UiSurfacePreference;
 
 pub mod alternate_screen;
+pub mod panic_hook;
 mod runner;
 mod session;
 mod style;
