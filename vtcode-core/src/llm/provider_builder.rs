@@ -146,10 +146,27 @@ mod http_client_pool {
     });
 
     pub fn get_http_client(key: &str) -> Arc<HttpClient> {
-        let pool = CLIENT_POOL.read().unwrap();
-        pool.get(key)
-            .cloned()
-            .unwrap_or_else(|| pool.get("default").cloned().expect("Default client must exist"))
+        let pool_guard = CLIENT_POOL.read();
+        let pool = match pool_guard {
+            Ok(guard) => guard,
+            Err(poisoned) => {
+                tracing::warn!("HTTP client pool poisoned; continuing with recovered state");
+                poisoned.into_inner()
+            }
+        };
+
+        if let Some(client) = pool.get(key).cloned() {
+            return client;
+        }
+
+        if let Some(default_client) = pool.get("default").cloned() {
+            return default_client;
+        }
+
+        tracing::warn!(
+            "HTTP client pool missing default client; constructing transient client"
+        );
+        Arc::new(HttpClient::new())
     }
 
     pub fn get_http_client_for_timeouts(timeouts: &TimeoutsConfig) -> Arc<HttpClient> {

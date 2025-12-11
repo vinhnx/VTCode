@@ -222,6 +222,10 @@ pub struct CachingMiddleware {
     cache: Arc<std::sync::RwLock<std::collections::HashMap<String, CacheEntry>>>,
     /// Maximum age of cache entries in seconds (default: 300 = 5 minutes)
     max_age_secs: u64,
+    /// Maximum number of entries to retain (evict oldest when exceeded)
+    max_entries: usize,
+    /// Maximum size of a single cached value in bytes (skip caching if exceeded)
+    max_value_bytes: usize,
 }
 
 impl CachingMiddleware {
@@ -229,11 +233,23 @@ impl CachingMiddleware {
         Self {
             cache: Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
             max_age_secs: 300, // 5 minutes default
+            max_entries: 256,
+            max_value_bytes: 512 * 1024, // 512KB default guardrail to avoid caching huge outputs
         }
     }
 
     pub fn with_max_age(mut self, max_age_secs: u64) -> Self {
         self.max_age_secs = max_age_secs;
+        self
+    }
+
+    pub fn with_max_entries(mut self, max_entries: usize) -> Self {
+        self.max_entries = max_entries.max(1);
+        self
+    }
+
+    pub fn with_max_value_bytes(mut self, max_value_bytes: usize) -> Self {
+        self.max_value_bytes = max_value_bytes.max(1024); // enforce reasonable floor
         self
     }
 
@@ -269,6 +285,11 @@ impl Middleware for CachingMiddleware {
     ) -> MiddlewareResult {
         let key = Self::cache_key(&request.tool_name, &request.arguments);
 
+        // Opportunistically drop stale entries and keep cache bounded
+        if let Ok(mut cache) = self.cache.write() {
+            cache.retain(|_, entry| !self.is_stale(entry));
+        }
+
         // Check cache and staleness
         if let Ok(cache) = self.cache.read()
             && let Some(entry) = cache.get(&key)
@@ -291,6 +312,7 @@ impl Middleware for CachingMiddleware {
 
         if result.success
             && let Some(ref output) = result.result
+            && output.len() <= self.max_value_bytes
             && let Ok(mut cache) = self.cache.write()
         {
             cache.insert(
@@ -300,6 +322,24 @@ impl Middleware for CachingMiddleware {
                     timestamp: std::time::Instant::now(),
                 },
             );
+
+            while cache.len() > self.max_entries {
+                if let Some((oldest_key, _)) = cache.iter().min_by_key(|(_, entry)| entry.timestamp)
+                {
+                    let key_to_remove = oldest_key.clone();
+                    cache.remove(&key_to_remove);
+                } else {
+                    break;
+                }
+            }
+        } else if result.success
+            && let Some(ref output) = result.result
+            && output.len() > self.max_value_bytes
+        {
+            result
+                .metadata
+                .warnings
+                .push("Skipped caching: payload exceeds cache size limit".to_string());
         }
 
         result.metadata.layers_executed.push(LAYER_CACHING.into());
