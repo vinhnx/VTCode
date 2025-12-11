@@ -68,6 +68,10 @@ pub(crate) async fn execute_llm_request(
         );
     }
 
+    // Enforce context window even when semantic compression is disabled
+    let _ = ctx
+        .context_manager
+        .enforce_context_window(ctx.working_history);
     let request_history = ctx.working_history.clone();
     ctx.context_manager.reset_token_budget().await;
     let system_prompt = ctx
@@ -84,22 +88,36 @@ pub(crate) async fn execute_llm_request(
         }
     });
 
-    let current_tools = ctx.tools.read().await.clone();
+    let tools_guard = ctx.tools.read().await;
+    let current_tools = if tools_guard.is_empty() {
+        None
+    } else {
+        Some(tools_guard.clone())
+    };
+    drop(tools_guard);
+    let has_tools = current_tools.is_some();
+    let parallel_config =
+        if has_tools && provider_client.supports_parallel_tool_config(active_model) {
+            parallel_cfg_opt.clone()
+        } else {
+            None
+        };
+    let tool_choice = if has_tools {
+        Some(uni::ToolChoice::auto())
+    } else {
+        None
+    };
     let request = uni::LLMRequest {
         messages: request_history.clone(),
         system_prompt: Some(system_prompt),
-        tools: Some(current_tools),
+        tools: current_tools,
         model: active_model.to_string(),
         max_tokens: max_tokens_opt.or(Some(2000)),
         temperature: Some(0.7),
         stream: use_streaming,
-        tool_choice: Some(uni::ToolChoice::auto()),
+        tool_choice,
         parallel_tool_calls: None,
-        parallel_tool_config: if provider_client.supports_parallel_tool_config(active_model) {
-            parallel_cfg_opt.clone()
-        } else {
-            None
-        },
+        parallel_tool_config: parallel_config,
         reasoning_effort,
         output_format: None,
         verbosity: None,
@@ -128,6 +146,11 @@ pub(crate) async fn execute_llm_request(
             tools = tool_count,
             "Dispatching provider request"
         );
+    }
+
+    if let Err(err) = provider_client.validate_request(&request) {
+        thinking_spinner.finish();
+        return Err(anyhow::Error::new(err));
     }
 
     let llm_result = if use_streaming {

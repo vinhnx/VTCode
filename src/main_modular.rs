@@ -176,10 +176,11 @@ async fn main() -> Result<()> {
 
             // Ask implementation
             // Create a simple LLM client and get a response
-            let client = vtcode_core::llm::make_client(
+            let _client = vtcode_core::llm::make_client(
                 config.api_key.clone(),
                 config.model.parse().unwrap_or_default(),
-            );
+            )
+            .map_err(|err| anyhow::anyhow!("failed to create LLM client: {err}"))?;
 
             // For a minimal implementation, we'll just print a placeholder response
             // In a full implementation, this would actually call the LLM

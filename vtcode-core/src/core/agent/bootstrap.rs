@@ -158,7 +158,7 @@ fn create_llm_client(config: &AgentConfig) -> Result<AnyClient> {
         .parse::<ModelId>()
         .with_context(|| format!("Invalid model identifier: {}", config.model))?;
 
-    Ok(make_client(config.api_key.clone(), model_id))
+    Ok(make_client(config.api_key.clone(), model_id)?)
 }
 
 fn create_session_info() -> Result<SessionInfo> {

@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use std::sync::Arc;
 use tokio::sync::Notify;
 
@@ -38,14 +39,27 @@ pub(crate) async fn execute_tool_pipeline(
     // For now, just execute each tool call sequentially
     // TODO: Add parallel execution and batching logic
     for tool_call in tool_calls {
-        let name = &tool_call
-            .function
-            .as_ref()
-            .expect("Tool call must have function")
-            .name;
-        let args_val = tool_call
-            .parsed_arguments()
-            .unwrap_or_else(|_| serde_json::json!({}));
+        let Some(function) = tool_call.function.as_ref() else {
+            results.push(
+                crate::agent::runloop::unified::tool_pipeline::ToolExecutionStatus::Failure {
+                    error: anyhow!("Tool call missing function payload"),
+                },
+            );
+            continue;
+        };
+
+        let name = &function.name;
+        let args_val = match tool_call.parsed_arguments() {
+            Ok(val) => val,
+            Err(err) => {
+                results.push(
+                    crate::agent::runloop::unified::tool_pipeline::ToolExecutionStatus::Failure {
+                        error: anyhow!(err),
+                    },
+                );
+                continue;
+            }
+        };
 
         // Execute the single tool call
         let result = execute_single_tool_call(

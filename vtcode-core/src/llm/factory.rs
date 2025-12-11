@@ -6,6 +6,7 @@ use crate::config::TimeoutsConfig;
 use crate::config::core::PromptCachingConfig;
 use crate::config::models::{ModelId, Provider};
 use crate::llm::provider::{LLMError, LLMProvider};
+use crate::ctx_err;
 use std::collections::HashMap;
 use std::str::FromStr;
 
@@ -147,7 +148,9 @@ pub fn infer_provider(override_provider: Option<&str>, model: &str) -> Option<Pr
         return Some(model_id.provider());
     }
 
-    let factory = get_factory().lock().unwrap();
+    let Ok(factory) = get_factory().lock() else {
+        return None;
+    };
     factory
         .provider_from_model(model)
         .and_then(|name| Provider::from_str(&name).ok())
@@ -183,7 +186,9 @@ pub fn create_provider_for_model(
     api_key: String,
     prompt_cache: Option<PromptCachingConfig>,
 ) -> Result<Box<dyn LLMProvider>, LLMError> {
-    let factory = get_factory().lock().unwrap();
+    let factory = get_factory()
+        .lock()
+        .map_err(|_| LLMError::Provider(ctx_err!("llm factory", "lock poisoned")))?;
     let provider_name = factory.provider_from_model(model).ok_or_else(|| {
         LLMError::InvalidRequest(format!("Cannot determine provider for model: {}", model))
     })?;
@@ -209,7 +214,9 @@ pub fn create_provider_with_config(
     prompt_cache: Option<PromptCachingConfig>,
     timeouts: Option<TimeoutsConfig>,
 ) -> Result<Box<dyn LLMProvider>, LLMError> {
-    let factory = get_factory().lock().unwrap();
+    let factory = get_factory()
+        .lock()
+        .map_err(|_| LLMError::Provider(ctx_err!("llm factory", "lock poisoned")))?;
     factory.create_provider(
         provider_name,
         ProviderConfig {
