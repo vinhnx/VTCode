@@ -24,6 +24,7 @@ use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::models::Provider;
 use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, ModelSelectionSource};
 use vtcode_core::config::validator::ConfigValidator;
+use vtcode_core::llm::factory::infer_provider;
 use vtcode_core::ui::theme::{self as ui_theme, DEFAULT_THEME_ID};
 use vtcode_core::{initialize_dot_folder, load_user_config, update_theme_preference};
 
@@ -140,17 +141,19 @@ impl StartupContext {
             );
         }
 
-        let provider = args
-            .provider
-            .clone()
-            .unwrap_or_else(|| config.agent.provider.clone());
-
         let (model, model_source) = match args.model.clone() {
             Some(value) => (value, ModelSelectionSource::CliOverride),
             None => (
                 config.agent.default_model.clone(),
                 ModelSelectionSource::WorkspaceConfig,
             ),
+        };
+
+        let provider = match args.provider.clone() {
+            Some(value) => value,
+            None => infer_provider(None, &model)
+                .map(|provider| provider.to_string())
+                .unwrap_or_else(|| config.agent.provider.clone()),
         };
 
         initialize_dot_folder().await.ok();

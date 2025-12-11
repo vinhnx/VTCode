@@ -41,6 +41,22 @@ fn classify_request_mode(provider_supports_streaming: bool) -> AskRequestMode {
 
 fn print_final_response(printed_any: bool, response: Option<LLMResponse>) {
     if let Some(response) = response {
+        // Surface reasoning traces for providers that return them (e.g., OpenAI Responses API, Gemini reasoning).
+        if let Some(reasoning) = response
+            .reasoning
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            if printed_any {
+                // Ensure separation from previously streamed tokens.
+                println!();
+            }
+            println!("--- reasoning ---");
+            println!("{reasoning}");
+            println!("-----------------");
+        }
+
         match (printed_any, response.content) {
             (false, Some(content)) => println!("{}", content),
             (true, Some(content)) => {
