@@ -766,6 +766,10 @@ impl AgentRunner {
         turn_index: usize,
     ) -> Result<ProviderResponseSummary> {
         let supports_streaming = self.provider_client.supports_streaming();
+        let streaming_deadline = self
+            .config()
+            .timeouts
+            .ceiling_duration(self.config().timeouts.streaming_ceiling_seconds);
         let mut streaming_disabled = false;
         if supports_streaming {
             if let Some(last_failure) = *self.streaming_last_failure.borrow()
@@ -786,9 +790,14 @@ impl AgentRunner {
         let mut streaming_response: Option<crate::llm::provider::LLMResponse> = None;
 
         if supports_streaming && !streaming_disabled {
-            // OPTIMIZATION: Try streaming first without cloning request
-            match self.provider_client.stream(request.clone()).await {
-                Ok(mut stream) => {
+            let stream_result = if let Some(limit) = streaming_deadline {
+                tokio::time::timeout(limit, self.provider_client.stream(request.clone())).await
+            } else {
+                Ok(self.provider_client.stream(request.clone()).await)
+            };
+
+            match stream_result {
+                Ok(Ok(mut stream)) => {
                     while let Some(event) = stream.next().await {
                         match event {
                             Ok(crate::llm::provider::LLMStreamEvent::Token { delta }) => {
@@ -831,7 +840,7 @@ impl AgentRunner {
                         }
                     }
                 }
-                Err(err) => {
+                Ok(Err(err)) => {
                     let mut failures = self.streaming_failures.borrow_mut();
                     *failures = failures.saturating_add(1);
                     self.streaming_last_failure.replace(Some(Instant::now()));
@@ -844,6 +853,26 @@ impl AgentRunner {
                         err
                     );
                     let warning = format!("Streaming request failed: {}", err);
+                    event_recorder.warning(&warning);
+                    warnings.push(warning);
+                    used_streaming_fallback = agent_message_streamed;
+                }
+                Err(_) => {
+                    let mut failures = self.streaming_failures.borrow_mut();
+                    *failures = failures.saturating_add(1);
+                    self.streaming_last_failure.replace(Some(Instant::now()));
+                    self.failure_tracker.borrow_mut().record_failure();
+                    runner_println!(
+                        self,
+                        "{} {} Streaming timed out after {:?}",
+                        agent_prefix,
+                        style("(WARN)").yellow().bold(),
+                        streaming_deadline.unwrap()
+                    );
+                    let warning = format!(
+                        "Streaming request timed out after {:?}",
+                        streaming_deadline.unwrap()
+                    );
                     event_recorder.warning(&warning);
                     warnings.push(warning);
                     used_streaming_fallback = agent_message_streamed;
@@ -917,11 +946,15 @@ impl AgentRunner {
             ..request.clone()
         };
 
-        let mut response = self
-            .provider_client
-            .generate(fallback_request)
-            .await
-            .map_err(|e| {
+        let generation_result = if let Some(limit) = streaming_deadline {
+            tokio::time::timeout(limit, self.provider_client.generate(fallback_request)).await
+        } else {
+            Ok(self.provider_client.generate(fallback_request).await)
+        };
+
+        let mut response = match generation_result {
+            Ok(Ok(resp)) => resp,
+            Ok(Err(e)) => {
                 // Record failure for exponential backoff
                 self.failure_tracker.borrow_mut().record_failure();
                 runner_println!(
@@ -930,13 +963,35 @@ impl AgentRunner {
                     agent_prefix,
                     style("(ERROR)").red().bold().on_black()
                 );
-                anyhow!(
+                return Err(anyhow!(
                     "Agent {} execution failed at turn {}: {}",
                     self.agent_type,
                     turn_index,
                     e
-                )
-            })?;
+                ));
+            }
+            Err(_) => {
+                self.failure_tracker.borrow_mut().record_failure();
+                let warning = match streaming_deadline {
+                    Some(limit) => format!("LLM request timed out after {:?}", limit),
+                    None => "LLM request timed out".to_string(),
+                };
+                event_recorder.warning(&warning);
+                warnings.push(warning.clone());
+                runner_println!(
+                    self,
+                    "{} {} {}",
+                    agent_prefix,
+                    style("(WARN)").yellow().bold(),
+                    warning
+                );
+                return Err(anyhow!(
+                    "Agent {} execution failed at turn {}: request timed out",
+                    self.agent_type,
+                    turn_index
+                ));
+            }
+        };
 
         let content = response.content.take().unwrap_or_default();
         let reasoning = response.reasoning.clone();
@@ -992,6 +1047,7 @@ impl AgentRunner {
         let config = Arc::new(config_value);
         let mut tool_registry = ToolRegistry::new(workspace.clone()).await;
         tool_registry.set_harness_session(session_id.clone());
+        tool_registry.apply_timeout_policy(&config.timeouts);
         let loop_detector = LoopDetector::with_max_repeated_calls(max_repeated_tool_calls);
 
         Ok(Self {
@@ -1054,6 +1110,7 @@ impl AgentRunner {
         self.system_prompt =
             compose_system_instruction_text(self._workspace.as_path(), Some(self.config())).await;
 
+        self.tool_registry.apply_timeout_policy(&vt_cfg.timeouts);
         self.tool_registry.initialize_async().await?;
 
         self.tool_registry.apply_commands_config(&vt_cfg.commands);

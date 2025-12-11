@@ -1330,6 +1330,45 @@ impl ToolRegistry {
                 "Loop detected: agent calling same tool with identical parameters {} times",
                 repeat_count
             );
+            if repeat_count >= 3 {
+                let delay_ms = (75 * repeat_count as u64).min(500);
+                if delay_ms > 0 {
+                    tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                }
+
+                let error = ToolExecutionError::new(
+                    tool_name_owned.clone(),
+                    ToolErrorType::PolicyViolation,
+                    format!(
+                        "Tool '{}' blocked after {} identical invocations in recent history",
+                        display_name, repeat_count
+                    ),
+                );
+                let mut payload = error.to_json_value();
+                if let Some(obj) = payload.as_object_mut() {
+                    obj.insert("loop_detected".into(), json!(true));
+                    obj.insert("repeat_count".into(), json!(repeat_count));
+                    obj.insert("tool".into(), json!(display_name));
+                }
+
+                self.execution_history
+                    .add_record(ToolExecutionRecord::failure(
+                        tool_name_owned,
+                        requested_name.clone(),
+                        false,
+                        None,
+                        args_for_recording,
+                        "Tool call blocked due to repeated identical invocations".to_string(),
+                        context_snapshot.clone(),
+                        timeout_category_label.clone(),
+                        base_timeout_ms,
+                        adaptive_timeout_ms,
+                        None,
+                        false,
+                    ));
+
+                return Ok(payload);
+            }
         }
 
         if self.policy_gateway.has_full_auto_allowlist()
