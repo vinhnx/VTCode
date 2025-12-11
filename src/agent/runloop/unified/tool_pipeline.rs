@@ -1,6 +1,6 @@
 #![allow(clippy::too_many_arguments)]
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{Error, anyhow};
 use serde_json::Value;
@@ -32,6 +32,35 @@ const DEFAULT_TOOL_TIMEOUT: Duration = Duration::from_secs(300);
 const TOOL_TIMEOUT_WARNING_HEADROOM: Duration = Duration::from_secs(5);
 const MAX_TOOL_RETRIES: usize = 2;
 const RETRY_BACKOFF_BASE: Duration = Duration::from_millis(200);
+
+/// Guard that ensures timeout warning tasks are cancelled when the tool attempt ends early
+struct TimeoutWarningGuard {
+    cancel_token: CancellationToken,
+    handle: Option<JoinHandle<()>>,
+}
+
+impl TimeoutWarningGuard {
+    fn new(tool_name: &str, start_time: Instant, tool_timeout: Duration) -> Self {
+        let cancel_token = CancellationToken::new();
+        let handle = spawn_timeout_warning_task(
+            tool_name.to_string(),
+            start_time,
+            cancel_token.clone(),
+            tool_timeout,
+        );
+        Self {
+            cancel_token,
+            handle,
+        }
+    }
+
+    async fn cancel(&mut self) {
+        self.cancel_token.cancel();
+        if let Some(handle) = self.handle.take() {
+            let _ = handle.await;
+        }
+    }
+}
 
 /// Status of a tool execution with progress information
 #[derive(Debug)]
@@ -438,24 +467,22 @@ async fn run_single_tool_attempt(
     progress_reporter: &ProgressReporter,
     tool_timeout: Duration,
 ) -> ToolExecutionStatus {
-    let start_time = std::time::Instant::now();
-
-    let warning_cancel_token = CancellationToken::new();
-    let warning_task = spawn_timeout_warning_task(
-        name.to_string(),
-        start_time,
-        warning_cancel_token.clone(),
-        tool_timeout,
-    );
+    let start_time = Instant::now();
+    let mut warning_guard = TimeoutWarningGuard::new(name, start_time, tool_timeout);
 
     progress_reporter
         .set_message(format!("Preparing {}...", name))
         .await;
     progress_reporter.set_progress(5).await;
 
-    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    tokio::time::sleep(Duration::from_millis(5)).await;
 
     if ctrl_c_state.is_cancel_requested() || ctrl_c_state.is_exit_requested() {
+        progress_reporter
+            .set_message(format!("{} cancelled", name))
+            .await;
+        progress_reporter.set_progress(100).await;
+        warning_guard.cancel().await;
         return ToolExecutionStatus::Cancelled;
     }
 
@@ -468,6 +495,11 @@ async fn run_single_tool_attempt(
         let mut registry_clone = registry.clone();
 
         if ctrl_c_state.is_cancel_requested() || ctrl_c_state.is_exit_requested() {
+            progress_reporter
+                .set_message(format!("{} cancelled", name))
+                .await;
+            progress_reporter.set_progress(100).await;
+            warning_guard.cancel().await;
             return ToolExecutionStatus::Cancelled;
         }
 
@@ -530,7 +562,13 @@ async fn run_single_tool_attempt(
 
         match control {
             ExecutionControl::Continue => continue,
-            ExecutionControl::Cancelled => break ToolExecutionStatus::Cancelled,
+            ExecutionControl::Cancelled => {
+                progress_reporter
+                    .set_message(format!("{} cancelled", name))
+                    .await;
+                progress_reporter.set_progress(100).await;
+                break ToolExecutionStatus::Cancelled;
+            }
             ExecutionControl::Completed(result) => {
                 break match result {
                     Ok(Ok(output)) => {
@@ -539,7 +577,7 @@ async fn run_single_tool_attempt(
                             .await;
                         progress_reporter.set_progress(95).await;
 
-                        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                        tokio::time::sleep(Duration::from_millis(5)).await;
 
                         progress_reporter.set_progress(100).await;
                         progress_reporter
@@ -566,10 +604,7 @@ async fn run_single_tool_attempt(
         }
     };
 
-    warning_cancel_token.cancel();
-    if let Some(handle) = warning_task {
-        let _ = handle.await;
-    }
+    warning_guard.cancel().await;
 
     status
 }
