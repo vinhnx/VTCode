@@ -48,9 +48,13 @@ async fn main() -> Result<()> {
     let args = Cli::parse();
 
     // Initialize tracing based on both RUST_LOG env var and config
-    if let Err(err) = initialize_tracing(&args).await {
-        eprintln!("warning: failed to initialize tracing from environment: {err}");
-    }
+    let env_tracing_initialized = match initialize_tracing(&args).await {
+        Ok(initialized) => initialized,
+        Err(err) => {
+            eprintln!("warning: failed to initialize tracing from environment: {err}");
+            false
+        }
+    };
 
     if args.print.is_some() && args.command.is_some() {
         anyhow::bail!(
@@ -70,7 +74,7 @@ async fn main() -> Result<()> {
     cli::set_workspace_env(&startup.workspace);
 
     // Initialize tracing based on config if enabled
-    if startup.config.debug.enable_tracing {
+    if startup.config.debug.enable_tracing && !env_tracing_initialized {
         if let Err(err) = initialize_tracing_from_config(&startup.config) {
             eprintln!("warning: failed to initialize tracing from config: {err}");
             tracing::warn!(error = %err, "failed to initialize tracing from config");
@@ -253,20 +257,24 @@ fn collect_piped_stdin() -> Result<Option<String>> {
     }
 }
 
-async fn initialize_tracing(_args: &Cli) -> Result<()> {
+async fn initialize_tracing(_args: &Cli) -> Result<bool> {
     use tracing_subscriber::fmt::format::FmtSpan;
 
     // Check if RUST_LOG env var is set (takes precedence)
     if std::env::var("RUST_LOG").is_ok() {
-        tracing_subscriber::fmt()
+        let init_result = tracing_subscriber::fmt()
             .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
             .with_span_events(FmtSpan::FULL)
-            .init();
+            .try_init();
+        if let Err(err) = init_result {
+            tracing::warn!(error = %err, "tracing already initialized; skipping env tracing setup");
+        }
+        return Ok(true);
     }
     // Note: Config-based tracing initialization is handled in initialize_tracing_from_config()
     // when DebugConfig is loaded. This function just ensures RUST_LOG is respected.
 
-    Ok(())
+    Ok(false)
 }
 
 fn initialize_tracing_from_config(
@@ -283,19 +291,29 @@ fn initialize_tracing_from_config(
 
     let filter_str = format!("{}={}", targets, debug_cfg.trace_level.as_str());
 
-    tracing_subscriber::fmt()
+    let init_result = tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
                 .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(&filter_str)),
         )
         .with_span_events(FmtSpan::FULL)
-        .init();
+        .try_init();
 
-    tracing::info!(
-        "Debug tracing enabled: targets={}, level={}",
-        targets,
-        debug_cfg.trace_level
-    );
+    match init_result {
+        Ok(()) => {
+            tracing::info!(
+                "Debug tracing enabled: targets={}, level={}",
+                targets,
+                debug_cfg.trace_level
+            );
+        }
+        Err(err) => {
+            tracing::warn!(
+                error = %err,
+                "tracing already initialized; skipping config tracing setup"
+            );
+        }
+    }
 
     Ok(())
 }

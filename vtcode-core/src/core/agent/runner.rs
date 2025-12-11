@@ -865,17 +865,17 @@ impl AgentRunner {
                     *failures = failures.saturating_add(1);
                     self.streaming_last_failure.replace(Some(Instant::now()));
                     self.failure_tracker.borrow_mut().record_failure();
+                    let timeout_display = streaming_deadline
+                        .map(|d| format!("{d:?}"))
+                        .unwrap_or_else(|| "configured streaming timeout".to_string());
                     runner_println!(
                         self,
-                        "{} {} Streaming timed out after {:?}",
+                        "{} {} Streaming timed out after {}",
                         agent_prefix,
                         style("(WARN)").yellow().bold(),
-                        streaming_deadline.unwrap()
+                        timeout_display
                     );
-                    let warning = format!(
-                        "Streaming request timed out after {:?}",
-                        streaming_deadline.unwrap()
-                    );
+                    let warning = format!("Streaming request timed out after {}", timeout_display);
                     event_recorder.warning(&warning);
                     warnings.push(warning);
                     used_streaming_fallback = agent_message_streamed;
