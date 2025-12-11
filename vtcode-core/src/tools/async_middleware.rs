@@ -165,9 +165,7 @@ impl AsyncMiddleware for AsyncLoggingMiddleware {
             .as_ref()
             .and_then(|v| v.get("task_id").and_then(|s| s.as_str()))
             .unwrap_or("");
-        let plan_summary = context_json
-            .as_ref()
-            .and_then(|v| v.get("plan_summary"));
+        let plan_summary = context_json.as_ref().and_then(|v| v.get("plan_summary"));
         let plan_status = plan_summary
             .and_then(|v| v.get("status").and_then(|s| s.as_str()))
             .unwrap_or("");
