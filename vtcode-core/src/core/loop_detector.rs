@@ -28,9 +28,7 @@ fn normalize_args_for_detection(tool_name: &str, args: &serde_json::Value) -> se
         if tool_name == tools::LIST_FILES {
             if let Some(path) = normalized.get("path").and_then(|v| v.as_str()) {
                 let trimmed = path.trim();
-                let only_root_markers = trimmed
-                    .trim_matches(|c| c == '.' || c == '/')
-                    .is_empty();
+                let only_root_markers = trimmed.trim_matches(|c| c == '.' || c == '/').is_empty();
                 if trimmed.is_empty() || only_root_markers {
                     // Normalize any root-only path markers (., /, ././, //, etc.) to the same key
                     normalized.insert("path".into(), serde_json::json!("__ROOT__"));
@@ -105,8 +103,7 @@ impl LoopDetector {
                 if identical {
                     // Escalate to hard limit so callers halt immediately.
                     let hard_limit = Self::get_limit_for_tool(tool_name) * HARD_LIMIT_MULTIPLIER;
-                    self.tool_counts
-                        .insert(tool_name.to_string(), hard_limit);
+                    self.tool_counts.insert(tool_name.to_string(), hard_limit);
 
                     return Some(format!(
                         "HARD STOP: Identical tool call repeated {} times: {} with same arguments. This indicates a loop.",

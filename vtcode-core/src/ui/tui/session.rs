@@ -272,6 +272,44 @@ impl Session {
         }
     }
 
+    /// Expose cursor position for tests.
+    #[allow(dead_code)]
+    pub fn cursor(&self) -> usize {
+        self.input_manager.cursor()
+    }
+
+    /// Set input content (for tests and utilities).
+    #[allow(dead_code)]
+    pub fn set_input(&mut self, text: impl Into<String>) {
+        self.input_manager.set_content(text.into());
+        self.mark_dirty();
+    }
+
+    /// Set cursor position (for tests and utilities).
+    #[allow(dead_code)]
+    pub fn set_cursor(&mut self, pos: usize) {
+        self.input_manager.set_cursor(pos);
+        self.mark_dirty();
+    }
+
+    /// Expose scroll offset for tests.
+    #[allow(dead_code)]
+    pub fn scroll_offset(&self) -> usize {
+        self.scroll_manager.offset()
+    }
+
+    /// Expose default style for tests.
+    #[allow(dead_code)]
+    pub fn default_style(&self) -> InlineTextStyle {
+        self.styles.default_inline_style()
+    }
+
+    /// Expose key processing for tests.
+    #[allow(dead_code)]
+    pub fn process_key(&mut self, key: KeyEvent) -> Option<InlineEvent> {
+        events::process_key(self, key)
+    }
+
     pub fn handle_command(&mut self, command: InlineCommand) {
         match command {
             InlineCommand::AppendLine { kind, segments } => {
@@ -731,6 +769,7 @@ mod tests {
     use super::prompt_palette;
     use super::*;
     use crate::tools::{PlanStep, StepStatus};
+    use crate::ui::tui::style::ratatui_style_from_inline;
     use crate::ui::tui::{InlineSegment, InlineTextStyle, InlineTheme};
     use chrono::Utc;
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -951,7 +990,7 @@ mod tests {
         let event = KeyEvent::new(KeyCode::Left, KeyModifiers::ALT);
         session.process_key(event);
 
-        assert_eq!(session.input_manager.cursor(), 6);
+        assert_eq!(session.cursor(), 6);
     }
 
     #[test]
@@ -962,7 +1001,7 @@ mod tests {
         let event = KeyEvent::new(KeyCode::Char('b'), KeyModifiers::ALT);
         session.process_key(event);
 
-        assert_eq!(session.input_manager.cursor(), 6);
+        assert_eq!(session.cursor(), 6);
     }
 
     #[test]
@@ -971,13 +1010,13 @@ mod tests {
         let mut session = session_with_input(text, 0);
 
         session.move_right_word();
-        assert_eq!(session.cursor, 5);
+        assert_eq!(session.cursor(), 5);
 
         session.move_right_word();
-        assert_eq!(session.cursor, 7);
+        assert_eq!(session.cursor(), 7);
 
         session.move_right_word();
-        assert_eq!(session.cursor, text.len());
+        assert_eq!(session.cursor(), text.len());
     }
 
     #[test]
@@ -986,7 +1025,7 @@ mod tests {
         let mut session = session_with_input(text, 5);
 
         session.move_right_word();
-        assert_eq!(session.cursor, 7);
+        assert_eq!(session.cursor(), 7);
     }
 
     #[test]
@@ -997,7 +1036,7 @@ mod tests {
         let event = KeyEvent::new(KeyCode::Right, KeyModifiers::SUPER);
         session.process_key(event);
 
-        assert_eq!(session.cursor, text.len());
+        assert_eq!(session.cursor(), text.len());
     }
 
     #[test]
@@ -1008,7 +1047,7 @@ mod tests {
         let event = KeyEvent::new(KeyCode::Char('a'), KeyModifiers::SUPER);
         session.process_key(event);
 
-        assert_eq!(session.cursor, 0);
+        assert_eq!(session.cursor(), 0);
     }
 
     #[test]
@@ -1061,9 +1100,9 @@ mod tests {
         let mut iterations = 0;
         loop {
             transcripts.push(visible_transcript(&mut session));
-            let previous_offset = session.scroll_manager.offset();
+            let previous_offset = session.scroll_offset();
             session.scroll_page_up();
-            if session.scroll_manager.offset() == previous_offset {
+            if session.scroll_offset() == previous_offset {
                 break;
             }
             iterations += 1;
@@ -1087,7 +1126,7 @@ mod tests {
 
         assert!(top_view.iter().any(|line| line.contains(&first_label)));
         assert!(top_view.iter().all(|line| !line.contains(&last_label)));
-        let scroll_offset = session.scroll_manager.offset();
+        let scroll_offset = session.scroll_offset();
         let max_offset = session.current_max_scroll_offset();
         assert_eq!(scroll_offset, max_offset);
     }
@@ -1102,7 +1141,7 @@ mod tests {
         }
 
         session.scroll_page_up();
-        assert!(session.scroll_offset > 0);
+        assert!(session.scroll_offset() > 0);
 
         session.force_view_rows(
             (LINE_COUNT as u16)
@@ -1111,7 +1150,7 @@ mod tests {
                 + 2,
         );
 
-        assert_eq!(session.scroll_manager.offset(), 0);
+        assert_eq!(session.scroll_offset(), 0);
         let max_offset = session.current_max_scroll_offset();
         assert_eq!(max_offset, 0);
     }
@@ -1132,20 +1171,20 @@ mod tests {
 
         for _ in 0..total {
             session.scroll_page_up();
-            if session.scroll_manager.offset() == session.current_max_scroll_offset() {
+            if session.scroll_offset() == session.current_max_scroll_offset() {
                 break;
             }
         }
-        assert!(session.scroll_manager.offset() > 0);
+        assert!(session.scroll_offset() > 0);
 
         for _ in 0..total {
             session.scroll_page_down();
-            if session.scroll_manager.offset() == 0 {
+            if session.scroll_offset() == 0 {
                 break;
             }
         }
 
-        assert_eq!(session.scroll_manager.offset(), 0);
+        assert_eq!(session.scroll_offset(), 0);
 
         let view = visible_transcript(&mut session);
         let expected_tail = format!("{LABEL_PREFIX}-{total}-continued");
@@ -1409,7 +1448,10 @@ mod tests {
     fn wrap_line_splits_double_width_graphemes() {
         let session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
         let style = session.default_style();
-        let line = Line::from(vec![Span::styled("你好世界".to_string(), style)]);
+        let line = Line::from(vec![Span::styled(
+            "你好世界".to_string(),
+            ratatui_style_from_inline(&style, None),
+        )]);
 
         let wrapped = session.wrap_line(line, 4);
         let rendered: Vec<String> = wrapped.iter().map(line_text).collect();
@@ -1421,7 +1463,10 @@ mod tests {
     fn wrap_line_keeps_explicit_blank_rows() {
         let session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
         let style = session.default_style();
-        let line = Line::from(vec![Span::styled("top\n\nbottom".to_string(), style)]);
+        let line = Line::from(vec![Span::styled(
+            "top\n\nbottom".to_string(),
+            ratatui_style_from_inline(&style, None),
+        )]);
 
         let wrapped = session.wrap_line(line, 40);
         let rendered: Vec<String> = wrapped.iter().map(line_text).collect();
@@ -1436,7 +1481,10 @@ mod tests {
     fn wrap_line_preserves_characters_wider_than_viewport() {
         let session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
         let style = session.default_style();
-        let line = Line::from(vec![Span::styled("你".to_string(), style)]);
+        let line = Line::from(vec![Span::styled(
+            "hi".to_string(),
+            ratatui_style_from_inline(&style, None),
+        )]);
 
         let wrapped = session.wrap_line(line, 1);
         let rendered: Vec<String> = wrapped.iter().map(line_text).collect();
@@ -1448,7 +1496,10 @@ mod tests {
     fn wrap_line_discards_carriage_return_before_newline() {
         let session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
         let style = session.default_style();
-        let line = Line::from(vec![Span::styled("foo\r\nbar".to_string(), style)]);
+        let line = Line::from(vec![Span::styled(
+            "foo\r\nbar".to_string(),
+            ratatui_style_from_inline(&style, None),
+        )]);
 
         let wrapped = session.wrap_line(line, 80);
         let rendered: Vec<String> = wrapped.iter().map(line_text).collect();

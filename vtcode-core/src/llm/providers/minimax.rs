@@ -358,9 +358,13 @@ Continuing response."#;
 
         assert_eq!(tool_calls.len(), 1);
         let call = &tool_calls[0];
-        assert_eq!(call.function.name, "search_web");
+        let func = call
+            .function
+            .as_ref()
+            .expect("function call should be present");
+        assert_eq!(func.name, "search_web");
 
-        let parsed_args: Value = serde_json::from_str(&call.function.arguments).unwrap();
+        let parsed_args: Value = serde_json::from_str(&func.arguments).unwrap();
         assert_eq!(parsed_args["query_list"], json!(["rust", "news"]));
         assert_eq!(parsed_args["query_tag"], json!(["technology"]));
         assert_eq!(parsed_args["radius"], json!(12.5));
@@ -395,7 +399,11 @@ Continuing response."#;
 
         let tool_calls = processed.tool_calls.expect("expected tool calls");
         assert_eq!(tool_calls.len(), 1);
-        assert_eq!(tool_calls[0].function.name, "search_web");
+        let func = tool_calls[0]
+            .function
+            .as_ref()
+            .expect("function call should be present");
+        assert_eq!(func.name, "search_web");
         assert!(matches!(processed.finish_reason, FinishReason::ToolCalls));
         assert!(
             processed

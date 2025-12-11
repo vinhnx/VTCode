@@ -459,13 +459,13 @@ mod tests {
 
     #[test]
     fn test_fallback_chain_result_best() {
-        let mut result1 = EnhancedToolResult::new(
+        let result1 = EnhancedToolResult::new(
             Value::String("result1".to_string()),
             ResultMetadata::success(0.5, 0.5),
             "tool1".to_string(),
         );
 
-        let mut result2 = EnhancedToolResult::new(
+        let result2 = EnhancedToolResult::new(
             Value::String("result2".to_string()),
             ResultMetadata::success(0.9, 0.9),
             "tool2".to_string(),

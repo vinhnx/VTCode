@@ -373,6 +373,27 @@ impl Session {
             first_section = false;
         }
 
+        let plan_summary = &self.plan.summary;
+        if plan_summary.total_steps > 0 {
+            if !first_section {
+                spans.push(Span::styled(
+                    ui::HEADER_MODE_SECONDARY_SEPARATOR.to_owned(),
+                    self.header_secondary_style(),
+                ));
+            }
+            let plan_style = self.header_secondary_style();
+            spans.push(Span::styled(
+                format!(
+                    "Plan v{} {}/{} {}",
+                    self.plan.version,
+                    plan_summary.completed_steps,
+                    plan_summary.total_steps,
+                    plan_summary.status.label()
+                ),
+                plan_style,
+            ));
+        }
+
         if spans.is_empty() {
             spans.push(Span::raw(String::new()));
         }

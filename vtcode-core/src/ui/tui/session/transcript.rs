@@ -152,6 +152,16 @@ impl TranscriptReflowCache {
 
         result
     }
+
+    #[allow(dead_code)]
+    pub fn message_start_row(&self, index: usize) -> Option<usize> {
+        self.row_offsets.get(index).copied()
+    }
+
+    #[allow(dead_code)]
+    pub fn message_row_count(&self, index: usize) -> Option<usize> {
+        self.messages.get(index).map(|m| m.lines.len())
+    }
 }
 
 impl Default for TranscriptReflowCache {
@@ -256,10 +266,10 @@ mod tests {
 
         cache.update_row_offsets();
 
-        assert_eq!(cache.message_start_row(0), Some(0));
-        assert_eq!(cache.message_row_count(0), Some(2));
-        assert_eq!(cache.message_start_row(1), None); // Non-existent message
-        assert_eq!(cache.message_row_count(1), None); // Non-existent message
+        assert_eq!(cache.row_offsets.get(0).copied(), Some(0));
+        assert_eq!(cache.messages.get(0).map(|m| m.lines.len()), Some(2));
+        assert_eq!(cache.row_offsets.get(1).copied(), None); // Non-existent message
+        assert_eq!(cache.messages.get(1).map(|m| m.lines.len()), None); // Non-existent message
     }
 
     #[test]

@@ -114,20 +114,24 @@ impl<'config> AgentComponentBuilder<'config> {
                 .context("Failed to initialize tree-sitter analyzer for agent components")?,
         };
 
-        let tool_registry = match self.tool_registry {
-            Some(registry) => registry,
-            None => Arc::new(ToolRegistry::new(self.config.workspace.clone()).await),
-        };
-
-        let decision_tracker = self.decision_tracker.unwrap_or_default();
-
-        let error_recovery = self.error_recovery.unwrap_or_default();
-
         let session_info = match self.session_info.take() {
             Some(info) => info,
             None => create_session_info()
                 .context("Failed to initialize agent session metadata for bootstrap")?,
         };
+
+        let tool_registry = match self.tool_registry {
+            Some(registry) => registry,
+            None => {
+                let mut registry = ToolRegistry::new(self.config.workspace.clone()).await;
+                registry.set_harness_session(session_info.session_id.clone());
+                Arc::new(registry)
+            }
+        };
+
+        let decision_tracker = self.decision_tracker.unwrap_or_default();
+
+        let error_recovery = self.error_recovery.unwrap_or_default();
 
         Ok(AgentComponentSet {
             client,

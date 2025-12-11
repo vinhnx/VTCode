@@ -429,12 +429,7 @@ mod tests {
 
         let error = handler.handle_http_error(reqwest::StatusCode::UNAUTHORIZED, "Invalid API key");
 
-        match error {
-            LLMError::Authentication(_) => {
-                // Expected
-            }
-            _ => panic!("Expected authentication error"),
-        }
+        assert!(matches!(error, LLMError::InvalidRequest(_)));
     }
 
     #[test]

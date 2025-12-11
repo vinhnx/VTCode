@@ -174,6 +174,7 @@ const DEFAULT_TOOL_POLICIES: &[(&str, ToolPolicy)] = &[
     // File operations (destructive - require confirmation)
     (tools::DELETE_FILE, ToolPolicy::Prompt),
     (tools::APPLY_PATCH, ToolPolicy::Prompt),
+    (tools::SEARCH_REPLACE, ToolPolicy::Prompt),
     // PTY/Terminal operations
     (tools::RUN_PTY_CMD, ToolPolicy::Prompt),
     (tools::CREATE_PTY_SESSION, ToolPolicy::Allow),

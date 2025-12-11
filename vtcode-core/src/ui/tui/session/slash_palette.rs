@@ -98,6 +98,7 @@ pub struct SlashPaletteItem {
     #[allow(dead_code)]
     pub custom_prompt: Option<CustomPrompt>,
     pub name_segments: Vec<SlashPaletteHighlightSegment>,
+    #[allow(dead_code)]
     pub description: String,
 }
 

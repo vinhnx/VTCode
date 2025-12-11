@@ -122,6 +122,12 @@ pub(super) fn builtin_tool_registrations() -> Vec<ToolRegistration> {
             ToolRegistry::apply_patch_executor,
         ),
         ToolRegistration::new(
+            tools::SEARCH_REPLACE,
+            CapabilityLevel::Editing,
+            false,
+            ToolRegistry::search_replace_executor,
+        ),
+        ToolRegistration::new(
             tools::SEARCH_TOOLS,
             CapabilityLevel::Bash,
             false,

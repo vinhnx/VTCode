@@ -105,6 +105,15 @@ impl SessionStyles {
         style
     }
 
+    /// Get the default inline style (for tests and inline conversions)
+    #[allow(dead_code)]
+    pub fn default_inline_style(&self) -> InlineTextStyle {
+        InlineTextStyle {
+            color: self.theme.foreground,
+            ..InlineTextStyle::default()
+        }
+    }
+
     /// Get the accent inline style
     pub fn accent_inline_style(&self) -> InlineTextStyle {
         InlineTextStyle {

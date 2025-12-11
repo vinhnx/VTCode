@@ -516,7 +516,7 @@ mod tests {
 
     #[test]
     fn session_message_converts_back_and_forth() {
-        let mut original = Message::assistant("Test response".to_owned());
+        let _original = Message::assistant("Test response".to_owned());
         let mut original = Message::assistant("Test response".to_owned());
         original.reasoning = Some("Model thoughts".to_owned());
         original.reasoning = Some("Model thoughts".to_owned());

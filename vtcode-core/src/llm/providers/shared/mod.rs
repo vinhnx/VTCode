@@ -379,7 +379,11 @@ mod tests {
         .unwrap();
         apply_tool_call_delta_from_content(&mut builders, &container, &telemetry);
         let calls = finalize_tool_calls(builders).expect("call expected");
-        assert_eq!(calls[0].function.name, "foo");
+        let func = calls[0]
+            .function
+            .as_ref()
+            .expect("function call should be present");
+        assert_eq!(func.name, "foo");
     }
 
     #[test]
@@ -407,7 +411,11 @@ mod tests {
         let calls = finalize_tool_calls(builders).expect("call expected");
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0].id, "call-1");
-        assert_eq!(calls[0].function.arguments, "{\"value\":1}");
+        let func = calls[0]
+            .function
+            .as_ref()
+            .expect("function call should be present");
+        assert_eq!(func.arguments, "{\"value\":1}");
     }
 
     #[test]

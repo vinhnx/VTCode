@@ -1212,8 +1212,8 @@ mod tests {
 
         // Test with empty model string (should use provider's default)
         let provider_default = AnthropicProvider::from_config(
-            "key".to_string(),
-            models::anthropic::DEFAULT_MODEL.to_string(),
+            Some("key".to_string()),
+            Some(models::anthropic::DEFAULT_MODEL.to_string()),
             None,
             None,
             None,

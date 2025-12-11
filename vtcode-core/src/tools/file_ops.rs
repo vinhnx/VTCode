@@ -22,6 +22,8 @@ use tokio::io::AsyncSeekExt;
 use tracing::{info, warn};
 use walkdir::WalkDir;
 
+const MAX_WRITE_BYTES: usize = 64_000;
+
 /// File operations tool with multiple modes
 #[derive(Clone)]
 pub struct FileOpsTool {
@@ -624,6 +626,9 @@ impl FileOpsTool {
             column: Some(false),
             only_matching: Some(false),
             trim: Some(false),
+            max_result_bytes: None,
+            timeout: None,
+            extra_ignore_globs: None,
         };
 
         let result = self
@@ -1096,13 +1101,12 @@ impl FileOpsTool {
             ));
         }
 
-        // Check if content needs chunking
         let content_size = input.content.len();
-        let should_chunk =
-            content_size > crate::config::constants::chunking::MAX_WRITE_CONTENT_SIZE;
-
-        if should_chunk {
-            return self.write_file_chunked(&file_path, &input).await;
+        if content_size > MAX_WRITE_BYTES {
+            return Err(anyhow!(
+                "Content exceeds safe write limit ({} bytes). Use search_replace or apply_patch for large edits.",
+                MAX_WRITE_BYTES
+            ));
         }
 
         // Create parent directories if needed
@@ -1111,14 +1115,6 @@ impl FileOpsTool {
         }
 
         let file_exists = tokio::fs::try_exists(&file_path).await?;
-
-        if input.mode.as_str() == "skip_if_exists" && file_exists {
-            return Ok(json!({
-                "success": true,
-                "skipped": true,
-                "reason": "File already exists"
-            }));
-        }
 
         let mut existing_content: Option<String> = None;
         let mut diff_preview: Option<Value> = None;
@@ -1135,7 +1131,21 @@ impl FileOpsTool {
             }
         }
 
-        match input.mode.as_str() {
+        let effective_mode = if input.overwrite
+            && input.mode != "overwrite"
+            && input.mode != "fail_if_exists"
+        {
+            return Err(anyhow!(
+                "Conflicting parameters: overwrite=true but mode='{}'. Use mode='overwrite' or omit overwrite.",
+                input.mode
+            ));
+        } else if input.overwrite {
+            "overwrite"
+        } else {
+            input.mode.as_str()
+        };
+
+        match effective_mode {
             "overwrite" => {
                 tokio::fs::write(&file_path, &input.content).await?;
             }
@@ -1149,12 +1159,28 @@ impl FileOpsTool {
                 file.write_all(input.content.as_bytes()).await?;
             }
             "skip_if_exists" => {
+                if file_exists {
+                    return Ok(json!({
+                        "success": true,
+                        "skipped": true,
+                        "reason": "File already exists"
+                    }));
+                }
+                tokio::fs::write(&file_path, &input.content).await?;
+            }
+            "fail_if_exists" => {
+                if file_exists {
+                    return Err(anyhow!(
+                        "File '{}' exists. Use mode='overwrite' (or overwrite=true) to replace, or choose append/skip_if_exists.",
+                        input.path
+                    ));
+                }
                 tokio::fs::write(&file_path, &input.content).await?;
             }
             _ => {
                 return Err(anyhow!(
-                    "Error: Unsupported write mode '{}'. Allowed: overwrite, append, skip_if_exists.",
-                    input.mode
+                    "Error: Unsupported write mode '{}'. Allowed: overwrite, append, skip_if_exists, fail_if_exists.",
+                    effective_mode
                 ));
             }
         }
@@ -1202,8 +1228,9 @@ impl FileOpsTool {
         let mut response = json!({
             "success": true,
             "path": self.workspace_relative_display(&file_path),
-            "mode": input.mode,
-            "bytes_written": input.content.len()
+            "mode": effective_mode,
+            "bytes_written": input.content.len(),
+            "file_existed": file_exists,
         });
 
         if let Some(preview) = diff_preview
@@ -1216,6 +1243,7 @@ impl FileOpsTool {
     }
 
     /// Write large file in chunks for atomicity and memory efficiency
+    #[allow(dead_code)]
     async fn write_file_chunked(&self, file_path: &Path, input: &WriteInput) -> Result<Value> {
         // Create parent directories if needed
         if let Some(parent) = file_path.parent() {
@@ -1583,6 +1611,13 @@ fn git_diff(old: &str, new: &str, old_label: &str, new_label: &str) -> Result<St
     result = result.replace(&format!("b/{new_str}"), &format!("b/{new_label}"));
 
     Ok(result)
+}
+
+impl FileOpsTool {
+    /// Public helper to normalize and validate a user-provided path against the workspace root.
+    pub async fn normalize_user_path(&self, path: &str) -> Result<PathBuf> {
+        self.normalize_and_validate_user_path(path).await
+    }
 }
 
 #[cfg(test)]

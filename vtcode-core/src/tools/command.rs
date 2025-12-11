@@ -8,8 +8,6 @@ use crate::tools::path_env;
 use crate::tools::shell::resolve_fallback_shell;
 use anyhow::{Result, anyhow};
 #[cfg(test)]
-use serde_json::json;
-#[cfg(test)]
 use std::collections::HashMap;
 #[cfg(test)]
 use std::ffi::OsString;
@@ -137,6 +135,12 @@ impl CommandTool {
 
         Ok(resolved_invocation)
     }
+
+    /// Validate command arguments without executing them (test/helper)
+    #[cfg(test)]
+    pub(crate) async fn validate_args(&self, input: &EnhancedTerminalInput) -> Result<()> {
+        self.prepare_invocation(input).await.map(|_| ())
+    }
 }
 
 // NOTE: Tool and ModeTool trait implementations removed since CommandTool
@@ -253,6 +257,7 @@ mod tests {
             shell: None,
             login: None,
             confirm: None,
+            max_tokens: None,
         }
     }
 
@@ -308,7 +313,7 @@ mod tests {
     #[tokio::test]
     async fn prepare_invocation_requires_confirm_for_git_reset_hard() {
         let tool = make_tool();
-        let mut input = make_input(vec!["git", "reset", "--hard"]);
+        let input = make_input(vec!["git", "reset", "--hard"]);
         // No explicit confirm set - should error
         let error = tool
             .prepare_invocation(&input)
@@ -441,7 +446,7 @@ mod tests {
                 .parent()
                 .expect("parent")
                 .to_string_lossy()
-                .to_owned(),
+                .into_owned(),
         ];
 
         let tool = CommandTool::with_commands_config(cwd, config);
@@ -514,9 +519,10 @@ mod tests {
     #[tokio::test]
     async fn validate_args_rejects_empty_command() {
         let tool = make_tool();
-        let args = json!({ "command": [] });
+        let args = make_input(vec![]);
         let error = tool
             .validate_args(&args)
+            .await
             .expect_err("empty command should fail validation");
         assert!(error.to_string().contains("Command cannot be empty"));
     }
@@ -524,9 +530,10 @@ mod tests {
     #[tokio::test]
     async fn validate_args_rejects_empty_executable() {
         let tool = make_tool();
-        let args = json!({ "command": ["", "arg1"] });
+        let args = make_input(vec!["", "arg1"]);
         let error = tool
             .validate_args(&args)
+            .await
             .expect_err("empty executable should fail validation");
         assert!(
             error
@@ -538,8 +545,9 @@ mod tests {
     #[tokio::test]
     async fn validate_args_accepts_valid_command() {
         let tool = make_tool();
-        let args = json!({ "command": ["ls", "-la"] });
+        let args = make_input(vec!["ls", "-la"]);
         tool.validate_args(&args)
+            .await
             .expect("valid command should pass validation");
     }
 

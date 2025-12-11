@@ -1210,7 +1210,9 @@ mod tests {
             .parts
             .iter()
             .find_map(|part| match part {
-                Part::FunctionResponse { function_response } => Some(function_response),
+                Part::FunctionResponse {
+                    function_response, ..
+                } => Some(function_response),
                 _ => None,
             })
             .expect("tool response part should exist");
@@ -1234,6 +1236,7 @@ mod tests {
                                 args: json!({ "path": "." }),
                                 id: Some("call_1".to_string()),
                             },
+                            thought_signature: None,
                         },
                     ],
                 },
@@ -1529,6 +1532,8 @@ mod tests {
                 Message {
                     role: MessageRole::Assistant,
                     content: MessageContent::Text(String::new()),
+                    reasoning: None,
+                    reasoning_details: None,
                     tool_calls: Some(vec![ToolCall {
                         id: "call_456".to_string(),
                         call_type: "function".to_string(),
@@ -1540,6 +1545,7 @@ mod tests {
                         thought_signature: Some(test_signature.clone()),
                     }]),
                     tool_call_id: None,
+                    origin_tool: None,
                 },
             ],
             system_prompt: None,

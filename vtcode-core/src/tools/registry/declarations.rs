@@ -4,6 +4,7 @@ use std::sync::OnceLock;
 use crate::config::constants::tools;
 use crate::config::types::CapabilityLevel;
 use crate::gemini::FunctionDeclaration;
+use crate::tool_policy::ToolPolicy;
 use serde_json::{Map, Value, json};
 
 use super::builtins::builtin_tool_registrations;
@@ -317,15 +318,17 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
         // ============================================================
         FunctionDeclaration {
             name: tools::READ_FILE.to_string(),
-            description: "Read file contents. Auto-chunks large files (>2000 lines).".to_string(),
+            description: "Read file contents safely. Supports chunked reads with offset/limit for large files; returns was_truncated=true when content is cut to fit size/token limits. Prefer paging with offset/limit over shell commands like cat/head/tail.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
-                    "path": {"type": "string", "description": "File path (absolute or relative to workspace)."},
-                    "max_bytes": {"type": "integer", "description": "Maximum bytes to read. Returns truncated content if file is larger."},
-                    "chunk_lines": {"type": "integer", "description": "Lines per chunk for large files. Lower value = more paginated output.", "default": 2000},
-                    "max_lines": {"type": "integer", "description": "Deprecated: Use max_tokens instead for token-based limits."},
-                    "max_tokens": {"type": "integer", "description": "Maximum tokens to include from this file (per-call token budget). Preferred over line-based limits."}
+                    "path": {"type": "string", "description": "File path (absolute or workspace-relative)."},
+                    "offset_lines": {"type": "integer", "description": "Start reading from this 1-based line offset (use with limit for paging)."},
+                    "limit": {"type": "integer", "description": "Number of lines to read from offset_lines (default reads from start)."},
+                    "max_bytes": {"type": "integer", "description": "Hard cap on bytes read; if exceeded, content is truncated and was_truncated=true."},
+                    "chunk_lines": {"type": "integer", "description": "Auto-chunking threshold for large files; smaller values increase paging.", "default": 2000},
+                    "max_lines": {"type": "integer", "description": "Deprecated: prefer limit or max_tokens."},
+                    "max_tokens": {"type": "integer", "description": "Token budget for content; prefer this over line counts for large files."}
                 },
                 "required": ["path"]
             }),
@@ -397,7 +400,7 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
 
         FunctionDeclaration {
             name: tools::WRITE_FILE.to_string(),
-            description: "Create or modify a file. Use for full-file rewrites or new files. Modes: overwrite (default), append, or skip_if_exists.".to_string(),
+            description: "Create or modify a file safely. Defaults to fail if the file exists; set mode=\"overwrite\" to replace. Prefer search_replace/edit_file for partial edits and read_file before overwriting. Modes: fail_if_exists (default), overwrite, append, skip_if_exists.".to_string(),
             parameters: {
                 let mut properties = Map::new();
                 insert_string_with_aliases(
@@ -412,11 +415,17 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
                     "Full file contents to persist",
                     CONTENT_ALIASES,
                 );
+                insert_bool_property(
+                    &mut properties,
+                    "overwrite",
+                    "Alias: set true to overwrite (maps to mode=overwrite)",
+                    Some(false),
+                );
                 insert_string_property_with_default(
                     &mut properties,
                     "mode",
-                    "overwrite|append|skip_if_exists",
-                    Some("overwrite"),
+                    "fail_if_exists|overwrite|append|skip_if_exists",
+                    Some("fail_if_exists"),
                 );
                 insert_string_property(
                     &mut properties,
@@ -489,6 +498,24 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
                     {"required": ["patch"]},
                     {"required": ["diff"]}
                 ]
+            }),
+        },
+
+        FunctionDeclaration {
+            name: tools::SEARCH_REPLACE.to_string(),
+            description: "Search for a literal block in a file and replace it with new text. Validates workspace paths, supports optional backup, and can constrain matches using before/after context hints.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Path to file to edit"},
+                    "search": {"type": "string", "description": "Literal text to find"},
+                    "replace": {"type": "string", "description": "Replacement text"},
+                    "max_replacements": {"type": "integer", "description": "Optional cap on replacements"},
+                    "backup": {"type": "boolean", "description": "Create .bak backup before writing", "default": true},
+                    "before": {"type": "string", "description": "Optional required prefix immediately before the match"},
+                    "after": {"type": "string", "description": "Optional required suffix immediately after the match"}
+                },
+                "required": ["path", "search", "replace"]
             }),
         },
 
@@ -658,6 +685,7 @@ pub fn build_function_declarations_with_mode(
     todo_planning_enabled: bool,
 ) -> Vec<FunctionDeclaration> {
     let mut declarations = base_function_declarations();
+    apply_metadata_overrides(&mut declarations);
     if !todo_planning_enabled {
         declarations.retain(|decl| decl.name != tools::UPDATE_PLAN);
     }
@@ -672,7 +700,10 @@ pub fn build_function_declarations_for_level(level: CapabilityLevel) -> Vec<Func
         .map(|registration| (registration.name(), registration.capability()))
         .collect();
 
-    build_function_declarations()
+    let mut declarations = build_function_declarations();
+    apply_metadata_overrides(&mut declarations);
+
+    declarations
         .into_iter()
         .filter(|fd| {
             tool_capabilities
@@ -681,4 +712,55 @@ pub fn build_function_declarations_for_level(level: CapabilityLevel) -> Vec<Func
                 .unwrap_or(false)
         })
         .collect()
+}
+
+fn apply_metadata_overrides(declarations: &mut [FunctionDeclaration]) {
+    let registrations = builtin_tool_registrations();
+    let mut metadata_by_name: HashMap<&str, _> =
+        registrations.iter().map(|r| (r.name(), r.metadata())).collect();
+
+    for decl in declarations.iter_mut() {
+        if let Some(meta) = metadata_by_name.remove(decl.name.as_str()) {
+            if let Some(schema) = meta.parameter_schema() {
+                decl.parameters = schema.clone();
+            }
+            annotate_parameters(&mut decl.parameters, meta);
+        }
+    }
+}
+
+fn annotate_parameters(params: &mut Value, meta: &super::registration::ToolMetadata) {
+    let Value::Object(map) = params else {
+        return;
+    };
+
+    if let Some(permission) = meta.default_permission() {
+        map.insert(
+            "x-default-permission".to_string(),
+            json!(permission_label(&permission)),
+        );
+    }
+
+    if !meta.aliases().is_empty() {
+        map.insert(
+            "x-aliases".to_string(),
+            json!(meta.aliases().to_vec()),
+        );
+    }
+
+    if let Some(schema) = meta.config_schema() {
+        map.insert("x-config-schema".to_string(), schema.clone());
+    }
+
+    if let Some(schema) = meta.state_schema() {
+        map.insert("x-state-schema".to_string(), schema.clone());
+    }
+}
+
+fn permission_label(permission: &ToolPolicy) -> &'static str {
+    match permission {
+        ToolPolicy::Allow => "allow",
+        ToolPolicy::Deny => "deny",
+        ToolPolicy::Prompt => "prompt",
+    }
 }

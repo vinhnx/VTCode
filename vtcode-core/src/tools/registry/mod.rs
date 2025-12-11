@@ -43,15 +43,17 @@ use crate::config::{CommandsConfig, PtyConfig, TimeoutsConfig, ToolsConfig};
 use crate::tool_policy::{ToolPolicy, ToolPolicyManager};
 use crate::tools::file_ops::FileOpsTool;
 use crate::tools::grep_file::GrepSearchManager;
+use crate::tools::mcp::build_mcp_registration;
 use crate::tools::names::canonical_tool_name;
 use crate::tools::pty::PtyManager;
+use crate::tools::{PlanSummary, TaskPlan};
 use anyhow::Result;
-use serde_json::Value;
+use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
-use tracing::{debug, warn};
+use tracing::{debug, trace, warn};
 
 use super::plan::PlanManager;
 use crate::mcp::{McpClient, McpToolExecutor, McpToolInfo};
@@ -66,36 +68,102 @@ use crate::config::types::CapabilityLevel;
 
 /// Record of a tool execution for diagnostics
 #[derive(Debug, Clone)]
+pub struct HarnessContextSnapshot {
+    pub session_id: String,
+    pub task_id: Option<String>,
+    pub plan_version: u64,
+    pub plan_summary: PlanSummary,
+}
+
+impl HarnessContextSnapshot {
+    pub fn new(
+        session_id: String,
+        task_id: Option<String>,
+        plan_version: u64,
+        plan_summary: PlanSummary,
+    ) -> Self {
+        Self {
+            session_id,
+            task_id,
+            plan_version,
+            plan_summary,
+        }
+    }
+
+    /// Serialize snapshot for middleware/telemetry consumers without cloning callers
+    pub fn to_json(&self) -> Value {
+        json!({
+            "session_id": self.session_id,
+            "task_id": self.task_id,
+            "plan_version": self.plan_version,
+            "plan_summary": {
+                "status": self.plan_summary.status.label(),
+                "total_steps": self.plan_summary.total_steps,
+                "completed_steps": self.plan_summary.completed_steps,
+            }
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct ToolExecutionRecord {
     pub tool_name: String,
+    pub requested_name: String,
+    pub is_mcp: bool,
+    pub mcp_provider: Option<String>,
     pub args: Value,
     pub result: Result<Value, String>, // Ok(result) or Err(error_message)
     pub timestamp: SystemTime,
     pub success: bool,
+    pub context: HarnessContextSnapshot,
 }
 
 impl ToolExecutionRecord {
     /// Create a new failed execution record
     #[inline]
-    pub fn failure(tool_name: String, args: Value, error_msg: String) -> Self {
+    pub fn failure(
+        tool_name: String,
+        requested_name: String,
+        is_mcp: bool,
+        mcp_provider: Option<String>,
+        args: Value,
+        error_msg: String,
+        context: HarnessContextSnapshot,
+    ) -> Self {
         Self {
             tool_name,
+            requested_name,
+            is_mcp,
+            mcp_provider,
             args,
             result: Err(error_msg),
             timestamp: SystemTime::now(),
             success: false,
+            context,
         }
     }
 
     /// Create a new successful execution record
     #[inline]
-    pub fn success(tool_name: String, args: Value, result: Value) -> Self {
+    pub fn success(
+        tool_name: String,
+        requested_name: String,
+        is_mcp: bool,
+        mcp_provider: Option<String>,
+        args: Value,
+        result: Value,
+        context: HarnessContextSnapshot,
+    ) -> Self {
         Self {
             tool_name,
+            requested_name,
+            is_mcp,
+            mcp_provider,
             args,
             result: Ok(result),
             timestamp: SystemTime::now(),
             success: true,
+            context,
         }
     }
 }
@@ -287,6 +355,52 @@ impl ToolTimeoutPolicy {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct HarnessContext {
+    session_id: String,
+    task_id: Option<String>,
+}
+
+impl Default for HarnessContext {
+    fn default() -> Self {
+        let session_id = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .map(|d| format!("session-{}", d.as_millis()))
+            .unwrap_or_else(|_| "session-unknown".to_string());
+
+        Self {
+            session_id,
+            task_id: None,
+        }
+    }
+}
+
+impl HarnessContext {
+    pub fn with_session(session_id: impl Into<String>) -> Self {
+        Self {
+            session_id: session_id.into(),
+            task_id: None,
+        }
+    }
+
+    pub fn set_session_id(&mut self, session_id: impl Into<String>) {
+        self.session_id = session_id.into();
+    }
+
+    pub fn set_task_id(&mut self, task_id: Option<String>) {
+        self.task_id = task_id;
+    }
+
+    fn snapshot_with_plan(&self, plan: &TaskPlan) -> HarnessContextSnapshot {
+        HarnessContextSnapshot {
+            session_id: self.session_id.clone(),
+            task_id: self.task_id.clone(),
+            plan_version: plan.version,
+            plan_summary: plan.summary.clone(),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct ToolRegistry {
     inventory: ToolInventory,
@@ -297,6 +411,7 @@ pub struct ToolRegistry {
     mcp_tool_presence: HashMap<String, bool>,
     timeout_policy: ToolTimeoutPolicy,
     execution_history: ToolExecutionHistory,
+    harness_context: HarnessContext,
     initialized: bool,
 }
 
@@ -389,6 +504,7 @@ impl ToolRegistry {
             mcp_tool_presence: HashMap::new(),
             timeout_policy: ToolTimeoutPolicy::default(),
             execution_history: ToolExecutionHistory::new(100), // Keep last 100 executions
+            harness_context: HarnessContext::default(),
             initialized: false,
         };
 
@@ -397,11 +513,51 @@ impl ToolRegistry {
     }
 
     async fn sync_policy_catalog(&mut self) {
-        let available = self.inventory.available_tools();
+        // Include aliases so policy prompts stay in sync with exposed names
+        let available = self.available_tools().await;
         let mcp_keys = self.mcp_policy_keys();
         self.policy_gateway
             .sync_available_tools(available, &mcp_keys)
             .await;
+
+        // Seed default permissions from tool metadata when policy manager is present
+        let registrations = self.inventory.registration_metadata();
+        if let Ok(policy) = self.policy_manager_mut() {
+            let mut seeded = 0usize;
+            for (name, metadata) in registrations {
+                if let Some(default_policy) = metadata.default_permission() {
+                    let current = policy.get_policy(&name);
+                    if matches!(current, ToolPolicy::Prompt) {
+                        if let Err(err) = policy.set_policy(&name, default_policy.clone()).await {
+                            warn!(
+                                tool = %name,
+                                error = %err,
+                                "Failed to seed default policy from tool metadata"
+                            );
+                        } else {
+                            seeded += 1;
+                            // Apply same default to aliases so they behave consistently
+                            for alias in metadata.aliases() {
+                                if let Err(err) =
+                                    policy.set_policy(alias, default_policy.clone()).await
+                                {
+                                    warn!(
+                                        tool = %name,
+                                        alias = %alias,
+                                        error = %err,
+                                        "Failed to seed default policy for alias"
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if seeded > 0 {
+                debug!(seeded, "Seeded default tool policies from registrations");
+            }
+        }
     }
 
     /// Register a new tool with the registry
@@ -421,6 +577,7 @@ impl ToolRegistry {
     /// A `Vec<String>` containing the names of all available tools
     pub async fn available_tools(&self) -> Vec<String> {
         let mut tools = self.inventory.available_tools();
+        tools.extend(self.inventory.registered_aliases());
 
         // Add MCP tools if available
         if let Some(mcp_client) = &self.mcp_client
@@ -559,6 +716,22 @@ impl ToolRegistry {
         self.inventory.plan_manager().snapshot()
     }
 
+    /// Update harness session identifier used for structured tool telemetry
+    pub fn set_harness_session(&mut self, session_id: impl Into<String>) {
+        self.harness_context.set_session_id(session_id);
+    }
+
+    /// Update current task identifier used for structured tool telemetry
+    pub fn set_harness_task(&mut self, task_id: Option<String>) {
+        self.harness_context.set_task_id(task_id);
+    }
+
+    /// Snapshot harness context including current plan metadata
+    pub fn harness_context_snapshot(&self) -> HarnessContextSnapshot {
+        let plan = self.current_plan();
+        self.harness_context.snapshot_with_plan(&plan)
+    }
+
     pub fn policy_manager_mut(&mut self) -> Result<&mut ToolPolicyManager> {
         self.policy_gateway.policy_manager_mut()
     }
@@ -688,6 +861,7 @@ impl ToolRegistry {
         let tool_name = canonical_name.as_ref();
         // Cache tool_name as owned String once for all record usage
         let tool_name_owned = tool_name.to_string();
+        let requested_name = name.to_string();
         let display_name = if tool_name == name {
             tool_name_owned.clone()
         } else {
@@ -696,6 +870,39 @@ impl ToolRegistry {
 
         // Clone args once at the start for error recording paths (clone only here)
         let args_for_recording = args.clone();
+        // Capture harness context snapshot for structured telemetry and history
+        let context_snapshot = self.harness_context_snapshot();
+        let context_payload = context_snapshot.to_json();
+
+        let execution_span = tracing::debug_span!(
+            "tool_execution",
+            tool = %tool_name,
+            requested = %name,
+            session_id = %context_snapshot.session_id,
+            task_id = %context_snapshot.task_id.as_deref().unwrap_or(""),
+            plan_version = context_snapshot.plan_version,
+            plan_status = %context_snapshot.plan_summary.status.label(),
+            plan_total_steps = context_snapshot.plan_summary.total_steps,
+            plan_completed_steps = context_snapshot.plan_summary.completed_steps
+        );
+        let _span_guard = execution_span.enter();
+
+        debug!(
+            tool = %tool_name,
+            session_id = %context_snapshot.session_id,
+            task_id = %context_snapshot.task_id.as_deref().unwrap_or(""),
+            plan_version = context_snapshot.plan_version,
+            plan_status = ?context_snapshot.plan_summary.status,
+            "Executing tool with harness context"
+        );
+
+        if tool_name != name {
+            trace!(
+                requested = %name,
+                canonical = %tool_name,
+                "Resolved tool alias to canonical name"
+            );
+        }
 
         // LOOP DETECTION: Check if we're calling the same tool repeatedly with identical params
         let (is_loop, repeat_count, _) = self.execution_history.detect_loop(tool_name, args);
@@ -723,8 +930,12 @@ impl ToolRegistry {
             self.execution_history
                 .add_record(ToolExecutionRecord::failure(
                     tool_name_owned,
+                    requested_name.clone(),
+                    false,
+                    None,
                     args_for_recording,
                     "Tool execution denied by policy".to_string(),
+                    context_snapshot.clone(),
                 ));
 
             return Ok(error.to_json_value());
@@ -742,8 +953,12 @@ impl ToolRegistry {
             self.execution_history
                 .add_record(ToolExecutionRecord::failure(
                     tool_name_owned,
+                    requested_name.clone(),
+                    false,
+                    None,
                     args_for_recording,
                     "Tool execution denied by policy".to_string(),
+                    context_snapshot.clone(),
                 ));
 
             return Ok(error.to_json_value());
@@ -765,8 +980,12 @@ impl ToolRegistry {
                 self.execution_history
                     .add_record(ToolExecutionRecord::failure(
                         tool_name_owned,
+                        requested_name.clone(),
+                        false,
+                        None,
                         args_for_recording,
                         format!("Failed to apply policy constraints: {}", err),
+                        context_snapshot.clone(),
                     ));
 
                 return Ok(error.to_json_value());
@@ -777,6 +996,7 @@ impl ToolRegistry {
         let mut needs_pty = false;
         let mut tool_exists = false;
         let mut is_mcp_tool = false;
+        let mut mcp_provider: Option<String> = None;
         let mut mcp_tool_name: Option<String> = None;
         let mut mcp_lookup_error: Option<anyhow::Error> = None;
 
@@ -787,11 +1007,22 @@ impl ToolRegistry {
         }
         // If not a standard tool, check if it's an MCP tool
         else if let Some(mcp_client) = &self.mcp_client {
-            let resolved_mcp_name = if let Some(stripped) = name.strip_prefix("mcp_") {
+            let mut resolved_mcp_name = if let Some(stripped) = name.strip_prefix("mcp_") {
                 stripped.to_string()
             } else {
                 tool_name_owned.clone()
             };
+
+            if let Some(alias_target) = self.resolve_mcp_tool_alias(&resolved_mcp_name).await {
+                if alias_target != resolved_mcp_name {
+                    trace!(
+                        requested = %resolved_mcp_name,
+                        resolved = %alias_target,
+                        "Resolved MCP tool alias"
+                    );
+                    resolved_mcp_name = alias_target;
+                }
+            }
 
             match mcp_client.has_mcp_tool(&resolved_mcp_name).await {
                 Ok(true) => {
@@ -799,6 +1030,7 @@ impl ToolRegistry {
                     tool_exists = true;
                     is_mcp_tool = true;
                     mcp_tool_name = Some(resolved_mcp_name);
+                    mcp_provider = self.find_mcp_provider(mcp_tool_name.as_deref().unwrap());
                 }
                 Ok(false) => {
                     tool_exists = false;
@@ -823,8 +1055,12 @@ impl ToolRegistry {
                 self.execution_history
                     .add_record(ToolExecutionRecord::failure(
                         tool_name_owned,
+                        requested_name.clone(),
+                        is_mcp_tool,
+                        mcp_provider.clone(),
                         args_for_recording,
                         format!("Failed to resolve MCP tool '{}': {}", display_name, err),
+                        context_snapshot.clone(),
                     ));
 
                 return Ok(error.to_json_value());
@@ -839,12 +1075,34 @@ impl ToolRegistry {
             self.execution_history
                 .add_record(ToolExecutionRecord::failure(
                     tool_name_owned,
+                    requested_name.clone(),
+                    is_mcp_tool,
+                    mcp_provider.clone(),
                     args_for_recording,
                     format!("Unknown tool: {}", display_name),
+                    context_snapshot.clone(),
                 ));
 
             return Ok(error.to_json_value());
         }
+
+        debug!(
+            tool = %tool_name,
+            requested = %name,
+            is_mcp = is_mcp_tool,
+            uses_pty = needs_pty,
+            alias = %if tool_name == name { "" } else { name },
+            mcp_provider = %mcp_provider.as_deref().unwrap_or(""),
+            "Resolved tool route"
+        );
+        trace!(
+            tool = %tool_name,
+            requested = %name,
+            mcp_provider = %mcp_provider.as_deref().unwrap_or(""),
+            mcp_tool = %mcp_tool_name.as_deref().unwrap_or(""),
+            context = %context_payload,
+            "Tool execution context and routing finalized"
+        );
 
         // Start PTY session if needed (using RAII guard for automatic cleanup)
         let _pty_guard = if needs_pty {
@@ -861,8 +1119,12 @@ impl ToolRegistry {
                     self.execution_history
                         .add_record(ToolExecutionRecord::failure(
                             tool_name_owned,
+                            requested_name.clone(),
+                            is_mcp_tool,
+                            mcp_provider.clone(),
                             args_for_recording,
                             "Failed to start PTY session".to_string(),
+                            context_snapshot.clone(),
                         ));
 
                     return Ok(error.to_json_value());
@@ -907,8 +1169,12 @@ impl ToolRegistry {
             self.execution_history
                 .add_record(ToolExecutionRecord::failure(
                     tool_name_owned,
+                    requested_name,
+                    is_mcp_tool,
+                    mcp_provider,
                     args_for_recording,
                     "Tool not found in registry".to_string(),
+                    context_snapshot.clone(),
                 ));
 
             return Ok(error.to_json_value());
@@ -925,8 +1191,12 @@ impl ToolRegistry {
                 self.execution_history
                     .add_record(ToolExecutionRecord::success(
                         tool_name_owned,
+                        requested_name,
+                        is_mcp_tool,
+                        mcp_provider,
                         args_for_recording,
                         normalized_value.clone(),
+                        context_snapshot.clone(),
                     ));
 
                 Ok(normalized_value)
@@ -943,8 +1213,12 @@ impl ToolRegistry {
                 self.execution_history
                     .add_record(ToolExecutionRecord::failure(
                         tool_name_owned,
+                        requested_name,
+                        is_mcp_tool,
+                        mcp_provider,
                         args_for_recording,
                         format!("Tool execution failed: {}", err),
+                        context_snapshot.clone(),
                     ));
 
                 Ok(error.to_json_value())
@@ -1070,6 +1344,22 @@ impl ToolRegistry {
             let tools = mcp_client.list_mcp_tools().await?;
             let mut provider_map: HashMap<String, Vec<String>> = HashMap::new();
 
+            for tool in &tools {
+                let registration =
+                    build_mcp_registration(Arc::clone(mcp_client), &tool.provider, tool, None);
+
+                if !self.inventory.has_tool(registration.name()) {
+                    if let Err(err) = self.inventory.register_tool(registration) {
+                        warn!(
+                            tool = %tool.name,
+                            provider = %tool.provider,
+                            error = %err,
+                            "failed to register MCP proxy tool"
+                        );
+                    }
+                }
+            }
+
             for tool in tools {
                 provider_map
                     .entry(tool.provider.clone())
@@ -1122,7 +1412,22 @@ impl ToolRegistry {
             return self.evaluate_mcp_tool_policy(name, tool_name).await;
         }
 
-        self.policy_gateway.evaluate_tool_policy(name).await
+        let canonical = canonical_tool_name(name);
+        let normalized = canonical.as_ref();
+
+        if !self.policy_gateway.has_policy_manager() {
+            if let Some(registration) = self.inventory.registration_for(normalized) {
+                if let Some(permission) = registration.default_permission() {
+                    return Ok(match permission {
+                        ToolPolicy::Allow => ToolPermissionDecision::Allow,
+                        ToolPolicy::Deny => ToolPermissionDecision::Deny,
+                        ToolPolicy::Prompt => ToolPermissionDecision::Prompt,
+                    });
+                }
+            }
+        }
+
+        self.policy_gateway.evaluate_tool_policy(normalized).await
     }
 
     async fn evaluate_mcp_tool_policy(
@@ -1293,7 +1598,9 @@ mod tests {
         let temp_dir = TempDir::new()?;
         let mut registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
 
-        registry.enable_full_auto_mode(&vec![tools::READ_FILE.to_string()]);
+        registry
+            .enable_full_auto_mode(&vec![tools::READ_FILE.to_string()])
+            .await;
 
         assert!(registry.preflight_tool_permission(tools::READ_FILE).await?);
         assert!(
