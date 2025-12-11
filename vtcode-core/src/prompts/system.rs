@@ -213,7 +213,7 @@ Examples:
 
 ### Loop Prevention (Built-in Detection)
 VT Code automatically stops after:
-- Same tool+params called 5+ times
+- Same tool+params exceed `tools.max_repeated_tool_calls` (default 2)
 - 10+ calls without concrete output
 - Your responsibility: Cache results, don't repeat queries
 

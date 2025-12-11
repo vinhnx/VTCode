@@ -18,6 +18,7 @@ mod telemetry;
 mod utils;
 
 use std::borrow::Cow;
+use std::env;
 
 pub use approval_recorder::ApprovalRecorder;
 pub use declarations::{
@@ -37,6 +38,7 @@ use inventory::ToolInventory;
 use policy::ToolPolicyGateway;
 use utils::normalize_tool_output;
 
+use crate::config::constants::defaults;
 #[cfg(test)]
 use crate::config::constants::tools;
 use crate::config::{CommandsConfig, PtyConfig, TimeoutsConfig, ToolsConfig};
@@ -194,10 +196,14 @@ impl ToolExecutionRecord {
 }
 
 /// Thread-safe execution history for recording tool executions
+const DEFAULT_LOOP_DETECT_WINDOW: usize = 5;
 #[derive(Clone)]
 pub struct ToolExecutionHistory {
     records: Arc<RwLock<VecDeque<ToolExecutionRecord>>>,
     max_records: usize,
+    detect_window: usize,
+    identical_limit: usize,
+    rate_limit_per_minute: Option<usize>,
 }
 
 impl ToolExecutionHistory {
@@ -205,6 +211,9 @@ impl ToolExecutionHistory {
         Self {
             records: Arc::new(RwLock::new(VecDeque::new())),
             max_records,
+            detect_window: DEFAULT_LOOP_DETECT_WINDOW,
+            identical_limit: defaults::DEFAULT_MAX_REPEATED_TOOL_CALLS,
+            rate_limit_per_minute: tool_rate_limit_from_env(),
         }
     }
 
@@ -214,6 +223,15 @@ impl ToolExecutionHistory {
         while records.len() > self.max_records {
             records.pop_front();
         }
+    }
+
+    pub fn set_loop_detection_limits(&mut self, detect_window: usize, identical_limit: usize) {
+        self.detect_window = detect_window.max(1);
+        self.identical_limit = identical_limit;
+    }
+
+    pub fn set_rate_limit_per_minute(&mut self, limit: Option<usize>) {
+        self.rate_limit_per_minute = limit.filter(|value| *value > 0);
     }
 
     pub fn get_recent_records(&self, count: usize) -> Vec<ToolExecutionRecord> {
@@ -243,14 +261,42 @@ impl ToolExecutionHistory {
         records.clear();
     }
 
+    pub fn loop_limit(&self) -> usize {
+        self.identical_limit
+    }
+
+    pub fn rate_limit_per_minute(&self) -> Option<usize> {
+        self.rate_limit_per_minute
+    }
+
+    pub fn calls_in_window(&self, window: Duration) -> usize {
+        let cutoff = SystemTime::now()
+            .checked_sub(window)
+            .unwrap_or(SystemTime::UNIX_EPOCH);
+
+        let records = self.records.read().unwrap();
+        records
+            .iter()
+            .rev()
+            .take_while(|record| record.timestamp >= cutoff)
+            .count()
+    }
+
     /// Detect if the agent is stuck in a loop (calling the same tool repeatedly with identical params)
     ///
     /// Returns (is_loop, repeat_count, tool_name) if a loop is detected
     pub fn detect_loop(&self, tool_name: &str, args: &Value) -> (bool, usize, String) {
+        let limit = self.identical_limit;
+        if limit == 0 {
+            return (false, 0, String::new());
+        }
+
+        let window = self.detect_window.max(limit.saturating_mul(2)).max(1);
+
         let records = self.records.read().unwrap();
 
-        // Look at the last 5 calls
-        let recent: Vec<&ToolExecutionRecord> = records.iter().rev().take(5).collect();
+        // Look at the recent calls within the configured window
+        let recent: Vec<&ToolExecutionRecord> = records.iter().rev().take(window).collect();
 
         if recent.is_empty() {
             return (false, 0, String::new());
@@ -264,11 +310,18 @@ impl ToolExecutionHistory {
             }
         }
 
-        // If we've called this exact combination 2+ times in the last 5 calls, it's a loop
-        let is_loop = identical_count >= 2;
+        // If we've called this exact combination at or above the configured limit, it's a loop
+        let is_loop = identical_count >= limit;
 
         (is_loop, identical_count, tool_name.to_string())
     }
+}
+
+fn tool_rate_limit_from_env() -> Option<usize> {
+    env::var("VTCODE_TOOL_CALLS_PER_MIN")
+        .ok()
+        .and_then(|raw| raw.trim().parse::<usize>().ok())
+        .filter(|value| *value > 0)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -921,6 +974,14 @@ impl ToolRegistry {
             policy_manager.apply_tools_config(tools_config).await?;
         }
 
+        let detect_window = DEFAULT_LOOP_DETECT_WINDOW
+            .max(tools_config.max_repeated_tool_calls.saturating_mul(2))
+            .max(1);
+        self.execution_history
+            .set_loop_detection_limits(detect_window, tools_config.max_repeated_tool_calls);
+        self.execution_history
+            .set_rate_limit_per_minute(tool_rate_limit_from_env());
+
         Ok(())
     }
 
@@ -1321,16 +1382,57 @@ impl ToolRegistry {
             .map(|d| d.as_millis() as u64);
         let timeout_category_label = Some(timeout_category.label().to_string());
 
+        if let Some(rate_limit) = self.execution_history.rate_limit_per_minute() {
+            let calls_last_minute = self
+                .execution_history
+                .calls_in_window(Duration::from_secs(60));
+            if calls_last_minute >= rate_limit {
+                let error = ToolExecutionError::new(
+                    tool_name_owned.clone(),
+                    ToolErrorType::PolicyViolation,
+                    format!(
+                        "Tool '{}' skipped: rate limit reached ({} calls/min)",
+                        display_name, rate_limit
+                    ),
+                );
+                let payload = json!({
+                    "error": error.to_json_value(),
+                    "rate_limited": true,
+                    "limit_per_minute": rate_limit,
+                    "recent_calls": calls_last_minute,
+                });
+
+                self.execution_history
+                    .add_record(ToolExecutionRecord::failure(
+                        tool_name_owned,
+                        requested_name,
+                        false,
+                        None,
+                        args_for_recording,
+                        "Tool rate limit reached".to_string(),
+                        context_snapshot.clone(),
+                        timeout_category_label.clone(),
+                        base_timeout_ms,
+                        adaptive_timeout_ms,
+                        None,
+                        false,
+                    ));
+
+                return Ok(payload);
+            }
+        }
+
         // LOOP DETECTION: Check if we're calling the same tool repeatedly with identical params
+        let loop_limit = self.execution_history.loop_limit();
         let (is_loop, repeat_count, _) = self.execution_history.detect_loop(tool_name, args);
-        if is_loop {
+        if loop_limit > 0 && is_loop {
             warn!(
                 tool = %tool_name,
                 repeats = repeat_count,
                 "Loop detected: agent calling same tool with identical parameters {} times",
                 repeat_count
             );
-            if repeat_count >= 3 {
+            if repeat_count >= loop_limit {
                 let delay_ms = (75 * repeat_count as u64).min(500);
                 if delay_ms > 0 {
                     tokio::time::sleep(Duration::from_millis(delay_ms)).await;
@@ -1340,8 +1442,8 @@ impl ToolRegistry {
                     tool_name_owned.clone(),
                     ToolErrorType::PolicyViolation,
                     format!(
-                        "Tool '{}' blocked after {} identical invocations in recent history",
-                        display_name, repeat_count
+                        "Tool '{}' blocked after {} identical invocations in recent history (limit: {})",
+                        display_name, repeat_count, loop_limit
                     ),
                 );
                 let mut payload = error.to_json_value();
