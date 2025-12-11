@@ -47,7 +47,7 @@ use crate::tools::mcp::build_mcp_registration;
 use crate::tools::names::canonical_tool_name;
 use crate::tools::pty::PtyManager;
 use crate::tools::{PlanSummary, TaskPlan};
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -271,7 +271,7 @@ impl ToolExecutionHistory {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ToolTimeoutCategory {
     Default,
     Pty,
@@ -1063,7 +1063,7 @@ impl ToolRegistry {
                         ceiling,
                         std::cmp::max(
                             Duration::from_millis(self.adaptive_tuning.min_floor_ms),
-                            scale_duration(p95, 11, 10),
+                            Self::scale_duration(p95, 11, 10),
                         ),
                     );
                     self.adaptive_timeout_ceiling.insert(category, adjusted);
@@ -1077,7 +1077,7 @@ impl ToolRegistry {
                 // No ceiling configured; derive one from p95 with headroom
                 let derived = std::cmp::max(
                     Duration::from_millis(self.adaptive_tuning.min_floor_ms),
-                    scale_duration(p95, 12, 10),
+                    Self::scale_duration(p95, 12, 10),
                 );
                 self.adaptive_timeout_ceiling.insert(category, derived);
                 debug!(
@@ -1670,6 +1670,8 @@ impl ToolRegistry {
         // Execute the appropriate tool based on its type
         // The _pty_guard will automatically decrement the session count when dropped
         let execution_started_at = Instant::now();
+        let effective_timeout = self.effective_timeout(timeout_category);
+        let effective_timeout_ms = effective_timeout.map(|d| d.as_millis() as u64);
         let exec_future = async {
             if is_mcp_tool {
                 let mcp_name =
@@ -1703,22 +1705,23 @@ impl ToolRegistry {
 
                 self.execution_history
                     .add_record(ToolExecutionRecord::failure(
-                        tool_name_owned,
-                        requested_name,
+                        tool_name_owned.clone(),
+                        requested_name.clone(),
                         is_mcp_tool,
-                        mcp_provider,
-                        args_for_recording,
+                        mcp_provider.clone(),
+                        args_for_recording.clone(),
                         "Tool not found in registry".to_string(),
                         context_snapshot.clone(),
-                        None,
+                        timeout_category_label.clone(),
+                        base_timeout_ms,
+                        adaptive_timeout_ms,
+                        effective_timeout_ms,
+                        false,
                     ));
 
                 return Ok(error.to_json_value());
             }
         };
-
-        let effective_timeout = self.effective_timeout(timeout_category);
-        let effective_timeout_ms = effective_timeout.map(|d| d.as_millis() as u64);
 
         let result = if let Some(limit) = effective_timeout {
             debug!(
@@ -1768,12 +1771,21 @@ impl ToolRegistry {
         match result {
             Ok(value) => {
                 self.reset_tool_failure(timeout_category);
-                if let Some(counter) = self.success_trackers.get_mut(&timeout_category) {
+                let should_decay = if let Some(counter) =
+                    self.success_trackers.get_mut(&timeout_category)
+                {
                     *counter = counter.saturating_add(1);
                     if *counter >= self.adaptive_tuning.success_streak {
-                        self.decay_adaptive_timeout(timeout_category);
                         *counter = 0;
+                        true
+                    } else {
+                        false
                     }
+                } else {
+                    false
+                };
+                if should_decay {
+                    self.decay_adaptive_timeout(timeout_category);
                 }
                 self.record_tool_latency(timeout_category, execution_started_at.elapsed());
                 let sanitized_value = Self::sanitize_tool_output(value, is_mcp_tool);

@@ -770,27 +770,18 @@ impl ToolRegistry {
             if is_root_path {
                 let dirs = discover_directories(&workspace_root);
 
-                // Format error with clear next action for the LLM
-                let next_action = if dirs.is_empty() {
-                    "Call: run_pty_cmd with {\"command\": \"ls -la\"}".to_string()
+                // Auto-correct: use first available directory instead of blocking
+                if !dirs.is_empty() {
+                    let default_path = dirs.first().unwrap_or(&"src".to_string()).clone();
+                    let mut corrected_args = args.clone();
+                    corrected_args["path"] = serde_json::json!(default_path);
+                    return tool.execute(corrected_args).await;
                 } else {
-                    format!(
-                        "Call: list_files with {{\"path\": \"{}\"}}",
-                        dirs.first().unwrap_or(&"src".to_string())
-                    )
-                };
-
-                let available = if dirs.is_empty() {
-                    String::new()
-                } else {
-                    format!(" Available: {}", dirs.join(", "))
-                };
-
-                return Err(anyhow!(
-                    "BLOCKED: list_files cannot use root path.{} NEXT ACTION: {}",
-                    available,
-                    next_action
-                ));
+                    // No suitable directories found, provide helpful error
+                    return Err(anyhow!(
+                        "Cannot list root directory. No standard source directories found. Available options: use run_pty_cmd with {{\"command\": \"ls -la\"}} to explore manually."
+                    ));
+                }
             }
 
             tool.execute(args).await

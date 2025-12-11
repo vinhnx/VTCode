@@ -4,7 +4,9 @@ use crate::config::VTCodeConfig;
 use crate::config::constants::{defaults, tools};
 use crate::config::loader::ConfigManager;
 use crate::config::models::{ModelId, Provider as ModelProvider};
-use crate::config::types::{ReasoningEffortLevel, VerbosityLevel};
+use crate::config::types::{
+    AgentConfig as CoreAgentConfig, ModelSelectionSource, ReasoningEffortLevel, VerbosityLevel,
+};
 use crate::core::agent::conversation::{
     build_conversation, build_messages_from_conversation, compose_system_instruction,
 };
@@ -13,8 +15,9 @@ pub use crate::core::agent::task::{ContextItem, Task, TaskOutcome, TaskResults};
 use crate::core::agent::types::AgentType;
 use crate::core::context_optimizer::ContextOptimizer;
 use crate::core::loop_detector::LoopDetector;
+use crate::core::router::{RouteDecision, Router, TaskClass};
 use crate::exec::events::{CommandExecutionStatus, ThreadEvent};
-use crate::gemini::{Content, Part, SystemInstruction, Tool};
+use crate::gemini::{Content, Part, Tool};
 use crate::llm::factory::create_provider_for_model;
 use crate::llm::provider as uni_provider;
 use crate::llm::provider::{FunctionDefinition, LLMRequest, Message, ToolCall, ToolDefinition};
@@ -454,6 +457,37 @@ impl AgentRunner {
         self.config.as_ref()
     }
 
+    fn core_agent_config(&self) -> CoreAgentConfig {
+        let cfg = self.config();
+        let checkpoint_dir = cfg
+            .agent
+            .checkpointing
+            .storage_dir
+            .as_ref()
+            .map(|dir| self._workspace.join(dir));
+
+        CoreAgentConfig {
+            model: self.model.clone(),
+            api_key: self._api_key.clone(),
+            provider: cfg.agent.provider.clone(),
+            api_key_env: cfg.agent.api_key_env.clone(),
+            workspace: self._workspace.clone(),
+            verbose: false,
+            theme: cfg.agent.theme.clone(),
+            reasoning_effort: self
+                .reasoning_effort
+                .unwrap_or(cfg.agent.reasoning_effort),
+            ui_surface: cfg.agent.ui_surface,
+            prompt_cache: cfg.prompt_cache.clone(),
+            model_source: ModelSelectionSource::WorkspaceConfig,
+            custom_api_keys: cfg.agent.custom_api_keys.clone(),
+            checkpointing_enabled: cfg.agent.checkpointing.enabled,
+            checkpointing_storage_dir: checkpoint_dir,
+            checkpointing_max_snapshots: cfg.agent.checkpointing.max_snapshots,
+            checkpointing_max_age_days: cfg.agent.checkpointing.max_age_days,
+        }
+    }
+
     fn print_compact_response(agent: AgentType, text: &str, quiet: bool) {
         if quiet {
             return;
@@ -549,7 +583,7 @@ impl AgentRunner {
 
     fn summarize_conversation_if_needed(
         &self,
-        system_instruction: &SystemInstruction,
+        system_instruction: &str,
         task_state: &mut TaskRunState,
         preserve_recent_turns: usize,
         utilization: f64,
@@ -1161,8 +1195,9 @@ impl AgentRunner {
                 trimmed_user
             );
             let cfg = self.config();
+            let core_agent_cfg = self.core_agent_config();
             let mut route_decision: RouteDecision = if cfg.router.enabled {
-                Router::route(cfg, &cfg.agent, &route_input)
+                Router::route(cfg, &core_agent_cfg, &route_input)
             } else {
                 RouteDecision {
                     class: TaskClass::Standard,
