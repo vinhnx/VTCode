@@ -34,12 +34,17 @@ use serde_json::Value;
 use std::cell::RefCell;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 use tokio::time::{Duration, timeout};
 use tracing::{info, warn};
 
 // Role constants to avoid repeated allocations
 const ROLE_USER: &str = "user";
 const ROLE_MODEL: &str = "model";
+const MAX_STREAMING_FAILURES: u8 = 2;
+const LOOP_THROTTLE_BASE_MS: u64 = 75;
+const LOOP_THROTTLE_MAX_MS: u64 = 500;
+const STREAMING_COOLDOWN_SECS: u64 = 60;
 
 macro_rules! runner_println {
     ($runner:expr, $($arg:tt)*) => {
@@ -450,6 +455,10 @@ pub struct AgentRunner {
     failure_tracker: RefCell<ApiFailureTracker>,
     /// Context optimizer for token budget management
     context_optimizer: RefCell<ContextOptimizer>,
+    /// Tracks recent streaming failures to avoid repeated double-requests
+    streaming_failures: RefCell<u8>,
+    /// Records when streaming last failed for cooldown-based re-enablement
+    streaming_last_failure: RefCell<Option<Instant>>,
 }
 
 impl AgentRunner {
@@ -757,6 +766,16 @@ impl AgentRunner {
         turn_index: usize,
     ) -> Result<ProviderResponseSummary> {
         let supports_streaming = self.provider_client.supports_streaming();
+        let mut streaming_disabled = false;
+        if supports_streaming {
+            if let Some(last_failure) = *self.streaming_last_failure.borrow()
+                && last_failure.elapsed().as_secs() >= STREAMING_COOLDOWN_SECS
+            {
+                *self.streaming_failures.borrow_mut() = 0;
+                self.streaming_last_failure.borrow_mut().take();
+            }
+            streaming_disabled = *self.streaming_failures.borrow() >= MAX_STREAMING_FAILURES;
+        }
         let mut agent_message_streamed = false;
         let mut used_streaming_fallback = false;
         let mut reasoning_recorded = false;
@@ -766,7 +785,7 @@ impl AgentRunner {
         let mut aggregated_reasoning = String::with_capacity(1024);
         let mut streaming_response: Option<crate::llm::provider::LLMResponse> = None;
 
-        if supports_streaming {
+        if supports_streaming && !streaming_disabled {
             // OPTIMIZATION: Try streaming first without cloning request
             match self.provider_client.stream(request.clone()).await {
                 Ok(mut stream) => {
@@ -789,6 +808,10 @@ impl AgentRunner {
                                 break;
                             }
                             Err(err) => {
+                                let mut failures = self.streaming_failures.borrow_mut();
+                                *failures = failures.saturating_add(1);
+                                self.streaming_last_failure.replace(Some(Instant::now()));
+                                self.failure_tracker.borrow_mut().record_failure();
                                 runner_println!(
                                     self,
                                     "{} {} Streaming error: {}",
@@ -809,6 +832,10 @@ impl AgentRunner {
                     }
                 }
                 Err(err) => {
+                    let mut failures = self.streaming_failures.borrow_mut();
+                    *failures = failures.saturating_add(1);
+                    self.streaming_last_failure.replace(Some(Instant::now()));
+                    self.failure_tracker.borrow_mut().record_failure();
                     runner_println!(
                         self,
                         "{} {} Streaming fallback: {}",
@@ -822,9 +849,15 @@ impl AgentRunner {
                     used_streaming_fallback = agent_message_streamed;
                 }
             }
+        } else if streaming_disabled {
+            let warning = "Skipping streaming after repeated streaming failures";
+            warnings.push(warning.to_string());
+            event_recorder.warning(warning);
         }
 
         if let Some(mut response) = streaming_response {
+            *self.streaming_failures.borrow_mut() = 0;
+            self.streaming_last_failure.borrow_mut().take();
             let response_text = response.content.take().unwrap_or_default();
             if !response_text.is_empty() {
                 aggregated_text = response_text;
@@ -910,6 +943,8 @@ impl AgentRunner {
 
         // Reset failure tracker on success
         self.failure_tracker.borrow_mut().reset();
+        *self.streaming_failures.borrow_mut() = self.streaming_failures.borrow().saturating_sub(1);
+        self.streaming_last_failure.borrow_mut().take();
 
         Ok(ProviderResponseSummary {
             response,
@@ -979,6 +1014,8 @@ impl AgentRunner {
             failure_tracker: RefCell::new(ApiFailureTracker::new()),
             context_optimizer: RefCell::new(ContextOptimizer::new()),
             shell_policy_cache: RefCell::new(None),
+            streaming_failures: RefCell::new(0),
+            streaming_last_failure: RefCell::new(None),
         })
     }
 
@@ -1138,6 +1175,16 @@ impl AgentRunner {
             // Pre-reserve capacity for conversation messages to avoid reallocations
             // Typical: 2-3 messages per turn (user input + assistant response + potential tool calls)
             task_state.conversation_messages.reserve(self.max_turns * 3);
+
+            if let Err(err) = self.tool_registry.initialize_async().await {
+                warn!(
+                    error = %err,
+                    "Tool registry initialization failed at task start"
+                );
+                task_state
+                    .warnings
+                    .push(format!("Tool registry init failed: {err}"));
+            }
 
             // Agent execution loop uses max_turns for conversation flow
             for turn in 0..self.max_turns {
@@ -1587,6 +1634,13 @@ impl AgentRunner {
                                 break;
                             }
 
+                            if let Err(err) = self.tool_registry.initialize_async().await {
+                                warn!(
+                                    error = %err,
+                                    "Failed to initialize tool registry before parallel execution"
+                                );
+                            }
+
                             runner_println!(
                                 self,
                                 "{} [{}] Executing {} tools in parallel",
@@ -1628,7 +1682,6 @@ impl AgentRunner {
                                     // OPTIMIZATION: Loop check already done before parallel execution
                                     async move {
                                         let mut registry = tool_registry;
-                                        registry.initialize_async().await.ok();
                                         let result = registry
                                             .execute_tool_ref(&name, &args)
                                             .await
@@ -1775,6 +1828,14 @@ impl AgentRunner {
                                         Some(&command_event),
                                     );
                                     continue;
+                                }
+
+                                let repeat_count =
+                                    self.loop_detector.borrow().get_call_count(&name);
+                                if repeat_count > 1 {
+                                    let delay_ms = (LOOP_THROTTLE_BASE_MS * repeat_count as u64)
+                                        .min(LOOP_THROTTLE_MAX_MS);
+                                    tokio::time::sleep(Duration::from_millis(delay_ms)).await;
                                 }
 
                                 match self.execute_tool(&name, &args).await {
