@@ -11,7 +11,12 @@ pub struct RewardSignal {
 }
 
 impl RewardSignal {
-    pub fn new(action: impl Into<String>, success: bool, latency_ms: Option<u64>, tokens_used: Option<u32>) -> Self {
+    pub fn new(
+        action: impl Into<String>,
+        success: bool,
+        latency_ms: Option<u64>,
+        tokens_used: Option<u32>,
+    ) -> Self {
         Self {
             action: action.into(),
             success,
@@ -21,9 +26,21 @@ impl RewardSignal {
         }
     }
 
-    pub fn reward_value(&self, success_reward: f32, timeout_penalty: f32, latency_weight: f32) -> f32 {
-        let latency_penalty = self.latency_ms.map(|ms| -(ms as f32) * latency_weight / 1000.0).unwrap_or(0.0);
-        let base = if self.success { success_reward } else { timeout_penalty };
+    pub fn reward_value(
+        &self,
+        success_reward: f32,
+        timeout_penalty: f32,
+        latency_weight: f32,
+    ) -> f32 {
+        let latency_penalty = self
+            .latency_ms
+            .map(|ms| -(ms as f32) * latency_weight / 1000.0)
+            .unwrap_or(0.0);
+        let base = if self.success {
+            success_reward
+        } else {
+            timeout_penalty
+        };
         base + latency_penalty
     }
 }

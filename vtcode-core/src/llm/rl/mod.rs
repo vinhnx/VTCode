@@ -15,12 +15,9 @@ pub use bandit::EpsilonGreedyBandit;
 pub use policy::{PolicyContext, PolicyDecision, ReinforcementPolicy};
 pub use signals::{RewardLedger, RewardSignal};
 
-use crate::config::{
-    ActorCriticConfig, BanditConfig, ReinforcementLearningConfig, RlStrategy, RewardShapingConfig,
-};
+use crate::config::{ReinforcementLearningConfig, RewardShapingConfig, RlStrategy};
 
 /// Wraps a reinforcement policy with reward tracking.
-#[derive(Debug)]
 pub struct RlEngine {
     policy: Arc<dyn ReinforcementPolicy>,
     reward_ledger: Mutex<RewardLedger>,
@@ -31,7 +28,9 @@ impl RlEngine {
     pub fn from_config(config: &ReinforcementLearningConfig) -> Self {
         let policy: Arc<dyn ReinforcementPolicy> = match config.strategy {
             RlStrategy::Bandit => Arc::new(EpsilonGreedyBandit::new(config.bandit.clone())),
-            RlStrategy::ActorCritic => Arc::new(ActorCriticPolicy::new(config.actor_critic.clone())),
+            RlStrategy::ActorCritic => {
+                Arc::new(ActorCriticPolicy::new(config.actor_critic.clone()))
+            }
         };
 
         Self {
@@ -41,7 +40,11 @@ impl RlEngine {
         }
     }
 
-    pub async fn select(&self, actions: &[String], context: PolicyContext) -> Result<PolicyDecision> {
+    pub async fn select(
+        &self,
+        actions: &[String],
+        context: PolicyContext,
+    ) -> Result<PolicyDecision> {
         ensure!(!actions.is_empty(), "no candidate actions provided");
         self.policy.select_action(actions, &context).await
     }

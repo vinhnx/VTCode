@@ -11,7 +11,7 @@ pub trait RecoveryAction: Send + Sync {
 }
 
 /// Composite set of recovery actions.
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Clone)]
 pub struct RecoveryPlaybook {
     actions: Vec<Arc<dyn RecoveryAction>>,
 }
@@ -64,7 +64,8 @@ mod tests {
 
     #[tokio::test]
     async fn executes_all_actions() {
-        let playbook = RecoveryPlaybook::default().with_action(Arc::new(LabeledAction::new("reset")));
+        let playbook =
+            RecoveryPlaybook::default().with_action(Arc::new(LabeledAction::new("reset")));
         let executed = playbook.execute_all().await.expect("playbook should run");
         assert_eq!(executed, vec!["reset".to_string()]);
     }

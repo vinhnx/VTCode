@@ -38,6 +38,7 @@ impl HitlGate {
                 }
             }
             RiskLevel::Low => OversightDecision::Allow,
+            RiskLevel::Critical => OversightDecision::RequireApproval,
         }
     }
 
@@ -90,6 +91,9 @@ mod tests {
     #[test]
     fn approval_required_for_high_risk() {
         let gate = HitlGate::new(true, true);
-        assert_eq!(gate.decide(RiskLevel::High), OversightDecision::RequireApproval);
+        assert_eq!(
+            gate.decide(RiskLevel::High),
+            OversightDecision::RequireApproval
+        );
     }
 }

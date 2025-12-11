@@ -132,6 +132,7 @@ pub mod commands;
 pub mod config;
 pub mod constants;
 pub mod core;
+pub mod diagnostics;
 pub mod exec;
 pub mod execpolicy;
 pub mod gemini;
@@ -140,14 +141,13 @@ pub mod instructions;
 pub mod llm;
 pub mod mcp;
 pub mod metrics;
-pub mod diagnostics;
 pub mod models;
 pub mod orchestrator;
-pub mod security;
-pub mod telemetry;
 pub mod project_doc;
 pub mod prompts;
 pub mod safety;
+pub mod security;
+pub mod telemetry;
 pub mod tool_policy;
 pub mod tools;
 pub mod types;
@@ -165,10 +165,10 @@ pub use config::types::{
     PerformanceMetrics, ReasoningEffortLevel, SessionInfo, ToolConfig,
 };
 pub use config::{
-    AgentClientProtocolConfig, AgentClientProtocolTransport, AgentClientProtocolZedConfig,
-    AgentClientProtocolZedToolsConfig, ActorCriticConfig, AgentConfig, BanditConfig,
-    PluginRuntimeConfig, PluginTrustLevel, ReinforcementLearningConfig, RlStrategy,
-    RewardShapingConfig, VTCodeConfig, WorkspaceTrustLevel,
+    ActorCriticConfig, AgentClientProtocolConfig, AgentClientProtocolTransport,
+    AgentClientProtocolZedConfig, AgentClientProtocolZedToolsConfig, AgentConfig, BanditConfig,
+    PluginRuntimeConfig, PluginTrustLevel, ReinforcementLearningConfig, RewardShapingConfig,
+    RlStrategy, VTCodeConfig, WorkspaceTrustLevel,
 };
 pub use core::agent::core::Agent;
 pub use core::agent::runner::AgentRunner;
@@ -179,6 +179,10 @@ pub use core::agent::task::{
 
 pub use core::prompt_caching::{CacheStats, PromptCache, PromptCacheConfig, PromptOptimizer};
 pub use core::timeout_detector::TimeoutDetector;
+pub use diagnostics::{
+    DiagnosticReport, HealthSample, LabeledAction, PredictiveMonitor, RecoveryAction,
+    RecoveryPlaybook,
+};
 pub use exec::events::{
     AgentMessageItem, CommandExecutionItem, CommandExecutionStatus, EVENT_SCHEMA_VERSION,
     ErrorItem, FileChangeItem, FileUpdateChange, ItemCompletedEvent, ItemStartedEvent,
@@ -189,23 +193,19 @@ pub use exec::events::{
 pub use exec::{CodeExecutor, ExecutionConfig, ExecutionResult, Language};
 pub use gemini::{Content, FunctionDeclaration, Part};
 pub use llm::{AnyClient, make_client};
-pub use diagnostics::{
-    DiagnosticReport, HealthSample, LabeledAction, PredictiveMonitor, RecoveryAction,
-    RecoveryPlaybook,
+pub use mcp::{
+    tool_discovery::{DetailLevel, ToolDiscovery, ToolDiscoveryResult},
+    validate_mcp_config,
 };
 pub use orchestrator::{
     DistributedOrchestrator, ExecutionTarget, ExecutorRegistry, LocalExecutor, ScheduledWork,
     WorkExecutor,
 };
-pub use telemetry::{TelemetryEvent, TelemetryPipeline};
-pub use security::{IntegrityTag, PayloadEnvelope, ZeroTrustContext};
-pub use mcp::{
-    tool_discovery::{DetailLevel, ToolDiscovery, ToolDiscoveryResult},
-    validate_mcp_config,
-};
 pub use prompts::{
     generate_lightweight_instruction, generate_specialized_instruction, generate_system_instruction,
 };
+pub use security::{IntegrityTag, PayloadEnvelope, ZeroTrustContext};
+pub use telemetry::{TelemetryEvent, TelemetryPipeline};
 
 pub use tool_policy::{ToolPolicy, ToolPolicyManager};
 pub use tools::grep_file::GrepSearchManager;

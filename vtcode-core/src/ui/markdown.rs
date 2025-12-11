@@ -8,6 +8,9 @@ use once_cell::sync::Lazy;
 use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
 use std::cmp::max;
 use std::collections::HashMap;
+use std::fs::OpenOptions;
+use std::io::Write;
+use std::time::{SystemTime, UNIX_EPOCH};
 use syntect::easy::HighlightLines;
 use syntect::highlighting::{Theme, ThemeSet};
 use syntect::parsing::{SyntaxReference, SyntaxSet};
@@ -17,9 +20,6 @@ use tracing::warn;
 const LIST_INDENT_WIDTH: usize = 2;
 const CODE_EXTRA_INDENT: &str = "    ";
 const MAX_THEME_CACHE_SIZE: usize = 32;
-
-// Box-drawing character for table cells (replaces pipe separator)
-const TABLE_VERTICAL: &str = "│";
 
 #[derive(Clone, Debug)]
 enum MarkdownEvent {
@@ -275,6 +275,7 @@ pub fn render_markdown_to_lines(
     let mut list_stack: Vec<ListState> = Vec::new();
     let mut pending_list_prefix: Option<String> = None;
     let mut code_block: Option<CodeBlockState> = None;
+    let mut table_cell_index: usize = 0;
 
     for event in events {
         if let Some(state) = code_block.as_mut() {
@@ -328,6 +329,7 @@ pub fn render_markdown_to_lines(
                     theme_styles,
                     base_style,
                     code_block: &mut code_block,
+                    table_cell_index: &mut table_cell_index,
                 };
                 handle_start_tag(tag, &mut context);
             }
@@ -342,6 +344,7 @@ pub fn render_markdown_to_lines(
                     theme_styles,
                     base_style,
                     code_block: &mut code_block,
+                    table_cell_index: &mut table_cell_index,
                 };
                 handle_end_tag(tag, &mut context);
             }
@@ -356,6 +359,7 @@ pub fn render_markdown_to_lines(
                     theme_styles,
                     base_style,
                     code_block: &mut code_block,
+                    table_cell_index: &mut table_cell_index,
                 };
                 append_text(&text, &mut context);
             }
@@ -381,6 +385,7 @@ pub fn render_markdown_to_lines(
                     theme_styles,
                     base_style,
                     code_block: &mut code_block,
+                    table_cell_index: &mut table_cell_index,
                 };
                 append_text(" ", &mut context);
             }
@@ -434,6 +439,7 @@ pub fn render_markdown_to_lines(
                     theme_styles,
                     base_style,
                     code_block: &mut code_block,
+                    table_cell_index: &mut table_cell_index,
                 };
                 append_text(&html, &mut context);
             }
@@ -448,6 +454,7 @@ pub fn render_markdown_to_lines(
                     theme_styles,
                     base_style,
                     code_block: &mut code_block,
+                    table_cell_index: &mut table_cell_index,
                 };
                 append_text(&format!("[^{}]", reference), &mut context);
             }
@@ -533,6 +540,7 @@ struct MarkdownContext<'a> {
     theme_styles: &'a ThemeStyles,
     base_style: Style,
     code_block: &'a mut Option<CodeBlockState>,
+    table_cell_index: &'a mut usize,
 }
 
 fn handle_start_tag(tag: MarkdownTag, context: &mut MarkdownContext<'_>) {
@@ -648,6 +656,7 @@ fn handle_start_tag(tag: MarkdownTag, context: &mut MarkdownContext<'_>) {
                 context.base_style,
             );
             push_blank_line(context.lines);
+            *context.table_cell_index = 0;
         }
         MarkdownTag::TableRow => {
             // Ensure we're on a fresh line for each row
@@ -660,13 +669,28 @@ fn handle_start_tag(tag: MarkdownTag, context: &mut MarkdownContext<'_>) {
                 context.theme_styles,
                 context.base_style,
             );
+            *context.table_cell_index = 0;
         }
         MarkdownTag::TableHead | MarkdownTag::TableCell => {
-            // Add separator between cells using box-drawing character
-            context.current_line.segments.push(MarkdownSegment::new(
-                context.theme_styles.secondary.italic(),
-                TABLE_VERTICAL,
-            ));
+            ensure_prefix(
+                context.current_line,
+                *context.blockquote_depth,
+                context.list_stack,
+                context.pending_list_prefix,
+                context.theme_styles,
+                context.base_style,
+            );
+
+            let separator = if *context.table_cell_index == 0 {
+                "- "
+            } else {
+                " | "
+            };
+            context
+                .current_line
+                .segments
+                .push(MarkdownSegment::new(context.base_style, separator));
+            *context.table_cell_index += 1;
         }
         MarkdownTag::FootnoteDefinition | MarkdownTag::HtmlBlock => {}
     }
@@ -772,6 +796,7 @@ fn handle_end_tag(tag: MarkdownTag, context: &mut MarkdownContext<'_>) {
                 context.base_style,
             );
             push_blank_line(context.lines);
+            *context.table_cell_index = 0;
         }
         MarkdownTag::TableRow => {
             // End of row
@@ -784,6 +809,7 @@ fn handle_end_tag(tag: MarkdownTag, context: &mut MarkdownContext<'_>) {
                 context.theme_styles,
                 context.base_style,
             );
+            *context.table_cell_index = 0;
         }
         MarkdownTag::TableHead | MarkdownTag::TableCell => {
             // Cell styling handled in start tag, just mark end
@@ -979,6 +1005,41 @@ fn highlight_code_block(
     let mut lines = Vec::new();
     let mut augmented_prefix = prefix_segments.to_vec();
     augmented_prefix.push(PrefixSegment::new(base_style, CODE_EXTRA_INDENT));
+
+    // #region agent log
+    if let Ok(mut file) = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.cursor/debug.log")
+    {
+        let (enabled, lang_count, theme_name, max_bytes) = highlight_config
+            .map(|cfg| {
+                (
+                    cfg.enabled,
+                    cfg.enabled_languages.len(),
+                    cfg.theme.clone(),
+                    cfg.max_file_size_mb,
+                )
+            })
+            .unwrap_or((false, 0, String::new(), 0));
+
+        let _ = writeln!(
+            file,
+            "{{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H5\",\"location\":\"markdown.rs:highlight_code_block\",\"message\":\"highlight request\",\"data\":{{\"language\":{:?},\"enabled\":{},\"lang_count\":{},\"theme\":\"{}\",\"max_mb\":{},\"code_len\":{},\"newline_count\":{}}},\"timestamp\":{}}}",
+            language,
+            enabled,
+            lang_count,
+            theme_name,
+            max_bytes,
+            code.len(),
+            code.matches('\n').count(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis()
+        );
+    }
+    // #endregion
 
     if let Some(config) = highlight_config.filter(|cfg| cfg.enabled)
         && let Some(highlighted) = try_highlight(code, language, config)

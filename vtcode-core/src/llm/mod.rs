@@ -174,11 +174,11 @@ pub mod provider_base; // Shared provider utilities to eliminate duplicate code
 // pub mod provider_config;
 pub mod providers;
 pub mod rig_adapter;
+pub mod rl;
 pub mod token_metrics;
 pub mod tool_bridge;
 pub mod types;
 pub mod utils; // Shared utilities for request/response processing
-pub mod rl;
 
 #[cfg(test)]
 mod error_display_test;
@@ -196,9 +196,9 @@ pub use tool_bridge::{
     ToolExecution, ToolIntent, ToolIntentExtractor,
 };
 
-pub use token_metrics::{TokenCounter, TokenMetrics, TokenTypeMetrics};
-pub use types::{BackendKind, LLMError, LLMResponse};
 pub use rl::{
     ActorCriticPolicy, EpsilonGreedyBandit, PolicyContext, PolicyDecision, ReinforcementPolicy,
     RewardLedger, RewardSignal, RlEngine,
 };
+pub use token_metrics::{TokenCounter, TokenMetrics, TokenTypeMetrics};
+pub use types::{BackendKind, LLMError, LLMResponse};

@@ -56,7 +56,8 @@ impl ReinforcementPolicy for EpsilonGreedyBandit {
             state.counts.entry(action.clone()).or_insert(0);
         }
 
-        let explore = self.pseudo_random_index(1000) as f32 / 1000.0 <= self.config.exploration_epsilon;
+        let explore =
+            self.pseudo_random_index(1000) as f32 / 1000.0 <= self.config.exploration_epsilon;
         let chosen = if explore {
             let idx = self.pseudo_random_index(actions.len());
             actions[idx].clone()
@@ -85,15 +86,23 @@ impl ReinforcementPolicy for EpsilonGreedyBandit {
     async fn update_reward(&self, action: &str, signal: &RewardSignal) -> Result<()> {
         let mut state = self.state.lock().await;
         let reward = signal.reward_value(1.0, -1.0, self.config.latency_weight);
-        let entry = state.scores.entry(action.to_string()).or_insert(0.0);
-        let count = state.counts.entry(action.to_string()).or_insert(0);
-        *count += 1;
+        let key = action.to_string();
 
-        let weight = 1.0 / (*count as f32 + 1.0);
+        let count_value = {
+            let count_entry = state.counts.entry(key.clone()).or_insert(0);
+            *count_entry += 1;
+            *count_entry
+        };
+
+        let entry = state.scores.entry(key.clone()).or_insert(0.0);
+        let weight = 1.0 / (count_value as f32 + 1.0);
         *entry = (*entry * (1.0 - weight)) + (reward * weight);
 
-        if self.config.rolling_window > 0 && *count as usize > self.config.rolling_window {
-            *count = self.config.rolling_window as u32;
+        if self.config.rolling_window > 0
+            && count_value as usize > self.config.rolling_window
+            && let Some(count_entry) = state.counts.get_mut(&key)
+        {
+            *count_entry = self.config.rolling_window as u32;
         }
 
         Ok(())

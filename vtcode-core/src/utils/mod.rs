@@ -111,6 +111,7 @@ pub mod diff_styles;
 pub mod dot_config;
 pub mod error_messages;
 pub mod image_processing;
+pub mod migration;
 pub mod path;
 pub mod ratatui_styles;
 pub mod safety;
@@ -119,7 +120,6 @@ pub mod style_helpers;
 pub mod transcript;
 pub mod unicode_monitor;
 pub mod vtcodegitignore;
-pub mod migration;
 
 pub use anstyle_utils::*;
 pub use cached_style_parser::CachedStyleParser;

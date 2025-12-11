@@ -2208,11 +2208,11 @@ fn normalize_mcp_tool_identifier(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tools::plan::{PlanCompletionState, PlanStep, StepStatus, UpdatePlanArgs};
     use async_trait::async_trait;
     use serde_json::json;
     use std::time::Duration;
     use tempfile::TempDir;
-    use crate::tools::plan::{PlanCompletionState, PlanStep, StepStatus, UpdatePlanArgs};
 
     const CUSTOM_TOOL_NAME: &str = "custom_test_tool";
 
@@ -2293,7 +2293,10 @@ mod tests {
         assert_eq!(snapshot.task_id.as_deref(), Some("task-123"));
         assert_eq!(snapshot.plan_version, updated_plan.version);
         assert_eq!(snapshot.plan_summary.total_steps, 1);
-        assert_eq!(snapshot.plan_summary.status, PlanCompletionState::InProgress);
+        assert_eq!(
+            snapshot.plan_summary.status,
+            PlanCompletionState::InProgress
+        );
 
         Ok(())
     }
@@ -2314,7 +2317,9 @@ mod tests {
         registry.allow_all_tools().await?;
 
         let args = json!({"input": "value"});
-        let response = registry.execute_tool(CUSTOM_TOOL_NAME, args.clone()).await?;
+        let response = registry
+            .execute_tool(CUSTOM_TOOL_NAME, args.clone())
+            .await?;
         assert!(response["success"].as_bool().unwrap_or(false));
 
         let records = registry.get_recent_tool_records(1);

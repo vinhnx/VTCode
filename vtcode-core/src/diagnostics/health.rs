@@ -1,8 +1,6 @@
 use std::collections::VecDeque;
 use std::time::SystemTime;
 
-use anyhow::Result;
-
 /// Individual health datapoint for predictive detection.
 #[derive(Debug, Clone)]
 pub struct HealthSample {

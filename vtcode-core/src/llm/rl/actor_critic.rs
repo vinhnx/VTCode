@@ -50,18 +50,18 @@ impl ReinforcementPolicy for ActorCriticPolicy {
         let chosen = actions
             .iter()
             .max_by(|a, b| {
-                let score_a = state.value.get(*a).unwrap_or(&0.0) + state.advantage.get(*a).unwrap_or(&0.0);
-                let score_b = state.value.get(*b).unwrap_or(&0.0) + state.advantage.get(*b).unwrap_or(&0.0);
-                score_a.partial_cmp(score_b).unwrap_or(std::cmp::Ordering::Equal)
+                let score_a =
+                    state.value.get(*a).unwrap_or(&0.0) + state.advantage.get(*a).unwrap_or(&0.0);
+                let score_b =
+                    state.value.get(*b).unwrap_or(&0.0) + state.advantage.get(*b).unwrap_or(&0.0);
+                score_a
+                    .partial_cmp(&score_b)
+                    .unwrap_or(std::cmp::Ordering::Equal)
             })
             .cloned()
             .unwrap_or_else(|| actions[0].clone());
 
-        let priority = state
-            .value
-            .get(&chosen)
-            .copied()
-            .unwrap_or(0.0)
+        let priority = state.value.get(&chosen).copied().unwrap_or(0.0)
             + state.advantage.get(&chosen).copied().unwrap_or(0.0);
 
         Ok(PolicyDecision {
@@ -72,13 +72,14 @@ impl ReinforcementPolicy for ActorCriticPolicy {
 
     async fn update_reward(&self, action: &str, signal: &RewardSignal) -> Result<()> {
         let mut state = self.state.lock().await;
-        let value_entry = state.value.entry(action.to_string()).or_insert(0.0);
-        let adv_entry = state.advantage.entry(action.to_string()).or_insert(0.0);
-
+        let current_value = *state.value.entry(action.to_string()).or_insert(0.0);
         let reward = signal.reward_value(1.0, -1.0, 0.0);
-        let delta = reward + (self.config.discount_factor * *value_entry) - *value_entry;
+        let delta = reward + (self.config.discount_factor * current_value) - current_value;
 
-        *value_entry += self.config.learning_rate * delta;
+        let value_slot = state.value.entry(action.to_string()).or_insert(0.0);
+        *value_slot = current_value + self.config.learning_rate * delta;
+
+        let adv_entry = state.advantage.entry(action.to_string()).or_insert(0.0);
         *adv_entry = (*adv_entry * (1.0 - self.config.trace_decay)) + delta;
 
         Ok(())
