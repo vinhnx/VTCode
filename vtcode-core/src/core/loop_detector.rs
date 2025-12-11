@@ -27,9 +27,12 @@ fn normalize_args_for_detection(tool_name: &str, args: &serde_json::Value) -> se
         // For list_files: normalize root path variations
         if tool_name == tools::LIST_FILES {
             if let Some(path) = normalized.get("path").and_then(|v| v.as_str()) {
-                let path_trimmed = path.trim_start_matches("./").trim_start_matches('/');
-                if path_trimmed.is_empty() || path_trimmed == "." {
-                    // Normalize all root variations to the same key
+                let trimmed = path.trim();
+                let only_root_markers = trimmed
+                    .trim_matches(|c| c == '.' || c == '/')
+                    .is_empty();
+                if trimmed.is_empty() || only_root_markers {
+                    // Normalize any root-only path markers (., /, ././, //, etc.) to the same key
                     normalized.insert("path".into(), serde_json::json!("__ROOT__"));
                 }
             } else {
@@ -100,6 +103,11 @@ impl LoopDetector {
                     .all(|record| record.tool_name == tool_name && record.args_hash == args_hash);
 
                 if identical {
+                    // Escalate to hard limit so callers halt immediately.
+                    let hard_limit = Self::get_limit_for_tool(tool_name) * HARD_LIMIT_MULTIPLIER;
+                    self.tool_counts
+                        .insert(tool_name.to_string(), hard_limit);
+
                     return Some(format!(
                         "HARD STOP: Identical tool call repeated {} times: {} with same arguments. This indicates a loop.",
                         limit, tool_name
@@ -320,7 +328,8 @@ mod tests {
         let paths = vec![
             json!({"path": "."}),
             json!({"path": ""}),
-            json!({"path": "./"}),
+            json!({"path": "././"}),
+            json!({"path": "//"}),
             json!({}),
         ];
 
@@ -331,6 +340,11 @@ mod tests {
         // Third call with any root variation should trigger
         let warning = detector.record_call(tools::LIST_FILES, &paths[2]);
         assert!(warning.is_some());
+
+        // Further root-only variations should continue to warn
+        for path in &paths[3..] {
+            assert!(detector.record_call(tools::LIST_FILES, path).is_some());
+        }
     }
 
     #[test]
@@ -397,6 +411,19 @@ mod tests {
                 .unwrap_or(0),
             3
         );
+    }
+
+    #[test]
+    fn test_identical_calls_trigger_hard_limit() {
+        let mut detector = LoopDetector::new();
+        let args = json!({"path": "."});
+
+        assert!(detector.record_call(tools::READ_FILE, &args).is_none());
+        assert!(detector.record_call(tools::READ_FILE, &args).is_none());
+
+        let warning = detector.record_call(tools::READ_FILE, &args);
+        assert!(warning.is_some());
+        assert!(detector.is_hard_limit_exceeded(tools::READ_FILE));
     }
 
     #[test]
