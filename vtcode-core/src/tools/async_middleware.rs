@@ -89,16 +89,14 @@ fn normalize_context(context: &str) -> String {
     let mut normalized = Map::new();
     let parsed: Value = serde_json::from_str(context).unwrap_or_else(|_| Value::Object(Map::new()));
 
-    if let Some(session) = parsed.get("session_id").and_then(Value::as_str) {
-        if !session.is_empty() {
-            normalized.insert("session_id".into(), Value::String(session.to_string()));
-        }
+    if let Some(session) = parsed.get("session_id").and_then(Value::as_str)
+        && !session.is_empty()
+    {
+        normalized.insert("session_id".into(), Value::String(session.to_string()));
     }
 
-    if let Some(task) = parsed.get("task_id").and_then(Value::as_str) {
-        if !task.is_empty() {
-            normalized.insert("task_id".into(), Value::String(task.to_string()));
-        }
+    if let Some(task) = parsed.get("task_id").and_then(Value::as_str) && !task.is_empty() {
+        normalized.insert("task_id".into(), Value::String(task.to_string()));
     }
 
     if let Some(version) = parsed.get("plan_version").and_then(Value::as_u64) {

@@ -5,12 +5,10 @@ use anyhow::{Context, Result};
 use chrono::Local;
 use crossterm::terminal::disable_raw_mode;
 use std::collections::VecDeque;
-use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
-use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::Notify;
 
 use crate::agent::runloop::unified::turn::session::slash_commands;

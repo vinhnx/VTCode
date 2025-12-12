@@ -95,7 +95,7 @@ impl ThemeManager {
     pub fn active_theme_config(&self) -> ThemeConfig {
         self.custom_config
             .clone()
-            .unwrap_or_else(ThemeConfig::default)
+            .unwrap_or_default()
     }
 
     /// Load theme from a specific file path

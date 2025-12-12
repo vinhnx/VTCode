@@ -127,6 +127,7 @@ pub struct ToolExecutionRecord {
 
 impl ToolExecutionRecord {
     /// Create a new failed execution record
+    #[allow(clippy::too_many_arguments)]
     #[inline]
     pub fn failure(
         tool_name: String,
@@ -161,6 +162,7 @@ impl ToolExecutionRecord {
     }
 
     /// Create a new successful execution record
+    #[allow(clippy::too_many_arguments)]
     #[inline]
     pub fn success(
         tool_name: String,
@@ -1024,7 +1026,7 @@ impl ToolRegistry {
         for category in categories {
             self.failure_trackers
                 .entry(category)
-                .or_insert_with(ToolFailureTracker::default);
+                .or_default();
             self.success_trackers.entry(category).or_insert(0);
             self.latency_stats
                 .entry(category)
@@ -1091,7 +1093,7 @@ impl ToolRegistry {
         let tracker = self
             .failure_trackers
             .entry(category)
-            .or_insert_with(ToolFailureTracker::default);
+            .or_default();
         tracker.record_failure();
         self.success_trackers.insert(category, 0);
         tracker.should_circuit_break()
@@ -1586,15 +1588,15 @@ impl ToolRegistry {
                 tool_name_owned.clone()
             };
 
-            if let Some(alias_target) = self.resolve_mcp_tool_alias(&resolved_mcp_name).await {
-                if alias_target != resolved_mcp_name {
-                    trace!(
-                        requested = %resolved_mcp_name,
-                        resolved = %alias_target,
-                        "Resolved MCP tool alias"
-                    );
-                    resolved_mcp_name = alias_target;
-                }
+            if let Some(alias_target) = self.resolve_mcp_tool_alias(&resolved_mcp_name).await
+                && alias_target != resolved_mcp_name
+            {
+                trace!(
+                    requested = %resolved_mcp_name,
+                    resolved = %alias_target,
+                    "Resolved MCP tool alias"
+                );
+                resolved_mcp_name = alias_target;
             }
 
             match mcp_client.has_mcp_tool(&resolved_mcp_name).await {
@@ -1670,50 +1672,47 @@ impl ToolRegistry {
         }
 
         const MCP_COOLDOWN: Duration = Duration::from_secs(10);
-        if is_mcp_tool {
-            if let Some(last_failed) = self.mcp_last_failed {
-                if let Ok(elapsed) = last_failed.elapsed() {
-                    if elapsed < MCP_COOLDOWN {
-                        let error = ToolExecutionError::new(
-                            tool_name_owned.clone(),
-                            ToolErrorType::ExecutionError,
-                            "MCP provider cooling down after failure; skipping execution"
-                                .to_string(),
-                        );
-                        let payload = json!({
-                            "error": error.to_json_value(),
-                            "mcp_unhealthy": true,
-                            "note": "MCP provider cooling down after failure; execution skipped",
-                            "last_failed_at": self.mcp_last_failed
-                                .and_then(|ts| ts.duration_since(SystemTime::UNIX_EPOCH).ok())
-                                .map(|d| d.as_secs()),
-                            "cooldown_seconds": MCP_COOLDOWN.as_secs(),
-                            "mcp_provider": mcp_provider,
-                        });
-                        warn!(
-                            tool = %tool_name_owned,
-                            payload = %payload,
-                            "Skipping MCP tool execution due to cooldown"
-                        );
-                        self.execution_history
-                            .add_record(ToolExecutionRecord::failure(
-                                tool_name_owned,
-                                requested_name.clone(),
-                                is_mcp_tool,
-                                mcp_provider.clone(),
-                                args_for_recording,
-                                "MCP provider in cooldown; execution skipped".to_string(),
-                                context_snapshot.clone(),
-                                timeout_category_label.clone(),
-                                base_timeout_ms,
-                                adaptive_timeout_ms,
-                                None,
-                                false,
-                            ));
-                        return Ok(payload);
-                    }
-                }
-            }
+        if is_mcp_tool
+            && let Some(last_failed) = self.mcp_last_failed
+            && let Ok(elapsed) = last_failed.elapsed()
+            && elapsed < MCP_COOLDOWN
+        {
+            let error = ToolExecutionError::new(
+                tool_name_owned.clone(),
+                ToolErrorType::ExecutionError,
+                "MCP provider cooling down after failure; skipping execution".to_string(),
+            );
+            let payload = json!({
+                "error": error.to_json_value(),
+                "mcp_unhealthy": true,
+                "note": "MCP provider cooling down after failure; execution skipped",
+                "last_failed_at": self.mcp_last_failed
+                    .and_then(|ts| ts.duration_since(SystemTime::UNIX_EPOCH).ok())
+                    .map(|d| d.as_secs()),
+                "cooldown_seconds": MCP_COOLDOWN.as_secs(),
+                "mcp_provider": mcp_provider,
+            });
+            warn!(
+                tool = %tool_name_owned,
+                payload = %payload,
+                "Skipping MCP tool execution due to cooldown"
+            );
+            self.execution_history
+                .add_record(ToolExecutionRecord::failure(
+                    tool_name_owned,
+                    requested_name.clone(),
+                    is_mcp_tool,
+                    mcp_provider.clone(),
+                    args_for_recording,
+                    "MCP provider in cooldown; execution skipped".to_string(),
+                    context_snapshot.clone(),
+                    timeout_category_label.clone(),
+                    base_timeout_ms,
+                    adaptive_timeout_ms,
+                    None,
+                    false,
+                ));
+            return Ok(payload);
         }
 
         if is_mcp_tool && !self.mcp_healthy {
@@ -1860,7 +1859,7 @@ impl ToolRegistry {
                         false,
                     ));
 
-                return Ok(error.to_json_value());
+                Ok(error.to_json_value())
             }
         };
 
@@ -2126,7 +2125,7 @@ impl ToolRegistry {
                     }
                     Err(err) => {
                         last_err = Some(err);
-                        let jitter = ((attempt as u64 * 37) % 80) as u64;
+                        let jitter = (attempt as u64 * 37) % 80;
                         let pow = 2_u64.saturating_pow(attempt.min(4) as u32); // cap exponent
                         let backoff =
                             Duration::from_millis(200 * pow + jitter).min(Duration::from_secs(3));
@@ -2158,15 +2157,15 @@ impl ToolRegistry {
                 let registration =
                     build_mcp_registration(Arc::clone(mcp_client), &tool.provider, tool, None);
 
-                if !self.inventory.has_tool(registration.name()) {
-                    if let Err(err) = self.inventory.register_tool(registration) {
-                        warn!(
-                            tool = %tool.name,
-                            provider = %tool.provider,
-                            error = %err,
-                            "failed to register MCP proxy tool"
-                        );
-                    }
+                if !self.inventory.has_tool(registration.name())
+                    && let Err(err) = self.inventory.register_tool(registration)
+                {
+                    warn!(
+                        tool = %tool.name,
+                        provider = %tool.provider,
+                        error = %err,
+                        "failed to register MCP proxy tool"
+                    );
                 }
             }
 
@@ -2227,16 +2226,15 @@ impl ToolRegistry {
         let canonical = canonical_tool_name(name);
         let normalized = canonical.as_ref();
 
-        if !self.policy_gateway.has_policy_manager() {
-            if let Some(registration) = self.inventory.registration_for(normalized) {
-                if let Some(permission) = registration.default_permission() {
-                    return Ok(match permission {
-                        ToolPolicy::Allow => ToolPermissionDecision::Allow,
-                        ToolPolicy::Deny => ToolPermissionDecision::Deny,
-                        ToolPolicy::Prompt => ToolPermissionDecision::Prompt,
-                    });
-                }
-            }
+        if !self.policy_gateway.has_policy_manager()
+            && let Some(registration) = self.inventory.registration_for(normalized)
+            && let Some(permission) = registration.default_permission()
+        {
+            return Ok(match permission {
+                ToolPolicy::Allow => ToolPermissionDecision::Allow,
+                ToolPolicy::Deny => ToolPermissionDecision::Deny,
+                ToolPolicy::Prompt => ToolPermissionDecision::Prompt,
+            });
         }
 
         self.policy_gateway.evaluate_tool_policy(normalized).await

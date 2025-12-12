@@ -1,8 +1,5 @@
 use crate::config::constants::ui;
 use crate::ui::tui::session::slash;
-use std::fs::OpenOptions;
-use std::io::Write;
-use std::time::{SystemTime, UNIX_EPOCH};
 /// Text editing and cursor movement operations for Session
 ///
 /// This module handles all text manipulation and cursor navigation including:
