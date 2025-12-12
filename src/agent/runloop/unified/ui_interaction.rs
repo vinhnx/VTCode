@@ -1,7 +1,6 @@
-use std::io::Write;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 use super::progress::{ProgressReporter, ProgressState};
 
@@ -691,28 +690,6 @@ pub(crate) async fn stream_and_render_response(
 
     let supports_streaming_markdown = renderer.supports_streaming_markdown();
 
-    // #region agent log
-    if let Ok(mut file) = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open("/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.cursor/debug.log")
-    {
-        let _ = writeln!(
-            file,
-            "{{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H1\",\"location\":\"ui_interaction.rs:stream_and_render_response:start\",\"message\":\"stream start\",\"data\":{{\"provider\":\"{}\",\"model\":\"{}\",\"stream\":{},\"supports_streaming\":{},\"supports_streaming_markdown\":{}}},\"timestamp\":{}}}",
-            provider_name,
-            request.model,
-            request.stream,
-            provider.supports_streaming(),
-            supports_streaming_markdown,
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_millis()
-        );
-    }
-    // #endregion
-
     // Start stream with cancellation support
     let stream_future = provider.stream(request);
     tokio::pin!(stream_future);
@@ -884,25 +861,6 @@ pub(crate) async fn stream_and_render_response(
             if !content.trim().is_empty() {
                 aggregated.push_str(content);
                 emitted_tokens = true;
-                // #region agent log
-                if let Ok(mut file) = std::fs::OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open("/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.cursor/debug.log")
-                {
-                    let _ = writeln!(
-                        file,
-                        "{{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H1\",\"location\":\"ui_interaction.rs:stream_and_render_response:fallback\",\"message\":\"completed-only fallback\",\"data\":{{\"content_len\":{},\"trimmed_len\":{},\"supports_streaming_markdown\":{}}},\"timestamp\":{}}}",
-                        content.len(),
-                        content.trim().len(),
-                        supports_streaming_markdown,
-                        SystemTime::now()
-                            .duration_since(UNIX_EPOCH)
-                            .unwrap_or_default()
-                            .as_millis()
-                    );
-                }
-                // #endregion
                 if supports_streaming_markdown {
                     rendered_line_count = renderer
                         .stream_markdown_response(&aggregated, rendered_line_count)
@@ -945,31 +903,6 @@ pub(crate) async fn stream_and_render_response(
     reasoning_state
         .finalize(renderer, response.reasoning.as_deref())
         .map_err(|err| map_render_error(provider_name, err))?;
-
-    // #region agent log
-    if let Ok(mut file) = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open("/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.cursor/debug.log")
-    {
-        let _ = writeln!(
-            file,
-            "{{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H1\",\"location\":\"ui_interaction.rs:stream_and_render_response:final\",\"message\":\"stream finished\",\"data\":{{\"provider\":\"{}\",\"token_count\":{},\"reasoning_tokens\":{},\"aggregated_len\":{},\"content_len\":{},\"tool_calls\":{},\"finish_reason\":\"{:?}\",\"emitted_tokens\":{}}},\"timestamp\":{}}}",
-            provider_name,
-            token_count,
-            reasoning_token_count,
-            aggregated.len(),
-            response.content.as_ref().map(|c| c.len()).unwrap_or(0),
-            response.tool_calls.as_ref().map(|calls| calls.len()).unwrap_or(0),
-            response.finish_reason,
-            emitted_tokens,
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_millis()
-        );
-    }
-    // #endregion
 
     if !supports_streaming_markdown && !aggregated.trim().is_empty() {
         renderer

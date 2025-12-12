@@ -896,26 +896,6 @@ pub(crate) async fn run_single_agent_loop_unified(
                 }
             };
 
-            // #region agent log
-            if let Ok(mut file) = OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open("/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.cursor/debug.log")
-            {
-                let _ = writeln!(
-                    file,
-                    "{{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H3\",\"location\":\"session_loop.rs:parse_at_patterns\",\"message\":\"pre-parse user input\",\"data\":{{\"len\":{},\"newline_count\":{},\"starts_with_cmd\":{}}},\"timestamp\":{}}}",
-                    input.len(),
-                    input.matches('\n').count(),
-                    input.starts_with('/'),
-                    SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_millis()
-                );
-            }
-            // #endregion
-
             // Apply prompt refinement if enabled
             let refined_content = match &processed_content {
                 uni::MessageContent::Text(text) => {

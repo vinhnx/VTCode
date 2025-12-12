@@ -73,24 +73,6 @@ impl Session {
         self.input_manager.insert_text(&sanitized);
         slash::update_slash_suggestions(self);
 
-        // #region agent log
-        if let Ok(mut file) = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open("/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.cursor/debug.log")
-        {
-            let _ = writeln!(
-                file,
-                "{{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H2\",\"location\":\"session/editing.rs:insert_paste_text\",\"message\":\"insert_paste_text sanitized\",\"data\":{{\"len\":{},\"newline_count\":{}}},\"timestamp\":{}}}",
-                sanitized.len(),
-                sanitized.matches('\n').count(),
-                SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_millis()
-            );
-        }
-        // #endregion
     }
 
     /// Calculate remaining newline capacity in the input field
