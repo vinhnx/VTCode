@@ -553,10 +553,14 @@ impl GeminiProvider {
         }
 
         let tools: Option<Vec<Tool>> = request.tools.as_ref().map(|definitions| {
+            let mut seen = std::collections::HashSet::new();
             definitions
                 .iter()
                 .filter_map(|tool| {
                     let func = tool.function.as_ref()?;
+                    if !seen.insert(func.name.clone()) {
+                        return None;
+                    }
                     Some(Tool {
                         function_declarations: vec![FunctionDeclaration {
                             name: func.name.clone(),

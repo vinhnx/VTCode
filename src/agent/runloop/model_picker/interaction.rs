@@ -222,26 +222,30 @@ pub(super) fn select_reasoning_with_ratatui(
 ) -> Result<Option<ReasoningChoice>> {
     let is_codex_max = selection.model_id.contains("codex-max");
 
-    let mut entries = vec![
-        SelectionEntry::new(
-            format!("Keep current ({})", reasoning_level_label(current)),
-            Some(KEEP_CURRENT_DESCRIPTION.to_string()),
-        ),
-        SelectionEntry::new(
-            reasoning_level_label(ReasoningEffortLevel::Medium),
-            Some(reasoning_level_description(ReasoningEffortLevel::Medium).to_string()),
-        ),
-        SelectionEntry::new(
-            reasoning_level_label(ReasoningEffortLevel::High),
-            Some(reasoning_level_description(ReasoningEffortLevel::High).to_string()),
-        ),
+    let mut entries = vec![SelectionEntry::new(
+        format!("Keep current ({})", reasoning_level_label(current)),
+        Some(KEEP_CURRENT_DESCRIPTION.to_string()),
+    )];
+
+    let mut level_entries: Vec<(usize, ReasoningEffortLevel)> = Vec::new();
+    let mut levels = vec![
+        ReasoningEffortLevel::None,
+        ReasoningEffortLevel::Minimal,
+        ReasoningEffortLevel::Low,
+        ReasoningEffortLevel::Medium,
+        ReasoningEffortLevel::High,
     ];
 
     if is_codex_max {
+        levels.push(ReasoningEffortLevel::XHigh);
+    }
+
+    for level in levels {
         entries.push(SelectionEntry::new(
-            reasoning_level_label(ReasoningEffortLevel::XHigh),
-            Some(reasoning_level_description(ReasoningEffortLevel::XHigh).to_string()),
+            reasoning_level_label(level),
+            Some(reasoning_level_description(level).to_string()),
         ));
+        level_entries.push((entries.len() - 1, level));
     }
 
     let mut disable_index = None;
@@ -282,12 +286,10 @@ pub(super) fn select_reasoning_with_ratatui(
         return Ok(Some(ReasoningChoice::Disable));
     }
 
-    let choice = match index {
-        0 => current,
-        1 => ReasoningEffortLevel::Medium,
-        2 => ReasoningEffortLevel::High,
-        3 if is_codex_max => ReasoningEffortLevel::XHigh,
-        _ => current,
-    };
-    Ok(Some(ReasoningChoice::Level(choice)))
+    let selected_level = level_entries
+        .iter()
+        .find_map(|(idx, level)| (*idx == index).then_some(*level))
+        .unwrap_or(current);
+
+    Ok(Some(ReasoningChoice::Level(selected_level)))
 }

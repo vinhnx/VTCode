@@ -425,7 +425,7 @@ impl ModelPickerState {
         let Some(selected) = level else {
             renderer.line(
                 MessageStyle::Error,
-                "Unknown reasoning option. Use easy, medium, hard, skip, or off.",
+                "Unknown reasoning option. Use none, low, medium, high, skip, or off.",
             )?;
             if let Some(progress) = self.prompt_reasoning_step(renderer)? {
                 return Ok(progress);

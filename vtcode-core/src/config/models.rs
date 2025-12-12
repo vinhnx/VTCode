@@ -184,6 +184,8 @@ pub enum ModelId {
     // OpenAI models
     /// GPT-5 - Latest most capable OpenAI model (2025-08-07)
     GPT5,
+    /// GPT-5.2 - Latest flagship general-purpose OpenAI model (2025-12-11)
+    GPT52,
     /// GPT-5 Codex - Code-focused GPT-5 variant using the Responses API
     GPT5Codex,
     /// GPT-5 Mini - Latest efficient OpenAI model (2025-08-07)
@@ -438,6 +440,7 @@ impl ModelId {
             ModelId::Gemini3ProPreview => models::GEMINI_3_PRO_PREVIEW,
             // OpenAI models
             ModelId::GPT5 => models::GPT_5,
+            ModelId::GPT52 => models::GPT_5_2,
             ModelId::GPT5Codex => models::GPT_5_CODEX,
             ModelId::GPT5Mini => models::GPT_5_MINI,
             ModelId::GPT5Nano => models::GPT_5_NANO,
@@ -561,6 +564,7 @@ impl ModelId {
             | ModelId::Gemini25Pro
             | ModelId::Gemini3ProPreview => Provider::Gemini,
             ModelId::GPT5
+            | ModelId::GPT52
             | ModelId::GPT5Codex
             | ModelId::GPT5Mini
             | ModelId::GPT5Nano
@@ -712,6 +716,7 @@ impl ModelId {
         let direct = match self {
             ModelId::Gemini25Pro => Some(ModelId::Gemini25Flash),
             ModelId::Gemini3ProPreview => Some(ModelId::Gemini25Flash),
+            ModelId::GPT52 => Some(ModelId::GPT5Mini),
             ModelId::GPT5 => Some(ModelId::GPT5Mini),
             ModelId::GPT5Codex => Some(ModelId::CodexMiniLatest),
             ModelId::GPT51 => Some(ModelId::GPT51Mini),
@@ -747,6 +752,7 @@ impl ModelId {
             ModelId::Gemini3ProPreview => "Gemini 3 Pro Preview",
             // OpenAI models
             ModelId::GPT5 => "GPT-5",
+            ModelId::GPT52 => "GPT-5.2",
             ModelId::GPT5Codex => "GPT-5 Codex",
             ModelId::GPT5Mini => "GPT-5 Mini",
             ModelId::GPT5Nano => "GPT-5 Nano",
@@ -824,6 +830,9 @@ impl ModelId {
             }
             // OpenAI models
             ModelId::GPT5 => "Latest most capable OpenAI model with advanced reasoning",
+            ModelId::GPT52 => {
+                "Latest flagship OpenAI model with improved reasoning, xhigh effort, and built-in compaction support"
+            }
             ModelId::GPT5Codex => {
                 "Code-focused GPT-5 variant optimized for tool calling and structured outputs"
             }
@@ -1009,6 +1018,7 @@ impl ModelId {
             ModelId::Gemini3ProPreview,
             // OpenAI models
             ModelId::GPT5,
+            ModelId::GPT52,
             ModelId::GPT5Codex,
             ModelId::GPT5Mini,
             ModelId::GPT5Nano,
@@ -1078,6 +1088,7 @@ impl ModelId {
         vec![
             ModelId::Gemini25FlashPreview,
             ModelId::Gemini25Pro,
+            ModelId::GPT52,
             ModelId::GPT5,
             ModelId::GPT51,
             ModelId::OpenAIGptOss20b,
@@ -1175,6 +1186,7 @@ impl ModelId {
             self,
             ModelId::Gemini25Pro
                 | ModelId::GPT5
+                | ModelId::GPT52
                 | ModelId::GPT5Codex
                 | ModelId::ClaudeOpus41
                 | ModelId::DeepSeekReasoner
@@ -1212,6 +1224,7 @@ impl ModelId {
         matches!(
             self,
             ModelId::Gemini25Pro
+                | ModelId::GPT52
                 | ModelId::GPT5
                 | ModelId::GPT5Codex
                 | ModelId::ClaudeOpus41
@@ -1253,6 +1266,7 @@ impl ModelId {
             | ModelId::Gemini25Pro => "2.5",
             ModelId::Gemini3ProPreview => "3",
             // OpenAI generations
+            ModelId::GPT52 => "5.2",
             ModelId::GPT5
             | ModelId::GPT5Codex
             | ModelId::GPT5Mini
@@ -1360,20 +1374,24 @@ impl ModelId {
         }
     }
 
-    /// Determine if this model is a GPT-5.1 variant with enhanced tool support
+    /// Determine if this model is a GPT-5.1+ variant with enhanced tool support
     pub fn is_gpt51_variant(&self) -> bool {
         matches!(
             self,
-            ModelId::GPT51 | ModelId::GPT51Codex | ModelId::GPT51CodexMax | ModelId::GPT51Mini
+            ModelId::GPT52
+                | ModelId::GPT51
+                | ModelId::GPT51Codex
+                | ModelId::GPT51CodexMax
+                | ModelId::GPT51Mini
         )
     }
 
-    /// Determine if this model supports GPT-5.1's new apply_patch tool type
+    /// Determine if this model supports GPT-5.1+/5.2 apply_patch tool type
     pub fn supports_apply_patch_tool(&self) -> bool {
         self.is_gpt51_variant()
     }
 
-    /// Determine if this model supports GPT-5.1's new shell tool type
+    /// Determine if this model supports GPT-5.1+/5.2 shell tool type
     pub fn supports_shell_tool(&self) -> bool {
         self.is_gpt51_variant()
     }
@@ -1398,6 +1416,8 @@ impl FromStr for ModelId {
             s if s == models::GEMINI_2_5_PRO => Ok(ModelId::Gemini25Pro),
             // OpenAI models
             s if s == models::GPT_5 => Ok(ModelId::GPT5),
+            s if s == models::openai::GPT_5_2 => Ok(ModelId::GPT52),
+            s if s == models::openai::GPT_5_2_ALIAS => Ok(ModelId::GPT52),
             s if s == models::GPT_5_CODEX => Ok(ModelId::GPT5Codex),
             s if s == models::GPT_5_MINI => Ok(ModelId::GPT5Mini),
             s if s == models::GPT_5_NANO => Ok(ModelId::GPT5Nano),
@@ -1889,6 +1909,7 @@ mod tests {
 
         // Pro variants
         assert!(ModelId::Gemini25Pro.is_pro_variant());
+        assert!(ModelId::GPT52.is_pro_variant());
         assert!(ModelId::GPT5.is_pro_variant());
         assert!(ModelId::GPT5Codex.is_pro_variant());
         assert!(ModelId::DeepSeekReasoner.is_pro_variant());
@@ -1914,6 +1935,7 @@ mod tests {
 
         // Top tier models
         assert!(ModelId::Gemini25Pro.is_top_tier());
+        assert!(ModelId::GPT52.is_top_tier());
         assert!(ModelId::GPT5.is_top_tier());
         assert!(ModelId::GPT5Codex.is_top_tier());
         assert!(ModelId::ClaudeSonnet45.is_top_tier());
@@ -1939,6 +1961,7 @@ mod tests {
         assert_eq!(ModelId::Gemini25Pro.generation(), "2.5");
 
         // OpenAI generations
+        assert_eq!(ModelId::GPT52.generation(), "5.2");
         assert_eq!(ModelId::GPT5.generation(), "5");
         assert_eq!(ModelId::GPT5Codex.generation(), "5");
         assert_eq!(ModelId::GPT5Mini.generation(), "5");
@@ -2003,6 +2026,7 @@ mod tests {
         assert!(!gemini_models.contains(&ModelId::GPT5));
 
         let openai_models = ModelId::models_for_provider(Provider::OpenAI);
+        assert!(openai_models.contains(&ModelId::GPT52));
         assert!(openai_models.contains(&ModelId::GPT5));
         assert!(openai_models.contains(&ModelId::GPT5Codex));
         assert!(!openai_models.contains(&ModelId::Gemini25Pro));
@@ -2066,6 +2090,7 @@ mod tests {
         let fallbacks = ModelId::fallback_models();
         assert!(!fallbacks.is_empty());
         assert!(fallbacks.contains(&ModelId::Gemini25Pro));
+        assert!(fallbacks.contains(&ModelId::GPT52));
         assert!(fallbacks.contains(&ModelId::GPT5));
         assert!(fallbacks.contains(&ModelId::ClaudeOpus41));
         assert!(fallbacks.contains(&ModelId::ClaudeSonnet45));

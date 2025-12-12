@@ -1,6 +1,7 @@
+use std::io::Write;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use super::progress::{ProgressReporter, ProgressState};
 
@@ -688,6 +689,30 @@ pub(crate) async fn stream_and_render_response(
         )));
     }
 
+    let supports_streaming_markdown = renderer.supports_streaming_markdown();
+
+    // #region agent log
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.cursor/debug.log")
+    {
+        let _ = writeln!(
+            file,
+            "{{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H1\",\"location\":\"ui_interaction.rs:stream_and_render_response:start\",\"message\":\"stream start\",\"data\":{{\"provider\":\"{}\",\"model\":\"{}\",\"stream\":{},\"supports_streaming\":{},\"supports_streaming_markdown\":{}}},\"timestamp\":{}}}",
+            provider_name,
+            request.model,
+            request.stream,
+            provider.supports_streaming(),
+            supports_streaming_markdown,
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis()
+        );
+    }
+    // #endregion
+
     // Start stream with cancellation support
     let stream_future = provider.stream(request);
     tokio::pin!(stream_future);
@@ -715,7 +740,6 @@ pub(crate) async fn stream_and_render_response(
     let mut final_response: Option<uni::LLMResponse> = None;
     let mut aggregated = String::new();
     let mut spinner_active = true;
-    let supports_streaming_markdown = renderer.supports_streaming_markdown();
     let mut rendered_line_count = 0usize;
     let response_style = MessageStyle::Response;
     let response_indent = response_style.indent();
@@ -840,7 +864,7 @@ pub(crate) async fn stream_and_render_response(
 
     finish_spinner(&mut spinner_active);
 
-    let response = match final_response {
+    let mut response = match final_response {
         Some(response) => response,
         None => {
             reasoning_state
@@ -854,9 +878,98 @@ pub(crate) async fn stream_and_render_response(
         }
     };
 
+    // Handle providers that send only a Completed event with content (no token deltas).
+    if aggregated.trim().is_empty() {
+        if let Some(content) = response.content.as_deref() {
+            if !content.trim().is_empty() {
+                aggregated.push_str(content);
+                emitted_tokens = true;
+                // #region agent log
+                if let Ok(mut file) = std::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open("/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.cursor/debug.log")
+                {
+                    let _ = writeln!(
+                        file,
+                        "{{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H1\",\"location\":\"ui_interaction.rs:stream_and_render_response:fallback\",\"message\":\"completed-only fallback\",\"data\":{{\"content_len\":{},\"trimmed_len\":{},\"supports_streaming_markdown\":{}}},\"timestamp\":{}}}",
+                        content.len(),
+                        content.trim().len(),
+                        supports_streaming_markdown,
+                        SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_millis()
+                    );
+                }
+                // #endregion
+                if supports_streaming_markdown {
+                    rendered_line_count = renderer
+                        .stream_markdown_response(&aggregated, rendered_line_count)
+                        .map_err(|err| map_render_error(provider_name, err))?;
+                } else {
+                    stream_plain_response_delta(
+                        renderer,
+                        response_style,
+                        response_indent,
+                        &mut needs_indent,
+                        &aggregated,
+                    )
+                    .map_err(|err| map_render_error(provider_name, err))?;
+                }
+            }
+        } else if let Some(reasoning) = response.reasoning.as_deref() {
+            if !reasoning.trim().is_empty() {
+                aggregated.push_str(reasoning);
+                emitted_tokens = true;
+                // Prevent double-render in finalize
+                response.reasoning = None;
+                if supports_streaming_markdown {
+                    rendered_line_count = renderer
+                        .stream_markdown_response(&aggregated, rendered_line_count)
+                        .map_err(|err| map_render_error(provider_name, err))?;
+                } else {
+                    stream_plain_response_delta(
+                        renderer,
+                        response_style,
+                        response_indent,
+                        &mut needs_indent,
+                        &aggregated,
+                    )
+                    .map_err(|err| map_render_error(provider_name, err))?;
+                }
+            }
+        }
+    }
+
     reasoning_state
         .finalize(renderer, response.reasoning.as_deref())
         .map_err(|err| map_render_error(provider_name, err))?;
+
+    // #region agent log
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.cursor/debug.log")
+    {
+        let _ = writeln!(
+            file,
+            "{{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H1\",\"location\":\"ui_interaction.rs:stream_and_render_response:final\",\"message\":\"stream finished\",\"data\":{{\"provider\":\"{}\",\"token_count\":{},\"reasoning_tokens\":{},\"aggregated_len\":{},\"content_len\":{},\"tool_calls\":{},\"finish_reason\":\"{:?}\",\"emitted_tokens\":{}}},\"timestamp\":{}}}",
+            provider_name,
+            token_count,
+            reasoning_token_count,
+            aggregated.len(),
+            response.content.as_ref().map(|c| c.len()).unwrap_or(0),
+            response.tool_calls.as_ref().map(|calls| calls.len()).unwrap_or(0),
+            response.finish_reason,
+            emitted_tokens,
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis()
+        );
+    }
+    // #endregion
 
     if !supports_streaming_markdown && !aggregated.trim().is_empty() {
         renderer
@@ -865,4 +978,134 @@ pub(crate) async fn stream_and_render_response(
     }
 
     Ok((response, emitted_tokens))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use futures::stream;
+    use std::sync::Arc;
+    use tokio::sync::{mpsc, Notify};
+    use vtcode_core::ui::tui::InlineCommand;
+
+    #[derive(Clone)]
+    struct CompletedOnlyProvider {
+        content: Option<String>,
+        reasoning: Option<String>,
+    }
+
+    #[async_trait::async_trait]
+    impl uni::LLMProvider for CompletedOnlyProvider {
+        fn name(&self) -> &str {
+            "test-provider"
+        }
+
+        fn supports_streaming(&self) -> bool {
+            true
+        }
+
+        async fn generate(&self, _request: uni::LLMRequest) -> Result<uni::LLMResponse, uni::LLMError> {
+            Ok(uni::LLMResponse {
+                content: self.content.clone(),
+                tool_calls: None,
+                usage: None,
+                finish_reason: uni::FinishReason::Stop,
+                reasoning: self.reasoning.clone(),
+                reasoning_details: None,
+            })
+        }
+
+        async fn stream(&self, request: uni::LLMRequest) -> Result<uni::LLMStream, uni::LLMError> {
+            let response = self.generate(request).await?;
+            Ok(Box::pin(stream::once(async {
+                Ok(uni::LLMStreamEvent::Completed { response })
+            })))
+        }
+
+        fn supported_models(&self) -> Vec<String> {
+            vec!["test-model".to_string()]
+        }
+
+        fn validate_request(&self, _request: &uni::LLMRequest) -> Result<(), uni::LLMError> {
+            Ok(())
+        }
+    }
+
+    fn build_request() -> uni::LLMRequest {
+        uni::LLMRequest {
+            messages: Vec::new(),
+            system_prompt: None,
+            tools: None,
+            model: "test-model".to_string(),
+            max_tokens: None,
+            temperature: None,
+            stream: true,
+            output_format: None,
+            tool_choice: None,
+            parallel_tool_calls: None,
+            parallel_tool_config: None,
+            reasoning_effort: None,
+            verbosity: None,
+        }
+    }
+
+    fn build_spinner() -> PlaceholderSpinner {
+        let (tx, _rx) = mpsc::unbounded_channel::<InlineCommand>();
+        let handle = InlineHandle::new_for_tests(tx);
+        PlaceholderSpinner::new(&handle, None, None, "")
+    }
+
+    #[tokio::test]
+    async fn renders_completed_only_content() {
+        let provider = CompletedOnlyProvider {
+            content: Some("hello world".to_string()),
+            reasoning: None,
+        };
+        let request = build_request();
+        let spinner = build_spinner();
+        let mut renderer = AnsiRenderer::stdout();
+        let ctrl_c_state = CtrlCState::new();
+        let ctrl_c_notify = Arc::new(Notify::new());
+
+        let (resp, emitted) = stream_and_render_response(
+            &provider,
+            request,
+            &spinner,
+            &mut renderer,
+            &Arc::new(ctrl_c_state),
+            &ctrl_c_notify,
+        )
+        .await
+        .expect("stream should succeed");
+
+        assert!(emitted, "should mark emitted tokens when content is rendered");
+        assert_eq!(resp.content.as_deref(), Some("hello world"));
+    }
+
+    #[tokio::test]
+    async fn renders_reasoning_when_no_content() {
+        let provider = CompletedOnlyProvider {
+            content: None,
+            reasoning: Some("because reason".to_string()),
+        };
+        let request = build_request();
+        let spinner = build_spinner();
+        let mut renderer = AnsiRenderer::stdout();
+        let ctrl_c_state = CtrlCState::new();
+        let ctrl_c_notify = Arc::new(Notify::new());
+
+        let (resp, emitted) = stream_and_render_response(
+            &provider,
+            request,
+            &spinner,
+            &mut renderer,
+            &Arc::new(ctrl_c_state),
+            &ctrl_c_notify,
+        )
+        .await
+        .expect("stream should succeed");
+
+        assert!(emitted, "should mark emitted tokens when reasoning is rendered");
+        assert!(resp.content.is_none(), "content should remain none");
+    }
 }

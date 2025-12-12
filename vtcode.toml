@@ -5,13 +5,13 @@
 # Core agent behavior; see docs/config/CONFIGURATION_PRECEDENCE.md.
 [agent]
 # Primary LLM provider to use (e.g., "openai", "gemini", "anthropic", "openrouter")
-provider = "ollama"
+provider = "openai"
 
 # Environment variable containing the API key for the provider
-api_key_env = "OLLAMA_API_KEY"
+api_key_env = "OPENAI_API_KEY"
 
 # Default model to use when no specific model is specified
-default_model = "gpt-oss:20b-cloud"
+default_model = "gpt-5.2-2025-12-11"
 
 # Visual theme for the terminal interface
 theme = "ciapre-dark"
@@ -28,7 +28,7 @@ max_conversation_turns = 50
 
 # Reasoning effort level ("none", "minimal", "low", "medium", "high") - affects model usage and response speed
 # For Gemini 3 Pro: Use "low" for fast responses, "high" for maximum reasoning depth, "medium" defaults to high (not yet generally available)
-reasoning_effort = "medium"
+reasoning_effort = "minimal"
 
 # Temperature for main LLM responses (0.0-1.0)
 # Lower values = more deterministic, higher values = more creative
@@ -272,6 +272,14 @@ audit_log_path = "~/.vtcode/web_fetch_audit.log"
 # Disable only for testing/development
 strict_https_only = true
 
+[tools.plugins]
+enabled = true
+manifests = []
+default_trust = "sandbox"
+allow = []
+deny = []
+auto_reload = true
+
 # Specific tool policies - Override default policy for individual tools
 [tools.policies]
 apply_patch = "prompt"
@@ -362,6 +370,9 @@ require_write_tool_for_claims = true
 
 # Auto-apply patches without prompting (DANGEROUS - disable for safety)
 auto_apply_detected_patches = false
+zero_trust_mode = false
+encrypt_payloads = false
+integrity_checks = true
 
 # UI configuration - Terminal and display settings
 [ui]
@@ -415,6 +426,9 @@ mcp_ceiling_seconds = 120
 streaming_ceiling_seconds = 600
 # Emit a warning once a tool runs longer than this percentage of its ceiling.
 warning_threshold_percent = 80
+adaptive_decay_ratio = 0.875
+adaptive_success_streak = 5
+adaptive_min_floor_ms = 1000
 
 # PTY (Pseudo Terminal) configuration - For interactive command execution
 [pty]
@@ -527,15 +541,15 @@ llm_router_model = ""
 # Model mapping for different task types
 [router.models]
 # Model for simple queries
-simple = "gpt-oss:20b-cloud"
+simple = "gpt-5.2-2025-12-11"
 # Model for standard tasks
-standard = "gpt-oss:20b-cloud"
+standard = "gpt-5.2-2025-12-11"
 # Model for complex tasks
-complex = "gpt-oss:20b-cloud"
+complex = "gpt-5.2-2025-12-11"
 # Model for code generation heavy tasks
-codegen_heavy = "gpt-oss:20b-cloud"
+codegen_heavy = "gpt-5.2-2025-12-11"
 # Model for information retrieval heavy tasks
-retrieval_heavy = "gpt-oss:20b-cloud"
+retrieval_heavy = "gpt-5.2-2025-12-11"
 
 # Router budget settings (if applicable)
 [router.budgets]
@@ -588,6 +602,10 @@ complex_markers = [
 [telemetry]
 # Enable trajectory logging for usage analysis
 trajectory_enabled = true
+dashboards_enabled = true
+sample_interval_ms = 1000
+retention_days = 14
+bottleneck_tracing = false
 
 # Syntax highlighting configuration
 [syntax_highlighting]
@@ -647,6 +665,10 @@ require_profile_ack = false
 # Path to full auto profile configuration
 profile_path = "automation/full_auto_profile.toml"
 
+[optimization]
+enabled = false
+strategy = "bandit"
+
 # Prompt caching - Cache model responses for efficiency
 [prompt_cache]
 # Enable prompt caching (reduces API calls for repeated prompts)
@@ -667,6 +689,11 @@ enable_auto_cleanup = true
 # Minimum quality threshold to keep cache entries
 min_quality_threshold = 0.7
 
+[optimization.bandit]
+exploration_epsilon = 0.1
+rolling_window = 50
+latency_weight = 0.35
+
 # Prompt cache configuration for OpenAI
 [prompt_cache.providers.openai]
 enabled = true
@@ -678,6 +705,11 @@ surface_metrics = true
 # reduce cost and latency for repeated reasoning prompts.
 prompt_cache_retention = "24h"
 
+[optimization.actor_critic]
+learning_rate = 0.02
+discount_factor = 0.85
+trace_decay = 0.8
+
 # Prompt cache configuration for Anthropic
 [prompt_cache.providers.anthropic]
 enabled = true
@@ -686,6 +718,11 @@ extended_ttl_seconds = 3600
 max_breakpoints = 4
 cache_system_messages = true
 cache_user_messages = true
+
+[optimization.reward_shaping]
+success_reward = 1.0
+timeout_penalty = -0.8
+latency_penalty_weight = 0.25
 
 # Prompt cache configuration for Gemini
 [prompt_cache.providers.gemini]

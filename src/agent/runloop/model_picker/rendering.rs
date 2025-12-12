@@ -329,13 +329,14 @@ pub(super) fn render_reasoning_inline(
         search_value: None,
     });
 
-    // For GPT-5.1 models, show "None" first as the default option (fastest)
-    let is_gpt51 = selection.model_id.starts_with("gpt-5.1");
-    if is_gpt51 {
+    // For GPT-5.1/5.2 models, show "None" first as the default option (fastest)
+    let is_gpt5_responses =
+        selection.model_id.starts_with("gpt-5.1") || selection.model_id.starts_with("gpt-5.2");
+    if is_gpt5_responses {
         items.push(InlineListItem {
             title: reasoning_level_label(ReasoningEffortLevel::None).to_string(),
             subtitle: Some(reasoning_level_description(ReasoningEffortLevel::None).to_string()),
-            badge: Some("GPT-5.1".to_string()),
+            badge: Some("GPT-5.x".to_string()),
             indent: 0,
             selection: Some(InlineListSelection::Reasoning(ReasoningEffortLevel::None)),
             search_value: None,
@@ -344,7 +345,12 @@ pub(super) fn render_reasoning_inline(
 
     let is_codex_max = selection.model_id.contains("codex-max");
 
-    let mut levels = vec![ReasoningEffortLevel::Medium, ReasoningEffortLevel::High];
+    let mut levels = vec![
+        ReasoningEffortLevel::Minimal,
+        ReasoningEffortLevel::Low,
+        ReasoningEffortLevel::Medium,
+        ReasoningEffortLevel::High,
+    ];
 
     if is_codex_max {
         levels.push(ReasoningEffortLevel::XHigh);
@@ -401,67 +407,71 @@ pub(super) fn prompt_reasoning_plain(
     selection: &SelectionDetail,
     current: ReasoningEffortLevel,
 ) -> Result<()> {
-    let is_gpt51 = selection.model_id.starts_with("gpt-5.1");
+    let is_responses_flagship =
+        selection.model_id.starts_with("gpt-5.1") || selection.model_id.starts_with("gpt-5.2");
+    let is_codex_max = selection.model_id.contains("codex-max");
+    let xhigh_suffix = if is_codex_max { "/xhigh" } else { "" };
+
     if selection.reasoning_optional {
-        if is_gpt51 {
-            renderer.line(
-                MessageStyle::Info,
-                &format!(
-                    "Step 2 – reasoning effort (current: {}). Choose none/easy/medium/hard or type 'skip' if the model does not expose configurable reasoning.",
-                    current
-                ),
-            )?;
+        let prefix = if is_responses_flagship {
+            "none/low/medium/high"
         } else {
-            renderer.line(
-                MessageStyle::Info,
-                &format!(
-                    "Step 2 – reasoning effort (current: {}). Choose easy/medium/hard or type 'skip' if the model does not expose configurable reasoning.",
-                    current
-                ),
-            )?;
-        }
-    } else if let Some(alternative) = selection.reasoning_off_model {
-        if is_gpt51 {
-            renderer.line(
-                MessageStyle::Info,
-                &format!(
-                    "Step 2 – select reasoning effort for {} (none/easy/medium/hard). Type 'skip' to keep {} or 'off' to use {} ({}). For GPT-5.1, 'none' provides lowest latency.",
-                    selection.model_display,
-                    reasoning_level_label(current),
-                    alternative.display_name(),
-                    alternative.as_str()
-                ),
-            )?;
-        } else {
-            renderer.line(
-                MessageStyle::Info,
-                &format!(
-                    "Step 2 – select reasoning effort for {} (easy/medium/hard). Type 'skip' to keep {} or 'off' to use {} ({}).",
-                    selection.model_display,
-                    reasoning_level_label(current),
-                    alternative.display_name(),
-                    alternative.as_str()
-                ),
-            )?;
-        }
-    } else if is_gpt51 {
+            "low/medium/high"
+        };
         renderer.line(
             MessageStyle::Info,
             &format!(
-                "Step 2 – select reasoning effort for {} (none/easy/medium/hard). Type 'skip' to keep {}. For GPT-5.1, 'none' provides lowest latency. Current: {}.",
+                "Step 2 – reasoning effort (current: {}). Choose {}{} or type 'skip' if the model does not expose configurable reasoning.",
+                current,
+                prefix,
+                xhigh_suffix
+            ),
+        )?;
+    } else if let Some(alternative) = selection.reasoning_off_model {
+        let prefix = if is_responses_flagship {
+            "none/low/medium/high"
+        } else {
+            "low/medium/high"
+        };
+        let gpt5_hint = if is_responses_flagship {
+            " For GPT-5.x, 'none' provides lowest latency."
+        } else {
+            ""
+        };
+        renderer.line(
+            MessageStyle::Info,
+            &format!(
+                "Step 2 – select reasoning effort for {} ({}{}). Type 'skip' to keep {} or 'off' to use {} ({}).{}",
                 selection.model_display,
-                reasoning_level_label(current),
-                current
+                prefix,
+                xhigh_suffix,
+                alternative.display_name(),
+                alternative.as_str(),
+                alternative.display_name(),
+                gpt5_hint
             ),
         )?;
     } else {
+        let prefix = if is_responses_flagship {
+            "none/low/medium/high"
+        } else {
+            "low/medium/high"
+        };
+        let gpt5_hint = if is_responses_flagship {
+            " For GPT-5.x, 'none' provides lowest latency."
+        } else {
+            ""
+        };
         renderer.line(
             MessageStyle::Info,
             &format!(
-                "Step 2 – select reasoning effort for {} (easy/medium/hard). Type 'skip' to keep {}. Current: {}.",
+                "Step 2 – select reasoning effort for {} ({}{}). Type 'skip' to keep {}. Current: {}.{}",
                 selection.model_display,
-                reasoning_level_label(current),
-                current
+                prefix,
+                xhigh_suffix,
+                current,
+                current,
+                gpt5_hint
             ),
         )?;
     }

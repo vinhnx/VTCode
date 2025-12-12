@@ -906,6 +906,18 @@ impl AgentRunner {
                 if agent_message_streamed {
                     event_recorder.agent_message_stream_complete();
                 }
+                // Ensure the agent reply is always visible even if the TUI misses streaming updates
+                Self::print_compact_response(self.agent_type, &aggregated_text, self.quiet);
+                runner_println!(
+                    self,
+                    "{} {}",
+                    agent_prefix,
+                    format!(
+                        "{} {}",
+                        style("(ASSISTANT)").green().bold(),
+                        aggregated_text.trim()
+                    )
+                );
             } else if agent_message_streamed {
                 event_recorder.agent_message_stream_complete();
             }
@@ -1529,7 +1541,7 @@ impl AgentRunner {
                         response,
                         content: response_text,
                         reasoning,
-                        agent_message_streamed,
+                        mut agent_message_streamed,
                         used_streaming_fallback,
                         reasoning_recorded,
                     } = self
@@ -1569,6 +1581,22 @@ impl AgentRunner {
                             "{} {} received empty response with no tool calls",
                             agent_prefix,
                             style("(WARN)").yellow().bold()
+                        );
+                    }
+
+                    if !response_text.trim().is_empty() && !agent_message_streamed {
+                        event_recorder.agent_message(&response_text);
+                        agent_message_streamed = true;
+                        Self::print_compact_response(self.agent_type, &response_text, self.quiet);
+                        runner_println!(
+                            self,
+                            "{} {}",
+                            agent_prefix,
+                            format!(
+                                "{} {}",
+                                style("(ASSISTANT)").green().bold(),
+                                response_text.trim()
+                            )
                         );
                     }
 
@@ -2169,6 +2197,22 @@ impl AgentRunner {
 
                 // Use response content directly
                 if !response.content.is_empty() {
+                    // Force-print agent message to stdout/TUI even if streaming sinks miss it
+                    Self::print_compact_response(
+                        self.agent_type,
+                        response.content.trim(),
+                        self.quiet,
+                    );
+                    runner_println!(
+                        self,
+                        "{} {}",
+                        agent_prefix,
+                        format!(
+                            "{} {}",
+                            style("(ASSISTANT)").green().bold(),
+                            response.content.trim()
+                        )
+                    );
                     // Try to parse the response as JSON to check for tool calls
                     let mut had_tool_call = false;
 

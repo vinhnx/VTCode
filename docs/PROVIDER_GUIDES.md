@@ -4,45 +4,46 @@ This index collects provider-specific guides for configuring VT Code with differ
 
 ## Google Gemini
 
-- Configuration details are covered in the main [Getting Started guide](./user-guide/getting-started.md#configure-your-llm-provider).
-- Models and constants are defined in [`vtcode-core/src/config/constants.rs`](../vtcode-core/src/config/constants.rs).
+-   Configuration details are covered in the main [Getting Started guide](./user-guide/getting-started.md#configure-your-llm-provider).
+-   Models and constants are defined in [`vtcode-core/src/config/constants.rs`](../vtcode-core/src/config/constants.rs).
 
 ## OpenAI GPT
 
-- Follow the [Getting Started guide](./user-guide/getting-started.md#configure-your-llm-provider) for API key setup.
-- See [`vtcode-core/src/config/constants.rs`](../vtcode-core/src/config/constants.rs) for the latest supported models.
+-   Follow the [Getting Started guide](./user-guide/getting-started.md#configure-your-llm-provider) for API key setup.
+-   See [`vtcode-core/src/config/constants.rs`](../vtcode-core/src/config/constants.rs) for the latest supported models.
+-   GPT-5.2 reference: [Using GPT-5.2](./guides/gpt-5-2.md)
 
 ## Anthropic Claude
 
-- Key management and defaults mirror the Gemini/OpenAI flow in [Getting Started](./user-guide/getting-started.md#configure-your-llm-provider).
-- Supported model IDs live in [`vtcode-core/src/config/constants.rs`](../vtcode-core/src/config/constants.rs).
+-   Key management and defaults mirror the Gemini/OpenAI flow in [Getting Started](./user-guide/getting-started.md#configure-your-llm-provider).
+-   Supported model IDs live in [`vtcode-core/src/config/constants.rs`](../vtcode-core/src/config/constants.rs).
 
 ## OpenRouter Marketplace
 
-- **Guide:** [OpenRouter Integration](./providers/openrouter.md)
-- **Official docs:**
-  - [API overview](https://openrouter.ai/docs/api-reference/overview/llms)
-  - [Streaming](https://openrouter.ai/docs/api-reference/streaming/llms)
-  - [Model catalog](https://openrouter.ai/docs/llms)
-- Default models: `x-ai/grok-code-fast-1`, `qwen/qwen3-coder` (override via `vtcode.toml` or CLI `--model`).
+-   **Guide:** [OpenRouter Integration](./providers/openrouter.md)
+-   **Official docs:**
+    -   [API overview](https://openrouter.ai/docs/api-reference/overview/llms)
+    -   [Streaming](https://openrouter.ai/docs/api-reference/streaming/llms)
+    -   [Model catalog](https://openrouter.ai/docs/llms)
+-   Default models: `x-ai/grok-code-fast-1`, `qwen/qwen3-coder` (override via `vtcode.toml` or CLI `--model`).
 
 ## Ollama Local & Cloud Models
 
-- **Setup:** Install and run Ollama locally ([official install](https://ollama.com/download))
-- **Configuration:** Local usage needs no key; set `OLLAMA_API_KEY` to access Ollama Cloud
-- **Default model:** Any locally available model (e.g., `llama3:8b`, `mistral:7b`, `qwen3:1.7b`)
-- **Cloud models:** Use IDs like `gpt-oss:120b-cloud` with `OLLAMA_BASE_URL=https://ollama.com`
-- **Custom Models:** Use the `custom-ollama` option in the model picker to enter any locally or cloud-available model ID
-- **Base URL:** Configurable via `OLLAMA_BASE_URL` environment variable (defaults to `http://localhost:11434`)
-- **Features:** Streaming, structured tool calling (including Ollama's web search tools), and thinking traces when `reasoning_effort` is enabled
+-   **Setup:** Install and run Ollama locally ([official install](https://ollama.com/download))
+-   **Configuration:** Local usage needs no key; set `OLLAMA_API_KEY` to access Ollama Cloud
+-   **Default model:** Any locally available model (e.g., `llama3:8b`, `mistral:7b`, `qwen3:1.7b`)
+-   **Cloud models:** Use IDs like `gpt-oss:120b-cloud` with `OLLAMA_BASE_URL=https://ollama.com`
+-   **Custom Models:** Use the `custom-ollama` option in the model picker to enter any locally or cloud-available model ID
+-   **Base URL:** Configurable via `OLLAMA_BASE_URL` environment variable (defaults to `http://localhost:11434`)
+-   **Features:** Streaming, structured tool calling (including Ollama's web search tools), and thinking traces when `reasoning_effort` is enabled
 
 ## LM Studio Local Server
 
-- **Guide:** [LM Studio Provider Guide](./providers/lmstudio.md)
-- **Server:** Enable the OpenAI-compatible Developer server in LM Studio (defaults to `http://localhost:1234/v1`)
-- **Environment:** Optional `LMSTUDIO_API_KEY` when auth is enabled; override host/port via `LMSTUDIO_BASE_URL`
-- **Default model:** `lmstudio-community/meta-llama-3.1-8b-instruct` (local inference)
-- **Catalog:** Also ships with `lmstudio-community/meta-llama-3-8b-instruct`, `lmstudio-community/qwen2.5-7b-instruct`, `lmstudio-community/gemma-2-2b-it`, `lmstudio-community/gemma-2-9b-it`, and `lmstudio-community/phi-3.1-mini-4k-instruct`, plus any custom GGUF models you expose
-- **Features:** Streaming, tool calling, structured output, and reasoning effort passthrough via the shared OpenAI surface
+-   **Guide:** [LM Studio Provider Guide](./providers/lmstudio.md)
+-   **Server:** Enable the OpenAI-compatible Developer server in LM Studio (defaults to `http://localhost:1234/v1`)
+-   **Environment:** Optional `LMSTUDIO_API_KEY` when auth is enabled; override host/port via `LMSTUDIO_BASE_URL`
+-   **Default model:** `lmstudio-community/meta-llama-3.1-8b-instruct` (local inference)
+-   **Catalog:** Also ships with `lmstudio-community/meta-llama-3-8b-instruct`, `lmstudio-community/qwen2.5-7b-instruct`, `lmstudio-community/gemma-2-2b-it`, `lmstudio-community/gemma-2-9b-it`, and `lmstudio-community/phi-3.1-mini-4k-instruct`, plus any custom GGUF models you expose
+-   **Features:** Streaming, tool calling, structured output, and reasoning effort passthrough via the shared OpenAI surface
 
 > ℹ️ Additional provider-specific guides will be added as new integrations land in VT Code.

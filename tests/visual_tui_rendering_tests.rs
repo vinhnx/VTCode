@@ -49,7 +49,7 @@ async fn test_visual_user_agent_exchange() {
             InlineMessageKind::User,
             vec![InlineSegment {
                 text: "Explain how bubble sort works".to_string(),
-                style: InlineTextStyle::default(),
+                style: InlineTextStyle::default().into(),
             }],
         );
 
@@ -57,7 +57,7 @@ async fn test_visual_user_agent_exchange() {
             InlineMessageKind::Agent,
             vec![InlineSegment {
                 text: "Bubble sort is a simple sorting algorithm that repeatedly steps through the list, compares adjacent elements and swaps them if they are in the wrong order. The pass through the list is repeated until the list is sorted.".to_string(),
-                style: InlineTextStyle::default(),
+                style: InlineTextStyle::default().into(),
             }],
         );
     }
@@ -98,7 +98,7 @@ async fn test_visual_code_rendering() {
             InlineMessageKind::User,
             vec![InlineSegment {
                 text: "Show me a Rust function to reverse a string".to_string(),
-                style: InlineTextStyle::default(),
+                style: InlineTextStyle::default().into(),
             }],
         );
 
@@ -106,7 +106,7 @@ async fn test_visual_code_rendering() {
             InlineMessageKind::Agent,
             vec![InlineSegment {
                 text: "Here's a Rust function to reverse a string:\n\n```rust\nfn reverse_string(s: &str) -> String {\n    s.chars().rev().collect()\n}\n\nfn main() {\n    let original = \"hello\";\n    let reversed = reverse_string(original);\n    println!(\"{} -> {}\", original, reversed);\n}\n```\n\nThis function works by converting the string to characters, reversing the iterator, and collecting back into a String.".to_string(),
-                style: InlineTextStyle::default(),
+                style: InlineTextStyle::default().into(),
             }],
         );
     }
@@ -143,7 +143,7 @@ async fn test_visual_tool_output() {
             InlineMessageKind::User,
             vec![InlineSegment {
                 text: "List files in current directory".to_string(),
-                style: InlineTextStyle::default(),
+                style: InlineTextStyle::default().into(),
             }],
         );
 
@@ -151,7 +151,7 @@ async fn test_visual_tool_output() {
             InlineMessageKind::Tool,
             vec![InlineSegment {
                 text: "run_pty_cmd([\"ls\", \"-la\"])".to_string(),
-                style: InlineTextStyle::default(),
+                style: InlineTextStyle::default().into(),
             }],
         );
 
@@ -159,7 +159,7 @@ async fn test_visual_tool_output() {
             InlineMessageKind::Pty,
             vec![InlineSegment {
                 text: "total 48\ndrwxr-xr-x  10 user  staff  320 Nov  1 10:30 .\ndrwxr-xr-x   5 user  staff  160 Nov  1 10:25 ..\n-rw-r--r--   1 user  staff  156 Nov  1 10:20 Cargo.toml\n-rw-r--r--   1 user  staff  368 Nov  1 10:25 README.md\ndrwxr-xr-x   3 user  staff   96 Nov  1 10:20 src/\n".to_string(),
-                style: InlineTextStyle::default(),
+                style: InlineTextStyle::default().into(),
             }],
         );
 
@@ -167,7 +167,7 @@ async fn test_visual_tool_output() {
             InlineMessageKind::Agent,
             vec![InlineSegment {
                 text: "I've listed the files in the current directory. You have Cargo.toml, README.md, and a src/ directory.".to_string(),
-                style: InlineTextStyle::default(),
+                style: InlineTextStyle::default().into(),
             }],
         );
     }
@@ -204,7 +204,7 @@ async fn test_visual_error_handling() {
             InlineMessageKind::User,
             vec![InlineSegment {
                 text: "Run command that might fail".to_string(),
-                style: InlineTextStyle::default(),
+                style: InlineTextStyle::default().into(),
             }],
         );
 
@@ -212,7 +212,7 @@ async fn test_visual_error_handling() {
             InlineMessageKind::Tool,
             vec![InlineSegment {
                 text: "run_pty_cmd([\"nonexistent-command\", \"--help\"])".to_string(),
-                style: InlineTextStyle::default(),
+                style: InlineTextStyle::default().into(),
             }],
         );
 
@@ -220,7 +220,7 @@ async fn test_visual_error_handling() {
             InlineMessageKind::Error,
             vec![InlineSegment {
                 text: "Error: Command 'nonexistent-command' not found. Make sure the command is installed and in your PATH.".to_string(),
-                style: InlineTextStyle::default(),
+                style: InlineTextStyle::default().into(),
             }],
         );
 
@@ -228,7 +228,7 @@ async fn test_visual_error_handling() {
             InlineMessageKind::Agent,
             vec![InlineSegment {
                 text: "I encountered an error running that command. The command 'nonexistent-command' doesn't appear to be available on your system. Would you like me to help you find an alternative?".to_string(),
-                style: InlineTextStyle::default(),
+                style: InlineTextStyle::default().into(),
             }],
         );
     }
@@ -301,7 +301,7 @@ async fn test_visual_header_variations() {
                 InlineMessageKind::Agent,
                 vec![InlineSegment {
                     text: format!("Session initialized with {} context", name),
-                    style: InlineTextStyle::default(),
+                    style: InlineTextStyle::default().into(),
                 }],
             );
         }

@@ -212,6 +212,10 @@ Examples:
 - `edit_file`: `{"path": "/workspace/file.rs", "old_str": "foo", "new_str": "bar"}`
 - `run_pty_cmd`: `{"command": "cargo build"}`
 
+**Preamble/Postamble Requirement (CRITICAL):**
+- Before invoking any tool, emit a 1-sentence preamble stating the intent and target (e.g., "Preamble: reading vtcode-core/src/lib.rs to inspect errors.").
+- After each tool completes, emit a 1-sentence postamble summarizing the outcome (e.g., "Postamble: read complete; no errors found."). Keep both terse.
+
 ### Loop Prevention (Built-in Detection)
 VT Code automatically stops after:
 - Same tool+params exceed `tools.max_repeated_tool_calls` (default 2)
