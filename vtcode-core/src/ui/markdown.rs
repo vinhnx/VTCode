@@ -1006,41 +1006,6 @@ fn highlight_code_block(
     let mut augmented_prefix = prefix_segments.to_vec();
     augmented_prefix.push(PrefixSegment::new(base_style, CODE_EXTRA_INDENT));
 
-    // #region agent log
-    if let Ok(mut file) = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open("/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.cursor/debug.log")
-    {
-        let (enabled, lang_count, theme_name, max_bytes) = highlight_config
-            .map(|cfg| {
-                (
-                    cfg.enabled,
-                    cfg.enabled_languages.len(),
-                    cfg.theme.clone(),
-                    cfg.max_file_size_mb,
-                )
-            })
-            .unwrap_or((false, 0, String::new(), 0));
-
-        let _ = writeln!(
-            file,
-            "{{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H5\",\"location\":\"markdown.rs:highlight_code_block\",\"message\":\"highlight request\",\"data\":{{\"language\":{:?},\"enabled\":{},\"lang_count\":{},\"theme\":\"{}\",\"max_mb\":{},\"code_len\":{},\"newline_count\":{}}},\"timestamp\":{}}}",
-            language,
-            enabled,
-            lang_count,
-            theme_name,
-            max_bytes,
-            code.len(),
-            code.matches('\n').count(),
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_millis()
-        );
-    }
-    // #endregion
-
     if let Some(config) = highlight_config.filter(|cfg| cfg.enabled)
         && let Some(highlighted) = try_highlight(code, language, config)
     {

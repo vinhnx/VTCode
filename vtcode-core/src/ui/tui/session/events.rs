@@ -27,24 +27,6 @@ pub(super) fn handle_event(
             _ => {}
         },
         CrosstermEvent::Paste(content) => {
-            // #region agent log
-            if let Ok(mut file) = OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open("/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.cursor/debug.log")
-            {
-                let _ = writeln!(
-                    file,
-                    "{{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H1\",\"location\":\"session/events.rs:handle_event\",\"message\":\"paste event\",\"data\":{{\"len\":{},\"newline_count\":{}}},\"timestamp\":{}}}",
-                    content.len(),
-                    content.matches('\n').count(),
-                    SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_millis()
-                );
-            }
-            // #endregion
             if session.input_enabled {
                 session.insert_paste_text(&content);
                 session.check_file_reference_trigger();
