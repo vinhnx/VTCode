@@ -8,9 +8,12 @@ use crate::llm::provider::{
 };
 use crate::llm::types as llm_types;
 use async_trait::async_trait;
-use reqwest::Client as HttpClient;
+use reqwest::header::RETRY_AFTER;
+use reqwest::{Client as HttpClient, StatusCode};
 use serde_json::{Value, json};
 use std::collections::HashSet;
+use std::sync::atomic::{AtomicBool, Ordering};
+use tracing::error;
 
 use super::common::{
     convert_usage_to_llm_types, override_base_url, parse_chat_request_openai_format_with_extractor,
@@ -21,12 +24,14 @@ use super::common::{
 const PROVIDER_NAME: &str = "Z.AI";
 const PROVIDER_KEY: &str = "zai";
 const CHAT_COMPLETIONS_PATH: &str = "/paas/v4/chat/completions";
+const LOG_BODY_MAX_CHARS: usize = 2000;
 
 pub struct ZAIProvider {
     api_key: String,
     http_client: HttpClient,
     base_url: String,
     model: String,
+    validated_api_key: AtomicBool,
 }
 
 impl ZAIProvider {
@@ -45,6 +50,7 @@ impl ZAIProvider {
                 Some(env_vars::Z_AI_BASE_URL),
             ),
             model,
+            validated_api_key: AtomicBool::new(false),
         }
     }
 
@@ -248,6 +254,107 @@ impl ZAIProvider {
         Ok(response)
     }
 
+    fn ensure_api_key(&self) -> Result<(), LLMError> {
+        if self.validated_api_key.load(Ordering::Relaxed) {
+            return Ok(());
+        }
+
+        if self.api_key.trim().is_empty() {
+            let formatted = error_display::format_llm_error(PROVIDER_NAME, "Missing Z.AI API key");
+            return Err(LLMError::Authentication(formatted));
+        }
+
+        self.validated_api_key.store(true, Ordering::Relaxed);
+        Ok(())
+    }
+
+    fn format_diagnostic(
+        status: StatusCode,
+        code: &str,
+        message: &str,
+        request_id: &str,
+        retry_after: Option<&str>,
+    ) -> String {
+        let code_part = if code.is_empty() { "unknown" } else { code };
+        let trimmed = message.trim();
+        let retry_part = retry_after
+            .filter(|value| !value.is_empty())
+            .map(|value| format!(", retry_after={}", value))
+            .unwrap_or_default();
+        format!(
+            "{} [status={}, code={}, request_id={}{}]",
+            if trimmed.is_empty() {
+                "request failed"
+            } else {
+                trimmed
+            },
+            status,
+            code_part,
+            request_id,
+            retry_part
+        )
+    }
+
+    fn classify_error(
+        &self,
+        status: StatusCode,
+        error_code: &str,
+        message: &str,
+        request_id: &str,
+    ) -> Option<LLMError> {
+        let code_num = error_code.parse::<u16>().ok();
+        let message_lower = message.to_ascii_lowercase();
+
+        let is_auth = status == StatusCode::UNAUTHORIZED
+            || matches!(code_num, Some(1000..=1004))
+            || message_lower.contains("authentication")
+            || message_lower.contains("unauthorized")
+            || message_lower.contains("invalid api key")
+            || message_lower.contains("token expired");
+
+        let is_account_issue =
+            matches!(code_num, Some(1110..=1121)) || message_lower.contains("account");
+
+        let is_balance_or_quota = status == StatusCode::PAYMENT_REQUIRED
+            || matches!(code_num, Some(1113))
+            || message_lower.contains("insufficient balance")
+            || message_lower.contains("no resource package")
+            || message_lower.contains("recharge")
+            || message_lower.contains("arrears")
+            || message_lower.contains("balance");
+
+        if is_balance_or_quota {
+            let diagnostic = Self::format_diagnostic(status, error_code, message, request_id, None);
+            let formatted = error_display::format_llm_error(PROVIDER_NAME, &diagnostic);
+            return Some(LLMError::Provider(formatted));
+        }
+
+        if is_auth || is_account_issue {
+            let diagnostic = Self::format_diagnostic(status, error_code, message, request_id, None);
+            let formatted = error_display::format_llm_error(PROVIDER_NAME, &diagnostic);
+            return Some(LLMError::Authentication(formatted));
+        }
+
+        let is_rate_limit = status == StatusCode::TOO_MANY_REQUESTS
+            || matches!(error_code, "1302" | "1303" | "1304" | "1308" | "1309")
+            || message_lower.contains("rate limit")
+            || message_lower.contains("rate_limit")
+            || message_lower.contains("ratelimit")
+            || message_lower.contains("concurrency")
+            || message_lower.contains("frequency")
+            || message_lower.contains("quota")
+            || message_lower.contains("usage limit")
+            || message_lower.contains("too many requests")
+            || message_lower.contains("daily call limit")
+            || message_lower.contains("package has expired");
+
+        if is_rate_limit {
+            return Some(LLMError::RateLimit);
+        }
+
+        None
+    }
+
     fn available_models() -> Vec<String> {
         models::zai::SUPPORTED_MODELS
             .iter()
@@ -282,6 +389,8 @@ impl LLMProvider for ZAIProvider {
     }
 
     async fn generate(&self, mut request: LLMRequest) -> Result<LLMResponse, LLMError> {
+        self.ensure_api_key()?;
+
         if request.model.trim().is_empty() {
             request.model = self.model.clone();
         }
@@ -322,6 +431,17 @@ impl LLMProvider for ZAIProvider {
 
         if !response.status().is_success() {
             let status = response.status();
+            let request_id = response
+                .headers()
+                .get("x-request-id")
+                .and_then(|value| value.to_str().ok())
+                .unwrap_or("<none>")
+                .to_string();
+            let retry_after = response
+                .headers()
+                .get(RETRY_AFTER)
+                .and_then(|value| value.to_str().ok())
+                .map(|value| value.to_string());
             let text = response.text().await.unwrap_or_default();
 
             // Try to parse the error JSON structure first
@@ -345,41 +465,30 @@ impl LLMProvider for ZAIProvider {
                 })
                 .unwrap_or_else(|| (String::new(), text.clone()));
 
-            // Check for rate limit errors
-            // 1. HTTP 429 status code (various rate limit scenarios)
-            // 2. Specific Z.AI error codes for rate limiting:
-            //    - 1302: High concurrency usage
-            //    - 1303: High frequency usage
-            //    - 1304: Daily call limit reached
-            //    - 1308: Usage limit reached with reset time
-            //    - 1309: GLM Coding Plan package expired
-            // 3. Fallback to text-based detection for non-JSON responses
-            let text_lower = message.to_lowercase();
-            let is_rate_limit = status.as_u16() == 429
-                || matches!(
-                    error_code.as_str(),
-                    "1302" | "1303" | "1304" | "1308" | "1309"
-                )
-                || text_lower.contains("rate limit")
-                || text_lower.contains("rate_limit")
-                || text_lower.contains("ratelimit")
-                || text_lower.contains("concurrency")
-                || text_lower.contains("frequency")
-                || text_lower.contains("balance exhausted")
-                || text_lower.contains("quota")
-                || text_lower.contains("usage limit")
-                || text_lower.contains("too many requests")
-                || text_lower.contains("daily call limit")
-                || text_lower.contains("package has expired");
+            let diagnostic = Self::format_diagnostic(
+                status,
+                &error_code,
+                &message,
+                &request_id,
+                retry_after.as_deref(),
+            );
+            let trimmed_body: String = text.chars().take(LOG_BODY_MAX_CHARS).collect();
+            error!(
+                target = "vtcode::llm::zai",
+                status = %status,
+                code = %error_code,
+                request_id = %request_id,
+                message = %message,
+                body = %trimmed_body,
+                retry_after = retry_after.as_deref().unwrap_or("<none>"),
+                "Z.AI request failed"
+            );
 
-            if is_rate_limit {
-                return Err(LLMError::RateLimit);
+            if let Some(mapped) = self.classify_error(status, &error_code, &message, &request_id) {
+                return Err(mapped);
             }
 
-            let formatted = error_display::format_llm_error(
-                PROVIDER_NAME,
-                &format!("HTTP {}: {}", status, message),
-            );
+            let formatted = error_display::format_llm_error(PROVIDER_NAME, &diagnostic);
             return Err(LLMError::Provider(formatted));
         }
 
@@ -447,12 +556,13 @@ mod tests {
             ("High concurrency usage", true),
             ("High frequency usage", true),
             ("concurrency exceeded", true),
-            ("balance exhausted", true),
             ("quota exceeded", true),
             ("usage limit reached", true),
             ("too many requests", true),
             ("daily call limit reached", true),
             ("GLM Coding Plan package has expired", true),
+            ("Insufficient balance or no resource package", false),
+            ("balance exhausted", false),
             ("invalid api key", false),
             ("authentication failed", false),
             ("internal server error", false),
@@ -465,7 +575,6 @@ mod tests {
                 || text_lower.contains("ratelimit")
                 || text_lower.contains("concurrency")
                 || text_lower.contains("frequency")
-                || text_lower.contains("balance exhausted")
                 || text_lower.contains("quota")
                 || text_lower.contains("usage limit")
                 || text_lower.contains("too many requests")
@@ -480,6 +589,51 @@ mod tests {
                 if should_match { "match" } else { "not match" }
             );
         }
+    }
+
+    #[test]
+    fn test_classify_error_auth_and_quota() {
+        let provider = ZAIProvider::with_model("key".to_string(), models::zai::GLM_4_6.to_string());
+
+        let auth_error = provider.classify_error(
+            StatusCode::UNAUTHORIZED,
+            "1000",
+            "Authentication Failed",
+            "<req>",
+        );
+        assert!(matches!(auth_error, Some(LLMError::Authentication(_))));
+
+        let quota_error = provider.classify_error(
+            StatusCode::TOO_MANY_REQUESTS,
+            "1113",
+            "Insufficient balance or no resource package. Please recharge.",
+            "<req>",
+        );
+        assert!(matches!(quota_error, Some(LLMError::Provider(_))));
+
+        let rate_limit_error = provider.classify_error(
+            StatusCode::TOO_MANY_REQUESTS,
+            "1302",
+            "High concurrency usage",
+            "<req>",
+        );
+        assert!(matches!(rate_limit_error, Some(LLMError::RateLimit)));
+    }
+
+    #[test]
+    fn test_format_diagnostic_includes_retry_after() {
+        let message = ZAIProvider::format_diagnostic(
+            StatusCode::TOO_MANY_REQUESTS,
+            "1302",
+            "rate limited",
+            "req-1",
+            Some("5"),
+        );
+        assert!(
+            message.contains("retry_after=5"),
+            "retry_after not included: {}",
+            message
+        );
     }
 
     #[test]
