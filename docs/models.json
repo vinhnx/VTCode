@@ -142,8 +142,9 @@
     "models": {
       "gpt-5.2-2025-12-11": {
         "id": "gpt-5.2-2025-12-11",
-        "name": "GPT-5.2",
-        "description": "Latest flagship general-purpose GPT-5 model with improved reasoning, xhigh effort level, and built-in compaction for long-running tasks.",
+        "name": "GPT-5.2 (legacy id)",
+        "description": "Legacy dated GPT-5.2 identifier. Use the short id `gpt-5.2`.",
+        "alias": "gpt-5.2",
         "reasoning": true,
         "tool_call": true,
         "modalities": {
@@ -158,9 +159,8 @@
       },
       "gpt-5.2": {
         "id": "gpt-5.2",
-        "name": "GPT-5.2 (alias)",
-        "description": "Alias for latest GPT-5.2 release (2025-12-11).",
-        "alias": "gpt-5.2-2025-12-11",
+        "name": "GPT-5.2",
+        "description": "Preferred GPT-5.2 identifier (was gpt-5.2-2025-12-11).",
         "reasoning": true,
         "tool_call": true,
         "modalities": {
