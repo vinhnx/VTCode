@@ -224,7 +224,7 @@ default_policy = "prompt"
 # Maximum number of tool loops allowed per turn (prevents infinite loops)
 # Higher values allow more complex operations but risk performance issues
 # Recommended: 20 for most tasks, 50 for complex multi-step workflows
-max_tool_loops = 100
+max_tool_loops = 20
 
 # Maximum number of repeated identical tool calls (prevents stuck loops)
 max_repeated_tool_calls = 2
@@ -622,14 +622,7 @@ cache_themes = true
 max_file_size_mb = 10
 
 # Programming languages to enable syntax highlighting for
-enabled_languages = [
-    "rust",
-    "python",
-    "javascript",
-    "typescript",
-    "go",
-    "java",
-]
+enabled_languages = ["rust", "python", "javascript", "typescript", "go", "java"]
 
 # Timeout for syntax highlighting operations (milliseconds)
 highlight_timeout_ms = 1000
@@ -847,7 +840,7 @@ post_tool_use = []
 
 [model]
 skip_loop_detection = false
-loop_detection_threshold = 3
+loop_detection_threshold = 1
 loop_detection_interactive = true
 
 # [hooks.lifecycle]
