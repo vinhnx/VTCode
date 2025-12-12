@@ -81,7 +81,7 @@ fn enforce_pty_command_policy(display_command: &str, confirm: bool) -> Result<()
     let deny_match = PTY_DENY_PREFIXES
         .iter()
         .any(|prefix| trimmed.starts_with(prefix));
-    let standalone_denied = is_standalone && PTY_DENY_STANDALONE.iter().any(|cmd| trimmed == *cmd);
+    let standalone_denied = is_standalone && PTY_DENY_STANDALONE.contains(&trimmed);
 
     if deny_match || standalone_denied {
         if confirm {
@@ -104,10 +104,8 @@ fn matches_context(
     before: Option<&str>,
     after: Option<&str>,
 ) -> bool {
-    if let Some(prefix) = before {
-        if !content[..idx].ends_with(prefix) {
-            return false;
-        }
+    if let Some(prefix) = before && !content[..idx].ends_with(prefix) {
+        return false;
     }
 
     if let Some(suffix) = after {
@@ -936,10 +934,8 @@ impl ToolRegistry {
             let search_len = input.search.len();
 
             for (idx, _) in original.match_indices(&input.search) {
-                if let Some(max) = input.max_replacements {
-                    if replacements >= max {
-                        break;
-                    }
+                if let Some(max) = input.max_replacements && replacements >= max {
+                    break;
                 }
 
                 if !matches_context(
@@ -2796,7 +2792,7 @@ fn strip_ansi(text: &str) -> String {
 
 fn compute_output_stats(text: &str) -> Value {
     json!({
-        "bytes": text.as_bytes().len(),
+        "bytes": text.len(),
         "lines": text.lines().count(),
         "unicode_metrics": Value::Null,
     })
@@ -3866,16 +3862,15 @@ fn join_windows_command(parts: &[String]) -> String {
 fn tokenize_windows_command(command: &str) -> Result<Vec<String>> {
     let mut parts = Vec::new();
     let mut current = String::new();
-    let mut chars = command.chars().peekable();
     let mut in_quotes = false;
     let mut backslashes = 0usize;
 
-    while let Some(ch) = chars.next() {
+    for ch in command.chars() {
         match ch {
             '"' => {
                 // In Windows parsing, an even number of preceding backslashes escapes them,
                 // an odd number escapes the quote.
-                if backslashes % 2 == 0 {
+                if backslashes.is_multiple_of(2) {
                     in_quotes = !in_quotes;
                 }
                 current.push('"');

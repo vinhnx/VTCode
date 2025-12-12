@@ -93,6 +93,12 @@ impl TuiPanicGuard {
     }
 }
 
+impl Default for TuiPanicGuard {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Drop for TuiPanicGuard {
     fn drop(&mut self) {
         mark_tui_deinitialized();

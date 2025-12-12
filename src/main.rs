@@ -74,11 +74,12 @@ async fn main() -> Result<()> {
     cli::set_workspace_env(&startup.workspace);
 
     // Initialize tracing based on config if enabled
-    if startup.config.debug.enable_tracing && !env_tracing_initialized {
-        if let Err(err) = initialize_tracing_from_config(&startup.config) {
-            eprintln!("warning: failed to initialize tracing from config: {err}");
-            tracing::warn!(error = %err, "failed to initialize tracing from config");
-        }
+    if startup.config.debug.enable_tracing
+        && !env_tracing_initialized
+        && let Err(err) = initialize_tracing_from_config(&startup.config)
+    {
+        eprintln!("warning: failed to initialize tracing from config: {err}");
+        tracing::warn!(error = %err, "failed to initialize tracing from config");
     }
 
     let cfg = &startup.config;

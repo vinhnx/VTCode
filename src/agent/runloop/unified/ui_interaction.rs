@@ -862,7 +862,7 @@ pub(crate) async fn stream_and_render_response(
                 aggregated.push_str(content);
                 emitted_tokens = true;
                 if supports_streaming_markdown {
-                    rendered_line_count = renderer
+                    renderer
                         .stream_markdown_response(&aggregated, rendered_line_count)
                         .map_err(|err| map_render_error(provider_name, err))?;
                 } else {
@@ -876,26 +876,26 @@ pub(crate) async fn stream_and_render_response(
                     .map_err(|err| map_render_error(provider_name, err))?;
                 }
             }
-        } else if let Some(reasoning) = response.reasoning.as_deref() {
-            if !reasoning.trim().is_empty() {
-                aggregated.push_str(reasoning);
-                emitted_tokens = true;
-                // Prevent double-render in finalize
-                response.reasoning = None;
-                if supports_streaming_markdown {
-                    rendered_line_count = renderer
-                        .stream_markdown_response(&aggregated, rendered_line_count)
-                        .map_err(|err| map_render_error(provider_name, err))?;
-                } else {
-                    stream_plain_response_delta(
-                        renderer,
-                        response_style,
-                        response_indent,
-                        &mut needs_indent,
-                        &aggregated,
-                    )
+        } else if let Some(reasoning) = response.reasoning.as_deref()
+            && !reasoning.trim().is_empty()
+        {
+            aggregated.push_str(reasoning);
+            emitted_tokens = true;
+            // Prevent double-render in finalize
+            response.reasoning = None;
+            if supports_streaming_markdown {
+                renderer
+                    .stream_markdown_response(&aggregated, rendered_line_count)
                     .map_err(|err| map_render_error(provider_name, err))?;
-                }
+            } else {
+                stream_plain_response_delta(
+                    renderer,
+                    response_style,
+                    response_indent,
+                    &mut needs_indent,
+                    &aggregated,
+                )
+                .map_err(|err| map_render_error(provider_name, err))?;
             }
         }
     }
