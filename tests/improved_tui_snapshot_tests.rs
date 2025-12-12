@@ -50,7 +50,8 @@ fn test_ui_component_serialization() {
             color: None,
             bg_color: None,
             effects: Effects::new(),
-        },
+        }
+        .into(),
     };
     assert_snapshot!("normal_segment", format!("{:?}", normal_segment));
 
@@ -60,7 +61,8 @@ fn test_ui_component_serialization() {
             color: None,
             bg_color: None,
             effects: Effects::BOLD,
-        },
+        }
+        .into(),
     };
     assert_snapshot!("bold_segment", format!("{:?}", bold_segment));
 
@@ -70,7 +72,8 @@ fn test_ui_component_serialization() {
             color: None,
             bg_color: None,
             effects: Effects::ITALIC,
-        },
+        }
+        .into(),
     };
     assert_snapshot!("italic_segment", format!("{:?}", italic_segment));
 }

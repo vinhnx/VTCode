@@ -83,12 +83,16 @@ async fn select_session_interactively() -> Result<Option<ResumeSession>> {
 }
 
 fn convert_listing(listing: &SessionListing) -> ResumeSession {
-    let history = listing
-        .snapshot
-        .messages
-        .iter()
-        .map(Message::from)
-        .collect();
+    let history = if let Some(progress) = &listing.snapshot.progress {
+        progress.recent_messages.iter().map(Message::from).collect()
+    } else {
+        listing
+            .snapshot
+            .messages
+            .iter()
+            .map(Message::from)
+            .collect()
+    };
 
     ResumeSession {
         identifier: listing.identifier(),
@@ -137,6 +141,48 @@ fn print_resume_summary(resume: &ResumeSession) {
         "{}",
         style(format!("Archive: {}", resume.path.display())).green()
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+    use vtcode_core::llm::provider::MessageRole;
+    use vtcode_core::utils::session_archive::{
+        SessionArchiveMetadata, SessionMessage, SessionProgress, SessionSnapshot,
+    };
+
+    #[test]
+    fn convert_listing_prefers_progress_messages() {
+        let progress_msg = SessionMessage::new(MessageRole::Assistant, "progress");
+        let snapshot = SessionSnapshot {
+            metadata: SessionArchiveMetadata::new(
+                "ws", "/tmp/ws", "model", "provider", "theme", "medium",
+            ),
+            started_at: Utc::now(),
+            ended_at: Utc::now(),
+            total_messages: 2,
+            distinct_tools: vec!["tool_a".to_string()],
+            transcript: Vec::new(),
+            messages: vec![SessionMessage::new(MessageRole::User, "full")],
+            progress: Some(SessionProgress {
+                turn_number: 2,
+                recent_messages: vec![progress_msg.clone()],
+                tool_summaries: vec!["tool_a".to_string()],
+                token_usage: None,
+                max_context_tokens: Some(128),
+            }),
+        };
+
+        let listing = SessionListing {
+            path: PathBuf::new(),
+            snapshot,
+        };
+
+        let resume = convert_listing(&listing);
+        assert_eq!(resume.history.len(), 1);
+        assert_eq!(resume.history[0].content.as_text(), "progress");
+    }
 }
 
 async fn run_single_agent_loop(

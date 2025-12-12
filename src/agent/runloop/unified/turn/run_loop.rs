@@ -18,7 +18,7 @@ use vtcode_core::config::constants::{defaults, tools, ui};
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, UiSurfacePreference};
 use vtcode_core::core::agent::snapshots::{SnapshotConfig, SnapshotManager};
-use vtcode_core::core::decision_tracker::{Action as DTAction, DecisionOutcome};
+use vtcode_core::core::decision_tracker::{Action as DTAction, DecisionOutcome, ResponseType};
 use vtcode_core::core::router::{Router, TaskClass};
 use vtcode_core::core::token_constants::{
     THRESHOLD_ALERT, THRESHOLD_COMPACT, THRESHOLD_EMERGENCY, THRESHOLD_WARNING,
@@ -35,6 +35,15 @@ use vtcode_core::utils::session_archive::{SessionArchive, SessionArchiveMetadata
 // Note: specific tool error helpers and style helpers were used during stepwise refactor
 // and have been removed to simplify outcome handlers. Keep generic error handling.
 use vtcode_core::utils::transcript;
+
+fn should_trigger_turn_balancer(
+    step_count: usize,
+    max_tool_loops: usize,
+    repeated: usize,
+    repeat_limit: usize,
+) -> bool {
+    step_count > max_tool_loops / 2 && repeated >= repeat_limit
+}
 
 use crate::agent::runloop::ResumeSession;
 use crate::agent::runloop::git::confirm_changes_with_git_diff;
@@ -1811,6 +1820,72 @@ pub(crate) async fn run_single_agent_loop_unified(
                     break res;
                 }
 
+                // Adaptive context trim near budget thresholds
+                if let Ok(outcome) = context_manager
+                    .adaptive_trim(working_history, None, step_count)
+                    .await
+                {
+                    if outcome.is_trimmed() {
+                        let note = format!(
+                            "Context trimmed ({:?}, removed {}).",
+                            outcome.phase, outcome.removed_messages
+                        );
+                        working_history.push(uni::Message::system(note.clone()));
+                        let mut ledger = decision_ledger.write().await;
+                        let decision_id = ledger.record_decision(
+                            "Context compaction for budget".to_string(),
+                            DTAction::Response {
+                                content: note,
+                                response_type: ResponseType::ContextSummary,
+                            },
+                            None,
+                        );
+                        ledger.record_outcome(
+                            &decision_id,
+                            DecisionOutcome::Success {
+                                result: "trimmed".to_string(),
+                                metrics: Default::default(),
+                            },
+                        );
+                    }
+                }
+
+                // Turn balancer: cap low-signal churn and request compaction if looping
+                if should_trigger_turn_balancer(
+                    step_count,
+                    max_tool_loops,
+                    repeated_tool_attempts.values().copied().max().unwrap_or(0),
+                    tool_repeat_limit,
+                ) {
+                    renderer.line(
+                        MessageStyle::Status,
+                        "Turn balancer: pausing due to repeated low-signal calls; compacting context.",
+                    )?;
+                    let _ = context_manager
+                        .adaptive_trim(working_history, None, step_count)
+                        .await;
+                    working_history.push(uni::Message::system(
+                        "Turn balancer paused turn after repeated low-signal calls.".to_string(),
+                    ));
+                    let mut ledger = decision_ledger.write().await;
+                    let decision_id = ledger.record_decision(
+                        "Turn balancer triggered compaction".to_string(),
+                        DTAction::Response {
+                            content: "Turn balancer paused after repeats".to_string(),
+                            response_type: ResponseType::ContextSummary,
+                        },
+                        None,
+                    );
+                    ledger.record_outcome(
+                        &decision_id,
+                        DecisionOutcome::Success {
+                            result: "turn_balancer_pause".to_string(),
+                            metrics: Default::default(),
+                        },
+                    );
+                    break TurnLoopResult::Completed;
+                }
+
                 // Token budget warnings (Requirement 2.1/2.2/5.5)
                 // Using unified thresholds from token_constants
                 if token_budget_enabled {
@@ -2955,4 +3030,16 @@ pub(crate) async fn run_single_agent_loop_unified(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_trigger_turn_balancer;
+
+    #[test]
+    fn balancer_triggers_only_after_halfway_and_repeats() {
+        assert!(should_trigger_turn_balancer(11, 20, 3, 3));
+        assert!(!should_trigger_turn_balancer(9, 20, 3, 3));
+        assert!(!should_trigger_turn_balancer(12, 20, 2, 3));
+    }
 }

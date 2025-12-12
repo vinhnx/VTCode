@@ -932,7 +932,9 @@ impl InlineSink {
             for (mut segments, mut plain) in
                 converted_lines.into_iter().zip(plain_lines.into_iter())
             {
-                if let Some(ref style_arc) = fallback_arc_opt && !plain.is_empty() {
+                if let Some(ref style_arc) = fallback_arc_opt
+                    && !plain.is_empty()
+                {
                     segments.insert(
                         0,
                         InlineSegment {

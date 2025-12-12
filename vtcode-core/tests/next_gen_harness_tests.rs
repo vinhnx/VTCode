@@ -1,6 +1,7 @@
+use vtcode_core::VTCodeConfig;
+use vtcode_core::llm::rl::{PolicyContext, RlEngine};
 use vtcode_core::orchestrator::{DistributedOrchestrator, ExecutionTarget, ScheduledWork};
 use vtcode_core::utils::migration::apply_migration_defaults;
-use vtcode_core::{PolicyContext, RlEngine, VTCodeConfig};
 
 #[tokio::test]
 async fn orchestration_pipeline_smoke() {

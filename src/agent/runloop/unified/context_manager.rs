@@ -5,7 +5,7 @@ use anyhow::{Result, bail};
 use tracing::{debug, warn};
 
 use crate::agent::runloop::context::{
-    ContextTrimConfig, ContextTrimOutcome, apply_aggressive_trim_unified,
+    ContextTrimConfig, ContextTrimOutcome, TrimPhase, apply_aggressive_trim_unified,
     enforce_unified_context_window, prune_unified_tool_responses,
 };
 use crate::agent::runloop::unified::incremental_system_prompt::{
@@ -117,7 +117,8 @@ impl ContextManager {
         history: &mut Vec<uni::Message>,
         mut pruning_ledger: Option<&mut PruningDecisionLedger>,
         turn_number: usize,
-    ) {
+    ) -> usize {
+        let before_len = history.len();
         if self.trim_config.semantic_compression {
             // Build metrics for all messages
             let mut metrics_list = Vec::new();
@@ -215,12 +216,64 @@ impl ContextManager {
             if let Some(ledger) = pruning_ledger.as_mut() {
                 ledger.record_pruning_round();
             }
+
+            before_len.saturating_sub(history.len())
+        } else {
+            0
         }
     }
 
     #[allow(dead_code)]
     pub(crate) fn aggressive_trim(&self, history: &mut Vec<uni::Message>) -> usize {
         apply_aggressive_trim_unified(history, self.trim_config)
+    }
+
+    /// Adaptive trim based on budget thresholds; returns structured outcome
+    pub(crate) async fn adaptive_trim(
+        &mut self,
+        history: &mut Vec<uni::Message>,
+        pruning_ledger: Option<&mut PruningDecisionLedger>,
+        turn_number: usize,
+    ) -> Result<ContextTrimOutcome> {
+        if !self.token_budget_enabled {
+            return Ok(ContextTrimOutcome::default());
+        }
+
+        let mut pruning_ledger = pruning_ledger;
+        let usage = self.token_budget.usage_ratio().await;
+        let mut outcome = ContextTrimOutcome::default();
+
+        // Alert/compact: semantic prune first, then enforce window
+        if usage >= vtcode_core::core::token_constants::THRESHOLD_ALERT {
+            let before_len = history.len();
+            self.prune_with_semantic_priority(history, pruning_ledger.as_deref_mut(), turn_number);
+            let window_outcome = self.enforce_context_window(history);
+            let after_semantic = before_len.saturating_sub(history.len());
+            let total_removed = after_semantic.saturating_add(window_outcome.removed_messages);
+            outcome.removed_messages = total_removed;
+            outcome.phase = if total_removed > 0 {
+                TrimPhase::AlertSemantic
+            } else {
+                window_outcome.phase
+            };
+        } else if usage >= vtcode_core::core::token_constants::THRESHOLD_WARNING {
+            // Warning: light prune of tool responses
+            let removed = self.prune_tool_responses(history);
+            outcome.removed_messages = removed;
+            if removed > 0 {
+                outcome.phase = TrimPhase::WarningToolPrune;
+            }
+        }
+
+        // Track efficiency after any action
+        if outcome.is_trimmed() {
+            self.record_efficiency_after_trim(history, &outcome);
+            if let Some(ledger) = pruning_ledger.as_deref_mut() {
+                ledger.record_pruning_round();
+            }
+        }
+
+        Ok(outcome)
     }
 
     pub(crate) async fn build_system_prompt(
@@ -410,5 +463,86 @@ impl ContextManager {
                 }
             })
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use vtcode_core::core::token_budget::TokenBudgetConfig;
+    use vtcode_core::core::token_constants::{THRESHOLD_ALERT, THRESHOLD_WARNING};
+
+    fn make_tool_history(len: usize) -> Vec<uni::Message> {
+        let mut history = Vec::new();
+        for idx in 0..len {
+            if idx < 3 {
+                history.push(uni::Message::assistant(format!("tool-{idx}")));
+            } else if idx % 2 == 0 {
+                history.push(uni::Message::assistant("assistant".to_string()));
+            } else {
+                history.push(uni::Message::user("user".to_string()));
+            }
+        }
+        history
+    }
+
+    #[tokio::test]
+    async fn adaptive_trim_prunes_tools_at_warning_threshold() {
+        let trim_config = ContextTrimConfig {
+            max_tokens: 100,
+            ..ContextTrimConfig::default()
+        };
+        let budget_cfg = TokenBudgetConfig::for_model("test", trim_config.max_tokens);
+        let budget = Arc::new(TokenBudgetManager::new(budget_cfg));
+        let mut manager = ContextManager::new("sys".into(), trim_config, Arc::clone(&budget), true);
+
+        let mut history = make_tool_history(8);
+        let mut stats = vtcode_core::core::token_budget::TokenUsageStats::new();
+        stats.total_tokens =
+            (THRESHOLD_WARNING * trim_config.max_tokens as f64).ceil() as usize + 5;
+        budget.restore_stats(stats).await;
+
+        let outcome = manager
+            .adaptive_trim(&mut history, None, 1)
+            .await
+            .expect("adaptive trim should succeed");
+
+        assert_eq!(outcome.phase, TrimPhase::WarningToolPrune);
+        assert!(outcome.removed_messages > 0);
+    }
+
+    #[tokio::test]
+    async fn adaptive_trim_compacts_at_alert_threshold() {
+        let trim_config = ContextTrimConfig {
+            max_tokens: 40,
+            ..ContextTrimConfig::default()
+        };
+        let budget_cfg = TokenBudgetConfig::for_model("test", trim_config.max_tokens);
+        let budget = Arc::new(TokenBudgetManager::new(budget_cfg));
+        let mut manager = ContextManager::new("sys".into(), trim_config, Arc::clone(&budget), true);
+
+        // Build a history that exceeds the context window
+        let mut history: Vec<uni::Message> = (0..10)
+            .map(|_| uni::Message::assistant("x".repeat(200)))
+            .collect();
+
+        let mut stats = vtcode_core::core::token_budget::TokenUsageStats::new();
+        stats.total_tokens = (THRESHOLD_ALERT * trim_config.max_tokens as f64).ceil() as usize + 10;
+        budget.restore_stats(stats).await;
+
+        let outcome = manager
+            .adaptive_trim(&mut history, None, 2)
+            .await
+            .expect("adaptive trim should succeed");
+
+        assert!(outcome.is_trimmed());
+        assert!(
+            matches!(
+                outcome.phase,
+                TrimPhase::AlertSemantic | TrimPhase::WindowEnforced
+            ),
+            "unexpected phase: {:?}",
+            outcome.phase
+        );
     }
 }

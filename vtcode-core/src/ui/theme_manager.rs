@@ -93,9 +93,7 @@ impl ThemeManager {
 
     /// Get the active theme configuration, falling back to defaults
     pub fn active_theme_config(&self) -> ThemeConfig {
-        self.custom_config
-            .clone()
-            .unwrap_or_default()
+        self.custom_config.clone().unwrap_or_default()
     }
 
     /// Load theme from a specific file path

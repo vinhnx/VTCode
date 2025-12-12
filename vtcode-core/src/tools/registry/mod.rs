@@ -1024,9 +1024,7 @@ impl ToolRegistry {
             ToolTimeoutCategory::Mcp,
         ];
         for category in categories {
-            self.failure_trackers
-                .entry(category)
-                .or_default();
+            self.failure_trackers.entry(category).or_default();
             self.success_trackers.entry(category).or_insert(0);
             self.latency_stats
                 .entry(category)
@@ -1090,10 +1088,7 @@ impl ToolRegistry {
     }
 
     fn record_tool_failure(&mut self, category: ToolTimeoutCategory) -> bool {
-        let tracker = self
-            .failure_trackers
-            .entry(category)
-            .or_default();
+        let tracker = self.failure_trackers.entry(category).or_default();
         tracker.record_failure();
         self.success_trackers.insert(category, 0);
         tracker.should_circuit_break()

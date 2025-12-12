@@ -87,6 +87,21 @@ pub(crate) struct SessionUISetup {
     pub follow_up_placeholder: Option<String>,
 }
 
+async fn build_conversation_history_from_resume(
+    resume: Option<&ResumeSession>,
+    token_budget: &TokenBudgetManager,
+) -> Vec<uni::Message> {
+    if let Some(progress) = resume.and_then(|session| session.snapshot.progress.clone()) {
+        if let Some(usage) = progress.token_usage {
+            token_budget.restore_stats(usage).await;
+        }
+    }
+
+    resume
+        .map(|session| session.history.clone())
+        .unwrap_or_default()
+}
+
 pub(crate) async fn initialize_session(
     config: &CoreAgentConfig,
     vt_cfg: Option<&VTCodeConfig>,
@@ -246,9 +261,7 @@ pub(crate) async fn initialize_session(
     let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
     let pruning_ledger = Arc::new(RwLock::new(PruningDecisionLedger::new()));
 
-    let conversation_history: Vec<uni::Message> = resume
-        .map(|session| session.history.clone())
-        .unwrap_or_default();
+    let conversation_history = build_conversation_history_from_resume(resume, &token_budget).await;
     let trajectory = build_trajectory_logger(&config.workspace, vt_cfg);
     let base_system_prompt = read_system_prompt(
         &config.workspace,
@@ -725,4 +738,60 @@ fn estimate_and_log_task_complexity(query: &str) -> TaskComplexity {
     }
 
     complexity
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+    use std::path::PathBuf;
+    use vtcode_core::core::token_budget::TokenUsageStats;
+    use vtcode_core::llm::provider::{Message, MessageRole};
+    use vtcode_core::utils::session_archive::{
+        SessionArchiveMetadata, SessionMessage, SessionProgress, SessionSnapshot,
+    };
+
+    #[tokio::test]
+    async fn resume_restores_token_budget_stats() {
+        let budget_cfg = RuntimeTokenBudgetConfig::for_model("test-model", 100);
+        let budget = TokenBudgetManager::new(budget_cfg);
+
+        let usage = TokenUsageStats {
+            total_tokens: 42,
+            ..TokenUsageStats::new()
+        };
+
+        let session_messages = vec![SessionMessage::new(MessageRole::Assistant, "hi")];
+        let snapshot = SessionSnapshot {
+            metadata: SessionArchiveMetadata::new(
+                "ws", "/tmp/ws", "model", "provider", "theme", "medium",
+            ),
+            started_at: Utc::now(),
+            ended_at: Utc::now(),
+            total_messages: 1,
+            distinct_tools: vec!["tool_a".to_string()],
+            transcript: Vec::new(),
+            messages: session_messages.clone(),
+            progress: Some(SessionProgress {
+                turn_number: 2,
+                recent_messages: session_messages.clone(),
+                tool_summaries: vec!["tool_a".to_string()],
+                token_usage: Some(usage.clone()),
+                max_context_tokens: Some(100),
+            }),
+        };
+
+        let resume = ResumeSession {
+            identifier: "resume-1".to_string(),
+            snapshot,
+            history: session_messages.iter().map(Message::from).collect(),
+            path: PathBuf::new(),
+        };
+
+        let history = build_conversation_history_from_resume(Some(&resume), &budget).await;
+        let restored = budget.get_stats().await;
+
+        assert_eq!(history.len(), 1);
+        assert_eq!(restored.total_tokens, usage.total_tokens);
+    }
 }

@@ -27,7 +27,7 @@ use vtcode_core::ui::theme;
 use vtcode_core::ui::tui::{InlineEvent, InlineEventCallback, spawn_session, theme_from_styles};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::at_pattern::parse_at_patterns;
-use vtcode_core::utils::session_archive::{SessionArchive, SessionArchiveMetadata};
+use vtcode_core::utils::session_archive::{SessionArchive, SessionArchiveMetadata, SessionMessage};
 use vtcode_core::utils::transcript;
 
 use crate::agent::runloop::ResumeSession;
@@ -62,6 +62,8 @@ use crate::agent::runloop::unified::status_line::{
 use crate::agent::runloop::unified::workspace_links::LinkedDirectory;
 use crate::hooks::lifecycle::{LifecycleHookEngine, SessionEndReason, SessionStartTrigger};
 use crate::ide_context::IdeContextBridge;
+
+const RECENT_MESSAGE_LIMIT: usize = 16;
 
 #[allow(dead_code)]
 enum TurnLoopResult {
@@ -1057,6 +1059,30 @@ pub(crate) async fn run_single_agent_loop_unified(
                         &format!("Failed to finalize turn: {}", err),
                     )
                     .ok();
+            }
+            if let Some(archive) = session_archive.as_ref() {
+                let mut recent_messages: Vec<SessionMessage> = conversation_history
+                    .iter()
+                    .rev()
+                    .take(RECENT_MESSAGE_LIMIT)
+                    .map(SessionMessage::from)
+                    .collect();
+                recent_messages.reverse();
+
+                let progress_turn = next_checkpoint_turn.saturating_sub(1).max(1);
+                let distinct_tools = session_stats.sorted_tools();
+                let budget_usage = token_budget.get_stats().await;
+
+                if let Err(err) = archive.persist_progress(
+                    conversation_history.len(),
+                    distinct_tools.clone(),
+                    recent_messages,
+                    progress_turn,
+                    Some(budget_usage),
+                    Some(trim_config.max_tokens),
+                ) {
+                    tracing::warn!("Failed to persist session progress: {}", err);
+                }
             }
             let _turn_result = outcome.result;
 
