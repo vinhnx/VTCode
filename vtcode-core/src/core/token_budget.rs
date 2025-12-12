@@ -70,7 +70,7 @@ impl TokenBudgetConfig {
 }
 
 /// Token usage statistics
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TokenUsageStats {
     pub total_tokens: usize,
     pub system_prompt_tokens: usize,
@@ -414,6 +414,13 @@ impl TokenBudgetManager {
         let mut components = self.component_tokens.write().await;
         components.clear();
         debug!("Token budget reset");
+    }
+
+    /// Restore token usage statistics (e.g., from a session archive)
+    pub async fn restore_stats(&self, snapshot: TokenUsageStats) {
+        let mut stats = self.stats.write().await;
+        *stats = snapshot;
+        debug!("Token budget stats restored from snapshot");
     }
 
     /// Deduct tokens (after removal)

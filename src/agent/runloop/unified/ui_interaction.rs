@@ -918,7 +918,7 @@ mod tests {
     use super::*;
     use futures::stream;
     use std::sync::Arc;
-    use tokio::sync::{mpsc, Notify};
+    use tokio::sync::{Notify, mpsc};
     use vtcode_core::ui::tui::InlineCommand;
 
     #[derive(Clone)]
@@ -937,7 +937,10 @@ mod tests {
             true
         }
 
-        async fn generate(&self, _request: uni::LLMRequest) -> Result<uni::LLMResponse, uni::LLMError> {
+        async fn generate(
+            &self,
+            _request: uni::LLMRequest,
+        ) -> Result<uni::LLMResponse, uni::LLMError> {
             Ok(uni::LLMResponse {
                 content: self.content.clone(),
                 tool_calls: None,
@@ -1011,7 +1014,10 @@ mod tests {
         .await
         .expect("stream should succeed");
 
-        assert!(emitted, "should mark emitted tokens when content is rendered");
+        assert!(
+            emitted,
+            "should mark emitted tokens when content is rendered"
+        );
         assert_eq!(resp.content.as_deref(), Some("hello world"));
     }
 
@@ -1038,7 +1044,10 @@ mod tests {
         .await
         .expect("stream should succeed");
 
-        assert!(emitted, "should mark emitted tokens when reasoning is rendered");
+        assert!(
+            emitted,
+            "should mark emitted tokens when reasoning is rendered"
+        );
         assert!(resp.content.is_none(), "content should remain none");
     }
 }

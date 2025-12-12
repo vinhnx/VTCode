@@ -69,7 +69,6 @@ impl Session {
 
         self.input_manager.insert_text(&sanitized);
         slash::update_slash_suggestions(self);
-
     }
 
     /// Calculate remaining newline capacity in the input field

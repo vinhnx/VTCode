@@ -55,7 +55,7 @@ async fn test_real_ui_scenario_with_commands() {
         InlineMessageKind::User,
         vec![InlineSegment {
             text: "Can you help me refactor this Rust code?".to_string(),
-            style: InlineTextStyle::default(),
+            style: InlineTextStyle::default().into(),
         }],
     );
 
@@ -63,7 +63,7 @@ async fn test_real_ui_scenario_with_commands() {
         InlineMessageKind::Agent,
         vec![InlineSegment {
             text: "Sure! I can help you refactor your Rust code. Could you share the code you'd like to refactor?".to_string(),
-            style: InlineTextStyle::default(),
+            style: InlineTextStyle::default().into(),
         }],
     );
 
@@ -71,7 +71,7 @@ async fn test_real_ui_scenario_with_commands() {
         InlineMessageKind::User,
         vec![InlineSegment {
             text: "Here's the code I want to refactor:\n```rust\nfn calculate_sum(numbers: Vec<i32>) -> i32 {\n    let mut sum = 0;\n    for i in 0..numbers.len() {\n        sum += numbers[i];\n    }\n    sum\n}\n```".to_string(),
-            style: InlineTextStyle::default(),
+            style: InlineTextStyle::default().into(),
         }],
     );
 
@@ -79,7 +79,7 @@ async fn test_real_ui_scenario_with_commands() {
         InlineMessageKind::Agent,
         vec![InlineSegment {
             text: "I can help refactor this code to be more idiomatic Rust. Here's an improved version:\n```rust\nfn calculate_sum(numbers: &[i32]) -> i32 {\n    numbers.iter().sum()\n}\n```\nThis version: 1) Takes a slice instead of moving the Vec, 2) Uses iterator methods for better performance, 3) Is more idiomatic Rust.".to_string(),
-            style: InlineTextStyle::default(),
+            style: InlineTextStyle::default().into(),
         }],
     );
 
@@ -198,7 +198,8 @@ fn test_ui_styling_variations() {
                     color: None,
                     bg_color: None,
                     effects: Effects::new(),
-                },
+                }
+                .into(),
             },
         ),
         (
@@ -209,7 +210,8 @@ fn test_ui_styling_variations() {
                     color: None,
                     bg_color: None,
                     effects: Effects::BOLD,
-                },
+                }
+                .into(),
             },
         ),
         (
@@ -220,7 +222,8 @@ fn test_ui_styling_variations() {
                     color: None,
                     bg_color: None,
                     effects: Effects::ITALIC,
-                },
+                }
+                .into(),
             },
         ),
         (
@@ -231,7 +234,8 @@ fn test_ui_styling_variations() {
                     color: None,
                     bg_color: None,
                     effects: Effects::BOLD | Effects::ITALIC,
-                },
+                }
+                .into(),
             },
         ),
     ];

@@ -104,7 +104,9 @@ fn matches_context(
     before: Option<&str>,
     after: Option<&str>,
 ) -> bool {
-    if let Some(prefix) = before && !content[..idx].ends_with(prefix) {
+    if let Some(prefix) = before
+        && !content[..idx].ends_with(prefix)
+    {
         return false;
     }
 
@@ -934,7 +936,9 @@ impl ToolRegistry {
             let search_len = input.search.len();
 
             for (idx, _) in original.match_indices(&input.search) {
-                if let Some(max) = input.max_replacements && replacements >= max {
+                if let Some(max) = input.max_replacements
+                    && replacements >= max
+                {
                     break;
                 }
 

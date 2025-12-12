@@ -68,18 +68,34 @@ impl ContextTrimConfig {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[allow(dead_code)]
+pub(crate) enum TrimPhase {
+    None,
+    WarningToolPrune,
+    AlertSemantic,
+    WindowEnforced,
+}
+
+impl Default for TrimPhase {
+    fn default() -> Self {
+        TrimPhase::None
+    }
+}
+
 /// Result of a context trimming operation
-#[derive(Default)]
+#[derive(Default, Clone, Copy, Debug)]
 #[allow(dead_code)]
 pub(crate) struct ContextTrimOutcome {
     /// Number of messages that were removed during trimming
     pub(crate) removed_messages: usize,
+    pub(crate) phase: TrimPhase,
 }
 
 impl ContextTrimOutcome {
     #[allow(dead_code)]
     pub(crate) fn is_trimmed(&self) -> bool {
-        self.removed_messages > 0
+        self.removed_messages > 0 || !matches!(self.phase, TrimPhase::None)
     }
 }
 
@@ -258,7 +274,14 @@ pub(crate) fn enforce_unified_context_window(
     }
 
     let removed_messages = apply_removal_set(history, &removal_set);
-    ContextTrimOutcome { removed_messages }
+    ContextTrimOutcome {
+        removed_messages,
+        phase: if removed_messages > 0 {
+            TrimPhase::WindowEnforced
+        } else {
+            TrimPhase::None
+        },
+    }
 }
 
 /// Removes low-value messages from the specified range

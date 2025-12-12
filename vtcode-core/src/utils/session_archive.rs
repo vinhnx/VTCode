@@ -1,3 +1,4 @@
+use crate::core::token_budget::TokenUsageStats;
 use crate::llm::provider::{Message, MessageContent, MessageRole};
 use crate::utils::dot_config::DotManager;
 use crate::utils::error_messages::*;
@@ -129,6 +130,21 @@ pub struct SessionSnapshot {
     pub transcript: Vec<String>,
     #[serde(default)]
     pub messages: Vec<SessionMessage>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub progress: Option<SessionProgress>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct SessionProgress {
+    pub turn_number: usize,
+    #[serde(default)]
+    pub recent_messages: Vec<SessionMessage>,
+    #[serde(default)]
+    pub tool_summaries: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub token_usage: Option<TokenUsageStats>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_context_tokens: Option<usize>,
 }
 
 #[derive(Debug, Clone)]
@@ -247,8 +263,43 @@ impl SessionArchive {
             distinct_tools,
             transcript,
             messages,
+            progress: None,
         };
 
+        self.write_snapshot(snapshot)
+    }
+
+    pub fn persist_progress(
+        &self,
+        total_messages: usize,
+        distinct_tools: Vec<String>,
+        recent_messages: Vec<SessionMessage>,
+        turn_number: usize,
+        token_usage: Option<TokenUsageStats>,
+        max_context_tokens: Option<usize>,
+    ) -> Result<PathBuf> {
+        let tool_summaries = distinct_tools.clone();
+        let snapshot = SessionSnapshot {
+            metadata: self.metadata.clone(),
+            started_at: self.started_at,
+            ended_at: Utc::now(),
+            total_messages,
+            distinct_tools,
+            transcript: Vec::new(),
+            messages: recent_messages.clone(),
+            progress: Some(SessionProgress {
+                turn_number,
+                recent_messages,
+                tool_summaries,
+                token_usage,
+                max_context_tokens,
+            }),
+        };
+
+        self.write_snapshot(snapshot)
+    }
+
+    fn write_snapshot(&self, snapshot: SessionSnapshot) -> Result<PathBuf> {
         let payload = serde_json::to_string_pretty(&snapshot).context(ERR_SERIALIZE_STATE)?;
         if let Some(parent) = self.path.parent() {
             fs::create_dir_all(parent)
@@ -444,6 +495,7 @@ fn is_session_file(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::token_budget::TokenUsageStats;
     use crate::llm::provider::ContentPart;
     use anyhow::anyhow;
     use chrono::{TimeZone, Timelike};
@@ -545,6 +597,49 @@ mod tests {
 
         let restored = Message::from(&stored);
         assert_eq!(restored.content, original.content);
+    }
+
+    #[tokio::test]
+    async fn session_progress_persists_budget_and_recent_messages() -> Result<()> {
+        let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
+        let _guard = EnvGuard::set(SESSION_DIR_ENV, temp_dir.path());
+
+        let metadata = SessionArchiveMetadata::new(
+            "ExampleWorkspace",
+            "/tmp/example",
+            "model-x",
+            "provider-y",
+            "dark",
+            "medium",
+        );
+        let archive = SessionArchive::new(metadata).await?;
+        let recent = vec![SessionMessage::new(MessageRole::Assistant, "recent")];
+        let usage = TokenUsageStats {
+            total_tokens: 10,
+            ..TokenUsageStats::new()
+        };
+
+        let path = archive.persist_progress(
+            1,
+            vec!["tool_a".to_owned()],
+            recent.clone(),
+            2,
+            Some(usage.clone()),
+            Some(128),
+        )?;
+
+        let stored = fs::read_to_string(&path)
+            .with_context(|| format!("failed to read stored session: {}", path.display()))?;
+        let snapshot: SessionSnapshot =
+            serde_json::from_str(&stored).context("failed to deserialize stored snapshot")?;
+
+        let progress = snapshot.progress.expect("progress should exist");
+        assert_eq!(progress.turn_number, 2);
+        assert_eq!(progress.recent_messages, recent);
+        assert_eq!(progress.token_usage, Some(usage));
+        assert_eq!(progress.tool_summaries, vec!["tool_a".to_string()]);
+        assert_eq!(progress.max_context_tokens, Some(128));
+        Ok(())
     }
 
     #[tokio::test]
@@ -716,6 +811,7 @@ mod tests {
                 SessionMessage::new(MessageRole::User, "  prompt line\nsecond"),
                 SessionMessage::new(MessageRole::Assistant, long_response.clone()),
             ],
+            progress: None,
         };
         let listing = SessionListing {
             path: PathBuf::from("session-workspace.json"),

@@ -95,7 +95,9 @@ fn normalize_context(context: &str) -> String {
         normalized.insert("session_id".into(), Value::String(session.to_string()));
     }
 
-    if let Some(task) = parsed.get("task_id").and_then(Value::as_str) && !task.is_empty() {
+    if let Some(task) = parsed.get("task_id").and_then(Value::as_str)
+        && !task.is_empty()
+    {
         normalized.insert("task_id".into(), Value::String(task.to_string()));
     }
 
