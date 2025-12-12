@@ -3,6 +3,51 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Version 0.43.0] - 2025-11-09
+# [Version 0.48.0] - 2025-12-12
+
+
+### Features
+    - feat: update OpenAI provider to support GPT-5.2 and enhance reasoning options
+    - feat: enhance response output with reasoning traces
+    - feat: implement timeout warning management for tool execution
+    - feat: enhance tool execution with rate limiting and workspace management
+    - feat: enhance logging and error handling in orchestrator and agent components
+    - feat: improve tracing initialization and error handling in main
+    - feat: implement idle turn detection and management in task execution
+    - feat: improve HTTP client pool handling and enhance caching middleware
+    - feat: enhance loop detection and rate limiting in tool execution
+    - feat: implement timeout management for streaming and generation requests
+    - feat: implement streaming failure management and cooldown mechanism
+    - feat: enhance agent logging and improve markdown rendering
+    - feat: introduce reinforcement learning optimization and enhance configuration
+    - feat: add new dependencies and improve error handling in main
+    - feat: enhance grep result optimization and tool registration
+    - feat: enhance timeout configuration and adaptive timeout handling
+    - feat: add search_replace tool and enhance file operations
+
+
+### Bug Fixes
+    - fix: improve error handling in LLM client creation and tool execution
+
+
+### Refactors
+    - refactor: update GPT-5.2 model identifiers and documentation
+    - refactor: streamline error handling and conditional checks in various modules
+    - refactor: remove logging statements from UI interaction and session handling
+    - refactor: remove outdated vibe_tooling_mapping documentation
+    - refactor: enhance loop detection logic and add tests
+
+
+### Documentation
+    - docs: update changelog for v0.47.16 [skip ci]
+
+
+### Chores
+    - chore: update VSCode extension package.json to v0.47.16 [skip ci]
+    - chore: update npm package.json to v0.47.16 [skip ci]
+    - chore: release v0.47.16
+    - chore: update VSCode extension package.json to v0.47.15 [skip ci]
+    - chore: update npm package.json to v0.47.15 [skip ci]
 # [Version 0.47.16] - 2025-12-11
 
 
