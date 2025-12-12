@@ -32,6 +32,7 @@ pub struct Cli {
     /// Available providers & models:
     ///   • gemini-2.5-flash-preview-05-20 - Latest fast Gemini model (default)
     ///   • gemini-2.5-pro - Latest, most capable Gemini model
+    ///   • gpt-5.2-2025-12-11 - OpenAI's latest flagship (Responses API)
     ///   • gpt-5 - OpenAI's latest
     ///   • gpt-5-codex - OpenAI's latest coding-focused model
     ///   • claude-sonnet-4-5 - Anthropic's latest Sonnet model
@@ -52,15 +53,15 @@ pub struct Cli {
     ///   • moonshotai/kimi-k2-0905 - OpenRouter MoonshotAI Kimi K2
     ///   • gpt-oss:20b - Ollama local model
     /// Note: If using OpenAI, the `prompt_cache_retention` configuration applies only to models
-    /// that support the OpenAI Responses API (e.g., gpt-5, gpt-5.1). Setting it for non-Responses
-    /// models will be ignored.
+    /// that support the OpenAI Responses API (e.g., gpt-5, gpt-5.1, gpt-5.2). Setting it for
+    /// non-Responses models will be ignored.
     /// To see all available models for a given provider, use the `models` command. For example:
     ///
     ///   vtcode models list --provider openai
     ///
     /// Note: If using OpenAI, the `prompt_cache_retention` configuration applies only to models
-    /// that support the OpenAI Responses API (e.g., gpt-5, gpt-5.1). Setting it for non-Responses
-    /// models will be ignored.
+    /// that support the OpenAI Responses API (e.g., gpt-5, gpt-5.1, gpt-5.2). Setting it for
+    /// non-Responses models will be ignored.
     #[arg(long, global = true)]
     pub model: Option<String>,
 

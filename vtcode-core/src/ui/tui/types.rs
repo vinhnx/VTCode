@@ -326,6 +326,10 @@ pub struct InlineHandle {
 }
 
 impl InlineHandle {
+    pub fn new_for_tests(sender: UnboundedSender<InlineCommand>) -> Self {
+        Self { sender }
+    }
+
     pub fn append_line(&self, kind: InlineMessageKind, segments: Vec<InlineSegment>) {
         let segments = if segments.is_empty() {
             vec![InlineSegment::default()]

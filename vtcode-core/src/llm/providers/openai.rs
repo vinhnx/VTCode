@@ -23,6 +23,7 @@ use async_trait::async_trait;
 use futures::StreamExt;
 use reqwest::Client as HttpClient;
 use reqwest::StatusCode;
+use reqwest::header::HeaderMap;
 use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -52,6 +53,9 @@ fn is_model_not_found(status: StatusCode, error_text: &str) -> bool {
 /// Provide a fallback model when the requested GPT-5.1 model is unavailable
 fn fallback_model_if_not_found(model: &str) -> Option<String> {
     match model {
+        m if m == models::openai::GPT_5_2 || m == models::openai::GPT_5_2_ALIAS => {
+            Some(models::openai::GPT_5_1.to_string())
+        }
         m if m == models::openai::GPT_5_1_MINI => Some(models::openai::GPT_5_1.to_string()),
         m if m == models::openai::GPT_5_MINI => Some(models::openai::GPT_5.to_string()),
         m if m == models::openai::GPT_5_NANO => Some(models::openai::GPT_5_MINI.to_string()),
@@ -60,6 +64,30 @@ fn fallback_model_if_not_found(model: &str) -> Option<String> {
             Some(models::openai::GPT_5_1_CODEX.to_string())
         }
         _ => Some(models::openai::DEFAULT_MODEL.to_string()),
+    }
+}
+
+fn format_openai_error(
+    status: StatusCode,
+    body: &str,
+    headers: &HeaderMap,
+    context: &str,
+) -> String {
+    let request_id = headers
+        .get("x-request-id")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("<none>");
+    let trimmed_body: String = body.chars().take(2_000).collect();
+    if trimmed_body.is_empty() {
+        format!(
+            "{} (status {}) [request_id={}]",
+            context, status, request_id
+        )
+    } else {
+        format!(
+            "{} (status {}) [request_id={}] Body: {}",
+            context, status, request_id, trimmed_body
+        )
     }
 }
 
@@ -320,9 +348,20 @@ impl OpenAIProvider {
             return None;
         }
 
+        let mut seen_names = std::collections::HashSet::new();
         let serialized_tools = tools
             .iter()
             .filter_map(|tool| {
+                // Use function name when present, otherwise tool type to dedupe apply_patch duplicates
+                let canonical_name = tool
+                    .function
+                    .as_ref()
+                    .map(|f| f.name.as_str())
+                    .unwrap_or(tool.tool_type.as_str());
+                if !seen_names.insert(canonical_name.to_string()) {
+                    return None;
+                }
+
                 Some(match tool.tool_type.as_str() {
                     "function" => {
                         let func = tool.function.as_ref()?;
@@ -367,17 +406,14 @@ impl OpenAIProvider {
             return None;
         }
 
-        // Check if built-in apply_patch is present
-        let has_builtin_apply_patch = tools.iter().any(|t| t.tool_type == "apply_patch");
-
+        let mut seen_names = std::collections::HashSet::new();
         let serialized_tools = tools
             .iter()
             .filter_map(|tool| {
                 match tool.tool_type.as_str() {
                     "function" => {
                         let func = tool.function.as_ref()?;
-                        // Skip function tools named "apply_patch" if built-in apply_patch is present
-                        if has_builtin_apply_patch && func.name == "apply_patch" {
+                        if !seen_names.insert(func.name.clone()) {
                             return None;
                         }
                         // GPT-5.1 Codex uses FLAT function format (name at top level)
@@ -389,8 +425,37 @@ impl OpenAIProvider {
                         }))
                     }
                     "apply_patch" => {
-                        // Built-in apply_patch - just {"type": "apply_patch"}, no other fields
-                        Some(json!({"type": "apply_patch"}))
+                        // GPT-5.2 Responses API does not accept apply_patch type; serialize as function
+                        let name = tool
+                            .function
+                            .as_ref()
+                            .map(|f| f.name.as_str())
+                            .unwrap_or("apply_patch");
+                        if !seen_names.insert(name.to_string()) {
+                            return None;
+                        }
+                        if let Some(func) = tool.function.as_ref() {
+                            Some(json!({
+                                "type": "function",
+                                "name": &func.name,
+                                "description": &func.description,
+                                "parameters": &func.parameters
+                            }))
+                        } else {
+                            Some(json!({
+                                "type": "function",
+                                "name": "apply_patch",
+                                "description": "Apply a unified diff patch to a file.",
+                                "parameters": json!({
+                                    "type": "object",
+                                    "properties": {
+                                        "file_path": { "type": "string" },
+                                        "patch": { "type": "string" }
+                                    },
+                                    "required": ["file_path", "patch"]
+                                })
+                            }))
+                        }
                     }
                     "shell" => {
                         // For shell, treat as function tool with flat format
@@ -404,8 +469,7 @@ impl OpenAIProvider {
                     "custom" => {
                         // GPT-5 custom tool - use custom format
                         if let Some(func) = &tool.function {
-                            // Skip if named apply_patch and built-in is present
-                            if has_builtin_apply_patch && func.name == "apply_patch" {
+                            if !seen_names.insert(func.name.clone()) {
                                 return None;
                             }
                             Some(json!({
@@ -419,8 +483,12 @@ impl OpenAIProvider {
                         }
                     }
                     "grammar" => {
-                        // GPT-5 grammar tool - skip if it would conflict with apply_patch
-                        if has_builtin_apply_patch {
+                        let name = tool
+                            .function
+                            .as_ref()
+                            .map(|f| f.name.as_str())
+                            .unwrap_or("apply_patch_grammar");
+                        if !seen_names.insert(name.to_string()) {
                             return None;
                         }
                         tool.grammar.as_ref().map(|grammar| json!({
@@ -437,8 +505,7 @@ impl OpenAIProvider {
                     _ => {
                         // Unknown tool type - treat as function tool with flat format
                         if let Some(func) = &tool.function {
-                            // Skip if named apply_patch and built-in is present
-                            if has_builtin_apply_patch && func.name == "apply_patch" {
+                            if !seen_names.insert(func.name.clone()) {
                                 return None;
                             }
                             Some(json!({
@@ -1204,8 +1271,10 @@ impl OpenAIProvider {
             }
         }
 
-        // Set default verbosity for GPT-5.1 models if no format options specified
-        if !has_format_options && request.model.starts_with("gpt-5.1") {
+        // Set default verbosity for GPT-5.1/5.2 models if no format options specified
+        if !has_format_options
+            && (request.model.starts_with("gpt-5.1") || request.model.starts_with("gpt-5.2"))
+        {
             text_format["verbosity"] = json!("medium");
             has_format_options = true;
         }
@@ -1629,12 +1698,15 @@ impl OpenAIProvider {
         // Check response status
         if !response.status().is_success() {
             let status = response.status();
+            let headers = response.headers().clone();
             let error_text = response.text().await.unwrap_or_default();
             let formatted_error = error_display::format_llm_error(
                 "OpenAI",
-                &format!(
-                    "Harmony inference server error ({}): {}",
-                    status, error_text
+                &format_openai_error(
+                    status,
+                    &error_text,
+                    &headers,
+                    "Harmony inference server error",
                 ),
             );
             return Err(LLMError::Provider(formatted_error));
@@ -1874,6 +1946,41 @@ mod tests {
         assert_eq!(
             tool_object.get("name").and_then(Value::as_str),
             Some("search_workspace")
+        );
+    }
+
+    #[test]
+    fn serialize_tools_dedupes_duplicate_names() {
+        let duplicate = ToolDefinition::function(
+            "search_workspace".to_owned(),
+            "dup".to_owned(),
+            json!({"type": "object"}),
+        );
+        let tools = vec![sample_tool(), duplicate];
+        let serialized =
+            OpenAIProvider::serialize_tools(&tools).expect("tools should serialize cleanly");
+        let arr = serialized.as_array().expect("array");
+        assert_eq!(arr.len(), 1, "duplicate names should be dropped");
+    }
+
+    #[test]
+    fn responses_tools_dedupes_apply_patch_and_function() {
+        let apply_builtin = ToolDefinition::apply_patch("Apply patches".to_owned());
+        let apply_function = ToolDefinition::function(
+            "apply_patch".to_owned(),
+            "alt apply".to_owned(),
+            json!({"type": "object"}),
+        );
+        let tools = vec![apply_builtin, apply_function];
+        let serialized = OpenAIProvider::serialize_tools_for_responses(&tools)
+            .expect("responses tools should serialize");
+        let arr = serialized.as_array().expect("array");
+        assert_eq!(arr.len(), 1, "apply_patch should be deduped");
+        let tool = arr[0].as_object().expect("object");
+        assert_eq!(tool.get("type").and_then(Value::as_str), Some("function"));
+        assert_eq!(
+            tool.get("name").and_then(Value::as_str),
+            Some("apply_patch")
         );
     }
 
@@ -2491,6 +2598,7 @@ impl LLMProvider for OpenAIProvider {
 
         if !response.status().is_success() {
             let status = response.status();
+            let headers = response.headers().clone();
             let error_text = response.text().await.unwrap_or_default();
 
             if matches!(responses_state, ResponsesApiState::Allowed)
@@ -2541,14 +2649,14 @@ impl LLMProvider for OpenAIProvider {
                 }
                 let formatted_error = error_display::format_llm_error(
                     "OpenAI",
-                    &format!("HTTP {}: {} (model not available)", status, error_text),
+                    &format_openai_error(status, &error_text, &headers, "Model not available"),
                 );
                 return Err(LLMError::Provider(formatted_error));
             }
 
             let formatted_error = error_display::format_llm_error(
                 "OpenAI",
-                &format!("HTTP {}: {}", status, error_text),
+                &format_openai_error(status, &error_text, &headers, "Responses API error"),
             );
             return Err(LLMError::Provider(formatted_error));
         }
@@ -2787,6 +2895,7 @@ impl LLMProvider for OpenAIProvider {
 
             if !response.status().is_success() {
                 let status = response.status();
+                let headers = response.headers().clone();
                 let error_text = response.text().await.unwrap_or_default();
 
                 if matches!(responses_state, ResponsesApiState::Allowed)
@@ -2849,13 +2958,13 @@ impl LLMProvider for OpenAIProvider {
                     }
                     let formatted_error = error_display::format_llm_error(
                         "OpenAI",
-                        &format!("HTTP {}: {} (model not available)", status, error_text),
+                        &format_openai_error(status, &error_text, &headers, "Model not available"),
                     );
                     return Err(LLMError::Provider(formatted_error));
                 } else {
                     let formatted_error = error_display::format_llm_error(
                         "OpenAI",
-                        &format!("HTTP {}: {}", status, error_text),
+                        &format_openai_error(status, &error_text, &headers, "Responses API error"),
                     );
                     return Err(LLMError::Provider(formatted_error));
                 }

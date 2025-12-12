@@ -14,10 +14,8 @@ use anstream::{AutoStream, ColorChoice};
 use anstyle::{Ansi256Color, AnsiColor, Color as AnsiColorEnum, Effects, Reset, RgbColor, Style};
 use anyhow::{Result, anyhow};
 use ratatui::style::{Color as RatColor, Modifier as RatModifier, Style as RatatuiStyle};
-use std::fs::OpenOptions;
 use std::io::{self, Write};
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Styles available for rendering messages
 #[derive(Clone, Copy, Debug)]
@@ -607,24 +605,6 @@ impl InlineSink {
         let fallback = self.resolve_fallback_style(base_style);
         let fallback_arc = Arc::new(fallback.clone());
         let theme_styles = theme::active_styles();
-        // #region agent log
-        if let Ok(mut file) = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open("/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.cursor/debug.log")
-        {
-            let _ = writeln!(
-                file,
-                "{{\"sessionId\":\"debug-session\",\"runId\":\"pre-fix\",\"hypothesisId\":\"H4\",\"location\":\"utils/ansi.rs:prepare_markdown_lines\",\"message\":\"inline sink markdown render\",\"data\":{{\"highlight_passed\":false,\"indent_len\":{},\"base_fg\":{}}},\"timestamp\":{}}}",
-                indent.len(),
-                base_style.get_fg_color().is_some(),
-                SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_millis()
-            );
-        }
-        // #endregion
         let highlight_cfg = self
             .highlight_config
             .enabled

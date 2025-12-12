@@ -87,6 +87,8 @@ pub mod models {
             "gpt-5-codex",
             "gpt-5-mini",
             "gpt-5-nano",
+            "gpt-5.2-2025-12-11",
+            "gpt-5.2",
             "gpt-5.1", // Enhanced version of GPT-5 with temperature support and streaming
             "gpt-5.1-codex", // Enhanced version of GPT-5 Codex with temperature support and streaming
             "gpt-5.1-codex-max", // Enhanced version of GPT-5 Codex with temperature support and streaming
@@ -102,6 +104,8 @@ pub mod models {
             GPT_5_CODEX,
             GPT_5_MINI,
             GPT_5_NANO,
+            GPT_5_2,
+            GPT_5_2_ALIAS,
             GPT_5_1,
             GPT_5_1_CODEX,
             GPT_5_1_CODEX_MAX,
@@ -112,6 +116,8 @@ pub mod models {
         pub const REASONING_MODELS: &[&str] = &[
             GPT_5,
             GPT_5_CODEX,
+            GPT_5_2,
+            GPT_5_2_ALIAS,
             GPT_5_1,
             GPT_5_1_CODEX,
             GPT_5_1_CODEX_MAX,
@@ -128,6 +134,8 @@ pub mod models {
         pub const GPT_5_CODEX: &str = "gpt-5-codex";
         pub const GPT_5_MINI: &str = "gpt-5-mini";
         pub const GPT_5_NANO: &str = "gpt-5-nano";
+        pub const GPT_5_2: &str = "gpt-5.2-2025-12-11";
+        pub const GPT_5_2_ALIAS: &str = "gpt-5.2";
         pub const GPT_5_1: &str = "gpt-5.1"; // Enhanced version with temperature support and streaming
         pub const GPT_5_1_CODEX: &str = "gpt-5.1-codex"; // Enhanced version with temperature support and streaming
         pub const GPT_5_1_CODEX_MAX: &str = "gpt-5.1-codex-max"; // Enhanced version with temperature support and streaming
@@ -341,6 +349,8 @@ pub mod models {
     pub const GPT_5_CODEX: &str = openai::GPT_5_CODEX;
     pub const GPT_5_MINI: &str = openai::GPT_5_MINI;
     pub const GPT_5_NANO: &str = openai::GPT_5_NANO;
+    pub const GPT_5_2: &str = openai::GPT_5_2;
+    pub const GPT_5_2_ALIAS: &str = openai::GPT_5_2_ALIAS;
     pub const GPT_5_1: &str = openai::GPT_5_1;
     pub const GPT_5_1_CODEX: &str = openai::GPT_5_1_CODEX;
     pub const GPT_5_1_CODEX_MAX: &str = openai::GPT_5_1_CODEX_MAX;
