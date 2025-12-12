@@ -32,7 +32,7 @@ pub struct Cli {
     /// Available providers & models:
     ///   • gemini-2.5-flash-preview-05-20 - Latest fast Gemini model (default)
     ///   • gemini-2.5-pro - Latest, most capable Gemini model
-    ///   • gpt-5.2-2025-12-11 - OpenAI's latest flagship (Responses API)
+    ///   • gpt-5.2 - OpenAI's latest flagship (Responses API, legacy alias: gpt-5.2-2025-12-11)
     ///   • gpt-5 - OpenAI's latest
     ///   • gpt-5-codex - OpenAI's latest coding-focused model
     ///   • claude-sonnet-4-5 - Anthropic's latest Sonnet model

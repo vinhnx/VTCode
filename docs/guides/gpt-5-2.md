@@ -2,13 +2,13 @@
 
 ## Summary
 
--   Model ID: `gpt-5.2-2025-12-11` (alias: `gpt-5.2`).
+-   Model ID: `gpt-5.2` (alias: `gpt-5.2-2025-12-11`).
 -   Best general-purpose OpenAI model; upgrades over GPT-5.1 in reasoning, instruction following, vision, code generation, tool calling, and context management (compaction).
 -   Supports Responses API features: reasoning effort (adds `xhigh`), verbosity, prompt caching/compaction, allowed tools, custom tools, and preambles.
 
 ## Model lineup
 
--   `gpt-5.2` (alias for `gpt-5.2-2025-12-11`): complex reasoning, broad knowledge, code-heavy or multi-step agent tasks.
+-   `gpt-5.2` (primary id; legacy alias `gpt-5.2-2025-12-11`): complex reasoning, broad knowledge, code-heavy or multi-step agent tasks.
 -   `gpt-5.2-pro`: higher compute for harder problems, more consistent depth.
 -   `gpt-5.2-chat-latest`: ChatGPT-facing chat default.
 -   `gpt-5.1-codex-max`: coding-optimized variant with `xhigh` reasoning and compaction; keep for coding-only workloads.
@@ -45,7 +45,7 @@ curl --request POST https://api.openai.com/v1/responses \
   --header "Authorization: Bearer $OPENAI_API_KEY" \
   --header "Content-type: application/json" \
   --data '{
-    "model": "gpt-5.2-2025-12-11",
+    "model": "gpt-5.2",
     "input": "Summarize the design constraints for the VTCode agent.",
     "reasoning": { "effort": "none" },
     "text": { "verbosity": "medium" }
@@ -92,3 +92,4 @@ Custom tool with allowed tools:
 -   GPT-5.2 prompting guide: https://cookbook.openai.com/examples/gpt-5/gpt-5-2_prompting_guide
 -   GPT-5 family new features: https://cookbook.openai.com/examples/gpt-5/gpt-5_new_params_and_tools
 -   Responses vs Chat Completions: https://platform.openai.com/docs/guides/migrate-to-responses
+
