@@ -4,7 +4,7 @@
 
 -   Model ID: `gpt-5.2` (alias: `gpt-5.2-2025-12-11`).
 -   Best general-purpose OpenAI model; upgrades over GPT-5.1 in reasoning, instruction following, vision, code generation, tool calling, and context management (compaction).
--   Supports Responses API features: reasoning effort (adds `xhigh`), verbosity, prompt caching/compaction, allowed tools, custom tools, and preambles.
+-   Supports Responses API features: reasoning effort (adds `xhigh`), verbosity, prompt caching/compaction, allowed tools, custom tools, and first-person tool preambles.
 
 ## Model lineup
 
@@ -34,7 +34,7 @@
 -   Shell tool supported.
 -   Custom tools: `type: custom` for freeform inputs; can attach CFG grammars to constrain outputs.
 -   Allowed tools: restrict active tools via `tool_choice.allowed_tools`.
--   Preambles: ask the model to explain why it is calling a tool before invocation for better traceability.
+-   Preambles: have the model restate the goal in first person with one short action-first line (verb + target + tool), outline the steps, and narrate progress without using a "Preamble:" prefix for better traceability.
 
 ## Quick Requests API examples
 
@@ -85,11 +85,10 @@ Custom tool with allowed tools:
 
 -   Keep verbosity at `medium` or `high` for rich code output; use `low` for concise SQL/snippets.
 -   With `reasoning.effort=none`, explicitly ask the model to outline steps before answering when you need depth.
--   Enable preambles when chaining tools to surface intent between calls.
+-   Enable first-person preambles (goal → steps → progress, no prefix) when chaining tools to surface intent between calls.
 
 ## References
 
 -   GPT-5.2 prompting guide: https://cookbook.openai.com/examples/gpt-5/gpt-5-2_prompting_guide
 -   GPT-5 family new features: https://cookbook.openai.com/examples/gpt-5/gpt-5_new_params_and_tools
 -   Responses vs Chat Completions: https://platform.openai.com/docs/guides/migrate-to-responses
-

@@ -1,6 +1,6 @@
 # Agent Prompt Optimization - November 2025
 
-**Status**: ✓  Complete
+**Status**: ✓ Complete
 **Date**: November 2025
 **Impact**: 35-62% reduction in static prompt content while preserving clarity
 
@@ -28,6 +28,7 @@ Optimized all agent-facing system prompts to be concise, direct, and LLM-focused
 -   Simplified tool descriptions to clear arrow chains
 -   Condensed code execution patterns to bullet points
 -   Removed "Guidelines" and "Self-Documentation" boilerplate
+-   Standardized tool preambles to first-person goal → steps → progress (no literal "Preamble:" prefix) with terse per-tool outcomes
 
 **Result**: Same instruction clarity, lower token cost per prompt
 
@@ -118,12 +119,12 @@ Added guidance for diagnostic workflows: agents should use `tools::GET_ERRORS` t
 
 ## Instruction Quality Validation
 
-✓  **Clarity**: All core instructions preserved
-✓  **Completeness**: No missing guidance for agents
-✓  **Actionability**: Direct, tool-focused language
-✓  **Safety**: All safety boundaries included
-✓  **Code Execution**: Full guidance on execute_code/skills
-✓  **Tool References**: All tool names and workflows present
+✓ **Clarity**: All core instructions preserved
+✓ **Completeness**: No missing guidance for agents
+✓ **Actionability**: Direct, tool-focused language
+✓ **Safety**: All safety boundaries included
+✓ **Code Execution**: Full guidance on execute_code/skills
+✓ **Tool References**: All tool names and workflows present
 
 ---
 
@@ -141,10 +142,10 @@ Added guidance for diagnostic workflows: agents should use `tools::GET_ERRORS` t
 
 ## Testing
 
-✓  All 64 exec integration tests passing
-✓  System prompt parsing works correctly
-✓  Markdown to prompt extraction verified
-✓  No regression in agent guidance
+✓ All 64 exec integration tests passing
+✓ System prompt parsing works correctly
+✓ Markdown to prompt extraction verified
+✓ No regression in agent guidance
 
 ---
 
@@ -159,10 +160,10 @@ Added guidance for diagnostic workflows: agents should use `tools::GET_ERRORS` t
 
 ## Deployment
 
--   ✓  No configuration changes needed
--   ✓  Backward compatible (prompts still work identically)
--   ✓  Immediate benefit on new conversations
--   ✓  No migration required
+-   ✓ No configuration changes needed
+-   ✓ Backward compatible (prompts still work identically)
+-   ✓ Immediate benefit on new conversations
+-   ✓ No migration required
 
 ---
 

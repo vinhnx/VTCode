@@ -656,7 +656,7 @@ max_scrollback_bytes = 50000000
 
 # Threshold for large output detection (in kilobytes, default: 5MB = 5000KB)
 # Outputs larger than this may be auto-spooled to disk in future versions
-# Used to detect commands that produce excessive output and need special handling  
+# Used to detect commands that produce excessive output and need special handling
 large_output_threshold_kb = 5000
 
 # Preferred shell program for PTY sessions
@@ -1072,3 +1072,4 @@ loop_detection_threshold = 3
 # When false, automatically halts on detected loop without prompting
 # Default: true
 loop_detection_interactive = true
+
