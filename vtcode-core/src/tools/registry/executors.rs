@@ -1133,6 +1133,68 @@ impl ToolRegistry {
         })
     }
 
+    pub(super) fn skill_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
+        let workspace_root = self.workspace_root_owned();
+        Box::pin(async move {
+            #[derive(Debug, Deserialize)]
+            struct SkillArgs {
+                name: String,
+            }
+
+            let parsed: SkillArgs = serde_json::from_value(args)
+                .context("skill requires 'name' field")?;
+
+            // Load skill using SkillLoader (reads .claude/skills/*/SKILL.md)
+            use crate::skills::SkillLoader;
+            let loader = SkillLoader::new(workspace_root);
+
+            match loader.load_skill(&parsed.name) {
+                Ok(skill) => {
+                    let mut resources = json!({});
+
+                    // Include resources if available
+                    for (path, resource) in skill.resources.iter() {
+                        resources[path] = json!({
+                            "type": format!("{:?}", resource.resource_type),
+                            "path": resource.path,
+                        });
+                    }
+
+                    // Format output to emphasize instructions for agent to follow
+                    let output = format!(
+                        "=== Skill Loaded: {} ===\n\n{}\n\n=== Resources Available ===\n{}\n\n⚠️  IMPORTANT: Follow the instructions above to complete the task. Do NOT call this tool again.",
+                        skill.manifest.name,
+                        skill.instructions,
+                        if resources.as_object().map(|r| r.is_empty()).unwrap_or(true) {
+                            "No additional resources".to_string()
+                        } else {
+                            serde_json::to_string_pretty(&resources).unwrap_or_default()
+                        }
+                    );
+
+                    Ok(json!({
+                        "success": true,
+                        "name": skill.manifest.name,
+                        "description": skill.manifest.description,
+                        "version": skill.manifest.version,
+                        "author": skill.manifest.author,
+                        "instructions": skill.instructions,
+                        "resources": resources,
+                        "output": output,
+                        "message": format!("Skill '{}' loaded. Read 'output' field for complete instructions.", skill.manifest.name)
+                    }))
+                }
+                Err(e) => {
+                    Ok(json!({
+                        "success": false,
+                        "error": format!("Failed to load skill '{}': {}", parsed.name, e),
+                        "hint": "Use search_tools to discover available skills"
+                    }))
+                }
+            }
+        })
+    }
+
     pub(super) fn execute_code_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
         let mcp_client = self.mcp_client.clone();
         let workspace_root = self.workspace_root_owned();
