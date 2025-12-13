@@ -141,7 +141,44 @@ pub(crate) async fn run_single_agent_loop_unified(
             tool_permission_cache,
             search_metrics: _,
             custom_prompts,
+            loaded_skills,
         } = initialize_session(&config, vt_cfg.as_ref(), full_auto, resume_ref).await?;
+
+        // Restore skills from previous session if resuming
+        if let Some(resume_session) = resume_ref {
+            let skill_names_to_restore = &resume_session.snapshot.metadata.loaded_skills;
+            if !skill_names_to_restore.is_empty() {
+                use vtcode_core::skills::loader::SkillLoader;
+                use vtcode_core::skills::executor::SkillToolAdapter;
+                use vtcode_core::tools::ToolRegistration;
+                use vtcode_core::config::types::CapabilityLevel;
+                use std::sync::Arc;
+
+                let skill_loader = SkillLoader::new(config.workspace.clone());
+                for skill_name in skill_names_to_restore {
+                    match skill_loader.load_skill(skill_name) {
+                        Ok(skill) => {
+                            let adapter = SkillToolAdapter::new(skill.clone());
+                            let adapter_arc = Arc::new(adapter);
+                            let name_static: &'static str = Box::leak(Box::new(skill_name.clone()));
+                            let registration = ToolRegistration::from_tool(
+                                name_static,
+                                CapabilityLevel::Bash,
+                                adapter_arc,
+                            );
+                            if let Err(e) = tool_registry.register_tool(registration) {
+                                tracing::warn!("Failed to restore skill '{}': {}", skill_name, e);
+                            } else {
+                                loaded_skills.write().await.insert(skill_name.clone(), skill);
+                            }
+                        }
+                        Err(e) => {
+                            tracing::warn!("Failed to load skill '{}' during resume: {}", skill_name, e);
+                        }
+                    }
+                }
+            }
+        }
 
         let mut session_end_reason = SessionEndReason::Completed;
 
@@ -758,6 +795,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                 full_auto,
                                 approval_recorder: Some(&approval_recorder),
                                 tool_permission_cache: &tool_permission_cache,
+                                loaded_skills: &loaded_skills,
                             },
                         )
                         .await?;
@@ -1073,6 +1111,13 @@ pub(crate) async fn run_single_agent_loop_unified(
                 let distinct_tools = session_stats.sorted_tools();
                 let budget_usage = token_budget.get_stats().await;
 
+                let skill_names: Vec<String> = loaded_skills
+                    .read()
+                    .await
+                    .keys()
+                    .cloned()
+                    .collect();
+                
                 if let Err(err) = archive.persist_progress(
                     conversation_history.len(),
                     distinct_tools.clone(),
@@ -1080,6 +1125,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                     progress_turn,
                     Some(budget_usage),
                     Some(trim_config.max_tokens),
+                    Some(skill_names),
                 ) {
                     tracing::warn!("Failed to persist session progress: {}", err);
                 }
@@ -1091,6 +1137,17 @@ pub(crate) async fn run_single_agent_loop_unified(
                 break;
             }
             continue;
+        }
+
+        // Capture loaded skills before finalizing session
+        if let Some(archive) = session_archive.as_mut() {
+            let skill_names: Vec<String> = loaded_skills
+                .read()
+                .await
+                .keys()
+                .cloned()
+                .collect();
+            archive.set_loaded_skills(skill_names);
         }
 
         if let Err(err) = finalize_session(

@@ -67,6 +67,10 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
             name: "prompt",
             description: "List custom prompts and usage hints",
         },
+        SlashCommandInfo {
+            name: "skills",
+            description: "Manage skills and plugins (usage: /skills list|load|unload|use)",
+        },
         // Status and diagnostics
         SlashCommandInfo {
             name: "status",

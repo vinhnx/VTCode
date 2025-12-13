@@ -129,7 +129,15 @@ impl LLMFactory {
             Some("lmstudio".to_owned())
         } else if m.starts_with("moonshot-") || m.starts_with("kimi-") {
             Some("moonshot".to_owned())
-        } else if m.contains('/') || m.contains('@') {
+        } else if m.starts_with("mistral-")
+            || m.starts_with("mixtral-")
+            || m.starts_with("qwen-")
+            || m.starts_with("meta-")
+            || m.starts_with("llama-")
+            || m.starts_with("command-")
+            || m.contains('/')
+            || m.contains('@')
+        {
             Some("openrouter".to_owned())
         } else {
             None

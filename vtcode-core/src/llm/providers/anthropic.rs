@@ -152,17 +152,7 @@ impl AnthropicProvider {
             .unwrap_or("5m")
     }
 
-    /// Returns the cache control JSON block for Anthropic API.
-    fn cache_control_value(&self) -> Option<Value> {
-        if !self.prompt_cache_enabled {
-            return None;
-        }
 
-        Some(json!({
-            "type": "ephemeral",
-            "ttl": self.get_cache_ttl()
-        }))
-    }
 
     /// Returns the beta header value for Anthropic API prompt caching.
     /// - Always includes "prompt-caching-2024-07-31"
@@ -521,8 +511,16 @@ impl AnthropicProvider {
     }
 
     fn convert_to_anthropic_format(&self, request: &LLMRequest) -> Result<Value, LLMError> {
+        use super::anthropic_types::{
+            AnthropicContentBlock, AnthropicMessage, AnthropicRequest, AnthropicTool, CacheControl,
+        };
+
         let cache_control_template = if self.prompt_cache_enabled {
-            self.cache_control_value()
+            let ttl = self.get_cache_ttl();
+            Some(CacheControl {
+                control_type: "ephemeral".to_string(),
+                ttl: Some(ttl.to_string()),
+            })
         } else {
             None
         };
@@ -532,23 +530,20 @@ impl AnthropicProvider {
             .map(|_| self.prompt_cache_settings.max_breakpoints as usize)
             .unwrap_or(0);
 
-        let mut tools_json: Option<Vec<Value>> = None;
-        if let Some(tools) = &request.tools
-            && !tools.is_empty()
+        let mut tools: Option<Vec<AnthropicTool>> = None;
+        if let Some(request_tools) = &request.tools
+            && !request_tools.is_empty()
         {
-            let mut built_tools: Vec<Value> = tools
+            let mut built_tools: Vec<AnthropicTool> = request_tools
                 .iter()
                 .filter_map(|tool| {
                     let func = tool.function.as_ref()?;
-                    let mut obj = json!({
-                        "name": func.name,
-                        "description": func.description,
-                        "input_schema": func.parameters
-                    });
-                    if tool.strict == Some(true) {
-                        obj["strict"] = json!(true);
-                    }
-                    Some(obj)
+                    Some(AnthropicTool {
+                        name: func.name.clone(),
+                        description: func.description.clone(),
+                        input_schema: func.parameters.clone(),
+                        cache_control: None,
+                    })
                 })
                 .collect();
 
@@ -556,22 +551,24 @@ impl AnthropicProvider {
                 && let Some(cache_control) = cache_control_template.as_ref()
                 && let Some(last_tool) = built_tools.last_mut()
             {
-                last_tool["cache_control"] = cache_control.clone();
+                last_tool.cache_control = Some(cache_control.clone());
                 breakpoints_remaining -= 1;
             }
 
-            tools_json = Some(built_tools);
+            if !built_tools.is_empty() {
+                tools = Some(built_tools);
+            }
         }
 
         let mut system_value: Option<Value> = None;
         if let Some(system_prompt) = &request.system_prompt {
             if self.prompt_cache_settings.cache_system_messages && breakpoints_remaining > 0 {
                 if let Some(cache_control) = cache_control_template.as_ref() {
-                    let mut block = json!({
+                    let block = json!({
                         "type": "text",
-                        "text": system_prompt
+                        "text": system_prompt,
+                        "cache_control": cache_control
                     });
-                    block["cache_control"] = cache_control.clone();
                     system_value = Some(Value::Array(vec![block]));
                     breakpoints_remaining -= 1;
                 } else {
@@ -589,52 +586,84 @@ impl AnthropicProvider {
                 continue;
             }
 
+            let mut blocks = Vec::new();
             let content_text = msg.content.as_text();
 
             match msg.role {
                 MessageRole::Assistant => {
-                    let mut content_blocks = Vec::new();
+                    if let Some(details) = &msg.reasoning_details {
+                        for detail in details {
+                             if detail.get("type").and_then(|t| t.as_str()) == Some("thinking") {
+                                 let thinking = detail.get("thinking").and_then(|t| t.as_str()).unwrap_or("").to_string();
+                                 let signature = detail.get("signature").and_then(|t| t.as_str()).unwrap_or("").to_string();
+                                 if !thinking.is_empty() && !signature.is_empty() {
+                                      blocks.push(AnthropicContentBlock::Thinking {
+                                           thinking,
+                                           signature,
+                                           cache_control: None,
+                                      });
+                                 }
+                             }
+                        }
+                    }
+
                     if !msg.content.is_empty() {
-                        content_blocks.push(json!({"type": "text", "text": content_text.clone()}));
+                        blocks.push(AnthropicContentBlock::Text {
+                            text: content_text.to_string(),
+                            cache_control: None,
+                        });
                     }
                     if let Some(tool_calls) = &msg.tool_calls {
                         for call in tool_calls {
                             if let Some(ref func) = call.function {
                                 let args: Value = serde_json::from_str(&func.arguments)
                                     .unwrap_or_else(|_| json!({}));
-                                content_blocks.push(json!({
-                                    "type": "tool_use",
-                                    "id": call.id,
-                                    "name": func.name,
-                                    "input": args
-                                }));
+                                blocks.push(AnthropicContentBlock::ToolUse {
+                                    id: call.id.clone(),
+                                    name: func.name.clone(),
+                                    input: args,
+                                    cache_control: None,
+                                });
                             }
                         }
                     }
-                    if content_blocks.is_empty() {
-                        content_blocks.push(json!({"type": "text", "text": ""}));
+                    if blocks.is_empty() {
+                        blocks.push(AnthropicContentBlock::Text {
+                            text: String::new(),
+                            cache_control: None,
+                        });
                     }
-                    messages.push(json!({
-                        "role": "assistant",
-                        "content": content_blocks
-                    }));
+                    messages.push(AnthropicMessage {
+                        role: "assistant".to_string(),
+                        content: blocks,
+                    });
                 }
                 MessageRole::Tool => {
                     if let Some(tool_call_id) = &msg.tool_call_id {
-                        let blocks = Self::tool_result_blocks(&content_text);
-                        messages.push(json!({
-                            "role": "user",
-                            "content": [{
-                                "type": "tool_result",
-                                "tool_use_id": tool_call_id,
-                                "content": blocks
-                            }]
-                        }));
+                        let tool_content_blocks = Self::tool_result_blocks(&content_text);
+                        let content_val = if tool_content_blocks.len() == 1 && tool_content_blocks[0]["type"] == "text" {
+                            json!(tool_content_blocks[0]["text"])
+                        } else {
+                            json!(tool_content_blocks)
+                        };
+
+                        messages.push(AnthropicMessage {
+                            role: "user".to_string(),
+                            content: vec![AnthropicContentBlock::ToolResult {
+                                tool_use_id: tool_call_id.clone(),
+                                content: content_val,
+                                is_error: None,
+                                cache_control: None,
+                            }],
+                        });
                     } else if !msg.content.is_empty() {
-                        messages.push(json!({
-                            "role": "user",
-                            "content": [{"type": "text", "text": content_text.clone()}]
-                        }));
+                        messages.push(AnthropicMessage {
+                            role: "user".to_string(),
+                            content: vec![AnthropicContentBlock::Text {
+                                text: content_text.to_string(),
+                                cache_control: None,
+                            }],
+                        });
                     }
                 }
                 _ => {
@@ -642,24 +671,23 @@ impl AnthropicProvider {
                         continue;
                     }
 
-                    let mut block = json!({
-                        "type": "text",
-                        "text": content_text.clone()
-                    });
-
+                    let mut cache_ctrl = None;
                     if msg.role == MessageRole::User
                         && self.prompt_cache_settings.cache_user_messages
                         && breakpoints_remaining > 0
-                        && let Some(cache_control) = cache_control_template.as_ref()
+                        && let Some(template) = cache_control_template.as_ref()
                     {
-                        block["cache_control"] = cache_control.clone();
+                        cache_ctrl = Some(template.clone());
                         breakpoints_remaining -= 1;
                     }
 
-                    messages.push(json!({
-                        "role": msg.role.as_anthropic_str(),
-                        "content": [block]
-                    }));
+                    messages.push(AnthropicMessage {
+                        role: msg.role.as_anthropic_str().to_string(),
+                        content: vec![AnthropicContentBlock::Text {
+                            text: content_text.to_string(),
+                            cache_control: cache_ctrl,
+                        }],
+                    });
                 }
             }
         }
@@ -675,71 +703,60 @@ impl AnthropicProvider {
             });
         }
 
-        let mut anthropic_request = json!({
-            "model": request.model,
-            "messages": messages,
-            "stream": request.stream,
-            "max_tokens": request
-                .max_tokens
-                .unwrap_or(defaults::ANTHROPIC_DEFAULT_MAX_TOKENS),
-        });
-
-        if let Some(system) = system_value {
-            anthropic_request["system"] = system;
-        }
-
-        if let Some(temperature) = request.temperature {
-            anthropic_request["temperature"] = json!(temperature);
-        }
-
-        if let Some(tools) = tools_json {
-            anthropic_request["tools"] = Value::Array(tools);
-        }
-
-        if let Some(tool_choice) = &request.tool_choice {
-            anthropic_request["tool_choice"] = tool_choice.to_provider_format("anthropic");
-        }
-
+        let mut reasoning_val = None;
         if let Some(effort) = request.reasoning_effort
             && self.supports_reasoning_effort(&request.model)
         {
             if let Some(payload) = reasoning_parameters_for(Provider::Anthropic, effort) {
-                anthropic_request["reasoning"] = payload;
+                reasoning_val = Some(payload);
             } else {
-                anthropic_request["reasoning"] = json!({ "effort": effort.as_str() });
+                reasoning_val = Some(json!({ "effort": effort.as_str() }));
             }
         }
 
-        // Include structured output format when requested and supported by the model
-        // According to Anthropic documentation, structured outputs are available for Claude 4 and Claude 4.5 models
         if let Some(schema) = &request.output_format
             && self.supports_structured_output(&request.model)
         {
-            // If there are existing tools, we need to preserve them and add our structured output tool
-            let mut tools_array = if let Some(existing_tools) =
-                anthropic_request.get("tools").and_then(|t| t.as_array())
-            {
-                existing_tools.clone()
-            } else {
-                Vec::new()
+            let structured_tool = AnthropicTool {
+                name: "structured_output".to_string(),
+                description: "Forces Claude to respond in a specific JSON format according to the provided schema".to_string(),
+                input_schema: schema.clone(),
+                cache_control: None,
             };
 
-            // Add the structured output tool
-            tools_array.push(json!({
-                "name": "structured_output",
-                "description": "Forces Claude to respond in a specific JSON format according to the provided schema",
-                "input_schema": schema
-            }));
-            anthropic_request["tools"] = Value::Array(tools_array);
-
-            // Force the model to use the structured output tool
-            anthropic_request["tool_choice"] = json!({
-                "type": "tool",
-                "name": "structured_output"
-            });
+            if let Some(tools_vec) = &mut tools {
+                tools_vec.push(structured_tool);
+            } else {
+                tools = Some(vec![structured_tool]);
+            }
         }
 
-        Ok(anthropic_request)
+        let mut final_tool_choice = request.tool_choice.as_ref().map(|tc| tc.to_provider_format("anthropic"));
+        if request.output_format.is_some() && self.supports_structured_output(&request.model) {
+            final_tool_choice = Some(json!({
+                "type": "tool",
+                "name": "structured_output"
+            }));
+        }
+
+        let anthropic_request = AnthropicRequest {
+            model: request.model.clone(),
+            messages,
+            max_tokens: request.max_tokens.unwrap_or(defaults::ANTHROPIC_DEFAULT_MAX_TOKENS),
+            system: system_value,
+            temperature: if self.supports_reasoning_effort(&request.model) { None } else { request.temperature },
+            tools,
+            tool_choice: final_tool_choice,
+            reasoning: reasoning_val,
+            stream: request.stream,
+        };
+
+        serde_json::to_value(anthropic_request).map_err(|e| {
+            LLMError::Provider {
+                message: format!("Serialization error: {}", e),
+                metadata: None,
+            }
+        })
     }
 
     fn parse_anthropic_response(&self, response_json: Value) -> Result<LLMResponse, LLMError> {
@@ -760,6 +777,7 @@ impl AnthropicProvider {
         let mut text_parts = Vec::new();
         let mut reasoning_parts = Vec::new();
         let mut tool_calls = Vec::new();
+        let mut reasoning_details_vec = Vec::new();
 
         for block in content {
             match block.get("type").and_then(|t| t.as_str()) {
@@ -769,6 +787,9 @@ impl AnthropicProvider {
                     }
                 }
                 Some("thinking") => {
+                    // Store the raw block (including signature) for hydration
+                    reasoning_details_vec.push(block.clone());
+
                     if let Some(thinking) = block.get("thinking").and_then(|t| t.as_str()) {
                         reasoning_parts.push(thinking.to_string());
                     } else if let Some(text) = block.get("text").and_then(|t| t.as_str()) {
@@ -882,7 +903,11 @@ impl AnthropicProvider {
             usage,
             finish_reason,
             reasoning,
-            reasoning_details: None,
+            reasoning_details: if reasoning_details_vec.is_empty() {
+                None
+            } else {
+                Some(reasoning_details_vec)
+            },
         })
     }
 }

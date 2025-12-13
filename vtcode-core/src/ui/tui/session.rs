@@ -1155,6 +1155,42 @@ mod tests {
     }
 
     #[test]
+    fn super_e_moves_cursor_to_end() {
+        let text = "hello world";
+        let mut session = session_with_input(text, 0);
+
+        let event = KeyEvent::new(KeyCode::Char('e'), KeyModifiers::SUPER);
+        let result = session.process_key(event);
+
+        // Should move to end and return None (no event)
+        assert!(result.is_none());
+        assert_eq!(session.cursor(), text.len());
+    }
+
+    #[test]
+    fn control_e_launches_editor() {
+        let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
+
+        let event = KeyEvent::new(KeyCode::Char('e'), KeyModifiers::CONTROL);
+        let result = session.process_key(event);
+
+        // Should launch editor
+        assert!(matches!(result, Some(InlineEvent::LaunchEditor)));
+    }
+
+    #[test]
+    fn control_super_e_does_not_launch_editor() {
+        let text = "hello world";
+        let mut session = session_with_input(text, 0);
+
+        let event = KeyEvent::new(KeyCode::Char('e'), KeyModifiers::CONTROL | KeyModifiers::SUPER);
+        let result = session.process_key(event);
+
+        // Should not launch editor when both Control and Super (Cmd) are pressed
+        assert!(!matches!(result, Some(InlineEvent::LaunchEditor)));
+    }
+
+    #[test]
     fn streaming_new_lines_preserves_scrolled_view() {
         let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS, true);
 

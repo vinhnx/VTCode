@@ -61,6 +61,9 @@ pub enum SlashCommandOutcome {
         file: Option<String>,
     },
     LaunchGit,
+    ManageSkills {
+        action: crate::agent::runloop::SkillCommandAction,
+    },
     SubmitPrompt {
         prompt: String,
     },
@@ -529,6 +532,30 @@ pub async fn handle_slash_command(
         }
         "git" => Ok(SlashCommandOutcome::LaunchGit),
         "exit" => Ok(SlashCommandOutcome::Exit),
+        "skills" => {
+            // Reconstruct full command with / prefix for parser
+            let full_command = format!("/{}", input);
+            match crate::agent::runloop::parse_skill_command(&full_command) {
+                Ok(Some(action)) => {
+                    // Return skill command for processing in chat context
+                    Ok(SlashCommandOutcome::ManageSkills { action })
+                }
+                Ok(None) => {
+                    renderer.line(
+                        MessageStyle::Error,
+                        "Skills command parse error",
+                    )?;
+                    Ok(SlashCommandOutcome::Handled)
+                }
+                Err(e) => {
+                    renderer.line(
+                        MessageStyle::Error,
+                        &format!("Skills command error: {}", e),
+                    )?;
+                    Ok(SlashCommandOutcome::Handled)
+                }
+            }
+        }
         "help" => {
             let specific_cmd = if args.trim().is_empty() {
                 None
