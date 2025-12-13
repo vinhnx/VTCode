@@ -168,12 +168,13 @@ pub(crate) async fn execute_llm_request(
 
         if ctx.ctrl_c_state.is_cancel_requested() || ctx.ctrl_c_state.is_exit_requested() {
             thinking_spinner.finish();
-            Err(uni::LLMError::Provider(
-                vtcode_core::llm::error_display::format_llm_error(
+            Err(uni::LLMError::Provider {
+                message: vtcode_core::llm::error_display::format_llm_error(
                     &provider_name,
                     "Interrupted by user",
                 ),
-            ))
+                metadata: None,
+            })
         } else {
             let generate_future = provider_client.generate(request);
             tokio::pin!(generate_future);
@@ -186,10 +187,13 @@ pub(crate) async fn execute_llm_request(
                 }
                 _ = &mut cancel_notifier => {
                     thinking_spinner.finish();
-                    Err(uni::LLMError::Provider(vtcode_core::llm::error_display::format_llm_error(
-                        &provider_name,
-                        "Interrupted by user",
-                    )))
+                    Err(uni::LLMError::Provider {
+                        message: vtcode_core::llm::error_display::format_llm_error(
+                            &provider_name,
+                            "Interrupted by user",
+                        ),
+                        metadata: None,
+                    })
                 }
             };
             outcome
