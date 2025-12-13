@@ -11,22 +11,89 @@ Generate professional Excel spreadsheets with structured data, formulas, charts,
 
 ## Instructions
 
-When asked to generate a spreadsheet:
+**⚠️ IMPORTANT: vtcode Compatibility Note**
 
-1. **Understand Requirements**: Parse the request for:
-   - Data content (financial, operational, analytical)
-   - Structure (sheets, columns, headers)
-   - Formatting needs (colors, number formats, alignment)
-   - Charts or visualizations required
-   - Formulas or calculations
+This skill requires Anthropic's container skills feature (xlsx skill) which is only available through:
+- Anthropic's official CLI (`anthropic` command)
+- Claude Desktop app with skills enabled
+- Direct Anthropic API with `container.skills` parameter
 
-2. **Plan the Spreadsheet**:
-   - Sketch sheet layout and column structure
-   - Identify calculations and dependencies
-   - Determine chart types and data ranges
-   - Plan summary/dashboard sheets if needed
+**vtcode does not currently support Anthropic container skills.** Instead, use one of these approaches:
 
-3. **Create with Code Execution**:
+### Option 1: Use Anthropic CLI (Recommended)
+```bash
+# Install Anthropic CLI: pip install anthropic
+# Set API key: export ANTHROPIC_API_KEY=your_key
+anthropic messages create \
+  --model claude-3-5-sonnet-20241022 \
+  --max-tokens 4096 \
+  --container-skills anthropic:xlsx:latest \
+  --message "Create an Excel file with [your specification]"
+```
+
+### Option 2: Python Script with openpyxl
+Use vtcode's `execute_code` tool with Python and openpyxl library:
+
+```python
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.chart import BarChart, Reference
+
+# Create workbook
+wb = openpyxl.Workbook()
+ws = wb.active
+ws.title = "Financial Dashboard"
+
+# Add headers
+headers = ["Month", "Revenue", "Expenses", "Profit"]
+ws.append(headers)
+
+# Style headers
+for cell in ws[1]:
+    cell.font = Font(bold=True)
+    cell.fill = PatternFill(start_color="366092", fill_type="solid")
+
+# Add sample data
+data = [
+    ["Q1", 150000, 90000, 60000],
+    ["Q2", 175000, 95000, 80000],
+    ["Q3", 200000, 100000, 100000],
+    ["Q4", 225000, 110000, 115000]
+]
+for row in data:
+    ws.append(row)
+
+# Save file
+wb.save("financial_dashboard.xlsx")
+print("Spreadsheet created: financial_dashboard.xlsx")
+```
+
+### Option 3: Use CSV + Manual Import
+Generate CSV data that users can import into Excel:
+
+```python
+import csv
+
+data = [
+    ["Month", "Revenue", "Expenses", "Profit"],
+    ["Q1", 150000, 90000, 60000],
+    ["Q2", 175000, 95000, 80000],
+]
+
+with open("data.csv", "w", newline="") as f:
+    writer = csv.writer(f)
+    writer.writerows(data)
+
+print("CSV created: data.csv (import into Excel manually)")
+```
+
+## Original Anthropic API Instructions (For Reference)
+
+When using Anthropic's official tools with container skills:
+
+1. **Understand Requirements**: Parse data content, structure, formatting, charts, formulas
+2. **Plan the Spreadsheet**: Sketch layout, identify calculations, determine chart types
+3. **Create with Anthropic API**:
    ```python
    import anthropic
    
@@ -46,10 +113,7 @@ When asked to generate a spreadsheet:
        betas=["code-execution-2025-08-25", "skills-2025-10-02"]
    )
    ```
-
-4. **Extract File Reference**:
-   - Locate file_id in response content blocks
-   - Return file reference for download/integration
+4. **Extract File Reference**: Locate file_id in response content blocks
 
 ## Examples
 

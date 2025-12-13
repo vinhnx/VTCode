@@ -72,29 +72,33 @@ vtcode
 VTCode now has TWO skill systems (both supported):
 
 ### 1. Claude Agent Skills (NEW - Fixed in this PR)
-- **Format**: `SKILL.md` with YAML frontmatter + markdown instructions
-- **Location**: `.claude/skills/*/SKILL.md`
-- **Purpose**: Declarative workflow instructions for AI agents
-- **Loader**: `SkillLoader` (`vtcode-core/src/skills/loader.rs`)
-- **Tools**: `search_tools`, `skill` (load by name)
+
+-   **Format**: `SKILL.md` with YAML frontmatter + markdown instructions
+-   **Location**: `.claude/skills/*/SKILL.md`
+-   **Purpose**: Declarative workflow instructions for AI agents
+-   **Loader**: `SkillLoader` (`vtcode-core/src/skills/loader.rs`)
+-   **Tools**: `search_tools`, `skill` (load by name)
 
 ### 2. Executable Code Skills (OLD - Still works)
-- **Format**: `skill.json` + `skill.py`/`skill.js`
-- **Location**: `.vtcode/skills/*/skill.*`
-- **Purpose**: Reusable Python/JS functions with metadata
-- **Manager**: `SkillManager` (`vtcode-core/src/exec/skill_manager.rs`)
-- **Tools**: `save_skill`, `load_skill`, `list_skills`, `search_skills` (deprecated)
+
+-   **Format**: `skill.json` + `skill.py`/`skill.js`
+-   **Location**: `.vtcode/skills/*/skill.*`
+-   **Purpose**: Reusable Python/JS functions with metadata
+-   **Manager**: `SkillManager` (`vtcode-core/src/exec/skill_manager.rs`)
+-   **Tools**: `save_skill`, `load_skill`, `list_skills`, `search_skills` (deprecated)
 
 The fix ensures `search_tools` correctly searches **both** MCP tools and Claude Agent Skills.
 
 ## Testing
 
 Run the verification script:
+
 ```bash
 ./test_skill_discovery.sh
 ```
 
 Expected output:
+
 ```
 ✓ Found .claude/skills/spreadsheet-generator/
 ✓ SKILL.md exists
@@ -107,20 +111,20 @@ Expected output:
 
 ## Related Documentation
 
-- `SKILL_DISCOVERY_FIX.md` - Detailed explanation of the fix
-- `AGENTS.md` (lines 388-401) - Skills discovery guidelines
-- `vtcode-core/src/prompts/system.rs` (lines 70-72) - System prompt guidance
-- `docs/README_AGENT_SKILLS.md` - User-facing skill documentation
+-   `SKILL_DISCOVERY_FIX.md` - Detailed explanation of the fix
+-   `AGENTS.md` (lines 388-401) - Skills discovery guidelines
+-   `vtcode-core/src/prompts/system.rs` (lines 70-72) - System prompt guidance
+-   `docs/README_AGENT_SKILLS.md` - User-facing skill documentation
 
 ## Impact
 
-✓ Agents can now discover and use Claude Agent Skills  
-✓ `search_tools` returns both MCP tools and skills  
-✓ No breaking changes to existing code  
-✓ Both skill systems continue to work independently  
+✓ Agents can now discover and use Claude Agent Skills
+✓ `search_tools` returns both MCP tools and skills
+✓ No breaking changes to existing code
+✓ Both skill systems continue to work independently
 
 ---
 
-**Fixed by**: GitHub Copilot  
-**Date**: December 13, 2025  
+**Fixed by**: GitHub Copilot
+**Date**: December 13, 2025
 **Verified**: ✓ Compilation, file checks, and skill discovery working

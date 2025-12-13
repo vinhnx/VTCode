@@ -768,6 +768,7 @@ pub mod tools {
     pub const UPDATE_PLAN: &str = "update_plan";
     pub const WEB_FETCH: &str = "web_fetch";
     pub const SEARCH_TOOLS: &str = "search_tools";
+    pub const SKILL: &str = "skill";
     pub const EXECUTE_CODE: &str = "execute_code";
 
     pub const DEBUG_AGENT: &str = "debug_agent";
