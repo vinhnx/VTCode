@@ -108,13 +108,16 @@ impl ReadFileHandler {
         let path = PathBuf::from(&file_path);
         anyhow::ensure!(path.is_absolute(), "file_path must be an absolute path");
 
-        let collected = match mode {
+        let mut collected = match mode {
             ReadMode::Slice => slice::read(&path, offset, limit).await?,
             ReadMode::Indentation => {
                 let indentation = indentation.unwrap_or_default();
                 indentation::read_block(&path, offset, limit, indentation).await?
             }
         };
+
+        // Condense large outputs (>100 lines) to head + tail
+        condense_collected_lines(&mut collected);
 
         Ok(collected.join("\n"))
     }
@@ -254,7 +257,7 @@ mod slice {
             }
 
             let formatted = format_line(&buffer);
-            collected.push(format!("L{seen}: {formatted}"));
+            collected.push(format!("{seen}: {formatted}"));
         }
 
         if seen < offset {
@@ -305,7 +308,7 @@ mod indentation {
 
         if final_limit == 1 {
             return Ok(vec![format!(
-                "L{}: {}",
+                "{}: {}",
                 collected[anchor_index].number, collected[anchor_index].display
             )]);
         }
@@ -384,7 +387,7 @@ mod indentation {
 
         Ok(out
             .into_iter()
-            .map(|record| format!("L{}: {}", record.number, record.display))
+            .map(|record| format!("{}: {}", record.number, record.display))
             .collect())
     }
 
@@ -480,6 +483,38 @@ fn trim_empty_lines(out: &mut VecDeque<&LineRecord>) {
     while matches!(out.back(), Some(line) if line.raw.trim().is_empty()) {
         out.pop_back();
     }
+}
+
+fn condense_collected_lines(lines: &mut Vec<String>) {
+    const CONDENSED_THRESHOLD: usize = 100;
+    const HEAD_LINES: usize = 30;
+    const TAIL_LINES: usize = 30;
+
+    // If under threshold, return as-is
+    if lines.len() <= CONDENSED_THRESHOLD {
+        return;
+    }
+
+    // Build condensed output: head + omission indicator + tail
+    let head_count = HEAD_LINES.min(lines.len());
+    let tail_count = TAIL_LINES.min(lines.len() - head_count);
+    let omitted_count = lines.len() - head_count - tail_count;
+
+    // Take head lines
+    let mut condensed: Vec<String> = lines[..head_count].to_vec();
+
+    // Add omission indicator
+    condensed.push(format!(
+        "… [+{} lines omitted; use read_file with offset/limit for full content]",
+        omitted_count
+    ));
+
+    // Add tail lines
+    let tail_start = lines.len() - tail_count;
+    condensed.extend_from_slice(&lines[tail_start..]);
+
+    // Replace original with condensed
+    *lines = condensed;
 }
 
 mod defaults {

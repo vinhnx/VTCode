@@ -2,7 +2,6 @@
 
 use crate::config::loader::SyntaxHighlightingConfig;
 use crate::ui::theme::{self, ThemeStyles};
-use anstyle::{Color, RgbColor};
 use anstyle::Style;
 use anstyle_syntect::to_anstyle;
 use once_cell::sync::Lazy;
@@ -1011,23 +1010,12 @@ fn highlight_code_block(
     if let Some(config) = highlight_config.filter(|cfg| cfg.enabled)
         && let Some(highlighted) = try_highlight(code_to_display, language, config)
     {
-        // Get background color from config theme for full-width fill
-        let bg_color = try_get_theme_bg_color(&config.theme);
-        
         for segments in highlighted {
             let mut line = MarkdownLine::default();
             line.prepend_segments(&augmented_prefix);
             for (style, text) in segments {
                 line.push_segment(style, &text);
             }
-            
-            // Fill the rest of the line with background color for full-width effect
-            if let Some(bg) = bg_color {
-                let fill_style = base_style.bg_color(Some(bg));
-                // Add a space with the background to extend the highlight to the right edge
-                line.push_segment(fill_style, " ");
-            }
-            
             lines.push(line);
         }
         return lines;
@@ -1063,13 +1051,6 @@ fn code_block_style(theme_styles: &ThemeStyles, base_style: Style) -> Style {
         style = style.fg_color(Some(color));
     }
     style
-}
-
-fn try_get_theme_bg_color(theme_name: &str) -> Option<Color> {
-    let defaults = ThemeSet::load_defaults();
-    defaults.themes.get(theme_name)
-        .and_then(|theme| theme.settings.background)
-        .map(|c| Color::Rgb(RgbColor(c.r, c.g, c.b)))
 }
 
 /// Normalize indentation in code using tree-sitter parsing
@@ -1163,7 +1144,10 @@ fn try_highlight(
             if part.is_empty() {
                 continue;
             }
-            segments.push((to_anstyle(style), part.to_owned()));
+            let mut anstyle = to_anstyle(style);
+            // Strip background color to avoid filled backgrounds in terminal
+            anstyle = anstyle.bg_color(None);
+            segments.push((anstyle, part.to_owned()));
         }
         rendered.push(segments);
     }
