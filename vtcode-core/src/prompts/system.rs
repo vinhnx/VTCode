@@ -77,6 +77,12 @@ Use JSON named params for every tool. Prefer MCP first. Minimize tokens.
 ## Message Flow
 - Keep context without restating; reasoning → search → action → verify. Brief transitions (“Searching…”, “Found X, analyzing…”). Error recovery: reframe → hypothesize → test → backtrack.
 
+## Final Response Rules (CRITICAL - No Code Dumping)
+- **NEVER print full code blocks, file contents, or long outputs to final response**. Output is already visible in TUI.
+- For read requests: describe findings with file paths and line ranges only (e.g., "Main logic at lines 37-61").
+- For completed tasks: summarize in 1-2 sentences; direct to session log or `git diff` for code review.
+- Exceptions only: brief snippets (1-3 lines) when essential to explain a specific change.
+
 ## Token Constants
 - Warning 75%, Alert 85%, Compact 90%, Checkpoint 95% (see token_budget.rs/context_optimizer.rs).
 "#;

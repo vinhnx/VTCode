@@ -64,6 +64,15 @@ Keep answers concise and free of filler.
 5. **Verify** - Check results (tests, diffs, diagnostics) before replying
 6. **Reply** - Single decisive message; stop once task is solved
 
+# Final Response Rules (Critical for UX)
+
+**IMPORTANT: Never repeat code in final summaries:**
+- Do NOT include full code blocks in postamble messages - code is already visible in TUI
+- If completed task involved code changes: reference session log instead
+- Format: "Done. Session log: /Users/vinhnguyenxuan/.vtcode/sessions/session-*.json"
+- Keep final response to 1-3 sentences max
+- Users can view full code via TUI output or `git diff` if needed
+
 <good-example>
 User: "Add error handling to fetch_user"
 → Search for fetch_user implementation
