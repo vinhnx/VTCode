@@ -649,6 +649,25 @@ pub enum Commands {
         #[command(subcommand)]
         command: TokenCommands,
     },
+
+    /// **Manage Anthropic Agent Skills**
+    ///
+    /// Skills extend Claude's functionality with specialized capabilities.
+    /// Discover, load, and manage skills from the local filesystem.
+    ///
+    /// Features:
+    ///   • Discover skills from ~/.vtcode/skills, .claude/skills, ./skills/
+    ///   • Load skills for use in agent sessions
+    ///   • Create skill templates for custom skills
+    ///   • Validate SKILL.md manifest files
+    ///
+    /// Examples:
+    ///   vtcode skills list           # List available skills
+    ///   vtcode skills info pdf       # Show skill details
+    ///   vtcode skills load pdf       # Load skill for session
+    ///   vtcode skills create my-skill # Create template
+    #[command(subcommand)]
+    Skills(SkillsSubcommand),
 }
 
 /// Token-related subcommands
@@ -723,6 +742,63 @@ pub enum ModelCommands {
         /// Model name to get information about
         model: String,
     },
+}
+
+/// Skills subcommands
+#[derive(Debug, Subcommand)]
+pub enum SkillsSubcommand {
+    /// List available skills
+    #[command(name = "list")]
+    List {
+        /// Show all skills including system skills
+        #[arg(long)]
+        all: bool,
+    },
+
+    /// Load a skill for use in agent session
+    #[command(name = "load")]
+    Load {
+        /// Skill name to load
+        name: String,
+        /// Optional path to skill directory
+        #[arg(long)]
+        path: Option<PathBuf>,
+    },
+
+    /// Unload a skill from session
+    #[command(name = "unload")]
+    Unload {
+        /// Skill name to unload
+        name: String,
+    },
+
+    /// Show skill details and instructions
+    #[command(name = "info")]
+    Info {
+        /// Skill name to get information about
+        name: String,
+    },
+
+    /// Create a new skill from template
+    #[command(name = "create")]
+    Create {
+        /// Path for new skill directory
+        path: PathBuf,
+        /// Optional template to use
+        #[arg(long)]
+        template: Option<String>,
+    },
+
+    /// Validate SKILL.md manifest
+    #[command(name = "validate")]
+    Validate {
+        /// Path to skill directory or SKILL.md file
+        path: PathBuf,
+    },
+
+    /// Show skill configuration and search paths
+    #[command(name = "config")]
+    Config,
 }
 
 /// Configuration file structure with latest features

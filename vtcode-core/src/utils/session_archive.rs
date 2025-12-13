@@ -22,6 +22,9 @@ pub struct SessionArchiveMetadata {
     pub provider: String,
     pub theme: String,
     pub reasoning_effort: String,
+    /// Names of skills loaded in this session
+    #[serde(default)]
+    pub loaded_skills: Vec<String>,
 }
 
 impl SessionArchiveMetadata {
@@ -40,7 +43,14 @@ impl SessionArchiveMetadata {
             provider: provider.into(),
             theme: theme.into(),
             reasoning_effort: reasoning_effort.into(),
+            loaded_skills: Vec::new(),
         }
+    }
+
+    /// Set loaded skills for this session
+    pub fn with_loaded_skills(mut self, skills: Vec<String>) -> Self {
+        self.loaded_skills = skills;
+        self
     }
 }
 
@@ -145,6 +155,9 @@ pub struct SessionProgress {
     pub token_usage: Option<TokenUsageStats>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_context_tokens: Option<usize>,
+    /// Names of skills loaded at checkpoint time
+    #[serde(default)]
+    pub loaded_skills: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -277,6 +290,7 @@ impl SessionArchive {
         turn_number: usize,
         token_usage: Option<TokenUsageStats>,
         max_context_tokens: Option<usize>,
+        loaded_skills: Option<Vec<String>>,
     ) -> Result<PathBuf> {
         let tool_summaries = distinct_tools.clone();
         let snapshot = SessionSnapshot {
@@ -293,6 +307,7 @@ impl SessionArchive {
                 tool_summaries,
                 token_usage,
                 max_context_tokens,
+                loaded_skills: loaded_skills.unwrap_or_default(),
             }),
         };
 
@@ -310,6 +325,11 @@ impl SessionArchive {
 
         Ok(self.path.clone())
     }
+    /// Update loaded skills in the archive metadata
+    pub fn set_loaded_skills(&mut self, skills: Vec<String>) {
+        self.metadata.loaded_skills = skills;
+    }
+
     pub fn path(&self) -> &Path {
         &self.path
     }
@@ -626,6 +646,7 @@ mod tests {
             2,
             Some(usage.clone()),
             Some(128),
+            None, // loaded_skills
         )?;
 
         let stored = fs::read_to_string(&path)

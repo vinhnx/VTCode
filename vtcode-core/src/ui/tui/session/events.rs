@@ -112,7 +112,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             session.mark_dirty();
             Some(InlineEvent::Exit)
         }
-        KeyCode::Char('e') | KeyCode::Char('E') if has_control => {
+        KeyCode::Char('e') | KeyCode::Char('E') if has_control && !has_command => {
             session.mark_dirty();
             Some(InlineEvent::LaunchEditor)
         }

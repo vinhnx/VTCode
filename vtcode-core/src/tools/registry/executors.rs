@@ -1029,12 +1029,8 @@ impl ToolRegistry {
 
     pub(super) fn search_tools_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
         let mcp_client = self.mcp_client.clone();
+        let workspace_root = self.workspace_root_owned();
         Box::pin(async move {
-            let mcp_client = match mcp_client {
-                Some(client) => client,
-                None => return Err(anyhow!("MCP client not configured")),
-            };
-
             #[derive(Debug, Deserialize)]
             struct SearchArgs {
                 keyword: String,
@@ -1059,24 +1055,63 @@ impl ToolRegistry {
                 }
             };
 
-            let discovery = ToolDiscovery::new(mcp_client);
-            let results = discovery
-                .search_tools(&parsed.keyword, detail_level)
-                .await
-                .context("failed to search tools")?;
+            // Search MCP tools
+            let mut all_results = vec![];
 
-            if results.is_empty() {
+            if let Some(mcp_client) = mcp_client {
+                let discovery = ToolDiscovery::new(mcp_client);
+                if let Ok(results) = discovery.search_tools(&parsed.keyword, detail_level).await {
+                    all_results.extend(results);
+                }
+            }
+
+            // Also search local skills (using SkillLoader for .claude/skills/ with SKILL.md)
+            use crate::skills::{SkillLoader, SkillContext};
+            let loader = SkillLoader::new(workspace_root);
+            if let Ok(skill_contexts) = loader.discover_skills() {
+                let query_lower = parsed.keyword.to_lowercase();
+                let filtered: Vec<_> = skill_contexts
+                    .into_iter()
+                    .filter_map(|ctx| {
+                        if let SkillContext::MetadataOnly(manifest) = ctx {
+                            let name_matches = manifest.name.to_lowercase().contains(&query_lower);
+                            let desc_matches = manifest.description.to_lowercase().contains(&query_lower);
+                            if name_matches || desc_matches {
+                                Some(manifest)
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+
+                // Convert skill results to tool format for consistent response
+                for manifest in filtered {
+                    all_results.push(crate::mcp::ToolDiscoveryResult {
+                        name: manifest.name.clone(),
+                        provider: "skill".to_string(),
+                        description: manifest.description.clone(),
+                        relevance_score: 1.0,
+                        input_schema: None,
+                    });
+                }
+            }
+
+            if all_results.is_empty() {
                 return Ok(json!({
                     "keyword": parsed.keyword,
                     "matched": 0,
-                    "results": []
+                    "results": [],
+                    "note": "Use 'skill' tool to load available skills directly by name"
                 }));
             }
 
-            let tools_json: Vec<Value> = results.iter().map(|r| r.to_json(detail_level)).collect();
+            let tools_json: Vec<Value> = all_results.iter().map(|r| r.to_json(detail_level)).collect();
 
             // Implement AGENTS.md pattern for large result sets
-            let matched = results.len();
+            let matched = all_results.len();
             let overflow_indication = if matched > 50 {
                 format!("[+{} more tools]", matched - 5)
             } else {

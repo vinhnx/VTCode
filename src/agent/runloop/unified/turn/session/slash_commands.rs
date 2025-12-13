@@ -85,6 +85,7 @@ pub struct SlashCommandContext<'a> {
     pub full_auto: bool,
     pub approval_recorder: Option<&'a vtcode_core::tools::ApprovalRecorder>,
     pub tool_permission_cache: &'a Arc<RwLock<vtcode_core::acp::ToolPermissionCache>>,
+    pub loaded_skills: &'a Arc<RwLock<std::collections::HashMap<String, vtcode_core::skills::types::Skill>>>,
 }
 
 pub async fn handle_outcome(
@@ -867,6 +868,117 @@ pub async fn handle_outcome(
 
             ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
             Ok(SlashCommandControl::Continue)
+        }
+
+        SlashCommandOutcome::ManageSkills { action } => {
+            use crate::agent::runloop::handle_skill_command;
+            use vtcode_core::skills::executor::SkillToolAdapter;
+            use vtcode_core::tools::ToolRegistration;
+            use vtcode_core::config::types::CapabilityLevel;
+            use std::sync::Arc;
+
+            let outcome = handle_skill_command(action, ctx.config.workspace.clone()).await?;
+            
+            use crate::agent::runloop::SkillCommandOutcome;
+            match outcome {
+                SkillCommandOutcome::Handled { message } => {
+                    ctx.renderer.line(MessageStyle::Info, &message)?;
+                    Ok(SlashCommandControl::Continue)
+                }
+                SkillCommandOutcome::LoadSkill { skill } => {
+                    let skill_name = skill.name().to_string();
+                    
+                    // Create adapter and register as tool in tool registry
+                    let adapter = SkillToolAdapter::new(skill.clone());
+                    let adapter_arc = Arc::new(adapter);
+                    
+                    // SAFETY: skill_name is converted to static for Tool trait.
+                    // The ToolAdapter's name() method already returns 'static.
+                    let name_static: &'static str = Box::leak(Box::new(skill_name.clone()));
+                    
+                    let registration = ToolRegistration::from_tool(
+                        name_static,
+                        CapabilityLevel::Bash,
+                        adapter_arc,
+                    );
+                    
+                    if let Err(e) = ctx.tool_registry.register_tool(registration) {
+                        ctx.renderer.line(
+                            MessageStyle::Error,
+                            &format!("Failed to register skill as tool: {}", e),
+                        )?;
+                        return Ok(SlashCommandControl::Continue);
+                    }
+                    
+                    // Store in session loaded skills registry
+                    ctx.loaded_skills.write().await.insert(skill_name.clone(), skill.clone());
+                    
+                    ctx.renderer.line(
+                        MessageStyle::Info,
+                        &format!("Loaded skill: {} - {}", skill.name(), skill.description()),
+                    )?;
+                    Ok(SlashCommandControl::Continue)
+                }
+                SkillCommandOutcome::UnloadSkill { name } => {
+                    // Remove from loaded skills registry
+                    ctx.loaded_skills.write().await.remove(&name);
+                    
+                    // Unregister from tool registry (if support exists)
+                    // Note: Current tool registry may not support dynamic unregistration
+                    // This is a TODO for future enhancement
+                    
+                    ctx.renderer.line(
+                        MessageStyle::Info,
+                        &format!("Unloaded skill: {}", name),
+                    )?;
+                    Ok(SlashCommandControl::Continue)
+                }
+                SkillCommandOutcome::UseSkill { skill, input } => {
+                    // Phase 5: Execute skill with LLM sub-call support
+                    use vtcode_core::skills::execute_skill_with_sub_llm;
+                    
+                    let skill_name = skill.name().to_string();
+                    let available_tools = ctx.tools.read().await.clone();
+                    let model = ctx.config.model.clone();
+                    
+                    // Execute skill with LLM sub-calls
+                    match execute_skill_with_sub_llm(
+                        &skill,
+                        input,
+                        ctx.provider_client.as_ref(),
+                        ctx.tool_registry,
+                        available_tools,
+                        model,
+                    )
+                    .await
+                    {
+                        Ok(result) => {
+                            // Display result to user
+                            ctx.renderer.line(MessageStyle::Output, &result)?;
+                            
+                            // Add to conversation history for context
+                            ctx.conversation_history.push(uni::Message::user(
+                                format!("/skills use {} [executed]", skill_name)
+                            ));
+                            
+                            ctx.conversation_history.push(uni::Message::assistant(result));
+                            
+                            Ok(SlashCommandControl::Continue)
+                        }
+                        Err(e) => {
+                            ctx.renderer.line(
+                                MessageStyle::Error,
+                                &format!("Failed to execute skill: {}", e),
+                            )?;
+                            Ok(SlashCommandControl::Continue)
+                        }
+                    }
+                }
+                SkillCommandOutcome::Error { message } => {
+                    ctx.renderer.line(MessageStyle::Error, &message)?;
+                    Ok(SlashCommandControl::Continue)
+                }
+            }
         }
 
         SlashCommandOutcome::Exit => {

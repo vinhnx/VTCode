@@ -203,6 +203,35 @@ async fn main() -> Result<()> {
                 .await
                 .map_err(|e| anyhow::anyhow!("{:?}", e))?;
         }
+        Some(Commands::Skills(skills_cmd)) => {
+            let skills_options = cli::SkillsCommandOptions {
+                workspace: startup.workspace.clone(),
+            };
+            use vtcode_core::cli::args::SkillsSubcommand;
+            match skills_cmd {
+                SkillsSubcommand::List { .. } => {
+                    cli::handle_skills_list(&skills_options).await?;
+                }
+                SkillsSubcommand::Load { name, path } => {
+                    cli::handle_skills_load(&skills_options, name, path.clone()).await?;
+                }
+                SkillsSubcommand::Info { name } => {
+                    cli::handle_skills_info(&skills_options, name).await?;
+                }
+                SkillsSubcommand::Create { path, .. } => {
+                    cli::handle_skills_create(path).await?;
+                }
+                SkillsSubcommand::Validate { path } => {
+                    cli::handle_skills_validate(path).await?;
+                }
+                SkillsSubcommand::Config => {
+                    cli::handle_skills_config(&skills_options).await?;
+                }
+                SkillsSubcommand::Unload { .. } => {
+                    println!("Skill unload not yet implemented");
+                }
+            }
+        }
         _ => {
             // Default to chat
             cli::handle_chat_command(core_cfg, skip_confirmations, full_auto_requested).await?;

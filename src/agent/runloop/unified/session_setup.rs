@@ -3,6 +3,7 @@ use crate::agent::runloop::telemetry::build_trajectory_logger;
 use crate::agent::runloop::welcome::{SessionBootstrap, prepare_session_bootstrap};
 use anyhow::{Context, Result};
 use chrono::Local;
+use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::{Notify, RwLock};
@@ -69,6 +70,9 @@ pub(crate) struct SessionState {
     pub search_metrics: Arc<RwLock<SearchMetrics>>,
 
     pub custom_prompts: CustomPromptRegistry,
+    
+    /// Skills loaded in current session (name -> Skill mapping)
+    pub loaded_skills: Arc<RwLock<HashMap<String, vtcode_core::skills::types::Skill>>>,
 }
 
 #[allow(dead_code)]
@@ -383,6 +387,7 @@ pub(crate) async fn initialize_session(
         tool_permission_cache,
         search_metrics,
         custom_prompts,
+        loaded_skills: Arc::new(RwLock::new(HashMap::new())),
     })
 }
 

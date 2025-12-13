@@ -890,7 +890,44 @@ pub(crate) async fn run_single_agent_loop_unified(
             tool_permission_cache,
             search_metrics: _,
             custom_prompts,
+            loaded_skills,
         } = initialize_session(&config, vt_cfg.as_ref(), full_auto, resume_ref).await?;
+
+        // Restore skills from previous session if resuming
+        if let Some(resume_session) = resume_ref {
+            let skill_names_to_restore = &resume_session.snapshot.metadata.loaded_skills;
+            if !skill_names_to_restore.is_empty() {
+                use vtcode_core::skills::loader::SkillLoader;
+                use vtcode_core::skills::executor::SkillToolAdapter;
+                use vtcode_core::tools::ToolRegistration;
+                use vtcode_core::config::types::CapabilityLevel;
+                use std::sync::Arc;
+
+                let skill_loader = SkillLoader::new(config.workspace.clone());
+                for skill_name in skill_names_to_restore {
+                    match skill_loader.load_skill(skill_name) {
+                        Ok(skill) => {
+                            let adapter = SkillToolAdapter::new(skill.clone());
+                            let adapter_arc = Arc::new(adapter);
+                            let name_static: &'static str = Box::leak(Box::new(skill_name.clone()));
+                            let registration = ToolRegistration::from_tool(
+                                name_static,
+                                CapabilityLevel::Bash,
+                                adapter_arc,
+                            );
+                            if let Err(e) = tool_registry.register_tool(registration) {
+                                tracing::warn!("Failed to restore skill '{}': {}", skill_name, e);
+                            } else {
+                                loaded_skills.write().await.insert(skill_name.clone(), skill);
+                            }
+                        }
+                        Err(e) => {
+                            tracing::warn!("Failed to load skill '{}' during resume: {}", skill_name, e);
+                        }
+                    }
+                }
+            }
+        }
 
         let mut session_end_reason = SessionEndReason::Completed;
 
@@ -1511,6 +1548,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                                 full_auto,
                                 approval_recorder: Some(&approval_recorder),
                                 tool_permission_cache: &tool_permission_cache,
+                                loaded_skills: &loaded_skills,
                             },
                         )
                         .await?;
@@ -1673,21 +1711,25 @@ pub(crate) async fn run_single_agent_loop_unified(
                 }
             };
 
-            // Display the user message with inline border decoration
-            match &refined_content {
-                uni::MessageContent::Text(text) => display_user_message(&mut renderer, text)?,
+            // Extract text from the message once for display and skill matching
+            let input_text = match &refined_content {
+                uni::MessageContent::Text(text) => text.clone(),
                 uni::MessageContent::Parts(parts) => {
-                    // For multi-part content, display the text parts concatenated
-                    let mut display_parts = Vec::new();
-                    for part in parts {
-                        if let uni::ContentPart::Text { text } = part {
-                            display_parts.push(text.as_str());
-                        }
-                    }
-                    let display_text = display_parts.join(" ");
-                    display_user_message(&mut renderer, &display_text)?;
+                    parts.iter()
+                        .filter_map(|p| {
+                            if let uni::ContentPart::Text { text } = p {
+                                Some(text.as_str())
+                            } else {
+                                None
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                        .join(" ")
                 }
-            }
+            };
+
+            // Display the user message with inline border decoration
+            display_user_message(&mut renderer, &input_text)?;
 
             // Spinner is displayed via the input status in the inline handle
             // No need to show a separate message here
@@ -1701,6 +1743,132 @@ pub(crate) async fn run_single_agent_loop_unified(
             conversation_history.push(user_message);
             // Removed: Tool response pruning
             // Removed: Context window enforcement to respect token limits
+
+            // Check if any loaded skill should handle this request
+            {
+                use vtcode_core::skills::execute_skill_with_sub_llm;
+                use vtcode_core::skills::loader::SkillLoader;
+                
+                let input_lower = input_text.to_lowercase();
+                let mut matched_skill: Option<(String, vtcode_core::skills::types::Skill)> = None;
+                
+                // First check loaded skills
+                {
+                    let loaded_skills_lock = loaded_skills.read().await;
+                    
+                    // Check if request matches any loaded skill's purpose
+                    for (skill_name, skill) in loaded_skills_lock.iter() {
+                        let description_lower = skill.description().to_lowercase();
+                        let skill_name_lower = skill_name.to_lowercase();
+                        
+                        // Priority 1: Direct skill name match (e.g., "spreadsheet-generator")
+                        if input_lower.contains(&skill_name_lower) || input_lower.contains(&skill_name.replace("-", " ")) {
+                            matched_skill = Some((skill_name.clone(), skill.clone()));
+                            break;
+                        }
+                        
+                        // Priority 2: Keyword matching on description
+                        // For spreadsheet/excel/xlsx skills
+                        if (description_lower.contains("spreadsheet") || description_lower.contains("excel")) 
+                            && (input_lower.contains("spreadsheet") || input_lower.contains("excel") 
+                                || input_lower.contains("xlsx") || input_lower.contains("sheet")) {
+                            matched_skill = Some((skill_name.clone(), skill.clone()));
+                            break;
+                        }
+                        // For document/word skills
+                        if (description_lower.contains("word") || description_lower.contains("document")) 
+                            && (input_lower.contains("word") || input_lower.contains("document") 
+                                || input_lower.contains(".docx")) {
+                            matched_skill = Some((skill_name.clone(), skill.clone()));
+                            break;
+                        }
+                        // For PDF skills
+                        if description_lower.contains("pdf") 
+                            && (input_lower.contains("pdf") || input_lower.contains("report")) {
+                            matched_skill = Some((skill_name.clone(), skill.clone()));
+                            break;
+                        }
+                    }
+                }
+                
+                // If no loaded skill matched, check if user mentioned a skill by name and try to load it
+                if matched_skill.is_none() {
+                    let skill_loader = SkillLoader::new(config.workspace.clone());
+                    
+                    // Look for skill name in input (e.g., "spreadsheet-generator")
+                    match skill_loader.discover_skills() {
+                        Ok(available_skills) => {
+                            for skill_ctx in &available_skills {
+                                let manifest = skill_ctx.manifest();
+                                let skill_name_lower = manifest.name.to_lowercase();
+                                
+                                // Check if user explicitly mentioned this skill
+                                if input_lower.contains(&skill_name_lower) || input_lower.contains(&skill_name_lower.replace("-", " ")) {
+                                    // Try to load the skill
+                                    match skill_loader.load_skill(&manifest.name) {
+                                        Ok(skill) => {
+                                            // Add to loaded skills
+                                            loaded_skills.write().await.insert(manifest.name.clone(), skill.clone());
+                                            renderer.line(
+                                                MessageStyle::Info,
+                                                &format!("Loaded skill: {} - {}", manifest.name, manifest.description),
+                                            )?;
+                                            matched_skill = Some((manifest.name.clone(), skill));
+                                            break;
+                                        }
+                                        Err(e) => {
+                                            renderer.line(
+                                                MessageStyle::Error,
+                                                &format!("Failed to load skill '{}': {}", manifest.name, e),
+                                            )?;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            // Skill discovery failed, but don't block normal processing
+                            #[cfg(debug_assertions)]
+                            eprintln!("Failed to discover skills: {}", e);
+                        }
+                    }
+                }
+                
+                if let Some((skill_name, skill)) = matched_skill {
+                    // Auto-route to skill execution
+                    renderer.line(
+                        MessageStyle::Info,
+                        &format!("Using {} skill...", skill_name),
+                    )?;
+                    
+                    let available_tools = tools.read().await.clone();
+                    let model = config.model.clone();
+                    
+                    match execute_skill_with_sub_llm(
+                        &skill,
+                        input_text.clone(),
+                        provider_client.as_ref(),
+                        &mut tool_registry,
+                        available_tools,
+                        model,
+                    )
+                    .await
+                    {
+                        Ok(result) => {
+                            renderer.line(MessageStyle::Output, &result)?;
+                            conversation_history.push(uni::Message::assistant(result.clone()));
+                            continue;
+                        }
+                        Err(e) => {
+                            renderer.line(
+                                MessageStyle::Error,
+                                &format!("Skill execution failed: {}", e),
+                            )?;
+                            // Fall through to normal processing if skill fails
+                        }
+                    }
+                }
+            }
 
             // Use copy-on-write pattern to avoid cloning entire history
             let working_history = &mut conversation_history;
@@ -3008,6 +3176,17 @@ pub(crate) async fn run_single_agent_loop_unified(
                     }
                 }
             }
+        }
+
+        // Capture loaded skills before finalizing session
+        if let Some(archive) = session_archive.as_mut() {
+            let skill_names: Vec<String> = loaded_skills
+                .read()
+                .await
+                .keys()
+                .cloned()
+                .collect();
+            archive.set_loaded_skills(skill_names);
         }
 
         finalize_session(

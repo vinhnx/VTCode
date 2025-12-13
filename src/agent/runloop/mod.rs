@@ -5,6 +5,7 @@ mod mcp_events;
 mod model_picker;
 mod prompt;
 mod slash_commands;
+mod skills_commands;
 mod telemetry;
 mod text_tools;
 mod token_trunc;
@@ -15,3 +16,4 @@ mod welcome;
 
 // Re-export ResumeSession for backward compatibility with modules that import it from runloop
 pub use crate::agent::agents::ResumeSession;
+pub use skills_commands::{SkillCommandAction, SkillCommandOutcome, handle_skill_command, parse_skill_command};
