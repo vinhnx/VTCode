@@ -22,7 +22,6 @@ pub fn command_range(input: &str, cursor: usize) -> Option<SlashCommandRange> {
         return None;
     }
 
-    let mut last_range = None;
     let mut active_range = None;
 
     for (index, grapheme) in input.grapheme_indices(true) {
@@ -36,22 +35,14 @@ pub fn command_range(input: &str, cursor: usize) -> Option<SlashCommandRange> {
                 end: input.len(),
             });
         } else if grapheme.chars().all(char::is_whitespace) {
-            if let Some(mut range) = active_range.take() {
-                range.end = index;
-                last_range = Some(range);
-            }
+            // Space terminates the current command token
+            active_range = None;
         } else if let Some(range) = &mut active_range {
             range.end = index + grapheme.len();
         }
     }
 
-    if let Some(range) = active_range
-        && range.end > range.start
-    {
-        return Some(range);
-    }
-
-    last_range.filter(|range| range.end > range.start)
+    active_range.filter(|range| range.end > range.start)
 }
 
 pub fn command_prefix(input: &str, cursor: usize) -> Option<String> {
@@ -710,9 +701,9 @@ mod tests {
     fn command_range_stops_at_whitespace() {
         let input = "/cmd arg";
         let cursor = input.len();
-        let range = command_range(input, cursor).expect("range available");
-        assert_eq!(range.start, 0);
-        assert_eq!(range.end, 4);
+        // Previous behavior: returned Some(0..4) (last range)
+        // New behavior: returns None (active range interrupted by space)
+        assert!(command_range(input, cursor).is_none());
     }
 
     #[test]
