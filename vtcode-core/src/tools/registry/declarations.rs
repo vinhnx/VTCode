@@ -190,7 +190,7 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
         // ============================================================
         FunctionDeclaration {
             name: tools::GREP_FILE.to_owned(),
-            description: "Fast regex-based code search using ripgrep (replaces ast-grep). Find patterns, functions, definitions, TODOs, errors, imports, and API calls across files. Respects .gitignore/.ignore by default. Supports glob patterns, file-type filtering, context lines, and regex/literal matching. Essential for code navigation and analysis.".to_owned(),
+            description: "Fast regex-based code search using ripgrep (replaces ast-grep). Find patterns, functions, definitions, TODOs, errors, imports, and API calls across files. Respects .gitignore/.ignore by default. Supports glob patterns, file-type filtering, context lines, and regex/literal matching. Essential for code navigation and analysis. Note: pattern is required; use literal: true for exact string matching. Invalid regex patterns will be rejected with helpful error messages.".to_owned(),
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -318,7 +318,7 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
         // ============================================================
         FunctionDeclaration {
             name: tools::READ_FILE.to_string(),
-            description: "Read file contents safely. Supports chunked reads with offset/limit for large files; returns was_truncated=true when content is cut to fit size/token limits. Prefer paging with offset/limit over shell commands like cat/head/tail.".to_string(),
+            description: "Read file contents safely. Returns JSON with 'content', 'status', and 'message'. Supports chunked reads/offset. IMPORTANT: If 'status' is 'success', the file has been successfully read. DO NOT retry reading the same file with identical keys, even if the content seems short or empty.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {

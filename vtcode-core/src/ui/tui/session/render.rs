@@ -82,6 +82,9 @@ pub fn render(session: &mut Session, frame: &mut Frame<'_>) {
         session.mark_dirty(); // Ensure UI updates
     }
 
+    // Pull any newly forwarded log entries before layout calculations
+    session.poll_log_entries();
+
     let header_lines = session.header_lines();
     let header_height = session.header_height_from_lines(size.width, &header_lines);
     if header_height != session.header_rows {
@@ -126,22 +129,51 @@ pub fn render(session: &mut Session, frame: &mut Frame<'_>) {
             .constraints([Constraint::Percentage(70), Constraint::Percentage(30)].as_ref())
             .split(transcript_area);
         render_transcript(session, frame, timeline_chunks[0]);
-        // Placeholder for timeline rendering
-        let timeline_block = Block::default()
-            .title("Timeline")
-            .borders(Borders::ALL)
-            .border_type(terminal_capabilities::get_border_type())
-            .style(default_style(session))
-            .border_style(border_style(session));
-        frame.render_widget(timeline_block, timeline_chunks[1]);
+        if session.show_logs {
+            render_log_view(session, frame, timeline_chunks[1]);
+        } else {
+            let block = Block::default()
+                .title("Logs hidden")
+                .borders(Borders::ALL)
+                .border_type(terminal_capabilities::get_border_type())
+                .style(default_style(session))
+                .border_style(border_style(session));
+            frame.render_widget(block, timeline_chunks[1]);
+        }
     } else {
-        render_transcript(session, frame, transcript_area);
+        if session.show_logs {
+            let split = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Percentage(70), Constraint::Percentage(30)].as_ref())
+                .split(transcript_area);
+            render_transcript(session, frame, split[0]);
+            render_log_view(session, frame, split[1]);
+        } else {
+            render_transcript(session, frame, transcript_area);
+        }
     }
     session.render_input(frame, input_area);
     render_modal(session, frame, size);
     super::slash::render_slash_palette(session, frame, size);
     render_file_palette(session, frame, size);
     render_prompt_palette(session, frame, size);
+}
+
+fn render_log_view(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
+    let block = Block::default()
+        .title("Logs")
+        .borders(Borders::ALL)
+        .border_type(terminal_capabilities::get_border_type())
+        .style(default_style(session))
+        .border_style(border_style(session));
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+    if inner.height == 0 || inner.width == 0 {
+        return;
+    }
+
+    let paragraph = Paragraph::new((*session.log_text()).clone()).wrap(Wrap { trim: false });
+    frame.render_widget(paragraph, inner);
 }
 
 fn modal_list_highlight_style(session: &Session) -> Style {

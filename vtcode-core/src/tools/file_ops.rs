@@ -4,6 +4,7 @@ use super::traits::{CacheableTool, FileTool, ModeTool, Tool};
 use super::types::*;
 use crate::config::constants::diff;
 use crate::tools::grep_file::{GrepSearchInput, GrepSearchManager};
+use crate::tools::handlers::read_file::{ReadFileArgs, ReadFileHandler};
 use crate::utils::image_processing::read_image_file;
 use crate::utils::path::canonicalize_workspace;
 use crate::utils::vtcodegitignore::should_exclude_file;
@@ -846,11 +847,16 @@ impl FileOpsTool {
 
     /// Read file with intelligent path resolution, paging, and offset functionality
     pub async fn read_file(&self, args: Value) -> Result<Value> {
-        let input: Input = serde_json::from_value(args)
-            .context("Error: Invalid 'read_file' arguments. Expected JSON object with: path (required, string). Optional: max_bytes, offset_bytes, page_size_bytes, offset_lines, page_size_lines. Example: {\"path\": \"src/main.rs\", \"offset_lines\": 100, \"page_size_lines\": 50}")?;
+        let path_str = args
+            .get("path")
+            .or_else(|| args.get("file_path"))
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| {
+                anyhow!("Error: Invalid 'read_file' arguments. Expected JSON object with: path (required, string). Optional: offset, limit, mode, indentation.")
+            })?;
 
         // Try to resolve the file path
-        let potential_paths = self.resolve_file_path(&input.path)?;
+        let potential_paths = self.resolve_file_path(path_str)?;
 
         for candidate_path in &potential_paths {
             if !tokio::fs::try_exists(candidate_path).await? {
@@ -858,16 +864,81 @@ impl FileOpsTool {
             }
 
             let canonical = self
-                .normalize_and_validate_candidate(candidate_path, &input.path)
+                .normalize_and_validate_candidate(candidate_path, path_str)
                 .await?;
 
             if self.should_exclude(&canonical).await {
                 continue;
             }
 
-            if !tokio::fs::metadata(&canonical).await?.is_file() {
+            let metadata = tokio::fs::metadata(&canonical).await?;
+            if !metadata.is_file() {
                 continue;
             }
+
+            let size_bytes = metadata.len();
+            
+            // Heuristic to decide between new handler (line/indentation) and legacy handler (byte-based)
+            // If explicit "offset_bytes", "page_size_bytes" are used, stay with legacy.
+            // If "mode", "indentation", "offset" (implied line) are used, prefer new handler.
+            let is_legacy_request = args.get("offset_bytes").is_some() 
+                || args.get("page_size_bytes").is_some()
+                || args.get("offset_lines").is_some(); // Legacy also used offset_lines, but new one uses 'offset'
+            
+            let prefer_new_handler = args.get("mode").is_some() 
+                || args.get("indentation").is_some()
+                || args.get("offset").is_some();
+
+            if !is_legacy_request || prefer_new_handler {
+                // Prepare args for new handler
+                let mut handler_args_json = args.clone();
+                if let Some(obj) = handler_args_json.as_object_mut() {
+                    // Inject resolved absolute path
+                    obj.insert("file_path".to_string(), json!(canonical.to_string_lossy()));
+                    
+                    // Map legacy param names if new ones aren't present
+                    if !obj.contains_key("offset") && obj.contains_key("offset_lines") {
+                         obj["offset"] = obj["offset_lines"].clone();
+                    }
+                    if !obj.contains_key("limit") && obj.contains_key("page_size_lines") {
+                         obj["limit"] = obj["page_size_lines"].clone();
+                    }
+                    if !obj.contains_key("limit") {
+                         // Default limit if not specified (ReadFileArgs defaults to 2000)
+                    }
+                }
+                
+                // Attempt to parse
+                match serde_json::from_value::<ReadFileArgs>(handler_args_json) {
+                    Ok(read_args) => {
+                         let handler = ReadFileHandler;
+                         let content = handler.handle(read_args).await?;
+                         return Ok(json!({
+                            "success": true,
+                            "status": "success",
+                            "message": format!("Successfully read file {}", self.workspace_relative_display(&canonical)),
+                            "content": content,
+                            "path": self.workspace_relative_display(&canonical),
+                            "metadata": {
+                                "size_bytes": size_bytes,
+                            }
+                         }));
+                    }
+                    Err(e) => {
+                        // If parsing failed (e.g. invalid mode), allow falling back ONLY if it looks strictly like a legacy request,
+                        // otherwise wrap the error.
+                        if prefer_new_handler {
+                             return Err(anyhow!("Failed to parse arguments for read_file handler: {}. Args: {:?}", e, args));
+                        }
+                        // Fall through to legacy
+                    }
+                }
+            }
+
+            // Legacy Fallback
+            // We must reconstruct Input from args to use legacy functions
+            let input: Input = serde_json::from_value(args.clone())
+                .context("Error: Invalid 'read_file' arguments for legacy handler.")?;
 
             // Check if paging/offset is requested
             let use_paging = input.offset_bytes.is_some()
@@ -878,17 +949,19 @@ impl FileOpsTool {
             let (content, metadata, truncated) = if use_paging {
                 self.read_file_paged(&canonical, &input).await?
             } else {
-                // Use existing logic for backward compatibility
                 self.read_file_legacy(&canonical, &input).await?
             };
 
             let mut result = json!({
                 "success": true,
+                "status": "success",
+                "message": format!("Successfully read {} bytes from {}", size_bytes, self.workspace_relative_display(&canonical)),
                 "content": content,
                 "path": self.workspace_relative_display(&canonical),
                 "metadata": metadata
             });
-
+            
+            // ... (legacy metadata logic) ...
             if let Some(encoding) = result
                 .get("metadata")
                 .and_then(|meta| meta.get("encoding"))
@@ -897,7 +970,7 @@ impl FileOpsTool {
             {
                 result["encoding"] = json!(encoding);
             }
-
+            // ... copy remaining legacy logic ...
             if let Some(content_kind) = result
                 .get("metadata")
                 .and_then(|meta| meta.get("content_kind"))
@@ -905,12 +978,11 @@ impl FileOpsTool {
                 .map(str::to_owned)
             {
                 result["content_kind"] = json!(content_kind);
-                if matches!(content_kind.as_str(), "binary" | "image") {
+                 if matches!(content_kind.as_str(), "binary" | "image") {
                     result["binary"] = json!(true);
                 }
             }
-
-            if let Some(mime_type) = result
+             if let Some(mime_type) = result
                 .get("metadata")
                 .and_then(|meta| meta.get("mime_type"))
                 .and_then(Value::as_str)
@@ -919,20 +991,12 @@ impl FileOpsTool {
                 result["mime_type"] = json!(mime_type);
             }
 
-            // Add paging information if applicable
-            if use_paging {
-                if let Some(offset_bytes) = input.offset_bytes {
-                    result["offset_bytes"] = json!(offset_bytes);
-                }
-                if let Some(page_size_bytes) = input.page_size_bytes {
-                    result["page_size_bytes"] = json!(page_size_bytes);
-                }
-                if let Some(offset_lines) = input.offset_lines {
-                    result["offset_lines"] = json!(offset_lines);
-                }
-                if let Some(page_size_lines) = input.page_size_lines {
-                    result["page_size_lines"] = json!(page_size_lines);
-                }
+            // Add paging information
+             if input.offset_bytes.is_some() || input.page_size_bytes.is_some() || input.offset_lines.is_some() || input.page_size_lines.is_some() {
+                if let Some(offset_bytes) = input.offset_bytes { result["offset_bytes"] = json!(offset_bytes); }
+                if let Some(page_size_bytes) = input.page_size_bytes { result["page_size_bytes"] = json!(page_size_bytes); }
+                if let Some(offset_lines) = input.offset_lines { result["offset_lines"] = json!(offset_lines); }
+                if let Some(page_size_lines) = input.page_size_lines { result["page_size_lines"] = json!(page_size_lines); }
                 if truncated {
                     result["truncated"] = json!(true);
                     result["truncation_reason"] = json!("reached_end_of_file");
@@ -943,8 +1007,8 @@ impl FileOpsTool {
         }
 
         Err(anyhow!(
-            "Error: File not found: {}. Tried paths: {}. Suggestions: 1) Check the file path and case sensitivity, 2) Use list_files to explore the directory structure, 3) Try case-insensitive search with just the filename. Example: {{\"path\": \"src/main.rs\"}}",
-            input.path,
+            "Error: File not found: {}. Tried paths: {}.",
+            path_str,
             potential_paths
                 .iter()
                 .map(|p| self.workspace_relative_display(p))

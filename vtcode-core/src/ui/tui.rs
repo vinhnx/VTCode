@@ -4,6 +4,7 @@ use tokio::sync::mpsc;
 use crate::config::types::UiSurfacePreference;
 
 pub mod alternate_screen;
+pub mod log;
 pub mod panic_hook;
 mod runner;
 mod session;
@@ -64,6 +65,8 @@ pub fn spawn_session_with_prompts(
                 surface_preference,
                 inline_rows,
                 show_timeline_pane,
+                show_logs: true,
+                log_theme: None,
                 event_callback,
                 custom_prompts,
             },

@@ -1,17 +1,32 @@
 use std::fmt;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::SystemTime;
 
 use humantime::format_rfc3339_seconds;
 use once_cell::sync::Lazy;
+use ratatui::{
+    style::{Color, Modifier, Style},
+    text::{Line, Span, Text},
+};
 use tokio::sync::mpsc::UnboundedSender;
-use tracing::{Event, Subscriber, field::Visit};
+use tracing::{Event, Level, Subscriber, field::Visit};
 use tracing_subscriber::layer::{Context, Layer};
 use tracing_subscriber::registry::LookupSpan;
+use tui_syntax_highlight::{
+    Highlighter,
+    syntect::{
+        highlighting::{Theme, ThemeSet},
+        parsing::{SyntaxReference, SyntaxSet},
+    },
+};
 
 #[derive(Debug, Clone)]
 pub struct LogEntry {
     pub formatted: Arc<str>,
+    pub timestamp: Arc<str>,
+    pub level: Level,
+    pub target: Arc<str>,
+    pub message: Arc<str>,
 }
 
 #[derive(Default)]
@@ -36,6 +51,13 @@ impl LogForwarder {
 }
 
 static LOG_FORWARDER: Lazy<Arc<LogForwarder>> = Lazy::new(|| Arc::new(LogForwarder::default()));
+
+const DEFAULT_THEME_NAME: &str = "base16-ocean.dark";
+static LOG_SYNTAX_SET: Lazy<SyntaxSet> = Lazy::new(SyntaxSet::load_defaults_newlines);
+static LOG_THEME_SET: Lazy<ThemeSet> = Lazy::new(ThemeSet::load_defaults);
+static LOG_THEME_NAME: Lazy<RwLock<Option<String>>> = Lazy::new(|| RwLock::new(None));
+static LOG_HIGHLIGHTER_CACHE: Lazy<RwLock<Option<(String, Highlighter)>>> =
+    Lazy::new(|| RwLock::new(None));
 
 struct FieldVisitor {
     message: Option<String>,
@@ -118,7 +140,7 @@ where
             format!(" {rendered}")
         };
 
-        let timestamp = format_rfc3339_seconds(SystemTime::now());
+        let timestamp = format_rfc3339_seconds(SystemTime::now()).to_string();
         let line = format!(
             "{} {:<5} {} {}{}",
             timestamp,
@@ -128,8 +150,14 @@ where
             extras
         );
 
+        let log_target = Arc::from(event.metadata().target().to_string().into_boxed_str());
+        let message_with_extras = Arc::from(format!("{message}{extras}").into_boxed_str());
         self.forwarder.send(LogEntry {
             formatted: Arc::from(line.into_boxed_str()),
+            timestamp: Arc::from(timestamp.into_boxed_str()),
+            level: *event.metadata().level(),
+            target: log_target,
+            message: message_with_extras,
         });
     }
 }
@@ -144,4 +172,127 @@ pub fn register_tui_log_sender(sender: UnboundedSender<LogEntry>) {
 
 pub fn clear_tui_log_sender() {
     TuiLogLayer::clear_sender();
+}
+
+pub fn set_log_theme_name(theme: Option<String>) {
+    let mut slot = LOG_THEME_NAME.write().unwrap();
+    *slot = theme
+        .map(|t| t.trim().to_string())
+        .filter(|t| !t.is_empty());
+    // Clear cached highlighter so it reloads with the new theme
+    let mut cache = LOG_HIGHLIGHTER_CACHE.write().unwrap();
+    *cache = None;
+}
+
+fn resolve_theme(theme_name: Option<String>) -> Theme {
+    let name = theme_name.unwrap_or_else(|| DEFAULT_THEME_NAME.to_string());
+    if let Some(theme) = LOG_THEME_SET.themes.get(&name) {
+        return theme.clone();
+    }
+    if let Some(theme) = LOG_THEME_SET.themes.get(DEFAULT_THEME_NAME) {
+        return theme.clone();
+    }
+    LOG_THEME_SET
+        .themes
+        .values()
+        .next()
+        .cloned()
+        .unwrap_or_default()
+}
+
+fn highlighter_for_current_theme() -> Highlighter {
+    let theme_name = {
+        let slot = LOG_THEME_NAME.read().unwrap();
+        slot.clone()
+    };
+    let resolved_name = theme_name
+        .clone()
+        .unwrap_or_else(|| DEFAULT_THEME_NAME.to_string());
+    {
+        let cache = LOG_HIGHLIGHTER_CACHE.read().unwrap();
+        if let Some((cached_name, cached)) = &*cache {
+            if *cached_name == resolved_name {
+                return cached.clone();
+            }
+        }
+    }
+
+    let theme = resolve_theme(theme_name);
+    let highlighter = Highlighter::new(theme).line_numbers(false);
+    let mut cache = LOG_HIGHLIGHTER_CACHE.write().unwrap();
+    *cache = Some((resolved_name, highlighter.clone()));
+    highlighter
+}
+
+fn log_level_style(level: &Level) -> Style {
+    match *level {
+        Level::ERROR => Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+        Level::WARN => Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD),
+        Level::INFO => Style::default().fg(Color::Green),
+        Level::DEBUG => Style::default().fg(Color::Blue),
+        Level::TRACE => Style::default().fg(Color::DarkGray),
+    }
+}
+
+fn log_prefix(entry: &LogEntry) -> Vec<Span<'static>> {
+    let timestamp_style = Style::default().fg(Color::DarkGray);
+    vec![
+        Span::styled(format!("[{}]", entry.timestamp), timestamp_style),
+        Span::raw(" "),
+        Span::styled(format!("{:<5}", entry.level), log_level_style(&entry.level)),
+        Span::raw(" "),
+        Span::styled(entry.target.to_string(), Style::default().fg(Color::Gray)),
+        Span::raw(" "),
+    ]
+}
+
+fn prepend_metadata(text: &mut Text<'static>, entry: &LogEntry) {
+    let mut prefix = log_prefix(entry);
+    if let Some(first) = text.lines.first_mut() {
+        let mut merged = Vec::with_capacity(prefix.len() + first.spans.len());
+        merged.append(&mut prefix);
+        merged.append(&mut first.spans);
+        first.spans = merged;
+    } else {
+        text.lines.push(Line::from(prefix));
+    }
+}
+
+fn select_syntax(message: &str) -> &'static SyntaxReference {
+    let trimmed = message.trim_start();
+    if !trimmed.is_empty() {
+        if trimmed.starts_with('{') || trimmed.starts_with('[') {
+            if let Some(json) = LOG_SYNTAX_SET
+                .find_syntax_by_name("JSON")
+                .or_else(|| LOG_SYNTAX_SET.find_syntax_by_extension("json"))
+            {
+                return json;
+            }
+        }
+
+        if trimmed.contains('$') || trimmed.contains(';') {
+            if let Some(shell) = LOG_SYNTAX_SET
+                .find_syntax_by_name("Bash")
+                .or_else(|| LOG_SYNTAX_SET.find_syntax_by_extension("sh"))
+            {
+                return shell;
+            }
+        }
+    }
+
+    LOG_SYNTAX_SET
+        .find_syntax_by_name("Rust")
+        .or_else(|| LOG_SYNTAX_SET.find_syntax_by_extension("rs"))
+        .unwrap_or_else(|| LOG_SYNTAX_SET.find_syntax_plain_text())
+}
+
+pub fn highlight_log_entry(entry: &LogEntry) -> Text<'static> {
+    let syntax = select_syntax(entry.message.as_ref());
+    let mut highlighted = highlighter_for_current_theme()
+        .highlight_lines(entry.message.lines(), syntax, &LOG_SYNTAX_SET)
+        .unwrap_or_else(|_| Text::raw(entry.formatted.as_ref().to_string()));
+    prepend_metadata(&mut highlighted, entry);
+    highlighted
 }

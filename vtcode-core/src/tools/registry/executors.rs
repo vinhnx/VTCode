@@ -604,8 +604,28 @@ impl ToolRegistry {
                 ".".into()
             }
 
-            let payload: GrepArgs =
-                serde_json::from_value(args).context("Error: Invalid 'grep_file' arguments. Expected JSON object with: pattern (required, string), path (optional, string, defaults to '.'), max_results (optional, number). Example: {\"pattern\": \"TODO\", \"path\": \"src\", \"max_results\": 5}")?;
+            let payload: GrepArgs = serde_json::from_value(args).context(
+                "Invalid 'grep_file' arguments. Expected JSON object with: \n\
+                 - pattern (required, string): regex pattern to search for\n\
+                 - path (optional, string): directory to search (defaults to '.')\n\
+                 - max_results (optional, number): max results to return\n\
+                 Example: {\"pattern\": \"TODO\", \"path\": \"src\", \"max_results\": 5}"
+            )?;
+
+            // Validate pattern parameter
+            if payload.pattern.is_empty() {
+                return Err(anyhow!("pattern cannot be empty"));
+            }
+
+            // Validate regex pattern syntax if not using literal matching
+            if payload.literal != Some(true) {
+                if let Err(e) = regex::Regex::new(&payload.pattern) {
+                    return Err(anyhow!(
+                        "Invalid regex pattern: {}. If you meant to match a literal string, set literal: true",
+                        e
+                    ));
+                }
+            }
 
             // Validate the path parameter to avoid security issues
             if payload.path.contains("..") || payload.path.starts_with('/') {

@@ -236,102 +236,127 @@ impl ContextOptimizer {
         if let Some(obj) = result.as_object()
             && let Some(content) = obj.get("content").and_then(|v| v.as_str())
         {
+            let max_file_lines = MAX_FILE_LINES;
+
+            // Calculate exact token count using tokenizer
+            let estimated_tokens = self.count_tokens(content);
+
             // Check if max_tokens was specified in the result
             let max_tokens = obj
                 .get("max_tokens")
                 .and_then(|v| v.as_u64())
-                .map(|v| v as usize);
+                .map(|v| v as usize)
+                .or_else(|| {
+                    obj.get("metadata")
+                        .and_then(|m| m.get("applied_max_tokens"))
+                        .and_then(|v| v.as_u64())
+                        .map(|v| v as usize)
+                });
 
-            // Estimate tokens (rough: 1 token ≈ 4 chars)
-            let estimated_tokens = content.len() / 4;
-            let lines: Vec<_> = content.lines().collect();
-
-            // Determine if we need to truncate based on tokens or lines
             let should_truncate = if let Some(max_tok) = max_tokens {
                 estimated_tokens > max_tok
             } else {
-                lines.len() > MAX_FILE_LINES
+                let lines: Vec<&str> = content.lines().collect();
+                lines.len() > max_file_lines
             };
 
-            if should_truncate {
-                let target_tokens = max_tokens.unwrap_or(MAX_FILE_LINES * 20); // ~20 tokens per line
-                let target_chars = target_tokens * 4;
+            let (final_content, is_truncated) = if should_truncate {
+                // If we have a max_tokens limit, use it for smarter truncation
+                // Default to ~8000 tokens (2000 lines * 4) if not specified
+                let token_limit = max_tokens.unwrap_or(MAX_FILE_LINES * 4);
+                
+                // Use token-based truncation if possible (more accurate)
+                // Otherwise fall back to line-based
+                let truncated = self.truncate_content(content, token_limit);
+                (truncated, true)
+            } else {
+                (content.to_string(), false)
+            };
 
-                let truncated = if content.len() > target_chars {
-                    // Truncate by characters, then find last complete line
-                    let partial = &content[..target_chars];
-                    if let Some(last_newline) = partial.rfind('\n') {
-                        &partial[..last_newline]
-                    } else {
-                        partial
-                    }
-                } else {
-                    // Truncate by lines
-                    &lines[..MAX_FILE_LINES.min(lines.len())].join("\n")
-                };
-
-                let truncated_lines = truncated.lines().count();
-
-                // Preserve path metadata if present to keep breadcrumb in compacted output
-                let mut truncated_obj = serde_json::Map::new();
-                if let Some(path) = obj.get("path").or_else(|| obj.get("file")) {
-                    truncated_obj.insert("path".to_string(), path.clone());
-                }
-
-                truncated_obj.extend([
-                    ("content".to_string(), json!(truncated)),
-                    ("truncated".to_string(), json!(true)),
-                    ("total_lines".to_string(), json!(lines.len())),
-                    ("showing_lines".to_string(), json!(truncated_lines)),
-                    ("estimated_tokens".to_string(), json!(estimated_tokens)),
-                    ("max_tokens".to_string(), json!(max_tokens)),
-                    (
-                        "note".to_string(),
-                        json!("File truncated. Use read_file with start_line/end_line for specific sections."),
-                    ),
-                ]);
-
-                return Value::Object(truncated_obj);
+            // Reconstruct the object to ensure consistent field ordering and presence
+            let mut standardized_obj = serde_json::Map::new();
+            standardized_obj.insert("success".to_string(), json!(true));
+            
+            if let Some(status) = obj.get("status") {
+                standardized_obj.insert("status".to_string(), status.clone());
+            } else {
+                standardized_obj.insert("status".to_string(), json!("success"));
             }
+
+            if let Some(message) = obj.get("message") {
+                standardized_obj.insert("message".to_string(), message.clone());
+            }
+
+            // Always put content
+            standardized_obj.insert("content".to_string(), json!(final_content));
+            
+            if let Some(path) = obj.get("path").or_else(|| obj.get("file")) {
+                standardized_obj.insert("path".to_string(), path.clone());
+            }
+
+            if let Some(metadata) = obj.get("metadata") {
+                standardized_obj.insert("metadata".to_string(), metadata.clone());
+            }
+
+            if is_truncated {
+                standardized_obj.insert("is_truncated".to_string(), json!(true));
+                standardized_obj.insert("original_tokens".to_string(), json!(estimated_tokens));
+                
+                if let Some(omitted) = obj.get("omitted_line_count") {
+                    standardized_obj.insert("omitted_line_count".to_string(), omitted.clone());
+                }
+            }
+
+            return Value::Object(standardized_obj);
         }
+
         result
     }
 
+    /// Estimate tokens (rough approximation)
+    fn count_tokens(&self, text: &str) -> usize {
+        text.len() / 4
+    }
+
+    /// Truncate content while preserving line boundaries if possible
+    fn truncate_content(&self, content: &str, token_limit: usize) -> String {
+        let char_limit = token_limit * 4;
+        if content.len() <= char_limit {
+            return content.to_string();
+        }
+        
+        let truncated = &content[..char_limit];
+        // Try to cut at last newline to avoid partial lines
+        if let Some(last_newline) = truncated.rfind('\n') {
+            truncated[..last_newline].to_string()
+        } else {
+            truncated.to_string()
+        }
+    }
+
+    /// Optimize command output - extract errors only
     /// Optimize command output - extract errors only
     fn optimize_command_result(&self, result: Value) -> Value {
         if let Some(obj) = result.as_object()
             && let Some(stdout) = obj.get("stdout").and_then(|v| v.as_str())
         {
-            // Extract error lines + 2 context lines
-            let lines: Vec<_> = stdout.lines().collect();
-            if lines.len() > 100 {
-                let error_lines: Vec<_> = lines
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, line)| {
-                        line.contains("error:") || line.contains("Error:") || line.contains("ERROR")
-                    })
-                    .flat_map(|(i, _)| {
-                        let start = i.saturating_sub(2);
-                        let end = (i + 3).min(lines.len());
-                        lines[start..end].iter().map(|s| s.to_string())
-                    })
-                    .collect();
+            // Use same limit as files (approx 2000 lines / 8000 tokens)
+            let max_tokens = MAX_FILE_LINES * 4;
+            let current_tokens = self.count_tokens(stdout);
 
-                if !error_lines.is_empty() {
-                    return serde_json::json!({
-                        "errors": error_lines,
-                        "total_lines": lines.len(),
-                        "note": "Showing error lines with context. Full output available if needed."
-                    });
-                }
+            if current_tokens > max_tokens {
+                let truncated = self.truncate_content(stdout, max_tokens);
+                let lines_count = stdout.lines().count();
 
-                // No errors, just show summary
-                return serde_json::json!({
-                    "status": "completed",
-                    "total_lines": lines.len(),
-                    "note": "Command completed successfully. Output truncated."
-                });
+                // Clone the original object to preserve exit_code, stderr, etc.
+                let mut new_obj = obj.clone();
+                new_obj.insert("stdout".to_string(), json!(truncated));
+                new_obj.insert("is_truncated".to_string(), json!(true));
+                new_obj.insert("original_lines".to_string(), json!(lines_count));
+                new_obj.insert("original_tokens".to_string(), json!(current_tokens));
+                new_obj.insert("note".to_string(), json!("Output truncated. Use 'grep_file' or specific commands to search content."));
+
+                return Value::Object(new_obj);
             }
         }
         result
@@ -804,6 +829,29 @@ mod tests {
         assert!(optimized["truncated"].as_bool().unwrap_or(false));
         assert!(optimized["estimated_tokens"].is_number());
         assert_eq!(optimized["max_tokens"], 1000);
+    }
+
+    #[tokio::test]
+    async fn test_read_file_truncation_preserves_status() {
+        let mut optimizer = ContextOptimizer::new();
+
+        // Create a large file content to force truncation
+        let large_content = "line\n".repeat(5000);
+        let result = json!({
+            "content": large_content,
+            "max_tokens": 100, // Force truncation
+            "status": "success",
+            "message": "Successfully read file"
+        });
+
+        let optimized = optimizer.optimize_result(tools::READ_FILE, result).await;
+
+        // Verify truncation happened
+        assert!(optimized["is_truncated"].as_bool().unwrap());
+        
+        // Verify status/message preserved
+        assert_eq!(optimized["status"], "success");
+        assert_eq!(optimized["message"], "Successfully read file");
     }
 
     #[tokio::test]

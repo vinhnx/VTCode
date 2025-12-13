@@ -10,6 +10,7 @@ use std::io::{self, Read};
 use vtcode::startup::StartupContext;
 use vtcode_core::cli::args::{Cli, Commands};
 use vtcode_core::config::api_keys::load_dotenv;
+use vtcode_core::ui::tui::log::make_tui_log_layer;
 use vtcode_core::ui::tui::panic_hook;
 // FullTui import removed – not used in this binary.
 
@@ -259,13 +260,16 @@ fn collect_piped_stdin() -> Result<Option<String>> {
 }
 
 async fn initialize_tracing(_args: &Cli) -> Result<bool> {
-    use tracing_subscriber::fmt::format::FmtSpan;
+    use tracing_subscriber::{fmt::format::FmtSpan, prelude::*};
 
     // Check if RUST_LOG env var is set (takes precedence)
     if std::env::var("RUST_LOG").is_ok() {
-        let init_result = tracing_subscriber::fmt()
-            .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-            .with_span_events(FmtSpan::FULL)
+        let env_filter = tracing_subscriber::EnvFilter::from_default_env();
+        let fmt_layer = tracing_subscriber::fmt::layer().with_span_events(FmtSpan::FULL);
+        let init_result = tracing_subscriber::registry()
+            .with(env_filter)
+            .with(fmt_layer)
+            .with(make_tui_log_layer())
             .try_init();
         if let Err(err) = init_result {
             tracing::warn!(error = %err, "tracing already initialized; skipping env tracing setup");
@@ -281,7 +285,7 @@ async fn initialize_tracing(_args: &Cli) -> Result<bool> {
 fn initialize_tracing_from_config(
     config: &vtcode_core::config::loader::VTCodeConfig,
 ) -> Result<()> {
-    use tracing_subscriber::fmt::format::FmtSpan;
+    use tracing_subscriber::{fmt::format::FmtSpan, prelude::*};
 
     let debug_cfg = &config.debug;
     let targets = if debug_cfg.trace_targets.is_empty() {
@@ -292,12 +296,13 @@ fn initialize_tracing_from_config(
 
     let filter_str = format!("{}={}", targets, debug_cfg.trace_level.as_str());
 
-    let init_result = tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(&filter_str)),
-        )
-        .with_span_events(FmtSpan::FULL)
+    let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(&filter_str));
+    let fmt_layer = tracing_subscriber::fmt::layer().with_span_events(FmtSpan::FULL);
+    let init_result = tracing_subscriber::registry()
+        .with(env_filter)
+        .with(fmt_layer)
+        .with(make_tui_log_layer())
         .try_init();
 
     match init_result {

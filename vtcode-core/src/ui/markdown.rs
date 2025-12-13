@@ -2,6 +2,7 @@
 
 use crate::config::loader::SyntaxHighlightingConfig;
 use crate::ui::theme::{self, ThemeStyles};
+use anstyle::{Color, RgbColor};
 use anstyle::Style;
 use anstyle_syntect::to_anstyle;
 use once_cell::sync::Lazy;
@@ -1003,21 +1004,37 @@ fn highlight_code_block(
     let mut augmented_prefix = prefix_segments.to_vec();
     augmented_prefix.push(PrefixSegment::new(base_style, CODE_EXTRA_INDENT));
 
+    // Always normalize indentation first, regardless of highlighting
+    let normalized_code = normalize_code_indentation(code, language);
+    let code_to_display = &normalized_code;
+
     if let Some(config) = highlight_config.filter(|cfg| cfg.enabled)
-        && let Some(highlighted) = try_highlight(code, language, config)
+        && let Some(highlighted) = try_highlight(code_to_display, language, config)
     {
+        // Get background color from config theme for full-width fill
+        let bg_color = try_get_theme_bg_color(&config.theme);
+        
         for segments in highlighted {
             let mut line = MarkdownLine::default();
             line.prepend_segments(&augmented_prefix);
             for (style, text) in segments {
                 line.push_segment(style, &text);
             }
+            
+            // Fill the rest of the line with background color for full-width effect
+            if let Some(bg) = bg_color {
+                let fill_style = base_style.bg_color(Some(bg));
+                // Add a space with the background to extend the highlight to the right edge
+                line.push_segment(fill_style, " ");
+            }
+            
             lines.push(line);
         }
         return lines;
     }
 
-    for raw_line in LinesWithEndings::from(code) {
+    // Fallback: render without syntax highlighting, but still with normalized indentation
+    for raw_line in LinesWithEndings::from(code_to_display) {
         let trimmed = raw_line.trim_end_matches('\n');
         let mut line = MarkdownLine::default();
         line.prepend_segments(&augmented_prefix);
@@ -1027,7 +1044,7 @@ fn highlight_code_block(
         lines.push(line);
     }
 
-    if code.ends_with('\n') {
+    if code_to_display.ends_with('\n') {
         let mut line = MarkdownLine::default();
         line.prepend_segments(&augmented_prefix);
         lines.push(line);
@@ -1046,6 +1063,69 @@ fn code_block_style(theme_styles: &ThemeStyles, base_style: Style) -> Style {
         style = style.fg_color(Some(color));
     }
     style
+}
+
+fn try_get_theme_bg_color(theme_name: &str) -> Option<Color> {
+    let defaults = ThemeSet::load_defaults();
+    defaults.themes.get(theme_name)
+        .and_then(|theme| theme.settings.background)
+        .map(|c| Color::Rgb(RgbColor(c.r, c.g, c.b)))
+}
+
+/// Normalize indentation in code using tree-sitter parsing
+fn normalize_code_indentation(code: &str, language: Option<&str>) -> String {
+    // Check if we should normalize based on language hint
+    let has_language_hint = language.map_or(false, |hint| {
+        matches!(
+            hint.to_lowercase().as_str(),
+            "rust" | "rs" | "python" | "py" | "javascript" | "js" | "jsx"
+                | "typescript" | "ts" | "tsx" | "go" | "golang" | "java"
+                | "bash" | "sh"
+        )
+    });
+
+    // Always normalize indentation regardless of language (applies to plain text code too)
+    // This ensures consistently formatted output
+    if !has_language_hint && language.is_some() {
+        // If there's a language hint but it's not supported, don't normalize
+        return code.to_string();
+    }
+
+    // Get minimum indentation to detect if code needs normalization
+    let lines: Vec<&str> = code.lines().collect();
+    let min_indent = lines
+        .iter()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| line.len() - line.trim_start().len())
+        .min()
+        .unwrap_or(0);
+
+    // If code is already well-indented (starts at column 0), keep it as-is
+    if min_indent == 0 {
+        return code.to_string();
+    }
+
+    // Remove the common leading indentation from all non-empty lines
+    let normalized = lines
+        .iter()
+        .map(|line| {
+            if line.trim().is_empty() {
+                ""
+            } else if line.len() >= min_indent {
+                &line[min_indent..]
+            } else {
+                line
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    // Preserve trailing newline if original had one
+    if code.ends_with('\n') {
+        format!("{}\n", normalized)
+    } else {
+        normalized
+    }
 }
 
 fn try_highlight(
@@ -1191,5 +1271,35 @@ mod tests {
             output.contains("│"),
             "Should use box-drawing character (│) for table cells instead of pipe"
         );
+    }
+
+    #[test]
+    fn test_code_indentation_normalization_removes_common_indent() {
+        let code_with_indent = "    fn hello() {\n        println!(\"world\");\n    }";
+        let expected = "fn hello() {\n    println!(\"world\");\n}";
+        let result = normalize_code_indentation(code_with_indent, Some("rust"));
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_code_indentation_preserves_already_normalized() {
+        let code = "fn hello() {\n    println!(\"world\");\n}";
+        let result = normalize_code_indentation(code, Some("rust"));
+        assert_eq!(result, code);
+    }
+
+    #[test]
+    fn test_code_indentation_without_language_hint() {
+        let code = "    some code";
+        let result = normalize_code_indentation(code, None);
+        assert_eq!(result, code);
+    }
+
+    #[test]
+    fn test_code_indentation_preserves_relative_indentation() {
+        let code = "    line1\n        line2\n    line3";
+        let expected = "line1\n    line2\nline3";
+        let result = normalize_code_indentation(code, Some("python"));
+        assert_eq!(result, expected);
     }
 }

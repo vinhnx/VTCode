@@ -138,6 +138,7 @@ pub mod fallback_chains;
 pub mod file_ops;
 pub mod grep_cache;
 pub mod grep_file;
+pub mod handlers;
 pub mod mcp;
 pub mod names;
 pub(crate) mod path_env;
