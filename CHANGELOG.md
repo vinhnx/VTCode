@@ -3,6 +3,29 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Version 0.43.0] - 2025-11-09
+# [Version 0.48.3] - 2025-12-13
+
+
+### Refactors
+    - refactor: update LLMError handling in turn_processing
+    - refactor: standardize LLMError structure across providers
+    - refactor: enhance Z.AI provider error handling and API key validation
+    - refactor: enhance context trimming and session management features
+    - refactor: update configuration and documentation for improved clarity and performance
+
+
+### Documentation
+    - docs: update changelog for v0.48.2 [skip ci]
+    - docs: update changelog for v0.48.1 [skip ci]
+
+
+### Chores
+    - chore: update VSCode extension package.json to v0.48.2 [skip ci]
+    - chore: update npm package.json to v0.48.2 [skip ci]
+    - chore: release v0.48.2
+    - chore: release v0.48.1
+    - chore: update VSCode extension package.json to v0.48.0 [skip ci]
+    - chore: update npm package.json to v0.48.0 [skip ci]
 # [Version 0.48.2] - 2025-12-13
 
 
