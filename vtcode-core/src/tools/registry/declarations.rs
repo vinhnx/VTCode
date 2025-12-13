@@ -281,6 +281,18 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
         },
 
         FunctionDeclaration {
+            name: tools::SKILL.to_string(),
+            description: "Load a Claude Agent Skill by name. Skills are specialized subagents with instructions, reference files, and scripts stored in .claude/skills/. Returns skill instructions and available resources. Use search_tools to discover available skills first.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Skill name (e.g., 'spreadsheet-generator', 'doc-generator', 'pdf-report-generator')"}
+                },
+                "required": ["name"]
+            }),
+        },
+
+        FunctionDeclaration {
             name: tools::EXECUTE_CODE.to_string(),
             description: "Execute Python or JavaScript code with access to MCP tools as library functions. Supports loops, conditionals, data filtering, and aggregation. Results are returned as JSON via `result = {...}` assignment.".to_string(),
             parameters: json!({
