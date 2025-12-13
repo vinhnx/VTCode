@@ -3,6 +3,44 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Version 0.43.0] - 2025-11-09
+# [Version 0.48.2] - 2025-12-13
+
+
+### Features
+    - feat: update OpenAI provider to support GPT-5.2 and enhance reasoning options
+    - feat: enhance response output with reasoning traces
+    - feat: implement timeout warning management for tool execution
+    - feat: enhance tool execution with rate limiting and workspace management
+
+
+### Bug Fixes
+    - fix: improve error handling in LLM client creation and tool execution
+
+
+### Refactors
+    - refactor: update LLMError handling in turn_processing
+    - refactor: standardize LLMError structure across providers
+    - refactor: enhance Z.AI provider error handling and API key validation
+    - refactor: enhance context trimming and session management features
+    - refactor: update configuration and documentation for improved clarity and performance
+    - refactor: update GPT-5.2 model identifiers and documentation
+    - refactor: streamline error handling and conditional checks in various modules
+    - refactor: remove logging statements from UI interaction and session handling
+    - refactor: remove outdated vibe_tooling_mapping documentation
+
+
+### Documentation
+    - docs: update changelog for v0.48.1 [skip ci]
+    - docs: update changelog for v0.48.0 [skip ci]
+
+
+### Chores
+    - chore: release v0.48.1
+    - chore: update VSCode extension package.json to v0.48.0 [skip ci]
+    - chore: update npm package.json to v0.48.0 [skip ci]
+    - chore: release v0.48.0
+    - chore: update VSCode extension package.json to v0.47.16 [skip ci]
+    - chore: update npm package.json to v0.47.16 [skip ci]
 # [Version 0.48.1] - 2025-12-13
 
 
