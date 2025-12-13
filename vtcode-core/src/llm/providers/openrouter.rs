@@ -815,7 +815,10 @@ impl OpenRouterProvider {
             .map_err(|e| {
                 let formatted_error =
                     error_display::format_llm_error("OpenRouter", &format!("Network error: {}", e));
-                LLMError::Network(formatted_error)
+                LLMError::Network {
+                    message: formatted_error,
+                    metadata: None,
+                }
             })
     }
 
@@ -846,7 +849,7 @@ impl OpenRouterProvider {
         let error_text = response.text().await.unwrap_or_default();
 
         if status.as_u16() == 429 || error_text.contains("quota") {
-            return Err(LLMError::RateLimit);
+            return Err(LLMError::RateLimit { metadata: None });
         }
 
         if request_with_tools && Self::is_tool_unsupported_error(status, &error_text) {
@@ -868,7 +871,7 @@ impl OpenRouterProvider {
             let fallback_text = fallback_response.text().await.unwrap_or_default();
 
             if fallback_status.as_u16() == 429 || fallback_text.contains("quota") {
-                return Err(LLMError::RateLimit);
+                return Err(LLMError::RateLimit { metadata: None });
             }
 
             let combined_error = format!(
@@ -876,14 +879,20 @@ impl OpenRouterProvider {
                 status, error_text, fallback_status, fallback_text
             );
             let formatted_error = error_display::format_llm_error("OpenRouter", &combined_error);
-            return Err(LLMError::Provider(formatted_error));
+            return Err(LLMError::Provider {
+                message: formatted_error,
+                metadata: None,
+            });
         }
 
         let formatted_error = error_display::format_llm_error(
             "OpenRouter",
             &format!("HTTP {}: {}", status, error_text),
         );
-        Err(LLMError::Provider(formatted_error))
+        Err(LLMError::Provider {
+            message: formatted_error,
+            metadata: None,
+        })
     }
 
     fn parse_chat_request(&self, value: &Value) -> Option<LLMRequest> {
@@ -1184,7 +1193,10 @@ impl OpenRouterProvider {
                             "OpenRouter",
                             "Tool messages must include tool_call_id for Responses API",
                         );
-                        LLMError::InvalidRequest(formatted_error)
+                        LLMError::InvalidRequest {
+                            message: formatted_error,
+                            metadata: None,
+                        }
                     })?;
 
                     let mut tool_content = Vec::new();
@@ -1283,7 +1295,10 @@ impl OpenRouterProvider {
                             "OpenRouter",
                             "Tool messages must include tool_call_id for Responses API",
                         );
-                        LLMError::InvalidRequest(formatted_error)
+                        LLMError::InvalidRequest {
+                            message: formatted_error,
+                            metadata: None,
+                        }
                     })?;
 
                     let mut tool_content = Vec::new();
@@ -1350,7 +1365,10 @@ impl OpenRouterProvider {
                 "OpenRouter",
                 "No messages provided for Responses API",
             );
-            return Err(LLMError::InvalidRequest(formatted_error));
+            return Err(LLMError::InvalidRequest {
+                message: formatted_error,
+                metadata: None,
+            });
         }
 
         let mut provider_request = json!({
@@ -1471,7 +1489,10 @@ impl OpenRouterProvider {
         if messages.is_empty() {
             let formatted_error =
                 error_display::format_llm_error("OpenRouter", "No messages provided");
-            return Err(LLMError::InvalidRequest(formatted_error));
+            return Err(LLMError::InvalidRequest {
+                message: formatted_error,
+                metadata: None,
+            });
         }
 
         let mut provider_request = json!({
@@ -1537,7 +1558,10 @@ impl OpenRouterProvider {
             if choices.is_empty() {
                 let formatted_error =
                     error_display::format_llm_error("OpenRouter", "No choices in response");
-                return Err(LLMError::Provider(formatted_error));
+                return Err(LLMError::Provider {
+                    message: formatted_error,
+                    metadata: None,
+                });
             }
 
             let choice = &choices[0];
@@ -1546,7 +1570,10 @@ impl OpenRouterProvider {
                     "OpenRouter",
                     "Invalid response format: missing message",
                 );
-                LLMError::Provider(formatted_error)
+                LLMError::Provider {
+                    message: formatted_error,
+                    metadata: None,
+                }
             })?;
 
             let mut content = match message.get("content") {
@@ -1673,13 +1700,19 @@ impl OpenRouterProvider {
                     "OpenRouter",
                     "Invalid response format: missing output",
                 );
-                LLMError::Provider(formatted_error)
+                LLMError::Provider {
+                    message: formatted_error,
+                    metadata: None,
+                }
             })?;
 
         if outputs.is_empty() {
             let formatted_error =
                 error_display::format_llm_error("OpenRouter", "No output in response");
-            return Err(LLMError::Provider(formatted_error));
+            return Err(LLMError::Provider {
+                message: formatted_error,
+                metadata: None,
+            });
         }
 
         let message = outputs
@@ -1881,7 +1914,7 @@ impl LLMProvider for OpenRouterProvider {
                         "OpenRouter",
                         &format!("Streaming error: {}", err),
                     );
-                    LLMError::Network(formatted_error)
+                    LLMError::Network { message: formatted_error, metadata: None }
                 })?;
 
                 buffer.push_str(&String::from_utf8_lossy(&chunk));
@@ -1998,7 +2031,10 @@ impl LLMProvider for OpenRouterProvider {
                 "OpenRouter",
                 &format!("Failed to parse response: {}", e),
             );
-            LLMError::Provider(formatted_error)
+            LLMError::Provider {
+                message: formatted_error,
+                metadata: None,
+            }
         })?;
 
         self.parse_openrouter_response(openrouter_response)
@@ -2015,20 +2051,29 @@ impl LLMProvider for OpenRouterProvider {
         if request.messages.is_empty() {
             let formatted_error =
                 error_display::format_llm_error("OpenRouter", "Messages cannot be empty");
-            return Err(LLMError::InvalidRequest(formatted_error));
+            return Err(LLMError::InvalidRequest {
+                message: formatted_error,
+                metadata: None,
+            });
         }
 
         for message in &request.messages {
             if let Err(err) = message.validate_for_provider("openai") {
                 let formatted = error_display::format_llm_error("OpenRouter", &err);
-                return Err(LLMError::InvalidRequest(formatted));
+                return Err(LLMError::InvalidRequest {
+                    message: formatted,
+                    metadata: None,
+                });
             }
         }
 
         if request.model.trim().is_empty() {
             let formatted_error =
                 error_display::format_llm_error("OpenRouter", "Model must be provided");
-            return Err(LLMError::InvalidRequest(formatted_error));
+            return Err(LLMError::InvalidRequest {
+                message: formatted_error,
+                metadata: None,
+            });
         }
 
         Ok(())

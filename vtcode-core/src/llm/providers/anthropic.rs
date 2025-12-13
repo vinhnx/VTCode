@@ -669,7 +669,10 @@ impl AnthropicProvider {
                 "Anthropic",
                 "No convertible messages for Anthropic request",
             );
-            return Err(LLMError::InvalidRequest(formatted_error));
+            return Err(LLMError::InvalidRequest {
+                message: formatted_error,
+                metadata: None,
+            });
         }
 
         let mut anthropic_request = json!({
@@ -748,7 +751,10 @@ impl AnthropicProvider {
                     "Anthropic",
                     "Invalid response format: missing content",
                 );
-                LLMError::Provider(formatted)
+                LLMError::Provider {
+                    message: formatted,
+                    metadata: None,
+                }
             })?;
 
         let mut text_parts = Vec::new();
@@ -984,7 +990,10 @@ impl LLMProvider for AnthropicProvider {
         if request.messages.is_empty() {
             let formatted_error =
                 error_display::format_llm_error("Anthropic", "Messages cannot be empty");
-            return Err(LLMError::InvalidRequest(formatted_error));
+            return Err(LLMError::InvalidRequest {
+                message: formatted_error,
+                metadata: None,
+            });
         }
 
         if !models::anthropic::SUPPORTED_MODELS
@@ -995,7 +1004,10 @@ impl LLMProvider for AnthropicProvider {
                 "Anthropic",
                 &format!("Unsupported model: {}", request.model),
             );
-            return Err(LLMError::InvalidRequest(formatted_error));
+            return Err(LLMError::InvalidRequest {
+                message: formatted_error,
+                metadata: None,
+            });
         }
 
         // Check if structured output is requested on an unsupported model
@@ -1007,7 +1019,10 @@ impl LLMProvider for AnthropicProvider {
                     request.model
                 ),
             );
-            return Err(LLMError::InvalidRequest(formatted_error));
+            return Err(LLMError::InvalidRequest {
+                message: formatted_error,
+                metadata: None,
+            });
         }
 
         // Validate the schema if structured output is requested
@@ -1025,7 +1040,10 @@ impl LLMProvider for AnthropicProvider {
         for message in &request.messages {
             if let Err(err) = message.validate_for_provider("anthropic") {
                 let formatted = error_display::format_llm_error("Anthropic", &err);
-                return Err(LLMError::InvalidRequest(formatted));
+                return Err(LLMError::InvalidRequest {
+                    message: formatted,
+                    metadata: None,
+                });
             }
         }
 
@@ -1350,7 +1368,10 @@ impl AnthropicProvider {
                     "Anthropic",
                     "Structured output schema must be a JSON object",
                 );
-                return Err(LLMError::InvalidRequest(formatted_error));
+                return Err(LLMError::InvalidRequest {
+                    message: formatted_error,
+                    metadata: None,
+                });
             }
         }
         Ok(())
@@ -1378,7 +1399,10 @@ impl AnthropicProvider {
                                         type_str, path
                                     ),
                                 );
-                                return Err(LLMError::InvalidRequest(formatted_error));
+                                return Err(LLMError::InvalidRequest {
+                                    message: formatted_error,
+                                    metadata: None,
+                                });
                             }
                         }
                     }
@@ -1392,7 +1416,10 @@ impl AnthropicProvider {
                             key, path
                         ),
                     );
-                    return Err(LLMError::InvalidRequest(formatted_error));
+                    return Err(LLMError::InvalidRequest {
+                        message: formatted_error,
+                        metadata: None,
+                    });
                 }
                 // Check for unsupported string constraints
                 "minLength" | "maxLength" => {
@@ -1403,7 +1430,10 @@ impl AnthropicProvider {
                             key, path
                         ),
                     );
-                    return Err(LLMError::InvalidRequest(formatted_error));
+                    return Err(LLMError::InvalidRequest {
+                        message: formatted_error,
+                        metadata: None,
+                    });
                 }
                 // Check for unsupported array constraints beyond minItems with values 0 or 1
                 "minItems" | "maxItems" | "uniqueItems" => {
@@ -1418,7 +1448,10 @@ impl AnthropicProvider {
                                     min_items, path
                                 ),
                             );
-                            return Err(LLMError::InvalidRequest(formatted_error));
+                            return Err(LLMError::InvalidRequest {
+                                message: formatted_error,
+                                metadata: None,
+                            });
                         }
                     } else {
                         let formatted_error = error_display::format_llm_error(
@@ -1428,7 +1461,10 @@ impl AnthropicProvider {
                                 key, path
                             ),
                         );
-                        return Err(LLMError::InvalidRequest(formatted_error));
+                        return Err(LLMError::InvalidRequest {
+                            message: formatted_error,
+                            metadata: None,
+                        });
                     }
                 }
                 // Check for additionalProperties - must be false for objects
@@ -1443,7 +1479,10 @@ impl AnthropicProvider {
                                 additional_props, path
                             ),
                         );
-                        return Err(LLMError::InvalidRequest(formatted_error));
+                        return Err(LLMError::InvalidRequest {
+                            message: formatted_error,
+                            metadata: None,
+                        });
                     }
                 }
                 // Recursively validate nested objects and arrays in properties
@@ -1471,7 +1510,10 @@ impl AnthropicProvider {
                                         i, path
                                     ),
                                 );
-                                return Err(LLMError::InvalidRequest(formatted_error));
+                                return Err(LLMError::InvalidRequest {
+                                    message: formatted_error,
+                                    metadata: None,
+                                });
                             }
                         }
                     }

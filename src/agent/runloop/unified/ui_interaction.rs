@@ -414,7 +414,10 @@ fn map_render_error(provider_name: &str, err: Error) -> uni::LLMError {
         provider_name,
         &format!("Failed to render streaming output: {}", err),
     );
-    uni::LLMError::Provider(formatted_error)
+    uni::LLMError::Provider {
+        message: formatted_error,
+        metadata: None,
+    }
 }
 
 fn stream_plain_response_delta(
@@ -682,10 +685,10 @@ pub(crate) async fn stream_and_render_response(
     // Check for cancellation before starting stream
     if ctrl_c_state.is_cancel_requested() {
         spinner.finish();
-        return Err(uni::LLMError::Provider(error_display::format_llm_error(
-            provider_name,
-            "Interrupted by user",
-        )));
+        return Err(uni::LLMError::Provider {
+            message: error_display::format_llm_error(provider_name, "Interrupted by user"),
+            metadata: None,
+        });
     }
 
     let supports_streaming_markdown = renderer.supports_streaming_markdown();
@@ -696,20 +699,17 @@ pub(crate) async fn stream_and_render_response(
 
     if ctrl_c_state.is_cancel_requested() || ctrl_c_state.is_exit_requested() {
         spinner.finish();
-        return Err(uni::LLMError::Provider(error_display::format_llm_error(
-            provider_name,
-            "Interrupted by user",
-        )));
+        return Err(uni::LLMError::Provider {
+            message: error_display::format_llm_error(provider_name, "Interrupted by user"),
+            metadata: None,
+        });
     }
 
     let mut stream = tokio::select! {
         biased;
         _ = ctrl_c_notify.notified() => {
             spinner.finish();
-            return Err(uni::LLMError::Provider(error_display::format_llm_error(
-                provider_name,
-                "Interrupted by user",
-            )));
+            return Err(uni::LLMError::Provider { message: error_display::format_llm_error(provider_name, "Interrupted by user"), metadata: None });
         }
         result = stream_future => result?,
     };
@@ -743,10 +743,10 @@ pub(crate) async fn stream_and_render_response(
             reasoning_state
                 .handle_stream_failure(renderer)
                 .map_err(|err| map_render_error(provider_name, err))?;
-            return Err(uni::LLMError::Provider(error_display::format_llm_error(
-                provider_name,
-                "Interrupted by user",
-            )));
+            return Err(uni::LLMError::Provider {
+                message: error_display::format_llm_error(provider_name, "Interrupted by user"),
+                metadata: None,
+            });
         }
 
         let maybe_event = tokio::select! {
@@ -757,10 +757,7 @@ pub(crate) async fn stream_and_render_response(
                 reasoning_state
                     .handle_stream_failure(renderer)
                     .map_err(|err| map_render_error(provider_name, err))?;
-                return Err(uni::LLMError::Provider(error_display::format_llm_error(
-                    provider_name,
-                    "Interrupted by user",
-                )));
+                return Err(uni::LLMError::Provider { message: error_display::format_llm_error(provider_name, "Interrupted by user"), metadata: None });
             }
             event = stream.next() => event,
         };
@@ -851,7 +848,10 @@ pub(crate) async fn stream_and_render_response(
                 provider_name,
                 "Stream ended without a completion event",
             );
-            return Err(uni::LLMError::Provider(formatted_error));
+            return Err(uni::LLMError::Provider {
+                message: formatted_error,
+                metadata: None,
+            });
         }
     };
 

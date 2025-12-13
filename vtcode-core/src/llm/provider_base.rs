@@ -11,7 +11,7 @@ use serde_json::Value;
 use std::time::Duration;
 
 use crate::config::TimeoutsConfig;
-use crate::llm::{LLMError, LLMStreamEvent, provider::LLMRequest};
+use crate::llm::provider::{LLMError, LLMRequest, LLMStreamEvent};
 
 /// Default timeout configurations
 pub const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
@@ -154,9 +154,12 @@ impl ErrorHandler {
 
         // Handle different error types based on status code
         if status == StatusCode::TOO_MANY_REQUESTS {
-            LLMError::RateLimit
+            LLMError::RateLimit { metadata: None }
         } else {
-            LLMError::ApiError(formatted_error)
+            LLMError::Provider {
+                message: formatted_error,
+                metadata: None,
+            }
         }
     }
 
@@ -429,7 +432,13 @@ mod tests {
 
         let error = handler.handle_http_error(reqwest::StatusCode::UNAUTHORIZED, "Invalid API key");
 
-        assert!(matches!(error, LLMError::InvalidRequest(_)));
+        assert!(matches!(
+            error,
+            LLMError::InvalidRequest {
+                message: _,
+                metadata: _
+            }
+        ));
     }
 
     #[test]

@@ -85,9 +85,13 @@ impl LLMFactory {
         provider_name: &str,
         config: ProviderConfig,
     ) -> Result<Box<dyn LLMProvider>, LLMError> {
-        let factory_fn = self.providers.get(provider_name).ok_or_else(|| {
-            LLMError::InvalidRequest(format!("Unknown provider: {}", provider_name))
-        })?;
+        let factory_fn =
+            self.providers
+                .get(provider_name)
+                .ok_or_else(|| LLMError::InvalidRequest {
+                    message: format!("Unknown provider: {}", provider_name),
+                    metadata: None,
+                })?;
 
         Ok(factory_fn(config))
     }
@@ -186,12 +190,17 @@ pub fn create_provider_for_model(
     api_key: String,
     prompt_cache: Option<PromptCachingConfig>,
 ) -> Result<Box<dyn LLMProvider>, LLMError> {
-    let factory = get_factory()
-        .lock()
-        .map_err(|_| LLMError::Provider(ctx_err!("llm factory", "lock poisoned")))?;
-    let provider_name = factory.provider_from_model(model).ok_or_else(|| {
-        LLMError::InvalidRequest(format!("Cannot determine provider for model: {}", model))
+    let factory = get_factory().lock().map_err(|_| LLMError::Provider {
+        message: ctx_err!("llm factory", "lock poisoned"),
+        metadata: None,
     })?;
+    let provider_name =
+        factory
+            .provider_from_model(model)
+            .ok_or_else(|| LLMError::InvalidRequest {
+                message: format!("Cannot determine provider for model: {}", model),
+                metadata: None,
+            })?;
 
     factory.create_provider(
         &provider_name,
@@ -214,9 +223,10 @@ pub fn create_provider_with_config(
     prompt_cache: Option<PromptCachingConfig>,
     timeouts: Option<TimeoutsConfig>,
 ) -> Result<Box<dyn LLMProvider>, LLMError> {
-    let factory = get_factory()
-        .lock()
-        .map_err(|_| LLMError::Provider(ctx_err!("llm factory", "lock poisoned")))?;
+    let factory = get_factory().lock().map_err(|_| LLMError::Provider {
+        message: ctx_err!("llm factory", "lock poisoned"),
+        metadata: None,
+    })?;
     factory.create_provider(
         provider_name,
         ProviderConfig {

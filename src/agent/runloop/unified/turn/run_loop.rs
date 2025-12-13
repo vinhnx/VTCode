@@ -2115,10 +2115,13 @@ pub(crate) async fn run_single_agent_loop_unified(
 
                     if ctrl_c_state.is_cancel_requested() || ctrl_c_state.is_exit_requested() {
                         thinking_spinner.finish();
-                        Err(uni::LLMError::Provider(error_display::format_llm_error(
-                            &provider_name,
-                            "Interrupted by user",
-                        )))
+                        Err(uni::LLMError::Provider {
+                            message: error_display::format_llm_error(
+                                &provider_name,
+                                "Interrupted by user",
+                            ),
+                            metadata: None,
+                        })
                     } else {
                         // Get LLM request timeout from config (default: 120 seconds)
                         let llm_timeout_secs = vt_cfg
@@ -2141,17 +2144,23 @@ pub(crate) async fn run_single_agent_loop_unified(
                             }
                             _ = &mut cancel_notifier => {
                                 thinking_spinner.finish();
-                                Err(uni::LLMError::Provider(error_display::format_llm_error(
-                                    &provider_name,
-                                    "Interrupted by user",
-                                )))
+                                Err(uni::LLMError::Provider {
+                                    message: error_display::format_llm_error(
+                                        &provider_name,
+                                        "Interrupted by user",
+                                    ),
+                                    metadata: None,
+                                })
                             }
                             _ = &mut timeout_future => {
                                 thinking_spinner.finish();
-                                Err(uni::LLMError::Provider(error_display::format_llm_error(
-                                    &provider_name,
-                                    &format!("Request timed out after {} seconds. The LLM is taking too long to respond. Try a simpler prompt or check your network connection.", llm_timeout_secs),
-                                )))
+                                Err(uni::LLMError::Provider {
+                                    message: error_display::format_llm_error(
+                                        &provider_name,
+                                        &format!("Request timed out after {} seconds. The LLM is taking too long to respond. Try a simpler prompt or check your network connection.", llm_timeout_secs),
+                                    ),
+                                    metadata: None,
+                                })
                             }
                         };
                         outcome

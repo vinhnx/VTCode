@@ -198,7 +198,10 @@ impl LLMProvider for MoonshotProvider {
                     PROVIDER_NAME,
                     &format!("Network error: {}", e),
                 );
-                LLMError::Network(formatted_error)
+                LLMError::Network {
+                    message: formatted_error,
+                    metadata: None,
+                }
             })?;
 
         let response =
@@ -209,7 +212,10 @@ impl LLMProvider for MoonshotProvider {
                 PROVIDER_NAME,
                 &format!("Failed to parse response: {}", e),
             );
-            LLMError::Provider(formatted_error)
+            LLMError::Provider {
+                message: formatted_error,
+                metadata: None,
+            }
         })?;
 
         self.parse_response(response_json)

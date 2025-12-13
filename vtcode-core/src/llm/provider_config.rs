@@ -388,8 +388,8 @@ pub fn create_provider_unified(
     use crate::config::models::Provider;
 
     let provider = Provider::from_str(provider_name)
-        .map_err(|_| crate::llm::provider::LLMError::InvalidRequest(
-            format!("Unknown provider: {}", provider_name)
+        .map_err(|_| crate::llm::provider::LLMError::InvalidRequest { message: 
+            format!("Unknown provider: {}", provider_name, metadata: None }
         ))?;
 
     match provider {

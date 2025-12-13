@@ -4,7 +4,8 @@ use crate::config::core::PromptCachingConfig;
 use crate::llm::client::LLMClient;
 use crate::llm::error_display;
 use crate::llm::provider::{
-    LLMError, LLMProvider, LLMRequest, LLMResponse, MessageRole, ToolChoice, Usage,
+    LLMError, LLMErrorMetadata, LLMProvider, LLMRequest, LLMResponse, MessageRole, ToolChoice,
+    Usage,
 };
 use crate::llm::types as llm_types;
 use async_trait::async_trait;
@@ -162,7 +163,10 @@ impl ZAIProvider {
 
         if messages.is_empty() {
             let formatted = error_display::format_llm_error(PROVIDER_NAME, "No messages provided");
-            return Err(LLMError::InvalidRequest(formatted));
+            return Err(LLMError::InvalidRequest {
+                message: formatted,
+                metadata: None,
+            });
         }
 
         let mut payload = json!({
@@ -261,7 +265,10 @@ impl ZAIProvider {
 
         if self.api_key.trim().is_empty() {
             let formatted = error_display::format_llm_error(PROVIDER_NAME, "Missing Z.AI API key");
-            return Err(LLMError::Authentication(formatted));
+            return Err(LLMError::Authentication {
+                message: formatted,
+                metadata: None,
+            });
         }
 
         self.validated_api_key.store(true, Ordering::Relaxed);
@@ -301,9 +308,22 @@ impl ZAIProvider {
         error_code: &str,
         message: &str,
         request_id: &str,
+        retry_after: Option<&str>,
     ) -> Option<LLMError> {
         let code_num = error_code.parse::<u16>().ok();
         let message_lower = message.to_ascii_lowercase();
+        let metadata = Some(LLMErrorMetadata::new(
+            PROVIDER_NAME,
+            Some(status.as_u16()),
+            if error_code.is_empty() {
+                None
+            } else {
+                Some(error_code.to_string())
+            },
+            Some(request_id.to_string()),
+            retry_after.map(|v| v.to_string()),
+            Some(message.to_string()),
+        ));
 
         let is_auth = status == StatusCode::UNAUTHORIZED
             || matches!(code_num, Some(1000..=1004))
@@ -324,15 +344,23 @@ impl ZAIProvider {
             || message_lower.contains("balance");
 
         if is_balance_or_quota {
-            let diagnostic = Self::format_diagnostic(status, error_code, message, request_id, None);
+            let diagnostic =
+                Self::format_diagnostic(status, error_code, message, request_id, retry_after);
             let formatted = error_display::format_llm_error(PROVIDER_NAME, &diagnostic);
-            return Some(LLMError::Provider(formatted));
+            return Some(LLMError::Provider {
+                message: formatted,
+                metadata: metadata.clone(),
+            });
         }
 
         if is_auth || is_account_issue {
-            let diagnostic = Self::format_diagnostic(status, error_code, message, request_id, None);
+            let diagnostic =
+                Self::format_diagnostic(status, error_code, message, request_id, retry_after);
             let formatted = error_display::format_llm_error(PROVIDER_NAME, &diagnostic);
-            return Some(LLMError::Authentication(formatted));
+            return Some(LLMError::Authentication {
+                message: formatted,
+                metadata: metadata.clone(),
+            });
         }
 
         let is_rate_limit = status == StatusCode::TOO_MANY_REQUESTS
@@ -349,7 +377,7 @@ impl ZAIProvider {
             || message_lower.contains("package has expired");
 
         if is_rate_limit {
-            return Some(LLMError::RateLimit);
+            return Some(LLMError::RateLimit { metadata });
         }
 
         None
@@ -400,13 +428,19 @@ impl LLMProvider for ZAIProvider {
                 PROVIDER_NAME,
                 &format!("Unsupported model: {}", request.model),
             );
-            return Err(LLMError::InvalidRequest(formatted));
+            return Err(LLMError::InvalidRequest {
+                message: formatted,
+                metadata: None,
+            });
         }
 
         for message in &request.messages {
             if let Err(err) = message.validate_for_provider(PROVIDER_KEY) {
                 let formatted = error_display::format_llm_error(PROVIDER_NAME, &err);
-                return Err(LLMError::InvalidRequest(formatted));
+                return Err(LLMError::InvalidRequest {
+                    message: formatted,
+                    metadata: None,
+                });
             }
         }
 
@@ -426,7 +460,10 @@ impl LLMProvider for ZAIProvider {
                     PROVIDER_NAME,
                     &format!("Network error: {}", err),
                 );
-                LLMError::Network(formatted)
+                LLMError::Network {
+                    message: formatted,
+                    metadata: None,
+                }
             })?;
 
         if !response.status().is_success() {
@@ -472,6 +509,18 @@ impl LLMProvider for ZAIProvider {
                 &request_id,
                 retry_after.as_deref(),
             );
+            let metadata = Some(LLMErrorMetadata::new(
+                PROVIDER_NAME,
+                Some(status.as_u16()),
+                if error_code.is_empty() {
+                    None
+                } else {
+                    Some(error_code.to_string())
+                },
+                Some(request_id.clone()),
+                retry_after.clone(),
+                Some(message.clone()),
+            ));
             let trimmed_body: String = text.chars().take(LOG_BODY_MAX_CHARS).collect();
             error!(
                 target = "vtcode::llm::zai",
@@ -484,12 +533,21 @@ impl LLMProvider for ZAIProvider {
                 "Z.AI request failed"
             );
 
-            if let Some(mapped) = self.classify_error(status, &error_code, &message, &request_id) {
+            if let Some(mapped) = self.classify_error(
+                status,
+                &error_code,
+                &message,
+                &request_id,
+                retry_after.as_deref(),
+            ) {
                 return Err(mapped);
             }
 
             let formatted = error_display::format_llm_error(PROVIDER_NAME, &diagnostic);
-            return Err(LLMError::Provider(formatted));
+            return Err(LLMError::Provider {
+                message: formatted,
+                metadata,
+            });
         }
 
         let json: Value = response.json().await.map_err(|err| {
@@ -497,7 +555,10 @@ impl LLMProvider for ZAIProvider {
                 PROVIDER_NAME,
                 &format!("Failed to parse response: {}", err),
             );
-            LLMError::Provider(formatted)
+            LLMError::Provider {
+                message: formatted,
+                metadata: None,
+            }
         })?;
 
         self.parse_zai_response(json)
@@ -600,24 +661,42 @@ mod tests {
             "1000",
             "Authentication Failed",
             "<req>",
+            None,
         );
-        assert!(matches!(auth_error, Some(LLMError::Authentication(_))));
+        assert!(matches!(
+            auth_error,
+            Some(LLMError::Authentication {
+                metadata: Some(_),
+                ..
+            })
+        ));
 
         let quota_error = provider.classify_error(
             StatusCode::TOO_MANY_REQUESTS,
             "1113",
             "Insufficient balance or no resource package. Please recharge.",
             "<req>",
+            None,
         );
-        assert!(matches!(quota_error, Some(LLMError::Provider(_))));
+        assert!(matches!(
+            quota_error,
+            Some(LLMError::Provider {
+                metadata: Some(_),
+                ..
+            })
+        ));
 
         let rate_limit_error = provider.classify_error(
             StatusCode::TOO_MANY_REQUESTS,
             "1302",
             "High concurrency usage",
             "<req>",
+            None,
         );
-        assert!(matches!(rate_limit_error, Some(LLMError::RateLimit)));
+        assert!(matches!(
+            rate_limit_error,
+            Some(LLMError::RateLimit { metadata: Some(_) })
+        ));
     }
 
     #[test]
