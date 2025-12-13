@@ -181,14 +181,20 @@ impl LLMProvider for LmStudioProvider {
         if request.messages.is_empty() {
             let formatted_error =
                 error_display::format_llm_error("LM Studio", "Messages cannot be empty");
-            return Err(LLMError::InvalidRequest(formatted_error));
+            return Err(LLMError::InvalidRequest {
+                message: formatted_error,
+                metadata: None,
+            });
         }
 
         // Validate messages against provider's requirements
         for message in &request.messages {
             if let Err(err) = message.validate_for_provider("openai") {
                 let formatted = error_display::format_llm_error("LM Studio", &err);
-                return Err(LLMError::InvalidRequest(formatted));
+                return Err(LLMError::InvalidRequest {
+                    message: formatted,
+                    metadata: None,
+                });
             }
         }
 

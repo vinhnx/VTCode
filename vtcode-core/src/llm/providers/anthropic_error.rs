@@ -24,12 +24,15 @@ pub async fn handle_anthropic_http_error(response: Response) -> Result<Response,
             "Anthropic",
             "Authentication failed (check ANTHROPIC_API_KEY)",
         );
-        return Err(LLMError::Authentication(formatted_error));
+        return Err(LLMError::Authentication {
+            message: formatted_error,
+            metadata: None,
+        });
     }
 
     // Rate limit errors
     if status.as_u16() == STATUS_TOO_MANY_REQUESTS {
-        return Err(LLMError::RateLimit);
+        return Err(LLMError::RateLimit { metadata: None });
     }
 
     // Parse error message from Anthropic's error format
@@ -50,7 +53,10 @@ pub async fn handle_anthropic_http_error(response: Response) -> Result<Response,
     };
 
     let formatted_error = error_display::format_llm_error("Anthropic", &error_message);
-    Err(LLMError::Provider(formatted_error))
+    Err(LLMError::Provider {
+        message: formatted_error,
+        metadata: None,
+    })
 }
 
 #[cfg(test)]

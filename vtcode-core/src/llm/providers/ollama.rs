@@ -366,8 +366,9 @@ impl OllamaProvider {
             return Ok(Value::Object(Map::new()));
         }
 
-        serde_json::from_str(arguments).map_err(|err| {
-            LLMError::InvalidRequest(format!("Failed to parse tool arguments for Ollama: {err}"))
+        serde_json::from_str(arguments).map_err(|err| LLMError::InvalidRequest {
+            message: format!("Failed to parse tool arguments for Ollama: {err}"),
+            metadata: None,
         })
     }
 
@@ -399,14 +400,14 @@ impl OllamaProvider {
 
         let mut converted = Vec::new();
         for (index, call) in tool_calls.into_iter().enumerate() {
-            let function = call.function.ok_or_else(|| {
-                LLMError::Provider(
-                    "Ollama response missing function details for tool call".to_string(),
-                )
+            let function = call.function.ok_or_else(|| LLMError::Provider {
+                message: "Ollama response missing function details for tool call".to_string(),
+                metadata: None,
             })?;
 
-            let name = function.name.ok_or_else(|| {
-                LLMError::Provider("Ollama response missing tool function name".to_string())
+            let name = function.name.ok_or_else(|| LLMError::Provider {
+                message: "Ollama response missing tool function name".to_string(),
+                metadata: None,
             })?;
 
             let arguments_value = function
@@ -414,8 +415,9 @@ impl OllamaProvider {
                 .unwrap_or_else(|| Value::Object(Map::new()));
             let arguments = match arguments_value {
                 Value::String(raw) => raw,
-                other => serde_json::to_string(&other).map_err(|err| {
-                    LLMError::Provider(format!("Failed to serialize Ollama tool arguments: {err}"))
+                other => serde_json::to_string(&other).map_err(|err| LLMError::Provider {
+                    message: format!("Failed to serialize Ollama tool arguments: {err}"),
+                    metadata: None,
                 })?,
             };
 
@@ -594,15 +596,23 @@ struct OllamaErrorResponse {
 
 fn map_reqwest_error(err: reqwest::Error) -> LLMError {
     if err.is_timeout() || err.is_connect() {
-        LLMError::Network(err.to_string())
+        LLMError::Network {
+            message: err.to_string(),
+            metadata: None,
+        }
     } else {
-        LLMError::Provider(err.to_string())
+        LLMError::Provider {
+            message: err.to_string(),
+            metadata: None,
+        }
     }
 }
 
 fn parse_stream_chunk(line: &str) -> Result<OllamaChatResponse, LLMError> {
-    serde_json::from_str::<OllamaChatResponse>(line)
-        .map_err(|err| LLMError::Provider(format!("Failed to parse Ollama stream chunk: {err}")))
+    serde_json::from_str::<OllamaChatResponse>(line).map_err(|err| LLMError::Provider {
+        message: format!("Failed to parse Ollama stream chunk: {err}"),
+        metadata: None,
+    })
 }
 
 #[async_trait]
@@ -647,7 +657,10 @@ impl LLMProvider for OllamaProvider {
             let body = response.text().await.unwrap_or_default();
             let error_message = Self::extract_error(&body)
                 .unwrap_or_else(|| format!("Ollama request failed ({status}): {body}"));
-            return Err(LLMError::Provider(error_message));
+            return Err(LLMError::Provider {
+                message: error_message,
+                metadata: None,
+            });
         }
 
         let parsed = response
@@ -656,7 +669,10 @@ impl LLMProvider for OllamaProvider {
             .map_err(map_reqwest_error)?;
 
         if let Some(error) = parsed.error {
-            return Err(LLMError::Provider(error));
+            return Err(LLMError::Provider {
+                message: error,
+                metadata: None,
+            });
         }
 
         let (content, reasoning, tool_calls) = if let Some(message) = parsed.message {
@@ -702,7 +718,10 @@ impl LLMProvider for OllamaProvider {
             let body = response.text().await.unwrap_or_default();
             let error_message = Self::extract_error(&body)
                 .unwrap_or_else(|| format!("Ollama streaming request failed ({status}): {body}"));
-            return Err(LLMError::Provider(error_message));
+            return Err(LLMError::Provider {
+                message: error_message,
+                metadata: None,
+            });
         }
 
         let byte_stream = response.bytes_stream();
@@ -724,7 +743,10 @@ impl LLMProvider for OllamaProvider {
                 while let Some(pos) = buffer.iter().position(|b| *b == b'\n') {
                     let line_bytes: Vec<u8> = buffer.drain(..=pos).collect();
                     let line = std::str::from_utf8(&line_bytes)
-                        .map_err(|err| LLMError::Provider(format!("Invalid UTF-8 in Ollama stream: {err}")))?
+                        .map_err(|err| LLMError::Provider {
+                            message: format!("Invalid UTF-8 in Ollama stream: {err}"),
+                            metadata: None,
+                        })?
                         .trim();
 
                     if line.is_empty() {
@@ -734,7 +756,10 @@ impl LLMProvider for OllamaProvider {
                     let parsed = parse_stream_chunk(line)?;
 
                     if let Some(error) = parsed.error {
-                        Err(LLMError::Provider(error))?;
+                        Err(LLMError::Provider {
+                            message: error,
+                            metadata: None,
+                        })?;
                     }
 
                     if let Some(message) = parsed.message {
@@ -774,9 +799,10 @@ impl LLMProvider for OllamaProvider {
             }
 
             if !completed {
-                Err(LLMError::Provider(
-                    "Ollama stream ended without completion signal".to_string(),
-                ))?;
+                Err(LLMError::Provider {
+                    message: "Ollama stream ended without completion signal".to_string(),
+                    metadata: None,
+                })?;
             }
 
             let response = Self::build_response(
@@ -814,24 +840,28 @@ impl LLMProvider for OllamaProvider {
             match tool_choice {
                 ToolChoice::Auto | ToolChoice::None => {}
                 _ => {
-                    return Err(LLMError::InvalidRequest(
-                        "Ollama does not support explicit tool_choice overrides".to_string(),
-                    ));
+                    return Err(LLMError::InvalidRequest {
+                        message: "Ollama does not support explicit tool_choice overrides"
+                            .to_string(),
+                        metadata: None,
+                    });
                 }
             }
         }
 
         if request.parallel_tool_calls.is_some() || request.parallel_tool_config.is_some() {
-            return Err(LLMError::InvalidRequest(
-                "Ollama does not support parallel tool configuration".to_string(),
-            ));
+            return Err(LLMError::InvalidRequest {
+                message: "Ollama does not support parallel tool configuration".to_string(),
+                metadata: None,
+            });
         }
 
         for message in &request.messages {
             if matches!(message.role, MessageRole::Tool) && message.tool_call_id.is_none() {
-                return Err(LLMError::InvalidRequest(
-                    "Ollama tool responses must include tool_call_id".to_string(),
-                ));
+                return Err(LLMError::InvalidRequest {
+                    message: "Ollama tool responses must include tool_call_id".to_string(),
+                    metadata: None,
+                });
             }
         }
 

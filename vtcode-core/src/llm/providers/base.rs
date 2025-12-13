@@ -47,25 +47,33 @@ impl ProviderConfig {
             .timeout(self.timeout)
             .connect_timeout(Duration::from_secs(30))
             .build()
-            .map_err(|e| LLMError::Network(format!("Failed to build HTTP client: {}", e)))
+            .map_err(|e| LLMError::Network {
+                message: format!("Failed to build HTTP client: {}", e),
+                metadata: None,
+            })
     }
 }
 
 /// Common HTTP error handling for all providers
 pub fn handle_http_error(status: StatusCode, error_text: &str, _model: &str) -> LLMError {
     match status {
-        StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => LLMError::Authentication(format!(
-            "Authentication failed ({}): {}",
-            status, error_text
-        )),
-        StatusCode::TOO_MANY_REQUESTS => LLMError::RateLimit,
-        StatusCode::REQUEST_TIMEOUT => {
-            LLMError::Network(format!("Request timeout ({}): {}", status, error_text))
-        }
-        _ if status.is_server_error() => {
-            LLMError::Provider(format!("Server error ({}): {}", status, error_text))
-        }
-        _ => LLMError::Network(format!("HTTP error ({}): {}", status, error_text)),
+        StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => LLMError::Authentication {
+            message: format!("Authentication failed ({}): {}", status, error_text),
+            metadata: None,
+        },
+        StatusCode::TOO_MANY_REQUESTS => LLMError::RateLimit { metadata: None },
+        StatusCode::REQUEST_TIMEOUT => LLMError::Network {
+            message: format!("Request timeout ({}): {}", status, error_text),
+            metadata: None,
+        },
+        _ if status.is_server_error() => LLMError::Provider {
+            message: format!("Server error ({}): {}", status, error_text),
+            metadata: None,
+        },
+        _ => LLMError::Network {
+            message: format!("HTTP error ({}): {}", status, error_text),
+            metadata: None,
+        },
     }
 }
 
@@ -233,10 +241,10 @@ pub trait BaseProvider: Send + Sync {
                                     }
                                 }
                                 Err(e) => {
-                                    let error = LLMError::Network(format!(
-                                        "Failed to read response: {}",
-                                        e
-                                    ));
+                                    let error = LLMError::Network {
+                                        message: format!("Failed to read response: {}", e),
+                                        metadata: None,
+                                    };
                                     if attempt < max_retries {
                                         last_error = Some(error);
                                         continue;
@@ -246,7 +254,10 @@ pub trait BaseProvider: Send + Sync {
                             }
                         }
                         Err(e) => {
-                            let error = LLMError::Network(format!("Request failed: {}", e));
+                            let error = LLMError::Network {
+                                message: format!("Request failed: {}", e),
+                                metadata: None,
+                            };
                             if attempt < max_retries {
                                 sleep(backoff_duration(attempt)).await;
                                 last_error = Some(error);
@@ -267,7 +278,10 @@ pub trait BaseProvider: Send + Sync {
         }
 
         // All retries exhausted
-        Err(last_error.unwrap_or_else(|| LLMError::Network("All retries exhausted".to_string())))
+        Err(last_error.unwrap_or_else(|| LLMError::Network {
+            message: "All retries exhausted".to_string(),
+            metadata: None,
+        }))
     }
 }
 
@@ -307,7 +321,7 @@ async fn acquire_model_permit(model: &str) -> Result<OwnedSemaphorePermit, LLMEr
     let limiter = limiter_for_model(model);
     match timeout(RATE_LIMIT_ACQUIRE_TIMEOUT, limiter.acquire_owned()).await {
         Ok(Ok(permit)) => Ok(permit),
-        Ok(Err(_)) => Err(LLMError::RateLimit),
-        Err(_) => Err(LLMError::RateLimit),
+        Ok(Err(_)) => Err(LLMError::RateLimit { metadata: None }),
+        Err(_) => Err(LLMError::RateLimit { metadata: None }),
     }
 }

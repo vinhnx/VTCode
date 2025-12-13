@@ -1337,29 +1337,99 @@ pub trait LLMProvider: Send + Sync {
     fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError>;
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LLMErrorMetadata {
+    pub provider: &'static str,
+    pub status: Option<u16>,
+    pub code: Option<String>,
+    pub request_id: Option<String>,
+    pub retry_after: Option<String>,
+    pub message: Option<String>,
+}
+
+impl LLMErrorMetadata {
+    pub fn new(
+        provider: &'static str,
+        status: Option<u16>,
+        code: Option<String>,
+        request_id: Option<String>,
+        retry_after: Option<String>,
+        message: Option<String>,
+    ) -> Self {
+        Self {
+            provider,
+            status,
+            code,
+            request_id,
+            retry_after,
+            message,
+        }
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum LLMError {
-    #[error("Authentication failed: {0}")]
-    Authentication(String),
+    #[error("Authentication failed: {message}")]
+    Authentication {
+        message: String,
+        metadata: Option<LLMErrorMetadata>,
+    },
     #[error("Rate limit exceeded")]
-    RateLimit,
-    #[error("Invalid request: {0}")]
-    InvalidRequest(String),
-    #[error("Network error: {0}")]
-    Network(String),
-    #[error("Provider error: {0}")]
-    Provider(String),
+    RateLimit { metadata: Option<LLMErrorMetadata> },
+    #[error("Invalid request: {message}")]
+    InvalidRequest {
+        message: String,
+        metadata: Option<LLMErrorMetadata>,
+    },
+    #[error("Network error: {message}")]
+    Network {
+        message: String,
+        metadata: Option<LLMErrorMetadata>,
+    },
+    #[error("Provider error: {message}")]
+    Provider {
+        message: String,
+        metadata: Option<LLMErrorMetadata>,
+    },
 }
 
 // Implement conversion from provider::LLMError to llm::types::LLMError
 impl From<LLMError> for crate::llm::types::LLMError {
     fn from(err: LLMError) -> crate::llm::types::LLMError {
+        let convert = |meta: Option<LLMErrorMetadata>| {
+            meta.map(|m| crate::llm::types::LLMErrorMetadata {
+                provider: Some(m.provider.to_string()),
+                status: m.status,
+                code: m.code,
+                request_id: m.request_id,
+                retry_after: m.retry_after,
+                message: m.message,
+            })
+        };
         match err {
-            LLMError::Authentication(msg) => crate::llm::types::LLMError::ApiError(msg),
-            LLMError::RateLimit => crate::llm::types::LLMError::RateLimit,
-            LLMError::InvalidRequest(msg) => crate::llm::types::LLMError::InvalidRequest(msg),
-            LLMError::Network(msg) => crate::llm::types::LLMError::NetworkError(msg),
-            LLMError::Provider(msg) => crate::llm::types::LLMError::ApiError(msg),
+            LLMError::Authentication { message, metadata } => {
+                crate::llm::types::LLMError::ApiError {
+                    message,
+                    metadata: convert(metadata),
+                }
+            }
+            LLMError::RateLimit { metadata } => crate::llm::types::LLMError::RateLimit {
+                metadata: convert(metadata),
+            },
+            LLMError::InvalidRequest { message, metadata } => {
+                crate::llm::types::LLMError::InvalidRequest {
+                    message,
+                    metadata: convert(metadata),
+                }
+            }
+            LLMError::Network { message, metadata } => crate::llm::types::LLMError::NetworkError {
+                message,
+                metadata: convert(metadata),
+            },
+            LLMError::Provider { message, metadata } => crate::llm::types::LLMError::ApiError {
+                message,
+                metadata: convert(metadata),
+            },
         }
     }
 }

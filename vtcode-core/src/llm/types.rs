@@ -34,15 +34,34 @@ pub struct Usage {
     pub cache_read_tokens: Option<usize>,
 }
 
-/// LLM error types
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct LLMErrorMetadata {
+    pub provider: Option<String>,
+    pub status: Option<u16>,
+    pub code: Option<String>,
+    pub request_id: Option<String>,
+    pub retry_after: Option<String>,
+    pub message: Option<String>,
+}
+
+/// LLM error types with optional provider metadata
 #[derive(Debug, thiserror::Error)]
 pub enum LLMError {
-    #[error("API error: {0}")]
-    ApiError(String),
-    #[error("Network error: {0}")]
-    NetworkError(String),
+    #[error("API error: {message}")]
+    ApiError {
+        message: String,
+        metadata: Option<LLMErrorMetadata>,
+    },
+    #[error("Network error: {message}")]
+    NetworkError {
+        message: String,
+        metadata: Option<LLMErrorMetadata>,
+    },
     #[error("Rate limit exceeded")]
-    RateLimit,
-    #[error("Invalid request: {0}")]
-    InvalidRequest(String),
+    RateLimit { metadata: Option<LLMErrorMetadata> },
+    #[error("Invalid request: {message}")]
+    InvalidRequest {
+        message: String,
+        metadata: Option<LLMErrorMetadata>,
+    },
 }

@@ -166,12 +166,18 @@ fn parse_responses_payload(
                 "OpenAI",
                 "Invalid response format: missing output",
             );
-            LLMError::Provider(formatted_error)
+            LLMError::Provider {
+                message: formatted_error,
+                metadata: None,
+            }
         })?;
 
     if output.is_empty() {
         let formatted_error = error_display::format_llm_error("OpenAI", "No output in response");
-        return Err(LLMError::Provider(formatted_error));
+        return Err(LLMError::Provider {
+            message: formatted_error,
+            metadata: None,
+        });
     }
 
     let mut content_fragments = Vec::with_capacity(output.len() * 2); // Estimate 2 fragments per output item
@@ -1086,7 +1092,10 @@ impl OpenAIProvider {
 
         if messages.is_empty() {
             let formatted_error = error_display::format_llm_error("OpenAI", "No messages provided");
-            return Err(LLMError::InvalidRequest(formatted_error));
+            return Err(LLMError::InvalidRequest {
+                message: formatted_error,
+                metadata: None,
+            });
         }
 
         let mut openai_request = json!({
@@ -1160,7 +1169,10 @@ impl OpenAIProvider {
         if responses_payload.input.is_empty() {
             let formatted_error =
                 error_display::format_llm_error("OpenAI", "No messages provided for Responses API");
-            return Err(LLMError::InvalidRequest(formatted_error));
+            return Err(LLMError::InvalidRequest {
+                message: formatted_error,
+                metadata: None,
+            });
         }
 
         let mut openai_request = json!({
@@ -1308,13 +1320,19 @@ impl OpenAIProvider {
                     "OpenAI",
                     "Invalid response format: missing choices",
                 );
-                LLMError::Provider(formatted_error)
+                LLMError::Provider {
+                    message: formatted_error,
+                    metadata: None,
+                }
             })?;
 
         if choices.is_empty() {
             let formatted_error =
                 error_display::format_llm_error("OpenAI", "No choices in response");
-            return Err(LLMError::Provider(formatted_error));
+            return Err(LLMError::Provider {
+                message: formatted_error,
+                metadata: None,
+            });
         }
 
         let choice = &choices[0];
@@ -1323,7 +1341,10 @@ impl OpenAIProvider {
                 "OpenAI",
                 "Invalid response format: missing message",
             );
-            LLMError::Provider(formatted_error)
+            LLMError::Provider {
+                message: formatted_error,
+                metadata: None,
+            }
         })?;
 
         let content = match message.get("content") {
@@ -1448,7 +1469,10 @@ impl OpenAIProvider {
                 "OpenAI",
                 &format!("Failed to load harmony encoding: {}", e),
             );
-            LLMError::Provider(formatted_error)
+            LLMError::Provider {
+                message: formatted_error,
+                metadata: None,
+            }
         })?;
 
         // Convert to harmony conversation
@@ -1462,7 +1486,10 @@ impl OpenAIProvider {
                     "OpenAI",
                     &format!("Failed to render conversation: {}", e),
                 );
-                LLMError::Provider(formatted_error)
+                LLMError::Provider {
+                    message: formatted_error,
+                    metadata: None,
+                }
             })?;
 
         // Send tokens to inference server
@@ -1485,7 +1512,10 @@ impl OpenAIProvider {
                     "OpenAI",
                     &format!("Failed to parse completion tokens: {}", e),
                 );
-                LLMError::Provider(formatted_error)
+                LLMError::Provider {
+                    message: formatted_error,
+                    metadata: None,
+                }
             })?;
 
         // Extract content from parsed messages
@@ -1650,7 +1680,10 @@ impl OpenAIProvider {
                 "OpenAI",
                 &format!("Failed to load harmony encoding for stop tokens: {}", e),
             );
-            LLMError::Provider(formatted_error)
+            LLMError::Provider {
+                message: formatted_error,
+                metadata: None,
+            }
         })?;
 
         let stop_token_ids = encoding.stop_tokens_for_assistant_actions().map_err(|e| {
@@ -1658,7 +1691,10 @@ impl OpenAIProvider {
                 "OpenAI",
                 &format!("Failed to get stop tokens: {}", e),
             );
-            LLMError::Provider(formatted_error)
+            LLMError::Provider {
+                message: formatted_error,
+                metadata: None,
+            }
         })?;
 
         // Convert HashSet to Vec for JSON serialization
@@ -1692,7 +1728,10 @@ impl OpenAIProvider {
                         server_url, e
                     ),
                 );
-                LLMError::Network(formatted_error)
+                LLMError::Network {
+                    message: formatted_error,
+                    metadata: None,
+                }
             })?;
 
         // Check response status
@@ -1709,7 +1748,10 @@ impl OpenAIProvider {
                     "Harmony inference server error",
                 ),
             );
-            return Err(LLMError::Provider(formatted_error));
+            return Err(LLMError::Provider {
+                message: formatted_error,
+                metadata: None,
+            });
         }
 
         // Parse response JSON
@@ -1718,7 +1760,10 @@ impl OpenAIProvider {
                 "OpenAI",
                 &format!("Failed to parse harmony inference response: {}", e),
             );
-            LLMError::Provider(formatted_error)
+            LLMError::Provider {
+                message: formatted_error,
+                metadata: None,
+            }
         })?;
 
         // Extract completion tokens from response
@@ -1767,7 +1812,10 @@ impl OpenAIProvider {
                 "OpenAI",
                 "No completion tokens received from harmony inference server",
             );
-            return Err(LLMError::Provider(formatted_error));
+            return Err(LLMError::Provider {
+                message: formatted_error,
+                metadata: None,
+            });
         }
 
         Ok(completion_tokens)
@@ -2314,7 +2362,10 @@ fn build_standard_responses_payload(
                         "OpenAI",
                         "Tool messages must include tool_call_id for Responses API",
                     );
-                    LLMError::InvalidRequest(formatted_error)
+                    LLMError::InvalidRequest {
+                        message: formatted_error,
+                        metadata: None,
+                    }
                 })?;
 
                 if !active_tool_call_ids.contains(tool_call_id) {
@@ -2432,7 +2483,10 @@ fn build_codex_responses_payload(request: &LLMRequest) -> Result<OpenAIResponses
                         "OpenAI",
                         "Tool messages must include tool_call_id for Responses API",
                     );
-                    LLMError::InvalidRequest(formatted_error)
+                    LLMError::InvalidRequest {
+                        message: formatted_error,
+                        metadata: None,
+                    }
                 })?;
 
                 if !active_tool_call_ids.contains(&tool_call_id) {
@@ -2593,7 +2647,10 @@ impl LLMProvider for OpenAIProvider {
             .map_err(|e| {
                 let formatted_error =
                     error_display::format_llm_error("OpenAI", &format!("Network error: {}", e));
-                LLMError::Network(formatted_error)
+                LLMError::Network {
+                    message: formatted_error,
+                    metadata: None,
+                }
             })?;
 
         if !response.status().is_success() {
@@ -2624,7 +2681,7 @@ impl LLMProvider for OpenAIProvider {
                 || error_text.contains("quota")
                 || error_text.contains("rate limit")
             {
-                return Err(LLMError::RateLimit);
+                return Err(LLMError::RateLimit { metadata: None });
             }
 
             if is_model_not_found(status, &error_text) {
@@ -2651,14 +2708,20 @@ impl LLMProvider for OpenAIProvider {
                     "OpenAI",
                     &format_openai_error(status, &error_text, &headers, "Model not available"),
                 );
-                return Err(LLMError::Provider(formatted_error));
+                return Err(LLMError::Provider {
+                    message: formatted_error,
+                    metadata: None,
+                });
             }
 
             let formatted_error = error_display::format_llm_error(
                 "OpenAI",
                 &format_openai_error(status, &error_text, &headers, "Responses API error"),
             );
-            return Err(LLMError::Provider(formatted_error));
+            return Err(LLMError::Provider {
+                message: formatted_error,
+                metadata: None,
+            });
         }
 
         #[cfg(debug_assertions)]
@@ -2689,7 +2752,7 @@ impl LLMProvider for OpenAIProvider {
                         "OpenAI",
                         &format!("Streaming error: {}", err),
                     );
-                    LLMError::Network(formatted_error)
+                    LLMError::Network { message: formatted_error, metadata: None }
                 })?;
 
                 buffer.push_str(&String::from_utf8_lossy(&chunk));
@@ -2760,7 +2823,7 @@ impl LLMProvider for OpenAIProvider {
                                         .and_then(|value| value.as_str())
                                         .unwrap_or("Streaming response failed");
                                     let formatted_error = error_display::format_llm_error("OpenAI", message);
-                                    Err(LLMError::Provider(formatted_error))?;
+                                    Err(LLMError::Provider { message: formatted_error, metadata: None })?;
                                 }
                                 "error" => {
                                     let message = payload
@@ -2768,7 +2831,7 @@ impl LLMProvider for OpenAIProvider {
                                         .and_then(|value| value.as_str())
                                         .unwrap_or("Streaming request failed");
                                     let formatted_error = error_display::format_llm_error("OpenAI", message);
-                                    Err(LLMError::Provider(formatted_error))?;
+                                    Err(LLMError::Provider { message: formatted_error, metadata: None })?;
                                 }
                                 _ => {}
                             }
@@ -2811,7 +2874,7 @@ impl LLMProvider for OpenAIProvider {
                         "OpenAI",
                         "Stream ended without a completion event",
                     );
-                    Err(LLMError::Provider(formatted_error))?
+                    Err(LLMError::Provider { message: formatted_error, metadata: None })?
                 }
             };
 
@@ -2890,7 +2953,10 @@ impl LLMProvider for OpenAIProvider {
                 .map_err(|e| {
                     let formatted_error =
                         error_display::format_llm_error("OpenAI", &format!("Network error: {}", e));
-                    LLMError::Network(formatted_error)
+                    LLMError::Network {
+                        message: formatted_error,
+                        metadata: None,
+                    }
                 })?;
 
             if !response.status().is_success() {
@@ -2913,7 +2979,7 @@ impl LLMProvider for OpenAIProvider {
                     || error_text.contains("quota")
                     || error_text.contains("rate limit")
                 {
-                    return Err(LLMError::RateLimit);
+                    return Err(LLMError::RateLimit { metadata: None });
                 } else if is_model_not_found(status, &error_text) {
                     if let Some(fallback_model) = fallback_model_if_not_found(&request.model) {
                         if fallback_model != request.model {
@@ -2939,7 +3005,10 @@ impl LLMProvider for OpenAIProvider {
                                         "OpenAI",
                                         &format!("Network error: {}", e),
                                     );
-                                    LLMError::Network(formatted_error)
+                                    LLMError::Network {
+                                        message: formatted_error,
+                                        metadata: None,
+                                    }
                                 })?;
                             if retry_response.status().is_success() {
                                 let openai_response: Value =
@@ -2948,7 +3017,10 @@ impl LLMProvider for OpenAIProvider {
                                             "OpenAI",
                                             &format!("Failed to parse response: {}", e),
                                         );
-                                        LLMError::Provider(formatted_error)
+                                        LLMError::Provider {
+                                            message: formatted_error,
+                                            metadata: None,
+                                        }
                                     })?;
                                 let response =
                                     self.parse_openai_responses_response(openai_response)?;
@@ -2960,13 +3032,19 @@ impl LLMProvider for OpenAIProvider {
                         "OpenAI",
                         &format_openai_error(status, &error_text, &headers, "Model not available"),
                     );
-                    return Err(LLMError::Provider(formatted_error));
+                    return Err(LLMError::Provider {
+                        message: formatted_error,
+                        metadata: None,
+                    });
                 } else {
                     let formatted_error = error_display::format_llm_error(
                         "OpenAI",
                         &format_openai_error(status, &error_text, &headers, "Responses API error"),
                     );
-                    return Err(LLMError::Provider(formatted_error));
+                    return Err(LLMError::Provider {
+                        message: formatted_error,
+                        metadata: None,
+                    });
                 }
             } else {
                 let openai_response: Value = response.json().await.map_err(|e| {
@@ -2974,7 +3052,10 @@ impl LLMProvider for OpenAIProvider {
                         "OpenAI",
                         &format!("Failed to parse response: {}", e),
                     );
-                    LLMError::Provider(formatted_error)
+                    LLMError::Provider {
+                        message: formatted_error,
+                        metadata: None,
+                    }
                 })?;
 
                 let response = self.parse_openai_responses_response(openai_response)?;
@@ -3013,7 +3094,10 @@ impl LLMProvider for OpenAIProvider {
             .map_err(|e| {
                 let formatted_error =
                     error_display::format_llm_error("OpenAI", &format!("Network error: {}", e));
-                LLMError::Network(formatted_error)
+                LLMError::Network {
+                    message: formatted_error,
+                    metadata: None,
+                }
             })?;
 
         if !response.status().is_success() {
@@ -3025,14 +3109,17 @@ impl LLMProvider for OpenAIProvider {
                 || error_text.contains("quota")
                 || error_text.contains("rate limit")
             {
-                return Err(LLMError::RateLimit);
+                return Err(LLMError::RateLimit { metadata: None });
             }
 
             let formatted_error = error_display::format_llm_error(
                 "OpenAI",
                 &format!("HTTP {}: {}", status, error_text),
             );
-            return Err(LLMError::Provider(formatted_error));
+            return Err(LLMError::Provider {
+                message: formatted_error,
+                metadata: None,
+            });
         }
 
         let openai_response: Value = response.json().await.map_err(|e| {
@@ -3040,7 +3127,10 @@ impl LLMProvider for OpenAIProvider {
                 "OpenAI",
                 &format!("Failed to parse response: {}", e),
             );
-            LLMError::Provider(formatted_error)
+            LLMError::Provider {
+                message: formatted_error,
+                metadata: None,
+            }
         })?;
 
         let response = self.parse_openai_response(openai_response)?;
@@ -3071,7 +3161,10 @@ impl LLMProvider for OpenAIProvider {
         if request.messages.is_empty() {
             let formatted_error =
                 error_display::format_llm_error("OpenAI", "Messages cannot be empty");
-            return Err(LLMError::InvalidRequest(formatted_error));
+            return Err(LLMError::InvalidRequest {
+                message: formatted_error,
+                metadata: None,
+            });
         }
 
         if !models::openai::SUPPORTED_MODELS
@@ -3082,13 +3175,19 @@ impl LLMProvider for OpenAIProvider {
                 "OpenAI",
                 &format!("Unsupported model: {}", request.model),
             );
-            return Err(LLMError::InvalidRequest(formatted_error));
+            return Err(LLMError::InvalidRequest {
+                message: formatted_error,
+                metadata: None,
+            });
         }
 
         for message in &request.messages {
             if let Err(err) = message.validate_for_provider("openai") {
                 let formatted = error_display::format_llm_error("OpenAI", &err);
-                return Err(LLMError::InvalidRequest(formatted));
+                return Err(LLMError::InvalidRequest {
+                    message: formatted,
+                    metadata: None,
+                });
             }
         }
 

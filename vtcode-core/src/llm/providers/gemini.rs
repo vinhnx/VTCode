@@ -149,12 +149,15 @@ impl GeminiProvider {
                     error_text
                 ),
             );
-            return LLMError::Authentication(formatted_error);
+            return LLMError::Authentication {
+                message: formatted_error,
+                metadata: None,
+            };
         }
 
         // Handle rate limit and quota errors using shared detection
         if is_rate_limit_error(status_code, error_text) {
-            return LLMError::RateLimit;
+            return LLMError::RateLimit { metadata: None };
         }
 
         // Handle invalid request errors
@@ -163,13 +166,19 @@ impl GeminiProvider {
                 "Gemini",
                 &format!("Invalid request: {}", error_text),
             );
-            return LLMError::InvalidRequest(formatted_error);
+            return LLMError::InvalidRequest {
+                message: formatted_error,
+                metadata: None,
+            };
         }
 
         // Generic error for other cases
         let formatted_error =
             error_display::format_llm_error("Gemini", &format!("HTTP {}: {}", status, error_text));
-        LLMError::Provider(formatted_error)
+        LLMError::Provider {
+            message: formatted_error,
+            metadata: None,
+        }
     }
 }
 
@@ -363,7 +372,10 @@ impl LLMProvider for GeminiProvider {
                 "Gemini",
                 &format!("Unsupported model: {}", request.model),
             );
-            return Err(LLMError::InvalidRequest(formatted_error));
+            return Err(LLMError::InvalidRequest {
+                message: formatted_error,
+                metadata: None,
+            });
         }
 
         // Validate token limits based on model capabilities
@@ -383,7 +395,10 @@ impl LLMProvider for GeminiProvider {
                         max_tokens, max_output_tokens, model
                     ),
                 );
-                return Err(LLMError::InvalidRequest(formatted_error));
+                return Err(LLMError::InvalidRequest {
+                    message: formatted_error,
+                    metadata: None,
+                });
             }
         }
 
@@ -672,7 +687,10 @@ impl GeminiProvider {
         let candidate = candidates.next().ok_or_else(|| {
             let formatted_error =
                 error_display::format_llm_error("Gemini", "No candidate in response");
-            LLMError::Provider(formatted_error)
+            LLMError::Provider {
+                message: formatted_error,
+                metadata: None,
+            }
         })?;
 
         if candidate.content.parts.is_empty() {
@@ -815,7 +833,10 @@ impl GeminiProvider {
                     "Gemini",
                     &format!("Network error: {}", message),
                 );
-                LLMError::Network(formatted)
+                LLMError::Network {
+                    message: formatted,
+                    metadata: None,
+                }
             }
             StreamingError::ApiError {
                 status_code,
@@ -827,21 +848,30 @@ impl GeminiProvider {
                         "Gemini",
                         &format!("HTTP {}: {}", status_code, message),
                     );
-                    LLMError::Authentication(formatted)
+                    LLMError::Authentication {
+                        message: formatted,
+                        metadata: None,
+                    }
                 } else if status_code == 429 {
-                    LLMError::RateLimit
+                    LLMError::RateLimit { metadata: None }
                 } else {
                     let formatted = error_display::format_llm_error(
                         "Gemini",
                         &format!("API error ({}): {}", status_code, message),
                     );
-                    LLMError::Provider(formatted)
+                    LLMError::Provider {
+                        message: formatted,
+                        metadata: None,
+                    }
                 }
             }
             StreamingError::ParseError { message, .. } => {
                 let formatted =
                     error_display::format_llm_error("Gemini", &format!("Parse error: {}", message));
-                LLMError::Provider(formatted)
+                LLMError::Provider {
+                    message: formatted,
+                    metadata: None,
+                }
             }
             StreamingError::TimeoutError {
                 operation,
@@ -854,21 +884,30 @@ impl GeminiProvider {
                         operation, duration
                     ),
                 );
-                LLMError::Network(formatted)
+                LLMError::Network {
+                    message: formatted,
+                    metadata: None,
+                }
             }
             StreamingError::ContentError { message } => {
                 let formatted = error_display::format_llm_error(
                     "Gemini",
                     &format!("Content error: {}", message),
                 );
-                LLMError::Provider(formatted)
+                LLMError::Provider {
+                    message: formatted,
+                    metadata: None,
+                }
             }
             StreamingError::StreamingError { message, .. } => {
                 let formatted = error_display::format_llm_error(
                     "Gemini",
                     &format!("Streaming error: {}", message),
                 );
-                LLMError::Provider(formatted)
+                LLMError::Provider {
+                    message: formatted,
+                    metadata: None,
+                }
             }
         }
     }

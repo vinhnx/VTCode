@@ -108,7 +108,10 @@ impl LLMProvider for XAIProvider {
     fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {
         if request.messages.is_empty() {
             let formatted = error_display::format_llm_error("xAI", "Messages cannot be empty");
-            return Err(LLMError::InvalidRequest(formatted));
+            return Err(LLMError::InvalidRequest {
+                message: formatted,
+                metadata: None,
+            });
         }
 
         if !request.model.trim().is_empty()
@@ -120,13 +123,19 @@ impl LLMProvider for XAIProvider {
                 "xAI",
                 &format!("Unsupported model: {}", request.model),
             );
-            return Err(LLMError::InvalidRequest(formatted));
+            return Err(LLMError::InvalidRequest {
+                message: formatted,
+                metadata: None,
+            });
         }
 
         for message in &request.messages {
             if let Err(err) = message.validate_for_provider("openai") {
                 let formatted = error_display::format_llm_error("xAI", &err);
-                return Err(LLMError::InvalidRequest(formatted));
+                return Err(LLMError::InvalidRequest {
+                    message: formatted,
+                    metadata: None,
+                });
             }
         }
 

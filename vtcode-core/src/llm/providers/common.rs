@@ -212,7 +212,10 @@ pub fn serialize_messages_openai_format(
     for message in &request.messages {
         message
             .validate_for_provider(provider_key)
-            .map_err(LLMError::InvalidRequest)?;
+            .map_err(|e| LLMError::InvalidRequest {
+                message: e,
+                metadata: None,
+            })?;
 
         let mut message_map = Map::with_capacity(4); // Pre-allocate for role, content, tool_calls, tool_call_id
         message_map.insert(
@@ -267,7 +270,10 @@ pub fn validate_request_common(
 ) -> Result<(), LLMError> {
     if request.messages.is_empty() {
         let formatted = error_display::format_llm_error(provider_name, "Messages cannot be empty");
-        return Err(LLMError::InvalidRequest(formatted));
+        return Err(LLMError::InvalidRequest {
+            message: formatted,
+            metadata: None,
+        });
     }
 
     if let Some(models) = supported_models
@@ -276,13 +282,19 @@ pub fn validate_request_common(
     {
         let msg = format!("Unsupported model: {}", request.model);
         let formatted = error_display::format_llm_error(provider_name, &msg);
-        return Err(LLMError::InvalidRequest(formatted));
+        return Err(LLMError::InvalidRequest {
+            message: formatted,
+            metadata: None,
+        });
     }
 
     for message in &request.messages {
         if let Err(err) = message.validate_for_provider(validation_provider) {
             let formatted = error_display::format_llm_error(provider_name, &err);
-            return Err(LLMError::InvalidRequest(formatted));
+            return Err(LLMError::InvalidRequest {
+                message: formatted,
+                metadata: None,
+            });
         }
     }
 
@@ -496,13 +508,19 @@ where
                 provider_name,
                 "Invalid response format: missing choices",
             );
-            LLMError::Provider(formatted_error)
+            LLMError::Provider {
+                message: formatted_error,
+                metadata: None,
+            }
         })?;
 
     if choices.is_empty() {
         let formatted_error =
             error_display::format_llm_error(provider_name, "No choices in response");
-        return Err(LLMError::Provider(formatted_error));
+        return Err(LLMError::Provider {
+            message: formatted_error,
+            metadata: None,
+        });
     }
 
     let choice = &choices[0];
@@ -511,7 +529,10 @@ where
             provider_name,
             "Invalid response format: missing message",
         );
-        LLMError::Provider(formatted_error)
+        LLMError::Provider {
+            message: formatted_error,
+            metadata: None,
+        }
     })?;
 
     let content = extract_content_from_message(message);

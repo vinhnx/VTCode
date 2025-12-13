@@ -15,7 +15,10 @@ impl StreamAssemblyError {
     pub fn into_llm_error(self, provider: &str) -> LLMError {
         let message = self.to_string();
         let formatted = error_display::format_llm_error(provider, &message);
-        LLMError::Provider(formatted)
+        LLMError::Provider {
+            message: formatted,
+            metadata: None,
+        }
     }
 }
 

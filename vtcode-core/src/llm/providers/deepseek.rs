@@ -121,7 +121,10 @@ impl DeepSeekProvider {
             payload.insert(
                 "temperature".to_owned(),
                 Value::Number(serde_json::Number::from_f64(temperature as f64).ok_or_else(
-                    || LLMError::InvalidRequest("Invalid temperature value".to_string()),
+                    || LLMError::InvalidRequest {
+                        message: "Invalid temperature value".to_string(),
+                        metadata: None,
+                    },
                 )?),
             );
         }
@@ -222,7 +225,10 @@ impl LLMProvider for DeepSeekProvider {
                     PROVIDER_NAME,
                     &format!("Network error: {}", e),
                 );
-                LLMError::Network(formatted_error)
+                LLMError::Network {
+                    message: formatted_error,
+                    metadata: None,
+                }
             })?;
 
         let response =
@@ -233,7 +239,10 @@ impl LLMProvider for DeepSeekProvider {
                 PROVIDER_NAME,
                 &format!("Failed to parse response: {}", e),
             );
-            LLMError::Provider(formatted_error)
+            LLMError::Provider {
+                message: formatted_error,
+                metadata: None,
+            }
         })?;
 
         self.parse_response(response_json)
@@ -250,7 +259,10 @@ impl LLMProvider for DeepSeekProvider {
         for message in &request.messages {
             message
                 .validate_for_provider(PROVIDER_KEY)
-                .map_err(LLMError::InvalidRequest)?;
+                .map_err(|e| LLMError::InvalidRequest {
+                    message: e,
+                    metadata: None,
+                })?;
         }
         Ok(())
     }

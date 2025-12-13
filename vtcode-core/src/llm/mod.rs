@@ -143,9 +143,9 @@
 //! match client.chat(&messages, None).await {
 //!     Ok(response) => println!("Success: {}", response.content),
 //!     Err(LLMError::Authentication) => eprintln!("Authentication failed"),
-//!     Err(LLMError::RateLimit) => eprintln!("Rate limit exceeded"),
-//!     Err(LLMError::Network(e)) => eprintln!("Network error: {}", e),
-//!     Err(LLMError::Provider(e)) => eprintln!("Provider error: {}", e),
+//!     Err(LLMError::RateLimit { metadata: None }) => eprintln!("Rate limit exceeded"),
+//!     Err(LLMError::Network { message: e, metadata: None }) => eprintln!("Network error: {}", e),
+//!     Err(LLMError::Provider { message: e, metadata: None }) => eprintln!("Provider error: {}", e),
 //!     Err(e) => eprintln!("Other error: {}", e),
 //! }
 //! ```

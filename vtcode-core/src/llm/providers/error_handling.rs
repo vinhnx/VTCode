@@ -39,24 +39,33 @@ pub async fn handle_gemini_http_error(response: Response) -> Result<Response, LL
                 error_text
             ),
         );
-        return Err(LLMError::Authentication(formatted_error));
+        return Err(LLMError::Authentication {
+            message: formatted_error,
+            metadata: None,
+        });
     }
 
     // Rate limit and quota errors
     if is_rate_limit_error(status.as_u16(), &error_text) {
-        return Err(LLMError::RateLimit);
+        return Err(LLMError::RateLimit { metadata: None });
     }
 
     // Invalid request errors
     if status.as_u16() == STATUS_BAD_REQUEST {
         let formatted_error =
             error_display::format_llm_error("Gemini", &format!("Invalid request: {}", error_text));
-        return Err(LLMError::InvalidRequest(formatted_error));
+        return Err(LLMError::InvalidRequest {
+            message: formatted_error,
+            metadata: None,
+        });
     }
 
     // Generic error for other cases
     let formatted_error = format_http_error("Gemini", status, &error_text);
-    Err(LLMError::Provider(formatted_error))
+    Err(LLMError::Provider {
+        message: formatted_error,
+        metadata: None,
+    })
 }
 
 /// Handle HTTP response errors for Anthropic provider
@@ -74,12 +83,15 @@ pub async fn handle_anthropic_http_error(response: Response) -> Result<Response,
             "Anthropic",
             "Authentication failed (check ANTHROPIC_API_KEY)",
         );
-        return Err(LLMError::Authentication(formatted_error));
+        return Err(LLMError::Authentication {
+            message: formatted_error,
+            metadata: None,
+        });
     }
 
     // Rate limit errors
     if is_rate_limit_error(status.as_u16(), &error_text) {
-        return Err(LLMError::RateLimit);
+        return Err(LLMError::RateLimit { metadata: None });
     }
 
     // Parse error message from Anthropic's JSON error format
@@ -92,7 +104,10 @@ pub async fn handle_anthropic_http_error(response: Response) -> Result<Response,
     };
 
     let formatted_error = error_display::format_llm_error("Anthropic", &error_message);
-    Err(LLMError::Provider(formatted_error))
+    Err(LLMError::Provider {
+        message: formatted_error,
+        metadata: None,
+    })
 }
 
 /// Parse Anthropic error response to extract friendly message
@@ -128,17 +143,23 @@ pub async fn handle_openai_http_error(
             provider_name,
             &format!("Authentication failed (check {})", api_key_env_var),
         );
-        return Err(LLMError::Authentication(formatted_error));
+        return Err(LLMError::Authentication {
+            message: formatted_error,
+            metadata: None,
+        });
     }
 
     // Rate limit errors
     if status.as_u16() == STATUS_TOO_MANY_REQUESTS || error_text.to_lowercase().contains("quota") {
-        return Err(LLMError::RateLimit);
+        return Err(LLMError::RateLimit { metadata: None });
     }
 
     // Generic provider error
     let formatted_error = format_http_error(provider_name, status, &error_text);
-    Err(LLMError::Provider(formatted_error))
+    Err(LLMError::Provider {
+        message: formatted_error,
+        metadata: None,
+    })
 }
 
 /// Check if an error is a rate limit error based on status code and message
@@ -159,7 +180,10 @@ pub fn is_rate_limit_error(status_code: u16, error_text: &str) -> bool {
 pub fn format_network_error(provider: &str, error: &impl std::fmt::Display) -> LLMError {
     let formatted_error =
         error_display::format_llm_error(provider, &format!("Network error: {}", error));
-    LLMError::Network(formatted_error)
+    LLMError::Network {
+        message: formatted_error,
+        metadata: None,
+    }
 }
 
 /// Handle JSON parsing errors with consistent formatting
@@ -167,7 +191,10 @@ pub fn format_network_error(provider: &str, error: &impl std::fmt::Display) -> L
 pub fn format_parse_error(provider: &str, error: &impl std::fmt::Display) -> LLMError {
     let formatted_error =
         error_display::format_llm_error(provider, &format!("Failed to parse response: {}", error));
-    LLMError::Provider(formatted_error)
+    LLMError::Provider {
+        message: formatted_error,
+        metadata: None,
+    }
 }
 
 /// Format HTTP error with status code and message
