@@ -284,6 +284,38 @@ pub(crate) async fn run_tool_call(
     )
     .await;
 
+    // Handle loop detection for read-only tools: if blocked, try to return cached result
+    let outcome = if is_read_only_tool {
+        if let ToolExecutionStatus::Success { output, .. } = &outcome {
+            // Check if this is actually a loop detection error wrapped as success
+            if let Some(loop_detected) = output.get("loop_detected").and_then(|v| v.as_bool()) {
+                if loop_detected {
+                    // Tool was blocked due to loop detection - try to get cached result
+                    let mut cache = ctx.tool_result_cache.write().await;
+                    let cache_key =
+                        vtcode_core::tools::result_cache::ToolCacheKey::from_json(&name, &args_val, "");
+                    if let Some(cached_output) = cache.get(&cache_key) {
+                        // We have a cached result from a previous successful call - return it
+                        let cached_json: serde_json::Value =
+                            serde_json::from_str(&cached_output).unwrap_or(serde_json::json!({}));
+                        drop(cache);
+                        tool_spinner.finish();
+                        return Ok(ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
+                            output: cached_json,
+                            stdout: None,
+                            modified_files: vec![],
+                            command_success: true,
+                            has_more: false,
+                        }));
+                    }
+                }
+            }
+        }
+        outcome
+    } else {
+        outcome
+    };
+
     if let ToolExecutionStatus::Success {
         output,
         stdout: _stdout,
@@ -643,6 +675,42 @@ fn backoff_for_attempt(attempt: usize) -> Duration {
 
 /// Process the output from a tool execution and convert it to a ToolExecutionStatus
 fn process_tool_output(output: Value) -> ToolExecutionStatus {
+    // Check for loop detection first - this is a critical signal to stop retrying
+    if let Some(loop_detected) = output.get("loop_detected").and_then(|v| v.as_bool()) {
+        if loop_detected {
+            let tool_name = output
+                .get("tool")
+                .and_then(|v| v.as_str())
+                .unwrap_or("tool");
+            let repeat_count = output
+                .get("repeat_count")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
+            let base_error_msg = output
+                .get("error")
+                .and_then(|e| e.get("message"))
+                .and_then(|m| m.as_str())
+                .unwrap_or("Tool blocked due to repeated identical invocations");
+
+            // Create a structured, explicit error message that clearly instructs the LLM to stop
+            // Format: Use clear directives and structured information for better LLM understanding
+            let clear_error_msg = format!(
+                "LOOP DETECTION: Tool '{}' has been called {} times with identical parameters and is now blocked.\n\n\
+                ACTION REQUIRED: DO NOT retry this tool call. The tool execution has been prevented to avoid infinite loops.\n\n\
+                If you need the result from this tool:\n\
+                1. Check if you already have the result from a previous successful call in your conversation history\n\
+                2. If not available, use a different approach or modify your request\n\n\
+                Original error: {}",
+                tool_name,
+                repeat_count,
+                base_error_msg
+            );
+            return ToolExecutionStatus::Failure {
+                error: anyhow::anyhow!(clear_error_msg),
+            };
+        }
+    }
+
     // Check if the output contains an error object
     if output.get("error").is_some() {
         let error_msg = output
@@ -884,6 +952,36 @@ mod tests {
             assert!(!has_more);
         } else {
             panic!("Expected Success variant");
+        }
+    }
+
+    #[test]
+    fn test_process_tool_output_loop_detection() {
+        // Test loop detection output - should return Failure with clear message
+        let output = json!({
+            "error": {
+                "tool_name": "read_file",
+                "error_type": "PolicyViolation",
+                "message": "Tool 'read_file' blocked after 5 identical invocations in recent history (limit: 5)",
+                "is_recoverable": false,
+                "recovery_suggestions": [],
+                "original_error": null
+            },
+            "loop_detected": true,
+            "repeat_count": 5,
+            "tool": "read_file"
+        });
+
+        let status = process_tool_output(output);
+        if let ToolExecutionStatus::Failure { error } = status {
+            let error_msg = error.to_string();
+            assert!(error_msg.contains("LOOP DETECTION"));
+            assert!(error_msg.contains("read_file"));
+            assert!(error_msg.contains("5"));
+            assert!(error_msg.contains("DO NOT retry"));
+            assert!(error_msg.contains("ACTION REQUIRED"));
+        } else {
+            panic!("Expected Failure variant for loop detection, got: {:?}", status);
         }
     }
 

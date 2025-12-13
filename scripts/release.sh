@@ -501,6 +501,21 @@ publish_npm_package() {
         print_info "If publishing fails, you may need to configure npm tokens locally or run in CI/CD environment"
     fi
 
+    # If running locally without npm login or GitHub token, skip npm publishes to avoid 401s
+    local npm_logged_in=true
+    if ! npm whoami >/dev/null 2>&1; then
+        npm_logged_in=false
+    fi
+    local has_github_token=true
+    if [[ -z "${GITHUB_TOKEN:-}" ]]; then
+        has_github_token=false
+    fi
+
+    if [[ "$in_ci" == false && "$npm_logged_in" == false && "$has_github_token" == false ]]; then
+        print_warning "npm/GitHub Packages auth not configured locally; skipping npm publishes (use --skip-npm or npm login / set GITHUB_TOKEN)"
+        return 0
+    fi
+
     local npm_publish_success=0
     local github_publish_success=0
 

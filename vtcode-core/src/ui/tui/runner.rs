@@ -24,6 +24,7 @@ use tokio::time::interval;
 use tokio_util::sync::CancellationToken;
 
 use crate::config::{constants::ui, types::UiSurfacePreference};
+use crate::ui::tui::log::{clear_tui_log_sender, register_tui_log_sender, set_log_theme_name};
 
 use super::{
     session::Session,
@@ -193,6 +194,8 @@ pub struct TuiOptions {
     pub surface_preference: UiSurfacePreference,
     pub inline_rows: u16,
     pub show_timeline_pane: bool,
+    pub show_logs: bool,
+    pub log_theme: Option<String>,
     pub event_callback: Option<InlineEventCallback>,
     pub custom_prompts: Option<crate::prompts::CustomPromptRegistry>,
 }
@@ -203,12 +206,17 @@ pub async fn run_tui(
     options: TuiOptions,
 ) -> Result<()> {
     let surface = TerminalSurface::detect(options.surface_preference, options.inline_rows)?;
-    let mut session = Session::new(
+    let (log_tx, log_rx) = tokio::sync::mpsc::unbounded_channel();
+    set_log_theme_name(options.log_theme.clone());
+    let mut session = Session::new_with_logs(
         options.theme,
         options.placeholder,
         surface.rows(),
         options.show_timeline_pane,
+        options.show_logs,
     );
+    session.set_log_receiver(log_rx);
+    register_tui_log_sender(log_tx);
 
     // Pre-load custom prompts if provided
     if let Some(prompts) = options.custom_prompts {
@@ -276,6 +284,8 @@ pub async fn run_tui(
 
     drive_result?;
     finalize_result?;
+
+    clear_tui_log_sender();
 
     Ok(())
 }

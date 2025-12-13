@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::VecDeque, sync::Arc};
 
 #[cfg(test)]
 use anstyle::Color as AnsiColorEnum;
@@ -10,10 +10,10 @@ use crossterm::event::{
 use ratatui::{
     Frame,
     layout::{Constraint, Layout, Rect},
-    text::{Line, Span},
+    text::{Line, Span, Text},
     widgets::{Block, BorderType, Borders, Clear, ListState, Paragraph, Wrap},
 };
-use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use super::{
     style::{measure_text_width, ratatui_color_from_ansi, ratatui_style_from_inline},
@@ -75,6 +75,7 @@ use crate::prompts::CustomPromptRegistry;
 #[cfg(test)]
 use crate::tools::PlanSummary;
 use crate::tools::TaskPlan;
+use crate::ui::tui::log::{LogEntry, highlight_log_entry};
 
 const USER_PREFIX: &str = "";
 const PLACEHOLDER_COLOR: RgbColor = RgbColor(0x88, 0x88, 0x88);
@@ -83,6 +84,7 @@ const LEGACY_PROMPT_COMMAND_NAME: &str = "prompts";
 const PROMPT_INVOKE_PREFIX: &str = "prompt:";
 const LEGACY_PROMPT_INVOKE_PREFIX: &str = "prompts:";
 const PROMPT_COMMAND_PREFIX: &str = "/prompt:";
+const MAX_LOG_LINES: usize = 256;
 
 pub struct Session {
     // --- Managers (Phase 2) ---
@@ -122,6 +124,13 @@ pub struct Session {
     transcript_rows: u16,
     transcript_width: u16,
     transcript_view_top: usize,
+
+    // --- Logging ---
+    log_receiver: Option<UnboundedReceiver<LogEntry>>,
+    log_lines: VecDeque<Arc<Text<'static>>>,
+    log_cached_text: Option<Arc<Text<'static>>>,
+    log_evicted: bool,
+    show_logs: bool,
 
     // --- Rendering ---
     transcript_cache: Option<TranscriptReflowCache>,
@@ -181,11 +190,22 @@ impl Session {
             .any(|indicator| lower_content.contains(indicator))
     }
 
+    #[allow(dead_code)]
     pub fn new(
         theme: InlineTheme,
         placeholder: Option<String>,
         view_rows: u16,
         show_timeline_pane: bool,
+    ) -> Self {
+        Self::new_with_logs(theme, placeholder, view_rows, show_timeline_pane, true)
+    }
+
+    pub fn new_with_logs(
+        theme: InlineTheme,
+        placeholder: Option<String>,
+        view_rows: u16,
+        show_timeline_pane: bool,
+        show_logs: bool,
     ) -> Self {
         let resolved_rows = view_rows.max(2);
         let initial_header_rows = ui::INLINE_HEADER_HEIGHT;
@@ -226,6 +246,13 @@ impl Session {
             transcript_rows: initial_transcript_rows,
             transcript_width: 0,
             transcript_view_top: 0,
+
+            // --- Logging ---
+            log_receiver: None,
+            log_lines: VecDeque::with_capacity(MAX_LOG_LINES),
+            log_cached_text: None,
+            log_evicted: false,
+            show_logs,
 
             // --- Rendering ---
             transcript_cache: None,
@@ -290,6 +317,68 @@ impl Session {
     pub fn set_cursor(&mut self, pos: usize) {
         self.input_manager.set_cursor(pos);
         self.mark_dirty();
+    }
+
+    pub fn set_log_receiver(&mut self, receiver: UnboundedReceiver<LogEntry>) {
+        self.log_receiver = Some(receiver);
+    }
+
+    pub(super) fn poll_log_entries(&mut self) {
+        if !self.show_logs {
+            // Drain without processing to avoid accumulation
+            if let Some(receiver) = self.log_receiver.as_mut() {
+                while receiver.try_recv().is_ok() {}
+            }
+            return;
+        }
+
+        let mut updated = false;
+        if let Some(receiver) = self.log_receiver.as_mut() {
+            let mut drained = Vec::new();
+            while let Ok(entry) = receiver.try_recv() {
+                drained.push(entry);
+            }
+            for entry in drained {
+                let rendered = Arc::new(highlight_log_entry(&entry));
+                self.push_log_line(rendered);
+                updated = true;
+            }
+        }
+        if updated {
+            self.mark_dirty();
+        }
+    }
+
+    fn push_log_line(&mut self, text: Arc<Text<'static>>) {
+        if self.log_lines.len() >= MAX_LOG_LINES {
+            self.log_lines.pop_front();
+            self.log_evicted = true;
+        }
+        self.log_lines.push_back(text);
+        self.log_cached_text = None;
+    }
+
+    fn log_text(&mut self) -> Arc<Text<'static>> {
+        if let Some(cached) = &self.log_cached_text {
+            return Arc::clone(cached);
+        }
+
+        let mut text = Text::default();
+        if self.log_evicted {
+            text.lines.push(Line::from("(oldest logs dropped)"));
+        }
+
+        for entry in self.log_lines.iter() {
+            text.lines.extend(entry.lines.clone());
+        }
+
+        if text.lines.is_empty() {
+            text.lines.push(Line::from("No logs yet"));
+        }
+
+        let arc = Arc::new(text);
+        self.log_cached_text = Some(Arc::clone(&arc));
+        arc
     }
 
     /// Expose scroll offset for tests.

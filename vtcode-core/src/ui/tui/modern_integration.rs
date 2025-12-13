@@ -1,6 +1,7 @@
 //! Integration module to bridge the modern TUI with the existing Session-based UI
 
 use crate::config::types::UiSurfacePreference;
+use crate::ui::tui::log::{clear_tui_log_sender, register_tui_log_sender, set_log_theme_name};
 use crate::ui::tui::session::Session;
 use crate::ui::tui::types::{InlineCommand, InlineEvent, InlineEventCallback, InlineTheme};
 use anyhow::Result;
@@ -16,6 +17,8 @@ pub async fn run_modern_tui(
     surface_preference: UiSurfacePreference,
     inline_rows: u16,
     show_timeline_pane: bool,
+    show_logs: bool,
+    log_theme: Option<String>,
     event_callback: Option<InlineEventCallback>,
 ) -> Result<()> {
     // Create a new ModernTUI instance
@@ -26,7 +29,12 @@ pub async fn run_modern_tui(
         .paste(true);
 
     // Create the session
-    let mut session = Session::new(theme, placeholder, inline_rows, show_timeline_pane);
+    let (log_tx, log_rx) = tokio::sync::mpsc::unbounded_channel();
+    set_log_theme_name(log_theme.clone());
+    register_tui_log_sender(log_tx);
+    let mut session =
+        Session::new_with_logs(theme, placeholder, inline_rows, show_timeline_pane, show_logs);
+    session.set_log_receiver(log_rx);
 
     // Enter the TUI
     tui.enter().await?;
@@ -140,6 +148,8 @@ pub async fn run_modern_tui(
     // Exit the TUI
     tui.exit().await?;
 
+    clear_tui_log_sender();
+
     Ok(())
 }
 
@@ -150,6 +160,8 @@ pub fn spawn_modern_session(
     surface_preference: UiSurfacePreference,
     inline_rows: u16,
     show_timeline_pane: bool,
+    show_logs: bool,
+    log_theme: Option<String>,
     event_callback: Option<InlineEventCallback>,
 ) -> Result<super::InlineSession> {
     // Initialize panic hook to restore terminal state if a panic occurs
@@ -170,6 +182,8 @@ pub fn spawn_modern_session(
             surface_preference,
             inline_rows,
             show_timeline_pane,
+            show_logs,
+            log_theme,
             event_callback,
         )
         .await

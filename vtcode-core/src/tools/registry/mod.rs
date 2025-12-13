@@ -39,7 +39,6 @@ use policy::ToolPolicyGateway;
 use utils::normalize_tool_output;
 
 use crate::config::constants::defaults;
-#[cfg(test)]
 use crate::config::constants::tools;
 use crate::config::{CommandsConfig, PtyConfig, TimeoutsConfig, ToolsConfig};
 use crate::tool_policy::{ToolPolicy, ToolPolicyManager};
@@ -199,6 +198,7 @@ impl ToolExecutionRecord {
 
 /// Thread-safe execution history for recording tool executions
 const DEFAULT_LOOP_DETECT_WINDOW: usize = 5;
+const MIN_READONLY_IDENTICAL_LIMIT: usize = 5;
 #[derive(Clone)]
 pub struct ToolExecutionHistory {
     records: Arc<RwLock<VecDeque<ToolExecutionRecord>>>,
@@ -267,8 +267,21 @@ impl ToolExecutionHistory {
         self.identical_limit
     }
 
+    pub fn loop_limit_for(&self, tool_name: &str) -> usize {
+        self.effective_identical_limit_for_tool(tool_name)
+    }
+
     pub fn rate_limit_per_minute(&self) -> Option<usize> {
         self.rate_limit_per_minute
+    }
+
+    fn effective_identical_limit_for_tool(&self, tool_name: &str) -> usize {
+        match tool_name {
+            tools::READ_FILE | tools::GREP_FILE | tools::LIST_FILES => {
+                self.identical_limit.max(MIN_READONLY_IDENTICAL_LIMIT)
+            }
+            _ => self.identical_limit,
+        }
     }
 
     pub fn calls_in_window(&self, window: Duration) -> usize {
@@ -288,7 +301,7 @@ impl ToolExecutionHistory {
     ///
     /// Returns (is_loop, repeat_count, tool_name) if a loop is detected
     pub fn detect_loop(&self, tool_name: &str, args: &Value) -> (bool, usize, String) {
-        let limit = self.identical_limit;
+        let limit = self.effective_identical_limit_for_tool(tool_name);
         if limit == 0 {
             return (false, 0, String::new());
         }
@@ -305,9 +318,11 @@ impl ToolExecutionHistory {
         }
 
         // Count how many of the recent calls match this exact tool + args combo
+        // CRITICAL FIX: Only count SUCCESSFUL calls to avoid cascade blocking
+        // When a call fails due to loop detection, it shouldn't count toward future loop detection
         let mut identical_count = 0;
         for record in &recent {
-            if record.tool_name == tool_name && record.args == *args {
+            if record.tool_name == tool_name && record.args == *args && record.success {
                 identical_count += 1;
             }
         }
@@ -1420,7 +1435,7 @@ impl ToolRegistry {
         }
 
         // LOOP DETECTION: Check if we're calling the same tool repeatedly with identical params
-        let loop_limit = self.execution_history.loop_limit();
+        let loop_limit = self.execution_history.loop_limit_for(tool_name);
         let (is_loop, repeat_count, _) = self.execution_history.detect_loop(tool_name, args);
         if loop_limit > 0 && is_loop {
             warn!(
@@ -1439,14 +1454,19 @@ impl ToolRegistry {
                     tool_name_owned.clone(),
                     ToolErrorType::PolicyViolation,
                     format!(
-                        "Tool '{}' blocked after {} identical invocations in recent history (limit: {})",
-                        display_name, repeat_count, loop_limit
+                        "LOOP DETECTION: Tool '{}' has been called {} times with identical parameters and is now blocked.\n\n\
+                        ACTION REQUIRED: DO NOT retry this tool call. The tool execution has been prevented to avoid infinite loops.\n\n\
+                        If you need the result from this tool:\n\
+                        1. Check if you already have the result from a previous successful call in your conversation history\n\
+                        2. If not available, use a different approach or modify your request",
+                        display_name, repeat_count
                     ),
                 );
                 let mut payload = error.to_json_value();
                 if let Some(obj) = payload.as_object_mut() {
                     obj.insert("loop_detected".into(), json!(true));
                     obj.insert("repeat_count".into(), json!(repeat_count));
+                    obj.insert("limit".into(), json!(loop_limit));
                     obj.insert("tool".into(), json!(display_name));
                 }
 

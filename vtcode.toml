@@ -5,13 +5,13 @@
 # Core agent behavior; see docs/config/CONFIGURATION_PRECEDENCE.md.
 [agent]
 # Primary LLM provider to use (e.g., "openai", "gemini", "anthropic", "openrouter")
-provider = "openai"
+provider = "ollama"
 
 # Environment variable containing the API key for the provider
-api_key_env = "OPENAI_API_KEY"
+api_key_env = "OLLAMA_API_KEY"
 
 # Default model to use when no specific model is specified
-default_model = "gpt-5.2-2025-12-11"
+default_model = "gpt-oss:20b-cloud"
 
 # Visual theme for the terminal interface
 theme = "ciapre-dark"
@@ -28,7 +28,7 @@ max_conversation_turns = 50
 
 # Reasoning effort level ("none", "minimal", "low", "medium", "high") - affects model usage and response speed
 # For Gemini 3 Pro: Use "low" for fast responses, "high" for maximum reasoning depth, "medium" defaults to high (not yet generally available)
-reasoning_effort = "minimal"
+reasoning_effort = "low"
 
 # Temperature for main LLM responses (0.0-1.0)
 # Lower values = more deterministic, higher values = more creative
@@ -541,15 +541,15 @@ llm_router_model = ""
 # Model mapping for different task types
 [router.models]
 # Model for simple queries
-simple = "gpt-5.2-2025-12-11"
+simple = "gpt-oss:20b-cloud"
 # Model for standard tasks
-standard = "gpt-5.2-2025-12-11"
+standard = "gpt-oss:20b-cloud"
 # Model for complex tasks
-complex = "gpt-5.2-2025-12-11"
+complex = "gpt-oss:20b-cloud"
 # Model for code generation heavy tasks
-codegen_heavy = "gpt-5.2-2025-12-11"
+codegen_heavy = "gpt-oss:20b-cloud"
 # Model for information retrieval heavy tasks
-retrieval_heavy = "gpt-5.2-2025-12-11"
+retrieval_heavy = "gpt-oss:20b-cloud"
 
 # Router budget settings (if applicable)
 [router.budgets]
@@ -622,7 +622,14 @@ cache_themes = true
 max_file_size_mb = 10
 
 # Programming languages to enable syntax highlighting for
-enabled_languages = ["rust", "python", "javascript", "typescript", "go", "java"]
+enabled_languages = [
+    "rust",
+    "python",
+    "javascript",
+    "typescript",
+    "go",
+    "java",
+]
 
 # Timeout for syntax highlighting operations (milliseconds)
 highlight_timeout_ms = 1000
