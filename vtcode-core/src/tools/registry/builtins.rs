@@ -134,6 +134,12 @@ pub(super) fn builtin_tool_registrations() -> Vec<ToolRegistration> {
             ToolRegistry::search_tools_executor,
         ),
         ToolRegistration::new(
+            tools::SKILL,
+            CapabilityLevel::Basic,
+            false,
+            ToolRegistry::skill_executor,
+        ),
+        ToolRegistration::new(
             tools::EXECUTE_CODE,
             CapabilityLevel::Bash,
             false,

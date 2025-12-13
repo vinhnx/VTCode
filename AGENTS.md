@@ -385,9 +385,16 @@ Done?
 
 **Tier 2 - Control**: update_plan (TODO list), PTY sessions (create/send/read/close)
 
-**Tier 3 - Semantic**: apply_patch, search_tools
+**Tier 3 - Semantic**: apply_patch, search_tools, skill
 
 **Tier 4 - Diagnostics**: get_errors, debug_agent, analyze_agent
+
+**Skills Discovery & Loading**:
+- To search for available skills: `search_tools(keyword="spreadsheet")` returns both MCP tools and local skills
+- To load a skill directly: `skill(name="spreadsheet-generator")` - does NOT require search first
+- Skills provide pre-built solutions (doc-generator, spreadsheet-generator, pdf-report-generator, etc.)
+- Once loaded, skills inject instructions and bundled resources for agent context
+- **IMPORTANT**: When user requests a skill by name, use `skill(name="...")` directly instead of repeated search_tools calls
 
 For comprehensive error diagnostics, use `get_errors` with parameters:
 - `scope`: "archive" (default), "all", or specific area to check

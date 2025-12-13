@@ -194,6 +194,7 @@ const DEFAULT_TOOL_POLICIES: &[(&str, ToolPolicy)] = &[
     // Planning and meta tools
     (tools::UPDATE_PLAN, ToolPolicy::Allow),
     (tools::SEARCH_TOOLS, ToolPolicy::Allow),
+    (tools::SKILL, ToolPolicy::Allow),
     // Diagnostic and introspection tools
     // DEBUG_AGENT: Low-level agent state inspection (diagnostic, read-only)
     (tools::DEBUG_AGENT, ToolPolicy::Allow),

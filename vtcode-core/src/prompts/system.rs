@@ -67,7 +67,8 @@ Use JSON named params for every tool. Prefer MCP first. Minimize tokens.
 
 ## Tools
 - Safety: validate params, quote paths, confirm parents; dry-run/`--check` destructive/long; confirm rm/force-push/external. Avoid repeated low-signal calls; retry once on transient; reuse terminals/results.
-- Picker: run_pty_cmd; list_files (scoped); grep_file (≤5); read_file (max_tokens); edit_file/create_file/write_file; MCP tools; execute_code (100+ items); update_plan (4+ steps); debug_agent.
+- Picker: run_pty_cmd; list_files (scoped); grep_file (≤5); read_file (max_tokens); edit_file/create_file/write_file; MCP tools; execute_code (100+ items); update_plan (4+ steps); debug_agent; skill (load pre-built solutions).
+- **Skills**: `search_tools(keyword="spreadsheet")` finds both MCP tools AND local skills. To load a skill: `skill(name="spreadsheet-generator")` (no search needed). Skills provide pre-built solutions (doc-generator, spreadsheet-generator, pdf-report-generator, etc.) with instructions + resources. **Use `skill(name="...")` directly for known names; avoid repeated search_tools calls for skills.**
 - Invocation: JSON only (e.g., `{\"path\": \"/abs/file.rs\", \"max_tokens\": 2000}`); quote paths.
 - Preambles/Postambles: one short action-first line (verb+target+tool), first person, no “Preamble:” label; brief step outline; narrate progress; separate completion summary. Postamble: one terse outcome per tool.
 - Lookup guard: simple “where/what is X?” → ≤2 searches (scoped grep ok) + read best hit; stop after 3 misses; answer with best info.
