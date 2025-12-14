@@ -80,6 +80,7 @@ impl LLMFactory {
     }
 
     /// Create provider instance
+    #[allow(clippy::result_large_err)]
     pub fn create_provider(
         &self,
         provider_name: &str,
@@ -193,6 +194,7 @@ pub fn get_factory() -> &'static Mutex<LLMFactory> {
 }
 
 /// Create provider from model name and API key
+#[allow(clippy::result_large_err)]
 pub fn create_provider_for_model(
     model: &str,
     api_key: String,
@@ -223,6 +225,7 @@ pub fn create_provider_for_model(
 }
 
 /// Create provider with full configuration
+#[allow(clippy::result_large_err)]
 pub fn create_provider_with_config(
     provider_name: &str,
     api_key: Option<String>,

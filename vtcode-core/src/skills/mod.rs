@@ -117,6 +117,7 @@ pub use cli_bridge::{CliToolBridge, CliToolConfig, CliToolResult, discover_cli_t
 pub use container::{SkillContainer, SkillSpec, SkillType, SkillVersion};
 pub use context_manager::{ContextManager, ContextConfig, ContextLevel, ContextStats, PersistentContextManager};
 pub use discovery::{DiscoveryConfig, DiscoveryResult, DiscoveryStats, ProgressiveSkillLoader, SkillDiscovery};
+pub use executor::execute_skill_with_sub_llm;
 pub use loader::{EnhancedSkillLoader, EnhancedSkill, EnhancedDiscoveryResult, EnhancedDiscoveryStats};
 pub use locations::{SkillLocations, SkillLocation, SkillLocationType, DiscoveredSkill, DiscoveryStats as LocationDiscoveryStats};
 pub use manifest::{generate_skill_template, parse_skill_content, parse_skill_file, SkillYaml};

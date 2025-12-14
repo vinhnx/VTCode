@@ -24,6 +24,12 @@ pub struct ApiFailureTracker {
     pub last_failure: Option<std::time::Instant>,
 }
 
+impl Default for ApiFailureTracker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ApiFailureTracker {
     pub fn new() -> Self {
         Self {

@@ -6,7 +6,7 @@
 use anyhow::{Context, Result};
 use std::path::PathBuf;
 use tracing::info;
-use vtcode_core::skills::loader::SkillLoader;
+use vtcode_core::skills::loader::EnhancedSkillLoader;
 use vtcode_core::skills::manifest::generate_skill_template;
 
 /// Skills command options
@@ -17,11 +17,12 @@ pub struct SkillsCommandOptions {
 
 /// List available skills
 pub async fn handle_skills_list(options: &SkillsCommandOptions) -> Result<()> {
-    let loader = SkillLoader::new(options.workspace.clone());
+    let mut loader = EnhancedSkillLoader::new(options.workspace.clone());
 
     println!("Discovering skills...\n");
 
-    let skills = loader.discover_skills().context("Failed to discover skills")?;
+    let discovery_result = loader.discover_all_skills().await.context("Failed to discover skills")?;
+    let skills = discovery_result.traditional_skills;
 
     if skills.is_empty() {
         println!("No skills found. Create one with: vtcode skills create ./my-skill");
@@ -47,17 +48,27 @@ pub async fn handle_skills_load(
     name: &str,
     _path: Option<PathBuf>,
 ) -> Result<()> {
-    let loader = SkillLoader::new(options.workspace.clone());
+    let mut loader = EnhancedSkillLoader::new(options.workspace.clone());
 
     println!("Loading skill: {}...", name);
 
     let skill = loader
-        .load_skill(name)
+        .get_skill(name)
+        .await
         .context(format!("Failed to load skill '{}'", name))?;
 
-    println!("✓ Loaded skill: {} (v{})", skill.name(), skill.manifest.version.as_deref().unwrap_or("0.0.1"));
-    println!("  Description: {}", skill.description());
-    println!("  Resources: {} files", skill.list_resources().len());
+    match skill {
+        vtcode_core::skills::loader::EnhancedSkill::Traditional(skill) => {
+            println!("✓ Loaded skill: {} (v{})", skill.name(), skill.manifest.version.as_deref().unwrap_or("0.0.1"));
+            println!("  Description: {}", skill.description());
+            println!("  Resources: {} files", skill.list_resources().len());
+        }
+        vtcode_core::skills::loader::EnhancedSkill::CliTool(bridge) => {
+            println!("✓ Loaded CLI tool skill: {}", bridge.config.name);
+            println!("  Description: {}", bridge.config.description);
+        }
+    }
+    
     println!("\nSkill is ready to use. Use it in chat mode or with: vtcode ask 'Use {} for...'", name);
 
     info!("Loaded skill: {}", name);
@@ -66,30 +77,41 @@ pub async fn handle_skills_load(
 
 /// Show skill details
 pub async fn handle_skills_info(options: &SkillsCommandOptions, name: &str) -> Result<()> {
-    let loader = SkillLoader::new(options.workspace.clone());
+    let mut loader = EnhancedSkillLoader::new(options.workspace.clone());
 
     println!("Loading skill: {}...\n", name);
 
     let skill = loader
-        .load_skill(name)
+        .get_skill(name)
+        .await
         .context(format!("Failed to load skill '{}'", name))?;
 
-    println!("Skill: {}", skill.name());
-    println!("Description: {}", skill.description());
-    if let Some(version) = &skill.manifest.version {
-        println!("Version: {}", version);
-    }
-    if let Some(author) = &skill.manifest.author {
-        println!("Author: {}", author);
-    }
+    match skill {
+        vtcode_core::skills::loader::EnhancedSkill::Traditional(skill) => {
+            println!("Skill: {}", skill.name());
+            println!("Description: {}", skill.description());
+            if let Some(version) = &skill.manifest.version {
+                println!("Version: {}", version);
+            }
+            if let Some(author) = &skill.manifest.author {
+                println!("Author: {}", author);
+            }
 
-    println!("\n--- Instructions ---");
-    println!("{}", skill.instructions);
+            println!("\n--- Instructions ---");
+            println!("{}", skill.instructions);
 
-    if !skill.list_resources().is_empty() {
-        println!("\n--- Available Resources ---");
-        for resource in skill.list_resources() {
-            println!("  • {}", resource);
+            if !skill.list_resources().is_empty() {
+                println!("\n--- Available Resources ---");
+                for resource in skill.list_resources() {
+                    println!("  • {}", resource);
+                }
+            }
+        }
+        vtcode_core::skills::loader::EnhancedSkill::CliTool(bridge) => {
+            println!("CLI Tool Skill: {}", bridge.config.name);
+            println!("Description: {}", bridge.config.description);
+            println!("\n--- Tool Configuration ---");
+            println!("Tool available for execution");
         }
     }
 
@@ -156,10 +178,14 @@ pub async fn handle_skills_validate(skill_path: &PathBuf) -> Result<()> {
 pub async fn handle_skills_config(options: &SkillsCommandOptions) -> Result<()> {
     println!("Skill Configuration\n");
     println!("Workspace: {}", options.workspace.display());
-    println!("\nSkill Search Paths:");
-    println!("  • .claude/skills/       (project-local skills)");
-    println!("  • ./skills/             (workspace skills)");
-    println!("  • ~/.vtcode/skills/     (user global skills)");
+    println!("\nSkill Search Paths (by precedence):");
+    println!("  • ~/.vtcode/skills/     (VTCode user skills - highest precedence)");
+    println!("  • .vtcode/skills/       (VTCode project skills)");
+    println!("  • ~/.pi/skills/         (Pi framework user skills)");
+    println!("  • .pi/skills/           (Pi framework project skills)");
+    println!("  • ~/.claude/skills/     (Claude Code user skills)");
+    println!("  • .claude/skills/       (Claude Code project skills)");
+    println!("  • ~/.codex/skills/      (Codex CLI user skills - lowest precedence)");
 
     println!("\nSkill Directory Structure:");
     println!("  my-skill/");
@@ -169,7 +195,7 @@ pub async fn handle_skills_config(options: &SkillsCommandOptions) -> Result<()> 
     println!("    └── templates/        (optional: reference materials)");
 
     println!("\nEnvironment Variables:");
-    println!("  • HOME - Used to locate ~/.vtcode/skills/");
+    println!("  • HOME - Used to locate user skill directories");
 
     Ok(())
 }

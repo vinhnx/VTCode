@@ -897,28 +897,35 @@ pub(crate) async fn run_single_agent_loop_unified(
         if let Some(resume_session) = resume_ref {
             let skill_names_to_restore = &resume_session.snapshot.metadata.loaded_skills;
             if !skill_names_to_restore.is_empty() {
-                use vtcode_core::skills::loader::SkillLoader;
+                use vtcode_core::skills::loader::EnhancedSkillLoader;
                 use vtcode_core::skills::executor::SkillToolAdapter;
                 use vtcode_core::tools::ToolRegistration;
                 use vtcode_core::config::types::CapabilityLevel;
                 use std::sync::Arc;
 
-                let skill_loader = SkillLoader::new(config.workspace.clone());
+                let mut skill_loader = EnhancedSkillLoader::new(config.workspace.clone());
                 for skill_name in skill_names_to_restore {
-                    match skill_loader.load_skill(skill_name) {
-                        Ok(skill) => {
-                            let adapter = SkillToolAdapter::new(skill.clone());
-                            let adapter_arc = Arc::new(adapter);
-                            let name_static: &'static str = Box::leak(Box::new(skill_name.clone()));
-                            let registration = ToolRegistration::from_tool(
-                                name_static,
-                                CapabilityLevel::Bash,
-                                adapter_arc,
-                            );
-                            if let Err(e) = tool_registry.register_tool(registration) {
-                                tracing::warn!("Failed to restore skill '{}': {}", skill_name, e);
-                            } else {
-                                loaded_skills.write().await.insert(skill_name.clone(), skill);
+                    match skill_loader.get_skill(skill_name).await {
+                        Ok(enhanced_skill) => {
+                            match enhanced_skill {
+                                vtcode_core::skills::loader::EnhancedSkill::Traditional(skill) => {
+                                    let adapter = SkillToolAdapter::new(skill.clone());
+                                    let adapter_arc = Arc::new(adapter);
+                                    let name_static: &'static str = Box::leak(Box::new(skill_name.clone()));
+                                    let registration = ToolRegistration::from_tool(
+                                        name_static,
+                                        CapabilityLevel::Bash,
+                                        adapter_arc,
+                                    );
+                                    if let Err(e) = tool_registry.register_tool(registration) {
+                                        tracing::warn!("Failed to restore skill '{}': {}", skill_name, e);
+                                    } else {
+                                        loaded_skills.write().await.insert(skill_name.clone(), skill);
+                                    }
+                                }
+                                vtcode_core::skills::loader::EnhancedSkill::CliTool(_bridge) => {
+                                    tracing::warn!("Cannot restore CLI tool skill '{}' as traditional skill", skill_name);
+                                }
                             }
                         }
                         Err(e) => {
@@ -1747,7 +1754,7 @@ pub(crate) async fn run_single_agent_loop_unified(
             // Check if any loaded skill should handle this request
             {
                 use vtcode_core::skills::execute_skill_with_sub_llm;
-                use vtcode_core::skills::loader::SkillLoader;
+                use vtcode_core::skills::loader::EnhancedSkillLoader;
                 
                 let input_lower = input_text.to_lowercase();
                 let mut matched_skill: Option<(String, vtcode_core::skills::types::Skill)> = None;
@@ -1793,28 +1800,39 @@ pub(crate) async fn run_single_agent_loop_unified(
                 
                 // If no loaded skill matched, check if user mentioned a skill by name and try to load it
                 if matched_skill.is_none() {
-                    let skill_loader = SkillLoader::new(config.workspace.clone());
+                    let mut skill_loader = EnhancedSkillLoader::new(config.workspace.clone());
                     
                     // Look for skill name in input (e.g., "spreadsheet-generator")
-                    match skill_loader.discover_skills() {
-                        Ok(available_skills) => {
-                            for skill_ctx in &available_skills {
+                    match skill_loader.discover_all_skills().await {
+                        Ok(discovery_result) => {
+                            for skill_ctx in &discovery_result.traditional_skills {
                                 let manifest = skill_ctx.manifest();
                                 let skill_name_lower = manifest.name.to_lowercase();
                                 
                                 // Check if user explicitly mentioned this skill
                                 if input_lower.contains(&skill_name_lower) || input_lower.contains(&skill_name_lower.replace("-", " ")) {
                                     // Try to load the skill
-                                    match skill_loader.load_skill(&manifest.name) {
-                                        Ok(skill) => {
-                                            // Add to loaded skills
-                                            loaded_skills.write().await.insert(manifest.name.clone(), skill.clone());
-                                            renderer.line(
-                                                MessageStyle::Info,
-                                                &format!("Loaded skill: {} - {}", manifest.name, manifest.description),
-                                            )?;
-                                            matched_skill = Some((manifest.name.clone(), skill));
-                                            break;
+                                    match skill_loader.get_skill(&manifest.name).await {
+                                        Ok(enhanced_skill) => {
+                                            // Extract the actual skill from EnhancedSkill
+                                            match enhanced_skill {
+                                                vtcode_core::skills::loader::EnhancedSkill::Traditional(skill) => {
+                                                    // Add to loaded skills
+                                                    loaded_skills.write().await.insert(manifest.name.clone(), skill.clone());
+                                                    renderer.line(
+                                                        MessageStyle::Info,
+                                                        &format!("Loaded skill: {} - {}", manifest.name, manifest.description),
+                                                    )?;
+                                                    matched_skill = Some((manifest.name.clone(), skill));
+                                                    break;
+                                                }
+                                                vtcode_core::skills::loader::EnhancedSkill::CliTool(_) => {
+                                                    renderer.line(
+                                                        MessageStyle::Info,
+                                                        &format!("Skill '{}' is a CLI tool, not a traditional skill", manifest.name),
+                                                    )?;
+                                                }
+                                            }
                                         }
                                         Err(e) => {
                                             renderer.line(

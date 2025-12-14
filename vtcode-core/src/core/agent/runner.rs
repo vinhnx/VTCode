@@ -158,6 +158,7 @@ pub fn format_tool_result_for_display(tool_name: &str, result: &Value) -> String
 }
 
 #[inline]
+#[allow(dead_code)]
 fn record_turn_duration(
     turn_durations: &mut Vec<u128>,
     recorded: &mut bool,

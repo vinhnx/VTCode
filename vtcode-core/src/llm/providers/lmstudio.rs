@@ -1,3 +1,4 @@
+#![allow(clippy::result_large_err)]
 use super::common::resolve_model;
 use super::openai::OpenAIProvider;
 use crate::config::TimeoutsConfig;

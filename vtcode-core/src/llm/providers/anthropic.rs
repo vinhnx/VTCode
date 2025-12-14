@@ -1,3 +1,4 @@
+#![allow(clippy::result_large_err)]
 use crate::config::TimeoutsConfig;
 use crate::config::constants::{defaults, env_vars, models, urls};
 use crate::config::core::{AnthropicPromptCacheSettings, PromptCachingConfig};
@@ -510,6 +511,7 @@ impl AnthropicProvider {
         }
     }
 
+    #[allow(clippy::result_large_err)]
     fn convert_to_anthropic_format(&self, request: &LLMRequest) -> Result<Value, LLMError> {
         use super::anthropic_types::{
             AnthropicContentBlock, AnthropicMessage, AnthropicRequest, AnthropicTool, CacheControl,
@@ -759,6 +761,7 @@ impl AnthropicProvider {
         })
     }
 
+    #[allow(clippy::result_large_err)]
     fn parse_anthropic_response(&self, response_json: Value) -> Result<LLMResponse, LLMError> {
         let content = response_json
             .get("content")

@@ -5,7 +5,7 @@
 
 use anyhow::Result;
 use std::path::PathBuf;
-use vtcode_core::skills::loader::SkillLoader;
+use vtcode_core::skills::loader::EnhancedSkillLoader;
 use vtcode_core::skills::types::Skill;
 
 /// Skill-related command actions
@@ -110,11 +110,12 @@ pub async fn handle_skill_command(
     action: SkillCommandAction,
     workspace: PathBuf,
 ) -> Result<SkillCommandOutcome> {
-    let loader = SkillLoader::new(workspace);
+    let mut loader = EnhancedSkillLoader::new(workspace);
 
     match action {
         SkillCommandAction::List => {
-            let skills = loader.discover_skills()?;
+            let discovery_result = loader.discover_all_skills().await?;
+            let skills = discovery_result.traditional_skills;
 
             if skills.is_empty() {
                 return Ok(SkillCommandOutcome::Handled {
@@ -136,8 +137,19 @@ pub async fn handle_skill_command(
         }
 
         SkillCommandAction::Load { name } => {
-            match loader.load_skill(&name) {
-                Ok(skill) => Ok(SkillCommandOutcome::LoadSkill { skill }),
+            match loader.get_skill(&name).await {
+                Ok(enhanced_skill) => {
+                    match enhanced_skill {
+                        vtcode_core::skills::loader::EnhancedSkill::Traditional(skill) => {
+                            Ok(SkillCommandOutcome::LoadSkill { skill })
+                        }
+                        vtcode_core::skills::loader::EnhancedSkill::CliTool(_) => {
+                            Ok(SkillCommandOutcome::Error {
+                                message: format!("Skill '{}' is a CLI tool, not a traditional skill", name),
+                            })
+                        }
+                    }
+                }
                 Err(e) => Ok(SkillCommandOutcome::Error {
                     message: format!("Failed to load skill '{}': {}", name, e),
                 }),
@@ -147,27 +159,39 @@ pub async fn handle_skill_command(
         SkillCommandAction::Unload { name } => Ok(SkillCommandOutcome::UnloadSkill { name }),
 
         SkillCommandAction::Info { name } => {
-            match loader.load_skill(&name) {
-                Ok(skill) => {
-                    let mut output = String::new();
-                    output.push_str(&format!("Skill: {}\n", skill.name()));
-                    output.push_str(&format!("Description: {}\n", skill.description()));
+            match loader.get_skill(&name).await {
+                Ok(enhanced_skill) => {
+                    match enhanced_skill {
+                        vtcode_core::skills::loader::EnhancedSkill::Traditional(skill) => {
+                            let mut output = String::new();
+                            output.push_str(&format!("Skill: {}\n", skill.name()));
+                            output.push_str(&format!("Description: {}\n", skill.description()));
 
-                    if let Some(version) = &skill.manifest.version {
-                        output.push_str(&format!("Version: {}\n", version));
-                    }
+                            if let Some(version) = &skill.manifest.version {
+                                output.push_str(&format!("Version: {}\n", version));
+                            }
 
-                    output.push_str("\n--- Instructions ---\n");
-                    output.push_str(&skill.instructions);
+                            output.push_str("\n--- Instructions ---\n");
+                            output.push_str(&skill.instructions);
 
-                    if !skill.list_resources().is_empty() {
-                        output.push_str("\n\n--- Resources ---\n");
-                        for resource in skill.list_resources() {
-                            output.push_str(&format!("  • {}\n", resource));
+                            if !skill.list_resources().is_empty() {
+                                output.push_str("\n\n--- Resources ---\n");
+                                for resource in skill.list_resources() {
+                                    output.push_str(&format!("  • {}\n", resource));
+                                }
+                            }
+
+                            Ok(SkillCommandOutcome::Handled { message: output })
+                        }
+                        vtcode_core::skills::loader::EnhancedSkill::CliTool(bridge) => {
+                            let mut output = String::new();
+                            output.push_str(&format!("CLI Tool Skill: {}\n", bridge.config.name));
+                            output.push_str(&format!("Description: {}\n", bridge.config.description));
+                            output.push_str("\n--- Tool Configuration ---\n");
+                            output.push_str("Tool available for execution");
+                            Ok(SkillCommandOutcome::Handled { message: output })
                         }
                     }
-
-                    Ok(SkillCommandOutcome::Handled { message: output })
                 }
                 Err(e) => Ok(SkillCommandOutcome::Error {
                     message: format!("Failed to load skill '{}': {}", name, e),
@@ -176,8 +200,19 @@ pub async fn handle_skill_command(
         }
 
         SkillCommandAction::Use { name, input } => {
-            match loader.load_skill(&name) {
-                Ok(skill) => Ok(SkillCommandOutcome::UseSkill { skill, input }),
+            match loader.get_skill(&name).await {
+                Ok(enhanced_skill) => {
+                    match enhanced_skill {
+                        vtcode_core::skills::loader::EnhancedSkill::Traditional(skill) => {
+                            Ok(SkillCommandOutcome::UseSkill { skill, input })
+                        }
+                        vtcode_core::skills::loader::EnhancedSkill::CliTool(_) => {
+                            Ok(SkillCommandOutcome::Error {
+                                message: format!("Skill '{}' is a CLI tool, not a traditional skill", name),
+                            })
+                        }
+                    }
+                }
                 Err(e) => Ok(SkillCommandOutcome::Error {
                     message: format!("Failed to load skill '{}': {}", name, e),
                 }),

@@ -2,7 +2,8 @@
     clippy::collapsible_if,
     clippy::manual_contains,
     clippy::nonminimal_bool,
-    clippy::single_match
+    clippy::single_match,
+    clippy::result_large_err
 )]
 
 use crate::config::TimeoutsConfig;

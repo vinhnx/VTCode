@@ -910,6 +910,7 @@ impl SkillValidator {
     }
     
     /// Get cached schema
+    #[allow(dead_code)]
     fn get_cached_schema(&mut self, _schema_path: &Path) -> Option<&serde_json::Value> {
         // TODO: Implement proper JSON Schema caching when jsonschema crate is available
         None
@@ -917,6 +918,7 @@ impl SkillValidator {
     }
     
     /// Cache schema
+    #[allow(dead_code)]
     fn cache_schema(&mut self, _schema_path: PathBuf, _schema: serde_json::Value) {
         // TODO: Implement proper JSON Schema caching when jsonschema crate is available
         // self.schema_cache.insert(schema_path, schema);
@@ -1019,7 +1021,7 @@ mod tests {
     
     #[tokio::test]
     async fn test_validator_creation() {
-        let validator = SkillValidator::new();
+        let _validator = SkillValidator::new();
         // assert_eq!(validator.schema_cache.len(), 0); // Commented out since schema_cache is disabled
     }
     

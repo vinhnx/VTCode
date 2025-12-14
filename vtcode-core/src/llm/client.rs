@@ -16,6 +16,7 @@ pub type AnyClient = Box<dyn LLMClient>;
 
 /// Create a client based on the model ID
 /// Uses the existing factory pattern from factory.rs
+#[allow(clippy::result_large_err)]
 pub fn make_client(api_key: String, model: ModelId) -> Result<AnyClient, LLMError> {
     let model_id = model.to_string();
     // Use factory to create provider

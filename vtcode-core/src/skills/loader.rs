@@ -14,6 +14,7 @@ use std::path::{Path, PathBuf};
 use tracing::{info, warn};
 
 /// Enhanced skill search paths including CLI tools
+#[allow(dead_code)]
 const ENHANCED_SKILL_SEARCH_PATHS: &[&str] = &[
     ".claude/skills",     // Project-local skills (traditional)
     "./skills",           // Workspace skills (traditional)
