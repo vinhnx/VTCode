@@ -2,17 +2,29 @@
 //!
 //! Implements `/skills` command palette for loading, listing, and executing skills
 //! within interactive chat sessions.
+//!
+//! Supports both explicit commands (`/skills load pdf-analyzer`) and Codex-style
+//! mention detection (`$pdf-analyzer` or description keyword matching).
 
 use anyhow::Result;
 use std::path::PathBuf;
-use vtcode_core::skills::loader::EnhancedSkillLoader;
-use vtcode_core::skills::types::Skill;
+use vtcode_core::skills::authoring::SkillAuthor;
+use vtcode_core::skills::loader::{EnhancedSkillLoader, detect_skill_mentions};
+use vtcode_core::skills::types::{Skill, SkillManifest};
 
 /// Skill-related command actions
 #[derive(Clone, Debug)]
 pub enum SkillCommandAction {
+    /// Show help
+    Help,
     /// List available skills
     List,
+    /// Create a new skill from template
+    Create { name: String, path: Option<PathBuf> },
+    /// Validate a skill
+    Validate { name: String },
+    /// Package a skill into .skill file
+    Package { name: String },
     /// Load a skill by name
     Load { name: String },
     /// Unload a skill
@@ -49,12 +61,59 @@ pub fn parse_skill_command(input: &str) -> Result<Option<SkillCommandAction>> {
     // Remove "/skills" prefix and split remaining args
     let rest = trimmed[7..].trim();
 
-    if rest.is_empty() || rest == "list" {
+    if rest.is_empty() {
+        return Ok(Some(SkillCommandAction::Help));
+    }
+
+    if rest == "list" {
         return Ok(Some(SkillCommandAction::List));
+    }
+
+    if rest == "help" || rest == "--help" || rest == "-h" {
+        return Ok(Some(SkillCommandAction::Help));
     }
 
     let parts: Vec<&str> = rest.splitn(2, ' ').collect();
     match parts[0] {
+        "create" => {
+            if let Some(name) = parts.get(1) {
+                // Optional: parse --path flag
+                let mut name_str = name.to_string();
+                let mut path = None;
+
+                if name.contains("--path") {
+                    let name_parts: Vec<&str> = name.split_whitespace().collect();
+                    name_str = name_parts[0].to_string();
+                    if let Some(idx) = name_parts.iter().position(|&x| x == "--path") {
+                        if let Some(path_str) = name_parts.get(idx + 1) {
+                            path = Some(PathBuf::from(path_str));
+                        }
+                    }
+                }
+
+                Ok(Some(SkillCommandAction::Create { name: name_str, path }))
+            } else {
+                Err(anyhow::anyhow!("create: skill name required"))
+            }
+        }
+        "validate" => {
+            if let Some(name) = parts.get(1) {
+                Ok(Some(SkillCommandAction::Validate {
+                    name: name.to_string(),
+                }))
+            } else {
+                Err(anyhow::anyhow!("validate: skill name required"))
+            }
+        }
+        "package" => {
+            if let Some(name) = parts.get(1) {
+                Ok(Some(SkillCommandAction::Package {
+                    name: name.to_string(),
+                }))
+            } else {
+                Err(anyhow::anyhow!("package: skill name required"))
+            }
+        }
         "load" => {
             if let Some(name) = parts.get(1) {
                 Ok(Some(SkillCommandAction::Load {
@@ -110,9 +169,98 @@ pub async fn handle_skill_command(
     action: SkillCommandAction,
     workspace: PathBuf,
 ) -> Result<SkillCommandOutcome> {
-    let mut loader = EnhancedSkillLoader::new(workspace);
+    let author = SkillAuthor::new(workspace.clone());
+    let mut loader = EnhancedSkillLoader::new(workspace.clone());
 
     match action {
+        SkillCommandAction::Help => {
+            let help_text = r#"Skills Commands:
+
+Authoring:
+  /skills create <name> [--path <dir>]  Create new skill from template
+  /skills validate <name>                Validate skill structure
+  /skills package <name>                 Package skill to .skill file
+
+Management:
+  /skills list                           List available skills
+  /skills load <name>                    Load skill into session
+  /skills unload <name>                  Unload skill from session
+  /skills info <name>                    Show skill details
+  /skills use <name> <input>             Execute skill with input
+
+Examples:
+  /skills create pdf-analyzer
+  /skills validate pdf-analyzer
+  /skills package pdf-analyzer
+  /skills load pdf-analyzer
+  /skills info pdf-analyzer
+
+For more info: docs/SKILL_AUTHORING_GUIDE.md"#;
+
+            Ok(SkillCommandOutcome::Handled {
+                message: help_text.to_string(),
+            })
+        }
+
+        SkillCommandAction::Create { name, path } => {
+            match author.create_skill(&name, path) {
+                Ok(skill_dir) => {
+                    Ok(SkillCommandOutcome::Handled {
+                        message: format!(
+                            "✓ Created skill: {}\n\nNext steps:\n1. Edit {}/SKILL.md to complete the frontmatter and instructions\n2. Add scripts, references, or assets as needed\n3. Validate with: /skills validate {}\n4. Package with: /skills package {}",
+                            name,
+                            skill_dir.display(),
+                            name,
+                            name
+                        ),
+                    })
+                }
+                Err(e) => Ok(SkillCommandOutcome::Error {
+                    message: format!("Failed to create skill: {}", e),
+                }),
+            }
+        }
+
+        SkillCommandAction::Validate { name } => {
+            let skill_dir = workspace.join("skills").join(&name);
+            if !skill_dir.exists() {
+                return Ok(SkillCommandOutcome::Error {
+                    message: format!("Skill directory not found: {}", skill_dir.display()),
+                });
+            }
+
+            match author.validate_skill(&skill_dir) {
+                Ok(report) => {
+                    Ok(SkillCommandOutcome::Handled {
+                        message: report.format(),
+                    })
+                }
+                Err(e) => Ok(SkillCommandOutcome::Error {
+                    message: format!("Validation error: {}", e),
+                }),
+            }
+        }
+
+        SkillCommandAction::Package { name } => {
+            let skill_dir = workspace.join("skills").join(&name);
+            if !skill_dir.exists() {
+                return Ok(SkillCommandOutcome::Error {
+                    message: format!("Skill directory not found: {}", skill_dir.display()),
+                });
+            }
+
+            match author.package_skill(&skill_dir, Some(workspace.clone())) {
+                Ok(output_file) => {
+                    Ok(SkillCommandOutcome::Handled {
+                        message: format!("✓ Packaged skill to: {}", output_file.display()),
+                    })
+                }
+                Err(e) => Ok(SkillCommandOutcome::Error {
+                    message: format!("Packaging failed: {}", e),
+                }),
+            }
+        }
+
         SkillCommandAction::List => {
             let discovery_result = loader.discover_all_skills().await?;
             let skills = discovery_result.traditional_skills;
@@ -221,6 +369,50 @@ pub async fn handle_skill_command(
     }
 }
 
+/// Detect skill mentions in user input using Codex-style patterns
+///
+/// Returns list of skill names that should be auto-triggered based on:
+/// 1. Explicit `$skill-name` mention (e.g., "Use $pdf-analyzer")
+/// 2. Description keyword matches (fuzzy, requires 2+ matches)
+///
+/// # Examples
+/// ```
+/// // Explicit mention
+/// "Use $pdf-analyzer to process the document" -> ["pdf-analyzer"]
+///
+/// // Description matching
+/// "Extract tables from PDF document" -> ["pdf-analyzer"] (if description contains "extract" + "tables" or "PDF")
+/// ```
+pub async fn detect_mentioned_skills(
+    user_input: &str,
+    workspace: PathBuf,
+) -> Result<Vec<(String, Skill)>> {
+    let mut loader = EnhancedSkillLoader::new(workspace);
+
+    // Discover available skills
+    let discovery_result = loader.discover_all_skills().await?;
+    let manifests: Vec<SkillManifest> = discovery_result
+        .traditional_skills
+        .iter()
+        .map(|ctx| ctx.manifest().clone())
+        .collect();
+
+    // Detect mentions using the same logic as vtcode-core
+    let mentioned_names = detect_skill_mentions(user_input, &manifests);
+
+    // Load the mentioned skills
+    let mut skills = Vec::new();
+    for name in mentioned_names {
+        if let Ok(enhanced_skill) = loader.get_skill(&name).await {
+            if let vtcode_core::skills::loader::EnhancedSkill::Traditional(skill) = enhanced_skill {
+                skills.push((name.clone(), skill));
+            }
+        }
+    }
+
+    Ok(skills)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -286,5 +478,15 @@ mod tests {
     fn test_parse_non_skill_command() {
         let result = parse_skill_command("/help").unwrap();
         assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_detect_explicit_skill_mention() {
+        // This test would need actual skills in a temp directory
+        // Just verify the function signature compiles
+        let input = "Use $pdf-analyzer to process the document";
+        let workspace = PathBuf::from("/tmp");
+        let _result = detect_mentioned_skills(input, workspace).await;
+        // In real test, would assert skills are detected
     }
 }

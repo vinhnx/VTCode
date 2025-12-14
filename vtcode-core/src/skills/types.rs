@@ -7,6 +7,38 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+/// Skill scope indicating where the skill is defined
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SkillScope {
+	/// User-level skill (~/.vtcode/skills or ~/.claude/skills)
+	User,
+	/// Repository-level skill (.vtcode/skills or .codex/skills in project root)
+	Repo,
+}
+
+impl Default for SkillScope {
+	fn default() -> Self {
+		Self::User
+	}
+}
+
+/// Skill metadata for protocol/API responses (matches Codex protocol)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SkillMetadata {
+	pub name: String,
+	pub description: String,
+	pub path: PathBuf,
+	pub scope: SkillScope,
+}
+
+/// Skill error information (matches Codex protocol)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SkillErrorInfo {
+	pub path: PathBuf,
+	pub message: String,
+}
+
 /// Skill manifest metadata from SKILL.md frontmatter
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SkillManifest {
@@ -18,6 +50,11 @@ pub struct SkillManifest {
     pub version: Option<String>,
     /// Optional author name
     pub author: Option<String>,
+    /// Indicates if skill uses VT Code native features (not container skills)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "vtcode-native")]
+    #[serde(alias = "vtcode_native")]
+    pub vtcode_native: Option<bool>,
 }
 
 impl SkillManifest {
@@ -76,6 +113,9 @@ pub struct Skill {
     /// Absolute path to skill directory
     pub path: PathBuf,
 
+	/// Skill scope (user-level or repo-level)
+	pub scope: SkillScope,
+
     /// Level 2: Instructions from SKILL.md body (<5K tokens, loaded when triggered)
     pub instructions: String,
 
@@ -91,13 +131,38 @@ impl Skill {
         instructions: String,
     ) -> anyhow::Result<Self> {
         manifest.validate()?;
+		// Determine scope based on path
+		let scope = if path.to_string_lossy().contains(".vtcode/skills") 
+			|| path.to_string_lossy().contains(".codex/skills") {
+			SkillScope::Repo
+		} else {
+			SkillScope::User
+		};
         Ok(Skill {
             manifest,
             path,
+			scope,
             instructions,
             resources: HashMap::new(),
         })
     }
+
+	/// Create a new skill with explicit scope
+	pub fn with_scope(
+		manifest: SkillManifest,
+		path: PathBuf,
+		scope: SkillScope,
+		instructions: String,
+	) -> anyhow::Result<Self> {
+		manifest.validate()?;
+		Ok(Skill {
+			manifest,
+			path,
+			scope,
+			instructions,
+			resources: HashMap::new(),
+		})
+	}
 
     /// Add a resource to the skill
     pub fn add_resource(&mut self, path: String, resource: SkillResource) {
@@ -195,6 +260,7 @@ mod tests {
             description: "A test skill".to_string(),
             version: None,
             author: None,
+            vtcode_native: None,
         };
         assert!(m.validate().is_ok());
     }
@@ -206,6 +272,7 @@ mod tests {
             description: "Valid description".to_string(),
             version: None,
             author: None,
+            vtcode_native: None,
         };
         assert!(m.validate().is_err());
     }
@@ -217,6 +284,7 @@ mod tests {
             description: "Valid description".to_string(),
             version: None,
             author: None,
+            vtcode_native: None,
         };
         assert!(m.validate().is_err());
     }
@@ -228,6 +296,7 @@ mod tests {
             description: "Test".to_string(),
             version: None,
             author: None,
+            vtcode_native: None,
         };
 
         let meta_ctx = SkillContext::MetadataOnly(manifest.clone());

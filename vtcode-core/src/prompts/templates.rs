@@ -60,4 +60,9 @@ impl PromptTemplates {
     pub fn pagination_guidelines_prompt() -> &'static str {
         "PAGINATION GUIDELINES: When working with large datasets, always use pagination to prevent timeouts and token overflow. Default per_page=50 for optimal performance. For edge cases: reduce per_page to 25 for very large directories, handle incomplete pages gracefully, and retry with smaller batches on API failures. Monitor 'has_more' flag and use 'page' parameter to continue pagination."
     }
+
+    /// Get skills available prompt (inspired by OpenAI Codex)
+    pub fn skills_available_prompt() -> &'static str {
+        "## Available Skills\nThe following skills are available for use. Each skill provides specialized capabilities that can be invoked when relevant to the task. Skills are loaded from .vtcode/skills/ directory."
+    }
 }

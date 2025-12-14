@@ -11,6 +11,8 @@ pub struct PromptContext {
     pub project_type: Option<String>,
     /// Available tools
     pub available_tools: Vec<String>,
+    /// Available skills (name: description)
+    pub available_skills: Vec<(String, String)>,
     /// User preferences
     pub user_preferences: Option<UserPreferences>,
 }
@@ -51,6 +53,20 @@ impl PromptContext {
     pub fn add_tool(&mut self, tool: String) {
         if !self.available_tools.contains(&tool) {
             self.available_tools.push(tool);
+        }
+    }
+
+    /// Add available skill
+    pub fn add_skill(&mut self, name: String, description: String) {
+        if !self.available_skills.iter().any(|(n, _)| n == &name) {
+            self.available_skills.push((name, description));
+        }
+    }
+
+    /// Add multiple skills
+    pub fn add_skills(&mut self, skills: Vec<(String, String)>) {
+        for (name, description) in skills {
+            self.add_skill(name, description);
         }
     }
 }

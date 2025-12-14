@@ -17,6 +17,12 @@ pub struct SkillYaml {
     pub version: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub author: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tags: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "vtcode-native")]
+    #[serde(alias = "vtcode_native")]
+    pub vtcode_native: Option<bool>,
 }
 
 /// Parse SKILL.md file and extract manifest + instructions
@@ -56,6 +62,7 @@ pub fn parse_skill_content(content: &str) -> anyhow::Result<(SkillManifest, Stri
         description: yaml.description,
         version: yaml.version,
         author: yaml.author,
+        vtcode_native: yaml.vtcode_native,
     };
 
     manifest.validate()?;

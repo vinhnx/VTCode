@@ -81,10 +81,21 @@ impl ContainerSkillsValidator {
 
     /// Analyze a skill for container skills requirements
     pub fn analyze_skill(&self, skill: &Skill) -> ContainerValidationResult {
+        // Check if skill uses VT Code native features (not container skills)
+        if let Some(true) = skill.manifest.vtcode_native {
+            return ContainerValidationResult {
+                requirement: ContainerSkillsRequirement::NotRequired,
+                analysis: "Skill uses VT Code native features (not container skills)".to_string(),
+                patterns_found: vec![],
+                recommendations: vec![],
+                should_filter: false,
+            };
+        }
+
         let instructions = &skill.instructions;
         let mut patterns_found = Vec::new();
         let mut recommendations = Vec::new();
-        
+
         // Check for container skills patterns
         let mut has_container_usage = false;
         for pattern in &self.container_patterns {
@@ -93,7 +104,7 @@ impl ContainerSkillsValidator {
                 has_container_usage = true;
             }
         }
-        
+
         // Check for explicit incompatibility statements
         let mut has_incompatibility = false;
         for pattern in &self.incompatibility_patterns {
@@ -102,7 +113,7 @@ impl ContainerSkillsValidator {
                 has_incompatibility = true;
             }
         }
-        
+
         // Check for fallback alternatives
         let mut has_fallback = false;
         for pattern in &self.fallback_patterns {
@@ -111,7 +122,7 @@ impl ContainerSkillsValidator {
                 has_fallback = true;
             }
         }
-        
+
         // Determine requirement level and recommendations
         let (requirement, analysis, should_filter) = if has_incompatibility {
             (
@@ -147,13 +158,13 @@ impl ContainerSkillsValidator {
                 false,
             )
         };
-        
+
         // Generate recommendations with enhanced user guidance
         if requirement == ContainerSkillsRequirement::Required {
             recommendations.push("This skill requires Anthropic's container skills feature which is not available in VTCode.".to_string());
             recommendations.push("".to_string());
             recommendations.push("Consider these VTCode-compatible alternatives:".to_string());
-            
+
             // Provide specific alternatives based on skill type
             if skill.name().contains("pdf") || skill.name().contains("report") {
                 recommendations.push("  1. Use execute_code with Python libraries: reportlab, fpdf2, or weasyprint".to_string());
@@ -175,7 +186,7 @@ impl ContainerSkillsValidator {
                 recommendations.push("  1. Use execute_code with appropriate Python libraries".to_string());
                 recommendations.push("  2. Search for VTCode-compatible skills in the documentation".to_string());
             }
-            
+
             recommendations.push("".to_string());
             recommendations.push("Learn more about VTCode's code execution in the documentation.".to_string());
             recommendations.push("Official Anthropic container skills documentation: https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview".to_string());
@@ -185,7 +196,7 @@ impl ContainerSkillsValidator {
             recommendations.push("Look for sections marked 'Option 2' or 'VTCode Alternative'.".to_string());
             recommendations.push("The skill instructions contain working examples using `execute_code`.".to_string());
         }
-        
+
         ContainerValidationResult {
             requirement,
             analysis,
@@ -204,10 +215,10 @@ impl ContainerSkillsValidator {
     pub fn filter_incompatible_skills(&self, skills: Vec<Skill>) -> (Vec<Skill>, Vec<IncompatibleSkillInfo>) {
         let mut compatible_skills = Vec::new();
         let mut incompatible_skills = Vec::new();
-        
+
         for skill in skills {
             let analysis = self.analyze_skill(&skill);
-            
+
             if analysis.should_filter {
                 incompatible_skills.push(IncompatibleSkillInfo {
                     name: skill.name().to_string(),
@@ -219,7 +230,7 @@ impl ContainerSkillsValidator {
                 compatible_skills.push(skill);
             }
         }
-        
+
         (compatible_skills, incompatible_skills)
     }
 }
@@ -273,10 +284,10 @@ impl ContainerValidationReport {
             },
         }
     }
-    
+
     pub fn add_skill_analysis(&mut self, skill_name: String, analysis: ContainerValidationResult) {
         self.total_skills_analyzed += 1;
-        
+
         match analysis.requirement {
             ContainerSkillsRequirement::NotRequired => {
                 self.compatible_skills.push(skill_name);
@@ -306,7 +317,7 @@ impl ContainerValidationReport {
             }
         }
     }
-    
+
     pub fn add_incompatible_skill(&mut self, name: String, description: String, reason: String) {
         self.incompatible_skills.push(IncompatibleSkillInfo {
             name,
@@ -320,17 +331,17 @@ impl ContainerValidationReport {
         self.summary.total_incompatible += 1;
         self.total_skills_analyzed += 1;
     }
-    
+
     pub fn finalize(&mut self) {
         self.summary.recommendation = match (self.summary.total_incompatible, self.summary.total_with_fallbacks) {
             (0, 0) => "All skills are fully compatible with VTCode.".to_string(),
             (0, _) => format!("{} skills have container skills dependencies but provide VTCode-compatible fallbacks.", self.summary.total_with_fallbacks),
             (_, 0) => format!("{} skills require container skills and cannot be used. Consider the suggested alternatives.", self.summary.total_incompatible),
-            (_, _) => format!("{} skills require container skills. {} skills have fallbacks. Use alternatives or fallback instructions.", 
+            (_, _) => format!("{} skills require container skills. {} skills have fallbacks. Use alternatives or fallback instructions.",
                 self.summary.total_incompatible, self.summary.total_with_fallbacks),
         };
     }
-    
+
     pub fn format_report(&self) -> String {
         let mut output = String::new();
         output.push_str(&format!("📊 Container Skills Validation Report\n"));
@@ -340,7 +351,7 @@ impl ContainerValidationReport {
         output.push_str(&format!("With Fallbacks: {}\n", self.summary.total_with_fallbacks));
         output.push_str(&format!("Incompatible: {}\n\n", self.summary.total_incompatible));
         output.push_str(&format!("{}", self.summary.recommendation));
-        
+
         if !self.incompatible_skills.is_empty() {
             output.push_str("\n\nIncompatible Skills:");
             for skill in &self.incompatible_skills {
@@ -350,14 +361,14 @@ impl ContainerValidationReport {
                 }
             }
         }
-        
+
         if !self.skills_with_fallbacks.is_empty() {
             output.push_str("\n\nSkills with Fallbacks:");
             for skill in &self.skills_with_fallbacks {
                 output.push_str(&format!("\n  • {} - {}", skill.name, skill.description));
             }
         }
-        
+
         output
     }
 }
@@ -377,18 +388,19 @@ mod tests {
     #[test]
     fn test_container_skills_detection() {
         let validator = ContainerSkillsValidator::new();
-        
+
         // Test skill with container usage
         let manifest = SkillManifest {
             name: "pdf-report-generator".to_string(),
             description: "Generate PDFs".to_string(),
             version: Some("1.0.0".to_string()),
             author: Some("Test".to_string()),
+            vtcode_native: None,
         };
-        
+
         let instructions = r#"
         Generate PDF documents using Anthropic's pdf skill.
-        
+
         ```python
         response = client.messages.create(
             model="claude-3-5-sonnet-20241022",
@@ -400,10 +412,10 @@ mod tests {
         )
         ```
         "#;
-        
+
         let skill = Skill::new(manifest, PathBuf::from("/tmp"), instructions.to_string()).unwrap();
         let result = validator.analyze_skill(&skill);
-        
+
         assert_eq!(result.requirement, ContainerSkillsRequirement::Required);
         assert!(result.should_filter);
         assert!(!result.patterns_found.is_empty());
@@ -412,20 +424,21 @@ mod tests {
     #[test]
     fn test_enhanced_validation_with_fallback() {
         let validator = ContainerSkillsValidator::new();
-        
+
         let manifest = SkillManifest {
             name: "spreadsheet-generator".to_string(),
             description: "Generate spreadsheets".to_string(),
             version: Some("1.0.0".to_string()),
             author: Some("Test".to_string()),
+            vtcode_native: Some(true),
         };
-        
+
         let instructions = r#"
         **vtcode does not currently support Anthropic container skills.** Instead, use:
-        
+
         ### Option 1: Python Script with openpyxl
         Use vtcode's `execute_code` tool with Python and openpyxl library:
-        
+
         ```python
         import openpyxl
         wb = openpyxl.Workbook()
@@ -433,14 +446,14 @@ mod tests {
         wb.save("output.xlsx")
         ```
         "#;
-        
+
         let skill = Skill::new(manifest, PathBuf::from("/tmp"), instructions.to_string()).unwrap();
         let result = validator.analyze_skill(&skill);
-        
+
         assert_eq!(result.requirement, ContainerSkillsRequirement::RequiredWithFallback);
         assert!(!result.should_filter);
         assert!(result.patterns_found.len() >= 2);
-        
+
         // Test enhanced recommendations
         let recommendations = result.recommendations.join(" ");
         assert!(recommendations.contains("container skills"));
@@ -451,17 +464,18 @@ mod tests {
     #[test]
     fn test_enhanced_validation_without_fallback() {
         let validator = ContainerSkillsValidator::new();
-        
+
         let manifest = SkillManifest {
             name: "pdf-report-generator".to_string(),
             description: "Generate PDFs".to_string(),
             version: Some("1.0.0".to_string()),
             author: Some("Test".to_string()),
+            vtcode_native: None,
         };
-        
+
         let instructions = r#"
         Generate PDF documents using Anthropic's pdf skill.
-        
+
         ```python
         response = client.messages.create(
             model="claude-3-5-sonnet-20241022",
@@ -473,13 +487,13 @@ mod tests {
         )
         ```
         "#;
-        
+
         let skill = Skill::new(manifest, PathBuf::from("/tmp"), instructions.to_string()).unwrap();
         let result = validator.analyze_skill(&skill);
-        
+
         assert_eq!(result.requirement, ContainerSkillsRequirement::Required);
         assert!(result.should_filter);
-        
+
         // Test enhanced recommendations
         let recommendations = result.recommendations.join(" ");
         assert!(recommendations.contains("cannot be used"));
@@ -490,14 +504,14 @@ mod tests {
     #[test]
     fn test_validation_report_formatting() {
         let mut report = ContainerValidationReport::new();
-        
+
         // Add test data
         report.add_incompatible_skill(
             "pdf-report-generator".to_string(),
             "Generate PDFs".to_string(),
             "Requires container skills".to_string()
         );
-        
+
         report.add_skill_analysis(
             "spreadsheet-generator".to_string(),
             ContainerValidationResult {
@@ -508,9 +522,9 @@ mod tests {
                 should_filter: false,
             }
         );
-        
+
         report.finalize();
-        
+
         let formatted = report.format_report();
         assert!(formatted.contains("Container Skills Validation Report"));
         assert!(formatted.contains("pdf-report-generator"));

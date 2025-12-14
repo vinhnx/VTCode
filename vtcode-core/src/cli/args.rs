@@ -289,6 +289,14 @@ pub struct Cli {
     )]
     pub continue_latest: bool,
 
+    /// **Enable skills system**
+    ///
+    /// Enables the skills subsystem for loading and executing agent skills.
+    /// When disabled, skill-related commands and functionality are not available.
+    /// Mirrors OpenAI Codex CLI's `--enable skills` flag for compatibility.
+    #[arg(long, global = true)]
+    pub enable_skills: bool,
+
     /// TUI tick rate (ms) - Controls how frequently the UI updates
     ///
     /// Lower values: More responsive UI but higher CPU usage
@@ -668,6 +676,13 @@ pub enum Commands {
     ///   vtcode skills create my-skill # Create template
     #[command(subcommand)]
     Skills(SkillsSubcommand),
+
+    /// **List available skills** (OpenAI Codex CLI style)
+    ///
+    /// Quick alias for `vtcode skills list`
+    /// Shows all available agent skills with descriptions
+    #[command(name = "list-skills")]
+    ListSkills {},
 }
 
 /// Token-related subcommands
@@ -906,6 +921,7 @@ impl Default for Cli {
             resume_session: None,
             continue_latest: false,
             debug: false,
+            enable_skills: false, // Skills disabled by default
             tick_rate: 250, // Default tick rate: 250ms
             frame_rate: 60, // Default frame rate: 60 FPS
             command: Some(Commands::Chat),

@@ -449,6 +449,7 @@ pub fn tool_config_to_skill_context(config: &CliToolConfig) -> Result<SkillConte
         description: config.description.clone(),
         version: Some("1.0.0".to_string()),
         author: Some("VTCode CLI Discovery".to_string()),
+        vtcode_native: None,
     };
     
     Ok(SkillContext::MetadataOnly(manifest))
