@@ -355,12 +355,26 @@ impl SkillManifest {
 3. **Progressive disclosure docs** - Clear 4-step workflow
 4. **Context hygiene emphasis** - "Keep context small"
 
-### 🎯 Future Enhancements (Optional)
+### 🎯 Future Enhancements (Required for Production)
 
-1. **XML injection format** - `<skill><name>...</name>...</skill>` tags
-2. **TUI validation modal** - Show errors at startup (like Codex)
-3. **Skill ordering** - By name, then path (Codex uses this for stability)
-4. **Skill popup UI** - Fuzzy search popup (Codex has this in TUI)
+1. **Automatic skill injection** - When `$skill-name` detected, auto-inject SKILL.md content
+2. **XML injection format** - `<skill><name>...</name>...</skill>` tags
+3. **TUI validation modal** - Show errors at startup (like Codex)
+4. **Skill ordering** - By name, then path (Codex uses this for stability)
+5. **Skill popup UI** - Fuzzy search popup (Codex has this in TUI)
+
+### ⚠️ Current Limitation
+
+**Agent stalls when `$skill-name` mentioned** - The system detects skill mentions but doesn't automatically inject skill content.
+
+**Workaround**: Use `/skills load <name>` command explicitly before mentioning skill.
+
+**Permanent fix needed**: Implement auto-injection middleware that:
+
+1. Detects `$skill-name` in user input
+2. Loads corresponding SKILL.md
+3. Injects as user message before agent processes request
+4. Uses Codex's XML format: `<skill><name>pdf-analyzer</name>[content]</skill>`
 
 ## Usage Example
 
@@ -462,4 +476,40 @@ Created comprehensive guides:
 
 **Implementation Date**: December 15, 2024
 **Codex Reference**: https://github.com/openai/codex
-**Status**: ✅ **Production-Ready with Codex Patterns**
+**Status**: ⚠️ **Patterns Applied - Auto-Injection Required for Production**
+
+## Known Issue: Agent Stalls on Skill Mentions
+
+**Symptom**: When user types `Use $pdf-analyzer...`, agent detects skill but doesn't load content, gets stuck.
+
+**Root Cause**: Missing middleware to auto-inject skill content when `$skill-name` detected.
+
+**Current Flow** (broken):
+
+```
+User: "Use $pdf-analyzer to process doc"
+  ↓
+Agent sees: "Need to load skill pdf-analyzer"
+  ↓
+Agent thinks: [searches tools, doesn't find it]
+  ↓
+Agent stalls: [no mechanism to load skill content]
+```
+
+**Required Flow** (Codex pattern):
+
+```
+User: "Use $pdf-analyzer to process doc"
+  ↓
+Middleware detects: $pdf-analyzer mention
+  ↓
+Middleware injects: <skill><name>pdf-analyzer</name>[SKILL.md content]</skill>
+  ↓
+Agent receives: Original message + skill content as context
+  ↓
+Agent proceeds: Now has skill instructions, can execute
+```
+
+**Implementation Location**: `src/agent/runloop/mod.rs` or `src/agent/runloop/unified/context_manager.rs`
+
+**Reference**: See Codex's `build_skill_injections()` in `codex-rs/core/src/skills/injection.rs`
