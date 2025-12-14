@@ -2913,7 +2913,7 @@ fn snapshot_to_map(
     {
         response.insert(
             "screen_contents".to_string(),
-            Value::String(strip_ansi(&screen)),
+            Value::String(filter_pty_output(&strip_ansi(&screen))),
         );
     }
 
@@ -2922,11 +2922,27 @@ fn snapshot_to_map(
     {
         response.insert(
             "scrollback".to_string(),
-            Value::String(strip_ansi(&scrollback)),
+            Value::String(filter_pty_output(&strip_ansi(&scrollback))),
         );
     }
 
     response
+}
+
+fn filter_pty_output(text: &str) -> String {
+    // Filter out macOS malloc debugging messages
+    // These appear as: "process_name(PID) MallocStackLogging: message"
+    let lines: Vec<&str> = text.lines().collect();
+    let filtered: Vec<&str> = lines
+        .iter()
+        .filter(|line| {
+            !line.contains("MallocStackLogging:")
+                && !line.contains("malloc: enabling abort()")
+                && !line.contains("can't turn off malloc stack logging")
+        })
+        .copied()
+        .collect();
+    filtered.join("\n")
 }
 
 fn strip_ansi(text: &str) -> String {

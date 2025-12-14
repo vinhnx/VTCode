@@ -394,4 +394,39 @@ mod tests {
         let input_ansi = "\x1b[31mVT\u{2014}Code\x1b[0m";
         assert_eq!(strip_ansi(input_ansi), "VT\u{2014}Code");
     }
+
+    #[test]
+    fn test_background_colors() {
+        // Test background color codes (40-47 for standard, 48;5;N for 256-color, 48;2;R;G;B for RGB)
+        assert_eq!(strip_ansi("\x1b[40mBlack bg\x1b[0m"), "Black bg");
+        assert_eq!(strip_ansi("\x1b[41mRed bg\x1b[0m"), "Red bg");
+        assert_eq!(strip_ansi("\x1b[42mGreen bg\x1b[0m"), "Green bg");
+        assert_eq!(strip_ansi("\x1b[43mYellow bg\x1b[0m"), "Yellow bg");
+        assert_eq!(strip_ansi("\x1b[44mBlue bg\x1b[0m"), "Blue bg");
+        assert_eq!(strip_ansi("\x1b[45mMagenta bg\x1b[0m"), "Magenta bg");
+        assert_eq!(strip_ansi("\x1b[46mCyan bg\x1b[0m"), "Cyan bg");
+        assert_eq!(strip_ansi("\x1b[47mWhite bg\x1b[0m"), "White bg");
+
+        // Bright background colors (100-107)
+        assert_eq!(strip_ansi("\x1b[100mBright black bg\x1b[0m"), "Bright black bg");
+        assert_eq!(strip_ansi("\x1b[107mBright white bg\x1b[0m"), "Bright white bg");
+
+        // 256-color background
+        assert_eq!(strip_ansi("\x1b[48;5;196mRed 256\x1b[0m"), "Red 256");
+
+        // RGB background
+        assert_eq!(strip_ansi("\x1b[48;2;255;0;0mRGB red\x1b[0m"), "RGB red");
+
+        // Mixed foreground and background
+        assert_eq!(
+            strip_ansi("\x1b[31;42mRed text on green bg\x1b[0m"),
+            "Red text on green bg"
+        );
+
+        // Background with bold and other styles
+        assert_eq!(
+            strip_ansi("\x1b[1;4;41;33mBold underline yellow on red\x1b[0m"),
+            "Bold underline yellow on red"
+        );
+    }
 }
