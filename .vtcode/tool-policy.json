@@ -35,7 +35,7 @@
     "debug_agent": "allow",
     "delete_file": "prompt",
     "edit_file": "allow",
-    "execute_code": "prompt",
+    "execute_code": "allow",
     "grep_file": "allow",
     "list_files": "allow",
     "list_pty_sessions": "allow",
@@ -49,13 +49,13 @@
     "web_fetch": "prompt",
     "write_file": "allow",
     "search_replace": "prompt",
-    "skill": "prompt",
+    "skill": "allow",
+    "mcp_get_current_time": "prompt",
+    "mcp_time_get_current_time": "prompt",
     "mcp_convert_time": "prompt",
     "mcp_time_convert_time": "prompt",
     "mcp_fetch": "prompt",
-    "mcp_fetch_fetch": "prompt",
-    "mcp_get_current_time": "prompt",
-    "mcp_time_get_current_time": "prompt"
+    "mcp_fetch_fetch": "prompt"
   },
   "constraints": {},
   "mcp": {

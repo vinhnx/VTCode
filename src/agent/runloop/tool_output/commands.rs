@@ -331,14 +331,21 @@ fn preprocess_terminal_stdout<'a>(tokens: Option<&[String]>, stdout: &'a str) ->
         None  // No filtering needed
     };
 
-    // Use filtered text if available, otherwise original
-    let text_to_process = filtered_text.as_deref().unwrap_or(stdout);
-    
     // Continue with ANSI stripping and normalization
-    let stripped = strip_ansi_codes(text_to_process);
-    let normalized = match stripped {
-        Cow::Borrowed(text) => normalize_carriage_returns(text),
-        Cow::Owned(text) => normalize_carriage_returns(&text).into_owned().into(),
+    let normalized = if let Some(filtered) = filtered_text {
+        // We have filtered text, need to return owned Cow
+        let stripped = strip_ansi_codes(&filtered);
+        match stripped {
+            Cow::Borrowed(text) => normalize_carriage_returns(text).into_owned().into(),
+            Cow::Owned(text) => normalize_carriage_returns(&text).into_owned().into(),
+        }
+    } else {
+        // Use original stdout, can return borrowed Cow
+        let stripped = strip_ansi_codes(stdout);
+        match stripped {
+            Cow::Borrowed(text) => normalize_carriage_returns(text),
+            Cow::Owned(text) => normalize_carriage_returns(&text).into_owned().into(),
+        }
     };
     
     let should_strip_numbers = tokens
