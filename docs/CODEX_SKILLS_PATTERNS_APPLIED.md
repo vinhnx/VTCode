@@ -563,5 +563,9 @@ When you run this skill, VT Code will use the detected Python environment automa
 
 ```
 
-**For skill authors**: No need to specify Python paths - VT Code handles it automatically.
+**Package Manager Preferences**: VTCode agents automatically prefer modern tools:
+- Python: `uv pip install` (faster) > `pip install` (fallback)
+- JavaScript: `bun install` / `bun add` (faster) > `npm install` (fallback)
+
+**For skill authors**: No need to specify Python paths or package managers - VT Code handles it automatically.
 ```

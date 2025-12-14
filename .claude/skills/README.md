@@ -14,14 +14,23 @@ This directory contains Claude Agent Skills tailored for VTCode development and 
 ### Recommended Setup
 
 ```bash
-# Option 1: Create project venv
+# Recommended: Use uv (fastest, best isolation)
+uv pip install reportlab fpdf2 openpyxl python-docx
+
+# Alternative: Traditional venv + pip
 python3 -m venv .venv
 source .venv/bin/activate
 pip install reportlab fpdf2 openpyxl python-docx
-
-# Option 2: Use uv (faster, better isolation)
-uv pip install reportlab fpdf2 openpyxl python-docx
 ```
+
+### Package Manager Preferences
+
+**VTCode agents are instructed to prefer modern package managers:**
+
+- **Python**: `uv pip install` > `pip install`
+- **JavaScript**: `bun install` > `npm install` > `pnpm install`
+
+These tools are faster, provide better dependency resolution, and are more reliable.
 
 Skills will automatically use your detected environment - no configuration needed!
 
