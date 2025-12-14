@@ -180,7 +180,7 @@ impl CodeExecutor {
         tokio::fs::create_dir_all(&code_temp_dir)
             .await
             .context("failed to create .vtcode/code_temp directory")?;
-        
+
         // Use a unique temp file name based on timestamp
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -191,7 +191,7 @@ impl CodeExecutor {
             Language::JavaScript => "js",
         };
         let code_file = code_temp_dir.join(format!("exec_{}.{}", timestamp, ext));
-        
+
         tokio::fs::write(&code_file, &complete_code)
             .await
             .context("failed to write code file")?;
