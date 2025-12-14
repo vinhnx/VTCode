@@ -25,7 +25,7 @@ use std::{
 };
 use tokio::fs;
 use tokio::time::sleep;
-use tracing::{debug, trace};
+use tracing::{debug, trace, info, warn};
 
 use crate::config::constants::defaults::{
     DEFAULT_PTY_OUTPUT_BYTE_FUSE, DEFAULT_PTY_OUTPUT_MAX_TOKENS,
@@ -1176,8 +1176,8 @@ impl ToolRegistry {
                         }
 
                         // Format output to emphasize instructions for agent to follow
-                        let output = format!(
-                            "=== Skill Loaded: {} ===\n\n{}\n\n=== Resources Available ===\n{}\n\n⚠️  IMPORTANT: Follow the instructions above to complete the task. Do NOT call this tool again.",
+                        let mut output = format!(
+                            "=== Skill Loaded: {} ===\n\n{}\n\n=== Resources Available ===\n{}\n",
                             skill.manifest.name,
                             skill.instructions,
                             if resources.as_object().map(|r| r.is_empty()).unwrap_or(true) {
@@ -1186,6 +1186,25 @@ impl ToolRegistry {
                                 serde_json::to_string_pretty(&resources).unwrap_or_default()
                             }
                         );
+                        
+                        // Add file tracking information if the skill mentions file generation
+                        use crate::skills::skill_file_tracker::SkillFileTracker;
+                        let _tracker = SkillFileTracker::new(workspace_root.clone());
+                        
+                        // Scan the instructions for file generation patterns
+                        if skill.instructions.contains("output") || 
+                           skill.instructions.contains("generate") || 
+                           skill.instructions.contains("create") ||
+                           skill.instructions.contains(".pdf") ||
+                           skill.instructions.contains(".xlsx") ||
+                           skill.instructions.contains(".csv") {
+                            output.push_str("
+=== Auto File Tracking ===
+This skill generates files. After execution, file locations will be automatically detected and reported.
+");
+                        }
+                        
+                        output.push_str("\n⚠️  IMPORTANT: Follow the instructions above to complete the task. Do NOT call this tool again.");
 
                         Ok(json!({
                             "success": true,
@@ -1196,7 +1215,8 @@ impl ToolRegistry {
                             "instructions": skill.instructions,
                             "resources": resources,
                             "output": output,
-                            "message": format!("Skill '{}' loaded. Read 'output' field for complete instructions.", skill.manifest.name)
+                            "message": format!("Skill '{}' loaded. Read 'output' field for complete instructions.", skill.manifest.name),
+                            "file_tracking_enabled": true  // NEW: Flag indicating auto-tracking is available
                         }))
                     } else {
                         Ok(json!({
@@ -1220,6 +1240,8 @@ impl ToolRegistry {
     pub(super) fn execute_code_executor(&mut self, args: Value) -> BoxFuture<'_, Result<Value>> {
         let mcp_client = self.mcp_client.clone();
         let workspace_root = self.workspace_root_owned();
+        let file_tracker = crate::tools::file_tracker::FileTracker::new(workspace_root.clone());
+        
         Box::pin(async move {
             use crate::exec::code_executor::{CodeExecutor, Language};
 
@@ -1229,10 +1251,15 @@ impl ToolRegistry {
                 language: String,
                 #[serde(default)]
                 timeout_secs: Option<u64>,
+                #[serde(default)]
+                track_files: Option<bool>,
             }
 
             let parsed: ExecuteCodeArgs = serde_json::from_value(args)
                 .context("execute_code requires 'code' and 'language' fields")?;
+            
+            // Record timestamp before execution for file tracking
+            let execution_start = std::time::SystemTime::now();
 
             // SECURITY FIX: Warn if code appears to be calling tool invocation methods
             // This is a heuristic check - documents expectations that tool calls are not supported
@@ -1338,6 +1365,28 @@ impl ToolRegistry {
                 has_json_result = result.json_result.is_some(),
                 "Code execution completed"
             );
+            
+            // File tracking: detect newly created files if enabled
+            let mut file_tracking_info = None;
+            if parsed.track_files.unwrap_or(true) {
+                match file_tracker.detect_new_files(execution_start).await {
+                    Ok(new_files) if !new_files.is_empty() => {
+                        let summary = file_tracker.generate_file_summary(&new_files);
+                        info!("File tracking detected {} new files", new_files.len());
+                        file_tracking_info = Some(json!({
+                            "files": new_files.iter().map(|f| f.to_json()).collect::<Vec<_>>(),
+                            "summary": summary,
+                            "count": new_files.len(),
+                        }));
+                    }
+                    Ok(_) => {
+                        debug!("File tracking: no new files detected");
+                    }
+                    Err(e) => {
+                        warn!("File tracking failed: {}", e);
+                    }
+                }
+            }
 
             // Implement AGENTS.md pattern for large outputs
             const MAX_OUTPUT_CHARS: usize = 4000; // Reasonable limit for context windows
@@ -1383,6 +1432,11 @@ impl ToolRegistry {
             // Include JSON result if present
             if let Some(json_result) = result.json_result {
                 response["result"] = json_result;
+            }
+            
+            // Include file tracking info if available
+            if let Some(file_info) = file_tracking_info {
+                response["generated_files"] = file_info;
             }
 
             Ok(response)

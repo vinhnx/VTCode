@@ -136,6 +136,8 @@ pub mod execution_context;
 pub mod execution_tracker;
 pub mod fallback_chains;
 pub mod file_ops;
+pub mod file_tracker;
+pub mod generation_helpers;
 pub mod grep_cache;
 pub mod grep_file;
 pub mod handlers;
