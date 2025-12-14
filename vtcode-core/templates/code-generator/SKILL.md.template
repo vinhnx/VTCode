@@ -1,0 +1,75 @@
+---
+name: {{generator_name}}
+description: Generate {{target_language}} code from templates using {{template_engine}}
+version: 1.0.0
+author: VTCode User
+category: generator
+tags: code,generation,templates
+---
+
+# {{generator_name}}
+
+Generate {{target_language}} code from templates using {{template_engine}}.
+
+## Overview
+
+This skill provides code generation capabilities for {{target_language}} projects using the {{template_engine}} template engine.
+
+## Capabilities
+
+- Generate code from templates
+- Support for multiple template formats
+- Customizable template variables
+- Batch code generation
+- Template validation
+
+## Usage Examples
+
+### Generate a Simple Class
+```
+Generate a {{target_language}} class named "User" with fields for name and email
+```
+
+### Generate from Custom Template
+```
+Generate code using the template in templates/api_template.{{template_engine}}
+```
+
+### Batch Generation
+```
+Generate multiple files: model, controller, and tests for a "Product" entity
+```
+
+## Available Templates
+
+The skill includes templates for:
+- Class/struct generation
+- API endpoint generation
+- Test file generation
+- Configuration file generation
+
+## Template Variables
+
+Common template variables:
+- `{{name}}`: Entity name
+- `{{fields}}`: Field definitions
+- `{{methods}}`: Method definitions
+- `{{imports}}`: Import statements
+
+## Best Practices
+
+- Validate templates before use
+- Test generated code
+- Keep templates modular
+- Document template variables
+
+## Error Handling
+
+The skill validates templates and provides clear error messages for:
+- Invalid template syntax
+- Missing template variables
+- File generation errors
+
+---
+
+Generated from VTCode skill template v1.0.0

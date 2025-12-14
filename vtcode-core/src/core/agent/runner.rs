@@ -25,6 +25,7 @@ use crate::llm::{AnyClient, make_client};
 use crate::mcp::McpClient;
 use crate::prompts::system::compose_system_instruction_text;
 use crate::tools::{ToolRegistry, build_function_declarations};
+use crate::core::agent::state::{TaskRunState, ApiFailureTracker};
 
 use crate::utils::colors::style;
 use crate::utils::error_messages::ERR_TOOL_DENIED;
@@ -60,42 +61,6 @@ struct ShellPolicyCacheEntry {
     signature: u64,
     deny_regexes: Vec<(String, regex::Regex)>,
     deny_globs: Vec<(String, regex::Regex)>,
-}
-
-/// API failure tracking for exponential backoff
-struct ApiFailureTracker {
-    consecutive_failures: u32,
-    last_failure: Option<std::time::Instant>,
-}
-
-impl ApiFailureTracker {
-    fn new() -> Self {
-        Self {
-            consecutive_failures: 0,
-            last_failure: None,
-        }
-    }
-
-    fn record_failure(&mut self) {
-        self.consecutive_failures += 1;
-        self.last_failure = Some(std::time::Instant::now());
-    }
-
-    fn reset(&mut self) {
-        self.consecutive_failures = 0;
-        self.last_failure = None;
-    }
-
-    fn should_circuit_break(&self) -> bool {
-        self.consecutive_failures >= 3
-    }
-
-    fn backoff_duration(&self) -> Duration {
-        let base_ms = 1000;
-        let max_ms = 30000;
-        let backoff_ms = base_ms * 2_u64.pow(self.consecutive_failures.saturating_sub(1));
-        Duration::from_millis(backoff_ms.min(max_ms))
-    }
 }
 
 /// Format tool result for display in the TUI.
@@ -213,127 +178,11 @@ struct ProviderResponseSummary {
     reasoning_recorded: bool,
 }
 
-struct TaskRunState {
-    conversation: Vec<Content>,
-    conversation_messages: Vec<Message>,
-    created_contexts: Vec<String>,
-    modified_files: Vec<String>,
-    executed_commands: Vec<String>,
-    warnings: Vec<String>,
-    has_completed: bool,
-    completion_outcome: TaskOutcome,
-    turns_executed: usize,
-    turn_durations_ms: Vec<u128>,
-    max_tool_loops: usize,
-    consecutive_tool_loops: usize,
-    max_tool_loop_streak: usize,
-    tool_loop_limit_hit: bool,
-    consecutive_idle_turns: usize,
-    // Optimization: Track last processed message index for incremental Gemini message building
-    last_processed_message_idx: usize,
-}
-
 struct ToolFailureContext<'a> {
     agent_prefix: &'a str,
     task_state: &'a mut TaskRunState,
     event_recorder: &'a mut ExecEventRecorder,
     command_event: &'a crate::core::agent::events::ActiveCommandHandle,
-}
-
-impl TaskRunState {
-    fn new(
-        conversation: Vec<Content>,
-        conversation_messages: Vec<Message>,
-        max_tool_loops: usize,
-    ) -> Self {
-        Self {
-            conversation,
-            conversation_messages,
-            created_contexts: Vec::with_capacity(16), // Typical session creates ~5-10 contexts
-            modified_files: Vec::with_capacity(32),   // Typical session modifies ~10-20 files
-            executed_commands: Vec::with_capacity(64), // Typical session executes ~20-40 commands
-            warnings: Vec::with_capacity(16),         // Typical session has ~5-10 warnings
-            has_completed: false,
-            completion_outcome: TaskOutcome::Unknown,
-            turns_executed: 0,
-            turn_durations_ms: Vec::with_capacity(max_tool_loops), // Pre-allocate for expected number of turns
-            last_processed_message_idx: 0,
-            max_tool_loops,
-            consecutive_tool_loops: 0,
-            max_tool_loop_streak: 0,
-            tool_loop_limit_hit: false,
-            consecutive_idle_turns: 0,
-        }
-    }
-
-    fn record_turn(&mut self, start: &std::time::Instant, recorded: &mut bool) {
-        record_turn_duration(&mut self.turn_durations_ms, recorded, start);
-    }
-
-    fn finalize_outcome(&mut self, max_turns: usize) {
-        if self.completion_outcome == TaskOutcome::Unknown {
-            if self.has_completed {
-                self.completion_outcome = TaskOutcome::Success;
-            } else if self.tool_loop_limit_hit {
-                self.completion_outcome = TaskOutcome::tool_loop_limit_reached(
-                    self.max_tool_loops,
-                    self.consecutive_tool_loops,
-                );
-            } else if self.turns_executed >= max_turns {
-                self.completion_outcome =
-                    TaskOutcome::turn_limit_reached(max_turns, self.turns_executed);
-            }
-        }
-    }
-
-    fn register_tool_loop(&mut self) -> usize {
-        self.consecutive_tool_loops += 1;
-        if self.consecutive_tool_loops > self.max_tool_loop_streak {
-            self.max_tool_loop_streak = self.consecutive_tool_loops;
-        }
-        self.consecutive_tool_loops
-    }
-
-    fn reset_tool_loop_guard(&mut self) {
-        self.consecutive_tool_loops = 0;
-    }
-
-    fn mark_tool_loop_limit_hit(&mut self) {
-        self.tool_loop_limit_hit = true;
-        self.completion_outcome =
-            TaskOutcome::tool_loop_limit_reached(self.max_tool_loops, self.consecutive_tool_loops);
-    }
-
-    fn into_results(
-        self,
-        summary: String,
-        thread_events: Vec<ThreadEvent>,
-        total_duration_ms: u128,
-    ) -> TaskResults {
-        let total_turn_duration_ms: u128 = self.turn_durations_ms.iter().sum();
-        let average_turn_duration_ms = if !self.turn_durations_ms.is_empty() {
-            Some(total_turn_duration_ms as f64 / self.turn_durations_ms.len() as f64)
-        } else {
-            None
-        };
-        let max_turn_duration_ms = self.turn_durations_ms.iter().copied().max();
-        let completion_outcome = self.completion_outcome;
-
-        TaskResults {
-            created_contexts: self.created_contexts,
-            modified_files: self.modified_files,
-            executed_commands: self.executed_commands,
-            summary,
-            warnings: self.warnings,
-            thread_events,
-            outcome: completion_outcome,
-            turns_executed: self.turns_executed,
-            total_duration_ms,
-            average_turn_duration_ms,
-            max_turn_duration_ms,
-            turn_durations_ms: self.turn_durations_ms,
-        }
-    }
 }
 
 #[cfg(test)]

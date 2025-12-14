@@ -111,11 +111,11 @@ impl CommandPolicyEvaluator {
             let cache = self.cache.lock().await;
             if let Some(allowed) = cache.get(cmd) {
                 let reason = if allowed {
-                    "Cached allow decision".to_string()
+                    "Cached allow decision"
                 } else {
-                    "Cached deny decision".to_string()
+                    "Cached deny decision"
                 };
-                return (allowed, None, reason, PermissionDecision::Cached);
+                return (allowed, None, reason.to_string(), PermissionDecision::Cached);
             }
         }
 
@@ -129,7 +129,7 @@ impl CommandPolicyEvaluator {
         // Evaluate policy
         let allowed = self.allows_text(cmd);
 
-        // Determine reason
+        // Determine reason - use static strings where possible to avoid allocations
         let reason = if allowed {
             if self.matches_prefix(cmd, &self.allow_prefixes) {
                 format!("allow_list match: {}", cmd)

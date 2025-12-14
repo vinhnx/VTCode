@@ -147,24 +147,31 @@ impl AutonomousExecutor {
             ));
         }
 
-        if let Ok(detector) = self.loop_detector.read() {
-            // Check if hard limit already exceeded
-            if detector.is_hard_limit_exceeded(tool_name) {
-                return Some(format!(
-                    "Tool '{}' blocked: hard limit exceeded. Agent is stuck in a loop.",
-                    tool_name
-                ));
-            }
+        // Use try_read to avoid blocking on contested locks
+        match self.loop_detector.try_read() {
+            Ok(detector) => {
+                // Check if hard limit already exceeded
+                if detector.is_hard_limit_exceeded(tool_name) {
+                    return Some(format!(
+                        "Tool '{}' blocked: hard limit exceeded. Agent is stuck in a loop.",
+                        tool_name
+                    ));
+                }
 
-            // Check call count and provide early warning
-            let count = detector.get_call_count(tool_name);
-            if count >= 3
-                && let Some(suggestion) = detector.suggest_alternative(tool_name)
-            {
-                return Some(format!(
-                    "Tool '{}' called {} times. Consider alternative approach:\n{}",
-                    tool_name, count, suggestion
-                ));
+                // Check call count and provide early warning
+                let count = detector.get_call_count(tool_name);
+                if count >= 3 {
+                    if let Some(suggestion) = detector.suggest_alternative(tool_name) {
+                        return Some(format!(
+                            "Tool '{}' called {} times. Consider alternative approach:\n{}",
+                            tool_name, count, suggestion
+                        ));
+                    }
+                }
+            }
+            Err(_) => {
+                // If we can't get the lock, don't block execution
+                tracing::debug!("Could not acquire loop detector read lock for {}", tool_name);
             }
         }
         None

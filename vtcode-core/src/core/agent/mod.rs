@@ -12,6 +12,7 @@ pub mod examples;
 pub mod runloop;
 pub mod runner;
 pub mod snapshots;
+pub mod state;
 pub mod stats;
 pub mod task;
 pub mod types;

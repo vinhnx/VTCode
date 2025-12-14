@@ -21,10 +21,16 @@ Skills are modular instruction sets that guide Claude on how to complete specifi
 vtcode skills list
 ```
 
-Shows all discovered skills from:
-- `.claude/skills/` (project-local)
-- `./skills/` (workspace)
-- `~/.vtcode/skills/` (user global)
+Shows all discovered skills from multiple locations with precedence handling:
+- **VTCode User Skills** (`~/.vtcode/skills/`) - Highest precedence
+- **VTCode Project Skills** (`.vtcode/skills/`) - Project-specific skills
+- **Pi User Skills** (`~/.pi/skills/`) - Pi framework user skills
+- **Pi Project Skills** (`.pi/skills/`) - Pi framework project skills
+- **Claude User Skills** (`~/.claude/skills/`) - Claude Code user skills
+- **Claude Project Skills** (`.claude/skills/`) - Claude Code project skills
+- **Codex User Skills** (`~/.codex/skills/`) - Codex CLI user skills
+
+Skills from higher precedence locations override skills with the same name from lower precedence locations.
 
 ### View Skill Details
 
@@ -409,6 +415,46 @@ if file_id:
 
 ---
 
+## New VTCode Skills Location System
+
+### Multi-Location Support
+
+VT Code now supports a comprehensive skills location system similar to pi-mono, with proper precedence handling:
+
+**Supported Locations:**
+- **VTCode User Skills**: `~/.vtcode/skills/` (highest precedence)
+- **VTCode Project Skills**: `.vtcode/skills/` 
+- **Pi User Skills**: `~/.pi/skills/`
+- **Pi Project Skills**: `.pi/skills/`
+- **Claude User Skills**: `~/.claude/skills/`
+- **Claude Project Skills**: `.claude/skills/`
+- **Codex User Skills**: `~/.codex/skills/` (lowest precedence)
+
+### Key Features
+
+**Precedence Handling**: Skills from higher precedence locations override skills with the same name from lower precedence locations.
+
+**Recursive Scanning**: Automatically discovers skills in nested directories for user locations.
+
+**Name Separators**: Different separators for different frameworks:
+- VTCode locations: `/` (path separator)
+- Pi locations: `:` (colon separator)
+
+**Backward Compatibility**: All existing Claude Code skills continue to work in their original locations.
+
+### Migration from .claude/skills to .vtcode/skills
+
+All existing skills have been migrated from `.claude/skills` to `.vtcode/skills` to take advantage of the higher precedence system. The old locations are still supported for backward compatibility.
+
+### Discovery Process
+
+1. **Scanning**: VT Code scans all configured locations recursively
+2. **Precedence Resolution**: When name collisions occur, higher precedence skills win
+3. **Loading**: Skills are loaded on-demand with progressive disclosure
+4. **Execution**: Skills execute with full access to VTCode's tool ecosystem
+
+---
+
 ## Advanced Topics
 
 ### Combining Skills with Code Execution
@@ -478,13 +524,38 @@ Common errors and solutions:
 
 ### Organization by Role
 
-**Global Skills** (`~/.vtcode/skills/`):
-- Reusable across all projects
+**VTCode Global Skills** (`~/.vtcode/skills/`):
+- Reusable across all projects (highest precedence)
 - Examples: code-review, doc-generator, security-audit
 
-**Project Skills** (`.claude/skills/` or `./skills/`):
+**VTCode Project Skills** (`.vtcode/skills/`):
 - Specific to your project
 - Examples: brand-guidelines, api-spec, deployment-playbook
+
+**Pi Framework Skills** (`~/.pi/skills/`, `.pi/skills/`):
+- Skills following the Pi framework specification
+- Uses `:` as name separator for nested skills
+
+**Claude Code Skills** (`~/.claude/skills/`, `.claude/skills/`):
+- Legacy Claude Code skills (backward compatible)
+- Examples: existing skills migrated from Claude Code
+
+**Codex CLI Skills** (`~/.codex/skills/`):
+- Codex CLI compatible skills (lowest precedence)
+
+### Precedence System
+
+VT Code uses a precedence system to handle skill name collisions:
+
+1. **VTCode User Skills** (highest precedence)
+2. **VTCode Project Skills**
+3. **Pi User Skills**
+4. **Pi Project Skills**
+5. **Claude User Skills**
+6. **Claude Project Skills**
+7. **Codex User Skills** (lowest precedence)
+
+When multiple skills have the same name, the skill from the higher precedence location is used.
 
 ### Organization by Category
 
@@ -645,12 +716,18 @@ Check for Zed and VS Code extensions on the VTCode repository.
 ### Skill Not Found
 
 ```bash
-# Verify skill exists
+# Verify skill exists in new VTCode locations
 ls ~/.vtcode/skills/
-ls .claude/skills/
-ls ./skills/
+ls .vtcode/skills/
 
-# Check search paths
+# Check legacy locations
+ls ~/.claude/skills/
+ls .claude/skills/
+ls ~/.pi/skills/
+ls .pi/skills/
+ls ~/.codex/skills/
+
+# Check search paths and precedence
 vtcode skills config
 
 # Validate SKILL.md
@@ -685,6 +762,8 @@ vtcode skills info <name>  # Preview
 - **Skills Cookbook**: https://github.com/anthropics/claude-cookbooks/tree/main/skills
 - **VTCode Skills Implementation**: `SKILLS_IMPLEMENTATION_SUMMARY.md`
 - **Integration Plan**: `SKILLS_INTEGRATION_PLAN.md`
+- **Location System**: `vtcode-core/src/skills/locations.rs` - Implementation details
+- **Precedence System**: Follows pi-mono pattern with VTCode-specific enhancements
 
 ---
 
@@ -702,7 +781,7 @@ A: Yes! When integrated with the agent harness, skills can call VTCode tools (fi
 A: Skills are reusable, discoverable, versioned modules with explicit metadata. Prompts are conversation-level instructions.
 
 **Q: Can I share skills with teammates?**
-A: Yes! Keep skills in `.claude/skills/` (version control) or `~/.vtcode/skills/` (personal).
+A: Yes! Keep skills in `.vtcode/skills/` (version control) or `~/.vtcode/skills/` (personal). The new VTCode location system provides better precedence and organization.
 
 ---
 

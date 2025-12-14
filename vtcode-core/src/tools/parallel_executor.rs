@@ -2,7 +2,7 @@
 
 use crate::config::constants::tools;
 use anyhow::Result;
-use futures::future::{BoxFuture, join_all};
+use futures::future::join_all;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -38,95 +38,78 @@ impl ExecutionGroup {
 
 /// Partition tool calls into non-conflicting groups
 pub struct ParallelExecutionPlanner {
-    conflict_map: HashMap<&'static str, Vec<&'static str>>,
+    conflict_map: HashMap<&'static str, &'static [&'static str]>,
 }
 
 impl ParallelExecutionPlanner {
     pub fn new() -> Self {
         let mut conflict_map = HashMap::new();
 
-        // Define conflict relationships (read-write, write-write)
-        let conflicts: Vec<(&'static str, Vec<&'static str>)> = vec![
-            (
-                tools::READ_FILE,
-                vec![
-                    tools::WRITE_FILE,
-                    tools::EDIT_FILE,
-                    tools::DELETE_FILE,
-                    tools::APPLY_PATCH,
-                ],
-            ),
-            (
-                tools::LIST_FILES,
-                vec![
-                    tools::WRITE_FILE,
-                    tools::EDIT_FILE,
-                    tools::DELETE_FILE,
-                    tools::APPLY_PATCH,
-                ],
-            ),
-            (
-                tools::GREP_FILE,
-                vec![tools::WRITE_FILE, tools::EDIT_FILE, tools::APPLY_PATCH],
-            ),
-            (
-                tools::WRITE_FILE,
-                vec![
-                    tools::READ_FILE,
-                    tools::LIST_FILES,
-                    tools::WRITE_FILE,
-                    tools::EDIT_FILE,
-                    tools::APPLY_PATCH,
-                ],
-            ),
-            (
-                tools::EDIT_FILE,
-                vec![
-                    tools::READ_FILE,
-                    tools::LIST_FILES,
-                    tools::WRITE_FILE,
-                    tools::EDIT_FILE,
-                    tools::APPLY_PATCH,
-                ],
-            ),
-            (
-                tools::APPLY_PATCH,
-                vec![
-                    tools::READ_FILE,
-                    tools::LIST_FILES,
-                    tools::WRITE_FILE,
-                    tools::EDIT_FILE,
-                    tools::APPLY_PATCH,
-                ],
-            ),
-        ];
-
-        for (tool, conflicting) in conflicts {
-            conflict_map.insert(tool, conflicting);
-        }
+        // Define conflict relationships as static arrays for better performance
+        conflict_map.insert(tools::READ_FILE, &[
+            tools::WRITE_FILE,
+            tools::EDIT_FILE,
+            tools::DELETE_FILE,
+            tools::APPLY_PATCH,
+        ] as &[&str]);
+        
+        conflict_map.insert(tools::LIST_FILES, &[
+            tools::WRITE_FILE,
+            tools::EDIT_FILE,
+            tools::DELETE_FILE,
+            tools::APPLY_PATCH,
+        ] as &[&str]);
+        
+        conflict_map.insert(tools::GREP_FILE, &[
+            tools::WRITE_FILE,
+            tools::EDIT_FILE,
+            tools::APPLY_PATCH,
+        ] as &[&str]);
+        
+        conflict_map.insert(tools::WRITE_FILE, &[
+            tools::READ_FILE,
+            tools::LIST_FILES,
+            tools::WRITE_FILE,
+            tools::EDIT_FILE,
+            tools::APPLY_PATCH,
+        ] as &[&str]);
+        
+        conflict_map.insert(tools::EDIT_FILE, &[
+            tools::READ_FILE,
+            tools::LIST_FILES,
+            tools::WRITE_FILE,
+            tools::EDIT_FILE,
+            tools::APPLY_PATCH,
+        ] as &[&str]);
+        
+        conflict_map.insert(tools::APPLY_PATCH, &[
+            tools::READ_FILE,
+            tools::LIST_FILES,
+            tools::WRITE_FILE,
+            tools::EDIT_FILE,
+            tools::APPLY_PATCH,
+        ] as &[&str]);
 
         Self { conflict_map }
     }
 
     /// Partition tool calls into non-conflicting groups
     pub fn plan(&self, calls: &[(String, Arc<Value>, String)]) -> Vec<ExecutionGroup> {
-        if calls.is_empty() {
-            return Vec::new();
-        }
-
-        let mut groups: Vec<ExecutionGroup> = Vec::new();
+        let mut groups = Vec::new();
         let mut assigned = vec![false; calls.len()];
+        let mut group_id = 0;
 
-        for (i, (tool_i, args_i, call_id_i)) in calls.iter().enumerate() {
+        for i in 0..calls.len() {
             if assigned[i] {
                 continue;
             }
 
-            let mut group = ExecutionGroup::new(groups.len());
+            let (tool_i, args_i, call_id_i) = &calls[i];
+            let mut group = ExecutionGroup::new(group_id);
             group.add_call(tool_i.clone(), args_i.clone(), call_id_i.clone());
             assigned[i] = true;
 
-            // Find other compatible tools
+            // Find compatible calls
             for (j, (tool_j, args_j, call_id_j)) in calls.iter().enumerate() {
                 if assigned[j] || i == j {
                     continue;
@@ -140,6 +123,7 @@ impl ParallelExecutionPlanner {
             }
 
             groups.push(group);
+            group_id += 1;
         }
 
         groups
@@ -147,16 +131,16 @@ impl ParallelExecutionPlanner {
 
     fn conflicts(&self, tool_a: &str, tool_b: &str) -> bool {
         // Check both directions due to symmetry
-        if let Some(conflicts) = self.conflict_map.get(tool_a)
-            && conflicts.contains(&tool_b)
-        {
-            return true;
+        if let Some(conflicts) = self.conflict_map.get(tool_a) {
+            if conflicts.iter().any(|&conflict| conflict == tool_b) {
+                return true;
+            }
         }
 
-        if let Some(conflicts) = self.conflict_map.get(tool_b)
-            && conflicts.contains(&tool_a)
-        {
-            return true;
+        if let Some(conflicts) = self.conflict_map.get(tool_b) {
+            if conflicts.iter().any(|&conflict| conflict == tool_a) {
+                return true;
+            }
         }
 
         false
@@ -183,7 +167,7 @@ impl ExecutionResultCollector {
         }
     }
 
-    pub fn add_success(&mut self, call_id: String, result: Value) {
+    pub fn add_result(&mut self, call_id: String, result: Value) {
         self.results.insert(call_id, result);
     }
 
@@ -191,72 +175,62 @@ impl ExecutionResultCollector {
         self.errors.insert(call_id, error);
     }
 
-    pub fn get_result(&self, call_id: &str) -> Result<&Value> {
-        self.results
-            .get(call_id)
-            .ok_or_else(|| anyhow::anyhow!("No result for call {}", call_id))
+    pub fn has_errors(&self) -> bool {
+        !self.errors.is_empty()
     }
 
-    pub fn get_error(&self, call_id: &str) -> Option<&str> {
-        self.errors.get(call_id).map(|s| s.as_str())
+    pub fn get_results(&self) -> &HashMap<String, Value> {
+        &self.results
     }
 
-    pub fn into_results(self) -> HashMap<String, Value> {
-        self.results
+    pub fn get_errors(&self) -> &HashMap<String, String> {
+        &self.errors
     }
 
-    pub fn into_errors(self) -> HashMap<String, String> {
-        self.errors
-    }
-
-    pub fn len(&self) -> usize {
-        self.results.len() + self.errors.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.results.is_empty() && self.errors.is_empty()
+    pub fn into_parts(self) -> (HashMap<String, Value>, HashMap<String, String>) {
+        (self.results, self.errors)
     }
 }
 
-impl Default for ExecutionResultCollector {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// Parallel executor trait for dependency injection
-pub trait ParallelToolExecutor: Send + Sync {
-    fn execute_tool<'a>(
-        &'a self,
-        tool: &'a str,
-        args: &'a Value,
-        call_id: &'a str,
-    ) -> BoxFuture<'a, Result<Value>>;
-}
-
-/// Execute multiple groups sequentially, with groups executing in parallel
-pub async fn execute_groups<E: ParallelToolExecutor>(
-    groups: Vec<ExecutionGroup>,
-    executor: &E,
+/// Execute a group of tools in parallel
+pub async fn execute_group_parallel(
+    group: &ExecutionGroup,
+    executor: Arc<dyn crate::tools::ToolExecutor>,
 ) -> Result<ExecutionResultCollector> {
     let mut collector = ExecutionResultCollector::new();
 
-    for group in groups {
-        // Execute group in parallel
+    if group.can_parallel && group.len() > 1 {
+        // Execute in parallel
         let futures: Vec<_> = group
             .tool_calls
             .iter()
             .map(|(tool, args, call_id)| {
-                executor.execute_tool(tool.as_str(), args.as_ref(), call_id.as_str())
+                let executor = Arc::clone(&executor);
+                let tool = tool.clone();
+                let call_id = call_id.clone();
+                let args = Arc::clone(args);
+                async move {
+                    match executor.execute_tool_ref(&tool, &args).await {
+                        Ok(result) => (call_id, Ok(result)),
+                        Err(e) => (call_id, Err(e.to_string())),
+                    }
+                }
             })
             .collect();
 
         let results = join_all(futures).await;
 
-        // Collect results
-        for ((_, _, call_id), result) in group.tool_calls.iter().zip(results) {
+        for (call_id, result) in results {
             match result {
-                Ok(value) => collector.add_success(call_id.clone(), value),
+                Ok(value) => collector.add_result(call_id, value),
+                Err(error) => collector.add_error(call_id, error),
+            }
+        }
+    } else {
+        // Execute sequentially
+        for (tool, args, call_id) in &group.tool_calls {
+            match executor.execute_tool_ref(tool, args).await {
+                Ok(result) => collector.add_result(call_id.clone(), result),
                 Err(e) => collector.add_error(call_id.clone(), e.to_string()),
             }
         }
@@ -265,77 +239,78 @@ pub async fn execute_groups<E: ParallelToolExecutor>(
     Ok(collector)
 }
 
+/// Execute multiple tool groups sequentially
+pub async fn execute_groups_sequential(
+    groups: Vec<ExecutionGroup>,
+    executor: Arc<dyn crate::tools::ToolExecutor>,
+) -> Result<ExecutionResultCollector> {
+    let mut final_collector = ExecutionResultCollector::new();
+
+    for group in groups {
+        let group_result = execute_group_parallel(&group, Arc::clone(&executor)).await?;
+
+        // Merge results
+        for (call_id, result) in group_result.get_results() {
+            final_collector.add_result(call_id.clone(), result.clone());
+        }
+
+        for (call_id, error) in group_result.get_errors() {
+            final_collector.add_error(call_id.clone(), error.clone());
+        }
+
+        // Stop on first error if needed
+        if final_collector.has_errors() {
+            break;
+        }
+    }
+
+    Ok(final_collector)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
 
     #[test]
-    fn test_planner_no_conflicts() {
+    fn test_conflict_detection() {
         let planner = ParallelExecutionPlanner::new();
 
-        let _calls = vec![
-            (
-                tools::GREP_FILE.to_string(),
-                Arc::new(json!({"pattern": "test"})),
-                "id1".to_string(),
-            ),
-            (
-                tools::LIST_FILES.to_string(),
-                Arc::new(json!({"path": "."})),
-                "id2".to_string(),
-            ),
-        ];
-
-        // These shouldn't conflict
-        assert!(!planner.conflicts(tools::GREP_FILE, tools::LIST_FILES));
-    }
-
-    #[test]
-    fn test_planner_with_conflicts() {
-        let planner = ParallelExecutionPlanner::new();
-
+        // Read operations should conflict with write operations
         assert!(planner.conflicts(tools::READ_FILE, tools::WRITE_FILE));
-        assert!(planner.conflicts(tools::WRITE_FILE, tools::READ_FILE));
-        assert!(planner.conflicts(tools::WRITE_FILE, tools::WRITE_FILE));
+        assert!(planner.conflicts(tools::READ_FILE, tools::EDIT_FILE));
+        assert!(planner.conflicts(tools::LIST_FILES, tools::WRITE_FILE));
+
+        // Read operations should not conflict with each other
+        assert!(!planner.conflicts(tools::READ_FILE, tools::LIST_FILES));
+        assert!(!planner.conflicts(tools::READ_FILE, tools::GREP_FILE));
+
+        // Write operations should conflict with each other
+        assert!(planner.conflicts(tools::WRITE_FILE, tools::EDIT_FILE));
+        assert!(planner.conflicts(tools::WRITE_FILE, tools::APPLY_PATCH));
     }
 
     #[test]
-    fn test_execution_planning() {
+    fn test_execution_grouping() {
         let planner = ParallelExecutionPlanner::new();
-
+        
         let calls = vec![
-            (
-                tools::READ_FILE.to_string(),
-                Arc::new(json!({})),
-                "id1".to_string(),
-            ),
-            (
-                tools::WRITE_FILE.to_string(),
-                Arc::new(json!({})),
-                "id2".to_string(),
-            ),
-            (
-                tools::GREP_FILE.to_string(),
-                Arc::new(json!({})),
-                "id3".to_string(),
-            ),
+            (tools::READ_FILE.to_string(), Arc::new(serde_json::json!({"path": "file1.txt"})), "call1".to_string()),
+            (tools::LIST_FILES.to_string(), Arc::new(serde_json::json!({"path": "."})), "call2".to_string()),
+            (tools::WRITE_FILE.to_string(), Arc::new(serde_json::json!({"path": "file2.txt", "content": "test"})), "call3".to_string()),
+            (tools::GREP_FILE.to_string(), Arc::new(serde_json::json!({"pattern": "test", "path": "."})), "call4".to_string()),
         ];
 
         let groups = planner.plan(&calls);
-        // Should have at least 2 groups (read_file + grep can't run with write_file)
+
+        // Should have at least 2 groups (reads in one, writes in another)
         assert!(groups.len() >= 2);
-    }
 
-    #[test]
-    fn test_result_collector() {
-        let mut collector = ExecutionResultCollector::new();
-
-        collector.add_success("id1".to_string(), json!({"result": "ok"}));
-        collector.add_error("id2".to_string(), "Failed".to_string());
-
-        assert_eq!(collector.len(), 2);
-        assert!(collector.get_result("id1").is_ok());
-        assert_eq!(collector.get_error("id2"), Some("Failed"));
+        // Verify that conflicting tools are in different groups
+        let read_group = groups.iter().find(|g| g.tool_calls.iter().any(|(t, _, _)| t == tools::READ_FILE));
+        let write_group = groups.iter().find(|g| g.tool_calls.iter().any(|(t, _, _)| t == tools::WRITE_FILE));
+        
+        assert!(read_group.is_some());
+        assert!(write_group.is_some());
+        assert_ne!(read_group.unwrap().group_id, write_group.unwrap().group_id);
     }
 }

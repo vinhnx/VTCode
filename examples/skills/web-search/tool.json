@@ -1,0 +1,15 @@
+{
+  "name": "web-search",
+  "description": "Web search functionality using curl and public search APIs",
+  "executable_path": "./web-search.sh",
+  "readme_path": "./README.md",
+  "schema_path": "./schema.json",
+  "timeout_seconds": 30,
+  "supports_json": true,
+  "environment": {
+    "SEARCH_API": "https://api.duckduckgo.com/",
+    "DEFAULT_FORMAT": "json",
+    "MAX_RESULTS": "10"
+  },
+  "working_dir": "."
+}

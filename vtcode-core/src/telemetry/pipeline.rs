@@ -52,7 +52,8 @@ impl TelemetryPipeline {
     }
 
     pub async fn snapshot(&self) -> Vec<TelemetryEvent> {
-        let events = self.events.lock().await;
-        events.clone()
+        let mut events = self.events.lock().await;
+        // Use drain instead of clone to avoid allocation
+        std::mem::take(&mut *events)
     }
 }
