@@ -42,74 +42,102 @@ pub async fn handle_skills_validate_all(options: &SkillsCommandOptions) -> Resul
     Ok(())
 }
 
-/// List available skills
+/// List available skills (OpenAI-style listing)
 pub async fn handle_skills_list(options: &SkillsCommandOptions) -> Result<()> {
     let mut loader = EnhancedSkillLoader::new(options.workspace.clone());
 
-    println!("Discovering skills...\n");
+    println!("Discovering skills from standard locations...\n");
 
     let discovery_result = loader.discover_all_skills().await.context("Failed to discover skills")?;
     let skills = discovery_result.traditional_skills;
+    let cli_tools = discovery_result.cli_tools;
 
-    if skills.is_empty() {
-        println!("No skills found. Create one with: vtcode skills create ./my-skill");
+    if skills.is_empty() && cli_tools.is_empty() {
+        println!("No skills found.");
+        println!("\nCreate a traditional skill:");
+        println!("  vtcode skills create ./my-skill");
+        println!("\nOr install skills in standard locations:");
+        println!("  ~/.vtcode/skills/     (VTCode user skills)");
+        println!("  .vtcode/skills/       (Project skills)");
+        println!("  ~/.claude/skills/     (Claude Code compatibility)");
+        println!("  ~/.codex/skills/      (OpenAI Codex CLI compatibility)");
         return Ok(());
     }
 
-    println!("Available Skills:");
-    println!("{:<30} | {}", "Name", "Description");
-    println!("{:-<30}-+-{:-<60}", "", "");
+    // List traditional skills (OpenAI-style)
+    if !skills.is_empty() {
+        println!("Available Traditional Skills:");
+        println!("{:-<70}", "");
 
-    // Track skills that need warnings
-    let mut warnings = Vec::new();
+        // Track skills that need warnings
+        let mut warnings = Vec::new();
 
-    for skill_ctx in &skills {
-        let manifest = skill_ctx.manifest();
-        
-        // Quick validation check for display
-        let mut temp_loader = EnhancedSkillLoader::new(options.workspace.clone());
-        match temp_loader.get_skill(&manifest.name).await {
-            Ok(enhanced_skill) => {
-                match enhanced_skill {
-                    vtcode_core::skills::loader::EnhancedSkill::Traditional(skill) => {
-                        let analysis = temp_loader.check_container_requirements(&skill);
-                        
-                        let status_indicator = match analysis.requirement {
-                            vtcode_core::skills::container_validation::ContainerSkillsRequirement::Required => {
-                                warnings.push(format!(" {} - Requires container skills (not compatible)", manifest.name));
-                                ""
-                            }
-                            vtcode_core::skills::container_validation::ContainerSkillsRequirement::RequiredWithFallback => {
-                                warnings.push(format!("  {} - Has container skills fallback", manifest.name));
-                                ""
-                            }
-                            _ => "",
-                        };
-                        
-                        println!("{} {:<28} | {}", status_indicator, manifest.name, manifest.description);
-                    }
-                    vtcode_core::skills::loader::EnhancedSkill::CliTool(_) => {
-                        println!(" {:<30} | {}", manifest.name, manifest.description);
+        for skill_ctx in &skills {
+            let manifest = skill_ctx.manifest();
+            
+            // Quick validation check for display
+            let mut temp_loader = EnhancedSkillLoader::new(options.workspace.clone());
+            match temp_loader.get_skill(&manifest.name).await {
+                Ok(enhanced_skill) => {
+                    match enhanced_skill {
+                        vtcode_core::skills::loader::EnhancedSkill::Traditional(skill) => {
+                            let analysis = temp_loader.check_container_requirements(&skill);
+                            
+                            let status_indicator = match analysis.requirement {
+                                vtcode_core::skills::container_validation::ContainerSkillsRequirement::Required => {
+                                    warnings.push(format!("❌ {} - Requires container skills (not compatible)", manifest.name));
+                                    "❌"
+                                }
+                                vtcode_core::skills::container_validation::ContainerSkillsRequirement::RequiredWithFallback => {
+                                    warnings.push(format!("⚠️  {} - Has container skills fallback", manifest.name));
+                                    "⚠️"
+                                }
+                                _ => "✓",
+                            };
+                            
+                            println!("{} {}\n  {}\n", status_indicator, manifest.name, manifest.description);
+                        }
+                        vtcode_core::skills::loader::EnhancedSkill::CliTool(_) => {
+                            // CLI tools handled separately below
+                        }
                     }
                 }
+                Err(_) => {
+                    // Skill failed to load, likely due to container skills validation
+                    warnings.push(format!("❌ {} - Requires container skills (validation failed)", manifest.name));
+                    println!("❌ {}\n  {}\n", manifest.name, manifest.description);
+                }
             }
-            Err(_) => {
-                // Skill failed to load, likely due to container skills validation
-                warnings.push(format!(" {} - Requires container skills (validation failed)", manifest.name));
-                println!(" {:<28} | {}", manifest.name, manifest.description);
+        }
+
+        if !warnings.is_empty() {
+            println!("\n⚠️  Compatibility Notes:");
+            for warning in warnings {
+                println!("  {}", warning);
             }
+            println!("\n  Use 'vtcode skills info <name>' for details and alternatives.");
         }
     }
 
-    if !warnings.is_empty() {
-        println!("\n  Container Skills Compatibility Warnings:");
-        for warning in warnings {
-            println!("  {}", warning);
+    // List CLI tools separately
+    if !cli_tools.is_empty() {
+        println!("\nAvailable CLI Tool Skills:");
+        println!("{:-<70}", "");
+        
+        for tool in &cli_tools {
+            println!("⚡ {}\n  {}\n  Path: {}\n", 
+                tool.name, 
+                tool.description,
+                tool.executable_path.display()
+            );
         }
-        println!("\n Use 'vtcode skills info <name>' to see compatibility details and alternatives.");
     }
 
-    println!("\nUse 'vtcode skills info <name>' for details");
+    println!("\n💡 Usage:");
+    println!("  Load skill:    vtcode skills load <name>");
+    println!("  Skill info:    vtcode skills info <name>");
+    println!("  Use in chat:   /skills load <name>");
+    println!("  Or:            /skills use <name> <input>");
     Ok(())
 }
 

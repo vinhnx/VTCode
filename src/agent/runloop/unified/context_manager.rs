@@ -31,6 +31,8 @@ pub(crate) struct ContextManager {
     semantic_score_cache: Option<HashMap<u64, u8>>,
     context_pruner: ContextPruner,
     last_efficiency: Option<ContextEfficiency>,
+    /// Loaded skills for prompt injection
+    loaded_skills: Arc<RwLock<HashMap<String, vtcode_core::skills::types::Skill>>>,
 }
 
 impl ContextManager {
@@ -67,6 +69,7 @@ impl ContextManager {
             semantic_score_cache,
             context_pruner,
             last_efficiency: None,
+            loaded_skills: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 

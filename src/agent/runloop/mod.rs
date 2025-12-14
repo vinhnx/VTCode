@@ -16,4 +16,7 @@ mod welcome;
 
 // Re-export ResumeSession for backward compatibility with modules that import it from runloop
 pub use crate::agent::agents::ResumeSession;
-pub use skills_commands::{SkillCommandAction, SkillCommandOutcome, handle_skill_command, parse_skill_command};
+pub use skills_commands::{
+	SkillCommandAction, SkillCommandOutcome, detect_mentioned_skills, handle_skill_command,
+	parse_skill_command,
+};

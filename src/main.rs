@@ -203,6 +203,12 @@ async fn main() -> Result<()> {
                 .await
                 .map_err(|e| anyhow::anyhow!("{:?}", e))?;
         }
+        Some(Commands::ListSkills {}) => {
+            let skills_options = cli::SkillsCommandOptions {
+                workspace: startup.workspace.clone(),
+            };
+            cli::handle_skills_list(&skills_options).await?;
+        }
         Some(Commands::Skills(skills_cmd)) => {
             let skills_options = cli::SkillsCommandOptions {
                 workspace: startup.workspace.clone(),

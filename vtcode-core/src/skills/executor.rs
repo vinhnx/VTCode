@@ -49,10 +49,10 @@ pub async fn execute_skill_with_sub_llm(
     model: String,
 ) -> Result<String> {
     debug!("Executing skill '{}' with LLM sub-call", skill.name());
-    
+
     // Build conversation starting with user input
     let mut messages = vec![Message::user(user_input.clone())];
-    
+
     // Create LLM request with skill instructions as system prompt
     let mut request = LLMRequest {
         messages: messages.clone(),
@@ -73,11 +73,11 @@ pub async fn execute_skill_with_sub_llm(
         reasoning_effort: None,
         verbosity: None,
     };
-    
+
     // Loop: Make LLM request and handle tool calls
     const MAX_ITERATIONS: usize = 10;
     let mut iterations = 0;
-    
+
     loop {
         iterations += 1;
         if iterations > MAX_ITERATIONS {
@@ -86,42 +86,42 @@ pub async fn execute_skill_with_sub_llm(
                 MAX_ITERATIONS
             ));
         }
-        
+
         info!("Skill LLM iteration {} for '{}'", iterations, skill.name());
-        
+
         // Make LLM request
         let response = provider.generate(request.clone()).await?;
-        
+
         // Extract content - handle Option
         let content = response
             .content
             .unwrap_or_else(|| String::new());
-        
+
         // Add assistant response to conversation
         if let Some(tool_calls) = &response.tool_calls {
             messages.push(Message::assistant_with_tools(content.clone(), tool_calls.clone()));
         } else {
             messages.push(Message::assistant(content.clone()));
         }
-        
+
         // Check if there are tool calls to handle
         if let Some(tool_calls) = response.tool_calls {
             if !tool_calls.is_empty() {
                 info!("Skill '{}' made {} tool calls", skill.name(), tool_calls.len());
-                
+
                 // Execute each tool call
                 for tool_call in tool_calls {
                     // Extract function name and arguments
                     if let Some(function) = &tool_call.function {
                         let tool_name = &function.name;
                         let tool_args_str = &function.arguments;
-                        
+
                         debug!("Executing tool '{}' for skill '{}'", tool_name, skill.name());
-                        
+
                         // Parse arguments as JSON
                         let tool_args = serde_json::from_str::<Value>(tool_args_str)
                             .unwrap_or_else(|_| serde_json::json!({}));
-                        
+
                         // Execute tool via registry
                         let tool_result = match tool_registry
                             .execute_tool_ref(tool_name, &tool_args)
@@ -133,17 +133,17 @@ pub async fn execute_skill_with_sub_llm(
                                 format!("Error executing {}: {}", tool_name, e)
                             }
                         };
-                        
+
                         // Add tool result to conversation
                         messages.push(Message::tool_response(tool_call.id.clone(), tool_result));
                     } else {
                         warn!("Tool call has no function: {:?}", tool_call.call_type);
                     }
                 }
-                
+
                 // Update request for next iteration
                 request.messages = messages.clone();
-                
+
                 // Continue loop to process tool results
             } else {
                 // No tool calls, return the text response
@@ -153,7 +153,7 @@ pub async fn execute_skill_with_sub_llm(
             // No tool calls, return the final response
             return Ok(content);
         }
-        
+
         // Check finish reason
         match response.finish_reason {
             FinishReason::Stop => {
@@ -319,6 +319,7 @@ mod tests {
             description: "Test skill".to_string(),
             version: None,
             author: None,
+            vtcode_native: Some(true),
         };
 
         let skill = Skill::new(manifest, PathBuf::from("/tmp"), "# Instructions".to_string())
@@ -335,6 +336,7 @@ mod tests {
             description: "Test skill".to_string(),
             version: None,
             author: None,
+            vtcode_native: Some(true),
         };
 
         let skill = Skill::new(manifest, PathBuf::from("/tmp"), "# Test Instructions".to_string())
@@ -357,6 +359,7 @@ mod tests {
             description: "Test skill".to_string(),
             version: None,
             author: None,
+            vtcode_native: Some(true),
         };
 
         let skill = Skill::new(manifest, PathBuf::from("/tmp"), "Instructions".to_string())

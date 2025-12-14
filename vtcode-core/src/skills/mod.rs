@@ -49,7 +49,7 @@
 //!
 //! // Setup context management
 //! let context_manager = ContextManager::new();
-//! 
+//!
 //! // Register discovered skills
 //! for skill in result.skills {
 //!     context_manager.register_skill_metadata(skill.manifest().clone())?;
@@ -106,8 +106,11 @@ pub mod container_validation;
 pub mod context_manager;
 pub mod auto_verification;
 pub mod discovery;
+pub mod document_processor;
+pub mod authoring;
 pub mod enhanced_harness;
 pub mod executor;
+pub mod prompt_integration;
 pub mod skill_file_tracker;
 pub mod loader;
 pub mod locations;
@@ -117,16 +120,21 @@ pub mod templates;
 pub mod types;
 pub mod validation;
 
+pub use authoring::{render_skills_lean, SkillAuthor, SkillFrontmatter, ValidationReport as AuthoringValidationReport};
 pub use cli_bridge::{CliToolBridge, CliToolConfig, CliToolResult, discover_cli_tools};
 pub use container::{SkillContainer, SkillSpec, SkillType, SkillVersion};
 pub use container_validation::{ContainerSkillsValidator, ContainerValidationResult, ContainerSkillsRequirement, IncompatibleSkillInfo};
 pub use context_manager::{ContextManager, ContextConfig, ContextLevel, ContextStats, PersistentContextManager};
 pub use discovery::{DiscoveryConfig, DiscoveryResult, DiscoveryStats, ProgressiveSkillLoader, SkillDiscovery};
+pub use document_processor::{DocumentProcessor, DocumentProcessorConfig, ProcessedDocument, DocumentType, DocumentMetadata};
 pub use executor::execute_skill_with_sub_llm;
-pub use loader::{EnhancedSkillLoader, EnhancedSkill, EnhancedDiscoveryResult, EnhancedDiscoveryStats};
+pub use loader::{EnhancedSkillLoader, EnhancedSkill, EnhancedDiscoveryResult, EnhancedDiscoveryStats, LegacySkillLoader, SearchPathType};
 pub use locations::{SkillLocations, SkillLocation, SkillLocationType, DiscoveredSkill, DiscoveryStats as LocationDiscoveryStats};
 pub use manifest::{generate_skill_template, parse_skill_content, parse_skill_file, SkillYaml};
+pub use prompt_integration::{
+	generate_skills_prompt, generate_skills_prompt_with_mode, SkillsRenderMode,
+};
 pub use streaming::{StreamingConfig, StreamingExecution, StreamEvent, StreamingSkillExecutor};
 pub use templates::{TemplateEngine, SkillTemplate, TemplateType, TemplateVariable, SkillTemplateBuilder};
-pub use types::{Skill, SkillContext, SkillManifest, SkillRegistryEntry, SkillResource};
+pub use types::{Skill, SkillContext, SkillManifest, SkillMetadata, SkillErrorInfo, SkillRegistryEntry, SkillResource, SkillScope};
 pub use validation::{SkillValidator, ValidationConfig, ValidationReport, ValidationStatus};
