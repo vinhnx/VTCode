@@ -379,19 +379,19 @@ deny_glob = [
 
 ### What This Protects Against
 
-✓  Accidental destructive commands  
-✓  Privilege escalation attempts  
-✓  Malicious shell exploits (forkbombs, eval injection)  
-✓  Sensitive data exposure (SSH keys, password files)  
-✓  System shutdown/corruption  
-✓  Filesystem manipulation  
+  Accidental destructive commands  
+  Privilege escalation attempts  
+  Malicious shell exploits (forkbombs, eval injection)  
+  Sensitive data exposure (SSH keys, password files)  
+  System shutdown/corruption  
+  Filesystem manipulation  
 
 ### What This Does NOT Protect Against
 
-⚠️ Compromised agent LLM (if it's compromised, it can craft allowed commands to cause harm)  
-⚠️ Commands that are allowed but have dangerous flags (e.g., `cargo build --offline` with missing dependencies)  
-⚠️ Zip bombs or other valid-but-malicious allowed file operations  
-⚠️ Side effects of running safe commands in a bad state  
+ Compromised agent LLM (if it's compromised, it can craft allowed commands to cause harm)  
+ Commands that are allowed but have dangerous flags (e.g., `cargo build --offline` with missing dependencies)  
+ Zip bombs or other valid-but-malicious allowed file operations  
+ Side effects of running safe commands in a bad state  
 
 ### Best Practices
 

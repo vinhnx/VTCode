@@ -102,6 +102,7 @@
 
 pub mod cli_bridge;
 pub mod container;
+pub mod container_validation;
 pub mod context_manager;
 pub mod discovery;
 pub mod executor;
@@ -115,6 +116,7 @@ pub mod validation;
 
 pub use cli_bridge::{CliToolBridge, CliToolConfig, CliToolResult, discover_cli_tools};
 pub use container::{SkillContainer, SkillSpec, SkillType, SkillVersion};
+pub use container_validation::{ContainerSkillsValidator, ContainerValidationResult, ContainerSkillsRequirement, IncompatibleSkillInfo};
 pub use context_manager::{ContextManager, ContextConfig, ContextLevel, ContextStats, PersistentContextManager};
 pub use discovery::{DiscoveryConfig, DiscoveryResult, DiscoveryStats, ProgressiveSkillLoader, SkillDiscovery};
 pub use executor::execute_skill_with_sub_llm;

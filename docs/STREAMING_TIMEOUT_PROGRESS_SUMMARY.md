@@ -10,22 +10,22 @@ Enhanced streaming timeout handling across **all LLM providers** in vtcode with 
 **File:** `vtcode-core/src/gemini/streaming/processor.rs`
 
 Gemini streaming processor now includes:
-- ✨ Progress callback support with 0.0-1.0 range
-- ✨ Configurable warning threshold (default 80%)
-- ✨ Automatic timeout warning logging
-- ✨ Multi-point progress reporting (first chunk, during streaming, at timeout)
-- ✨ ETA calculation and remaining time tracking
+-  Progress callback support with 0.0-1.0 range
+-  Configurable warning threshold (default 80%)
+-  Automatic timeout warning logging
+-  Multi-point progress reporting (first chunk, during streaming, at timeout)
+-  ETA calculation and remaining time tracking
 
 ### Tier 2: Provider-Agnostic (New)
 **File:** `vtcode-core/src/llm/providers/streaming_progress.rs`
 
 Universal tracker for **all 11 LLM providers**:
-- ✨ `StreamingProgressTracker` - unified progress tracking
-- ✨ `StreamingProgressBuilder` - fluent API for configuration
-- ✨ Works with OpenAI, Anthropic, Gemini, Ollama, OpenRouter, and more
-- ✨ Lock-free atomic operations (<1µs per chunk)
-- ✨ Optional callbacks (zero overhead if unused)
-- ✨ Full test coverage
+-  `StreamingProgressTracker` - unified progress tracking
+-  `StreamingProgressBuilder` - fluent API for configuration
+-  Works with OpenAI, Anthropic, Gemini, Ollama, OpenRouter, and more
+-  Lock-free atomic operations (<1µs per chunk)
+-  Optional callbacks (zero overhead if unused)
+-  Full test coverage
 
 ## Key Features
 
@@ -65,17 +65,17 @@ Warnings automatically logged when progress >= warning_threshold
 
 ```
 StreamingProgressTracker (Provider-Agnostic)
-├── Works with all 11 LLM providers
-├── Lock-free atomic progress tracking
-├── Optional progress callbacks
-├── Configurable warning threshold
-└── Builder pattern API
+ Works with all 11 LLM providers
+ Lock-free atomic progress tracking
+ Optional progress callbacks
+ Configurable warning threshold
+ Builder pattern API
 
 Gemini StreamingProcessor (Specialized)
-├── First-class progress tracking
-├── ETA calculation
-├── Detailed metrics
-└── Integration with Gemini-specific features
+ First-class progress tracking
+ ETA calculation
+ Detailed metrics
+ Integration with Gemini-specific features
 ```
 
 ## Usage Examples
@@ -114,7 +114,7 @@ let processor = StreamingProcessor::new()
 
 ## Supported Providers
 
-✓  **Streaming + Progress:**
+  **Streaming + Progress:**
 - OpenAI (GPT-4, o1, etc.)
 - Anthropic (Claude)
 - Google Gemini
@@ -123,7 +123,7 @@ let processor = StreamingProcessor::new()
 - LM Studio (OpenAI wrapper)
 - Minimax (Anthropic wrapper)
 
-📦 **Can Add Progress:**
+ **Can Add Progress:**
 - DeepSeek
 - Z.AI
 - xAI (Grok)
@@ -159,10 +159,10 @@ let processor = StreamingProcessor::new()
 
 ## Code Quality
 
-✓  **Compilation:** Passes `cargo check`
-✓  **Format:** Passes `cargo fmt`
-✓  **Warnings:** Clean (only pre-existing)
-✓  **Tests:** Included with coverage for:
+  **Compilation:** Passes `cargo check`
+  **Format:** Passes `cargo fmt`
+  **Warnings:** Clean (only pre-existing)
+  **Tests:** Included with coverage for:
 - Progress tracking
 - Callback execution
 - Warning threshold
@@ -172,10 +172,10 @@ let processor = StreamingProcessor::new()
 
 ## Backward Compatibility
 
-- ✓  All existing code continues to work
-- ✓  Progress callbacks are optional
-- ✓  No breaking API changes
-- ✓  Opt-in integration required
+-   All existing code continues to work
+-   Progress callbacks are optional
+-   No breaking API changes
+-   Opt-in integration required
 
 ## Next Steps
 
@@ -222,15 +222,15 @@ let processor = StreamingProcessor::new()
 
 ## Key Takeaways
 
-✨ **Unified Progress Tracking** across all LLM providers
-✨ **Zero-Cost Abstraction** with minimal performance overhead
-✨ **Production-Ready** with comprehensive documentation and examples
-✨ **Fully Backward Compatible** - no breaking changes
-✨ **Extensible Design** for future enhancements
+ **Unified Progress Tracking** across all LLM providers
+ **Zero-Cost Abstraction** with minimal performance overhead
+ **Production-Ready** with comprehensive documentation and examples
+ **Fully Backward Compatible** - no breaking changes
+ **Extensible Design** for future enhancements
 
 ---
 
-**Status:** ✓  Complete and ready for integration
-**Test Coverage:** ✓  Included
-**Documentation:** ✓  Comprehensive
-**Examples:** ✓  8 production patterns included
+**Status:**   Complete and ready for integration
+**Test Coverage:**   Included
+**Documentation:**   Comprehensive
+**Examples:**   8 production patterns included

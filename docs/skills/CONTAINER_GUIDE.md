@@ -316,11 +316,11 @@ fn build_container() -> Result<SkillContainer> {
 
 ## Compatibility
 
-- ✅ JSON serialization (serde)
-- ✅ Backward compatible with existing skills
-- ✅ Works with existing skill loader
-- ✅ Compatible with tool registry
-- ✅ No breaking changes
+-  JSON serialization (serde)
+-  Backward compatible with existing skills
+-  Works with existing skill loader
+-  Compatible with tool registry
+-  No breaking changes
 
 ## See Also
 

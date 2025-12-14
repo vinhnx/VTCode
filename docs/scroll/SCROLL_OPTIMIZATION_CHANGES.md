@@ -2,7 +2,7 @@
 
 ## Changes Made
 
-### 1. ✓  DONE: Remove Double Render on Mouse Scroll (Phase 1)
+### 1.   DONE: Remove Double Render on Mouse Scroll (Phase 1)
 **File**: `vtcode-core/src/ui/tui/modern_integration.rs`
 
 **Problem**: Mouse scroll events triggered immediate render + main loop render = 2x renders per scroll
@@ -19,7 +19,7 @@ Event::Mouse(mouse_event) => {
         MouseEventKind::ScrollUp => session.scroll_line_up(),
         _ => {}
     }
-    tui.terminal.draw(|frame| {  // ⤫  REMOVED
+    tui.terminal.draw(|frame| {  //   REMOVED
         session.render(frame);
     })?;
 }
@@ -37,7 +37,7 @@ Event::Mouse(mouse_event) => {
 
 ---
 
-### 2. ✓  DONE: Remove Full-Clear Flag on Scroll (Phase 2)
+### 2.   DONE: Remove Full-Clear Flag on Scroll (Phase 2)
 **File**: `vtcode-core/src/ui/tui/session.rs` (scroll functions)
 
 **Problem**: Every scroll event set `needs_full_clear = true`, which clears entire terminal unnecessarily
@@ -52,7 +52,7 @@ fn scroll_line_down(&mut self) {
     let previous = self.scroll_manager.offset();
     self.scroll_manager.scroll_down(1);
     if self.scroll_manager.offset() != previous {
-        self.needs_full_clear = true;  // ⤫  REMOVED
+        self.needs_full_clear = true;  //   REMOVED
     }
 }
 
@@ -65,7 +65,7 @@ fn scroll_line_down(&mut self) {
 
 ---
 
-### 3. ✓  DONE: Add Visible Lines Cache (Phase 3)
+### 3.   DONE: Add Visible Lines Cache (Phase 3)
 **File**: `vtcode-core/src/ui/tui/session.rs`
 
 **Problem**: Every render clones all visible lines from transcript cache, even on same scroll position
@@ -113,7 +113,7 @@ let mut visible_lines =
 
 ---
 
-### 4. ✓  DONE: Optimize get_visible_range() Iterator (Phase 3)
+### 4.   DONE: Optimize get_visible_range() Iterator (Phase 3)
 **File**: `vtcode-core/src/ui/tui/session/transcript.rs`
 
 **Problem**: Loop with enumerate() + skip() + clone() was doing unnecessary work
@@ -159,10 +159,10 @@ result.extend(
 
 ```bash
 $ cargo check
-✓  Compiles without errors
+  Compiles without errors
 
 $ cargo test --lib ui::tui::session
-✓  All tests pass
+  All tests pass
 ```
 
 ---
@@ -234,7 +234,7 @@ fn compute_scroll_amount(&self, wheel_delta: f32) -> usize {
 
 ## Backward Compatibility
 
-✓  **Fully backward compatible**
+  **Fully backward compatible**
 - No API changes
 - No behavioral changes to external interfaces
 - Only internal optimization
@@ -244,10 +244,10 @@ fn compute_scroll_amount(&self, wheel_delta: f32) -> usize {
 
 ## Testing Coverage
 
-- ✓  Compilation: `cargo check`
-- ✓  Unit tests: `cargo test --lib`
-- ✓  Scroll manager tests: Existing tests still pass
-- ✓  Transcript cache tests: Existing tests still pass
+-   Compilation: `cargo check`
+-   Unit tests: `cargo test --lib`
+-   Scroll manager tests: Existing tests still pass
+-   Transcript cache tests: Existing tests still pass
 
 ---
 

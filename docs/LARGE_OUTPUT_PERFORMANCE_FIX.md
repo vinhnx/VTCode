@@ -218,18 +218,18 @@ async fn render_large_output_with_spool(
     renderer.line(
         MessageStyle::Warning,
         &format!(
-            "⚠️  Large output detected ({} lines, {} KB)",
+            "  Large output detected ({} lines, {} KB)",
             total_lines,
             (stdout.len() + stderr.len()) / 1024
         ),
     )?;
     renderer.line(
         MessageStyle::Info,
-        &format!("📁 Full output saved to: {}", log_path.display()),
+        &format!(" Full output saved to: {}", log_path.display()),
     )?;
     renderer.line(MessageStyle::Info, "")?;
     renderer.line(MessageStyle::Info, "Preview (first 100 + last 100 lines):")?;
-    renderer.line(MessageStyle::Info, "─".repeat(60))?;
+    renderer.line(MessageStyle::Info, "".repeat(60))?;
 
     // Head
     for line in stdout_lines.iter().take(100) {
@@ -248,10 +248,10 @@ async fn render_large_output_with_spool(
         renderer.line(MessageStyle::Response, line)?;
     }
 
-    renderer.line(MessageStyle::Info, "─".repeat(60))?;
+    renderer.line(MessageStyle::Info, "".repeat(60))?;
     renderer.line(
         MessageStyle::Info,
-        &format!("💡 View full output: cat {}", log_path.display()),
+        &format!(" View full output: cat {}", log_path.display()),
     )?;
 
     Ok(())
@@ -375,7 +375,7 @@ cargo run -- exec "find / -name '*.rs' 2>/dev/null"
 
 ## Backward Compatibility
 
-✓  **Fully backward compatible**
+  **Fully backward compatible**
 - New config keys have sensible defaults
 - Existing `scrollback_lines` behavior preserved
 - No breaking API changes

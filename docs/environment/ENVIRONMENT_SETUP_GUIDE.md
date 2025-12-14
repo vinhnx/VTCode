@@ -20,28 +20,28 @@ If you just installed VTCode and want your custom tools (cargo, npm, python, etc
 VTCode now inherits the parent shell's environment variables and applies strategic overrides:
 
 ```
-┌─────────────────────────────────────┐
-│ Parent Shell Environment (inherited) │
-│                                     │
-│ • PATH (preserved)                  │
-│ • HOME (preserved)                  │
-│ • SHELL (preserved)                 │
-│ • Custom env vars (preserved)       │
-└─────────────────────────────────────┘
+
+ Parent Shell Environment (inherited) 
+                                     
+ • PATH (preserved)                  
+ • HOME (preserved)                  
+ • SHELL (preserved)                 
+ • Custom env vars (preserved)       
+
             ↓
         VTCode Process
             ↓
-┌─────────────────────────────────────┐
-│ VTCode Environment (modified)       │
-│                                     │
-│ • All inherited variables PLUS:     │
-│ • PAGER → "cat"                     │
-│ • GIT_PAGER → "cat"                 │
-│ • LESS → "R"                        │
-│ • TERM → "xterm-256color"           │
-│ • Color vars → disabled             │
-│ • Workspace vars added              │
-└─────────────────────────────────────┘
+
+ VTCode Environment (modified)       
+                                     
+ • All inherited variables PLUS:     
+ • PAGER → "cat"                     
+ • GIT_PAGER → "cat"                 
+ • LESS → "R"                        
+ • TERM → "xterm-256color"           
+ • Color vars → disabled             
+ • Workspace vars added              
+
             ↓
         Command Execution
 ```
@@ -342,16 +342,16 @@ export NODE_OPTIONS="--max-old-space-size=4096"
 ## Environment Inheritance Changelog
 
 ### v0.43.3+ (Latest)
-- ✓  PATH environment variable properly inherited
-- ✓  All parent environment variables preserved
-- ✓  User-installed tools (~/.cargo/bin, etc.) now accessible
-- ✓  Custom environment variables preserved
-- ✓  Security model maintained with strategic overrides
+-   PATH environment variable properly inherited
+-   All parent environment variables preserved
+-   User-installed tools (~/.cargo/bin, etc.) now accessible
+-   Custom environment variables preserved
+-   Security model maintained with strategic overrides
 
 ### Earlier Versions
-- ⤫  PATH not inherited - tools in custom locations not found
-- ⤫  Environment was mostly empty - only key variables set
-- ⤫  User-installed tools inaccessible
+-   PATH not inherited - tools in custom locations not found
+-   Environment was mostly empty - only key variables set
+-   User-installed tools inaccessible
 
 ## Contributing Improvements
 

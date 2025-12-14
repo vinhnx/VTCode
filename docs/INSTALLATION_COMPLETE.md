@@ -104,29 +104,29 @@ npm install -g @vinhnx/vtcode
 
 ```
 docs/installation/
-├── README.md              (main guide, all methods)
-├── NATIVE_INSTALLERS.md   (technical details)
-├── QUICK_REFERENCE.md     (one-liners)
-└── DEVELOPERS.md          (for maintainers)
+ README.md              (main guide, all methods)
+ NATIVE_INSTALLERS.md   (technical details)
+ QUICK_REFERENCE.md     (one-liners)
+ DEVELOPERS.md          (for maintainers)
 
 scripts/
-├── install.sh             (macOS/Linux installer)
-└── install.ps1            (Windows installer)
+ install.sh             (macOS/Linux installer)
+ install.ps1            (Windows installer)
 
 homebrew/
-└── vtcode.rb              (Homebrew formula)
+ vtcode.rb              (Homebrew formula)
 
 README.md                   (updated)
 ```
 
 ## Key Improvements
 
-✓ **Simplicity:** Reduced scripts from 400+ lines to ~280 total
-✓ **No Redundancy:** Single source of truth for users
-✓ **Clear Hierarchy:** README → Installation Guide → Details → Developer Docs
-✓ **No Broken URLs:** All scripts use GitHub raw content URLs
-✓ **Works Out of Box:** No custom domain setup required
-✓ **Professional:** Clean code, clear docs, obvious structure
+ **Simplicity:** Reduced scripts from 400+ lines to ~280 total
+ **No Redundancy:** Single source of truth for users
+ **Clear Hierarchy:** README → Installation Guide → Details → Developer Docs
+ **No Broken URLs:** All scripts use GitHub raw content URLs
+ **Works Out of Box:** No custom domain setup required
+ **Professional:** Clean code, clear docs, obvious structure
 
 ## Documentation Paths
 
@@ -183,15 +183,15 @@ Before releasing:
 
 ## Features
 
-✓ Platform auto-detection (OS and CPU architecture)
-✓ Latest version fetching (no hardcoded versions)
-✓ Smart installation paths with fallbacks
-✓ Automatic PATH configuration
-✓ Post-installation verification
-✓ Clear error messages and guidance
-✓ Works offline after download (except version check)
-✓ No admin required (unless choosing Program Files on Windows)
-✓ Clean uninstall (no config files left behind)
+ Platform auto-detection (OS and CPU architecture)
+ Latest version fetching (no hardcoded versions)
+ Smart installation paths with fallbacks
+ Automatic PATH configuration
+ Post-installation verification
+ Clear error messages and guidance
+ Works offline after download (except version check)
+ No admin required (unless choosing Program Files on Windows)
+ Clean uninstall (no config files left behind)
 
 ## Security
 

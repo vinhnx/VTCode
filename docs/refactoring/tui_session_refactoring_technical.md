@@ -17,19 +17,19 @@ The code has been restructured into focused modules:
 
 ```
 session/
-├── mod.rs (main Session struct interface)
-├── input/
-│   ├── manager.rs (InputManager and related logic)
-│   └── handlers.rs (key/mouse event processing)
-├── rendering/
-│   ├── transcript.rs (transcript rendering and caching)
-│   ├── header.rs (header rendering)
-│   ├── input.rs (input area rendering)
-│   └── components.rs (modals, palettes, etc.)
-├── state/
-│   ├── scroll.rs (scroll management)
-│   └── view.rs (viewport state)
-└── utils.rs (helper functions)
+ mod.rs (main Session struct interface)
+ input/
+    manager.rs (InputManager and related logic)
+    handlers.rs (key/mouse event processing)
+ rendering/
+    transcript.rs (transcript rendering and caching)
+    header.rs (header rendering)
+    input.rs (input area rendering)
+    components.rs (modals, palettes, etc.)
+ state/
+    scroll.rs (scroll management)
+    view.rs (viewport state)
+ utils.rs (helper functions)
 ```
 
 ## Key Improvements

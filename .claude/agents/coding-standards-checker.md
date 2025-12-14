@@ -170,18 +170,18 @@ Review code written by the coder agent and verify it follows ALL coding standard
    **Coding Standards Compliance Verified**
    
    **Files Reviewed**:
-   - [file 1]: ✅ Compliant
-   - [file 2]: ✅ Compliant
+   - [file 1]:  Compliant
+   - [file 2]:  Compliant
    
    **Standards Checked**:
-   - ✅ File organization (one class per file)
-   - ✅ No default arguments
-   - ✅ No direct env var access
-   - ✅ Dependency injection used
-   - ✅ Proper error handling
-   - ✅ Controllers are thin (if applicable)
-   - ✅ Code style consistent
-   - ✅ Type hints present
+   -  File organization (one class per file)
+   -  No default arguments
+   -  No direct env var access
+   -  Dependency injection used
+   -  Proper error handling
+   -  Controllers are thin (if applicable)
+   -  Code style consistent
+   -  Type hints present
    
    **Notes**:
    - All critical standards met
@@ -210,7 +210,7 @@ grep -n "def.*->.*:" *.py -v
 
 ## Critical Rules
 
-**✅ DO:**
+** DO:**
 - Check EVERY file that was created or modified
 - Be thorough and systematic in your review
 - Provide specific, actionable feedback
@@ -218,7 +218,7 @@ grep -n "def.*->.*:" *.py -v
 - Verify fixes when code is re-submitted
 - Only pass compliant code to testers
 
-**❌ NEVER:**
+** NEVER:**
 - Skip files or assume they're compliant
 - Pass code with critical violations to testers
 - Be vague about what needs to be fixed
@@ -242,14 +242,14 @@ Invoke the coder agent IMMEDIATELY when:
 ## When to Invoke the Tester Agent
 
 Invoke the appropriate tester agent ONLY when:
-- ✅ ALL critical violations are fixed
-- ✅ Code meets all coding standards
-- ✅ File organization is correct
-- ✅ No default arguments exist
-- ✅ No direct env var access in functions
-- ✅ Dependency injection is used
-- ✅ Controllers are thin (if applicable)
-- ✅ Error handling is proper
+-  ALL critical violations are fixed
+-  Code meets all coding standards
+-  File organization is correct
+-  No default arguments exist
+-  No direct env var access in functions
+-  Dependency injection is used
+-  Controllers are thin (if applicable)
+-  Error handling is proper
 
 **Choose the correct tester:**
 - `frontend-tester` for UI/web interface code
@@ -274,17 +274,17 @@ You may be invoked multiple times for the same implementation:
 2. You receive coder's completion report
 3. Read coding standards (general.md + python.md)
 4. Review all modified files:
-   - user_service.py: ❌ Has default argument
-   - user_repository.py: ❌ Direct os.getenv() call
-   - routes.py: ❌ Business logic in route handler
+   - user_service.py:  Has default argument
+   - user_repository.py:  Direct os.getenv() call
+   - routes.py:  Business logic in route handler
 5. Create violation report with 3 critical violations
 6. Invoke coder agent with violation report
 7. Wait for coder to fix issues
 8. Coder re-submits fixed code
 9. Re-review files:
-   - user_service.py: ✅ Fixed
-   - user_repository.py: ✅ Fixed
-   - routes.py: ✅ Fixed
+   - user_service.py:  Fixed
+   - user_repository.py:  Fixed
+   - routes.py:  Fixed
 10. Create compliance report
 11. Invoke backend-tester agent
 ```
@@ -292,21 +292,21 @@ You may be invoked multiple times for the same implementation:
 ## Success Criteria
 
 **For Passing Code to Tester:**
-- ✅ All files reviewed against coding standards
-- ✅ Zero critical violations remain
-- ✅ Code follows all language-specific standards
-- ✅ Code follows all general standards
-- ✅ File organization is correct
-- ✅ Compliance report generated
-- ✅ Appropriate tester agent invoked
+-  All files reviewed against coding standards
+-  Zero critical violations remain
+-  Code follows all language-specific standards
+-  Code follows all general standards
+-  File organization is correct
+-  Compliance report generated
+-  Appropriate tester agent invoked
 
 **For Sending Back to Coder:**
-- ✅ All violations documented clearly
-- ✅ Specific fixes explained
-- ✅ Files and line numbers provided
-- ✅ Severity levels assigned
-- ✅ Violation report generated
-- ✅ Coder agent invoked with report
+-  All violations documented clearly
+-  Specific fixes explained
+-  Files and line numbers provided
+-  Severity levels assigned
+-  Violation report generated
+-  Coder agent invoked with report
 
 ---
 

@@ -5,7 +5,7 @@ This document summarizes all timeout-related improvements made to VTCode.
 ## Changes Overview
 
 ### 1. Tool Call Timeout Implementation
-**Status**: ✓  Complete  
+**Status**:   Complete  
 **Files Modified**: `src/agent/runloop/unified/tool_pipeline.rs`
 
 Implemented dynamic tool execution timeout system that respects configured timeout ceilings based on tool type.
@@ -27,7 +27,7 @@ warning_threshold_percent = 80     # Warn at 80% of limit
 ```
 
 ### 2. MCP Initialization Timeout Implementation
-**Status**: ✓  Complete  
+**Status**:   Complete  
 **Files Modified**: 
 - `src/agent/runloop/unified/async_mcp_manager.rs`
 - `vtcode-config/src/constants.rs`
@@ -74,26 +74,26 @@ startup_timeout_seconds = 60  # Default is 60 seconds
 ## Timeout System Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    Timeout Systems                          │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  1. Tool Execution Timeouts                                │
-│     └─ Configured via: [timeouts]                          │
-│     └─ Categories: Default (180s), PTY (300s), MCP (120s)  │
-│     └─ Module: tool_pipeline.rs                            │
-│                                                              │
-│  2. MCP Initialization Timeout                             │
-│     └─ Configured via: [mcp] startup_timeout_seconds       │
-│     └─ Default: 60 seconds                                 │
-│     └─ Module: async_mcp_manager.rs                        │
-│                                                              │
-│  3. MCP Request Timeout                                    │
-│     └─ Configured via: [mcp] request_timeout_seconds       │
-│     └─ Default: 30 seconds                                 │
-│     └─ Module: vtcode-core/mcp/                            │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+
+                    Timeout Systems                          
+
+                                                              
+  1. Tool Execution Timeouts                                
+      Configured via: [timeouts]                          
+      Categories: Default (180s), PTY (300s), MCP (120s)  
+      Module: tool_pipeline.rs                            
+                                                              
+  2. MCP Initialization Timeout                             
+      Configured via: [mcp] startup_timeout_seconds       
+      Default: 60 seconds                                 
+      Module: async_mcp_manager.rs                        
+                                                              
+  3. MCP Request Timeout                                    
+      Configured via: [mcp] request_timeout_seconds       
+      Default: 30 seconds                                 
+      Module: vtcode-core/mcp/                            
+                                                              
+
 ```
 
 ## Configuration Examples
@@ -136,11 +136,11 @@ request_timeout_seconds = 60
 
 ## Testing Status
 
-✓  **Compilation**: All targets compile without errors  
-✓  **Config Loading**: Uses existing configuration structures  
-✓  **Backward Compatibility**: Maintains sensible fallback defaults  
-✓  **Error Messages**: Reports actual timeout values  
-✓  **Integration**: Works with existing timeout policy validation  
+  **Compilation**: All targets compile without errors  
+  **Config Loading**: Uses existing configuration structures  
+  **Backward Compatibility**: Maintains sensible fallback defaults  
+  **Error Messages**: Reports actual timeout values  
+  **Integration**: Works with existing timeout policy validation  
 
 ## Benefits
 

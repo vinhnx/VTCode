@@ -187,19 +187,19 @@ Skills use three levels of loading to minimize context cost:
 
 ```
 Level 1: Metadata (~100 tokens)
-  ├─ Loaded at startup
-  ├─ Agent knows skill exists and what it does
-  └─ No context cost when unused
+   Loaded at startup
+   Agent knows skill exists and what it does
+   No context cost when unused
 
 Level 2: Instructions (<5K tokens)
-  ├─ Loaded when skill is triggered
-  ├─ Full SKILL.md body with workflows
-  └─ Consumed only during use
+   Loaded when skill is triggered
+   Full SKILL.md body with workflows
+   Consumed only during use
 
 Level 3: Resources (scripts, templates)
-  ├─ Executed via bash without loading
-  ├─ Reference materials as needed
-  └─ No context overhead
+   Executed via bash without loading
+   Reference materials as needed
+   No context overhead
 ```
 
 ### Skill Container
@@ -243,35 +243,35 @@ VTCode agent harness integrates skills through:
 
 ```
 .claude/skills/
-├── README.md                        # Skills directory guide
-├── spreadsheet-generator/
-│   └── SKILL.md
-├── doc-generator/
-│   └── SKILL.md
-├── pdf-report-generator/
-│   └── SKILL.md
-├── strict-architecture/
-│   └── SKILL.md
-├── bdd-workflow/
-│   └── SKILL.md
-├── code-orchestration/
-│   └── SKILL.md
-└── forensic-debugging/
-    └── SKILL.md
+ README.md                        # Skills directory guide
+ spreadsheet-generator/
+    SKILL.md
+ doc-generator/
+    SKILL.md
+ pdf-report-generator/
+    SKILL.md
+ strict-architecture/
+    SKILL.md
+ bdd-workflow/
+    SKILL.md
+ code-orchestration/
+    SKILL.md
+ forensic-debugging/
+     SKILL.md
 
 docs/
-├── SKILLS_GUIDE.md                  # Complete skills guide
-├── AGENT_SKILLS_INTEGRATION.md      # Integration guide
-├── AGENT_SKILLS_QUICKREF.md         # Quick reference
-└── skills/
-    ├── SPREADSHEET_EXAMPLE.md
-    ├── WORD_DOCUMENT_EXAMPLE.md
-    └── PDF_GENERATION_EXAMPLE.md
+ SKILLS_GUIDE.md                  # Complete skills guide
+ AGENT_SKILLS_INTEGRATION.md      # Integration guide
+ AGENT_SKILLS_QUICKREF.md         # Quick reference
+ skills/
+     SPREADSHEET_EXAMPLE.md
+     WORD_DOCUMENT_EXAMPLE.md
+     PDF_GENERATION_EXAMPLE.md
 
 examples/
-├── skills_spreadsheet.py
-├── skills_word_document.py
-└── skills_pdf_generation.py
+ skills_spreadsheet.py
+ skills_word_document.py
+ skills_pdf_generation.py
 ```
 
 ---

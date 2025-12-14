@@ -50,12 +50,12 @@ export class UserRepository {
 
 ### No Default Arguments
 ```typescript
-// ❌ BAD - Default arguments
+//  BAD - Default arguments
 function createUser(name: string, email: string, role: string = "user"): User {
   // ...
 }
 
-// ✅ GOOD - Explicit arguments
+//  GOOD - Explicit arguments
 function createUser(name: string, email: string, role: string): User {
   // ...
 }
@@ -63,14 +63,14 @@ function createUser(name: string, email: string, role: string): User {
 
 ### No Environment Variable Access
 ```typescript
-// ❌ BAD - Reading env vars in function
+//  BAD - Reading env vars in function
 function connectToDatabase(): DatabaseConnection {
   const host = process.env.DB_HOST;
   const port = process.env.DB_PORT;
   return connect(host, port);
 }
 
-// ✅ GOOD - Configuration passed as arguments
+//  GOOD - Configuration passed as arguments
 function connectToDatabase(config: DatabaseConfig): DatabaseConnection {
   return connect(config.host, config.port);
 }
@@ -114,7 +114,7 @@ function parseData(data: unknown): ParsedData {
 
 ### Prefer Interfaces for Objects
 ```typescript
-// ✅ GOOD - Interface for object shapes
+//  GOOD - Interface for object shapes
 interface User {
   id: string;
   name: string;
@@ -129,7 +129,7 @@ interface UserRepository {
 
 ### Use Type for Unions and Utilities
 ```typescript
-// ✅ GOOD - Type for unions
+//  GOOD - Type for unions
 type Status = "pending" | "active" | "inactive";
 
 type Result<T> = Success<T> | Failure;
@@ -163,7 +163,7 @@ export class ValidationError extends Error {
 
 ### Error Propagation
 ```typescript
-// ✅ GOOD - Let errors propagate
+//  GOOD - Let errors propagate
 async function getUser(userId: string): Promise<User> {
   const user = await repository.findById(userId);
   if (!user) {
@@ -172,7 +172,7 @@ async function getUser(userId: string): Promise<User> {
   return user;
 }
 
-// ❌ BAD - Silent failure
+//  BAD - Silent failure
 async function getUser(userId: string): Promise<User | null> {
   try {
     return await repository.findById(userId);
@@ -220,7 +220,7 @@ const repository = new UserRepository(config.database);
 
 ### Constructor Injection
 ```typescript
-// ✅ GOOD - Dependencies injected
+//  GOOD - Dependencies injected
 export class UserService {
   constructor(
     private readonly repository: UserRepository,
@@ -241,14 +241,14 @@ export class UserService {
 
 ### Always Use Async/Await
 ```typescript
-// ✅ GOOD - Async/await
+//  GOOD - Async/await
 async function fetchUserData(userId: string): Promise<UserData> {
   const user = await userRepository.findById(userId);
   const orders = await orderRepository.findByUserId(userId);
   return { user, orders };
 }
 
-// ❌ BAD - Promise chains
+//  BAD - Promise chains
 function fetchUserData(userId: string): Promise<UserData> {
   return userRepository.findById(userId)
     .then(user => orderRepository.findByUserId(userId)
@@ -260,7 +260,7 @@ function fetchUserData(userId: string): Promise<UserData> {
 
 ### Testable Design
 ```typescript
-// ✅ GOOD - Easy to test with dependency injection
+//  GOOD - Easy to test with dependency injection
 export class UserService {
   constructor(
     private readonly repository: UserRepository,
@@ -345,7 +345,7 @@ import { UserRepository } from "../repositories/UserRepository";
 
 ### Prefer Union Types
 ```typescript
-// ✅ GOOD - Union type (more flexible)
+//  GOOD - Union type (more flexible)
 type Status = "pending" | "active" | "inactive";
 
 // Use enums only when you need reverse mapping or namespacing
@@ -362,7 +362,7 @@ enum HttpStatus {
 ```typescript
 // Always enable strictNullChecks in tsconfig.json
 
-// ✅ GOOD - Explicit null handling
+//  GOOD - Explicit null handling
 function findUser(id: string): User | null {
   // ...
 }

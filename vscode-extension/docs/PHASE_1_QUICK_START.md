@@ -65,7 +65,7 @@ try {
 
   // Format for display in chat
   const formatted = formatErrorMessage('NETWORK_TIMEOUT')
-  // "⤫  Network request timed out\n\n..."
+  // "  Network request timed out\n\n..."
 
   // Check if retryable
   if (isErrorRetryable('NETWORK_TIMEOUT')) {
@@ -97,12 +97,12 @@ Better markdown rendering, code blocks, and status indicators.
 ```
 
 **Visual Improvements**:
-- ✓  Heading styles (h1-h6)
-- ✓  Better code block formatting
-- ✓  Language labels on hover
-- ✓  Syntax highlighting ready
-- ✓  Theme compatibility
-- ✓  Responsive design
+-   Heading styles (h1-h6)
+-   Better code block formatting
+-   Language labels on hover
+-   Syntax highlighting ready
+-   Theme compatibility
+-   Responsive design
 
 ---
 
@@ -178,17 +178,17 @@ try {
 
 ```
 vscode-extension/
-├── src/
-│   ├── ui/
-│   │   ├── statusIndicator.ts          ← New component
-│   │   └── statusIndicator.test.ts     ← Tests
-│   └── error/
-│       ├── errorMessages.ts             ← New component
-│       └── errorMessages.test.ts        ← Tests
-├── media/
-│   └── chat-view.css                    ← Enhanced
-└── docs/
-    └── PHASE_1_IMPLEMENTATION.md        ← This phase
+ src/
+    ui/
+       statusIndicator.ts          ← New component
+       statusIndicator.test.ts     ← Tests
+    error/
+        errorMessages.ts             ← New component
+        errorMessages.test.ts        ← Tests
+ media/
+    chat-view.css                    ← Enhanced
+ docs/
+     PHASE_1_IMPLEMENTATION.md        ← This phase
 ```
 
 ---

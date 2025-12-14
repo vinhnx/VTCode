@@ -11,12 +11,12 @@ Based on the **Ratatui FAQ: "When should I use tokio and async/await?"**, VT Cod
 VT Code's main loop must handle three independent timers and one blocking I/O read without blocking:
 
 ```
-┌─────────────────────────────────────┐
-│ Tick Timer (4 Hz)                  │  Update app state
-│ Render Timer (60 FPS)              │  Redraw UI
-│ Crossterm Event Read (blocking)    │  Read terminal input
-│ Cancellation Token                 │  Graceful shutdown
-└─────────────────────────────────────┘
+
+ Tick Timer (4 Hz)                    Update app state
+ Render Timer (60 FPS)                Redraw UI
+ Crossterm Event Read (blocking)      Read terminal input
+ Cancellation Token                   Graceful shutdown
+
 ```
 
 Without async, polling each source would require sleeping, causing latency. With `tokio::select!`, VT Code reacts to whichever is ready first.
@@ -79,17 +79,17 @@ VT Code's event loop uses two modes:
 
 ```
 Main tokio runtime
-├─ Event handler task (spawned)
-│  ├─ Tick interval (async)
-│  ├─ Render interval (async)
-│  ├─ Crossterm read (spawned_blocking)
-│  └─ Event dispatch (mpsc channel)
-├─ Agent loop (async)
-│  ├─ Tool execution (concurrent tasks)
-│  ├─ LLM streaming (async)
-│  └─ State updates (tokio::sync::Mutex)
-└─ Lifecycle hooks (spawned async)
-   └─ Shell commands (tokio::process::Command)
+ Event handler task (spawned)
+   Tick interval (async)
+   Render interval (async)
+   Crossterm read (spawned_blocking)
+   Event dispatch (mpsc channel)
+ Agent loop (async)
+   Tool execution (concurrent tasks)
+   LLM streaming (async)
+   State updates (tokio::sync::Mutex)
+ Lifecycle hooks (spawned async)
+    Shell commands (tokio::process::Command)
 ```
 
 **Used for:**
@@ -101,7 +101,7 @@ Main tokio runtime
 
 ```
 Synchronous main
-└─ Simple print/exec commands (no event loop)
+ Simple print/exec commands (no event loop)
 ```
 
 **Used for:**
@@ -227,7 +227,7 @@ tokio::spawn(async move {
 
 ### Anti-Pattern 1: Mixing Blocking I/O with Async
 
-⤫  **Bad:**
+  **Bad:**
 ```rust
 async fn handle_event(key: KeyEvent) {
     let result = std::fs::read("file.txt");  // Blocks the runtime!
@@ -235,7 +235,7 @@ async fn handle_event(key: KeyEvent) {
 }
 ```
 
-✓  **Good:**
+  **Good:**
 ```rust
 async fn handle_event(key: KeyEvent) {
     let result = tokio::fs::read("file.txt").await;  // Async read
@@ -245,7 +245,7 @@ async fn handle_event(key: KeyEvent) {
 
 ### Anti-Pattern 2: Spawning Tasks Without Tracking
 
-⤫  **Bad:**
+  **Bad:**
 ```rust
 tokio::spawn(async {
     expensive_operation().await;
@@ -253,7 +253,7 @@ tokio::spawn(async {
 });
 ```
 
-✓  **Good:**
+  **Good:**
 ```rust
 let handle = tokio::spawn(async {
     expensive_operation().await
@@ -265,7 +265,7 @@ let result = handle.await?;
 
 ### Anti-Pattern 3: std::sync Locks in Async Code
 
-⤫  **Bad:**
+  **Bad:**
 ```rust
 let state = Arc::new(Mutex::new(data));
 
@@ -275,7 +275,7 @@ tokio::spawn(async move {
 });
 ```
 
-✓  **Good:**
+  **Good:**
 ```rust
 let state = Arc::new(tokio::sync::Mutex::new(data));
 
@@ -287,7 +287,7 @@ tokio::spawn(async move {
 
 ### Anti-Pattern 4: Not Handling Cancellation
 
-⤫  **Bad:**
+  **Bad:**
 ```rust
 tokio::spawn(async {
     loop {
@@ -297,7 +297,7 @@ tokio::spawn(async {
 });
 ```
 
-✓  **Good:**
+  **Good:**
 ```rust
 let cancel_token = CancellationToken::new();
 let cancel_clone = cancel_token.clone();

@@ -23,34 +23,34 @@ def generate_ascii_chart(data):
     failed_width = bar_width - passed_width
 
     chart = f"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                        HUMANEVAL BENCHMARK RESULTS                           ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  Model: {meta['model']:<66} ║
-║  Provider: {meta['provider']:<63} ║
-║  Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S'):<66} ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  PASS RATE: {pass_rate*100:>5.1f}%                                                         ║
-║                                                                              ║
-║  [{'█' * passed_width}{'░' * failed_width}]  ║
-║   {passed:>3} passed    {failed:>3} failed                                              ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  LATENCY METRICS                                                             ║
-║                                                                              ║
-║    Median (P50):  {summary['latency_p50_s']:>6.3f}s                                            ║
-║    P90:           {summary['latency_p90_s']:>6.3f}s                                            ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  COST ANALYSIS                                                               ║
-║                                                                              ║
-║    Input Tokens:  {summary['total_prompt_tokens']:>10,}                                        ║
-║    Output Tokens: {summary['total_completion_tokens']:>10,}                                        ║
-║    Est. Cost:     ${(summary['est_cost_usd'] or 0):.4f}                                           ║
-║                                                                              ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+
+                        HUMANEVAL BENCHMARK RESULTS                           
+
+                                                                              
+  Model: {meta['model']:<66} 
+  Provider: {meta['provider']:<63} 
+  Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S'):<66} 
+                                                                              
+
+  PASS RATE: {pass_rate*100:>5.1f}%                                                         
+                                                                              
+  [{'' * passed_width}{'' * failed_width}]  
+   {passed:>3} passed    {failed:>3} failed                                              
+                                                                              
+
+  LATENCY METRICS                                                             
+                                                                              
+    Median (P50):  {summary['latency_p50_s']:>6.3f}s                                            
+    P90:           {summary['latency_p90_s']:>6.3f}s                                            
+                                                                              
+
+  COST ANALYSIS                                                               
+                                                                              
+    Input Tokens:  {summary['total_prompt_tokens']:>10,}                                        
+    Output Tokens: {summary['total_completion_tokens']:>10,}                                        
+    Est. Cost:     ${(summary['est_cost_usd'] or 0):.4f}                                           
+                                                                              
+
 """
     return chart
 
@@ -60,7 +60,7 @@ def generate_matplotlib_chart(data, output_path):
         import matplotlib.pyplot as plt
         import matplotlib.patches as mpatches
     except ImportError:
-        print("⚠️  matplotlib not installed. Install with: pip install matplotlib")
+        print("  matplotlib not installed. Install with: pip install matplotlib")
         return False
 
     summary = data['summary']
@@ -149,9 +149,9 @@ def main():
     if '--png' in sys.argv or '--all' in sys.argv:
         png_path = report_path.parent / f"{report_path.stem}_chart.png"
         if generate_matplotlib_chart(data, png_path):
-            print(f"\n📊 Visual chart generated: {png_path}")
+            print(f"\n Visual chart generated: {png_path}")
         else:
-            print("\n💡 Tip: Install matplotlib for visual charts: pip install matplotlib")
+            print("\n Tip: Install matplotlib for visual charts: pip install matplotlib")
 
 if __name__ == "__main__":
     main()

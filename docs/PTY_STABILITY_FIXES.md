@@ -95,7 +95,7 @@ Created comprehensive test suite: `vtcode-core/tests/pty_session_guard_test.rs`
 2. **multiple_sessions**: Tests multiple concurrent guards
 3. **max_sessions**: Validates session limit enforcement
 
-All tests pass ✓ 
+All tests pass  
 
 ## Impact
 
@@ -136,18 +136,18 @@ All tests pass ✓
 
 ## Backward Compatibility
 
-✓  Fully backward compatible. The change is internal:
+  Fully backward compatible. The change is internal:
 - `end_pty_session()` still exists for direct PTY session tools
 - Public API remains unchanged
 - Only affects internal session tracking reliability
 
 ## Verification
 
-- ✓  `cargo check` passes
-- ✓  `cargo clippy` passes (no new warnings)
-- ✓  All new tests pass
-- ✓  Existing PTY tests pass
-- ✓  `cargo fmt` applied
+-   `cargo check` passes
+-   `cargo clippy` passes (no new warnings)
+-   All new tests pass
+-   Existing PTY tests pass
+-   `cargo fmt` applied
 
 ## Future Improvements
 

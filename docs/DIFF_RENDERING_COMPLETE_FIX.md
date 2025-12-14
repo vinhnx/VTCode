@@ -38,15 +38,15 @@ This document summarizes all improvements made to the git diff patch rendering s
 ### 2. Design Improvements
 
 #### A. File Header Enhancement
-- Changed bullet from `•` to `▸` (better visual indicator)
+- Changed bullet from `•` to `` (better visual indicator)
 - Changed label from "Edited" to "Edit" (more concise)
 - Removed parentheses around statistics
-- Format: `▸ Edit path/to/file +1 -2`
+- Format: ` Edit path/to/file +1 -2`
 
 #### B. Unified Diff Header
 - Added proper unified format headers (`--- a/` and `+++ b/`)
 - Proper ANSI styling applied with critical Reset placement
-- Visual separator line (`─`) above file summary
+- Visual separator line (``) above file summary
 
 #### C. Line Number Formatting
 - Improved spacing between line numbers and content
@@ -54,8 +54,8 @@ This document summarizes all improvements made to the git diff patch rendering s
 - Proper color styling of line numbers separate from content
 
 #### D. Operation Summary
-- Changed from `[Success] Operation` to `✓ [Success] Operation`
-- Added tree-like structure with `└─` for file count
+- Changed from `[Success] Operation` to ` [Success] Operation`
+- Added tree-like structure with `` for file count
 - Improved visual hierarchy with indentation
 - Better visual comprehension of success/failure states
 
@@ -116,23 +116,23 @@ Terminal emulators process ANSI codes sequentially:
 ## Testing & Verification
 
 ### Compilation
-- ✓  `cargo build -p vtcode-core --lib` - No errors
-- ✓  `cargo check -p vtcode-core --lib` - No errors
-- ✓  `cargo fmt -p vtcode-core` - Code formatted correctly
-- ✓  `cargo clippy -p vtcode-core --lib` - No critical warnings
+-   `cargo build -p vtcode-core --lib` - No errors
+-   `cargo check -p vtcode-core --lib` - No errors
+-   `cargo fmt -p vtcode-core` - Code formatted correctly
+-   `cargo clippy -p vtcode-core --lib` - No critical warnings
 
 ### Functionality
-- ✓  Diff rendering produces correct ANSI sequences
-- ✓  Colors don't bleed across lines during scrolling
-- ✓  Operation succeeds/fails with proper visual indicators
-- ✓  Line numbers properly aligned and styled
-- ✓  Works with and without color support
+-   Diff rendering produces correct ANSI sequences
+-   Colors don't bleed across lines during scrolling
+-   Operation succeeds/fails with proper visual indicators
+-   Line numbers properly aligned and styled
+-   Works with and without color support
 
 ### Backward Compatibility
-- ✓  All existing APIs unchanged
-- ✓  Color configuration still respected
-- ✓  `use_colors` flag still functional
-- ✓  Git config integration still works
+-   All existing APIs unchanged
+-   Color configuration still respected
+-   `use_colors` flag still functional
+-   Git config integration still works
 
 ## Before & After Examples
 
@@ -159,7 +159,7 @@ Result: Each line properly bounded
 
 **After**:
 ```
-▸ Edit path/to/file.rs +1 -2
+ Edit path/to/file.rs +1 -2
 ```
 
 ### Operation Summary (Design Improvement)
@@ -172,8 +172,8 @@ Operation completed successfully!
 
 **After**:
 ```
-✓ [Success] Apply patch
-└─ 3 file(s) affected
+ [Success] Apply patch
+ 3 file(s) affected
    Operation completed successfully
 ```
 

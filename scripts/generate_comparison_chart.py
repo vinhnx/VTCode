@@ -30,42 +30,42 @@ def generate_ascii_comparison(reports):
     f2 = sum(1 for r in r2['results'] if not r['passed'])
     
     # Determine winner for each metric
-    acc_winner = "🏆" if s1['pass_at_1'] > s2['pass_at_1'] else ""
-    acc_winner2 = "🏆" if s2['pass_at_1'] > s1['pass_at_1'] else ""
-    lat_winner = "🏆" if s1['latency_p50_s'] < s2['latency_p50_s'] else ""
-    lat_winner2 = "🏆" if s2['latency_p50_s'] < s1['latency_p50_s'] else ""
+    acc_winner = "" if s1['pass_at_1'] > s2['pass_at_1'] else ""
+    acc_winner2 = "" if s2['pass_at_1'] > s1['pass_at_1'] else ""
+    lat_winner = "" if s1['latency_p50_s'] < s2['latency_p50_s'] else ""
+    lat_winner2 = "" if s2['latency_p50_s'] < s1['latency_p50_s'] else ""
     
     chart = f"""
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                    HUMANEVAL BENCHMARK COMPARISON                            ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  Model 1: {m1['model']:<62} ║
-║  Provider: {m1['provider']:<61} ║
-║  Pass@1: {s1['pass_at_1']*100:>5.1f}% {acc_winner:<56} ║
-║  Passed: {p1:>3}/{s1['n']:<3}                                                         ║
-║  Failed: {f1:>3}/{s1['n']:<3}                                                         ║
-║  Latency (P50): {s1['latency_p50_s']:>6.3f}s {lat_winner:<46} ║
-║  Latency (P90): {s1['latency_p90_s']:>6.3f}s                                         ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  Model 2: {m2['model']:<62} ║
-║  Provider: {m2['provider']:<61} ║
-║  Pass@1: {s2['pass_at_1']*100:>5.1f}% {acc_winner2:<56} ║
-║  Passed: {p2:>3}/{s2['n']:<3}                                                         ║
-║  Failed: {f2:>3}/{s2['n']:<3}                                                         ║
-║  Latency (P50): {s2['latency_p50_s']:>6.3f}s {lat_winner2:<46} ║
-║  Latency (P90): {s2['latency_p90_s']:>6.3f}s                                         ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  COMPARISON SUMMARY                                                          ║
-║                                                                              ║
-║  Accuracy Difference: {abs(s1['pass_at_1'] - s2['pass_at_1'])*100:>5.1f}% ({('Model 1' if s1['pass_at_1'] > s2['pass_at_1'] else 'Model 2') + ' better':<30})║
-║  Speed Difference:    {abs(s1['latency_p50_s'] - s2['latency_p50_s']):.2f}s ({('Model 1' if s1['latency_p50_s'] < s2['latency_p50_s'] else 'Model 2') + ' faster':<30})║
-║  Speed Ratio:         {max(s1['latency_p50_s'], s2['latency_p50_s']) / min(s1['latency_p50_s'], s2['latency_p50_s']):.1f}x                                                  ║
-║                                                                              ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+
+                    HUMANEVAL BENCHMARK COMPARISON                            
+
+                                                                              
+  Model 1: {m1['model']:<62} 
+  Provider: {m1['provider']:<61} 
+  Pass@1: {s1['pass_at_1']*100:>5.1f}% {acc_winner:<56} 
+  Passed: {p1:>3}/{s1['n']:<3}                                                         
+  Failed: {f1:>3}/{s1['n']:<3}                                                         
+  Latency (P50): {s1['latency_p50_s']:>6.3f}s {lat_winner:<46} 
+  Latency (P90): {s1['latency_p90_s']:>6.3f}s                                         
+                                                                              
+
+                                                                              
+  Model 2: {m2['model']:<62} 
+  Provider: {m2['provider']:<61} 
+  Pass@1: {s2['pass_at_1']*100:>5.1f}% {acc_winner2:<56} 
+  Passed: {p2:>3}/{s2['n']:<3}                                                         
+  Failed: {f2:>3}/{s2['n']:<3}                                                         
+  Latency (P50): {s2['latency_p50_s']:>6.3f}s {lat_winner2:<46} 
+  Latency (P90): {s2['latency_p90_s']:>6.3f}s                                         
+                                                                              
+
+  COMPARISON SUMMARY                                                          
+                                                                              
+  Accuracy Difference: {abs(s1['pass_at_1'] - s2['pass_at_1'])*100:>5.1f}% ({('Model 1' if s1['pass_at_1'] > s2['pass_at_1'] else 'Model 2') + ' better':<30})
+  Speed Difference:    {abs(s1['latency_p50_s'] - s2['latency_p50_s']):.2f}s ({('Model 1' if s1['latency_p50_s'] < s2['latency_p50_s'] else 'Model 2') + ' faster':<30})
+  Speed Ratio:         {max(s1['latency_p50_s'], s2['latency_p50_s']) / min(s1['latency_p50_s'], s2['latency_p50_s']):.1f}x                                                  
+                                                                              
+
 """
     return chart
 
@@ -75,7 +75,7 @@ def generate_matplotlib_comparison(reports, output_path):
         import matplotlib.pyplot as plt
         import numpy as np
     except ImportError:
-        print("⚠️  matplotlib not installed. Install with: pip install matplotlib")
+        print("  matplotlib not installed. Install with: pip install matplotlib")
         return False
     
     if len(reports) != 2:
@@ -219,7 +219,7 @@ def generate_matplotlib_comparison(reports, output_path):
     
     plt.tight_layout()
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
-    print(f"✓  Comparison chart saved to: {output_path}")
+    print(f"  Comparison chart saved to: {output_path}")
     return True
 
 def main():
@@ -255,9 +255,9 @@ def main():
         png_path = report1_path.parent / f"comparison_{safe_m1}_vs_{safe_m2}.png"
         
         if generate_matplotlib_comparison(reports, png_path):
-            print(f"\n📊 Visual comparison chart generated: {png_path}")
+            print(f"\n Visual comparison chart generated: {png_path}")
         else:
-            print("\n💡 Tip: Install matplotlib for visual charts: pip install matplotlib")
+            print("\n Tip: Install matplotlib for visual charts: pip install matplotlib")
 
 if __name__ == "__main__":
     main()

@@ -32,19 +32,19 @@ This document tracks performance metrics for the VTCode LLM provider system afte
 #### Before Optimization
 ```
 Operation: HTTP Error Handling (1000 iterations)
-├─ Average Time: 245μs per error
-├─ Allocations: 18 per error
-├─ Clone Calls: 6 per error
-└─ Code Duplication: 300+ lines across providers
+ Average Time: 245μs per error
+ Allocations: 18 per error
+ Clone Calls: 6 per error
+ Code Duplication: 300+ lines across providers
 ```
 
 #### After Optimization
 ```
 Operation: HTTP Error Handling (1000 iterations)
-├─ Average Time: 196μs per error (-20%)
-├─ Allocations: 12 per error (-33%)
-├─ Clone Calls: 3 per error (-50%)
-└─ Code Duplication: 0 lines (centralized)
+ Average Time: 196μs per error (-20%)
+ Allocations: 12 per error (-33%)
+ Clone Calls: 3 per error (-50%)
+ Code Duplication: 0 lines (centralized)
 ```
 
 **Improvement:** 20% faster, 33% fewer allocations
@@ -56,17 +56,17 @@ Operation: HTTP Error Handling (1000 iterations)
 #### Before Optimization
 ```
 Operation: MessageContent::as_text() (10,000 iterations)
-├─ Single-part messages: 850ns, 3 allocations
-├─ Multi-part messages: 2.4μs, 8 allocations
-└─ Total allocations: 55,000
+ Single-part messages: 850ns, 3 allocations
+ Multi-part messages: 2.4μs, 8 allocations
+ Total allocations: 55,000
 ```
 
 #### After Optimization
 ```
 Operation: MessageContent::as_text() (10,000 iterations)
-├─ Single-part messages: 520ns, 0 allocations (-100%)
-├─ Multi-part messages: 1.8μs, 4 allocations (-50%)
-└─ Total allocations: 20,000 (-64%)
+ Single-part messages: 520ns, 0 allocations (-100%)
+ Multi-part messages: 1.8μs, 4 allocations (-50%)
+ Total allocations: 20,000 (-64%)
 ```
 
 **Improvement:** 40% reduction in allocations, 25% faster
@@ -78,17 +78,17 @@ Operation: MessageContent::as_text() (10,000 iterations)
 #### Before Optimization
 ```
 Operation: Tool Call Processing (Gemini, 100 messages)
-├─ HashMap reallocations: 23
-├─ Average time: 145μs per message
-└─ Memory overhead: High (dynamic growth)
+ HashMap reallocations: 23
+ Average time: 145μs per message
+ Memory overhead: High (dynamic growth)
 ```
 
 #### After Optimization
 ```
 Operation: Tool Call Processing (Gemini, 100 messages)
-├─ HashMap reallocations: 2 (-91%)
-├─ Average time: 128μs per message (-12%)
-└─ Memory overhead: Low (pre-allocated)
+ HashMap reallocations: 2 (-91%)
+ Average time: 128μs per message (-12%)
+ Memory overhead: Low (pre-allocated)
 ```
 
 **Improvement:** 91% fewer reallocations, 12% faster
@@ -121,21 +121,21 @@ Operation: Tool Call Processing (Gemini, 100 messages)
 #### Before Optimization
 ```
 Total Allocations: ~450 per request
-├─ Error handling: 18
-├─ Message processing: 120
-├─ Tool call handling: 85
-├─ JSON serialization: 150
-└─ String operations: 77
+ Error handling: 18
+ Message processing: 120
+ Tool call handling: 85
+ JSON serialization: 150
+ String operations: 77
 ```
 
 #### After Optimization
 ```
 Total Allocations: ~315 per request (-30%)
-├─ Error handling: 12 (-33%)
-├─ Message processing: 72 (-40%)
-├─ Tool call handling: 68 (-20%)
-├─ JSON serialization: 150 (unchanged)
-└─ String operations: 13 (-83%)
+ Error handling: 12 (-33%)
+ Message processing: 72 (-40%)
+ Tool call handling: 68 (-20%)
+ JSON serialization: 150 (unchanged)
+ String operations: 13 (-83%)
 ```
 
 **Total Reduction:** 30% fewer allocations per request
@@ -246,22 +246,22 @@ cargo bench --package vtcode-core -- --output-format bencher | tee perf-report.t
 ## Optimization Impact Summary
 
 ### Code Quality
-- ✅ **-277 lines** of code (duplicate elimination)
-- ✅ **0 warnings** (down from 1)
-- ✅ **0 dead code** (removed 30 lines)
-- ✅ **100% test coverage** maintained
+-  **-277 lines** of code (duplicate elimination)
+-  **0 warnings** (down from 1)
+-  **0 dead code** (removed 30 lines)
+-  **100% test coverage** maintained
 
 ### Performance
-- ✅ **-30% allocations** in hot paths
-- ✅ **-23% average latency** across providers
-- ✅ **-44% clone operations** in critical code
-- ✅ **-5% build time** improvement
+-  **-30% allocations** in hot paths
+-  **-23% average latency** across providers
+-  **-44% clone operations** in critical code
+-  **-5% build time** improvement
 
 ### Maintainability
-- ✅ **Single source of truth** for error handling
-- ✅ **Consistent error messages** across all providers
-- ✅ **Easy to extend** with new providers
-- ✅ **Comprehensive documentation**
+-  **Single source of truth** for error handling
+-  **Consistent error messages** across all providers
+-  **Easy to extend** with new providers
+-  **Comprehensive documentation**
 
 ---
 
@@ -298,7 +298,7 @@ The optimization effort has delivered **significant measurable improvements**:
 
 All optimizations maintain **100% backward compatibility** and **comprehensive test coverage**.
 
-**Status:** ✅ **PRODUCTION READY**
+**Status:**  **PRODUCTION READY**
 
 ---
 

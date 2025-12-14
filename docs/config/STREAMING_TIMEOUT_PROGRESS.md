@@ -73,7 +73,7 @@ Show timeout progress in the UI:
 ```rust
 let progress_percent = timeout_progress.load(Ordering::Relaxed);
 if progress_percent >= 80 {
-    println!("⚠️  Operation approaching timeout: {}% elapsed", progress_percent);
+    println!("  Operation approaching timeout: {}% elapsed", progress_percent);
 }
 ```
 

@@ -62,21 +62,21 @@ The following features are planned for future releases:
 ## Architecture
 
 ```
-┌─────────────────────────────────────────┐
-│       Zed Editor                        │
-│  ┌───────────────────────────────────┐ │
-│  │ VTCode Extension (WASM Binary)    │ │
-│  │ ┌─────────────────────────────┐   │ │
-│  │ │ • Language Support          │   │ │
-│  │ │ • Configuration Management  │   │ │
-│  │ │ • CLI Integration           │   │ │
-│  │ └─────────────────────────────┘   │ │
-│  └───────────────────────────────────┘ │
-└──────────────┬──────────────────────────┘
-               │
-               ├─► vtcode.toml (Configuration)
-               │
-               └─► VTCode CLI Binary
+
+       Zed Editor                        
+   
+   VTCode Extension (WASM Binary)     
+       
+    • Language Support              
+    • Configuration Management      
+    • CLI Integration               
+       
+   
+
+               
+                vtcode.toml (Configuration)
+               
+                VTCode CLI Binary
                    (Handles AI Logic)
 ```
 

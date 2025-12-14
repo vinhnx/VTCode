@@ -1,7 +1,7 @@
 # Skill Discovery Fix - Summary
 
 **Date**: December 13, 2025
-**Status**: ✓ Fixed and Verified
+**Status**:  Fixed and Verified
 
 ## Problem
 
@@ -69,8 +69,8 @@ if let Ok(skill_contexts) = loader.discover_skills() {
 
 ## Verification
 
-1. **Build Check**: ✓ Library compiles without errors
-2. **Skill Files Exist**: ✓ All 4 skills found in `.claude/skills/`
+1. **Build Check**:  Library compiles without errors
+2. **Skill Files Exist**:  All 4 skills found in `.claude/skills/`
     - `spreadsheet-generator`
     - `doc-generator`
     - `pdf-report-generator`

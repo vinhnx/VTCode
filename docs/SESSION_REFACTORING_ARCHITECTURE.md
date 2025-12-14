@@ -3,130 +3,130 @@
 ## Before Refactoring
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                      session.rs (~4,900 lines)              │
-│                                                             │
-│  • ThinkingSpinner struct & impl                           │
-│  • Session struct with 30+ fields                          │
-│  • Event handling (keyboard, mouse, paste)                 │
-│  • Rendering (transcript, input, modal, palettes)          │
-│  • Text processing (ANSI strip, wrapping, justify)         │
-│  • Styling logic (colors, borders, accents)                │
-│  • Message management (push, append, replace)              │
-│  • Scroll management                                        │
-│  • Input management                                         │
-│  • Modal dialogs                                            │
-│  • File/prompt palettes                                     │
-│  • Tool rendering                                           │
-│  • ...and more                                              │
-└─────────────────────────────────────────────────────────────┘
+
+                      session.rs (~4,900 lines)              
+                                                             
+  • ThinkingSpinner struct & impl                           
+  • Session struct with 30+ fields                          
+  • Event handling (keyboard, mouse, paste)                 
+  • Rendering (transcript, input, modal, palettes)          
+  • Text processing (ANSI strip, wrapping, justify)         
+  • Styling logic (colors, borders, accents)                
+  • Message management (push, append, replace)              
+  • Scroll management                                        
+  • Input management                                         
+  • Modal dialogs                                            
+  • File/prompt palettes                                     
+  • Tool rendering                                           
+  • ...and more                                              
+
 ```
 
 ## After Refactoring
 
 ```
-┌────────────────────────────────────────────────────────────────────┐
-│                    session.rs (~4,400 lines)                       │
-│                                                                    │
-│  • Session struct (coordinator)                                   │
-│  • High-level command handling                                    │
-│  • Module integration                                             │
-│  • Rendering orchestration                                        │
-└────────────────────────────────────────────────────────────────────┘
-                              │
-                              │ imports & uses
-                              ▼
-        ┌──────────────────────────────────────────────┐
-        │                                              │
-        ▼                    ▼                    ▼    │
-┌──────────────┐    ┌──────────────┐    ┌─────────────▼────┐
-│   spinner.rs │    │  styling.rs  │    │  text_utils.rs   │
-│              │    │              │    │                  │
-│ • Thinking   │    │ • Session    │    │ • strip_ansi     │
-│   indicator  │    │   Styles     │    │ • simplify_tool  │
-│ • Animation  │    │ • Tool       │    │ • wrap_line      │
-│   frames     │    │   colors     │    │ • justify_text   │
-│ • State      │    │ • Border     │    │ • format_params  │
-│              │    │   styles     │    │                  │
-└──────────────┘    └──────────────┘    └──────────────────┘
-        │                    │                    │
-        └────────────────────┼────────────────────┘
-                             │
-                             │ used by
-                             ▼
-        ┌────────────────────────────────────────────┐
-        │         Pre-existing Modules               │
-        │                                            │
-        │  • events.rs       • input_manager.rs     │
-        │  • message.rs      • scroll.rs            │
-        │  • modal.rs        • transcript.rs        │
-        │  • file_palette.rs • prompt_palette.rs    │
-        │  • header.rs       • navigation.rs        │
-        │  • queue.rs        • slash_palette.rs     │
-        └────────────────────────────────────────────┘
+
+                    session.rs (~4,400 lines)                       
+                                                                    
+  • Session struct (coordinator)                                   
+  • High-level command handling                                    
+  • Module integration                                             
+  • Rendering orchestration                                        
+
+                              
+                               imports & uses
+                              
+        
+                                                      
+                                                    
+        
+   spinner.rs       styling.rs        text_utils.rs   
+                                                      
+ • Thinking        • Session         • strip_ansi     
+   indicator         Styles          • simplify_tool  
+ • Animation       • Tool            • wrap_line      
+   frames            colors          • justify_text   
+ • State           • Border          • format_params  
+                     styles                           
+        
+                                                
+        
+                             
+                              used by
+                             
+        
+                 Pre-existing Modules               
+                                                    
+          • events.rs       • input_manager.rs     
+          • message.rs      • scroll.rs            
+          • modal.rs        • transcript.rs        
+          • file_palette.rs • prompt_palette.rs    
+          • header.rs       • navigation.rs        
+          • queue.rs        • slash_palette.rs     
+        
 ```
 
 ## Module Dependencies
 
 ```
 session.rs
-    │
-    ├──▶ spinner.rs (Animation)
-    │       └── No dependencies
-    │
-    ├──▶ styling.rs (Styles & Colors)
-    │       ├── Uses: InlineTheme, InlineTextStyle
-    │       └── Uses: message.rs types
-    │
-    ├──▶ text_utils.rs (Text Processing)
-    │       ├── Uses: ratatui types
-    │       ├── Uses: unicode_segmentation
-    │       └── Uses: line_clipping
-    │
-    ├──▶ events.rs (Event Handling)
-    │       ├── Uses: crossterm events
-    │       └── Uses: modal.rs types
-    │
-    ├──▶ input_manager.rs (Input State)
-    ├──▶ scroll.rs (Scroll State)
-    ├──▶ message.rs (Message Types)
-    ├──▶ modal.rs (Dialogs)
-    ├──▶ transcript.rs (Caching)
-    ├──▶ file_palette.rs (File Browser)
-    ├──▶ prompt_palette.rs (Prompt Browser)
-    └──▶ [other modules...]
+    
+     spinner.rs (Animation)
+            No dependencies
+    
+     styling.rs (Styles & Colors)
+            Uses: InlineTheme, InlineTextStyle
+            Uses: message.rs types
+    
+     text_utils.rs (Text Processing)
+            Uses: ratatui types
+            Uses: unicode_segmentation
+            Uses: line_clipping
+    
+     events.rs (Event Handling)
+            Uses: crossterm events
+            Uses: modal.rs types
+    
+     input_manager.rs (Input State)
+     scroll.rs (Scroll State)
+     message.rs (Message Types)
+     modal.rs (Dialogs)
+     transcript.rs (Caching)
+     file_palette.rs (File Browser)
+     prompt_palette.rs (Prompt Browser)
+     [other modules...]
 ```
 
 ## Data Flow
 
 ```
 User Input
-    │
-    ▼
-┌─────────────────┐
-│  events.rs      │ ◀── Handles keyboard, mouse, paste
-└─────────────────┘
-    │
-    ▼
-┌─────────────────┐
-│  session.rs     │ ◀── Processes events, updates state
-└─────────────────┘
-    │
-    ├──▶ input_manager.rs  (cursor, content)
-    ├──▶ scroll.rs         (viewport, offset)
-    ├──▶ spinner.rs        (animation state)
-    └──▶ message.rs        (transcript lines)
-    │
-    ▼
-┌─────────────────┐
-│  Rendering      │
-└─────────────────┘
-    │
-    ├──▶ styling.rs       (colors, styles)
-    ├──▶ text_utils.rs    (wrap, format)
-    └──▶ transcript.rs    (cache, reflow)
-    │
-    ▼
+    
+    
+
+  events.rs        Handles keyboard, mouse, paste
+
+    
+    
+
+  session.rs       Processes events, updates state
+
+    
+     input_manager.rs  (cursor, content)
+     scroll.rs         (viewport, offset)
+     spinner.rs        (animation state)
+     message.rs        (transcript lines)
+    
+    
+
+  Rendering      
+
+    
+     styling.rs       (colors, styles)
+     text_utils.rs    (wrap, format)
+     transcript.rs    (cache, reflow)
+    
+    
 Terminal Output
 ```
 
@@ -178,32 +178,32 @@ After:  Focused modules, easier navigation
 ## Future Refactoring Opportunities
 
 ```
-┌─────────────────────────────────────────┐
-│     Potential Future Extractions        │
-├─────────────────────────────────────────┤
-│ 1. renderer.rs                          │
-│    └── All render_* methods             │
-│                                          │
-│ 2. tool_renderer.rs                     │
-│    └── Tool-specific rendering          │
-│                                          │
-│ 3. message_processor.rs                 │
-│    └── Message state mutations          │
-│                                          │
-│ 4. layout.rs                            │
-│    └── View layout calculations         │
-└─────────────────────────────────────────┘
+
+     Potential Future Extractions        
+
+ 1. renderer.rs                          
+     All render_* methods             
+                                          
+ 2. tool_renderer.rs                     
+     Tool-specific rendering          
+                                          
+ 3. message_processor.rs                 
+     Message state mutations          
+                                          
+ 4. layout.rs                            
+     View layout calculations         
+
 ```
 
 ## Success Metrics
 
-✅ Compilation: All modules compile without errors
-✅ Warnings: Only 8 unused function warnings (expected)
-✅ Tests: Text utilities include unit tests
-✅ Documentation: Each module purpose documented
-✅ Encapsulation: Private fields, public APIs
-✅ Performance: No regressions introduced
-✅ Maintainability: Clear module boundaries
+ Compilation: All modules compile without errors
+ Warnings: Only 8 unused function warnings (expected)
+ Tests: Text utilities include unit tests
+ Documentation: Each module purpose documented
+ Encapsulation: Private fields, public APIs
+ Performance: No regressions introduced
+ Maintainability: Clear module boundaries
 
 ## Conclusion
 

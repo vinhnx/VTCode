@@ -18,17 +18,17 @@
 
 ## Implementation Status
 
-### Phase 1: Foundation ✓  COMPLETE
+### Phase 1: Foundation   COMPLETE
 **Timeline**: November 2025  
 **Status**: Production-ready  
 
 Achievements:
-- ✓  Upgraded `anstyle-git` and `anstyle-ls` crates
-- ✓  Modernized `InlineTextStyle` with Effects support
-- ✓  Added background color support
-- ✓  Created `ThemeConfigParser` module
-- ✓  Updated all call sites (20+ locations)
-- ✓  Comprehensive test coverage (14+ tests)
+-   Upgraded `anstyle-git` and `anstyle-ls` crates
+-   Modernized `InlineTextStyle` with Effects support
+-   Added background color support
+-   Created `ThemeConfigParser` module
+-   Updated all call sites (20+ locations)
+-   Comprehensive test coverage (14+ tests)
 
 **Key Files**:
 - `vtcode-core/src/ui/tui/types.rs` - InlineTextStyle struct
@@ -46,15 +46,15 @@ Achievements:
 **Status**: Ready to implement  
 
 Components:
-- 🔷 **Phase 2.1**: Git Config Color Parser (2-3 hours)
-- 🔷 **Phase 2.2**: LS_COLORS File Coloring (1-2 hours)
-- 🔷 **Phase 2.3**: Theme Configuration Files (2 hours)
+-  **Phase 2.1**: Git Config Color Parser (2-3 hours)
+-  **Phase 2.2**: LS_COLORS File Coloring (1-2 hours)
+-  **Phase 2.3**: Theme Configuration Files (2 hours)
 
 **Documentation**:
 - [Phase 2 Plan](PHASE2_PLAN.md) - Detailed specification
 - [Phase 2 Quick Start](PHASE2_QUICK_START.md) - Implementation guide
 
-### Phase 3: Advanced ✨ FUTURE
+### Phase 3: Advanced  FUTURE
 Expected enhancements:
 - Multi-theme system (light/dark/high-contrast)
 - Terminal capability auto-detection
@@ -147,8 +147,8 @@ System Config (Git/LS_COLORS)
 ThemeConfigParser
     ↓
 Style Objects (anstyle::Style)
-    ├── CLI Output (render)
-    └── TUI Output (ratatui conversion)
+     CLI Output (render)
+     TUI Output (ratatui conversion)
 ```
 
 ## Testing
@@ -213,11 +213,11 @@ For questions about:
 ## Changelog
 
 ### Latest Session (Nov 9, 2025)
-- ✓  Completed Phase 1 verification
-- ✓  Created Phase 2 planning document
-- ✓  Created Phase 2 quick-start guide
-- ✓  Created session summary
-- ✓  Committed all documentation
+-   Completed Phase 1 verification
+-   Created Phase 2 planning document
+-   Created Phase 2 quick-start guide
+-   Created session summary
+-   Committed all documentation
 
 ### Previous Milestones
 See [PHASE1_COMPLETION_SUMMARY.md](PHASE1_COMPLETION_SUMMARY.md) and commit history for details.

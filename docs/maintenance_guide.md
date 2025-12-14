@@ -16,37 +16,37 @@ This guide establishes ongoing maintenance practices to preserve code quality an
 #!/bin/bash
 # .github/workflows/daily-quality-check.sh
 
-echo "🔍 Running daily quality checks..."
+echo " Running daily quality checks..."
 
 # 1. Check for warnings
-echo "📊 Checking for compiler warnings..."
+echo " Checking for compiler warnings..."
 cargo check --package vtcode-core 2>&1 | tee check.log
 if grep -q "warning:" check.log; then
-    echo "❌ Warnings detected!"
+    echo " Warnings detected!"
     exit 1
 fi
 
 # 2. Run clippy with strict rules
-echo "📎 Running Clippy..."
+echo " Running Clippy..."
 cargo clippy --package vtcode-core -- -D warnings
 
 # 3. Check formatting
-echo "🎨 Checking code formatting..."
+echo " Checking code formatting..."
 cargo fmt --package vtcode-core -- --check
 
 # 4. Run tests
-echo "🧪 Running tests..."
+echo " Running tests..."
 cargo nextest run --package vtcode-core
 
 # 5. Check for dead code
-echo "🗑️  Checking for dead code..."
+echo "  Checking for dead code..."
 cargo check --package vtcode-core 2>&1 | grep "dead_code"
 if [ $? -eq 0 ]; then
-    echo "❌ Dead code detected!"
+    echo " Dead code detected!"
     exit 1
 fi
 
-echo "✅ All daily checks passed!"
+echo " All daily checks passed!"
 ```
 
 ### Weekly Reviews
@@ -56,14 +56,14 @@ echo "✅ All daily checks passed!"
 #!/bin/bash
 # Run weekly performance benchmarks
 
-echo "📈 Running performance benchmarks..."
+echo " Running performance benchmarks..."
 
 # Run benchmarks and compare to baseline
 cargo bench --package vtcode-core -- --baseline main
 
 # Check for regressions > 5%
 if [ $? -ne 0 ]; then
-    echo "⚠️  Performance regression detected!"
+    echo "  Performance regression detected!"
     # Send notification
 fi
 ```
@@ -73,7 +73,7 @@ fi
 #!/bin/bash
 # Audit .clone() usage in hot paths
 
-echo "🔍 Auditing clone operations..."
+echo " Auditing clone operations..."
 
 # Count clones in critical files
 echo "Error handling clones:"
@@ -93,7 +93,7 @@ rg '\.clone\(\)' vtcode-core/src/llm/providers/gemini.rs | wc -l
 #!/bin/bash
 # Check for outdated dependencies
 
-echo "📦 Auditing dependencies..."
+echo " Auditing dependencies..."
 
 cargo outdated --package vtcode-core
 cargo audit --package vtcode-core
@@ -167,30 +167,30 @@ group_imports = "StdExternalCrate"
 #!/bin/bash
 # Pre-commit quality checks
 
-echo "🔍 Running pre-commit checks..."
+echo " Running pre-commit checks..."
 
 # Format check
 cargo fmt -- --check
 if [ $? -ne 0 ]; then
-    echo "❌ Code not formatted. Run: cargo fmt"
+    echo " Code not formatted. Run: cargo fmt"
     exit 1
 fi
 
 # Clippy check
 cargo clippy -- -D warnings
 if [ $? -ne 0 ]; then
-    echo "❌ Clippy errors detected"
+    echo " Clippy errors detected"
     exit 1
 fi
 
 # Quick test
 cargo test --package vtcode-core --lib
 if [ $? -ne 0 ]; then
-    echo "❌ Tests failed"
+    echo " Tests failed"
     exit 1
 fi
 
-echo "✅ Pre-commit checks passed!"
+echo " Pre-commit checks passed!"
 ```
 
 ---
@@ -215,7 +215,7 @@ cargo bench --package vtcode-core -- --output-format bencher \
 
 # Compare to previous
 if [ -f "$BENCH_DIR/bench-baseline.txt" ]; then
-    echo "📊 Comparing to baseline..."
+    echo " Comparing to baseline..."
     
     # Parse and compare (simplified)
     python3 scripts/compare-benchmarks.py \
@@ -224,7 +224,7 @@ if [ -f "$BENCH_DIR/bench-baseline.txt" ]; then
 fi
 
 # Update baseline if better
-echo "💾 Updating baseline..."
+echo " Updating baseline..."
 cp "$BENCH_DIR/bench-$DATE.txt" "$BENCH_DIR/bench-baseline.txt"
 ```
 
@@ -234,7 +234,7 @@ cp "$BENCH_DIR/bench-$DATE.txt" "$BENCH_DIR/bench-baseline.txt"
 #!/bin/bash
 # Profile memory usage
 
-echo "🧠 Profiling memory usage..."
+echo " Profiling memory usage..."
 
 # Build with profiling
 cargo build --package vtcode-core --profile profiling
@@ -354,7 +354,7 @@ Brief description of changes
 ```bash
 # Automated benchmark comparison
 if [ $PERF_REGRESSION -gt 5 ]; then
-    echo "⚠️  Performance regression detected: ${PERF_REGRESSION}%"
+    echo "  Performance regression detected: ${PERF_REGRESSION}%"
     # Create issue
     # Notify team
     # Bisect to find cause
@@ -375,7 +375,7 @@ fi
 ```bash
 # Automated quality checks
 if [ $WARNINGS -gt 0 ]; then
-    echo "❌ Quality regression: $WARNINGS warnings"
+    echo " Quality regression: $WARNINGS warnings"
     # Block merge
     # Create issue
 fi
@@ -477,7 +477,7 @@ $(cargo clippy --package vtcode-core 2>&1 | tail -20)
 $(grep "TODO\|FIXME" -r vtcode-core/src | wc -l) TODOs/FIXMEs remaining
 EOF
 
-echo "📊 Quality report generated: $REPORT_FILE"
+echo " Quality report generated: $REPORT_FILE"
 ```
 
 ### Benchmark Comparison
@@ -500,17 +500,17 @@ def parse_bench(filename):
 baseline = parse_bench(sys.argv[1])
 current = parse_bench(sys.argv[2])
 
-print("📊 Benchmark Comparison\n")
+print(" Benchmark Comparison\n")
 for test, time in current.items():
     if test in baseline:
         baseline_time = baseline[test]
         diff = ((time - baseline_time) / baseline_time) * 100
         
         if abs(diff) > 5:
-            emoji = "⚠️" if diff > 0 else "✅"
+            emoji = "" if diff > 0 else ""
             print(f"{emoji} {test}: {diff:+.1f}%")
         else:
-            print(f"✓ {test}: {diff:+.1f}%")
+            print(f" {test}: {diff:+.1f}%")
 ```
 
 ---
@@ -518,28 +518,28 @@ for test, time in current.items():
 ## Best Practices
 
 ### Code Organization
-1. ✅ Keep modules focused and cohesive
-2. ✅ Use centralized utilities for common operations
-3. ✅ Minimize cross-module dependencies
-4. ✅ Document module boundaries
+1.  Keep modules focused and cohesive
+2.  Use centralized utilities for common operations
+3.  Minimize cross-module dependencies
+4.  Document module boundaries
 
 ### Performance
-1. ✅ Profile before optimizing
-2. ✅ Benchmark after changes
-3. ✅ Document performance characteristics
-4. ✅ Monitor production metrics
+1.  Profile before optimizing
+2.  Benchmark after changes
+3.  Document performance characteristics
+4.  Monitor production metrics
 
 ### Testing
-1. ✅ Test edge cases
-2. ✅ Test error paths
-3. ✅ Keep tests fast
-4. ✅ Avoid flaky tests
+1.  Test edge cases
+2.  Test error paths
+3.  Keep tests fast
+4.  Avoid flaky tests
 
 ### Documentation
-1. ✅ Document public APIs
-2. ✅ Explain complex logic
-3. ✅ Provide examples
-4. ✅ Keep docs up-to-date
+1.  Document public APIs
+2.  Explain complex logic
+3.  Provide examples
+4.  Keep docs up-to-date
 
 ---
 
@@ -547,11 +547,11 @@ for test, time in current.items():
 
 Maintaining code quality requires:
 
-✅ **Automated checks** - CI/CD pipeline  
-✅ **Regular reviews** - Daily, weekly, monthly  
-✅ **Performance monitoring** - Benchmarks and profiling  
-✅ **Documentation** - Keep it current  
-✅ **Team discipline** - Follow guidelines  
+ **Automated checks** - CI/CD pipeline  
+ **Regular reviews** - Daily, weekly, monthly  
+ **Performance monitoring** - Benchmarks and profiling  
+ **Documentation** - Keep it current  
+ **Team discipline** - Follow guidelines  
 
 **Key Principle:** Prevention is better than cure - catch issues early!
 
@@ -560,4 +560,4 @@ Maintaining code quality requires:
 **Document Version:** 1.0.0  
 **Last Updated:** 2025-11-27T14:17:16+07:00  
 **Next Review:** 2025-12-27  
-**Status:** ✅ Active Maintenance Framework
+**Status:**  Active Maintenance Framework

@@ -90,27 +90,27 @@ The following files have compilation errors and need their calls updated to use 
 - [x] Core agent files updated (`core/agent/bootstrap.rs`, `core/agent/runner.rs`, `core/agent/core.rs`)
 - [x] ACP integration updated (`src/acp/zed.rs`)
 - [x] All tests updated
-- [x] Compilation successful ✓ 
+- [x] Compilation successful  
 - [ ] Full test suite passing (needs verification)
 - [x] Documentation updated
 
-## Status: ✓  COMPLETE - Library Compiles Successfully!
+## Status:   COMPLETE - Library Compiles Successfully!
 
 ## Completed Work
 
-### ✓  `vtcode-core/src/tool_policy.rs` - Fully Converted
+###   `vtcode-core/src/tool_policy.rs` - Fully Converted
 - All 20 methods converted to async
 - All filesystem operations using `tokio::fs`
 - Tests updated
 
-### ✓  `vtcode-core/src/cli/tool_policy_commands.rs` - Fully Updated
+###   `vtcode-core/src/cli/tool_policy_commands.rs` - Fully Updated
 - All 6 command handlers updated to await async calls
 
-### ✓  `vtcode-core/src/tools/registry/policy.rs` - Fully Updated
+###   `vtcode-core/src/tools/registry/policy.rs` - Fully Updated
 - All 10 methods converted to async
 - `ToolPolicyGateway` fully async
 
-### ✓  `vtcode-core/src/tools/registry/mod.rs` - Fully Updated
+###   `vtcode-core/src/tools/registry/mod.rs` - Fully Updated
 - All 6 constructor methods made async
 - All 12 policy-related methods made async
 - Test updated

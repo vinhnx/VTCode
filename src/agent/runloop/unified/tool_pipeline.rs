@@ -712,13 +712,17 @@ fn process_tool_output(output: Value) -> ToolExecutionStatus {
     }
 
     // Check if the output contains an error object
-    if output.get("error").is_some() {
-        let error_msg = output
-            .get("error")
-            .and_then(|e| e.get("message"))
-            .and_then(|m| m.as_str())
-            .unwrap_or("Unknown tool execution error")
-            .to_string();
+    if let Some(error_value) = output.get("error") {
+        let error_msg = if let Some(message) = error_value.get("message").and_then(|m| m.as_str()) {
+            // Error is an object with message field
+            message.to_string()
+        } else if let Some(error_str) = error_value.as_str() {
+            // Error is a direct string
+            error_str.to_string()
+        } else {
+            // Fallback for unknown error format
+            "Unknown tool execution error".to_string()
+        };
         return ToolExecutionStatus::Failure {
             error: anyhow::anyhow!(error_msg),
         };

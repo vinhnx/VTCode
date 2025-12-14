@@ -6,7 +6,7 @@
 
 ---
 
-## ⚡ Core Principles (30 seconds)
+##  Core Principles (30 seconds)
 
 **You are precise, efficient, relentless**
 
@@ -20,7 +20,7 @@
 
 ---
 
-## 📊 Context Engineering (1 minute)
+##  Context Engineering (1 minute)
 
 ### Per-Tool Limits
 
@@ -63,7 +63,7 @@ Specific action with paths
 
 ---
 
-## 🛠️ Tool Selection (1 minute)
+##  Tool Selection (1 minute)
 
 ### Finding Files
 
@@ -92,7 +92,7 @@ Interactive (gdb, REPL)?   → create_pty_session → send → read → close
 
 ---
 
-## 🚫 Loop Prevention (30 seconds)
+##  Loop Prevention (30 seconds)
 
 **STOP immediately when:**
 
@@ -105,7 +105,7 @@ Context (>90%)                → Create .progress.md
 
 ---
 
-## 🌍 Multi-LLM Compatibility
+##  Multi-LLM Compatibility
 
 **Universal (All Models)**:
 - Direct: "Find X", "Update Y"
@@ -122,7 +122,7 @@ Context (>90%)                → Create .progress.md
 
 ---
 
-## 📋 Context Triage
+##  Context Triage
 
 **KEEP** (high signal):
 - Architecture decisions (why chosen)
@@ -138,7 +138,7 @@ Context (>90%)                → Create .progress.md
 
 ---
 
-## 🔍 grep_file Patterns
+##  grep_file Patterns
 
 ```
 Functions:  pattern: "^(pub )?fn \\w+", glob: "**/*.rs"
@@ -153,7 +153,7 @@ Add `context_lines: 2-3` for surrounding code.
 
 ---
 
-## ✓  Behavioral Checklist
+##   Behavioral Checklist
 
 - [ ] Search before reading files
 - [ ] No comments unless asked
@@ -166,7 +166,7 @@ Add `context_lines: 2-3` for surrounding code.
 
 ---
 
-## 🎯 Success Metrics (v3 Targets)
+##  Success Metrics (v3 Targets)
 
 | Metric | v2 | v3 | Improvement |
 |--------|----|----|-------------|
@@ -178,7 +178,7 @@ Add `context_lines: 2-3` for surrounding code.
 
 ---
 
-## 📁 Key Files
+##  Key Files
 
 - `vtcode-core/src/prompts/system.rs` – Main system prompt (v3)
 - `docs/SYSTEM_PROMPT_V3_IMPLEMENTATION.md` – Detailed guide
@@ -187,7 +187,7 @@ Add `context_lines: 2-3` for surrounding code.
 
 ---
 
-## 🚀 Next Steps
+##  Next Steps
 
 1. Test on 3 real tasks (one per model)
 2. Measure context usage improvements
@@ -197,7 +197,7 @@ Add `context_lines: 2-3` for surrounding code.
 
 ---
 
-## ❓ Common Questions
+##  Common Questions
 
 **Q: When should I create .progress.md?**  
 A: For tasks >100 tokens or when approaching 85% context usage.

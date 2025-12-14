@@ -5,7 +5,7 @@
 
 ## Completed Optimizations (2025-11-28)
 
-### 1. Tool Execution Result Handling Consolidation ✅
+### 1. Tool Execution Result Handling Consolidation 
 
 **Location:** `src/agent/runloop/unified/turn/`
 
@@ -25,7 +25,7 @@
 2. `src/agent/runloop/unified/turn/mod.rs` (added module declaration)
 3. `src/agent/runloop/unified/turn/turn_loop.rs` (refactored to use new module)
 
-### 2. ANSI Code Stripping Optimization ✅
+### 2. ANSI Code Stripping Optimization 
 
 **Location:** `vtcode-core/src/ui/tui/session/text_utils.rs`
 
@@ -44,7 +44,7 @@
 2. `vtcode-core/src/ui/tui/session/render.rs` (updated wrapper and call sites)
 3. `vtcode-core/src/ui/tui/session/reflow.rs` (updated call sites)
 
-### 3. Gemini Streaming JSON Processing Optimization ✅
+### 3. Gemini Streaming JSON Processing Optimization 
 
 **Location:** `vtcode-core/src/gemini/streaming/processor.rs`
 
@@ -63,7 +63,7 @@
 
 ## Build Status
 
-✅ **All checks passing**
+ **All checks passing**
 ```
 cargo check: SUCCESS (5.12s)
 Warnings: 6 (unused imports and variables - cleanup pending)
@@ -85,17 +85,17 @@ Warnings: 6 (unused imports and variables - cleanup pending)
 - **Tool Handling:** Eliminated duplicate allocations in result processing
 
 ### Maintainability Improvements
-- ✅ Centralized error handling across all LLM providers
-- ✅ Single source of truth for tool execution result handling
-- ✅ Consistent patterns for string operations (Cow<str> where appropriate)
-- ✅ Reduced code duplication across the codebase
-- ✅ Improved code organization with dedicated modules
+-  Centralized error handling across all LLM providers
+-  Single source of truth for tool execution result handling
+-  Consistent patterns for string operations (Cow<str> where appropriate)
+-  Reduced code duplication across the codebase
+-  Improved code organization with dedicated modules
 
 ## Remaining Work
 
 ### Phase 3 Continuation
 
-1. **Clean Up Warnings** - 🔄 Next
+1. **Clean Up Warnings** -  Next
    - Remove unused imports in `turn_loop.rs`
    - Fix unused variable warnings
    - Remove dead code in `tool_pipeline.rs`
@@ -178,15 +178,15 @@ handle_tool_execution_result(
 
 ## Next Steps
 
-1. ✅ Complete Phase 3 optimizations (major items done)
-2. 🔄 Clean up compiler warnings
+1.  Complete Phase 3 optimizations (major items done)
+2.  Clean up compiler warnings
 3. ⏳ Run comprehensive test suite
 4. ⏳ Review and optimize remaining large files
 5. ⏳ Create performance benchmarks to measure impact
 6. ⏳ Document optimization patterns for future development
 
 ## Status Legend
-- ✅ Completed
-- 🔄 In Progress
+-  Completed
+-  In Progress
 - ⏳ Planned
-- ❌ Blocked
+-  Blocked

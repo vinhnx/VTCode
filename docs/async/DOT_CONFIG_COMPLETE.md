@@ -1,4 +1,4 @@
-# Dot Config Async Conversion - COMPLETE ✓ 
+# Dot Config Async Conversion - COMPLETE  
 
 ## Date: October 24, 2025
 
@@ -112,12 +112,12 @@ Successfully converted `vtcode-core/src/utils/dot_config.rs` and related files f
 
 ## Benefits
 
-- ✓  Configuration loading/saving is now non-blocking
-- ✓  Cache cleanup doesn't block async runtime
-- ✓  Workspace trust operations are async
-- ✓  Session archive operations are async
-- ✓  Better responsiveness during initialization
-- ✓  Consistent async patterns throughout
+-   Configuration loading/saving is now non-blocking
+-   Cache cleanup doesn't block async runtime
+-   Workspace trust operations are async
+-   Session archive operations are async
+-   Better responsiveness during initialization
+-   Consistent async patterns throughout
 
 ## Technical Challenges Solved
 
@@ -156,7 +156,7 @@ pub trait WorkspaceTrustSynchronizer {
 
 ```bash
 cargo check --lib
-# Exit Code: 0 ✓ 
+# Exit Code: 0  
 # Compilation: Success
 ```
 
@@ -171,11 +171,11 @@ cargo check --lib
 
 ## Status
 
-✓  **COMPLETE** - All dot config and related operations are now fully async
+  **COMPLETE** - All dot config and related operations are now fully async
 
 ---
 
 **Completed**: October 24, 2025  
-**Status**: ✓  Complete  
-**Compilation**: ✓  Success  
+**Status**:   Complete  
+**Compilation**:   Success  
 **Next**: `instructions.rs`

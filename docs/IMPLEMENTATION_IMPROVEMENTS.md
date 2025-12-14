@@ -8,7 +8,7 @@ The permission system implementation has been reviewed against the original spec
 
 ## Code Quality Improvements Made
 
-### 1. CommandCache - Pattern Improvement ✓ 
+### 1. CommandCache - Pattern Improvement  
 
 **File**: `vtcode-core/src/tools/command_cache.rs`
 
@@ -50,53 +50,53 @@ pub fn get(&self, command: &str) -> Option<bool> {
 
 ## Specification Compliance
 
-### Module 1: CommandResolver ✓ 
+### Module 1: CommandResolver  
 
 **Specification**: "Resolves command names to actual filesystem paths using system PATH, with caching."
 
-**Implementation**: ✓  **COMPLETE**
-- ✓  Uses `which::which()` for PATH resolution
-- ✓  Built-in HashMap caching
-- ✓  Cache statistics (hits/misses tracking)
-- ✓  Extracts base command from arguments
-- ✓  Returns CommandResolution with metadata
-- ✓  4 unit tests covering all cases
+**Implementation**:   **COMPLETE**
+-   Uses `which::which()` for PATH resolution
+-   Built-in HashMap caching
+-   Cache statistics (hits/misses tracking)
+-   Extracts base command from arguments
+-   Returns CommandResolution with metadata
+-   4 unit tests covering all cases
 
 **Lines**: 160 (within spec's ~1-2 hour estimate: 50-100 LOC)
 
 ---
 
-### Module 2: PermissionAuditLog ✓ 
+### Module 2: PermissionAuditLog  
 
 **Specification**: "Records all permission decisions to structured JSON logs for audit trail."
 
-**Implementation**: ✓  **COMPLETE**
-- ✓  Daily log files: `~/.vtcode/audit/permissions-{date}.log`
-- ✓  JSON serialization per event
-- ✓  PermissionEvent with all required fields
-- ✓  PermissionDecision enum (Allowed|Denied|Prompted|Cached)
-- ✓  PermissionEventType enum with 6 event types
-- ✓  PermissionSummary for reporting
-- ✓  log_command_decision() helper method
-- ✓  BufWriter for performance
-- ✓  2 unit tests
+**Implementation**:   **COMPLETE**
+-   Daily log files: `~/.vtcode/audit/permissions-{date}.log`
+-   JSON serialization per event
+-   PermissionEvent with all required fields
+-   PermissionDecision enum (Allowed|Denied|Prompted|Cached)
+-   PermissionEventType enum with 6 event types
+-   PermissionSummary for reporting
+-   log_command_decision() helper method
+-   BufWriter for performance
+-   2 unit tests
 
 **Lines**: 197 (within spec's ~1-2 hour estimate: 100-150 LOC)
 
 ---
 
-### Module 3: PermissionCache ✓ 
+### Module 3: PermissionCache  
 
 **Specification**: "Caches permission decisions for 5 minutes to avoid redundant evaluations."
 
-**Implementation**: ✓  **COMPLETE**
-- ✓  Default 5-minute TTL
-- ✓  Customizable via `with_ttl()`
-- ✓  Automatic expiration detection
-- ✓  `cleanup_expired()` method
-- ✓  Statistics tracking
-- ✓  Clear functionality
-- ✓  3 unit tests
+**Implementation**:   **COMPLETE**
+-   Default 5-minute TTL
+-   Customizable via `with_ttl()`
+-   Automatic expiration detection
+-   `cleanup_expired()` method
+-   Statistics tracking
+-   Clear functionality
+-   3 unit tests
 
 **Lines**: 142 (within spec's ~0.5-1 hour estimate: 40-80 LOC)
 
@@ -106,18 +106,18 @@ pub fn get(&self, command: &str) -> Option<bool> {
 
 ## Integration Points
 
-### CommandPolicyEvaluator Enhancement ✓ 
+### CommandPolicyEvaluator Enhancement  
 
 **Specification**: "Add resolver and cache to CommandPolicyEvaluator"
 
-**Implementation**: ✓  **COMPLETE**
-- ✓  `resolver: Arc<Mutex<CommandResolver>>`
-- ✓  `cache: Arc<Mutex<PermissionCache>>`
-- ✓  Initialized in `from_config()`
-- ✓  New `evaluate_with_resolution()` method
-- ✓  Returns (bool, Option<PathBuf>, String, PermissionDecision)
-- ✓  Thread-safe design
-- ✓  Async/await compatible
+**Implementation**:   **COMPLETE**
+-   `resolver: Arc<Mutex<CommandResolver>>`
+-   `cache: Arc<Mutex<PermissionCache>>`
+-   Initialized in `from_config()`
+-   New `evaluate_with_resolution()` method
+-   Returns (bool, Option<PathBuf>, String, PermissionDecision)
+-   Thread-safe design
+-   Async/await compatible
 
 **Difference from spec**:
 - Spec: Optional resolver parameter
@@ -132,11 +132,11 @@ pub fn get(&self, command: &str) -> Option<bool> {
 
 | Module | Tests | Status |
 |--------|-------|--------|
-| CommandResolver | 4 | ✓  Ready |
-| PermissionCache | 3 | ✓  Ready |
-| PermissionAuditLog | 2 | ✓  Ready |
-| CommandPolicyEvaluator | 3 existing | ✓  Ready |
-| **Total** | **12** | ✓  Ready |
+| CommandResolver | 4 |   Ready |
+| PermissionCache | 3 |   Ready |
+| PermissionAuditLog | 2 |   Ready |
+| CommandPolicyEvaluator | 3 existing |   Ready |
+| **Total** | **12** |   Ready |
 
 ---
 
@@ -144,13 +144,13 @@ pub fn get(&self, command: &str) -> Option<bool> {
 
 | Check | Result |
 |-------|--------|
-| `cargo check -p vtcode-core` | ✓  Pass (0 errors) |
-| `cargo build -p vtcode-core` | ✓  Pass (0 errors) |
-| `cargo fmt --check` | ✓  Pass |
-| `cargo clippy` (permission modules) | ✓  Pass (0 warnings) |
-| Code comments | ✓  Complete |
-| Error handling | ✓  Complete (anyhow::Result) |
-| Thread safety | ✓  Complete (Arc<Mutex<>> patterns) |
+| `cargo check -p vtcode-core` |   Pass (0 errors) |
+| `cargo build -p vtcode-core` |   Pass (0 errors) |
+| `cargo fmt --check` |   Pass |
+| `cargo clippy` (permission modules) |   Pass (0 warnings) |
+| Code comments |   Complete |
+| Error handling |   Complete (anyhow::Result) |
+| Thread safety |   Complete (Arc<Mutex<>> patterns) |
 
 ---
 
@@ -185,15 +185,15 @@ pub fn get(&self, command: &str) -> Option<bool> {
 ### File Structure
 ```
 vtcode-core/src/
-├── audit/
-│   ├── mod.rs              (4 lines - exports)
-│   └── permission_log.rs   (197 lines - audit logging)
-├── tools/
-│   ├── command_cache.rs    (142 lines - cache with improved patterns)
-│   ├── command_resolver.rs (160 lines - command resolution)
-│   ├── command_policy.rs   (223 lines - enhanced with resolver/cache)
-│   └── mod.rs             (re-exports cache and resolver)
-└── lib.rs                 (re-exports audit module)
+ audit/
+    mod.rs              (4 lines - exports)
+    permission_log.rs   (197 lines - audit logging)
+ tools/
+    command_cache.rs    (142 lines - cache with improved patterns)
+    command_resolver.rs (160 lines - command resolution)
+    command_policy.rs   (223 lines - enhanced with resolver/cache)
+    mod.rs             (re-exports cache and resolver)
+ lib.rs                 (re-exports audit module)
 ```
 
 ### Module Visibility
@@ -232,25 +232,25 @@ Write via BufWriter: Batched, async-compatible
 
 | Requirement | Spec Location | Implementation | Status |
 |-------------|---|---|---|
-| Command resolver | Module 1 | command_resolver.rs | ✓  |
-| PATH resolution | Module 1 | which::which() | ✓  |
-| Caching in resolver | Module 1 | HashMap cache | ✓  |
-| Audit logger | Module 2 | permission_log.rs | ✓  |
-| JSON output | Module 2 | serde_json | ✓  |
-| Daily logs | Module 2 | chrono formatting | ✓  |
-| Permission cache | Module 3 | command_cache.rs | ✓  |
-| TTL support | Module 3 | Duration::from_secs(300) | ✓  |
-| Cache cleanup | Module 3 | cleanup_expired() | ✓  |
-| Integration | Throughout | CommandPolicyEvaluator | ✓  |
-| Resolver params | Module 1 Integration | Arc<Mutex<>> | ✓  Improved |
-| Cache usage | Module 3 Integration | evaluate_with_resolution() | ✓  |
-| Audit logging | Module 2 Integration | log_command_decision() | ✓  |
+| Command resolver | Module 1 | command_resolver.rs |   |
+| PATH resolution | Module 1 | which::which() |   |
+| Caching in resolver | Module 1 | HashMap cache |   |
+| Audit logger | Module 2 | permission_log.rs |   |
+| JSON output | Module 2 | serde_json |   |
+| Daily logs | Module 2 | chrono formatting |   |
+| Permission cache | Module 3 | command_cache.rs |   |
+| TTL support | Module 3 | Duration::from_secs(300) |   |
+| Cache cleanup | Module 3 | cleanup_expired() |   |
+| Integration | Throughout | CommandPolicyEvaluator |   |
+| Resolver params | Module 1 Integration | Arc<Mutex<>> |   Improved |
+| Cache usage | Module 3 Integration | evaluate_with_resolution() |   |
+| Audit logging | Module 2 Integration | log_command_decision() |   |
 
 ---
 
 ## What's Ready vs. What's Next
 
-### ✓  Ready Now
+###   Ready Now
 - All three modules fully implemented
 - CommandPolicyEvaluator enhanced with resolver + cache
 - All unit tests written

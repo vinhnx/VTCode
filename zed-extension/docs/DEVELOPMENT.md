@@ -81,17 +81,17 @@ Get-Content "$(env:APPDATA)\Zed\logs\zed.log" -Tail 50 -Wait
 
 ```
 zed-extension/
-├── extension.toml           # Extension metadata
-├── Cargo.toml              # Rust package configuration
-├── src/
-│   └── lib.rs              # Extension Rust code
-├── languages/
-│   └── vtcode/             # Language support for vtcode.toml
-│       └── config.toml     # Language metadata
-├── README.md               # User documentation
-├── DEVELOPMENT.md          # This file
-├── LICENSE                 # MIT License
-└── .gitignore             # Git ignore rules
+ extension.toml           # Extension metadata
+ Cargo.toml              # Rust package configuration
+ src/
+    lib.rs              # Extension Rust code
+ languages/
+    vtcode/             # Language support for vtcode.toml
+        config.toml     # Language metadata
+ README.md               # User documentation
+ DEVELOPMENT.md          # This file
+ LICENSE                 # MIT License
+ .gitignore             # Git ignore rules
 ```
 
 ## Extension Capabilities

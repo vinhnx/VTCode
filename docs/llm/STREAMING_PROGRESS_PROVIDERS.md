@@ -5,17 +5,17 @@
 The `StreamingProgressTracker` in `vtcode-core/src/llm/providers/streaming_progress.rs` provides a unified interface for tracking streaming timeout progress across all LLM providers.
 
 **Supported Providers:**
-- ✓  OpenAI (GPT-4, GPT-3.5, o1, o1-mini)
-- ✓  Anthropic (Claude)
-- ✓  Google Gemini
-- ✓  Ollama
-- ✓  OpenRouter
-- ✓  Minimax (via Anthropic wrapper)
-- ✓  LM Studio (via OpenAI wrapper)
-- ✓  DeepSeek
-- ✓  Z.AI
-- ✓  xAI (Grok)
-- ✓  Moonshot
+-   OpenAI (GPT-4, GPT-3.5, o1, o1-mini)
+-   Anthropic (Claude)
+-   Google Gemini
+-   Ollama
+-   OpenRouter
+-   Minimax (via Anthropic wrapper)
+-   LM Studio (via OpenAI wrapper)
+-   DeepSeek
+-   Z.AI
+-   xAI (Grok)
+-   Moonshot
 
 ## Quick Start
 
@@ -55,7 +55,7 @@ async fn stream_with_progress(
     let tracker = StreamingProgressBuilder::new(timeout_secs)
         .callback(Box::new(|progress: f32| {
             if progress >= 0.8 {
-                eprintln!("⚠️  Streaming approaching timeout: {:.0}%", progress * 100.0);
+                eprintln!("  Streaming approaching timeout: {:.0}%", progress * 100.0);
             }
         }))
         .build();
@@ -285,11 +285,11 @@ match streaming_operation().await {
 ### 1. Create Tracker at Stream Start
 
 ```rust
-// ✓  Good
+//   Good
 let tracker = StreamingProgressBuilder::new(timeout).build();
 stream_start();
 
-// ⤫  Bad - creates tracker after streaming begins
+//   Bad - creates tracker after streaming begins
 stream_start();
 let tracker = StreamingProgressBuilder::new(timeout).build();
 ```
@@ -297,7 +297,7 @@ let tracker = StreamingProgressBuilder::new(timeout).build();
 ### 2. Report at Key Points
 
 ```rust
-// ✓  Good progression reporting
+//   Good progression reporting
 tracker.report_first_chunk();           // First signal
 tracker.report_chunk_received();        // Each chunk
 tracker.report_error();                 // On failure

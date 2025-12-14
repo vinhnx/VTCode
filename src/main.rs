@@ -224,6 +224,9 @@ async fn main() -> Result<()> {
                 SkillsSubcommand::Validate { path } => {
                     cli::handle_skills_validate(path).await?;
                 }
+                SkillsSubcommand::CheckCompatibility => {
+                    cli::handle_skills_validate_all(&skills_options).await?;
+                }
                 SkillsSubcommand::Config => {
                     cli::handle_skills_config(&skills_options).await?;
                 }

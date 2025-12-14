@@ -46,8 +46,8 @@ parse("bold #0000ee ul").unwrap()       // bold, blue, underlined
 parse("italic yellow black").unwrap()   // italic yellow on black
 
 // Invalid (these will error)
-parse("unknown-color").unwrap()         // ✗ unknown-color not recognized
-parse("#gg0000").unwrap()               // ✗ invalid hex
+parse("unknown-color").unwrap()         //  unknown-color not recognized
+parse("#gg0000").unwrap()               //  invalid hex
 ```
 
 ---
@@ -117,8 +117,8 @@ let colors = "di=01;34:ln=01;36:ex=01;32:*.tar=01;31:*.zip=01;31";
 parse("01;34").unwrap()                 // from di=...
 
 // Invalid (will error)
-parse("99").unwrap()                    // ✗ code 99 not valid
-parse("invalid").unwrap()               // ✗ not numeric
+parse("99").unwrap()                    //  code 99 not valid
+parse("invalid").unwrap()               //  not numeric
 ```
 
 ---

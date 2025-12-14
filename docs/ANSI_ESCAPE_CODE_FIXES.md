@@ -211,11 +211,11 @@ The reset MUST appear before any newline that terminates the styled section.
 
 ## Testing & Verification
 
-- ✓  Code compiles without errors
-- ✓  No new clippy warnings
-- ✓  Maintains backward compatibility
-- ✓  Color handling still respects `use_colors` flag
-- ✓  Works with and without colors
+-   Code compiles without errors
+-   No new clippy warnings
+-   Maintains backward compatibility
+-   Color handling still respects `use_colors` flag
+-   Works with and without colors
 
 ## Behavioral Changes
 

@@ -105,9 +105,9 @@ Protocol Check (HTTPS only)
 Network Isolation Check (no local/private)
   ↓
 Safety Validation
-  ├→ Blocked Domains Check
-  ├→ Sensitive Pattern Check
-  └→ Malicious Indicators Check
+  → Blocked Domains Check
+  → Sensitive Pattern Check
+  → Malicious Indicators Check
   ↓
 Network Request (if all checks pass)
 ```

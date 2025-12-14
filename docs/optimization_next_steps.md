@@ -29,7 +29,7 @@ pub(crate) async fn execute_tool_with_timeout(...)
 
 ## Future Optimization Targets
 
-### 1. Tool System (`vtcode-core/src/tools/`) 📋
+### 1. Tool System (`vtcode-core/src/tools/`) 
 
 **Potential Optimizations:**
 - Review tool result caching efficiency
@@ -41,7 +41,7 @@ pub(crate) async fn execute_tool_with_timeout(...)
 
 **Effort:** 2-3 days
 
-### 2. UI Components (`vtcode-core/src/ui/`) 🎨
+### 2. UI Components (`vtcode-core/src/ui/`) 
 
 **Potential Optimizations:**
 - Further optimize transcript reflow caching
@@ -53,7 +53,7 @@ pub(crate) async fn execute_tool_with_timeout(...)
 
 **Effort:** 3-4 days
 
-### 3. Context Management (`src/agent/runloop/unified/context_manager.rs`) 🧠
+### 3. Context Management (`src/agent/runloop/unified/context_manager.rs`) 
 
 **Potential Optimizations:**
 - Optimize message history handling
@@ -65,7 +65,7 @@ pub(crate) async fn execute_tool_with_timeout(...)
 
 **Effort:** 2-3 days
 
-### 4. LLM Provider Streaming 📡
+### 4. LLM Provider Streaming 
 
 **Potential Optimizations:**
 - Review other providers (OpenAI, Anthropic) for similar optimizations
@@ -132,7 +132,7 @@ criterion_main!(benches);
 
 ## Code Quality Improvements
 
-### 1. Add More Unit Tests 🧪
+### 1. Add More Unit Tests 
 
 **Focus Areas:**
 - Tool execution result handling (`tool_handling.rs`)
@@ -142,7 +142,7 @@ criterion_main!(benches);
 
 **Recommendation:** Aim for 80%+ coverage on new modules
 
-### 2. Integration Tests 🔗
+### 2. Integration Tests 
 
 **Recommended Tests:**
 - End-to-end tool execution flow
@@ -150,7 +150,7 @@ criterion_main!(benches);
 - Error recovery scenarios
 - Streaming response handling
 
-### 3. Documentation 📚
+### 3. Documentation 
 
 **Areas to Document:**
 - Optimization patterns (already done in summary docs)
@@ -160,7 +160,7 @@ criterion_main!(benches);
 
 ## Long-term Improvements
 
-### 1. Async/Await Optimization 🚀
+### 1. Async/Await Optimization 
 
 **Potential Improvements:**
 - Review `.await` points for unnecessary blocking
@@ -172,7 +172,7 @@ criterion_main!(benches);
 
 **Effort:** 1-2 weeks
 
-### 2. Memory Pool for Common Allocations 🏊
+### 2. Memory Pool for Common Allocations 
 
 **Concept:**
 ```rust
@@ -198,7 +198,7 @@ impl MessagePool {
 
 **Effort:** 3-5 days
 
-### 3. Zero-Copy Deserialization 📦
+### 3. Zero-Copy Deserialization 
 
 **Approach:**
 - Use `serde_json::from_slice` instead of `from_str` where possible
@@ -235,19 +235,19 @@ impl MessagePool {
 ## Success Criteria
 
 ### Performance Targets
-- ✅ **Achieved:** 25-35% allocation reduction in hot paths
-- 🎯 **Next Target:** 40-50% total allocation reduction
-- 🎯 **Long-term:** Sub-100ms response time for 90% of operations
+-  **Achieved:** 25-35% allocation reduction in hot paths
+-  **Next Target:** 40-50% total allocation reduction
+-  **Long-term:** Sub-100ms response time for 90% of operations
 
 ### Code Quality Targets
-- ✅ **Achieved:** ~500 lines of duplicate code removed
-- 🎯 **Next Target:** Zero duplicate code patterns
-- 🎯 **Long-term:** 80%+ test coverage
+-  **Achieved:** ~500 lines of duplicate code removed
+-  **Next Target:** Zero duplicate code patterns
+-  **Long-term:** 80%+ test coverage
 
 ### Maintainability Targets
-- ✅ **Achieved:** Centralized error handling and tool processing
-- 🎯 **Next Target:** All critical paths well-documented
-- 🎯 **Long-term:** Self-documenting code with clear patterns
+-  **Achieved:** Centralized error handling and tool processing
+-  **Next Target:** All critical paths well-documented
+-  **Long-term:** Self-documenting code with clear patterns
 
 ## Conclusion
 

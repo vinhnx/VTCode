@@ -57,19 +57,19 @@ This catches conversion errors immediately before tool logic executes.
 
 ## Verification
 
-✓  **Compilation**: No errors, no warnings
+  **Compilation**: No errors, no warnings
 ```
     Checking vtcode-acp-client v0.45.4
     Checking vtcode v0.45.4
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.57s
 ```
 
-✓  **Code Quality**: Formatting validated
+  **Code Quality**: Formatting validated
 ```
 Running cargo fmt... No changes needed
 ```
 
-✓  **Logic Correctness**:
+  **Logic Correctness**:
 - All parameter variations handled
 - Secondary parameters preserved
 - Error conditions explicitly handled

@@ -477,29 +477,29 @@ This document provides a detailed, phase-based roadmap for implementing the arch
 
 ```
 Phase 1: Weeks 1-2    (Foundation & Quality)
-  ├── UI Polish & Styling
-  ├── Status Indicators
-  ├── Error Messages
-  ├── Testing Infrastructure
-  └── Documentation
+   UI Polish & Styling
+   Status Indicators
+   Error Messages
+   Testing Infrastructure
+   Documentation
 
 Phase 2: Weeks 3-6    (Architecture Refactoring)
-  ├── Command System Refactoring
-  ├── Participant System
-  ├── State Management
-  └── Extension Cleanup
+   Command System Refactoring
+   Participant System
+   State Management
+   Extension Cleanup
 
 Phase 3: Weeks 7-10   (Chat Enhancements)
-  ├── Tool Approval UI
-  ├── Conversation Persistence
-  ├── Streaming Enhancements
-  └── Error Recovery
+   Tool Approval UI
+   Conversation Persistence
+   Streaming Enhancements
+   Error Recovery
 
 Phase 4: Weeks 11-12  (Integration & Polish)
-  ├── Integration Testing
-  ├── Performance Optimization
-  ├── User Documentation
-  └── Release Preparation
+   Integration Testing
+   Performance Optimization
+   User Documentation
+   Release Preparation
 
 Total: 12 weeks (~3 months)
 ```

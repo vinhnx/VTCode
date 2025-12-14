@@ -7,47 +7,47 @@ VT Code implements a defense-in-depth security model for command execution to pr
 ## Security Architecture Diagram
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    User / LLM Prompt                        │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│  Layer 1: Command Allowlist                                 │
-│  ✓ Only 9 safe commands allowed                             │
-│  ✗ rm, sudo, docker, curl (without sandbox) blocked         │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│  Layer 2: Argument Validation                               │
-│  ✓ Per-command flag allowlist                               │
-│  ✗ Execution flags blocked (--pre, -exec, -e)               │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│  Layer 3: Workspace Isolation                               │
-│  ✓ Path normalization & validation                          │
-│  ✗ Path traversal blocked (../, symlinks)                   │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│  Layer 4: Sandbox Integration (Optional)                    │
-│  ✓ Filesystem isolation                                     │
-│  ✓ Network allowlist                                        │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│  Layer 5: Human-in-the-Loop                                 │
-│  • Approve Once (no persistence)                            │
-│  • Allow for Session (memory only)                          │
-│  • Always Allow (saved to policy)                           │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
+
+                    User / LLM Prompt                        
+
+                              
+                              
+
+  Layer 1: Command Allowlist                                 
+   Only 9 safe commands allowed                             
+   rm, sudo, docker, curl (without sandbox) blocked         
+
+                              
+                              
+
+  Layer 2: Argument Validation                               
+   Per-command flag allowlist                               
+   Execution flags blocked (--pre, -exec, -e)               
+
+                              
+                              
+
+  Layer 3: Workspace Isolation                               
+   Path normalization & validation                          
+   Path traversal blocked (../, symlinks)                   
+
+                              
+                              
+
+  Layer 4: Sandbox Integration (Optional)                    
+   Filesystem isolation                                     
+   Network allowlist                                        
+
+                              
+                              
+
+  Layer 5: Human-in-the-Loop                                 
+  • Approve Once (no persistence)                            
+  • Allow for Session (memory only)                          
+  • Always Allow (saved to policy)                           
+
+                              
+                              
                     Safe Execution
 ```
 

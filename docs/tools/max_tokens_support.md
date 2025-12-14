@@ -149,16 +149,16 @@ For run_command tool:
 
 ### When to Use max_tokens
 
-✓ Reading large log files
-✓ Listing directories with thousands of files  
-✓ Capturing verbose command output
-✓ Batch operations producing large results
+ Reading large log files
+ Listing directories with thousands of files  
+ Capturing verbose command output
+ Batch operations producing large results
 
 ### When NOT to Use max_tokens
 
-✗ Small outputs that naturally fit within token budget
-✗ When complete output is critical (use pagination instead)
-✗ Initial exploration (use reasonable defaults first)
+ Small outputs that naturally fit within token budget
+ When complete output is critical (use pagination instead)
+ Initial exploration (use reasonable defaults first)
 
 ### Recommended Token Budgets
 

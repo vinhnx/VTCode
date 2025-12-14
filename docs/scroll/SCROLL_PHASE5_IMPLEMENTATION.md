@@ -1,6 +1,6 @@
 # Scroll Performance Phase 5 - Implementation Report
 
-## Status: ✓  COMPLETE
+## Status:   COMPLETE
 
 Successfully implemented three critical deeper optimizations beyond Phase 1-4, achieving an additional **30-40% improvement** in scroll performance.
 
@@ -8,7 +8,7 @@ Successfully implemented three critical deeper optimizations beyond Phase 1-4, a
 
 ## Optimizations Implemented
 
-### 1. ✓  Arc-Wrapped Visible Lines Cache (Zero-Copy Reads)
+### 1.   Arc-Wrapped Visible Lines Cache (Zero-Copy Reads)
 
 **File**: `vtcode-core/src/ui/tui/session.rs`
 
@@ -41,7 +41,7 @@ return (**cached_lines).clone();  // Arc deref is free
 
 ---
 
-### 2. ✓  Remove Unconditional Clear Widget (Line 583)
+### 2.   Remove Unconditional Clear Widget (Line 583)
 
 **File**: `vtcode-core/src/ui/tui/session.rs` (render_transcript function)
 
@@ -53,7 +53,7 @@ return (**cached_lines).clone();  // Arc deref is free
 **Solution**:
 ```rust
 // REMOVED (line 583)
-frame.render_widget(Clear, area);  // ⤫  DELETED
+frame.render_widget(Clear, area);  //   DELETED
 
 // KEPT (lines 632-635) - conditional clear only when content changes
 if self.transcript_content_changed {
@@ -69,7 +69,7 @@ if self.transcript_content_changed {
 
 ---
 
-### 3. ✓  Smart Cache Invalidation on No-Op Scrolls
+### 3.   Smart Cache Invalidation on No-Op Scrolls
 
 **File**: `vtcode-core/src/ui/tui/session.rs` (scroll functions)
 
@@ -143,27 +143,27 @@ fn scroll_line_down(&mut self) {
 
 ```bash
 $ cargo check
-✓  Compiles successfully - no errors
+  Compiles successfully - no errors
 
 $ cargo test --lib
-✓  All 17 tests pass
+  All 17 tests pass
 
 $ cargo clippy
-✓  No new warnings introduced
+  No new warnings introduced
 ```
 
 ---
 
 ## Verification Checklist
 
-- ✓  Code compiles without errors
-- ✓  All tests pass (17/17)
-- ✓  Clippy shows no new warnings
-- ✓  Changes are isolated to scroll/render paths
-- ✓  No API breaking changes
-- ✓  Fully backward compatible
-- ✓  Performance gains measurable (87-92% total improvement)
-- ✓  Cache safety maintained (Arc guarantees thread-safe sharing)
+-   Code compiles without errors
+-   All tests pass (17/17)
+-   Clippy shows no new warnings
+-   Changes are isolated to scroll/render paths
+-   No API breaking changes
+-   Fully backward compatible
+-   Performance gains measurable (87-92% total improvement)
+-   Cache safety maintained (Arc guarantees thread-safe sharing)
 
 ---
 
@@ -197,7 +197,7 @@ This is a ~15x improvement over the baseline, achieving near-instantaneous scrol
 
 ## Production Readiness
 
-**Risk Level**: ⚠️ **MINIMAL**
+**Risk Level**:  **MINIMAL**
 - Isolated optimizations to scroll/render
 - Conservative cache invalidation
 - All tests passing

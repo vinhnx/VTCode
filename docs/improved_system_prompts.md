@@ -43,9 +43,9 @@ Explore first, act second. Use progressive disclosure—start with lightweight s
 Concise and clear
 Good context strategy
 Tool categories defined
-⚠️ Missing explicit response framework
-⚠️ Guidelines could be more specific
-⚠️ Multi-turn coherence guidance is brief
+ Missing explicit response framework
+ Guidelines could be more specific
+ Multi-turn coherence guidance is brief
 
 ### Improved Default Prompt (~280 tokens)
 

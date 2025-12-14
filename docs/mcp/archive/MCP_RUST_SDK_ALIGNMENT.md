@@ -9,12 +9,12 @@ Review of vtcode MCP implementation against official `rmcp` (Rust SDK) best prac
 VTCode's MCP client implementation is well-structured and follows most MCP specification requirements. This document identifies alignment gaps and optimization opportunities to match official Rust SDK patterns.
 
 **Current Status:**
-- ✅ Core client implementation functional
-- ✅ Multiple transport support (stdio, HTTP)
-- ✅ Tool discovery with progressive disclosure
-- ✅ Configuration management via TOML
-- ⚠️ Minor alignment opportunities with RMCP patterns
-- ⚠️ Async lifecycle management could use RMCP patterns
+-  Core client implementation functional
+-  Multiple transport support (stdio, HTTP)
+-  Tool discovery with progressive disclosure
+-  Configuration management via TOML
+-  Minor alignment opportunities with RMCP patterns
+-  Async lifecycle management could use RMCP patterns
 
 ---
 
@@ -23,17 +23,17 @@ VTCode's MCP client implementation is well-structured and follows most MCP speci
 ### VTCode Current Pattern
 ```
 McpClient (high-level)
-  ├── McpProvider (per-provider wrapper)
-  ├── RmcpClient (RMCP adapter)
-  └── ToolDiscovery (tool management)
+   McpProvider (per-provider wrapper)
+   RmcpClient (RMCP adapter)
+   ToolDiscovery (tool management)
 ```
 
 ### RMCP Official Pattern
 ```
 ServiceExt trait (protocol-agnostic)
-  ├── Transport (stdin/stdout, HTTP, WebSocket)
-  ├── Handler (ServerHandler, ClientHandler)
-  └── Schema (JsonSchema for tools)
+   Transport (stdin/stdout, HTTP, WebSocket)
+   Handler (ServerHandler, ClientHandler)
+   Schema (JsonSchema for tools)
 ```
 
 ### Recommendation: Adopt RMCP's ServiceExt Trait
@@ -386,7 +386,7 @@ let tool = client.find_tool(name)
 
 ## 7. Tool Discovery Progressive Disclosure
 
-### Current VTCode Pattern ✅
+### Current VTCode Pattern 
 **File:** `vtcode-core/src/mcp/tool_discovery.rs`
 
 ```rust
@@ -409,7 +409,7 @@ No changes needed. This pattern is optimal for agent context management.
 
 ## 8. Configuration Management
 
-### Current VTCode Pattern ✅
+### Current VTCode Pattern 
 **File:** `vtcode-config/src/mcp.rs`
 
 ```rust
@@ -448,7 +448,7 @@ args = ["mcp-server-filesystem", "/Users/john/work"]
 
 ## 9. Provider Health & Connection Management
 
-### Current VTCode Gap ⚠️
+### Current VTCode Gap 
 **Missing Feature**: Health checks for provider connections
 
 ### RMCP Pattern
@@ -483,7 +483,7 @@ pub async fn reconnect_if_unhealthy(
 
 ## 10. OAuth 2.1 Authorization Support
 
-### Current VTCode Gap ⚠️
+### Current VTCode Gap 
 **Missing Feature**: OAuth 2.1 support for protected resources
 
 ### RMCP Pattern
@@ -515,7 +515,7 @@ scopes = ["read:data", "write:data"]
 
 ## 11. Streaming & Long-Running Operations
 
-### Current VTCode Gap ⚠️
+### Current VTCode Gap 
 **Status**: May not fully support MCP streaming
 
 ### RMCP Pattern
@@ -544,7 +544,7 @@ pub async fn stream_mcp_tool(
 
 ## 12. Testing & Integration
 
-### Current VTCode Status ✅
+### Current VTCode Status 
 **Files:**
 - `vtcode-core/tests/mcp_integration_test.rs`
 - `vtcode-core/tests/mcp_integration_e2e.rs`

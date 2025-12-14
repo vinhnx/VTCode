@@ -112,30 +112,30 @@ This ensures consistent rendering across different terminal color schemes.
 ## Architecture Flow
 
 ```
-┌─────────────────────┐
-│   anstyle Style     │  Generic styling (CLI-agnostic)
-│  (Color + Effects)  │
-└──────────┬──────────┘
-           │
-           │ anstyle_to_ratatui()
-           │
-┌──────────▼──────────┐
-│ anstyle-crossterm   │  Conversion library
-│  to_crossterm()     │  (handles color mapping)
-└──────────┬──────────┘
-           │
-┌──────────▼──────────┐
-│ crossterm Style     │  Terminal capabilities
-│ (Color + Attrs)     │  (darker colors, indexed)
-└──────────┬──────────┘
-           │
-           │ crossterm_color_to_ratatui()
-           │ + apply_attributes()
-           │
-┌──────────▼──────────┐
-│  ratatui Style      │  TUI widget compatible
-│  (Color + Modifiers)│
-└─────────────────────┘
+
+   anstyle Style       Generic styling (CLI-agnostic)
+  (Color + Effects)  
+
+           
+            anstyle_to_ratatui()
+           
+
+ anstyle-crossterm     Conversion library
+  to_crossterm()       (handles color mapping)
+
+           
+
+ crossterm Style       Terminal capabilities
+ (Color + Attrs)       (darker colors, indexed)
+
+           
+            crossterm_color_to_ratatui()
+            + apply_attributes()
+           
+
+  ratatui Style        TUI widget compatible
+  (Color + Modifiers)
+
 ```
 
 ## Usage Patterns

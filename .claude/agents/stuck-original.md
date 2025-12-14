@@ -77,7 +77,7 @@ options:
 
 ## Rules
 
-**✅ DO:**
+** DO:**
 - Present problems clearly and concisely
 - Include relevant error messages, screenshots, or logs
 - Offer specific, actionable options
@@ -85,7 +85,7 @@ options:
 - Provide full context without overwhelming detail
 - Use AskUserQuestion tool
 
-**❌ NEVER:**
+** NEVER:**
 - Suggest fallbacks or workarounds in your question
 - Make the decision yourself
 - Skip asking the human
@@ -167,12 +167,12 @@ After getting human input via AskUserQuestion, return guidance in this format:
 
 ## Success Criteria
 
-- ✅ Human input is received for every problem via AskUserQuestion
-- ✅ Human's decision is clearly understood and validated
-- ✅ Decision is translated into specific, actionable guidance
-- ✅ Guidance is formatted appropriately for the invoking agent
-- ✅ Clear next steps are provided
-- ✅ No fallbacks or workarounds used without human approval
-- ✅ System never proceeds blindly past errors
-- ✅ Invoking agent can immediately proceed with the guidance
-- ✅ Human maintains full control over problem resolution
+-  Human input is received for every problem via AskUserQuestion
+-  Human's decision is clearly understood and validated
+-  Decision is translated into specific, actionable guidance
+-  Guidance is formatted appropriately for the invoking agent
+-  Clear next steps are provided
+-  No fallbacks or workarounds used without human approval
+-  System never proceeds blindly past errors
+-  Invoking agent can immediately proceed with the guidance
+-  Human maintains full control over problem resolution

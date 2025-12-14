@@ -12,15 +12,15 @@ Created the complete npm package directory with all required files:
 
 ```
 npm/
-├── package.json              # Package metadata (restored)
-├── index.js                  # CLI wrapper (restored)
-├── README.md                 # Package documentation (new)
-├── PUBLISHING.md             # Publishing guide (new)
-├── .npmrc.example            # Configuration template (restored)
-└── scripts/
-    ├── postinstall.js        # Auto-download binary (restored)
-    ├── preuninstall.js       # Cleanup on uninstall (restored)
-    └── publish-to-github.js  # Manual publish script (restored)
+ package.json              # Package metadata (restored)
+ index.js                  # CLI wrapper (restored)
+ README.md                 # Package documentation (new)
+ PUBLISHING.md             # Publishing guide (new)
+ .npmrc.example            # Configuration template (restored)
+ scripts/
+     postinstall.js        # Auto-download binary (restored)
+     preuninstall.js       # Cleanup on uninstall (restored)
+     publish-to-github.js  # Manual publish script (restored)
 ```
 
 ### 2. Updated Release Script (`scripts/release.sh`)
@@ -221,9 +221,9 @@ Modified:
 
 ## Status
 
-✓  npm directory restored
-✓  All npm files created
-✓  Release script updated
-✓  Documentation complete
-✓  Syntax validation passed
-✓  Ready for release
+  npm directory restored
+  All npm files created
+  Release script updated
+  Documentation complete
+  Syntax validation passed
+  Ready for release

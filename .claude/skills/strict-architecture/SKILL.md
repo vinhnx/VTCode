@@ -17,7 +17,7 @@ These constraints apply to every source file:
 
 ## 2. Implementation Patterns by Language
 
-### 🐍 Python Implementation
+###  Python Implementation
 - **Interfaces**: Use `typing.Protocol` for all dependencies.
   ```python
   class IClient(Protocol):
@@ -26,13 +26,13 @@ These constraints apply to every source file:
 - **Config**: Use `@dataclass` for configuration objects if args > 4.
 - **Env Block**: Reject `os.environ` or `os.getenv` anywhere except `main.py`.
 
-### 🐹 Golang Implementation
+###  Golang Implementation
 - **Interfaces**: Define `type Service interface` for all dependencies.
 - **Config**: Use strict structs for config.
 - **Env Block**: Reject `os.Getenv` anywhere except `main.go`.
 - **Forbidden**: Do not use struct pointers for dependencies; use interfaces.
 
-### 🔷 .NET / C# Implementation
+###  .NET / C# Implementation
 - **Interfaces**: Use `IInterface` prefix.
 - **Config**: Use `IOptions<T>` pattern or simple POCO config objects.
 - **Env Block**: Reject `Environment.GetEnvironmentVariable` anywhere except `Program.cs`.

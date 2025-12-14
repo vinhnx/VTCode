@@ -6,12 +6,13 @@
 use crate::skills::cli_bridge::{CliToolBridge, CliToolConfig};
 use crate::skills::context_manager::{ContextManager, ContextConfig, ContextLevel};
 use crate::skills::discovery::{DiscoveryConfig, SkillDiscovery};
-use crate::skills::locations::{SkillLocations, DiscoveredSkill};
+use crate::skills::locations::{SkillLocations, DiscoveredSkill, SkillLocationType};
 use crate::skills::manifest::{parse_skill_file};
 use crate::skills::types::{Skill, SkillContext};
+use crate::skills::container_validation::{ContainerSkillsValidator, ContainerValidationResult, ContainerValidationReport};
 use anyhow::{Result, anyhow};
 use std::path::{Path, PathBuf};
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 /// Enhanced skill search paths including CLI tools
 #[allow(dead_code)]
@@ -40,6 +41,12 @@ pub struct EnhancedSkillLoader {
     
     /// Cache of discovered skills
     discovered_skills: Option<Vec<DiscoveredSkill>>,
+    
+    /// Container skills validator
+    container_validator: ContainerSkillsValidator,
+    
+    /// Whether to filter incompatible skills
+    filter_incompatible_skills: bool,
 }
 
 impl EnhancedSkillLoader {
@@ -77,6 +84,8 @@ impl EnhancedSkillLoader {
             discovery: SkillDiscovery::with_config(discovery_config),
             workspace_root,
             discovered_skills: None,
+            container_validator: ContainerSkillsValidator::new(),
+            filter_incompatible_skills: true, // Filter by default for better UX
         }
     }
     
@@ -158,11 +167,11 @@ impl EnhancedSkillLoader {
         })
     }
     
-    /// Get skill by name (with automatic loading)
+    /// Get skill by name (with automatic loading and lazy discovery)
     pub async fn get_skill(&mut self, name: &str) -> Result<EnhancedSkill> {
-        // Try to get from context manager first
+        // Try to get from context manager first (optimal path)
         if let Some(context_entry) = self.context_manager.get_skill_context(name) {
-            match context_entry.level {
+            return match context_entry.level {
                 ContextLevel::Metadata => {
                     // Need to load full skill
                     self.load_full_skill(name).await
@@ -179,31 +188,65 @@ impl EnhancedSkillLoader {
                         Err(anyhow!("Skill '{}' context indicates full loading but no skill object found", name))
                     }
                 }
+            };
+        }
+        
+        // Skill not found - attempt targeted discovery instead of full scan
+        debug!("Skill '{}' not found in context manager, attempting targeted discovery", name);
+        
+        // Try to discover just this skill using locations system
+        match self.discover_single_skill(name).await {
+            Ok(Some(skill_context)) => {
+                debug!("Successfully discovered skill '{}' during get_skill", name);
+                // Register this single skill in context manager
+                self.context_manager.register_skill_metadata(skill_context.manifest().clone())?;
+                
+                // Also register in discovered_skills cache for load_full_skill to find it
+                if let Some(skill_path) = self.find_skill_path_from_context(name) {
+                    let discovered_skill = DiscoveredSkill {
+                        location_type: SkillLocationType::VtcodeProject, // Default type, could be improved
+                        skill_context: skill_context.clone(),
+                        skill_path: skill_path.clone(),
+                        skill_name: name.to_string(),
+                    };
+                    
+                    if self.discovered_skills.is_none() {
+                        self.discovered_skills = Some(Vec::new());
+                    }
+                    if let Some(cache) = &mut self.discovered_skills {
+                        cache.push(discovered_skill);
+                    }
+                    debug!("Cached discovered skill '{}' at path '{}'", name, skill_path.display());
+                }
+                
+                // Now load the full skill
+                self.load_full_skill(name).await
             }
-        } else {
-            Err(anyhow!("Skill '{}' not found in context manager", name))
+            Ok(None) => {
+                // Skill doesn't exist in any location
+                Err(anyhow!(
+                    "Skill '{}' not found. Available skills: {}. Use 'skills list' to see all available skills.",
+                    name,
+                    self.get_available_skills_hint()
+                ))
+            }
+            Err(e) => {
+                // Discovery failed - provide helpful error
+                Err(anyhow!(
+                    "Failed to discover skill '{}': {}. Ensure the skill exists in one of the skill directories.",
+                    name, e
+                ))
+            }
         }
     }
     
     /// Load full skill details using the locations system
+    /// Note: This method assumes the skill has already been discovered via discover_single_skill()
     async fn load_full_skill(&mut self, name: &str) -> Result<EnhancedSkill> {
         info!("Loading full skill: {}", name);
         
-        // First, ensure we have discovered skills
-        if self.discovered_skills.is_none() {
-            // Discover skills if not already done
-            match self.discover_all_skills().await {
-                Ok(_) => {
-                    // Continue with the discovered skills
-                }
-                Err(e) => {
-                    warn!("Failed to discover skills during loading: {}", e);
-                    return Err(anyhow!("Skill '{}' not found - discovery failed", name));
-                }
-            }
-        }
-        
-        // Find the skill in the discovered cache
+        // We assume the skill has been discovered and is in the discovered_skills cache
+        // This eliminates redundant discovery calls since get_skill() now handles discovery
         let skill_path = if let Some(discovered_skills) = &self.discovered_skills {
             discovered_skills
                 .iter()
@@ -223,7 +266,11 @@ impl EnhancedSkillLoader {
             }
         }
         
-        Err(anyhow!("Skill '{}' not found in any location", name))
+        // If we reach here, the skill was discovered but somehow lost - this shouldn't happen
+        Err(anyhow!(
+            "Skill '{}' was discovered but could not be loaded. This indicates an internal error.",
+            name
+        ))
     }
     
     /// Load traditional skill from directory
@@ -231,6 +278,31 @@ impl EnhancedSkillLoader {
         let (manifest, instructions) = parse_skill_file(skill_path)?;
         
         let mut skill = Skill::new(manifest, skill_path.to_path_buf(), instructions)?;
+        
+        // Validate container skills compatibility
+        let container_analysis = self.container_validator.analyze_skill(&skill);
+        
+        if container_analysis.should_filter && self.filter_incompatible_skills {
+            warn!(
+                "Skill '{}' requires container skills and will be filtered out: {}",
+                skill.name(),
+                container_analysis.analysis
+            );
+            return Err(anyhow!(
+                "Skill '{}' requires Anthropic container skills which are not supported in VTCode.\n{}",
+                skill.name(),
+                container_analysis.recommendations.join("\n")
+            ));
+        } else if container_analysis.requirement != crate::skills::container_validation::ContainerSkillsRequirement::NotRequired {
+            info!(
+                "Skill '{}' container skills analysis: {}",
+                skill.name(),
+                container_analysis.analysis
+            );
+            for recommendation in &container_analysis.recommendations {
+                info!("  - {}", recommendation);
+            }
+        }
         
         // Load resources
         self.load_skill_resources(&mut skill)?;
@@ -295,6 +367,26 @@ impl EnhancedSkillLoader {
         }
     }
     
+    /// Find skill path by scanning locations for a skill with the given name
+    fn find_skill_path_from_context(&self, skill_name: &str) -> Option<PathBuf> {
+        // Try to find the skill path by scanning the locations
+        // This is used when we have the skill context but need the path for loading
+        match self.skill_locations.discover_skills() {
+            Ok(discovered_skills) => {
+                for discovered in discovered_skills {
+                    if discovered.skill_context.manifest().name == skill_name {
+                        return Some(discovered.skill_path);
+                    }
+                }
+                None
+            }
+            Err(e) => {
+                debug!("Failed to discover skills while looking for path for '{}': {}", skill_name, e);
+                None
+            }
+        }
+    }
+    
     /// Load skill resources (Level 3)
     fn load_skill_resources(&self, skill: &mut Skill) -> Result<()> {
         let mut resource_dir = skill.path.clone();
@@ -344,6 +436,47 @@ impl EnhancedSkillLoader {
         self.context_manager.get_active_skills()
     }
     
+    /// Discover a single skill by name (targeted discovery)
+    async fn discover_single_skill(&mut self, name: &str) -> Result<Option<SkillContext>> {
+        debug!("Attempting targeted discovery for skill '{}'", name);
+        
+        // Use the locations system to find just this skill
+        let discovered_skills = self.skill_locations.discover_skills()?;
+        
+        // Look for the specific skill
+        for discovered in discovered_skills {
+            if discovered.skill_context.manifest().name == name {
+                debug!("Found skill '{}' during targeted discovery", name);
+                return Ok(Some(discovered.skill_context));
+            }
+        }
+        
+        // Also check CLI tools using traditional discovery
+        let discovery_result = self.discovery.discover_all(&self.workspace_root).await?;
+        for tool_config in &discovery_result.tools {
+            if tool_config.name == name {
+                let skill_context = crate::skills::discovery::tool_config_to_skill_context(tool_config)?;
+                debug!("Found CLI tool skill '{}' during targeted discovery", name);
+                return Ok(Some(skill_context));
+            }
+        }
+        
+        debug!("Skill '{}' not found during targeted discovery", name);
+        Ok(None)
+    }
+    
+    /// Get a helpful hint about available skills for error messages
+    fn get_available_skills_hint(&self) -> String {
+        let available = self.get_available_skills();
+        if available.is_empty() {
+            "no skills available".to_string()
+        } else if available.len() <= 5 {
+            format!("{}", available.join(", "))
+        } else {
+            format!("{} (and {} more)", available[..5].join(", "), available.len() - 5)
+        }
+    }
+    
     /// Get context manager for advanced usage
     pub fn context_manager(&self) -> &ContextManager {
         &self.context_manager
@@ -374,6 +507,58 @@ impl EnhancedSkillLoader {
         self.discovery.clear_cache();
         self.context_manager.clear_loaded_skills();
         self.discover_all_skills().await
+    }
+    
+    /// Set whether to filter incompatible container skills
+    pub fn set_filter_incompatible_skills(&mut self, filter: bool) {
+        self.filter_incompatible_skills = filter;
+    }
+    
+    /// Check if a skill requires container skills (for testing/debugging)
+    pub fn check_container_requirements(&self, skill: &Skill) -> ContainerValidationResult {
+        self.container_validator.analyze_skill(skill)
+    }
+    
+    /// Get container skills validator for advanced usage
+    pub fn container_validator(&self) -> &ContainerSkillsValidator {
+        &self.container_validator
+    }
+    
+    /// Generate a comprehensive validation report for all discovered skills
+    pub async fn generate_validation_report(&mut self) -> Result<ContainerValidationReport> {
+        info!("Generating comprehensive container skills validation report");
+        
+        // Discover all skills first
+        let discovery_result = self.discover_all_skills().await?;
+        let mut report = ContainerValidationReport::new();
+        
+        // Analyze each traditional skill
+        for skill_context in &discovery_result.traditional_skills {
+            // We need to load the full skill to analyze it
+            match self.get_skill(&skill_context.manifest().name).await {
+                Ok(EnhancedSkill::Traditional(skill)) => {
+                    let analysis = self.container_validator.analyze_skill(&skill);
+                    report.add_skill_analysis(skill_context.manifest().name.clone(), analysis);
+                }
+                Ok(EnhancedSkill::CliTool(_)) => {
+                    // CLI tools don't need container skills validation
+                    continue;
+                }
+                Err(e) => {
+                    // If skill failed to load due to container skills, record the error
+                    if e.to_string().contains("container skills") {
+                        report.add_incompatible_skill(
+                            skill_context.manifest().name.clone(),
+                            skill_context.manifest().description.clone(),
+                            e.to_string()
+                        );
+                    }
+                }
+            }
+        }
+        
+        report.finalize();
+        Ok(report)
     }
 }
 

@@ -38,7 +38,7 @@ Based on Anthropic's Context Engineering guide, this document analyzes VTCode's 
 
 ## System Prompt Calibration: The "Just Right" Approach
 
-### ⤫  Too Specific (Brittle)
+###   Too Specific (Brittle)
 
 Problems:
 
@@ -89,7 +89,7 @@ Keep context minimal—load only what's needed for the current step.
 -   Clear priorities (search first, read second)
 -   Flexibility for model reasoning
 
-### ⤫  Too Vague
+###   Too Vague
 
 Problems:
 
@@ -139,7 +139,7 @@ Escalate to a human if needed.
     - Real-time monitoring
     - Configurable thresholds
 
-### Areas for Enhancement 🔧
+### Areas for Enhancement 
 
 #### 1. More Explicit Response Framework
 
@@ -445,26 +445,26 @@ include_multi_turn_guidance = true
 
 ## Current VTCode Score
 
-**System Prompt Calibration**: 8/10 ⭐⭐⭐⭐⭐⭐⭐⭐
+**System Prompt Calibration**: 8/10 
 
 -   Excellent conciseness and clarity
 -   Good balance of guidance and flexibility
 -   Could benefit from more explicit response framework
 
-**Context Curation**: 7/10 ⭐⭐⭐⭐⭐⭐⭐
+**Context Curation**: 7/10 
 
 -   Token budget tracking implemented
 -   Decision ledger for key decisions
 -   Could benefit from dynamic per-turn curation
 
-**Tool Design**: 9/10 ⭐⭐⭐⭐⭐⭐⭐⭐⭐
+**Tool Design**: 9/10 
 
 -   Excellent conciseness (80% reduction)
 -   Clear purposes with minimal overlap
 -   Token management guidance included
 -   Auto-chunking implemented
 
-**Overall Context Engineering**: 8/10 ⭐⭐⭐⭐⭐⭐⭐⭐
+**Overall Context Engineering**: 8/10 
 
 VTCode already implements many context engineering best practices. The suggested enhancements focus on making the iterative curation process more explicit and providing stronger multi-turn coherence guidance.
 

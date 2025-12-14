@@ -4,8 +4,8 @@
 
 ### BEFORE
 ```
-─ ▸ Edit src/main.rs +3 -2
-───────────────────────────────────
+  Edit src/main.rs +3 -2
+
 
  --- a/src/main.rs
  +++ b/src/main.rs
@@ -28,8 +28,8 @@
 
 ### AFTER
 ```
-─ ▸ Edit src/main.rs +3 -2
-───────────────────────────────────
+  Edit src/main.rs +3 -2
+
 
  --- a/src/main.rs
  +++ b/src/main.rs
@@ -57,7 +57,7 @@
 ### BEFORE - Running Session
 ```
 [RUN] [RUNNING - 80x24] Session: gitdiff · Command: git+1 more
-──────────────────────────────────────────────────────────────
+
 $ git status
 [output...]
 ```
@@ -65,7 +65,7 @@ $ git status
 ### BEFORE - Completed Session
 ```
 [END] [COMPLETED - 80x24] Session: gitdiff
-──────────────────────────────────────────────────────────────
+
 [output...]
 ```
 
@@ -77,7 +77,7 @@ $ git status
 ### AFTER - Running Session
 ```
 [RUN] [RUNNING - 80x24] Session: gitdiff
-──────────────────────────────────────────────────────────────
+
 $ git status
 [output...]
 ```
@@ -85,7 +85,7 @@ $ git status
 ### AFTER - Completed Session
 ```
 [END] [COMPLETED - 80x24] Session: gitdiff
-──────────────────────────────────────────────────────────────
+
 $ git status
 [output...]
 ```
@@ -127,8 +127,8 @@ fn pad_diff_line(&self, line: &Line<'static>, max_width: usize) -> Line<'static>
 
 ### Before: Terminal Output
 ```
-─ ▸ Edit file.rs +5 -3
-────────────────────────────
+  Edit file.rs +5 -3
+
 -old line            ← gap here
 -another old         ← gap here
 +new line            ← gap here
@@ -138,8 +138,8 @@ fn pad_diff_line(&self, line: &Line<'static>, max_width: usize) -> Line<'static>
 
 ### After: Terminal Output
 ```
-─ ▸ Edit file.rs +5 -3
-────────────────────────────
+  Edit file.rs +5 -3
+
 -old line              ← colored full width
 -another old           ← colored full width
 +new line              ← colored full width
@@ -181,8 +181,8 @@ Both improvements enhance the user experience:
 2. **Terminal commands** are always visible, providing consistent UX and better auditability
 
 The implementation is:
-- ✓  Robust (handles edge cases)
-- ✓  Efficient (minimal overhead)
-- ✓  Backward compatible (no breaking changes)
-- ✓  Well tested (17/17 tests pass)
-- ✓  Well documented (detailed comments and docs)
+-   Robust (handles edge cases)
+-   Efficient (minimal overhead)
+-   Backward compatible (no breaking changes)
+-   Well tested (17/17 tests pass)
+-   Well documented (detailed comments and docs)

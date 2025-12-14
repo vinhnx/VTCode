@@ -28,12 +28,12 @@ allow_list = [
 
 ## Benefits
 
-✓  **Non-powered users don't need configuration** - Works out of the box  
-✓  **Agent access to full toolchain** - Can use `cargo test`, `npm run`, `pytest`, etc.  
-✓  **Better PATH resolution** - Extended PATH with `.cargo/bin`, `.local/bin`, etc.  
-✓  **Expanded glob patterns** - Patterns like `cargo *`, `npm run *` work  
-✓  **Comprehensive deny rules** - More dangerous commands are blocked  
-✓  **Backward compatible** - User configurations still override defaults  
+  **Non-powered users don't need configuration** - Works out of the box  
+  **Agent access to full toolchain** - Can use `cargo test`, `npm run`, `pytest`, etc.  
+  **Better PATH resolution** - Extended PATH with `.cargo/bin`, `.local/bin`, etc.  
+  **Expanded glob patterns** - Patterns like `cargo *`, `npm run *` work  
+  **Comprehensive deny rules** - More dangerous commands are blocked  
+  **Backward compatible** - User configurations still override defaults  
 
 ## Migration Steps
 
@@ -60,10 +60,10 @@ Remove your `[commands]` section entirely and let VTCode use defaults:
 ```
 
 This gets you:
-- ✓  All 100+ safe commands enabled by default
-- ✓  Full glob patterns for development workflows
-- ✓  Automatic updates when new commands are added
-- ✓  Simpler configuration
+-   All 100+ safe commands enabled by default
+-   Full glob patterns for development workflows
+-   Automatic updates when new commands are added
+-   Simpler configuration
 
 #### Option B: Merge with Defaults
 
@@ -159,7 +159,7 @@ allow_list = ["ls", "git", "cargo"]
 **Migration:**
 Remove the entire `[commands]` section. You'll get 100+ safe commands automatically.
 
-**Result:** ✓  Better - now `git stash`, `cargo test`, `npm install` all work
+**Result:**   Better - now `git stash`, `cargo test`, `npm install` all work
 
 ---
 
@@ -186,7 +186,7 @@ deny_glob = [
 ]
 ```
 
-**Result:** ✓  Better - custom rules + all 100+ safe commands
+**Result:**   Better - custom rules + all 100+ safe commands
 
 ---
 
@@ -213,7 +213,7 @@ deny_glob = ["*"]  # Still blocks everything by default
 allow_glob = []    # No patterns
 ```
 
-**Result:** ✓  Same - your restrictions are preserved
+**Result:**   Same - your restrictions are preserved
 
 ---
 
@@ -249,7 +249,7 @@ deny_glob = [
 ]
 ```
 
-**Result:** ✓  Compatible - works as-is with new defaults
+**Result:**   Compatible - works as-is with new defaults
 
 ## Before/After Examples
 
@@ -309,11 +309,11 @@ deny_glob = [
 ```
 
 Result:
-- ✓  Git workflows work fully (`git stash`, `git tag`, etc.)
-- ✓  Cargo full toolchain (`cargo nextest`, `cargo doc`)
-- ✓  Node.js packages (`yarn`, `pnpm`, `bun`)
-- ✓  Docker builds work (`docker build`, `docker logs`)
-- ✓  But container execution is blocked (`docker run`)
+-   Git workflows work fully (`git stash`, `git tag`, etc.)
+-   Cargo full toolchain (`cargo nextest`, `cargo doc`)
+-   Node.js packages (`yarn`, `pnpm`, `bun`)
+-   Docker builds work (`docker build`, `docker logs`)
+-   But container execution is blocked (`docker run`)
 
 ## Configuration Precedence
 

@@ -10,14 +10,14 @@ VT Code follows a modular, trait-based architecture designed for maintainability
 
 ```
 tools/
-├── mod.rs           # Module coordination & exports
-├── traits.rs        # Core composability traits
-├── types.rs         # Common types & structures
-├── cache.rs         # Enhanced caching system
-├── grep_file.rs     # Ripgrep-backed search manager
-├── file_ops.rs      # File operations tool (async + cached)
-├── command.rs       # Command execution tool (3 modes)
-└── registry.rs      # Tool coordination & function declarations
+ mod.rs           # Module coordination & exports
+ traits.rs        # Core composability traits
+ types.rs         # Common types & structures
+ cache.rs         # Enhanced caching system
+ grep_file.rs     # Ripgrep-backed search manager
+ file_ops.rs      # File operations tool (async + cached)
+ command.rs       # Command execution tool (3 modes)
+ registry.rs      # Tool coordination & function declarations
 ```
 
 ### Core Traits

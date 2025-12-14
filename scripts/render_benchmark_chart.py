@@ -10,7 +10,7 @@ from datetime import datetime
 def render_ascii_bar(value, max_value=1.0, width=40):
     """Render an ASCII progress bar."""
     filled = int((value / max_value) * width)
-    bar = "█" * filled + "░" * (width - filled)
+    bar = "" * filled + "" * (width - filled)
     return f"{bar} {value*100:.1f}%"
 
 def render_results_table(report_path):
@@ -27,10 +27,10 @@ def render_results_table(report_path):
     print("=" * 80)
 
     # Model info
-    print(f"\n📊 Model: {meta['model']}")
-    print(f"🔧 Provider: {meta['provider']}")
-    print(f"📅 Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"🎯 Tasks: {summary['n']}/{meta['n_requested']}")
+    print(f"\n Model: {meta['model']}")
+    print(f" Provider: {meta['provider']}")
+    print(f" Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f" Tasks: {summary['n']}/{meta['n_requested']}")
 
     # Performance metrics
     print(f"\n{'Metric':<30} {'Value':<50}")

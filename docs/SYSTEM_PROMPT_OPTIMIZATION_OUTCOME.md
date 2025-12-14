@@ -23,52 +23,52 @@ VT Code's system prompt (v3) has been analyzed against 9+ best practices from pr
 ## Key Improvements Implemented
 
 ### 1. **Context Engineering Enhancement**
-✓  **Added**: Per-tool output curation rules (grep max 5, list summarize 50+)  
-✓  **Added**: Context triage (keep/discard signal ratio)  
-✓  **Added**: Token budget awareness (70%/85%/90% thresholds)  
-✓  **Result**: Reduce context waste from 15% → 5%
+  **Added**: Per-tool output curation rules (grep max 5, list summarize 50+)  
+  **Added**: Context triage (keep/discard signal ratio)  
+  **Added**: Token budget awareness (70%/85%/90% thresholds)  
+  **Result**: Reduce context waste from 15% → 5%
 
 ### 2. **Semantic Context Emphasis**
-✓  **Added**: "Treat AI like new team member" pattern  
-✓  **Added**: Examples of semantic vs. prescriptive instructions  
-✓  **Added**: High-level context + specific examples guidance  
-✓  **Result**: Improve reasoning quality by 15%
+  **Added**: "Treat AI like new team member" pattern  
+  **Added**: Examples of semantic vs. prescriptive instructions  
+  **Added**: High-level context + specific examples guidance  
+  **Result**: Improve reasoning quality by 15%
 
 ### 3. **Extended Thinking Support**
-✓  **Added**: ReAct-style thinking patterns (thought → action → observation)  
-✓  **Added**: Thinking budget allocation guidance  
-✓  **Added**: Multi-pass refinement templates  
-✓  **Result**: 15-20% intelligence boost on complex tasks
+  **Added**: ReAct-style thinking patterns (thought → action → observation)  
+  **Added**: Thinking budget allocation guidance  
+  **Added**: Multi-pass refinement templates  
+  **Result**: 15-20% intelligence boost on complex tasks
 
 ### 4. **Persistent Memory System**
-✓  **Enhanced**: .progress.md consolidation logic  
-✓  **Added**: State extraction (meaningful → redundant)  
-✓  **Added**: Temporal conflict resolution patterns  
-✓  **Result**: Compress state 89-95%, maintain coherence across resets
+  **Enhanced**: .progress.md consolidation logic  
+  **Added**: State extraction (meaningful → redundant)  
+  **Added**: Temporal conflict resolution patterns  
+  **Result**: Compress state 89-95%, maintain coherence across resets
 
 ### 5. **Outcome-Focused Tool Selection**
-✓  **Replaced**: Prescriptive "use X tool for Y" → outcome-focused phased approach  
-✓  **Added**: Tool decision matrix (goal-primary-fallback)  
-✓  **Added**: Phased specificity model (broad → specific → detailed → constraints)  
-✓  **Result**: Better tool choices, fewer loops
+  **Replaced**: Prescriptive "use X tool for Y" → outcome-focused phased approach  
+  **Added**: Tool decision matrix (goal-primary-fallback)  
+  **Added**: Phased specificity model (broad → specific → detailed → constraints)  
+  **Result**: Better tool choices, fewer loops
 
 ### 6. **Universal Multi-LLM Patterns**
-✓  **Unified**: Single prompt with optional model-specific sections  
-✓  **Standardized**: Instruction language (avoid Claude-isms)  
-✓  **Added**: Model-specific enhancements (XML for Claude, numbered lists for GPT, flat for Gemini)  
-✓  **Result**: 95%+ compatibility across Claude/GPT/Gemini
+  **Unified**: Single prompt with optional model-specific sections  
+  **Standardized**: Instruction language (avoid Claude-isms)  
+  **Added**: Model-specific enhancements (XML for Claude, numbered lists for GPT, flat for Gemini)  
+  **Result**: 95%+ compatibility across Claude/GPT/Gemini
 
 ### 7. **Error Recovery Patterns**
-✓  **Added**: Error reframing strategy (error → fact → action)  
-✓  **Added**: Hypothesis testing approach (generate + test solutions)  
-✓  **Added**: Backtracking patterns (go to last known-good state)  
-✓  **Result**: Reduce error-retry loops by 50%
+  **Added**: Error reframing strategy (error → fact → action)  
+  **Added**: Hypothesis testing approach (generate + test solutions)  
+  **Added**: Backtracking patterns (go to last known-good state)  
+  **Result**: Reduce error-retry loops by 50%
 
 ### 8. **Iterative Refinement Support**
-✓  **Added**: Multi-turn conversation state management  
-✓  **Added**: Feedback loop patterns (attempt → evaluate → adjust → retry)  
-✓  **Added**: Context reset handling (full/semantic/snapshot strategies)  
-✓  **Result**: Better convergence, fewer redundant turns
+  **Added**: Multi-turn conversation state management  
+  **Added**: Feedback loop patterns (attempt → evaluate → adjust → retry)  
+  **Added**: Context reset handling (full/semantic/snapshot strategies)  
+  **Result**: Better convergence, fewer redundant turns
 
 ---
 
@@ -175,10 +175,10 @@ PHASE 4 (CONSTRAINTS): "Note: uses anyhow::Result, NO unwrap()"
 ## Compatibility & Testing
 
 ### Multi-LLM Compatibility Matrix
-✓  **Claude 3.5 Sonnet**: 96% (was 82%)  
-✓  **OpenAI GPT-4/4o**: 94% (was 75%)  
-✓  **Google Gemini 2.0**: 93% (was 58%)  
-✓  **Overall**: 95% average (was 72%)
+  **Claude 3.5 Sonnet**: 96% (was 82%)  
+  **OpenAI GPT-4/4o**: 94% (was 75%)  
+  **Google Gemini 2.0**: 93% (was 58%)  
+  **Overall**: 95% average (was 72%)
 
 ### Metrics Improvements
 
@@ -189,7 +189,7 @@ PHASE 4 (CONSTRAINTS): "Note: uses anyhow::Result, NO unwrap()"
 | Loop prevention | 90% | 98% | 8% ↑ |
 | Task completion (1st try) | 85% | 92% | 7% ↑ |
 | Context waste | 15% | 5% | 67% ↓ |
-| Long-task support | No | Yes | N/A ✓  |
+| Long-task support | No | Yes | N/A   |
 
 ---
 
@@ -304,7 +304,7 @@ Multi-turn conversation needs state management: full preservation (expensive) �
 
 ## Backward Compatibility
 
-✓  All changes are backward compatible:
+  All changes are backward compatible:
 - Existing Tier 0-1 sections remain unchanged
 - New Tier 2 patterns are optional additions
 - Tool selections remain same (only reasoning improved)

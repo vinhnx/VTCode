@@ -2,7 +2,7 @@
 
 Complete reference for using Anthropic Agent Skills with VTCode in CLI and TUI.
 
-## 🚀 Quick Start (2 minutes)
+##  Quick Start (2 minutes)
 
 ```bash
 # 1. Start interactive chat
@@ -22,7 +22,7 @@ vtcode chat
 
 ---
 
-## 📚 Documentation Map
+##  Documentation Map
 
 ### For TUI Users (I'm using `vtcode chat`)
 
@@ -57,7 +57,7 @@ vtcode chat
 
 ---
 
-## 🎯 Choose Your Path
+##  Choose Your Path
 
 ### "I want to use skills in the TUI now"
 
@@ -109,7 +109,7 @@ vtcode chat
 
 ---
 
-## 📋 Slash Commands Cheat Sheet
+##  Slash Commands Cheat Sheet
 
 ```bash
 /skills list              # List all available skills
@@ -121,7 +121,7 @@ vtcode chat
 
 ---
 
-## 🎬 Common Workflows
+##  Common Workflows
 
 ### Workflow 1: Create Financial Spreadsheet
 
@@ -129,7 +129,7 @@ vtcode chat
 $ vtcode chat
 /skills load spreadsheet-generator
 # Type: Create Excel with Q4 revenue, expenses, profit margins
-# Agent creates file ✓
+# Agent creates file 
 ```
 
 **Time:** 2-3 minutes  
@@ -141,7 +141,7 @@ $ vtcode chat
 $ vtcode chat
 /skills load doc-generator
 # Type: Create proposal with scope, timeline, budget
-# Agent creates file ✓
+# Agent creates file 
 ```
 
 **Time:** 3-4 minutes  
@@ -153,7 +153,7 @@ $ vtcode chat
 $ vtcode chat
 /skills load strict-architecture
 # Type: Review code for 500-line, 5-func, 4-arg rules
-# Agent analyzes and provides recommendations ✓
+# Agent analyzes and provides recommendations 
 ```
 
 **Time:** 2-3 minutes  
@@ -167,7 +167,7 @@ $ vtcode chat
 /skills load doc-generator
 /skills load pdf-report-generator
 # Type: Create quarterly report with all three files
-# Agent creates all three ✓
+# Agent creates all three 
 ```
 
 **Time:** 5-10 minutes  
@@ -175,7 +175,7 @@ $ vtcode chat
 
 ---
 
-## 🛠️ Available Skills
+##  Available Skills
 
 ### Document Generation (Anthropic Agent Skills)
 
@@ -196,7 +196,7 @@ $ vtcode chat
 
 ---
 
-## ⌨️ Keyboard Shortcuts
+## ⌨ Keyboard Shortcuts
 
 ### Quick Access in TUI
 
@@ -213,7 +213,7 @@ $ vtcode chat
 
 ---
 
-## 🔄 Progressive Disclosure
+##  Progressive Disclosure
 
 How skills efficiently use context:
 
@@ -241,7 +241,7 @@ RESOURCES (on-demand)
 
 ---
 
-## 📖 Documentation Files
+##  Documentation Files
 
 All documentation files located in `docs/`:
 
@@ -258,7 +258,7 @@ All documentation files located in `docs/`:
 
 ---
 
-## 🚀 Getting Started Paths
+##  Getting Started Paths
 
 ### Path 1: I Just Want to Use Skills (5 minutes)
 ```
@@ -299,7 +299,7 @@ All documentation files located in `docs/`:
 
 ---
 
-## 🎓 Learning Resources
+##  Learning Resources
 
 ### Official Resources
 - [Anthropic Agent Skills Overview](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview)
@@ -313,7 +313,7 @@ All documentation files located in `docs/`:
 
 ---
 
-## ✅ Verification
+##  Verification
 
 ### Verify Skills Are Available
 
@@ -340,7 +340,7 @@ python examples/skills_spreadsheet.py
 
 ---
 
-## 🆘 Troubleshooting
+##  Troubleshooting
 
 ### Skill Not Found
 ```bash
@@ -368,26 +368,26 @@ Tab key                   # Trigger autocomplete
 
 ---
 
-## 📊 Feature Summary
+##  Feature Summary
 
-✅ **Anthropic Agent Skills Integration**
+ **Anthropic Agent Skills Integration**
 - Excel (xlsx) generation
 - Word (docx) generation
 - PDF generation
 - PowerPoint (pptx) generation
 
-✅ **Custom Skills Support**
+ **Custom Skills Support**
 - Create custom skills with SKILL.md
 - Skill discovery and loading
 - Progressive disclosure (efficient context)
 
-✅ **CLI & TUI Integration**
+ **CLI & TUI Integration**
 - `/skills` slash commands
 - Interactive skill loading
 - Multi-skill workflows
 - Keyboard shortcuts
 
-✅ **Development Skills**
+ **Development Skills**
 - Code architecture review (strict-architecture)
 - BDD/TDD workflows
 - Code orchestration
@@ -395,7 +395,7 @@ Tab key                   # Trigger autocomplete
 
 ---
 
-## 🎯 Next Steps
+##  Next Steps
 
 **Choose one:**
 
@@ -421,7 +421,7 @@ Tab key                   # Trigger autocomplete
 
 ---
 
-## 📞 Support
+##  Support
 
 - **Quick Questions?** → `AGENT_SKILLS_QUICKREF.md`
 - **How do I use in TUI?** → `AGENT_SKILLS_CLI_TUI.md`
@@ -431,20 +431,20 @@ Tab key                   # Trigger autocomplete
 
 ---
 
-## 📦 What's Included
+##  What's Included
 
-✅ 3 new Agent Skills in `.claude/skills/`
-✅ 7 documentation files (89KB total)
-✅ 3 working Python examples
-✅ 3 example documentation files
-✅ Complete CLI/TUI integration
-✅ Progressive disclosure optimization
-✅ Keyboard shortcuts and workflows
-✅ Troubleshooting guides
+ 3 new Agent Skills in `.claude/skills/`
+ 7 documentation files (89KB total)
+ 3 working Python examples
+ 3 example documentation files
+ Complete CLI/TUI integration
+ Progressive disclosure optimization
+ Keyboard shortcuts and workflows
+ Troubleshooting guides
 
 ---
 
-## 🎉 You're Ready!
+##  You're Ready!
 
 Everything is set up. Start with:
 

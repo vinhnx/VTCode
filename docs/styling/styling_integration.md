@@ -9,29 +9,29 @@ VTCode uses `anstyle` as the core styling library for ANSI terminal output, prov
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Application Code                      │
-│           (CLI output, TUI widgets, etc.)                │
-└──────────────────────┬──────────────────────────────────┘
-                       │
-        ┌──────────────┴──────────────┐
-        │                             │
-   ┌────▼────────┐            ┌──────▼──────────┐
-   │   anstyle   │            │  ratatui_styles │
-   │  (Generic)  │            │  (TUI Bridge)   │
-   └────┬────────┘            └──────┬──────────┘
-        │                             │
-        └──────────────┬──────────────┘
-                       │
-            ┌──────────▼──────────┐
-            │ anstyle-crossterm   │
-            │  (to_crossterm)     │
-            └──────────┬──────────┘
-                       │
-            ┌──────────▼──────────┐
-            │  crossterm/ratatui  │
-            │  (Terminal Output)   │
-            └─────────────────────┘
+
+                    Application Code                      
+           (CLI output, TUI widgets, etc.)                
+
+                       
+        
+                                     
+               
+      anstyle                 ratatui_styles 
+     (Generic)                (TUI Bridge)   
+               
+                                     
+        
+                       
+            
+             anstyle-crossterm   
+              (to_crossterm)     
+            
+                       
+            
+              crossterm/ratatui  
+              (Terminal Output)   
+            
 ```
 
 ## Components

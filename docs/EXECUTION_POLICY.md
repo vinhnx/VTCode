@@ -80,19 +80,19 @@ The execution policy is designed to allow engineers typical software development
 
 ### Typical Engineer Workflow
 ```
-✓ git status, git diff, git log, git checkout
-✓ cargo test, cargo build, cargo check
-✓ npm install, npm test, npm run build
-✓ python scripts/setup.py
-✓ Editing files, reading logs, viewing diffs
+ git status, git diff, git log, git checkout
+ cargo test, cargo build, cargo check
+ npm install, npm test, npm run build
+ python scripts/setup.py
+ Editing files, reading logs, viewing diffs
 ```
 
 ### Blocked Without Confirmation
 ```
-✗ Deleting files (requires confirmation)
-✗ Applying complex patches (requires confirmation)
-✗ Git force-push or history rewrites
-✗ Publishing to registries
+ Deleting files (requires confirmation)
+ Applying complex patches (requires confirmation)
+ Git force-push or history rewrites
+ Publishing to registries
 ```
 
 ## Configuration

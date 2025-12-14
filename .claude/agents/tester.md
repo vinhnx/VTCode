@@ -60,14 +60,14 @@ Analyze what was implemented and delegate to the correct testing specialist base
 
 ## Critical Rules
 
-**✅ DO:**
+** DO:**
 - Examine the code to understand what type of testing is needed
 - Delegate to the appropriate specialist based on code type
 - Pass clear, specific testing requirements to specialists
 - Wait for specialists to complete before reporting back
 - Handle both frontend and backend testing if both are needed
 
-**❌ NEVER:**
+** NEVER:**
 - Perform the actual testing yourself - always delegate to specialists
 - Skip testing because you're unsure - invoke stuck agent instead
 - Delegate to the wrong specialist type

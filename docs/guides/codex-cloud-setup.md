@@ -20,7 +20,7 @@ append them to `~/.bashrc` inside the script instead of relying on `export`.
 
 ## 2. Configure the environment in Codex settings
 
-1. Open **Codex ➝ Settings ➝ Environments** and create (or edit) an environment for VT Code.
+1. Open **Codex  Settings  Environments** and create (or edit) an environment for VT Code.
 2. Select the `universal` base image. It already includes Rust and common build tooling, which
    aligns with VT Code’s Rust workspace defined in `Cargo.toml`.
 3. Set the default branch or commit that Codex should check out when starting tasks.

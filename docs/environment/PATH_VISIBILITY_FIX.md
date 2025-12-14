@@ -81,13 +81,13 @@ This fix enables the agent to access all commands listed in `ALLOWED_COMMANDS` i
 The fix has been verified to work with common commands:
 
 ```
-✓ cargo: /Users/vinh.nguyenxuan/.cargo/bin/cargo
-✓ rustc: /Users/vinh.nguyenxuan/.cargo/bin/rustc
-✓ npm: /opt/homebrew/bin/npm
-✓ node: /opt/homebrew/bin/node
-✓ python: /Users/vinh.nguyenxuan/.pyenv/shims/python
-✓ git: /usr/bin/git
-✓ docker: /opt/homebrew/bin/docker
+ cargo: /Users/vinh.nguyenxuan/.cargo/bin/cargo
+ rustc: /Users/vinh.nguyenxuan/.cargo/bin/rustc
+ npm: /opt/homebrew/bin/npm
+ node: /opt/homebrew/bin/node
+ python: /Users/vinh.nguyenxuan/.pyenv/shims/python
+ git: /usr/bin/git
+ docker: /opt/homebrew/bin/docker
 ```
 
 ## Files Modified

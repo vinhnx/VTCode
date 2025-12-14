@@ -58,7 +58,7 @@ No, VT Code can't control terminal font size. That's a terminal emulator setting
 
 **Tip:** Use `tui-big-text` or `figlet` for large ASCII art titles within the TUI.
 
-### What characters look weird or display as □?
+### What characters look weird or display as ?
 
 VT Code assumes a **Nerd Font** for box-drawing and icon support. Install one of:
 - [Nerd Fonts](https://www.nerdfonts.com/) (recommended)

@@ -35,7 +35,7 @@ anstyle-crossterm = "4.0"
 ```bash
 cargo test --lib ratatui_styles
 ```
-Result: ✓ All passing
+Result:  All passing
 
 ### 3. Documentation
 
@@ -62,15 +62,15 @@ Complete working example demonstrating:
 ```
 Application Code
     ↓
-┌─────────────────────────┐
-│   anstyle (Generic)     │  ← Define styles once
-├─────────────────────────┤
-│  ratatui_styles bridge  │  ← Unified conversion
-├─────────────────────────┤
-│ anstyle-crossterm       │  ← Adapter to crossterm
-├─────────────────────────┤
-│ crossterm + ratatui     │  ← Terminal rendering
-└─────────────────────────┘
+
+   anstyle (Generic)       ← Define styles once
+
+  ratatui_styles bridge    ← Unified conversion
+
+ anstyle-crossterm         ← Adapter to crossterm
+
+ crossterm + ratatui       ← Terminal rendering
+
 ```
 
 ## Key Benefits
@@ -119,7 +119,7 @@ Application Code
 use vtcode_core::utils::colors::style;
 
 // Simple chainable API
-println!("{}", style("✓ Success").green().bold());
+println!("{}", style(" Success").green().bold());
 ```
 
 ### TUI Code
@@ -142,20 +142,20 @@ let span = Span::styled("Text", ratatui_style);
 cd vtcode-core
 cargo test --lib ratatui_styles
 ```
-Result: ✓ 3/3 tests passing
+Result:  3/3 tests passing
 
 ### Example Build
 ```bash
 cd vtcode-core
 cargo build --example anstyle_ratatui_example
 ```
-Result: ✓ Successfully compiled
+Result:  Successfully compiled
 
 ### Full Workspace Check
 ```bash
 cargo check
 ```
-Result: ✓ No errors
+Result:  No errors
 
 ## Files Changed/Created
 
@@ -190,21 +190,21 @@ Result: ✓ No errors
 ## Validation
 
 ### Compilation
-- ✓ `cargo check` passes
-- ✓ `cargo clippy` passes (no style-related warnings)
-- ✓ Example builds successfully
+-  `cargo check` passes
+-  `cargo clippy` passes (no style-related warnings)
+-  Example builds successfully
 
 ### Testing
-- ✓ Unit tests pass
-- ✓ Color conversion tests
-- ✓ Effects conversion tests
-- ✓ Combined style tests
+-  Unit tests pass
+-  Color conversion tests
+-  Effects conversion tests
+-  Combined style tests
 
 ### Documentation
-- ✓ Comprehensive guide written
-- ✓ Architecture documented
-- ✓ Usage examples provided
-- ✓ Working example code
+-  Comprehensive guide written
+-  Architecture documented
+-  Usage examples provided
+-  Working example code
 
 ## Recommendations
 

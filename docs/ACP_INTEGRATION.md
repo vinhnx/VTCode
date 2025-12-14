@@ -14,33 +14,33 @@ VTCode now supports Agent Communication Protocol (ACP) for inter-agent communica
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────┐
-│            VTCode Main Agent                    │
-│  (Primary decision-maker & orchestrator)        │
-└──────────────────┬──────────────────────────────┘
-                   │
-        ┌──────────┴──────────┐
-        │ Three MCP Tools:    │
-        ├─────────────────────┤
-        │ acp_call           │ ─── Call remote agents
-        │ acp_discover       │ ─── Discover agents
-        │ acp_health         │ ─── Monitor health
-        └──────────┬──────────┘
-                   │
-        ┌──────────▼──────────────────────┐
-        │  vtcode-acp-client              │
-        │  ├─ HTTP Communication Layer    │
-        │  ├─ Agent Registry              │
-        │  ├─ Message Handling            │
-        │  └─ Connection Management       │
-        └──────────┬──────────────────────┘
-                   │
-    ┌──────────────┼──────────────────┐
-    │              │                  │
-    ▼              ▼                  ▼
-┌─────────┐   ┌─────────┐      ┌──────────┐
-│ Agent A │   │ Agent B │  ... │ Agent N  │
-└─────────┘   └─────────┘      └──────────┘
+
+            VTCode Main Agent                    
+  (Primary decision-maker & orchestrator)        
+
+                   
+        
+         Three MCP Tools:    
+        
+         acp_call             Call remote agents
+         acp_discover         Discover agents
+         acp_health           Monitor health
+        
+                   
+        
+          vtcode-acp-client              
+           HTTP Communication Layer    
+           Agent Registry              
+           Message Handling            
+           Connection Management       
+        
+                   
+    
+                                    
+                                    
+         
+ Agent A     Agent B   ...  Agent N  
+         
 ```
 
 ## Module Structure

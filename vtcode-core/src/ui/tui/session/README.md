@@ -4,22 +4,22 @@
 
 ```
 session.rs (main coordinator)
-├── palette.rs       - File & prompt palette management
-├── editing.rs       - Text editing & cursor movement
-├── messages.rs      - Transcript message operations
-├── reflow.rs        - Text wrapping & layout
-├── state.rs         - Lifecycle & state management
-├── events.rs        - Event handling (existing)
-├── command.rs       - Command execution (existing)
-├── render.rs        - UI rendering (existing)
-├── input.rs         - Input display (existing)
-├── header.rs        - Header rendering (existing)
-├── modal.rs         - Modal dialogs (existing)
-├── scroll.rs        - Scroll manager (existing)
-├── transcript.rs    - Transcript cache (existing)
-├── input_manager.rs - Input state (existing)
-├── styling.rs       - Style helpers (existing)
-└── ... (other supporting modules)
+ palette.rs       - File & prompt palette management
+ editing.rs       - Text editing & cursor movement
+ messages.rs      - Transcript message operations
+ reflow.rs        - Text wrapping & layout
+ state.rs         - Lifecycle & state management
+ events.rs        - Event handling (existing)
+ command.rs       - Command execution (existing)
+ render.rs        - UI rendering (existing)
+ input.rs         - Input display (existing)
+ header.rs        - Header rendering (existing)
+ modal.rs         - Modal dialogs (existing)
+ scroll.rs        - Scroll manager (existing)
+ transcript.rs    - Transcript cache (existing)
+ input_manager.rs - Input state (existing)
+ styling.rs       - Style helpers (existing)
+ ... (other supporting modules)
 ```
 
 ## Refactored Modules (New)

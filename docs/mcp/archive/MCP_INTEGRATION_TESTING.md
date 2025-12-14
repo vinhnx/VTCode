@@ -228,7 +228,7 @@ time cargo test -p vtcode-core code_executor::tests::test_javascript_execution_s
 **Success Criteria**:
 - Cold start (first execution): < 2s
 - Warm start: < 500ms
-- Timeout enforcement: ✓ 
+- Timeout enforcement:  
 
 #### Test 8: SDK Generation Speed
 

@@ -8,17 +8,17 @@ Completed comprehensive optimization of TUI scroll performance, ANSI rendering, 
 
 ## Completed Optimizations
 
-### 1. Terminal Command Output Format ✓  IMPLEMENTED
+### 1. Terminal Command Output Format   IMPLEMENTED
 
 **File**: `src/agent/runloop/tool_output/commands.rs`  
 **Status**: Complete, tested, builds without warnings
 
 **Changes**:
 - Replaced verbose multi-line headers with single-line compact format
-- Status symbols: `▶ RUN` (running), `✓ OK` (completed)
+- Status symbols: ` RUN` (running), ` OK` (completed)
 - Command truncation: 40-50 chars with ellipsis
 - Removed 60-char separator lines
-- Minimal footer: `✓ exit {code}` or `✓ done`
+- Minimal footer: ` exit {code}` or ` done`
 - Removed "command still running" message
 
 **Metrics**:
@@ -33,7 +33,7 @@ Completed comprehensive optimization of TUI scroll performance, ANSI rendering, 
 
 ---
 
-### 2. TUI Scroll Performance & ANSI Rendering 📋 PLANNED
+### 2. TUI Scroll Performance & ANSI Rendering  PLANNED
 
 **Status**: Strategically documented, ready for implementation
 
@@ -70,7 +70,7 @@ Completed comprehensive optimization of TUI scroll performance, ANSI rendering, 
 
 ---
 
-### 3. Documentation Updates ✓  COMPLETED
+### 3. Documentation Updates   COMPLETED
 
 **Files Updated**:
 - `AGENTS.md` - Added references to all optimization guides
@@ -78,13 +78,13 @@ Completed comprehensive optimization of TUI scroll performance, ANSI rendering, 
 **Files Created**:
 ```
 docs/
-├── TUI_SCROLL_ANSI_OPTIMIZATION.md          (11 KB)
-├── SCROLL_OPTIMIZATION_IMPL.md              (13 KB)
-├── SCROLL_BENCHMARKS.md                     (9.4 KB)
-├── OPTIMIZATION_SUMMARY.md                  (9.2 KB)
-├── TERMINAL_OUTPUT_OPTIMIZATION.md          (8.5 KB)
-├── TERMINAL_OUTPUT_BEFORE_AFTER.md          (9.1 KB)
-└── OPTIMIZATION_STATUS.md                   (This file)
+ TUI_SCROLL_ANSI_OPTIMIZATION.md          (11 KB)
+ SCROLL_OPTIMIZATION_IMPL.md              (13 KB)
+ SCROLL_BENCHMARKS.md                     (9.4 KB)
+ OPTIMIZATION_SUMMARY.md                  (9.2 KB)
+ TERMINAL_OUTPUT_OPTIMIZATION.md          (8.5 KB)
+ TERMINAL_OUTPUT_BEFORE_AFTER.md          (9.1 KB)
+ OPTIMIZATION_STATUS.md                   (This file)
 ```
 
 **Total Documentation**: ~60 KB of strategic guides and implementation patterns
@@ -145,28 +145,28 @@ docs/
 | Cache hit rate | 0% | No caching yet |
 | Memory overhead | ~1 MB | Baseline |
 
-### After Phase 1 (Terminal Format) ✓  COMPLETE
+### After Phase 1 (Terminal Format)   COMPLETE
 | Metric | Change | Impact |
 |---|---|---|
 | Terminal output lines | -43% | 7 → 4 lines |
 | Output characters | -60% | Reduced buffer usage |
 | Header render time | -30% | Faster output |
 
-### After Phase 2 (ANSI Cache) 📋 TODO
+### After Phase 2 (ANSI Cache)  TODO
 | Metric | Target | Impact |
 |---|---|---|
 | ANSI parse (cached) | < 1 μs | 100x faster |
 | Cache hit rate | 40-70% | Most output cached |
 | Scroll latency (cached) | < 1 ms | Imperceptible |
 
-### After Phase 3 (Instrumentation) 📋 TODO
+### After Phase 3 (Instrumentation)  TODO
 | Metric | Benefit | Impact |
 |---|---|---|
 | Performance visibility | 100% | Full metrics |
 | Slow render detection | Real-time | Alert on >50ms |
 | Cache effectiveness | Measurable | Data-driven decisions |
 
-### After Phase 4 (ANSI Testing) 📋 TODO
+### After Phase 4 (ANSI Testing)  TODO
 | Metric | Coverage | Impact |
 |---|---|---|
 | ANSI boundary tests | 100% | Regression prevention |
@@ -220,22 +220,22 @@ docs/
 ### Optimization Points
 
 **Scroll Performance**:
-- ✓  Binary search already implemented (O(log n))
-- ✓  Row offset precomputation done
-- ✓  Viewport caching with Arc working
-- 📋 Dirty message tracking ready to implement
+-   Binary search already implemented (O(log n))
+-   Row offset precomputation done
+-   Viewport caching with Arc working
+-  Dirty message tracking ready to implement
 
 **ANSI Rendering**:
-- ✓  UTF-8 validation in place
-- ✓  Fallback to plain text working
-- 📋 Parse result caching ready to add
-- 📋 Batch processing ready to implement
+-   UTF-8 validation in place
+-   Fallback to plain text working
+-  Parse result caching ready to add
+-  Batch processing ready to implement
 
 **Output Format**:
-- ✓  Compact headers implemented
-- ✓  Status symbols in place
-- ✓  Command truncation working
-- ✓  Minimal footers complete
+-   Compact headers implemented
+-   Status symbols in place
+-   Command truncation working
+-   Minimal footers complete
 
 ---
 
@@ -270,7 +270,7 @@ cargo bench --bench terminal_output  # (new)
 
 ### Current
 - Session IDs no longer displayed (by design - not needed in UI)
-- No "command still running" message (status symbol `▶` sufficient)
+- No "command still running" message (status symbol `` sufficient)
 - Command truncation at 40-50 chars (full command on separate line if long)
 
 ### Design Tradeoffs
@@ -282,25 +282,25 @@ cargo bench --bench terminal_output  # (new)
 
 ## Success Criteria
 
-### Phase 1: Terminal Output ✓  MET
+### Phase 1: Terminal Output   MET
 - [x] 40-50% reduction in lines
 - [x] Compiles without warnings
 - [x] Existing tests pass
 - [x] Format documented
 
-### Phase 2: ANSI Caching 📋 TODO
+### Phase 2: ANSI Caching  TODO
 - [ ] 100x speedup on cached hits
 - [ ] 40-70% hit rate achieved
 - [ ] Benchmarks show improvement
 - [ ] No regressions
 
-### Phase 3: Instrumentation 📋 TODO
+### Phase 3: Instrumentation  TODO
 - [ ] All scroll operations timed
 - [ ] Cache metrics visible
 - [ ] Performance alerts working
 - [ ] Dashboard data flowing
 
-### Phase 4: ANSI Testing 📋 TODO
+### Phase 4: ANSI Testing  TODO
 - [ ] 100% boundary case coverage
 - [ ] No color bleed detected
 - [ ] CI/CD integrated
@@ -330,8 +330,8 @@ Status:          OPTIMIZATION_STATUS.md (this file)
 ## Next Steps
 
 **Immediate (Today)**:
-1. Review terminal output implementation ✓ 
-2. Review optimization guides ✓ 
+1. Review terminal output implementation  
+2. Review optimization guides  
 3. Plan Phase 2 timeline
 
 **This Sprint**:

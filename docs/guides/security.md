@@ -79,35 +79,35 @@ Three-tier approval system for tool execution:
 
 ### Protected Against
 
-✓  **Prompt Injection Attacks**
+  **Prompt Injection Attacks**
 - Malicious prompts from users
 - Embedded prompts in code comments
 - Prompts in repository files
 - Prompts in logging output
 
-✓  **Argument Injection**
+  **Argument Injection**
 - Execution flags (`-exec`, `--pre`, `-e`)
 - Path traversal (`../`, symlinks)
 - Output redirection (`-o /etc/passwd`)
 - Command chaining (`;`, `&&`, `||`)
 
-✓  **Workspace Escape**
+  **Workspace Escape**
 - Absolute paths outside workspace
 - Symlink traversal
 - Parent directory traversal
 - File-through-file traversal
 
-✓  **Privilege Escalation**
+  **Privilege Escalation**
 - `sudo`, `su`, `doas` commands
 - System configuration modification
 - SUID binary exploitation
 
 ### Not Protected Against
 
-⚠️ **Physical Access** - Assumes no physical access to machine  
-⚠️ **Kernel Exploits** - Relies on OS security  
-⚠️ **Side Channel Attacks** - Timing, cache, etc.  
-⚠️ **Social Engineering** - Direct user manipulation
+ **Physical Access** - Assumes no physical access to machine  
+ **Kernel Exploits** - Relies on OS security  
+ **Side Channel Attacks** - Timing, cache, etc.  
+ **Social Engineering** - Direct user manipulation
 
 ## Configuration
 

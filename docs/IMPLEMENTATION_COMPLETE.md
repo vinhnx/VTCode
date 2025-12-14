@@ -1,4 +1,4 @@
-# VTCode Permission System - Implementation Complete ✓ 
+# VTCode Permission System - Implementation Complete  
 
 ## Status: READY FOR PRODUCTION
 
@@ -104,37 +104,37 @@ We **improved** the original specification:
 ### Implementation (500 lines)
 ```
 vtcode-core/src/
-├── audit/
-│   ├── mod.rs                  (4 lines)
-│   └── permission_log.rs       (197 lines)
-├── tools/
-│   ├── command_cache.rs        (142 lines - improved)
-│   ├── command_resolver.rs     (160 lines)
-│   ├── command_policy.rs       (223 lines - enhanced)
-│   └── mod.rs
-└── lib.rs                       (already exports)
+ audit/
+    mod.rs                  (4 lines)
+    permission_log.rs       (197 lines)
+ tools/
+    command_cache.rs        (142 lines - improved)
+    command_resolver.rs     (160 lines)
+    command_policy.rs       (223 lines - enhanced)
+    mod.rs
+ lib.rs                       (already exports)
 ```
 
 ### Documentation
 ```
 docs/
-├── PERMISSIONS_IMPLEMENTATION_STATUS.md  (status & verification)
-├── PERMISSION_INTEGRATION_GUIDE.md       (how to integrate + examples)
-└── IMPLEMENTATION_IMPROVEMENTS.md        (spec review & code quality)
+ PERMISSIONS_IMPLEMENTATION_STATUS.md  (status & verification)
+ PERMISSION_INTEGRATION_GUIDE.md       (how to integrate + examples)
+ IMPLEMENTATION_IMPROVEMENTS.md        (spec review & code quality)
 ```
 
 ---
 
 ## Quality Metrics
 
-✓  **Compilation**: No errors, 14 warnings (in unrelated modules)
-✓  **Format**: Passes `cargo fmt --check`
-✓  **Linting**: 0 warnings in permission modules
-✓  **Tests**: 12 unit tests ready to run
-✓  **Dependencies**: All present
-✓  **Thread Safety**: Arc<Mutex<>> verified
-✓  **Error Handling**: Comprehensive with anyhow::Result
-✓  **Documentation**: Rustdoc + 3 integration guides
+  **Compilation**: No errors, 14 warnings (in unrelated modules)
+  **Format**: Passes `cargo fmt --check`
+  **Linting**: 0 warnings in permission modules
+  **Tests**: 12 unit tests ready to run
+  **Dependencies**: All present
+  **Thread Safety**: Arc<Mutex<>> verified
+  **Error Handling**: Comprehensive with anyhow::Result
+  **Documentation**: Rustdoc + 3 integration guides
 
 ---
 
@@ -188,7 +188,7 @@ cargo test -p vtcode-core command_
 
 ## Next Actions
 
-1. ✓  Review the implementation (you are here)
+1.   Review the implementation (you are here)
 2. ⏳ Pick integration location
 3. ⏳ Add `audit_log` field to executor
 4. ⏳ Wire `evaluate_with_resolution()` into execution
@@ -214,11 +214,11 @@ All code includes comprehensive rustdoc comments.
 ## Summary
 
 The permission system is **production-ready**:
-- ✓  All 3 modules implemented
-- ✓  Comprehensive testing framework
-- ✓  Thread-safe design
-- ✓  Proper error handling
-- ✓  Detailed documentation
-- ✓  Ready to integrate
+-   All 3 modules implemented
+-   Comprehensive testing framework
+-   Thread-safe design
+-   Proper error handling
+-   Detailed documentation
+-   Ready to integrate
 
 **Status**: Ready to wire into the command execution pipeline.

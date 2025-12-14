@@ -82,7 +82,7 @@ $ vtcode chat
 /skills load doc-generator
 ```
 
-**Result:** ✓ Skill loaded
+**Result:**  Skill loaded
 
 ### Step 3: Create Document
 
@@ -93,7 +93,7 @@ Type detailed requirements (as shown above)
 ```
 Agent: Creating professional project proposal document...
 
-✓ Document created successfully!
+ Document created successfully!
 
 The Word document contains:
 
@@ -180,14 +180,14 @@ Ready to download and send to client!
 
 A professional Word document with:
 
-✓ **Title Page** - Project name, client, date  
-✓ **Executive Summary** - Overview and key benefits  
-✓ **Project Scope** - Detailed requirements (4 areas)  
-✓ **Timeline** - 6-month development schedule  
-✓ **Budget** - Breakdown by category (table format)  
-✓ **Success Metrics** - Clear goals and KPIs  
-✓ **Risk Assessment** - Risk identification and mitigation  
-✓ **Next Steps** - Action items with timelines  
+ **Title Page** - Project name, client, date  
+ **Executive Summary** - Overview and key benefits  
+ **Project Scope** - Detailed requirements (4 areas)  
+ **Timeline** - 6-month development schedule  
+ **Budget** - Breakdown by category (table format)  
+ **Success Metrics** - Clear goals and KPIs  
+ **Risk Assessment** - Risk identification and mitigation  
+ **Next Steps** - Action items with timelines  
 
 All formatted professionally with:
 - Proper heading styles

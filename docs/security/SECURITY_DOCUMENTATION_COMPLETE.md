@@ -167,16 +167,16 @@ Security Model | Security Audit | Security Guide
 
 ```
 docs/
-├── SECURITY_MODEL.md                    # Complete architecture
-├── SECURITY_AUDIT.md                    # Vulnerability analysis
-├── SECURITY_FIX_2025-10-25.md          # Fix documentation
-├── SECURITY_SUMMARY.md                  # Executive summary
-├── SECURITY_QUICK_REFERENCE.md         # Quick reference card
-├── SECURITY_DOCUMENTATION_INDEX.md     # Complete index
-├── guides/
-│   └── security.md                      # User-facing guide
-└── user-guide/
-    └── getting-started.md               # Updated with security section
+ SECURITY_MODEL.md                    # Complete architecture
+ SECURITY_AUDIT.md                    # Vulnerability analysis
+ SECURITY_FIX_2025-10-25.md          # Fix documentation
+ SECURITY_SUMMARY.md                  # Executive summary
+ SECURITY_QUICK_REFERENCE.md         # Quick reference card
+ SECURITY_DOCUMENTATION_INDEX.md     # Complete index
+ guides/
+    security.md                      # User-facing guide
+ user-guide/
+     getting-started.md               # Updated with security section
 
 README.md                                # Updated with security highlights
 .kiro/steering/vtcode.md                # Updated with security guidelines

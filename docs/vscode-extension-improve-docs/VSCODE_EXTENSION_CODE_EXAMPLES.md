@@ -671,7 +671,7 @@ private showToolExecutionResult(
   toolName: string,
   result: VtcodeToolExecutionResult
 ): void {
-  const status = result.exitCode === 0 ? "✓ " : "⤫ "
+  const status = result.exitCode === 0 ? " " : " "
   this.addSystemMessage(
     `${status} Tool execution completed: **${toolName}**\n\n\`\`\`\n${result.text}\n\`\`\``
   )
@@ -679,7 +679,7 @@ private showToolExecutionResult(
 
 private showToolExecutionError(toolName: string, error: string): void {
   this.addSystemMessage(
-    `⤫  Tool execution failed: **${toolName}**\n\n\`\`\`\n${error}\n\`\`\``
+    `  Tool execution failed: **${toolName}**\n\n\`\`\`\n${error}\n\`\`\``
   )
 }
 ```
@@ -691,7 +691,7 @@ private showToolExecutionError(toolName: string, error: string): void {
 <div id="approval-modal" class="modal hidden">
   <div class="modal-content">
     <div class="approval-header">
-      <h3>🔐 Tool Execution Approval</h3>
+      <h3> Tool Execution Approval</h3>
       <p class="approval-description" id="approval-description"></p>
     </div>
 
@@ -702,13 +702,13 @@ private showToolExecutionError(toolName: string, error: string): void {
 
     <div class="approval-actions">
       <button class="btn btn-success" id="approve-btn">
-        ✓ Approve & Execute
+         Approve & Execute
       </button>
       <button class="btn btn-danger" id="deny-btn">
-        ✗ Deny
+         Deny
       </button>
       <button class="btn btn-default" id="modify-btn">
-        ⚙️ Review Arguments
+         Review Arguments
       </button>
     </div>
 
@@ -982,19 +982,19 @@ export class StatusIndicator {
     // Status icon
     switch (this.metrics.status) {
       case "idle":
-        parts.push("🟢")
+        parts.push("")
         break
       case "thinking":
-        parts.push("🔵")
+        parts.push("")
         break
       case "streaming":
-        parts.push("📤")
+        parts.push("")
         break
       case "executing":
-        parts.push("⚙️")
+        parts.push("")
         break
       case "error":
-        parts.push("🔴")
+        parts.push("")
         break
     }
 
@@ -1023,7 +1023,7 @@ export class StatusIndicator {
 
     // Tool
     if (this.metrics.toolName) {
-      parts.push(`⚙️ ${this.metrics.toolName}`)
+      parts.push(` ${this.metrics.toolName}`)
     }
 
     return parts.join(" ")

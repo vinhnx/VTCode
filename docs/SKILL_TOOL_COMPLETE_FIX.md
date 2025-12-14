@@ -1,16 +1,16 @@
-# ✓ COMPLETE FIX: VTCode Agent Skill Discovery & Loading
+#  COMPLETE FIX: VTCode Agent Skill Discovery & Loading
 
 ## Problem Summary
 
 When trying to use Claude Agent Skills (like `spreadsheet-generator`), the vtcode agent encountered **two issues**:
 
-### Issue 1: `search_tools` returned empty results ✓ FIXED
+### Issue 1: `search_tools` returned empty results  FIXED
 
 -   **Error**: `{"matched":0,"results":[]}`
 -   **Cause**: Used wrong loader (SkillManager looking for `skill.json` instead of SkillLoader reading `SKILL.md`)
 -   **Fix**: Changed `search_tools_executor` to use `SkillLoader` (commit f5f413c5)
 
-### Issue 2: `skill` tool not recognized ✓ FIXED
+### Issue 2: `skill` tool not recognized  FIXED
 
 -   **Error**: `Tool 'skill' execution failed: Unknown tool: skill`
 -   **Cause**: Function declaration missing from `declarations.rs`
@@ -101,15 +101,15 @@ All located in `.claude/skills/*/SKILL.md`:
 ```bash
 # 1. Build successfully
 cargo build --bin vtcode
-# ✓ Compiled without errors
+#  Compiled without errors
 
 # 2. Test in vtcode session
 vtcode
 > search_tools spreadsheet
-# ✓ Returns: spreadsheet-generator skill
+#  Returns: spreadsheet-generator skill
 
 > skill spreadsheet-generator
-# ✓ Loads skill with instructions and resources
+#  Loads skill with instructions and resources
 ```
 
 ## Expected Workflow (Now Working)
@@ -157,15 +157,15 @@ Agent:
 
 2. **Three Required Pieces**:
 
-    - ✓ Executor implementation (`skill_executor` - existed)
-    - ✓ Tool registration (`builtins.rs` - existed)
-    - ✓ Function declaration (`declarations.rs` - **was missing**)
+    -  Executor implementation (`skill_executor` - existed)
+    -  Tool registration (`builtins.rs` - existed)
+    -  Function declaration (`declarations.rs` - **was missing**)
 
 3. **Discovery vs Loading**: `search_tools` finds skills, `skill` loads them. Both now work correctly.
 
 ---
 
-**Status**: ✓ COMPLETE
+**Status**:  COMPLETE
 **Commits**: f5f413c5, 390245e1
 **Date**: December 13, 2025
 **Verified**: Build successful, ready for testing

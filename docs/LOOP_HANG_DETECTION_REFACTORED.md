@@ -120,17 +120,17 @@ if is_loop_detected {
 All 11 tests passing:
 
 ```
-✓ test_loop_detector_threshold           - Core detection at count > threshold
-✓ test_loop_detector_disabled            - Disabled detector never triggers  
-✓ test_loop_detector_reset               - Full state reset works
-✓ test_loop_detector_different_signatures- Each signature tracked independently
-✓ test_loop_detector_interactive_flag    - Interactive flag correctness
-✓ test_loop_detector_enable_disable      - Runtime enable/disable
-✓ test_loop_detection_response_enum      - Response enum validation
-✓ test_peek_count                        - Peek functionality
-✓ test_would_trigger                     - Predictive check
-✓ test_non_interactive_mode              - Non-interactive detection works
-✓ test_selective_reset                   - NEW: Selective reset functionality
+ test_loop_detector_threshold           - Core detection at count > threshold
+ test_loop_detector_disabled            - Disabled detector never triggers  
+ test_loop_detector_reset               - Full state reset works
+ test_loop_detector_different_signatures- Each signature tracked independently
+ test_loop_detector_interactive_flag    - Interactive flag correctness
+ test_loop_detector_enable_disable      - Runtime enable/disable
+ test_loop_detection_response_enum      - Response enum validation
+ test_peek_count                        - Peek functionality
+ test_would_trigger                     - Predictive check
+ test_non_interactive_mode              - Non-interactive detection works
+ test_selective_reset                   - NEW: Selective reset functionality
 ```
 
 ### New Test: Selective Reset
@@ -194,7 +194,7 @@ fn test_selective_reset() {
 
 ## Backward Compatibility
 
-⚠️ **Breaking API Change**: 
+ **Breaking API Change**: 
 
 The `record_tool_call()` return type changed from `bool` to `(bool, usize)`. Code calling this method must be updated:
 
@@ -224,7 +224,7 @@ Based on this refactoring, we can now easily add:
 
 ## Status
 
-✓  **COMPLETE** - Refactored and tested
+  **COMPLETE** - Refactored and tested
 - All 11 tests passing
 - Code compiles without errors
 - Ready for integration

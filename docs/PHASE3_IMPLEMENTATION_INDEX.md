@@ -2,29 +2,29 @@
 ## Complete Resource Guide for System Prompt Optimization
 
 **Created**: November 19, 2025  
-**Status**: ✓  READY FOR TEAM  
+**Status**:   READY FOR TEAM  
 **Audience**: Engineering team, leadership, researchers  
 
 ---
 
 ## Quick Navigation
 
-### 🚀 For Fast Starters (15 min read)
+###  For Fast Starters (15 min read)
 1. **START HERE**: OPTIMIZATION_RESEARCH_SESSION_SUMMARY.md (5 min)
 2. **THEN**: PHASE3_QUICK_START_GUIDE.md (10 min)
 3. **ACTION**: Create Phase 3 branch, assign tasks
 
-### 🎯 For Implementation (1-2 weeks)
+###  For Implementation (1-2 weeks)
 1. **PLAN**: PHASE3_QUICK_START_GUIDE.md (detailed roadmap)
 2. **REFERENCE**: CODING_AGENT_BEST_PRACTICES_SYNTHESIS.md (patterns)
 3. **DETAIL**: PHASE3_SYSTEM_PROMPT_OPTIMIZATION_PLAN.md (comprehensive guide)
 
-### 📚 For Research (Deep Dive)
+###  For Research (Deep Dive)
 1. **SYNTHESIS**: CODING_AGENT_BEST_PRACTICES_SYNTHESIS.md (best practices)
 2. **PLAN**: PHASE3_SYSTEM_PROMPT_OPTIMIZATION_PLAN.md (detailed phases)
 3. **REFERENCE**: Original research papers (linked in documents)
 
-### 🧪 For QA/Testing
+###  For QA/Testing
 1. **CRITERIA**: Success metrics in Quick Start Guide (Section 7)
 2. **TESTS**: 50-task validation suite (defined in Plan)
 3. **METRICS**: Measurement framework (in Synthesis doc, Section 10)
@@ -128,24 +128,24 @@
 
 ```
 MON (Day 1):
-├─ ReAct thinking patterns (system.rs)
-└─ .progress.md design
+ ReAct thinking patterns (system.rs)
+ .progress.md design
    
 TUE (Day 2):
-├─ .progress.md implementation (context.rs)
-└─ Load/detect logic
+ .progress.md implementation (context.rs)
+ Load/detect logic
    
 WED (Day 3):
-├─ Tool guidance refactor
-└─ Semantic context rules (AGENTS.md)
+ Tool guidance refactor
+ Semantic context rules (AGENTS.md)
    
 THU (Day 4):
-├─ Integration testing
-└─ AGENTS.md comprehensive update
+ Integration testing
+ AGENTS.md comprehensive update
    
 FRI (Day 5):
-├─ Final refinements
-└─ Documentation bundle
+ Final refinements
+ Documentation bundle
 ```
 
 **Deliverable**: Phase 3a implementation (thinking + .progress.md)
@@ -154,14 +154,14 @@ FRI (Day 5):
 
 ```
 Days 1-3:
-├─ Run 50-task validation suite
-├─ Measure all metrics
-└─ Test multi-LLM compatibility
+ Run 50-task validation suite
+ Measure all metrics
+ Test multi-LLM compatibility
 
 Days 4-5:
-├─ Document results
-├─ Create completion report
-└─ Prepare for Phase 4
+ Document results
+ Create completion report
+ Prepare for Phase 4
 ```
 
 **Deliverable**: Phase 3 validation + completion report
@@ -233,10 +233,10 @@ Days 4-5:
 
 ### Documentation (Already Created)
 
-- ✓  OPTIMIZATION_RESEARCH_SESSION_SUMMARY.md
-- ✓  PHASE3_QUICK_START_GUIDE.md
-- ✓  CODING_AGENT_BEST_PRACTICES_SYNTHESIS.md
-- ✓  PHASE3_SYSTEM_PROMPT_OPTIMIZATION_PLAN.md
+-   OPTIMIZATION_RESEARCH_SESSION_SUMMARY.md
+-   PHASE3_QUICK_START_GUIDE.md
+-   CODING_AGENT_BEST_PRACTICES_SYNTHESIS.md
+-   PHASE3_SYSTEM_PROMPT_OPTIMIZATION_PLAN.md
 
 ---
 
@@ -284,16 +284,16 @@ Days 4-5:
 
 ```
 WEEK 1 (Implementation)
-├─ Mon: Thinking patterns + design
-├─ Tue: .progress.md infrastructure  
-├─ Wed: Tool guidance + semantic context
-├─ Thu: Integration testing
-└─ Fri: Documentation
+ Mon: Thinking patterns + design
+ Tue: .progress.md infrastructure  
+ Wed: Tool guidance + semantic context
+ Thu: Integration testing
+ Fri: Documentation
 
 WEEK 2 (Validation)
-├─ Mon-Wed: 50-task validation
-├─ Thu: Metrics + analysis
-└─ Fri: Phase 3 completion report
+ Mon-Wed: 50-task validation
+ Thu: Metrics + analysis
+ Fri: Phase 3 completion report
 
 THEN: Phase 4 planning (error recovery)
 ```
@@ -305,14 +305,14 @@ THEN: Phase 4 planning (error recovery)
 ## How to Make Decisions
 
 ### Should we implement this?
-✓  YES if:
+  YES if:
 - High impact (>10% improvement)
 - Low risk (<5% regression)
 - Enables new use cases
 - Aligns with Phase 1-2
 
 ### Should we skip this?
-⏭️ DEFER if:
+⏭ DEFER if:
 - Medium impact (5-10%)
 - Medium effort (3+ days)
 - Can wait for Phase 4
@@ -356,10 +356,10 @@ A: Ideally 2-3 engineers + 1 reviewer. 4 engineer-weeks total.
 ## References & Resources
 
 ### Key Documents (This Session)
-- ✓  OPTIMIZATION_RESEARCH_SESSION_SUMMARY.md (session overview)
-- ✓  PHASE3_QUICK_START_GUIDE.md (implementation plan)
-- ✓  CODING_AGENT_BEST_PRACTICES_SYNTHESIS.md (patterns)
-- ✓  PHASE3_SYSTEM_PROMPT_OPTIMIZATION_PLAN.md (detailed guide)
+-   OPTIMIZATION_RESEARCH_SESSION_SUMMARY.md (session overview)
+-   PHASE3_QUICK_START_GUIDE.md (implementation plan)
+-   CODING_AGENT_BEST_PRACTICES_SYNTHESIS.md (patterns)
+-   PHASE3_SYSTEM_PROMPT_OPTIMIZATION_PLAN.md (detailed guide)
 
 ### Existing Documentation
 - AGENTS.md (current best practices)
@@ -455,21 +455,21 @@ A: Ideally 2-3 engineers + 1 reviewer. 4 engineer-weeks total.
 
 ```
 START
-  └─ OPTIMIZATION_RESEARCH_SESSION_SUMMARY.md (overview)
-      ├─ PHASE3_QUICK_START_GUIDE.md (implementation)
-      │   └─ [Engineering team starts here]
-      ├─ PHASE3_SYSTEM_PROMPT_OPTIMIZATION_PLAN.md (detailed plan)
-      │   └─ [Project management reference]
-      └─ CODING_AGENT_BEST_PRACTICES_SYNTHESIS.md (research)
-          └─ [Researchers + deep reference]
+   OPTIMIZATION_RESEARCH_SESSION_SUMMARY.md (overview)
+       PHASE3_QUICK_START_GUIDE.md (implementation)
+          [Engineering team starts here]
+       PHASE3_SYSTEM_PROMPT_OPTIMIZATION_PLAN.md (detailed plan)
+          [Project management reference]
+       CODING_AGENT_BEST_PRACTICES_SYNTHESIS.md (research)
+           [Researchers + deep reference]
 
 EXECUTION
-  └─ Modify: system.rs, context.rs, AGENTS.md
-      └─ Test: 50-task validation suite
-          └─ Document: Phase 3 completion report
+   Modify: system.rs, context.rs, AGENTS.md
+       Test: 50-task validation suite
+           Document: Phase 3 completion report
 
 NEXT PHASE
-  └─ Phase 4: Error Recovery (plan after Phase 3 validation)
+   Phase 4: Error Recovery (plan after Phase 3 validation)
 ```
 
 ---
@@ -478,7 +478,7 @@ NEXT PHASE
 
 | Version | Date | Status | Changes |
 |---------|------|--------|---------|
-| 1.0 | Nov 19, 2025 | ✓  READY | Initial research session complete |
+| 1.0 | Nov 19, 2025 |   READY | Initial research session complete |
 | 2.0 | Nov 24, 2025 | ⏳ PENDING | Phase 3a implementation updates |
 | 3.0 | Dec 1, 2025 | ⏳ PENDING | Phase 3 validation results |
 | 4.0 | Dec 5, 2025 | ⏳ PENDING | Phase 3 completion + Phase 4 plan |
@@ -486,14 +486,14 @@ NEXT PHASE
 ---
 
 **Index Version**: 1.0  
-**Status**: ✓  READY FOR TEAM  
+**Status**:   READY FOR TEAM  
 **Created**: November 19, 2025  
 **Last Updated**: November 19, 2025  
 **Maintained By**: VT Code Research Team  
 
 ---
 
-## 🚀 START HERE
+##  START HERE
 
 New to this research? Follow this path:
 

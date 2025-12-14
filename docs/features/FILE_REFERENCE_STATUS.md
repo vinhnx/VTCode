@@ -2,7 +2,7 @@
 
 ## Current Implementation Status
 
-### ✓  Completed Features
+###   Completed Features
 
 1. **@ Symbol Trigger**
 
@@ -34,7 +34,7 @@
 
     - Shows: `@vtcode.toml`
     - Internal: `/full/absolute/path/vtcode.toml`
-    - ✓  Already working correctly
+    -   Already working correctly
 
 6. **Loading State UI**
 
@@ -52,13 +52,13 @@
 
 ### In Progress / Needs Implementation
 
-#### 1. Ignore Files Support (CRITICAL) ⚠️
+#### 1. Ignore Files Support (CRITICAL) 
 
 **Status**: Dependency added, implementation needed
 
 **What's Done**:
 
--   ✓  Added `ignore = "0.4"` to vtcode-indexer/Cargo.toml
+-     Added `ignore = "0.4"` to vtcode-indexer/Cargo.toml
 
 **What's Needed**:
 
@@ -88,13 +88,13 @@ impl SimpleIndexer {
 **Effort**: 2-3 hours
 **Priority**: P0 (Critical)
 
-#### 2. Tree Structure (HIGH PRIORITY) 📁
+#### 2. Tree Structure (HIGH PRIORITY) 
 
 **Status**: Dependency added, implementation needed
 
 **What's Done**:
 
--   ✓  Added `tui-tree-widget = "0.22"` to vtcode-core/Cargo.toml
+-     Added `tui-tree-widget = "0.22"` to vtcode-core/Cargo.toml
 
 **What's Needed**:
 
@@ -107,13 +107,13 @@ impl SimpleIndexer {
 **Effort**: 6-8 hours
 **Priority**: P1 (High)
 
-#### 3. Visual Distinction (MEDIUM PRIORITY) 🎨
+#### 3. Visual Distinction (MEDIUM PRIORITY) 
 
 **Status**: Not started
 
 **What's Needed**:
 
--   Folder indicator (e.g., "📁 src/" or "▶ src/")
+-   Folder indicator (e.g., " src/" or " src/")
 -   File type icons or indicators
 -   Different colors for files vs folders
 -   Hierarchical indentation
@@ -121,7 +121,7 @@ impl SimpleIndexer {
 **Effort**: 2-3 hours
 **Priority**: P1 (High)
 
-#### 4. Immediate Modal Display (MINOR FIX) ⚡
+#### 4. Immediate Modal Display (MINOR FIX) 
 
 **Status**: Partially working
 
@@ -191,17 +191,17 @@ impl SimpleIndexer {
 
 ### Metrics
 
--   **Compilation**: ✓  Success (0 errors)
--   **Tests**: ✓  10/10 passing (100%)
--   **Performance**: ✓  Excellent
--   **Documentation**: ✓  Comprehensive
+-   **Compilation**:   Success (0 errors)
+-   **Tests**:   10/10 passing (100%)
+-   **Performance**:   Excellent
+-   **Documentation**:   Comprehensive
 
 ### Technical Debt
 
--   ⚠️ No .gitignore support (critical)
--   ⚠️ Flat list instead of tree (usability)
--   ⚠️ No visual file/folder distinction (UX)
--   ℹ️ No file type icons (nice-to-have)
+-    No .gitignore support (critical)
+-    Flat list instead of tree (usability)
+-    No visual file/folder distinction (UX)
+-   ℹ No file type icons (nice-to-have)
 
 ## Estimated Total Effort
 
@@ -223,24 +223,24 @@ impl SimpleIndexer {
 
 Users can:
 
--   ✓  Type `@` to open file browser
--   ✓  Type `/files` to open file browser
--   ✓  Filter files by typing
--   ✓  Navigate with arrow keys
--   ✓  Select files with Enter/Tab
--   ✓  See relative paths (clean)
--   ✓  Experience fast performance
--   ✓  Use cached filters (instant)
+-     Type `@` to open file browser
+-     Type `/files` to open file browser
+-     Filter files by typing
+-     Navigate with arrow keys
+-     Select files with Enter/Tab
+-     See relative paths (clean)
+-     Experience fast performance
+-     Use cached filters (instant)
 
 ## What Doesn't Work Yet
 
 Users cannot:
 
--   ⤫  See files excluded by .gitignore (shows everything)
--   ⤫  Browse files in tree structure (flat list only)
--   ⤫  Distinguish files from folders visually
--   ⤫  Expand/collapse folders
--   ⤫  See file type icons
+-     See files excluded by .gitignore (shows everything)
+-     Browse files in tree structure (flat list only)
+-     Distinguish files from folders visually
+-     Expand/collapse folders
+-     See file type icons
 
 ## Critical Issue: Ignore Files
 

@@ -1,4 +1,4 @@
-# Optimization: Efficient Input Pausing ⚡
+# Optimization: Efficient Input Pausing 
 
 ## Overview
 

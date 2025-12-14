@@ -2,7 +2,7 @@
 
 **For:** Developers & Teams Ready to Use MCP  
 **Time:** 20 minutes to productive coding  
-**Status:** ✅ Production-ready (Phase 1 & 2)
+**Status:**  Production-ready (Phase 1 & 2)
 
 ---
 
@@ -39,13 +39,13 @@ let (transport, _stderr) = create_stdio_transport_with_stderr(
 - **10 min:** [MCP_PHASE1_USAGE_GUIDE.md](MCP_PHASE1_USAGE_GUIDE.md) - Code patterns
 - **5 min:** Copy pattern that matches your use case
 
-**You're ready to build!** 🚀
+**You're ready to build!** 
 
 ---
 
 ## Implementation Checklist
 
-### ☐ Setup (First Time)
+###  Setup (First Time)
 
 - [ ] Read [README.md](README.md) (2 min)
 - [ ] Bookmark [INDEX.md](INDEX.md) for future reference
@@ -53,7 +53,7 @@ let (transport, _stderr) = create_stdio_transport_with_stderr(
 - [ ] Note the 7 error helpers available
 - [ ] Review 1-2 code examples from [MCP_PHASE1_USAGE_GUIDE.md](MCP_PHASE1_USAGE_GUIDE.md)
 
-### ☐ Development (Use in Code)
+###  Development (Use in Code)
 
 **For Error Handling:**
 - [ ] Import error helpers: `use vtcode_core::mcp::*;`
@@ -73,7 +73,7 @@ let (transport, _stderr) = create_stdio_transport_with_stderr(
 - [ ] Handle transport errors
 - [ ] Test with actual MCP server
 
-### ☐ Testing (Verify It Works)
+###  Testing (Verify It Works)
 
 - [ ] Test error helpers are imported correctly
 - [ ] Test schema validation with valid input
@@ -82,7 +82,7 @@ let (transport, _stderr) = create_stdio_transport_with_stderr(
 - [ ] Verify stderr capturing works
 - [ ] Run `cargo test -p vtcode-core mcp` (if applicable)
 
-### ☐ Review (Quality)
+###  Review (Quality)
 
 - [ ] Code follows patterns from [MCP_PHASE1_USAGE_GUIDE.md](MCP_PHASE1_USAGE_GUIDE.md)
 - [ ] Error messages are descriptive
@@ -136,11 +136,11 @@ use serde_json::json;
 fn validate_user_input(schema: &Value, input: &Value) -> anyhow::Result<()> {
     match validate_tool_input(Some(schema), input) {
         Ok(_) => {
-            println!("✅ Input is valid");
+            println!(" Input is valid");
             Ok(())
         }
         Err(e) => {
-            eprintln!("❌ Validation failed: {}", e);
+            eprintln!(" Validation failed: {}", e);
             Err(e)
         }
     }
@@ -157,10 +157,10 @@ let schema = json!({
 });
 
 let valid = json!({"name": "Alice", "age": 30});
-validate_user_input(&schema, &valid)?; // ✅ Pass
+validate_user_input(&schema, &valid)?; //  Pass
 
 let invalid = json!({"age": -5}); // Missing "name", negative age
-validate_user_input(&schema, &invalid)?; // ❌ Fail (as expected)
+validate_user_input(&schema, &invalid)?; //  Fail (as expected)
 ```
 
 ### Pattern 3: Transport Creation with Stderr
@@ -253,11 +253,11 @@ error: cannot find function `tool_not_found` in this scope
 ```rust
 // Wrong
 use vtcode_core::mcp;
-let err = tool_not_found("x"); // ❌ Won't work
+let err = tool_not_found("x"); //  Won't work
 
 // Right
 use vtcode_core::mcp::*;
-let err = tool_not_found("x"); // ✅ Works
+let err = tool_not_found("x"); //  Works
 ```
 
 ### Issue: "Schema validation always passes"
@@ -311,12 +311,12 @@ let (transport, stderr) = create_stdio_transport_with_stderr(
 
 You'll know you're using MCP correctly when:
 
-✅ Your code compiles without warnings (MCP-specific)  
-✅ Error messages are clear and descriptive  
-✅ Schema validation catches invalid input  
-✅ Tests verify both success and failure paths  
-✅ Transport creation handles errors gracefully  
-✅ New team members can use your code as an example  
+ Your code compiles without warnings (MCP-specific)  
+ Error messages are clear and descriptive  
+ Schema validation catches invalid input  
+ Tests verify both success and failure paths  
+ Transport creation handles errors gracefully  
+ New team members can use your code as an example  
 
 ---
 
@@ -379,11 +379,11 @@ let (transport, stderr) = create_stdio_transport_with_stderr(
 
 ---
 
-**Status:** Ready to use ✅  
+**Status:** Ready to use   
 **Time to Productivity:** 20 minutes  
-**Next Step:** Pick a code pattern above and start building! 🚀
+**Next Step:** Pick a code pattern above and start building! 
 
 ---
 
 **Last Updated:** 2025-11-20  
-**Phase Status:** Phase 1 ✅ | Phase 2 ✅ (40%) | Phase 3 🕐
+**Phase Status:** Phase 1  | Phase 2  (40%) | Phase 3 

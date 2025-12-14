@@ -461,10 +461,10 @@ impl LLMProviderWithProgress {
 ## Performance Considerations
 
 All examples use:
-- ✓  Lock-free atomics for progress tracking
-- ✓  Minimal overhead per chunk (nanoseconds)
-- ✓  No allocation in hot paths
-- ✓  Optional callbacks (can be `None`)
+-   Lock-free atomics for progress tracking
+-   Minimal overhead per chunk (nanoseconds)
+-   No allocation in hot paths
+-   Optional callbacks (can be `None`)
 
 Typical overhead per chunk: **< 1 microsecond**
 

@@ -123,13 +123,13 @@ git checkout src/file.rs
 ### Blocked Operations (Will Error)
 
 ```bash
-# ⤫  Force push (not allowed)
+#   Force push (not allowed)
 git push --force
 
-# ⤫  Destructive reset (not allowed)
+#   Destructive reset (not allowed)
 git reset --hard
 
-# ⤫  Complex history rewrite (not allowed)
+#   Complex history rewrite (not allowed)
 git rebase main
 git filter-branch
 ```

@@ -155,16 +155,16 @@ cache_ttl_seconds = 300
 User Command Input
         ↓
 CommandPolicyEvaluator.evaluate_with_resolution()
-        ├─→ PermissionCache.get()
-        │   ├─ Hit → Return cached (fast path, ~0.1ms)
-        │   └─ Miss → Continue
-        ├─→ CommandResolver.resolve()
-        │   └─ Map "cargo" → "/usr/local/bin/cargo"
-        ├─→ Policy evaluation (existing logic)
-        │   └─ Check allow/deny rules
-        ├─→ PermissionCache.put()
-        │   └─ Cache decision for 5 minutes
-        └─→ Return (allowed, path, reason, decision)
+        → PermissionCache.get()
+            Hit → Return cached (fast path, ~0.1ms)
+            Miss → Continue
+        → CommandResolver.resolve()
+            Map "cargo" → "/usr/local/bin/cargo"
+        → Policy evaluation (existing logic)
+            Check allow/deny rules
+        → PermissionCache.put()
+            Cache decision for 5 minutes
+        → Return (allowed, path, reason, decision)
                 ↓
         Agent uses decision for audit/execution
                 ↓
@@ -329,17 +329,17 @@ Two comprehensive documentation files are provided:
 
 ## Verification Checklist
 
-- ✓  All three modules compile without errors
-- ✓  All unit tests pass (9 tests)
-- ✓  Integration tests available (10+ tests)
-- ✓  CommandPolicyEvaluator enhanced with integration
-- ✓  Configuration section added to vtcode.toml
-- ✓  Public API exports added to lib.rs and tools/mod.rs
-- ✓  `which` dependency added to Cargo.toml
-- ✓  Code formatted with `cargo fmt`
-- ✓  Passes `cargo clippy` (no new warnings)
-- ✓  Comprehensive documentation provided
-- ✓  No breaking changes to existing APIs
+-   All three modules compile without errors
+-   All unit tests pass (9 tests)
+-   Integration tests available (10+ tests)
+-   CommandPolicyEvaluator enhanced with integration
+-   Configuration section added to vtcode.toml
+-   Public API exports added to lib.rs and tools/mod.rs
+-   `which` dependency added to Cargo.toml
+-   Code formatted with `cargo fmt`
+-   Passes `cargo clippy` (no new warnings)
+-   Comprehensive documentation provided
+-   No breaking changes to existing APIs
 
 ---
 

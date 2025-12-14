@@ -59,11 +59,11 @@ self.suspend_terminal_for_command(|| {
 
 ## Build Status
 
-✓  All components compile successfully:
+  All components compile successfully:
 ```bash
-cargo check -p vtcode-core      # ✓ Passes
-cargo check --bin vtcode        # ✓ Passes
-cargo check --lib              # ✓ Passes
+cargo check -p vtcode-core      #  Passes
+cargo check --bin vtcode        #  Passes
+cargo check --lib              #  Passes
 ```
 
 ## Files Modified
@@ -222,7 +222,7 @@ launcher.suspend_terminal_for_command(|| {
 
 ## Backward Compatibility
 
-✓  No breaking changes:
+  No breaking changes:
 - `src/interactive_list.rs` unchanged
 - Existing CLI handlers unchanged
 - New `tui` module is optional/additive
@@ -276,11 +276,11 @@ Recommended testing:
 ## Summary
 
 The integration is complete and tested:
-- ✓  Async event-driven TUI in place
-- ✓  External app suspension patterns unified
-- ✓  Code duplication eliminated
-- ✓  All components compile cleanly
-- ✓  Comprehensive documentation provided
-- ✓  Backward compatible with existing code
+-   Async event-driven TUI in place
+-   External app suspension patterns unified
+-   Code duplication eliminated
+-   All components compile cleanly
+-   Comprehensive documentation provided
+-   Backward compatible with existing code
 
 The architecture now provides modern, composable terminal UI patterns while maintaining the reliability and robustness of the original implementation.

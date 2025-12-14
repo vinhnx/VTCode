@@ -229,10 +229,10 @@ After planning, execute step-by-step with explicit narration:
 
 ### Benefits of This Approach
 
-✓  **Clear reasoning**: Each step shows why the action was taken  
-✓  **Easy to resume**: If context resets, can see exact progress  
-✓  **Debugging**: If something fails, can point to exact step  
-✓  **Collaboration**: Other engineers can understand the logic  
+  **Clear reasoning**: Each step shows why the action was taken  
+  **Easy to resume**: If context resets, can see exact progress  
+  **Debugging**: If something fails, can point to exact step  
+  **Collaboration**: Other engineers can understand the logic  
 
 ---
 
@@ -546,22 +546,22 @@ Reading src/api/errors.rs at line 50...
 
 ### DO
 
-✓  Create .progress.md for **5+ step tasks**  
-✓  Update .progress.md **after each major step**  
-✓  Include **file paths + line numbers** for quick navigation  
-✓  State **next action clearly** (not vague)  
-✓  Track **key decisions** (why, not just what)  
-✓  Use thinking structures for **complex reasoning**  
-✓  Compaction at **80% context used**  
+  Create .progress.md for **5+ step tasks**  
+  Update .progress.md **after each major step**  
+  Include **file paths + line numbers** for quick navigation  
+  State **next action clearly** (not vague)  
+  Track **key decisions** (why, not just what)  
+  Use thinking structures for **complex reasoning**  
+  Compaction at **80% context used**  
 
 ### DON'T
 
-⤫  Over-update .progress.md (once per step is enough)  
-⤫  Include verbose outputs in state file  
-⤫  Forget to note **file paths + line numbers**  
-⤫  Skip thinking analysis for complex tasks  
-⤫  Wait until 95% full to compact (harder recovery)  
-⤫  Create progress file for simple tasks (<5 steps)  
+  Over-update .progress.md (once per step is enough)  
+  Include verbose outputs in state file  
+  Forget to note **file paths + line numbers**  
+  Skip thinking analysis for complex tasks  
+  Wait until 95% full to compact (harder recovery)  
+  Create progress file for simple tasks (<5 steps)  
 
 ---
 
@@ -589,10 +589,10 @@ Reading src/api/errors.rs at line 50...
 
 Persistent task patterns enable VT Code agents to:
 
-1. ✓  Work on **arbitrarily long tasks** (no context limit)
-2. ✓  **Resume gracefully** after context resets
-3. ✓  **Maintain coherence** across multiple windows
-4. ✓  **Scale to enterprise tasks** (large refactorings, migrations)
+1.   Work on **arbitrarily long tasks** (no context limit)
+2.   **Resume gracefully** after context resets
+3.   **Maintain coherence** across multiple windows
+4.   **Scale to enterprise tasks** (large refactorings, migrations)
 
 **Implementation Priority**:
 1. Progress files (.progress.md) - high impact, low effort

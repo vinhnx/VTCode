@@ -17,7 +17,7 @@ Created a new spinner state struct that manages:
 
 Features:
 - 80ms frame duration for smooth animation
-- Braille pattern animation: ⠋ → ⠙ → ⠹ → ⠸
+- Braille pattern animation:  →  →  → 
 - Methods: `start()`, `stop()`, `update()`, `get_text()`, `render_frame()`
 
 ### 2. Integrated Spinner into Session
@@ -75,27 +75,27 @@ Added: `indicatif = { version = "0.18", default-features = false }`
 
 1. **Trigger**: Spinner starts immediately when user presses Enter to submit
 2. **Animation**: Smooth 80ms frame updates using braille characters
-3. **Display**: Shows "⠋ Thinking..." with cyan color at dim intensity
+3. **Display**: Shows " Thinking..." with cyan color at dim intensity
 4. **Stop**: Stops automatically when first agent message line appears
 5. **Performance**: Non-blocking, forces minimal redraws only when needed
 
 ## Visual Example
 
 ```
-┌─────────────────────────────────────┐
-│ Your message                        │
-│                                      │
-│ ⠙ Thinking...                       │  ← Animated spinner
-│                                      │
-│ Agent response starts here...        │  ← Spinner stops
-└─────────────────────────────────────┘
+
+ Your message                        
+                                      
+  Thinking...                         ← Animated spinner
+                                      
+ Agent response starts here...          ← Spinner stops
+
 ```
 
 ## Testing
 
-- Compiles cleanly: `cargo check` ✓
+- Compiles cleanly: `cargo check` 
 - No warnings or errors
-- Builds successfully: `cargo build` ✓
+- Builds successfully: `cargo build` 
 - Integration with existing TUI flow verified
 
 ## Implementation Notes

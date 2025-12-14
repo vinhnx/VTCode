@@ -6,12 +6,12 @@
 
 #### BEFORE (Verbose)
 ```
-✓ [run_pty_cmd] cargo fmt · Command: cargo, fmt (exit: 0)
+ [run_pty_cmd] cargo fmt · Command: cargo, fmt (exit: 0)
 [END] [COMPLETED - 80x24] Session: run-1763462657610 | Working directory: . (exit code: 0)
-────────────────────────────────────────────────────────────
+
 $ /bin/zsh -c cargo fmt
 (no output)
-────────────────────────────────────────────────────────────
+
 [Session run-1763462657610][SUCCESS]
 ```
 
@@ -20,10 +20,10 @@ $ /bin/zsh -c cargo fmt
 
 #### AFTER (Compact)
 ```
-✓ OK · cargo fmt · 80x24
+ OK · cargo fmt · 80x24
 $ /bin/zsh -c cargo fmt
 (no output)
-✓ exit 0
+ exit 0
 ```
 
 **Lines**: 4  
@@ -37,11 +37,11 @@ $ /bin/zsh -c cargo fmt
 #### BEFORE (Verbose)
 ```
 [RUN] [RUNNING - 120x30] Session: run-1764123456789 | Working directory: /Users/dev/vtcode (exit code: ?)
-────────────────────────────────────────────────────────────
+
 $ cargo build --release --features "feature-a, feature-b"
    Compiling vtcode v0.45.4 (/Users/dev/vtcode)
     Finished release [optimized] target(s) in 42.53s
-────────────────────────────────────────────────────────────
+
 [Session run-1764123456789][EXIT: 0]
 ```
 
@@ -50,11 +50,11 @@ $ cargo build --release --features "feature-a, feature-b"
 
 #### AFTER (Compact)
 ```
-▶ RUN · cargo build --release --features "feat…
+ RUN · cargo build --release --features "feat…
 $ cargo build --release --features "feature-a, feature-b"
    Compiling vtcode v0.45.4 (/Users/dev/vtcode)
     Finished release [optimized] target(s) in 42.53s
-✓ exit 0
+ exit 0
 ```
 
 **Lines**: 5  
@@ -68,7 +68,7 @@ $ cargo build --release --features "feature-a, feature-b"
 #### BEFORE (Verbose)
 ```
 [END] [COMPLETED - 80x24] Session: test-run-001 (exit code: 1)
-────────────────────────────────────────────────────────────
+
 $ cargo check
 error[E0425]: cannot find value `x` in this scope
    --> src/main.rs:42:5
@@ -78,7 +78,7 @@ error[E0425]: cannot find value `x` in this scope
 
 error: could not compile `vtcode` (bin "vtcode") due to previous error
 
-────────────────────────────────────────────────────────────
+
 [Session test-run-001][EXIT: 1]
 ```
 
@@ -87,7 +87,7 @@ error: could not compile `vtcode` (bin "vtcode") due to previous error
 
 #### AFTER (Compact)
 ```
-✓ OK · cargo check · 80x24
+ OK · cargo check · 80x24
 $ cargo check
 error[E0425]: cannot find value `x` in this scope
    --> src/main.rs:42:5
@@ -96,7 +96,7 @@ error[E0425]: cannot find value `x` in this scope
     |                   ^ not found in this scope
 
 error: could not compile `vtcode` (bin "vtcode") due to previous error
-✓ exit 1
+ exit 1
 ```
 
 **Lines**: 11+  
@@ -110,7 +110,7 @@ error: could not compile `vtcode` (bin "vtcode") due to previous error
 #### BEFORE (Verbose)
 ```
 [RUN] [RUNNING - 80x24] Session: stream-001
-────────────────────────────────────────────────────────────
+
 $ find . -name "*.rs" | head -20
 ... command still running ...
 ./src/main.rs
@@ -126,13 +126,13 @@ $ find . -name "*.rs" | head -20
 
 #### AFTER (Compact)
 ```
-▶ RUN · find . -name "*.rs" | head -20
+ RUN · find . -name "*.rs" | head -20
 ./src/main.rs
 ./src/cli/mod.rs
 ./src/agent/runloop.rs
 ...
 (after 10 seconds)
-✓ done
+ done
 ```
 
 **Lines**: ~10+  
@@ -145,13 +145,13 @@ $ find . -name "*.rs" | head -20
 | Aspect | Before | After | Change |
 |---|---|---|---|
 | **Header Format** | `[STATUS] [TEXT - SIZE] Session: ID` | `{status} · {command} · {size}` | Compact, semantic |
-| **Status Symbols** | `[RUN]`, `[END]`, brackets | `▶`, `✓`, emoji | Iconic, minimal |
+| **Status Symbols** | `[RUN]`, `[END]`, brackets | ``, ``, emoji | Iconic, minimal |
 | **Status Text** | `RUNNING`, `COMPLETED` | `RUN`, `OK` | Concise |
 | **Separators** | 60-char line | None | Removed |
-| **Exit Code** | `(exit code: 0)` in header | `✓ exit 0` in footer | Moved to footer |
+| **Exit Code** | `(exit code: 0)` in header | ` exit 0` in footer | Moved to footer |
 | **Session ID** | Displayed inline and in footer | Omitted | Not needed in UI |
 | **Command Display** | Always after header | In header, full on next if long | Integrated |
-| **Footer** | `[Session ID][STATUS]` | `✓ {status}` | Minimal |
+| **Footer** | `[Session ID][STATUS]` | ` {status}` | Minimal |
 | **Running Message** | `... command still running ...` | None (symbol shows it) | Removed |
 | **Total Lines (avg)** | 8-10 | 4-6 | 40-50% reduction |
 
@@ -162,18 +162,18 @@ $ find . -name "*.rs" | head -20
 ### BEFORE: 8 lines, ~280 characters
 ```
 [RUN] [RUNNING - 120x24] Session: run-1234567 (no directory)
-────────────────────────────────────────────────────────────
+
 $ command here
 output...
-────────────────────────────────────────────────────────────
+
 [Session run-1234567][COMPLETE]
 ```
 
 ### AFTER: 4 lines, ~100 characters
 ```
-✓ OK · command here · 120x24
+ OK · command here · 120x24
 output...
-✓ exit 0
+ exit 0
 ```
 
 **Efficiency**: 64% reduction in output characters  
@@ -186,7 +186,7 @@ output...
 
 ### Pattern 1: Quick Check (cargo fmt)
 - **Before**: User sees header noise before "no output"
-- **After**: User sees `✓ OK` immediately, then `(no output)`, then `✓ exit 0`
+- **After**: User sees ` OK` immediately, then `(no output)`, then ` exit 0`
 
 **Time to understand status**: 
 - Before: Scan 2-3 lines
@@ -206,7 +206,7 @@ output...
 
 **Location of exit info**:
 - Before: `[EXIT: 1]` at bottom of potentially long output
-- After: `✓ exit 1` clear footer
+- After: ` exit 1` clear footer
 
 ---
 
@@ -222,12 +222,12 @@ output...
    - Add intelligent command truncation
    
 2. **Footer generation** (Lines 203-217)
-   - Replace `[Session ID][STATUS]` with `✓ {status}`
+   - Replace `[Session ID][STATUS]` with ` {status}`
    - Show only exit code, not session ID
 
 3. **Running indicator** (Deleted)
    - Remove "... command still running ..." message
-   - Status symbol `▶` indicates running state
+   - Status symbol `` indicates running state
 
 ### Lines Changed
 - Added: ~45 lines (new compact formatting logic)
@@ -235,10 +235,10 @@ output...
 - Net: +15 lines (smaller, cleaner code)
 
 ### Compilation
-✓  Builds without warnings  
-✓  All existing tests pass  
-✓  No breaking changes to APIs  
-✓  Backward compatible
+  Builds without warnings  
+  All existing tests pass  
+  No breaking changes to APIs  
+  Backward compatible
 
 ---
 
@@ -265,16 +265,16 @@ output...
 ## Accessibility Considerations
 
 ### Color Blind Users
-✓  Status indicators work with or without color (emoji symbols)  
-✓  Text status (`RUN`, `OK`) supports color blindness
+  Status indicators work with or without color (emoji symbols)  
+  Text status (`RUN`, `OK`) supports color blindness
 
 ### Screen Readers
-✓  Simplified format has fewer repeated elements  
-✓  Clear text semantics (not abbreviations)
+  Simplified format has fewer repeated elements  
+  Clear text semantics (not abbreviations)
 
 ### High DPI/Small Fonts
-✓  Fewer lines to display  
-✓  Less visual clutter
+  Fewer lines to display  
+  Less visual clutter
 
 ---
 

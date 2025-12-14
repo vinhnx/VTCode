@@ -4,13 +4,13 @@ HTTP-based Agent Communication Protocol (ACP) client library for inter-agent com
 
 ## Features
 
-✓  **REST-based Communication** - Standard HTTP protocol, no special SDKs required
-✓  **Agent Discovery** - Find agents by capability or ID
-✓  **Sync & Async** - Both synchronous and asynchronous request handling
-✓  **Health Monitoring** - Ping agents to check status
-✓  **Message Serialization** - Type-safe ACP message handling
-✓  **Registry Management** - In-memory agent registry with lifecycle management
-✓  **Error Handling** - Comprehensive error types for debugging
+  **REST-based Communication** - Standard HTTP protocol, no special SDKs required
+  **Agent Discovery** - Find agents by capability or ID
+  **Sync & Async** - Both synchronous and asynchronous request handling
+  **Health Monitoring** - Ping agents to check status
+  **Message Serialization** - Type-safe ACP message handling
+  **Registry Management** - In-memory agent registry with lifecycle management
+  **Error Handling** - Comprehensive error types for debugging
 
 ## Quick Start
 
@@ -145,12 +145,12 @@ match client.call_sync("agent", "action".to_string(), args).await {
 
 ```
 User Code
-   │
-   └─► AcpClient
-        ├─► HTTP Communication (reqwest)
-        ├─► Message Serialization (serde_json)
-        └─► AgentRegistry
-             └─► In-memory HashMap<String, AgentInfo>
+   
+    AcpClient
+         HTTP Communication (reqwest)
+         Message Serialization (serde_json)
+         AgentRegistry
+              In-memory HashMap<String, AgentInfo>
 ```
 
 ## Message Protocol
@@ -261,13 +261,13 @@ cargo run --example acp_distributed_workflow
 
 ## Security Considerations
 
-⚠️ **Current Implementation:**
+ **Current Implementation:**
 - HTTP (not HTTPS) by default
 - No authentication/authorization
 - No message encryption
 - Messages logged with tracing
 
-🔒 **Recommended for Production:**
+ **Recommended for Production:**
 - Use HTTPS with certificate pinning
 - Implement JWT or mTLS authentication
 - Add message signing and encryption

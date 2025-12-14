@@ -1,6 +1,6 @@
 # Code Review Recommendations & Future Optimizations
 
-## 1. ✓  Implemented Improvements
+## 1.   Implemented Improvements
 
 ### Full-Width Diff Backgrounds
 - **Status**: COMPLETE
@@ -16,7 +16,7 @@
 
 ---
 
-## 2. 🔄 Potential Optimizations (Not Implemented)
+## 2.  Potential Optimizations (Not Implemented)
 
 ### Early Width Calculation
 **Current**: Padding calculated during text flow (late-stage)
@@ -69,29 +69,29 @@ new_spans.push(Span::styled(" ".repeat(padding_needed), bg_style));
 
 ---
 
-## 3. 📋 Code Quality Observations
+## 3.  Code Quality Observations
 
 ### Strengths
-✓  Proper Unicode width handling (`unicode_width` crate)
-✓  Clear separation of concerns (detection vs. padding)
-✓  Early returns prevent unnecessary computation
-✓  Comments explain the why, not just the what
-✓  No breaking changes to existing APIs
+  Proper Unicode width handling (`unicode_width` crate)
+  Clear separation of concerns (detection vs. padding)
+  Early returns prevent unnecessary computation
+  Comments explain the why, not just the what
+  No breaking changes to existing APIs
 
 ### Edge Cases Handled
-✓  Empty lines (early return)
-✓  Lines wider than viewport (saturating_sub prevents overflow)
-✓  Lines without background color (uses default style)
-✓  Mixed span content (searches for bg color across all spans)
+  Empty lines (early return)
+  Lines wider than viewport (saturating_sub prevents overflow)
+  Lines without background color (uses default style)
+  Mixed span content (searches for bg color across all spans)
 
 ### Potential Improvements
-⚠️ `is_diff_line()` could be renamed to `is_styled_line()` for reuse
-⚠️ Consider adding metrics/telemetry if padding very frequent
-⚠️ Could add optional debug logging for diff line detection
+ `is_diff_line()` could be renamed to `is_styled_line()` for reuse
+ Consider adding metrics/telemetry if padding very frequent
+ Could add optional debug logging for diff line detection
 
 ---
 
-## 4. 🧪 Testing Recommendations
+## 4.  Testing Recommendations
 
 ### Unit Tests to Add
 ```rust
@@ -122,21 +122,21 @@ fn pad_diff_line_preserves_all_colors() {
 
 ---
 
-## 5. 🎯 Recommendations Summary
+## 5.  Recommendations Summary
 
 | Item | Status | Priority | Effort | Recommendation |
 |------|--------|----------|--------|-----------------|
-| Full-width diff backgrounds | ✓  Done | - | - | Ship as-is |
-| Show all terminal commands | ✓  Done | - | - | Ship as-is |
-| Unicode width handling | ✓  Done | - | - | Validated |
-| Add unit tests | ⤫  Todo | Medium | Low | Add before next release |
-| Extend to code blocks | ⚠️ Consider | Low | Medium | Monitor adoption |
-| Performance profiling | ⚠️ Consider | Low | Medium | Only if complaints |
-| Refactor to generic padding | ⚠️ Consider | Low | Medium | Only if pattern repeats |
+| Full-width diff backgrounds |   Done | - | - | Ship as-is |
+| Show all terminal commands |   Done | - | - | Ship as-is |
+| Unicode width handling |   Done | - | - | Validated |
+| Add unit tests |   Todo | Medium | Low | Add before next release |
+| Extend to code blocks |  Consider | Low | Medium | Monitor adoption |
+| Performance profiling |  Consider | Low | Medium | Only if complaints |
+| Refactor to generic padding |  Consider | Low | Medium | Only if pattern repeats |
 
 ---
 
-## 6. 🚀 Next Steps
+## 6.  Next Steps
 
 1. **Merge current changes** - Both improvements are solid and ready
 2. **Add unit tests** - Cover the new diff detection logic  
@@ -145,7 +145,7 @@ fn pad_diff_line_preserves_all_colors() {
 
 ---
 
-## 7. 📝 Code Review Checklist
+## 7.  Code Review Checklist
 
 - [x] All tests pass
 - [x] No clippy warnings introduced

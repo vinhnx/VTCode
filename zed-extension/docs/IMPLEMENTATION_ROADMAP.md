@@ -4,7 +4,7 @@ This document outlines the current state of the extension and the roadmap for fu
 
 ## Current Status
 
-### ✓  Completed
+###   Completed
 
 - [x] Basic extension scaffold with `extension.toml`
 - [x] Rust crate setup with Zed extension API
@@ -89,7 +89,7 @@ let output = Command::new("vtcode")
 
 ## Phase 2: Advanced Features (v0.3.0)
 
-### 2.1 Editor Integration ✓ 
+### 2.1 Editor Integration  
 
 **Goal**: Deeper integration with editor UI
 
@@ -110,7 +110,7 @@ let output = Command::new("vtcode")
 - Diagnostic with severity levels and optional fixes
 - QuickFix for code suggestions
 
-### 2.2 Configuration Management ✓ 
+### 2.2 Configuration Management  
 
 **Goal**: Enhanced configuration handling
 
@@ -135,7 +135,7 @@ let output = Command::new("vtcode")
 - [ ] Settings UI for common options
 - [ ] Configuration migration on version updates
 
-### 2.3 Context Awareness ✓ 
+### 2.3 Context Awareness  
 
 **Goal**: Pass richer context to VTCode agent
 
@@ -158,9 +158,9 @@ let output = Command::new("vtcode")
 - ProjectStructure for hierarchy analysis
 - Language distribution metrics
 
-## Phase 3: Polish & Distribution ✓  (v0.3.0)
+## Phase 3: Polish & Distribution   (v0.3.0)
 
-### 3.1 Error Handling & UX ✓ 
+### 3.1 Error Handling & UX  
 
 **Goal**: Professional user experience
 
@@ -180,7 +180,7 @@ let output = Command::new("vtcode")
 - Thread-safe error state management
 - Integration with Output Channel
 
-### 3.2 Performance Optimization ✓ 
+### 3.2 Performance Optimization  
 
 **Goal**: Minimal overhead
 
@@ -200,7 +200,7 @@ let output = Command::new("vtcode")
 - Memory usage tracking
 - Zero-allocation fast path for hits
 
-### 3.3 Quality Assurance ✓ 
+### 3.3 Quality Assurance  
 
 **Goal**: Production-ready code
 
@@ -307,21 +307,21 @@ Planned additions:
 
 ```
 zed-extension/
-├── src/
-│   ├── lib.rs              # Main extension logic
-│   ├── executor.rs         # ✓ VTCode CLI execution
-│   ├── config.rs           # ✓ Configuration parsing
-│   ├── commands.rs         # ✓ Command implementations
-│   ├── output.rs           # ✓ Output channel management
-│   ├── context.rs          # ✓ Editor context & diagnostics
-│   ├── editor.rs           # ✓ Editor state & integration
-│   ├── validation.rs       # ✓ Configuration validation
-│   ├── workspace.rs        # ✓ Workspace context (Phase 2.3)
-│   ├── error_handling.rs   # ✓ Error handling & recovery (Phase 3)
-│   └── cache.rs            # ✓ Caching layer (Phase 3)
-├── tests/
-│   └── [integration tests - future]
-└── [existing files...]
+ src/
+    lib.rs              # Main extension logic
+    executor.rs         #  VTCode CLI execution
+    config.rs           #  Configuration parsing
+    commands.rs         #  Command implementations
+    output.rs           #  Output channel management
+    context.rs          #  Editor context & diagnostics
+    editor.rs           #  Editor state & integration
+    validation.rs       #  Configuration validation
+    workspace.rs        #  Workspace context (Phase 2.3)
+    error_handling.rs   #  Error handling & recovery (Phase 3)
+    cache.rs            #  Caching layer (Phase 3)
+ tests/
+    [integration tests - future]
+ [existing files...]
 ```
 
 **Current Module Structure**:
@@ -348,7 +348,7 @@ zed-extension/
 
 ## Success Criteria
 
-### Phase 1 ✓  (Completed)
+### Phase 1   (Completed)
 - [x] All Phase 1 commands working (ask, analyze, chat, status)
 - [x] Proper error handling and user feedback
 - [x] Comprehensive documentation
@@ -356,7 +356,7 @@ zed-extension/
 - [x] Unit tests for all modules (16 passing)
 - [x] Configuration parsing and validation
 
-### Phase 2 ✓  (Completed)
+### Phase 2   (Completed)
 - [x] Editor integration with context passing (Phase 2.1)
 - [x] Configuration management with validation (Phase 2.2)
 - [x] Workspace awareness and context extraction (Phase 2.3)
@@ -364,7 +364,7 @@ zed-extension/
 - [x] Full API documentation
 - [x] Production-ready code quality
 
-### Phase 3 ✓  (Completed)
+### Phase 3   (Completed)
 - [x] Comprehensive error handling with recovery strategies
 - [x] Multi-level caching with intelligent eviction
 - [x] Memory-bounded operations
@@ -410,7 +410,7 @@ To help implement this roadmap:
 
 ## Implementation Status Summary
 
-### Phase 1 Complete ✓  (v0.2.0)
+### Phase 1 Complete   (v0.2.0)
 All core features:
 1. **Process Execution** - VTCode CLI integration with full command execution
 2. **Commands Module** - 5 primary commands with proper response handling
@@ -418,7 +418,7 @@ All core features:
 4. **Configuration** - TOML parsing with sensible defaults
 5. **Extension Core** - Zed extension scaffold with proper initialization
 
-### Phase 2.1 Complete ✓ 
+### Phase 2.1 Complete  
 Editor integration features:
 1. **EditorContext** - Code selection and workspace context
 2. **Diagnostics** - Error/warning/info tracking with fixes
@@ -426,7 +426,7 @@ Editor integration features:
 4. **QuickFixes** - Code suggestions and fixes
 5. **EditorState** - Thread-safe state management
 
-### Phase 2.2 Complete ✓ 
+### Phase 2.2 Complete  
 Configuration management:
 1. **Configuration Validation** - Comprehensive rule checking
 2. **Error Reporting** - Detailed errors with suggestions
@@ -434,7 +434,7 @@ Configuration management:
 4. **Per-Section Validation** - AI, workspace, and security checks
 5. **User Display** - Formatted output for UI integration
 
-### Phase 2.3 Complete ✓ 
+### Phase 2.3 Complete  
 Workspace awareness:
 1. **Workspace Context** - Directory traversal and file discovery
 2. **File Content** - Size-limited extraction and management
@@ -442,7 +442,7 @@ Workspace awareness:
 4. **Open Buffers** - File tracking and state management
 5. **Project Structure** - Hierarchy analysis and metrics
 
-### Phase 3 Complete ✓  (v0.3.0)
+### Phase 3 Complete   (v0.3.0)
 Production-ready features:
 1. **Error Handling** - Comprehensive error types with recovery strategies
 2. **Caching Layer** - Multi-level caching with intelligent eviction
@@ -450,10 +450,10 @@ Production-ready features:
 4. **Quality** - 107 unit tests with 100% code coverage on new modules
 
 ### Quality Metrics
-- ✓ 107 unit tests (all passing)
-- ✓ 100% code coverage (new modules)
-- ✓ 0 compiler warnings
-- ✓ Full documentation for all public APIs
-- ✓ Clean code with comprehensive error handling
-- ✓ Thread-safe components throughout
-- ✓ Production-ready for v0.3.0 release
+-  107 unit tests (all passing)
+-  100% code coverage (new modules)
+-  0 compiler warnings
+-  Full documentation for all public APIs
+-  Clean code with comprehensive error handling
+-  Thread-safe components throughout
+-  Production-ready for v0.3.0 release

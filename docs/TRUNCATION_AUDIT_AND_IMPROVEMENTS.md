@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-**Status: Production-Ready ✓ **
+**Status: Production-Ready  **
 
 vtcode's token-based truncation strategy is **more sophisticated than competing systems** (e.g., Codex v0.56). This audit confirms the implementation is sound and identifies minor enhancement opportunities.
 
@@ -23,25 +23,25 @@ vtcode's token-based truncation strategy is **more sophisticated than competing 
 Tool Output (raw)
     ↓
 render_stream_section() [src/agent/runloop/tool_output/streams.rs:65-180]
-    ├─ Strip ANSI codes if needed
-    ├─ Apply token-based truncation (25k tokens)
-    │  ├─ Count total tokens (HuggingFace or approximate)
-    │  ├─ Allocate head/tail budget (40/60 or 50/50)
-    │  └─ Collect lines until token limit reached
-    ├─ Spool to .vtcode/tool-output/ if >200KB
-    └─ Proceed to display rendering
+     Strip ANSI codes if needed
+     Apply token-based truncation (25k tokens)
+       Count total tokens (HuggingFace or approximate)
+       Allocate head/tail budget (40/60 or 50/50)
+       Collect lines until token limit reached
+     Spool to .vtcode/tool-output/ if >200KB
+     Proceed to display rendering
     ↓
 Display Layer [src/agent/runloop/tool_output/streams.rs:225-370]
-    ├─ Render truncated content with safety limits
-    │  ├─ MAX_LINE_LENGTH: 150 chars (prevent TUI lag)
-    │  ├─ INLINE_STREAM_MAX_LINES: 30 lines (inline mode)
-    │  └─ MAX_CODE_LINES: 500 lines (code fence blocks)
-    ├─ Add truncation indicators
-    └─ Format with styles
+     Render truncated content with safety limits
+       MAX_LINE_LENGTH: 150 chars (prevent TUI lag)
+       INLINE_STREAM_MAX_LINES: 30 lines (inline mode)
+       MAX_CODE_LINES: 500 lines (code fence blocks)
+     Add truncation indicators
+     Format with styles
     ↓
 Output to UI/LLM
-    ├─ UI displays: Truncated content + log path
-    └─ LLM receives: Semantically complete head+tail (25k tokens)
+     UI displays: Truncated content + log path
+     LLM receives: Semantically complete head+tail (25k tokens)
 ```
 
 ### Truncation Algorithm Details
@@ -96,7 +96,7 @@ let total_tokens = match token_budget.count_tokens(content).await {
 
 ## Audit Findings
 
-### ✓  Strengths
+###   Strengths
 
 1. **Token-based limits are correct** (not line-based)
    - Aligns with actual LLM context window constraints
@@ -128,7 +128,7 @@ let total_tokens = match token_budget.count_tokens(content).await {
    - Uses Arc<RwLock<>> for thread-safe token budget tracking
    - Character fallback ensures no deadlocks
 
-### ⚠️ Opportunities for Enhancement
+###  Opportunities for Enhancement
 
 #### 1. Dynamic Token Limits Based on Context Pressure
 **Current**: Fixed 25k tokens per tool response
@@ -287,7 +287,7 @@ fn detect_code_content(content: &str) -> bool {
 **Risk**: Very low (only improves detection accuracy)
 
 #### 5. Removed Unused Constants
-**Status**: ✓  DONE
+**Status**:   DONE
 
 **File**: `vtcode-config/src/constants.rs:1315-1325`
 **What**: Removed unused terminal output constants
@@ -296,7 +296,7 @@ fn detect_code_content(content: &str) -> bool {
 - `TERMINAL_OUTPUT_END_LINES: 1_000` (now using 25k tokens)
 
 **Reason**: Legacy line-based limits replaced by token-based strategy
-**Impact**: ✓  Completed, verified with `cargo check`
+**Impact**:   Completed, verified with `cargo check`
 
 ---
 
@@ -307,25 +307,25 @@ fn detect_code_content(content: &str) -> bool {
 **Token Budget** (`vtcode-core/src/core/token_budget.rs`):
 ```rust
 #[test]
-fn test_token_counting()           // ✓ Accurate counts
+fn test_token_counting()           //  Accurate counts
 #[test]
-fn test_component_tracking()       // ✓ Per-component tokens
+fn test_component_tracking()       //  Per-component tokens
 #[test]
-fn test_threshold_detection()      // ✓ Warning thresholds
+fn test_threshold_detection()      //  Warning thresholds
 #[test]
-fn test_token_deduction()          // ✓ Budget arithmetic
+fn test_token_deduction()          //  Budget arithmetic
 #[test]
-fn test_usage_ratio_updates()      // ✓ Dynamic reconfiguration
+fn test_usage_ratio_updates()      //  Dynamic reconfiguration
 ```
 
 **Stream Rendering** (`src/agent/runloop/tool_output/streams.rs`):
 ```rust
 #[test]
-fn compact_mode_truncates_when_not_inline()      // ✓ Display limits
+fn compact_mode_truncates_when_not_inline()      //  Display limits
 #[test]
-fn inline_rendering_preserves_full_scrollback()  // ✓ Inline mode
+fn inline_rendering_preserves_full_scrollback()  //  Inline mode
 #[test]
-fn describes_shell_code_fence_as_shell_header()  // ✓ Formatting
+fn describes_shell_code_fence_as_shell_header()  //  Formatting
 ```
 
 ### Manual Testing
@@ -346,20 +346,20 @@ cargo test -p vtcode-core token_budget -- --nocapture
 
 | Feature | vtcode | Codex v0.56 | Claude Code |
 |---------|--------|-------------|-------------|
-| Token limits | ✓  25k tokens | ⤫  256 lines | ✓  Token-based |
-| Head+tail | ✓  Smart 40/60 | ✓  50/50 | ✓  Smart split |
-| Tokenizer | ✓  HuggingFace + fallback | ⤫  None mentioned | ✓  Integrated |
-| Approximation | ✓  3-method median | N/A | ✓  Advanced |
-| Component tracking | ✓  Per-component | ⤫  No | ⤫  No |
-| Dynamic limits | ⚠️ Planned | ⤫  No | ⤫  No |
-| Documentation | ✓  Excellent | ⤫  Minimal | ⤫  Closed |
-| Tests | ✓  8 tests | ⤫  Unknown | ⤫  Closed |
+| Token limits |   25k tokens |   256 lines |   Token-based |
+| Head+tail |   Smart 40/60 |   50/50 |   Smart split |
+| Tokenizer |   HuggingFace + fallback |   None mentioned |   Integrated |
+| Approximation |   3-method median | N/A |   Advanced |
+| Component tracking |   Per-component |   No |   No |
+| Dynamic limits |  Planned |   No |   No |
+| Documentation |   Excellent |   Minimal |   Closed |
+| Tests |   8 tests |   Unknown |   Closed |
 
 ---
 
 ## Implementation Checklist
 
-### ✓  Completed
+###   Completed
 - [x] Token-based truncation (25k tokens)
 - [x] Head+tail preservation with smart ratios
 - [x] Multi-method token approximation
@@ -369,13 +369,13 @@ cargo test -p vtcode-core token_budget -- --nocapture
 - [x] Unit test coverage
 - [x] Remove unused constants
 
-### 🔄 Recommended (Post-v0.44)
+###  Recommended (Post-v0.44)
 - [ ] Dynamic token limits based on context pressure
 - [ ] Error message preservation in middle sections
 - [ ] Token count caching for performance
 - [ ] Enhanced code detection algorithm
 
-### 📊 Future Enhancements (v0.45+)
+###  Future Enhancements (v0.45+)
 - [ ] Semantic compression (summarize repeated blocks)
 - [ ] Query-time access to spooled logs
 - [ ] Per-tool configurable limits
@@ -433,13 +433,13 @@ conservative_threshold = 0.50  # Disable limit before 50% context
 The identified enhancement opportunities are low-risk additions that would further improve context efficiency and error handling. None require architectural changes or pose correctness risks.
 
 ### Key Takeaways
-1. ✓  Token-based limits are correct and necessary
-2. ✓  Head+tail strategy with smart ratios is sound
-3. ✓  Approximation algorithm is robust and well-tested
-4. ✓  Documentation is clear and comprehensive
-5. ✓  Unused constants have been removed
-6. 🎯 Ready for production use
-7. 📈 Clear path for future enhancements
+1.   Token-based limits are correct and necessary
+2.   Head+tail strategy with smart ratios is sound
+3.   Approximation algorithm is robust and well-tested
+4.   Documentation is clear and comprehensive
+5.   Unused constants have been removed
+6.  Ready for production use
+7.  Clear path for future enhancements
 
 ---
 

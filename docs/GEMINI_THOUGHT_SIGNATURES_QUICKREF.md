@@ -50,14 +50,14 @@ if let Some(tool_calls) = response.tool_calls {
 
 ## When to Care About Thought Signatures
 
-### ✅ You DON'T need to worry if:
+###  You DON'T need to worry if:
 
 -   Using standard conversation patterns
 -   Using VT Code's Gemini provider
 -   Just executing tools and adding to history
 -   Working with Gemini 2.x models
 
-### ⚠️ You DO need to be careful if:
+###  You DO need to be careful if:
 
 -   **Manually constructing messages**: Include full tool call objects
 -   **Pruning conversation history**: Keep assistant messages with tool calls intact
@@ -66,7 +66,7 @@ if let Some(tool_calls) = response.tool_calls {
 
 ## Common Mistakes
 
-### ❌ Don't Do This
+###  Don't Do This
 
 ```rust
 // Reconstructing tool calls without signature
@@ -79,7 +79,7 @@ let tool_call = ToolCall {
 };
 ```
 
-### ✅ Do This Instead
+###  Do This Instead
 
 ```rust
 // Preserve entire tool call object
@@ -96,9 +96,9 @@ messages.push(Message::assistant_with_tool_calls(
 if let Some(tool_calls) = &message.tool_calls {
     for call in tool_calls {
         if let Some(sig) = &call.thought_signature {
-            println!("✓ Has signature: {:.20}...", sig);
+            println!(" Has signature: {:.20}...", sig);
         } else {
-            println!("✗ Missing signature for call: {}", call.id);
+            println!(" Missing signature for call: {}", call.id);
         }
     }
 }

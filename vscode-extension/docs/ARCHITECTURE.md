@@ -15,40 +15,40 @@ VTCode VSCode extension follows a modular, plugin-like architecture designed for
 ## Architecture Diagram
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                        VS Code Extension Host                        │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                      │
-│  ┌──────────────────┐    ┌──────────────────┐    ┌──────────────┐  │
-│  │   Command Layer  │    │  Participant     │    │    State     │  │
-│  │                  │    │     Layer        │    │   Layer      │  │
-│  ├──────────────────┤    ├──────────────────┤    ├──────────────┤  │
-│  │ • AskCommand     │    │ • Workspace      │    │ • Message    │  │
-│  │ • AnalyzeCommand │    │ • Code           │    │ • Conversation│ │
-│  │ • ConfigCommand  │    │ • Terminal       │    │ • Metadata   │  │
-│  │ • ... (7 total)  │    │ • Git            │    │              │  │
-│  └────────┬─────────┘    └────────┬─────────┘    └──────┬───────┘  │
-│           │                       │                     │          │
-│           └───────────────────────┼─────────────────────┘          │
-│                                   │                                │
-│  ┌────────────────────────────────▼──────────────────────────────┐  │
-│  │                    Core Services Layer                         │  │
-│  ├────────────────────────────────────────────────────────────────┤  │
-│  │ • CommandRegistry                                              │  │
-│  │ • ParticipantRegistry                                          │  │
-│  │ • ConversationManager                                          │  │
-│  │ • VtcodeBackend (CLI Integration)                            │  │
-│  │ • ChatViewProvider (UI)                                      │  │
-│  └────────────────────────────────────────────────────────────────┘  │
-│                                                                      │
-│  ┌────────────────────────────────────────────────────────────────┐  │
-│  │                    Utility Layer                               │  │
-│  ├────────────────────────────────────────────────────────────────┤  │
-│  │ • vtcodeRunner (CLI execution)                               │  │
-│  │ • Error handling                                             │  │
-│  │ • Configuration management                                   │  │
-│  └────────────────────────────────────────────────────────────────┘  │
-└──────────────────────────────────────────────────────────────────────┘
+
+                        VS Code Extension Host                        
+
+                                                                      
+            
+     Command Layer        Participant             State       
+                             Layer               Layer        
+            
+   • AskCommand          • Workspace           • Message      
+   • AnalyzeCommand      • Code                • Conversation 
+   • ConfigCommand       • Terminal            • Metadata     
+   • ... (7 total)       • Git                                
+            
+                                                                 
+                     
+                                                                   
+    
+                      Core Services Layer                           
+    
+   • CommandRegistry                                                
+   • ParticipantRegistry                                            
+   • ConversationManager                                            
+   • VtcodeBackend (CLI Integration)                              
+   • ChatViewProvider (UI)                                        
+    
+                                                                      
+    
+                      Utility Layer                                 
+    
+   • vtcodeRunner (CLI execution)                                 
+   • Error handling                                               
+   • Configuration management                                     
+    
+
 ```
 
 ---

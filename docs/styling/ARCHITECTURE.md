@@ -5,75 +5,75 @@ Visual diagrams and architectural details for the anstyle integration.
 ## System Architecture Diagram
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                     Input Sources                                │
-├──────────────────────┬──────────────────────┬──────────────────┤
-│  Git Config          │  LS_COLORS Env Var   │  Custom Config   │
-│  .git/config         │  "di=01;34:ln=01:36"│  .vtcoderc       │
-│                      │                      │                  │
-│ [color "diff"]       │                      │ ---              │
-│ new = green bold     │                      │                  │
-│ old = red            │                      │                  │
-└──────────────────────┴──────────────────────┴──────────────────┘
+
+                     Input Sources                                
+
+  Git Config            LS_COLORS Env Var     Custom Config   
+  .git/config           "di=01;34:ln=01:36"  .vtcoderc       
+                                                              
+ [color "diff"]                              ---              
+ new = green bold                                             
+ old = red                                                    
+
                              ↓
-                    ┌────────┴────────┐
-                    │                 │
-         ┌──────────▼────────┐  ┌──────▼─────────┐
-         │ anstyle-git 1.1   │  │ anstyle-ls 1.0 │
-         │ Parse Git syntax  │  │ Parse ANSI     │
-         │ "bold red"        │  │ codes "01;34"  │
-         └──────────┬────────┘  └────────┬───────┘
-                    │                    │
-                    └────────┬───────────┘
+                    
+                                     
+           
+          anstyle-git 1.1      anstyle-ls 1.0 
+          Parse Git syntax     Parse ANSI     
+          "bold red"           codes "01;34"  
+           
+                                        
+                    
                              ↓
-                   ┌─────────────────────┐
-                   │   anstyle::Style    │
-                   │ (ANSI abstraction)  │
-                   │                     │
-                   │ - fg_color          │
-                   │ - bg_color          │
-                   │ - effects (bold,    │
-                   │   dim, italic,      │
-                   │   underline, etc)   │
-                   └──────────┬──────────┘
+                   
+                      anstyle::Style    
+                    (ANSI abstraction)  
+                                        
+                    - fg_color          
+                    - bg_color          
+                    - effects (bold,    
+                      dim, italic,      
+                      underline, etc)   
+                   
                               ↓
-         ┌────────────────────────────────────────┐
-         │   vtcode-core/src/ui/tui/style.rs      │
-         │   convert_style() function             │
-         └──────────────────┬─────────────────────┘
+         
+            vtcode-core/src/ui/tui/style.rs      
+            convert_style() function             
+         
                             ↓
-         ┌────────────────────────────────────────┐
-         │      InlineTextStyle (NEW)             │
-         │                                        │
-         │ ┌──────────────────────────────────┐  │
-         │ │ color: Option<AnsiColorEnum>     │  │
-         │ │ bg_color: Option<AnsiColorEnum> │  │  ← NEW
-         │ │ effects: Effects (bitmask)       │  │  ← NEW
-         │ └──────────────────────────────────┘  │
-         └──────────────────┬─────────────────────┘
+         
+               InlineTextStyle (NEW)             
+                                                 
+            
+           color: Option<AnsiColorEnum>       
+           bg_color: Option<AnsiColorEnum>     ← NEW
+           effects: Effects (bitmask)           ← NEW
+            
+         
                             ↓
-         ┌────────────────────────────────────────┐
-         │   ratatui_style_from_inline()          │
-         └──────────────────┬─────────────────────┘
+         
+            ratatui_style_from_inline()          
+         
                             ↓
-         ┌────────────────────────────────────────┐
-         │   ratatui::style::Style                │
-         │                                        │
-         │ - foreground: Color                    │
-         │ - background: Color                    │
-         │ - modifiers: Modifier (BOLD, DIM, etc)│
-         └──────────────────┬─────────────────────┘
+         
+            ratatui::style::Style                
+                                                 
+          - foreground: Color                    
+          - background: Color                    
+          - modifiers: Modifier (BOLD, DIM, etc)
+         
                             ↓
-         ┌────────────────────────────────────────┐
-         │   TUI Rendering (Terminal Output)      │
-         │                                        │
-         │   ┌──────────────────────────┐        │
-         │   │ Terminal Escape Codes    │        │
-         │   │ ESC[1m bold             │        │
-         │   │ ESC[31m red             │        │
-         │   │ ESC[44m blue bg         │        │
-         │   └──────────────────────────┘        │
-         └────────────────────────────────────────┘
+         
+            TUI Rendering (Terminal Output)      
+                                                 
+                    
+             Terminal Escape Codes            
+             ESC[1m bold                     
+             ESC[31m red                     
+             ESC[44m blue bg                 
+                    
+         
 ```
 
 ---
@@ -82,35 +82,35 @@ Visual diagrams and architectural details for the anstyle integration.
 
 ```
 GitHub User Input Flow:
-────────────────────────
+
 
 User sets LS_COLORS env var
-    │
-    ├─→ "di=01;34:ln=01;36:ex=01;32"
-    │
-    ├─→ ThemeConfigParser::parse_ls_colors()
-    │
-    ├─→ anstyle_ls::parse() [crate function]
-    │
-    └─→ anstyle::Style { fg: blue, effects: BOLD }
-            │
-            └─→ convert_style()
-                    │
-                    └─→ InlineTextStyle {
+    
+    → "di=01;34:ln=01;36:ex=01;32"
+    
+    → ThemeConfigParser::parse_ls_colors()
+    
+    → anstyle_ls::parse() [crate function]
+    
+    → anstyle::Style { fg: blue, effects: BOLD }
+            
+            → convert_style()
+                    
+                    → InlineTextStyle {
                         color: Some(Blue),
                         bg_color: None,
                         effects: BOLD
                     }
-                        │
-                        └─→ ratatui_style_from_inline()
-                                │
-                                └─→ ratatui::Style {
+                        
+                        → ratatui_style_from_inline()
+                                
+                                → ratatui::Style {
                                     fg: Color::Blue,
                                     bg: None,
                                     modifiers: BOLD
                                 }
-                                    │
-                                    └─→ Draw directory in terminal
+                                    
+                                    → Draw directory in terminal
                                         "bold blue text"
 ```
 
@@ -120,48 +120,48 @@ User sets LS_COLORS env var
 
 ```
 vtcode-core
-└── src/ui/
-    ├── theme.rs (existing)
-    │   └─ ThemePalette, ThemeStyles
-    │
-    ├── styled.rs (existing)
-    │   └─ High-level style presets
-    │
-    ├── tui/
-    │   ├── style.rs (MODIFIED)
-    │   │   ├─ convert_style()       [updated]
-    │   │   ├─ convert_ansi_color()  [existing]
-    │   │   └─ ratatui_style_from_inline()  [updated]
-    │   │
-    │   ├── types.rs (MODIFIED)
-    │   │   └─ InlineTextStyle {color, bg_color, effects}  [expanded]
-    │   │
-    │   ├── theme_parser.rs (NEW)
-    │   │   └─ ThemeConfigParser
-    │   │       ├─ parse_git_style()
-    │   │       ├─ parse_ls_colors()
-    │   │       └─ parse_flexible()
-    │   │
-    │   ├── mod.rs (MODIFIED)
-    │   │   └─ pub mod theme_parser  [export new module]
-    │   │
-    │   ├── session/
-    │   │   ├── file_palette.rs (FUTURE: Phase 3)
-    │   │   └─ FileColorizer [not yet added]
-    │   │
-    │   └── tui.rs (existing)
-    │
-    └── diff_renderer.rs (FUTURE: Phase 2)
-        └─ GitColorConfig [not yet added]
+ src/ui/
+     theme.rs (existing)
+        ThemePalette, ThemeStyles
+    
+     styled.rs (existing)
+        High-level style presets
+    
+     tui/
+        style.rs (MODIFIED)
+           convert_style()       [updated]
+           convert_ansi_color()  [existing]
+           ratatui_style_from_inline()  [updated]
+       
+        types.rs (MODIFIED)
+           InlineTextStyle {color, bg_color, effects}  [expanded]
+       
+        theme_parser.rs (NEW)
+           ThemeConfigParser
+               parse_git_style()
+               parse_ls_colors()
+               parse_flexible()
+       
+        mod.rs (MODIFIED)
+           pub mod theme_parser  [export new module]
+       
+        session/
+           file_palette.rs (FUTURE: Phase 3)
+           FileColorizer [not yet added]
+       
+        tui.rs (existing)
+    
+     diff_renderer.rs (FUTURE: Phase 2)
+         GitColorConfig [not yet added]
 
 External Crates (Cargo.toml):
-├── anstyle = "1.0"         (existing)
-├── anstyle-git = "1.1"     (NEW in Phase 1)
-├── anstyle-ls = "1.0"      (NEW in Phase 1)
-├── anstyle-parse = "0.2"   (existing)
-├── anstyle-crossterm = "4.0" (existing)
-├── ratatui = "0.29"        (existing)
-└── catppuccin = "2.5"      (existing)
+ anstyle = "1.0"         (existing)
+ anstyle-git = "1.1"     (NEW in Phase 1)
+ anstyle-ls = "1.0"      (NEW in Phase 1)
+ anstyle-parse = "0.2"   (existing)
+ anstyle-crossterm = "4.0" (existing)
+ ratatui = "0.29"        (existing)
+ catppuccin = "2.5"      (existing)
 ```
 
 ---
@@ -172,25 +172,25 @@ External Crates (Cargo.toml):
 
 | Effect | Supported | Remark |
 |--------|-----------|--------|
-| **Bold** | ✓  Yes | Explicit `bold: bool` field |
-| **Italic** | ✓  Yes | Explicit `italic: bool` field |
-| **Dim** | ⤫  No | Not modeled |
-| **Underline** | ⤫  No | Not modeled |
-| **Strikethrough** | ⤫  No | Not modeled |
-| **Reverse** | ⤫  No | Not modeled |
-| **Background Color** | ⤫  No | InlineTextStyle has no `bg_color` |
+| **Bold** |   Yes | Explicit `bold: bool` field |
+| **Italic** |   Yes | Explicit `italic: bool` field |
+| **Dim** |   No | Not modeled |
+| **Underline** |   No | Not modeled |
+| **Strikethrough** |   No | Not modeled |
+| **Reverse** |   No | Not modeled |
+| **Background Color** |   No | InlineTextStyle has no `bg_color` |
 
 ### After Integration (Phase 1)
 
 | Effect | Supported | Remark |
 |--------|-----------|--------|
-| **Bold** | ✓  Yes | From `Effects::BOLD` bitmask |
-| **Italic** | ✓  Yes | From `Effects::ITALIC` bitmask |
-| **Dim** | ✓  Yes | From `Effects::DIMMED` bitmask |
-| **Underline** | ✓  Yes | From `Effects::UNDERLINE` bitmask |
-| **Strikethrough** | ✓  Yes | From `Effects::STRIKETHROUGH` bitmask |
-| **Reverse** | ✓  Yes | From `Effects::REVERSE` bitmask |
-| **Background Color** | ✓  Yes | New `bg_color: Option<AnsiColorEnum>` field |
+| **Bold** |   Yes | From `Effects::BOLD` bitmask |
+| **Italic** |   Yes | From `Effects::ITALIC` bitmask |
+| **Dim** |   Yes | From `Effects::DIMMED` bitmask |
+| **Underline** |   Yes | From `Effects::UNDERLINE` bitmask |
+| **Strikethrough** |   Yes | From `Effects::STRIKETHROUGH` bitmask |
+| **Reverse** |   Yes | From `Effects::REVERSE` bitmask |
+| **Background Color** |   Yes | New `bg_color: Option<AnsiColorEnum>` field |
 
 ---
 
@@ -304,20 +304,20 @@ anstyle-git::parse("bold red")     ~100 ns  (nanoseconds)
 anstyle-ls::parse("01;34")         ~80 ns
 convert_style(anstyle::Style)      ~50 ns
 ratatui_style_from_inline()        ~30 ns
-                                   ─────────
+                                   
 Total style pipeline:              ~260 ns per call
 ```
 
 ### Caching Strategy
 ```
 Immutable sources (cache forever):
-├─ Git config colors      → Cache in lazy_static
-├─ Theme definitions      → Already cached
-└─ LS_COLORS env var      → Cache at startup
+ Git config colors      → Cache in lazy_static
+ Theme definitions      → Already cached
+ LS_COLORS env var      → Cache at startup
 
 Hot path (no caching needed):
-├─ Per-render style application → Too fast to matter
-└─ Dynamic style merging        → Rare operation
+ Per-render style application → Too fast to matter
+ Dynamic style merging        → Rare operation
 ```
 
 ---
@@ -326,18 +326,18 @@ Hot path (no caching needed):
 
 ```
 User Input (config string)
-    │
-    ├─→ ThemeConfigParser::parse_git_style()
-    │       │
-    │       ├─ Success → anstyle::Style
-    │       │
-    │       └─ Error → anyhow::Error
-    │               │
-    │               ├─→ Log warning
-    │               ├─→ Fallback to previous style
-    │               └─→ Continue rendering (graceful degradation)
-    │
-    └─→ Never panic, always render something
+    
+    → ThemeConfigParser::parse_git_style()
+           
+            Success → anstyle::Style
+           
+            Error → anyhow::Error
+                   
+                   → Log warning
+                   → Fallback to previous style
+                   → Continue rendering (graceful degradation)
+    
+    → Never panic, always render something
 ```
 
 **Design principle**: Styling should never crash the TUI. Invalid colors → fallback → continue.
@@ -348,36 +348,36 @@ User Input (config string)
 
 ```
 Unit Tests (vtcode-core/src/ui/tui/)
-├── test_convert_style
-│   ├─ Bold color conversion
-│   ├─ Background color handling
-│   └─ Effect bitmask handling
-│
-├── test_ratatui_style_from_inline
-│   ├─ Color mapping to ratatui
-│   ├─ Modifier application
-│   └─ Fallback color logic
-│
-└── test_theme_parser
-    ├─ parse_git_style (valid inputs)
-    ├─ parse_git_style (error cases)
-    ├─ parse_ls_colors (valid inputs)
-    ├─ parse_ls_colors (error cases)
-    └─ parse_flexible (fallback logic)
+ test_convert_style
+    Bold color conversion
+    Background color handling
+    Effect bitmask handling
+
+ test_ratatui_style_from_inline
+    Color mapping to ratatui
+    Modifier application
+    Fallback color logic
+
+ test_theme_parser
+     parse_git_style (valid inputs)
+     parse_git_style (error cases)
+     parse_ls_colors (valid inputs)
+     parse_ls_colors (error cases)
+     parse_flexible (fallback logic)
 
 Integration Tests (vtcode-core/examples/)
-├── style_parsing.rs
-│   └─ Full pipeline: parse → convert → render
-│
-└── theme_integration.rs
-    └─ Real .git/config parsing & application
+ style_parsing.rs
+    Full pipeline: parse → convert → render
+
+ theme_integration.rs
+     Real .git/config parsing & application
 
 Visual Regression Tests (manual)
-├── Compare TUI output (before/after)
-├─ File browser coloring
-├─ Diff display colors
-├─ Error message styling
-└─ Different terminal emulators (iTerm2, Terminal.app, Linux)
+ Compare TUI output (before/after)
+ File browser coloring
+ Diff display colors
+ Error message styling
+ Different terminal emulators (iTerm2, Terminal.app, Linux)
 ```
 
 ---
@@ -386,30 +386,30 @@ Visual Regression Tests (manual)
 
 ```
 Phase 1: Foundation (2-3 hours)
-└─ Day 1: Dependencies + Types
-   ├─ Cargo.toml (anstyle-git, anstyle-ls)
-   └─ types.rs (InlineTextStyle expansion)
+ Day 1: Dependencies + Types
+    Cargo.toml (anstyle-git, anstyle-ls)
+    types.rs (InlineTextStyle expansion)
 
    Day 2: Parsing + Conversion
-   ├─ theme_parser.rs (new module)
-   └─ style.rs (convert_style, ratatui_style_from_inline)
+    theme_parser.rs (new module)
+    style.rs (convert_style, ratatui_style_from_inline)
 
    Day 3: Integration + Tests
-   ├─ Update all call sites
-   ├─ Write unit tests
-   └─ Validate with cargo test + clippy
+    Update all call sites
+    Write unit tests
+    Validate with cargo test + clippy
 
 Phase 2: Integration (2-3 hours)
-└─ Week 2: Git Color Config
-   ├─ diff_renderer.rs (GitColorConfig)
-   ├─ session/header.rs (Git status colors)
-   └─ Integration tests
+ Week 2: Git Color Config
+    diff_renderer.rs (GitColorConfig)
+    session/header.rs (Git status colors)
+    Integration tests
 
 Phase 3: Features (3-4 hours)
-└─ Week 3: System Colors
-   ├─ session/file_palette.rs (FileColorizer)
-   ├─ LS_COLORS env var parsing
-   └─ Config file support (.vtcoderc)
+ Week 3: System Colors
+    session/file_palette.rs (FileColorizer)
+    LS_COLORS env var parsing
+    Config file support (.vtcoderc)
 ```
 
 ---
@@ -418,23 +418,23 @@ Phase 3: Features (3-4 hours)
 
 ```
 Pre-Deployment
-☐ All unit tests pass
-☐ Clippy warnings = 0
-☐ Code review approved
-☐ No performance regressions
-☐ Manual TUI testing on 3+ terminals
+ All unit tests pass
+ Clippy warnings = 0
+ Code review approved
+ No performance regressions
+ Manual TUI testing on 3+ terminals
 
 Deployment
-☐ Merge to main
-☐ Update CHANGELOG.md
-☐ Tag release version
-☐ Build release artifacts
+ Merge to main
+ Update CHANGELOG.md
+ Tag release version
+ Build release artifacts
 
 Post-Deployment
-☐ Monitor for crash reports
-☐ Verify styling on different terminals
-☐ Gather user feedback
-☐ Document any gotchas or quirks
+ Monitor for crash reports
+ Verify styling on different terminals
+ Gather user feedback
+ Document any gotchas or quirks
 ```
 
 ---

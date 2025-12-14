@@ -49,12 +49,12 @@ interface ChatParticipant {
 **Improvement:**
 ```
 src/commands/
-├── askCommand.ts         (ask the agent)
-├── askSelectionCommand.ts (ask about selection)
-├── analyzeCommand.ts      (analyze workspace)
-├── updatePlanCommand.ts   (update plan)
-├── trustCommand.ts        (trust workspace)
-└── commandRegistry.ts     (register all commands)
+ askCommand.ts         (ask the agent)
+ askSelectionCommand.ts (ask about selection)
+ analyzeCommand.ts      (analyze workspace)
+ updatePlanCommand.ts   (update plan)
+ trustCommand.ts        (trust workspace)
+ commandRegistry.ts     (register all commands)
 
 // Each command follows this pattern:
 export class AskCommand implements ICommand {
@@ -264,9 +264,9 @@ interface ChatUIState {
 }
 
 // Display in chat header or status bar:
-// "🔵 VTCode Agent | Executing tool (2/5) | 2.3s | gpt-4"
+// " VTCode Agent | Executing tool (2/5) | 2.3s | gpt-4"
 // "⏳ VTCode Agent | Streaming response... | 150 tokens"
-// "✓  Done | 1.2s | 342 tokens | anthropic/claude-3-sonnet"
+// "  Done | 1.2s | 342 tokens | anthropic/claude-3-sonnet"
 ```
 
 ---
@@ -583,23 +583,23 @@ class DiagnosticsManager {
 **Improvement:**
 ```
 tests/
-├── unit/
-│   ├── chatView.test.ts
-│   ├── vtcodeBackend.test.ts
-│   ├── commands/
-│   │   ├── askCommand.test.ts
-│   │   └── ...
-│   └── participants/
-│       ├── workspaceParticipant.test.ts
-│       └── ...
-├── integration/
-│   ├── extension.integration.test.ts
-│   ├── chatFlow.integration.test.ts
-│   └── ...
-└── fixtures/
-    ├── mockVtcode.ts
-    ├── mockWorkspace.ts
-    └── sampleFiles/
+ unit/
+    chatView.test.ts
+    vtcodeBackend.test.ts
+    commands/
+       askCommand.test.ts
+       ...
+    participants/
+        workspaceParticipant.test.ts
+        ...
+ integration/
+    extension.integration.test.ts
+    chatFlow.integration.test.ts
+    ...
+ fixtures/
+     mockVtcode.ts
+     mockWorkspace.ts
+     sampleFiles/
 ```
 
 ---
@@ -611,12 +611,12 @@ tests/
 Create comprehensive architecture documentation:
 ```
 docs/extension/
-├── ARCHITECTURE.md          (high-level overview)
-├── PLUGIN_SYSTEM.md        (participant/command system)
-├── CHAT_FLOW.md           (message flow & state management)
-├── MCP_INTEGRATION.md     (MCP server management)
-├── DEVELOPMENT.md         (setup & debugging)
-└── API_REFERENCE.md       (public interfaces)
+ ARCHITECTURE.md          (high-level overview)
+ PLUGIN_SYSTEM.md        (participant/command system)
+ CHAT_FLOW.md           (message flow & state management)
+ MCP_INTEGRATION.md     (MCP server management)
+ DEVELOPMENT.md         (setup & debugging)
+ API_REFERENCE.md       (public interfaces)
 ```
 
 ---

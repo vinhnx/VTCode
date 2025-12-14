@@ -252,16 +252,16 @@ Added detailed explanation of:
 Tool Output
     ↓
 [1] render_stream_section()
-    ├─ Apply token-based truncation (25k tokens)
-    ├─ Use TokenBudgetManager for accurate counting
-    └─ Fallback to char-based estimation (3.5 chars per token)
+     Apply token-based truncation (25k tokens)
+     Use TokenBudgetManager for accurate counting
+     Fallback to char-based estimation (3.5 chars per token)
     ↓
 [2] Spool to .vtcode/tool-output/ if > 200KB
     ↓
 [3] Display rendering with UI safety limits
-    ├─ MAX_LINE_LENGTH: 150 (prevent TUI hang)
-    ├─ INLINE_STREAM_MAX_LINES: 30 (inline mode)
-    └─ MAX_CODE_LINES: 500 (code fence blocks)
+     MAX_LINE_LENGTH: 150 (prevent TUI hang)
+     INLINE_STREAM_MAX_LINES: 30 (inline mode)
+     MAX_CODE_LINES: 500 (code fence blocks)
     ↓
 User sees: Truncated output + spooled log path
 LLM receives: Semantically complete head+tail (25k tokens)
@@ -433,27 +433,27 @@ if context_usage > 80% {
 
 ### vtcode (Current)
 
--   ✓  Token-based limits (25k tokens)
--   ✓  Head+tail preservation
--   ✓  Model-aware tokenizers
--   ✓  Component tracking
--   ✓  Async token counting
--   ✓  Configurable thresholds
+-     Token-based limits (25k tokens)
+-     Head+tail preservation
+-     Model-aware tokenizers
+-     Component tracking
+-     Async token counting
+-     Configurable thresholds
 
 ### Codex (v0.56)
 
--   ⤫  Line-based limits (256 lines)
--   ✓  Head+tail strategy
--   ⤫  No tokenizer mentioned
--   ⤫  No component tracking
--   ⤫  Aggressive MCP truncation
+-     Line-based limits (256 lines)
+-     Head+tail strategy
+-     No tokenizer mentioned
+-     No component tracking
+-     Aggressive MCP truncation
 
 ### Claude Code
 
--   ✓  Token-based limits
--   ✓  Head+tail preservation
--   ✓  Integrated tokenizer
--   ⤫  Details not public
+-     Token-based limits
+-     Head+tail preservation
+-     Integrated tokenizer
+-     Details not public
 
 ## References
 

@@ -62,10 +62,10 @@ vtcode skills create ~/.vtcode/skills/my-skill
 vtcode skills validate ./.claude/skills/spreadsheet-generator
 
 # Validates:
-# ✓ YAML syntax
-# ✓ Required fields (name, description)
-# ✓ Name constraints (lowercase, alphanumeric)
-# ✓ Description length
+#  YAML syntax
+#  Required fields (name, description)
+#  Name constraints (lowercase, alphanumeric)
+#  Description length
 ```
 
 ### 5. Show Configuration
@@ -131,23 +131,23 @@ vtcode auto "Create quarterly financial report with spreadsheet-generator"
 
 ```
 Level 1: Metadata (100 tokens)
-├─ Skill name and description
-├─ Always in system prompt
-└─ No context cost when unused
+ Skill name and description
+ Always in system prompt
+ No context cost when unused
 
     ↓ (triggered when needed)
 
 Level 2: Instructions (<5K tokens)
-├─ Full SKILL.md body
-├─ Workflows and guidance
-└─ Loaded on-demand
+ Full SKILL.md body
+ Workflows and guidance
+ Loaded on-demand
 
     ↓ (when executing)
 
 Level 3: Resources (scripts, templates)
-├─ Executable scripts
-├─ Reference materials
-└─ No context loading
+ Executable scripts
+ Reference materials
+ No context loading
 ```
 
 ### Skill Metadata Structure

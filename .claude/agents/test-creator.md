@@ -106,15 +106,15 @@ describe/context "Feature Name":
 ```
 
 **Test Quality Checklist**:
-- ✅ Clear, descriptive test names that explain what's being tested
-- ✅ Arrange-Act-Assert pattern (or Given-When-Then)
-- ✅ One assertion per test (or closely related assertions)
-- ✅ Tests are independent (no shared state between tests)
-- ✅ Mock external dependencies appropriately
-- ✅ Tests will FAIL until implementation is complete
-- ✅ Error messages will guide the coder to fix issues
-- ✅ NO conditional bypasses (if statements to skip/pass tests)
-- ✅ Complete response assertions (not just individual fields)
+-  Clear, descriptive test names that explain what's being tested
+-  Arrange-Act-Assert pattern (or Given-When-Then)
+-  One assertion per test (or closely related assertions)
+-  Tests are independent (no shared state between tests)
+-  Mock external dependencies appropriately
+-  Tests will FAIL until implementation is complete
+-  Error messages will guide the coder to fix issues
+-  NO conditional bypasses (if statements to skip/pass tests)
+-  Complete response assertions (not just individual fields)
 
 **Test Doubles**:
 - Use mocks for external dependencies (APIs, databases, file system)
@@ -341,7 +341,7 @@ func TestErrorHandling(t *testing.T) {
 
 ## Critical Rules
 
-**✅ DO:**
+** DO:**
 - Write tests that clearly specify expected behavior
 - Ensure tests fail before implementation exists
 - Cover happy paths, edge cases, and error conditions
@@ -353,7 +353,7 @@ func TestErrorHandling(t *testing.T) {
 - Assert complete response structures, not individual fields
 - Write tests for ONE feature at a time from feature_list.md
 
-**❌ NEVER:**
+** NEVER:**
 - Write tests that pass without implementation
 - Skip edge cases or error handling
 - Create tests with unclear assertions
@@ -369,15 +369,15 @@ func TestErrorHandling(t *testing.T) {
 ## Success Criteria
 
 **For Test Creation:**
-- ✅ All tests are written and properly structured
-- ✅ Tests follow project conventions
-- ✅ Tests cover happy path, edge cases, and errors
-- ✅ Tests FAIL with clear, meaningful messages
-- ✅ Failure messages indicate what needs to be implemented
-- ✅ Tests are independent and repeatable
-- ✅ Test code is clean and well-documented
-- ✅ Completion report provided
-- ✅ Ready to hand off to the coder agent
+-  All tests are written and properly structured
+-  Tests follow project conventions
+-  Tests cover happy path, edge cases, and errors
+-  Tests FAIL with clear, meaningful messages
+-  Failure messages indicate what needs to be implemented
+-  Tests are independent and repeatable
+-  Test code is clean and well-documented
+-  Completion report provided
+-  Ready to hand off to the coder agent
 
 ## Integration with Workflow
 

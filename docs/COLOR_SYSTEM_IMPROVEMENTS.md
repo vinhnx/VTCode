@@ -191,13 +191,13 @@ test result: ok. 15 passed; 0 failed
 ```
 
 Key test coverage:
-- ✓ Standard color conversions with proper indexing
-- ✓ RGB color passthrough
-- ✓ Background color handling
-- ✓ All effect modifiers (bold, italic, underline, dim, reversed, blink)
-- ✓ Combined style application (color + effects)
-- ✓ Empty style handling
-- ✓ Helper function functionality
+-  Standard color conversions with proper indexing
+-  RGB color passthrough
+-  Background color handling
+-  All effect modifiers (bold, italic, underline, dim, reversed, blink)
+-  Combined style application (color + effects)
+-  Empty style handling
+-  Helper function functionality
 
 ## Benefits
 

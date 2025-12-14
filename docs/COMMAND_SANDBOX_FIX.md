@@ -26,10 +26,10 @@ Old execution flow:
 
 ```
 vtcode (parent process with basic PATH)
-  ├─ Try path_env::resolve_program_path("cargo")  ← /bin/sh not sourced yet
-  ├─ Not found in parent's PATH
-  └─ /bin/sh -c "cargo fmt"  ← Non-login shell, doesn't source ~/.zshrc
-     └─ cargo not found (exit 127) ✗
+   Try path_env::resolve_program_path("cargo")  ← /bin/sh not sourced yet
+   Not found in parent's PATH
+   /bin/sh -c "cargo fmt"  ← Non-login shell, doesn't source ~/.zshrc
+      cargo not found (exit 127) 
 ```
 
 ## Solution: Always Use User's Login Shell
@@ -97,12 +97,12 @@ vec!["-lc".to_string(), full_command.clone()]
 
 ```
 vtcode (parent process)
-  └─ /usr/bin/zsh -lc "cargo fmt"  ← User's preferred shell, login mode
-     ├─ Sources ~/.zshenv (if exists)
-     ├─ Sources ~/.zshrc (if exists)
-     ├─ Applies: export PATH="$HOME/.cargo/bin:$PATH"
-     ├─ Shell resolves "cargo" → /Users/user/.cargo/bin/cargo
-     └─ Executes: /Users/user/.cargo/bin/cargo fmt ✓
+   /usr/bin/zsh -lc "cargo fmt"  ← User's preferred shell, login mode
+      Sources ~/.zshenv (if exists)
+      Sources ~/.zshrc (if exists)
+      Applies: export PATH="$HOME/.cargo/bin:$PATH"
+      Shell resolves "cargo" → /Users/user/.cargo/bin/cargo
+      Executes: /Users/user/.cargo/bin/cargo fmt 
 ```
 
 ## Why This Is Better
@@ -116,11 +116,11 @@ vtcode (parent process)
 
 ## Compatibility
 
--   ✓ Works with all POSIX shells (bash, zsh, sh, fish, dash, ksh)
--   ✓ Works in both TTY and non-TTY execution contexts
--   ✓ Backwards compatible with existing scripts and commands
--   ✓ No configuration changes needed from users
--   ✓ Sandbox profiles continue to work as before
+-    Works with all POSIX shells (bash, zsh, sh, fish, dash, ksh)
+-    Works in both TTY and non-TTY execution contexts
+-    Backwards compatible with existing scripts and commands
+-    No configuration changes needed from users
+-    Sandbox profiles continue to work as before
 
 ## Technical Details
 
@@ -167,10 +167,10 @@ While `-i` (interactive) mode also sources configuration files, `-l` (login) mod
 
 Verified and tested:
 
--   ✓ `cargo --version` and `cargo fmt` execute successfully
--   ✓ `which cargo` finds `~/.cargo/bin/cargo`
--   ✓ PATH expansion includes `~/.cargo/bin` (857 character PATH)
--   ✓ Python, npm, node commands work reliably
--   ✓ Complex command chains with pipes and redirects work
--   ✓ Shell detection works correctly across systems
--   ✓ All existing tests pass
+-    `cargo --version` and `cargo fmt` execute successfully
+-    `which cargo` finds `~/.cargo/bin/cargo`
+-    PATH expansion includes `~/.cargo/bin` (857 character PATH)
+-    Python, npm, node commands work reliably
+-    Complex command chains with pipes and redirects work
+-    Shell detection works correctly across systems
+-    All existing tests pass

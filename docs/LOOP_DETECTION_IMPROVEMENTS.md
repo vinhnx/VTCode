@@ -105,16 +105,16 @@ pub fn prompt_for_loop_detection(interactive: bool) -> Result<LoopDetectionRespo
 
 **Full Coverage:**
 ```
-✓ test_loop_detector_threshold          - Detection at count > threshold
-✓ test_loop_detector_disabled           - Disabled detector never triggers
-✓ test_loop_detector_reset              - State reset clears tracking
-✓ test_loop_detector_different_signatures - Each signature tracked separately
-✓ test_loop_detector_interactive_flag   - Interactive flag correctness
-✓ test_loop_detector_enable_disable     - Runtime enable/disable control
-✓ test_loop_detection_response_enum     - Response enum equality
-✓ test_peek_count                       - Non-recording count inspection
-✓ test_would_trigger                    - Predictive detection
-✓ test_non_interactive_mode             - Automated mode behavior
+ test_loop_detector_threshold          - Detection at count > threshold
+ test_loop_detector_disabled           - Disabled detector never triggers
+ test_loop_detector_reset              - State reset clears tracking
+ test_loop_detector_different_signatures - Each signature tracked separately
+ test_loop_detector_interactive_flag   - Interactive flag correctness
+ test_loop_detector_enable_disable     - Runtime enable/disable control
+ test_loop_detection_response_enum     - Response enum equality
+ test_peek_count                       - Non-recording count inspection
+ test_would_trigger                    - Predictive detection
+ test_non_interactive_mode             - Automated mode behavior
 ```
 
 ### 6. **Better Error Handling**
@@ -172,7 +172,7 @@ DisableForSession,
 
 ## Backward Compatibility
 
-✓  **Fully Compatible**
+  **Fully Compatible**
 - Public API still works the same
 - Old code using the module won't break
 - Only removed truly unused functions
@@ -214,9 +214,9 @@ The refactored code makes these future enhancements easier:
 ## Summary
 
 The refactored implementation is:
-- ✓  **Cleaner** - Less code, better organized
-- ✓  **More Robust** - Better error handling, edge case support
-- ✓  **Better Tested** - 10 tests instead of 7
-- ✓  **More Flexible** - Supports non-interactive mode
-- ✓  **Production Ready** - No duplicate code, clear semantics
-- ✓  **Future-Proof** - Easier to extend and maintain
+-   **Cleaner** - Less code, better organized
+-   **More Robust** - Better error handling, edge case support
+-   **Better Tested** - 10 tests instead of 7
+-   **More Flexible** - Supports non-interactive mode
+-   **Production Ready** - No duplicate code, clear semantics
+-   **Future-Proof** - Easier to extend and maintain

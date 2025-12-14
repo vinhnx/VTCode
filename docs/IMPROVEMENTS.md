@@ -48,14 +48,14 @@ Modified `render_terminal_command_panel()` to:
 #### Before
 ```
 [RUN] [RUNNING - 80x24] Session: gitdiff · Command: git+1 more
-──────────────────────────────────────────────────────────────
+
 $ git status
 ```
 
 #### After
 ```
 [END] [COMPLETED - 80x24] Session: gitdiff
-──────────────────────────────────────────────────────────────
+
 $ git status
 [output...]
 ```
@@ -109,11 +109,11 @@ This ensures added/deleted lines maintain their distinctive colors.
 - Terminal command parsing tests verified
 
 ### Build Verification
-- `cargo check` ✓
-- `cargo build --release` ✓
-- `cargo clippy --all` ✓ (no new warnings)
-- `cargo fmt --check` ✓
-- `cargo test --lib` ✓
+- `cargo check` 
+- `cargo build --release` 
+- `cargo clippy --all`  (no new warnings)
+- `cargo fmt --check` 
+- `cargo test --lib` 
 
 ---
 

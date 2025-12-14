@@ -190,13 +190,13 @@ Practical example demonstrating:
   - `test_client_builder` - Builder pattern
 
 #### Code Standards
-- ✓  Zero compilation errors
-- ✓  Follows vtcode style guide (snake_case, PascalCase types)
-- ✓  Uses `anyhow::Result<T>` for error handling
-- ✓  Comprehensive error context
-- ✓  All public APIs documented
-- ✓  Trace-level logging enabled
-- ✓  No hardcoded values
+-   Zero compilation errors
+-   Follows vtcode style guide (snake_case, PascalCase types)
+-   Uses `anyhow::Result<T>` for error handling
+-   Comprehensive error context
+-   All public APIs documented
+-   Trace-level logging enabled
+-   No hardcoded values
 
 #### Build Integration
 - Added to workspace in `Cargo.toml`
@@ -207,38 +207,38 @@ Practical example demonstrating:
 ## Architecture
 
 ```
-┌──────────────────────────────────────────────────┐
-│           Main Agent (VTCode)                    │
-│      - Decides which agents to call              │
-│      - Orchestrates workflows                    │
-│      - Aggregates results                        │
-└──────────────────┬───────────────────────────────┘
-                   │
-        ┌──────────┴──────────────────┐
-        │    Three MCP Tools:         │
-        ├────────────────────────────┤
-        │ • acp_call (sync/async)    │
-        │ • acp_discover (find)      │
-        │ • acp_health (monitor)     │
-        └──────────────────┬─────────┘
-                           │
-        ┌──────────────────▼──────────────────┐
-        │   vtcode-acp-client Library         │
-        │   ├─ HTTP Client (reqwest)          │
-        │   ├─ Agent Registry (HashMap)       │
-        │   ├─ Message Types (serde)          │
-        │   └─ Error Handling (anyhow)        │
-        └──────────────────┬──────────────────┘
-                           │
-    ┌──────────────────────┼──────────────────┐
-    │                      │                  │
-    ▼                      ▼                  ▼
-┌──────────┐        ┌──────────┐      ┌──────────┐
-│ Agent A  │        │ Agent B  │  ... │ Agent N  │
-│ :8081    │        │ :8082    │      │ :8083    │
-│ bash     │        │ python   │      │ report   │
-│ python   │        │ torch    │      │ visual   │
-└──────────┘        └──────────┘      └──────────┘
+
+           Main Agent (VTCode)                    
+      - Decides which agents to call              
+      - Orchestrates workflows                    
+      - Aggregates results                        
+
+                   
+        
+            Three MCP Tools:         
+        
+         • acp_call (sync/async)    
+         • acp_discover (find)      
+         • acp_health (monitor)     
+        
+                           
+        
+           vtcode-acp-client Library         
+            HTTP Client (reqwest)          
+            Agent Registry (HashMap)       
+            Message Types (serde)          
+            Error Handling (anyhow)        
+        
+                           
+    
+                                            
+                                            
+              
+ Agent A           Agent B    ...  Agent N  
+ :8081             :8082           :8083    
+ bash              python          report   
+ python            torch           visual   
+              
 
 Implements ACP endpoints:
   • POST /messages (handle requests)
@@ -384,9 +384,9 @@ cargo fmt
 ## Security Considerations
 
 ### Current
-⚠️ HTTP (not HTTPS)
-⚠️ No authentication
-⚠️ No encryption
+ HTTP (not HTTPS)
+ No authentication
+ No encryption
 
 ### Recommended for Production
 - [ ] HTTPS with certificate pinning
@@ -439,14 +439,14 @@ cargo fmt
 
 ```
 vtcode-acp-client tests:
-  ✓ test_agent_registry
-  ✓ test_find_by_capability
-  ✓ test_message_creation
-  ✓ test_message_serialization
-  ✓ test_client_creation
-  ✓ test_client_builder
+   test_agent_registry
+   test_find_by_capability
+   test_message_creation
+   test_message_serialization
+   test_client_creation
+   test_client_builder
   
-All 6 tests passed ✓
+All 6 tests passed 
 ```
 
 ## Compilation Results
@@ -470,12 +470,12 @@ No errors, all code compiles cleanly.
 ## Conclusion
 
 Successfully implemented a complete, production-ready ACP client for vtcode with:
-- ✓  Full HTTP-based agent communication
-- ✓  Registry and discovery system
-- ✓  Type-safe message protocol
-- ✓  Three MCP tools for seamless integration
-- ✓  Comprehensive documentation
-- ✓  Working example and tests
-- ✓  Ready for enterprise deployments
+-   Full HTTP-based agent communication
+-   Registry and discovery system
+-   Type-safe message protocol
+-   Three MCP tools for seamless integration
+-   Comprehensive documentation
+-   Working example and tests
+-   Ready for enterprise deployments
 
 The implementation enables vtcode to participate in distributed agent systems, delegating tasks to specialized agents while maintaining orchestration control.

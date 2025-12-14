@@ -85,7 +85,7 @@ When asked to generate a spreadsheet:
 
 **Output:**
 ```
-✓ Loaded skill: spreadsheet-generator (v1.0.0)
+ Loaded skill: spreadsheet-generator (v1.0.0)
   Description: Generate professional Excel spreadsheets...
   Resources: 0 files
 
@@ -319,9 +319,9 @@ Analyzing code against strict-architecture rules:
 - 4 arguments per function
 
 Findings:
-✗ src/main.rs: 650 lines (exceeds 500)
-✗ src/handlers.rs: 8 functions (exceeds 5)
-✓ src/utils.rs: 4 functions, all ≤4 args
+ src/main.rs: 650 lines (exceeds 500)
+ src/handlers.rs: 8 functions (exceeds 5)
+ src/utils.rs: 4 functions, all ≤4 args
 
 Recommendations:
 1. Split src/main.rs into modules

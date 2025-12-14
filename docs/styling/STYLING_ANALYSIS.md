@@ -58,7 +58,7 @@ fn style_status_icon(exit_code: Option<i64>, icon: &str) -> String {
 
 #### File: `src/agent/runloop/unified/turn/session.rs` (Line 1666)
 ```rust
-&format!("\x1b[31m✗\x1b[0m Tool '{}' failed", name),
+&format!("\x1b[31m\x1b[0m Tool '{}' failed", name),
 ```
 
 **Suggested Fix:** Use `anstyle` colors instead

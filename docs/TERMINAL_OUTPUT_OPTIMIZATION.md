@@ -9,42 +9,42 @@ Optimized the terminal command output format from verbose, multi-line headers to
 ## Before (Verbose Format)
 
 ```
-✓ [run_pty_cmd] cargo fmt · Command: cargo, fmt (exit: 0)
+ [run_pty_cmd] cargo fmt · Command: cargo, fmt (exit: 0)
 [END] [COMPLETED - 80x24] Session: run-1763462657610 | Working directory: . (exit code: 0)
-────────────────────────────────────────────────────────────
+
 $ /bin/zsh -c cargo fmt
 (no output)
 Done.
-✓ Discovered new MCP tool: time:get_current_time
-────────────────────────────────────────────────────────────
+ Discovered new MCP tool: time:get_current_time
+
 ```
 
 **Issues**:
-- ⤫  Multiple status indicators: `[END]`, `[COMPLETED]`, `(exit code: 0)` - redundant
-- ⤫  60-character separator lines - wasteful
-- ⤫  Verbose session metadata: `Session: run-1763462657610`
-- ⤫  Cluttered headers with mixed information
-- ⤫  "Running" indicator adds extra line
-- ⤫  Completion footer with `[Session ...]` wrapper
+-   Multiple status indicators: `[END]`, `[COMPLETED]`, `(exit code: 0)` - redundant
+-   60-character separator lines - wasteful
+-   Verbose session metadata: `Session: run-1763462657610`
+-   Cluttered headers with mixed information
+-   "Running" indicator adds extra line
+-   Completion footer with `[Session ...]` wrapper
 
 ---
 
 ## After (Compact Format)
 
 ```
-✓ OK · cargo fmt · 80x24
+ OK · cargo fmt · 80x24
 $ /bin/zsh -c cargo fmt
 (no output)
-✓ exit 0
+ exit 0
 ```
 
 **Improvements**:
-- ✓  Single-line header with status · command · viewport
-- ✓  Clear indicators: `▶ RUN` (running), `✓ OK` (completed)
-- ✓  Minimal footer: `✓ exit 0` or `✓ done`
-- ✓  Command truncation to 40-50 chars with ellipsis
-- ✓  No redundant session IDs or separators
-- ✓  50% fewer lines of output
+-   Single-line header with status · command · viewport
+-   Clear indicators: ` RUN` (running), ` OK` (completed)
+-   Minimal footer: ` exit 0` or ` done`
+-   Command truncation to 40-50 chars with ellipsis
+-   No redundant session IDs or separators
+-   50% fewer lines of output
 
 ---
 
@@ -66,9 +66,9 @@ $ /bin/zsh -c cargo fmt
 
 | State | Symbol | Text | Display |
 |---|---|---|---|
-| Running | `▶` | `RUN` | `▶ RUN` |
-| Completed (0) | `✓` | `OK` | `✓ OK` |
-| Completed (exit code) | `✓` | `OK` | `✓ OK` |
+| Running | `` | `RUN` | ` RUN` |
+| Completed (0) | `` | `OK` | ` OK` |
+| Completed (exit code) | `` | `OK` | ` OK` |
 
 ### Command Truncation
 
@@ -82,7 +82,7 @@ $ /bin/zsh -c cargo fmt
 
 **On completion**:
 ```
-✓ {exit_info}
+ {exit_info}
 ```
 
 Where `exit_info` is:
@@ -114,13 +114,13 @@ renderer.line(
         exit_info
     ),
 )?;
-renderer.line(MessageStyle::Info, &"─".repeat(60))?;
+renderer.line(MessageStyle::Info, &"".repeat(60))?;
 renderer.line(MessageStyle::Response, &format!("$ {}", command))?;
 ```
 
 **After**:
 ```rust
-let status_symbol = if !is_completed { "▶" } else { "✓" };
+let status_symbol = if !is_completed { "" } else { "" };
 let status_badge = if !is_completed {
     format!("{} RUN", status_symbol)
 } else {
@@ -190,7 +190,7 @@ if is_pty_session && is_completed {
     } else {
         "done".to_string()
     };
-    renderer.line(MessageStyle::Info, &format!("✓ {}", exit_badge))?;
+    renderer.line(MessageStyle::Info, &format!(" {}", exit_badge))?;
 }
 ```
 
@@ -199,7 +199,7 @@ if is_pty_session && is_completed {
 **Removed entirely**:
 ```rust
 // DELETED: "... command still running ..." message
-// Status indicator (▶ RUN) is sufficient
+// Status indicator ( RUN) is sufficient
 ```
 
 ---
@@ -220,7 +220,7 @@ if is_pty_session && is_completed {
 
 **Output**:
 ```
-▶ RUN · cargo check · 80x24
+ RUN · cargo check · 80x24
 ... [output] ...
 ```
 
@@ -240,10 +240,10 @@ if is_pty_session && is_completed {
 
 **Output**:
 ```
-✓ OK · find /Users/vinhnguyenxuan/Developer …
+ OK · find /Users/vinhnguyenxuan/Developer …
 $ find /Users/vinhnguyenxuan/Developer -name '*.rs' -type f | head -20
 ... [output] ...
-✓ exit 1
+ exit 1
 ```
 
 ### Example 3: Successful Build
@@ -261,10 +261,10 @@ $ find /Users/vinhnguyenxuan/Developer -name '*.rs' -type f | head -20
 
 **Output**:
 ```
-✓ OK · cargo build --release
+ OK · cargo build --release
 Compiling vtcode v0.45.4 ...
 Finished `release` profile in 45.32s
-✓ exit 0
+ exit 0
 ```
 
 ---
@@ -278,7 +278,7 @@ Finished `release` profile in 45.32s
 
 ### Improved Readability
 - **Key information first**: Status symbol + command visible at a glance
-- **Clear completion**: Simple `✓ exit 0` instead of `[Session ID][EXIT: 0]`
+- **Clear completion**: Simple ` exit 0` instead of `[Session ID][EXIT: 0]`
 - **Consistent formatting**: All terminal sessions follow same pattern
 
 ### Better Information Density
@@ -287,7 +287,7 @@ Finished `release` profile in 45.32s
 - **No redundancy**: Status not repeated 3 times
 
 ### Faster Scanning
-- **Status symbol**: Universal `▶` and `✓` symbols
+- **Status symbol**: Universal `` and `` symbols
 - **Single-line headers**: Can scan multiple commands instantly
 - **Minimal footer**: Completion status immediate
 
@@ -295,10 +295,10 @@ Finished `release` profile in 45.32s
 
 ## Backwards Compatibility
 
-✓  **Internal change only** - no public API modifications
-✓  **No dependency changes** - uses existing `AnsiRenderer`
-✓  **Graceful fallback** - respects existing error handling
-✓  **No configuration needed** - automatic formatting
+  **Internal change only** - no public API modifications
+  **No dependency changes** - uses existing `AnsiRenderer`
+  **Graceful fallback** - respects existing error handling
+  **No configuration needed** - automatic formatting
 
 ---
 
@@ -308,7 +308,7 @@ Finished `release` profile in 45.32s
 
 1. **Short command, no output**
    - Verify header displays correctly
-   - Verify footer shows `✓ exit 0`
+   - Verify footer shows ` exit 0`
 
 2. **Long command with working directory**
    - Verify command truncation works
@@ -320,12 +320,12 @@ Finished `release` profile in 45.32s
    - Verify footer displays with exit code
 
 4. **Still-running command (PTY session)**
-   - Verify header shows `▶ RUN`
+   - Verify header shows ` RUN`
    - Verify no "running..." message
    - Verify command displayed
 
 5. **Failed command (non-zero exit)**
-   - Verify footer shows `✓ exit N`
+   - Verify footer shows ` exit N`
    - Verify stderr displayed
 
 ---

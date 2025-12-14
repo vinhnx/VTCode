@@ -4,7 +4,7 @@ Complete guide for setting up the VTCode Zed extension in your environment.
 
 ## What's Included
 
-✓ **Complete Zed Extension** for VTCode AI coding assistant
+ **Complete Zed Extension** for VTCode AI coding assistant
 
 -   Language support for `vtcode.toml` configuration files
 -   Integration with VTCode CLI
@@ -15,19 +15,19 @@ Complete guide for setting up the VTCode Zed extension in your environment.
 
 ```
 zed-extension/
-├── extension.toml                 # Extension metadata
-├── Cargo.toml                    # Rust project configuration
-├── LICENSE                       # MIT License
-├── src/lib.rs                   # Extension source code
-├── languages/vtcode/config.toml # Language definition
-├── target/release/libvtcode.dylib # Compiled binary (419KB)
-│
-├── README.md                    # User documentation
-├── QUICK_START.md               # 5-minute setup guide
-├── DEVELOPMENT.md               # Development setup
-├── IMPLEMENTATION_ROADMAP.md    # Future features
-├── extension-features.md        # Feature documentation
-└── .gitignore                   # Git ignore rules
+ extension.toml                 # Extension metadata
+ Cargo.toml                    # Rust project configuration
+ LICENSE                       # MIT License
+ src/lib.rs                   # Extension source code
+ languages/vtcode/config.toml # Language definition
+ target/release/libvtcode.dylib # Compiled binary (419KB)
+
+ README.md                    # User documentation
+ QUICK_START.md               # 5-minute setup guide
+ DEVELOPMENT.md               # Development setup
+ IMPLEMENTATION_ROADMAP.md    # Future features
+ extension-features.md        # Feature documentation
+ .gitignore                   # Git ignore rules
 ```
 
 ## Prerequisites
@@ -310,7 +310,7 @@ RUST_BACKTRACE=1  # For debugging build issues
 
 -   **Issues**: [GitHub Issues](https://github.com/vinhnx/vtcode/issues)
 -   **Discussions**: [GitHub Discussions](https://github.com/vinhnx/vtcode/discussions)
--   **Feedback**: Star ⭐ the repo if you find it useful
+-   **Feedback**: Star  the repo if you find it useful
 
 ## Uninstallation
 
