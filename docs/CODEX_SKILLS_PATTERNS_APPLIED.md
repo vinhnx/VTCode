@@ -513,3 +513,49 @@ Agent proceeds: Now has skill instructions, can execute
 **Implementation Location**: `src/agent/runloop/mod.rs` or `src/agent/runloop/unified/context_manager.rs`
 
 **Reference**: See Codex's `build_skill_injections()` in `codex-rs/core/src/skills/injection.rs`
+
+## Python Skills: Virtual Environment Safety (✅ Implemented)
+
+**Pattern**: VT Code automatically detects and uses the safest Python interpreter for skill execution.
+
+**Priority order**:
+1. **Active venv** - `$VIRTUAL_ENV/bin/python` (if set)
+2. **Workspace .venv** - `.venv/bin/python` (if exists in project)
+3. **uv** - `uv run python` (if uv is in PATH)
+4. **System python3** - `python3` (fallback)
+
+**Implementation**: `vtcode-core/src/exec/code_executor.rs::detect_python_interpreter()`
+
+**Benefits**:
+- ✅ Isolated dependencies per project
+- ✅ No system Python pollution
+- ✅ Compatible with modern Python tooling (uv, venv)
+- ✅ Automatic detection - zero configuration
+
+**Usage in skills**:
+```yaml
+---
+name: pdf-analyzer
+description: Extract text from PDFs
+---
+
+# PDF Analyzer
+
+VT Code will automatically use your project's venv or uv if available.
+
+## Setup (optional)
+```bash
+# Option 1: Create venv in workspace
+python3 -m venv .venv
+source .venv/bin/activate
+pip install pdfplumber
+
+# Option 2: Use uv (recommended)
+uv pip install pdfplumber
+```
+
+## Quick Start
+When you run this skill, VT Code will use the detected Python environment automatically.
+```
+
+**For skill authors**: No need to specify Python paths - VT Code handles it automatically.
