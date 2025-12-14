@@ -383,6 +383,7 @@ For more info: docs/SKILL_AUTHORING_GUIDE.md"#;
 /// // Description matching
 /// "Extract tables from PDF document" -> ["pdf-analyzer"] (if description contains "extract" + "tables" or "PDF")
 /// ```
+#[allow(dead_code)]
 pub async fn detect_mentioned_skills(
     user_input: &str,
     workspace: PathBuf,

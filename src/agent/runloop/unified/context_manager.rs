@@ -32,6 +32,7 @@ pub(crate) struct ContextManager {
     context_pruner: ContextPruner,
     last_efficiency: Option<ContextEfficiency>,
     /// Loaded skills for prompt injection
+    #[allow(dead_code)]
     loaded_skills: Arc<RwLock<HashMap<String, vtcode_core::skills::types::Skill>>>,
 }
 
