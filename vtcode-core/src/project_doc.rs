@@ -87,10 +87,9 @@ pub async fn read_project_doc(cwd: &Path, max_bytes: usize) -> Result<Option<Pro
 
 fn convert_bundle(bundle: InstructionBundle) -> ProjectDocBundle {
     let contents = bundle.combined_text();
-    let mut sources = Vec::with_capacity(bundle.segments.len());
-    for segment in &bundle.segments {
-        sources.push(segment.source.path.clone());
-    }
+    let sources = bundle.segments.iter()
+        .map(|segment| segment.source.path.clone())
+        .collect::<Vec<_>>();
 
     ProjectDocBundle {
         contents,

@@ -1,0 +1,92 @@
+#!/usr/bin/env python3
+"""
+Helper script for {{skill_name}} skill.
+
+{{description}}
+"""
+
+import json
+import sys
+import argparse
+from pathlib import Path
+
+def main():
+    parser = argparse.ArgumentParser(description="{{skill_name}} helper script")
+    parser.add_argument("--input", "-i", help="Input file path")
+    parser.add_argument("--output", "-o", help="Output file path")
+    parser.add_argument("--config", "-c", help="Configuration file path")
+    parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
+    
+    args = parser.parse_args()
+    
+    try:
+        # Load configuration if provided
+        config = {}
+        if args.config:
+            with open(args.config, 'r') as f:
+                config = json.load(f)
+        
+        # Process input
+        if args.input:
+            with open(args.input, 'r') as f:
+                input_data = json.load(f)
+        else:
+            # Read from stdin
+            input_data = json.load(sys.stdin)
+        
+        # Main processing logic
+        result = process_data(input_data, config, args.verbose)
+        
+        # Output result
+        output = {
+            "status": "success",
+            "result": result,
+            "skill": "{{skill_name}}",
+            "timestamp": "2024-01-01T00:00:00Z"
+        }
+        
+        if args.output:
+            with open(args.output, 'w') as f:
+                json.dump(output, f, indent=2)
+        else:
+            json.dump(output, sys.stdout, indent=2)
+            
+    except Exception as e:
+        error_output = {
+            "status": "error",
+            "error": str(e),
+            "skill": "{{skill_name}}",
+            "timestamp": "2024-01-01T00:00:00Z"
+        }
+        json.dump(error_output, sys.stderr, indent=2)
+        sys.exit(1)
+
+def process_data(data, config, verbose=False):
+    """
+    Main data processing function.
+    
+    Args:
+        data: Input data to process
+        config: Configuration dictionary
+        verbose: Whether to enable verbose output
+        
+    Returns:
+        Processed data
+    """
+    if verbose:
+        print(f"Processing data with config: {config}", file=sys.stderr)
+    
+    # TODO: Implement your specific processing logic here
+    # This is a placeholder that just returns the input data
+    
+    result = {
+        "processed": True,
+        "input_size": len(str(data)),
+        "config_used": config,
+        "message": "Data processed by {{skill_name}}"
+    }
+    
+    return result
+
+if __name__ == "__main__":
+    main()

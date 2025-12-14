@@ -64,6 +64,18 @@ pub mod tool_system {
     pub const TOOL_EXECUTION_REQUIRES_CONFIRMATION: &str =
         "Tool execution requires user confirmation";
     pub const INTERNAL_ERROR: &str = "Internal tool system error";
+
+    /// Get error message for a specific error type - returns static reference
+    pub fn get_error_message(error_type: &str) -> &'static str {
+        match error_type {
+            "not_found" => TOOL_NOT_FOUND,
+            "not_available" => TOOL_NOT_AVAILABLE,
+            "execution_denied" => TOOL_EXECUTION_DENIED,
+            "requires_confirmation" => TOOL_EXECUTION_REQUIRES_CONFIRMATION,
+            "internal_error" => INTERNAL_ERROR,
+            _ => INTERNAL_ERROR,
+        }
+    }
 }
 
 /// Patch operation error messages

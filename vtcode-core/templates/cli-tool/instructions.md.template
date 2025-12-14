@@ -1,0 +1,88 @@
+# {{tool_name}} Instructions
+
+## Purpose
+
+This skill integrates the `{{tool_command}}` CLI tool into VTCode, providing {{tool_description}}.
+
+## When to Use
+
+Use this skill when you need to:
+- Execute `{{tool_command}}` commands through VTCode
+- {{description}}
+
+## How to Use
+
+### Basic Command Execution
+
+The skill wraps `{{tool_command}}` and passes arguments through to the underlying tool:
+
+```
+Execute {{tool_command}} with arguments: [your arguments here]
+```
+
+### JSON Input/Output
+
+{{#if supports_json}}
+This skill supports JSON input/output when the `--json` flag is used:
+
+```
+Execute {{tool_command}} with JSON input: {"key": "value"}
+```
+{{/if}}
+
+### Input/Output Files
+
+You can specify input and output files:
+
+```
+Execute {{tool_command}} with input from file.txt and output to result.json
+```
+
+## Available Options
+
+### Command Arguments
+All standard `{{tool_command}}` arguments are supported and passed through to the underlying tool.
+
+### Skill-Specific Options
+- `--input FILE`: Specify input file
+- `--output FILE`: Specify output file  
+- `--json`: Enable JSON mode{{#if supports_json}} (supported by this tool){{/if}}
+- `--verbose`: Enable verbose output
+
+## Error Handling
+
+This skill handles errors by:
+- Capturing stderr output and reporting it clearly
+- Returning appropriate exit codes
+- Providing JSON error responses when in JSON mode
+
+## Performance Considerations
+
+- Default timeout: 30 seconds (configurable in tool.json)
+- Output is streamed for large results
+- Memory usage depends on the underlying `{{tool_command}}` tool
+
+## Security Notes
+
+- This skill executes external commands - ensure `{{tool_command}}` is trusted
+- Input validation is performed when JSON schema is provided
+- File access is limited to the skill's working directory
+
+## Integration Examples
+
+### With File Operations
+```
+First create a file with content, then process it with {{tool_command}}
+```
+
+### With Data Processing
+```
+Use {{tool_command}} to transform data and return results in JSON format
+```
+
+## Customization
+
+You can customize this skill by:
+- Editing `tool.json` to change configuration
+- Modifying `tool.sh` to add preprocessing/postprocessing
+- Adding a `schema.json` file for input validation

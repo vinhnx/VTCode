@@ -110,7 +110,7 @@ impl SkillContainer {
     pub fn new() -> Self {
         Self {
             id: None,
-            skills: Vec::new(),
+            skills: Vec::with_capacity(8), // Pre-allocate for max capacity
         }
     }
 
@@ -126,7 +126,7 @@ impl SkillContainer {
     pub fn with_id(id: impl Into<String>) -> Self {
         Self {
             id: Some(id.into()),
-            skills: Vec::new(),
+            skills: Vec::with_capacity(8), // Pre-allocate for max capacity
         }
     }
 
@@ -150,14 +150,19 @@ impl SkillContainer {
     /// # Errors
     /// Returns error if total would exceed 8 skills
     pub fn add_skills(&mut self, mut specs: Vec<SkillSpec>) -> anyhow::Result<()> {
-        let total = self.skills.len() + specs.len();
-        if total > 8 {
+        let current_len = self.skills.len();
+        let new_len = current_len + specs.len();
+        if new_len > 8 {
             anyhow::bail!(
                 "Adding {} skills would exceed maximum (8). Current: {}, requested: {}",
                 specs.len(),
-                self.skills.len(),
+                current_len,
                 specs.len()
             );
+        }
+        // Reserve capacity to avoid reallocations
+        if new_len > self.skills.capacity() {
+            self.skills.reserve(new_len - current_len);
         }
         self.skills.append(&mut specs);
         Ok(())

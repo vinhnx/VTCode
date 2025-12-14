@@ -140,7 +140,10 @@ impl ErrorRecoveryManager {
         message: String,
         context: ErrorContext,
     ) -> String {
-        let error_id = format!("error_{}_{}", current_timestamp(), self.errors.len());
+        // Use a more efficient ID generation with minimal formatting
+        let error_count = self.errors.len();
+        let timestamp_short = current_timestamp() % 10000;
+        let error_id = format!("e{}_{}", error_count, timestamp_short);
 
         let error = ExecutionError {
             id: error_id.clone(),
@@ -148,7 +151,7 @@ impl ErrorRecoveryManager {
             error_type, // ErrorType is Copy now, no need to clone
             message,
             context,
-            recovery_attempts: Vec::with_capacity(4), // Most errors have 1-4 recovery attempts
+            recovery_attempts: Vec::with_capacity(2), // Most errors have 1-2 recovery attempts
             resolved: false,
         };
 
@@ -228,23 +231,39 @@ impl ErrorRecoveryManager {
     /// Get error statistics
     pub fn get_error_statistics(&self) -> ErrorStatistics {
         let total_errors = self.errors.len();
+        if total_errors == 0 {
+            return ErrorStatistics {
+                total_errors: 0,
+                resolved_errors: 0,
+                unresolved_errors: 0,
+                errors_by_type: IndexMap::new(),
+                avg_recovery_attempts: 0.0,
+                recent_errors: Vec::new(),
+            };
+        }
+
         let resolved_errors = self.errors.iter().filter(|e| e.resolved).count();
         let unresolved_errors = total_errors - resolved_errors;
 
-        let errors_by_type = self.errors.iter().fold(IndexMap::new(), |mut acc, error| {
-            *acc.entry(error.error_type).or_insert(0) += 1;
-            acc
-        });
+        // Use a more efficient approach for counting by type
+        let mut errors_by_type = IndexMap::new();
+        let mut total_attempts = 0usize;
+        
+        for error in &self.errors {
+            *errors_by_type.entry(error.error_type).or_insert(0) += 1;
+            total_attempts += error.recovery_attempts.len();
+        }
 
-        let avg_recovery_attempts = if total_errors > 0 {
-            self.errors
-                .iter()
-                .map(|e| e.recovery_attempts.len())
-                .sum::<usize>() as f64
-                / total_errors as f64
-        } else {
-            0.0
-        };
+        let avg_recovery_attempts = total_attempts as f64 / total_errors as f64;
+
+        // Get recent errors more efficiently
+        let recent_count = total_errors.min(5);
+        let recent_errors: Vec<_> = self.errors
+            .iter()
+            .rev()
+            .take(recent_count)
+            .cloned()
+            .collect();
 
         ErrorStatistics {
             total_errors,
@@ -252,7 +271,7 @@ impl ErrorRecoveryManager {
             unresolved_errors,
             errors_by_type,
             avg_recovery_attempts,
-            recent_errors: self.errors.iter().rev().take(5).cloned().collect(),
+            recent_errors,
         }
     }
 

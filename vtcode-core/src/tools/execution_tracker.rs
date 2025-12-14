@@ -43,7 +43,7 @@ pub enum ExecutionStatus {
 /// Tool execution tracker with bounded memory usage
 pub struct ExecutionTracker {
     /// Mapping of tool names to IDs (deduplicate strings)
-    tool_ids: Vec<String>,
+    tool_ids: Vec<&'static str>,  // Use &'static str to avoid allocations
     /// Bounded execution history
     history: VecDeque<ExecutionRecord>,
     /// Maximum history size
@@ -116,16 +116,18 @@ impl ExecutionTracker {
     fn get_or_intern_tool_id(&mut self, tool_name: &str) -> u32 {
         self.tool_ids
             .iter()
-            .position(|t| t == tool_name)
+            .position(|&t| t == tool_name)
             .unwrap_or_else(|| {
-                self.tool_ids.push(tool_name.to_string());
+                // Leak the string to get &'static str - acceptable for tool names
+                let leaked = Box::leak(tool_name.to_string().into_boxed_str());
+                self.tool_ids.push(leaked);
                 self.tool_ids.len() - 1
             }) as u32
     }
 
     /// Get tool name from ID
     pub fn get_tool_name(&self, id: u32) -> Option<&str> {
-        self.tool_ids.get(id as usize).map(|s| s.as_str())
+        self.tool_ids.get(id as usize).copied()
     }
 
     /// Get recent executions (bounded to prevent large allocations)

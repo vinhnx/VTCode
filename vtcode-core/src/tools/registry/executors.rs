@@ -1065,10 +1065,11 @@ impl ToolRegistry {
                 }
             }
 
-            // Also search local skills (using SkillLoader for .claude/skills/ with SKILL.md)
-            use crate::skills::{SkillLoader, SkillContext};
-            let loader = SkillLoader::new(workspace_root);
-            if let Ok(skill_contexts) = loader.discover_skills() {
+            // Also search local skills (using EnhancedSkillLoader for .claude/skills/ with SKILL.md)
+            use crate::skills::{EnhancedSkillLoader, SkillContext};
+            let mut loader = EnhancedSkillLoader::new(workspace_root);
+            if let Ok(discovery_result) = loader.discover_all_skills().await {
+                let skill_contexts = discovery_result.traditional_skills;
                 let query_lower = parsed.keyword.to_lowercase();
                 let filtered: Vec<_> = skill_contexts
                     .into_iter()
@@ -1144,45 +1145,54 @@ impl ToolRegistry {
             let parsed: SkillArgs = serde_json::from_value(args)
                 .context("skill requires 'name' field")?;
 
-            // Load skill using SkillLoader (reads .claude/skills/*/SKILL.md)
-            use crate::skills::SkillLoader;
-            let loader = SkillLoader::new(workspace_root);
+            // Load skill using EnhancedSkillLoader (reads .claude/skills/*/SKILL.md)
+            use crate::skills::{EnhancedSkillLoader, loader::EnhancedSkill};
+            let mut loader = EnhancedSkillLoader::new(workspace_root);
 
-            match loader.load_skill(&parsed.name) {
-                Ok(skill) => {
-                    let mut resources = json!({});
+            match loader.get_skill(&parsed.name).await {
+                Ok(enhanced_skill) => {
+                    // Extract traditional skill from enhanced skill
+                    if let EnhancedSkill::Traditional(skill) = enhanced_skill {
+                        let mut resources = json!({});
 
-                    // Include resources if available
-                    for (path, resource) in skill.resources.iter() {
-                        resources[path] = json!({
-                            "type": format!("{:?}", resource.resource_type),
-                            "path": resource.path,
-                        });
-                    }
-
-                    // Format output to emphasize instructions for agent to follow
-                    let output = format!(
-                        "=== Skill Loaded: {} ===\n\n{}\n\n=== Resources Available ===\n{}\n\n⚠️  IMPORTANT: Follow the instructions above to complete the task. Do NOT call this tool again.",
-                        skill.manifest.name,
-                        skill.instructions,
-                        if resources.as_object().map(|r| r.is_empty()).unwrap_or(true) {
-                            "No additional resources".to_string()
-                        } else {
-                            serde_json::to_string_pretty(&resources).unwrap_or_default()
+                        // Include resources if available
+                        for (path, resource) in skill.resources.iter() {
+                            resources[path] = json!({
+                                "type": format!("{:?}", resource.resource_type),
+                                "path": resource.path,
+                            });
                         }
-                    );
 
-                    Ok(json!({
-                        "success": true,
-                        "name": skill.manifest.name,
-                        "description": skill.manifest.description,
-                        "version": skill.manifest.version,
-                        "author": skill.manifest.author,
-                        "instructions": skill.instructions,
-                        "resources": resources,
-                        "output": output,
-                        "message": format!("Skill '{}' loaded. Read 'output' field for complete instructions.", skill.manifest.name)
-                    }))
+                        // Format output to emphasize instructions for agent to follow
+                        let output = format!(
+                            "=== Skill Loaded: {} ===\n\n{}\n\n=== Resources Available ===\n{}\n\n⚠️  IMPORTANT: Follow the instructions above to complete the task. Do NOT call this tool again.",
+                            skill.manifest.name,
+                            skill.instructions,
+                            if resources.as_object().map(|r| r.is_empty()).unwrap_or(true) {
+                                "No additional resources".to_string()
+                            } else {
+                                serde_json::to_string_pretty(&resources).unwrap_or_default()
+                            }
+                        );
+
+                        Ok(json!({
+                            "success": true,
+                            "name": skill.manifest.name,
+                            "description": skill.manifest.description,
+                            "version": skill.manifest.version,
+                            "author": skill.manifest.author,
+                            "instructions": skill.instructions,
+                            "resources": resources,
+                            "output": output,
+                            "message": format!("Skill '{}' loaded. Read 'output' field for complete instructions.", skill.manifest.name)
+                        }))
+                    } else {
+                        Ok(json!({
+                            "success": false,
+                            "error": format!("Skill '{}' is not a traditional skill and cannot be loaded directly", parsed.name),
+                            "message": "CLI tool skills must be executed through the tool system, not loaded as instructions"
+                        }))
+                    }
                 }
                 Err(e) => {
                     Ok(json!({

@@ -1,0 +1,62 @@
+---
+name: {{skill_name}}
+description: {{description}}
+version: {{version}}
+author: {{author}}
+category: utility
+tags: general,purpose
+---
+
+# {{skill_name}}
+
+{{description}}
+
+## Overview
+
+This skill provides utility functions for [describe the main purpose].
+
+## Capabilities
+
+- [List key capabilities]
+- [Describe what the skill can do]
+- [Mention any limitations]
+
+## Usage Examples
+
+### Basic Usage
+```
+Use the {{skill_name}} skill to [describe basic usage]
+```
+
+### Advanced Usage
+```
+For more complex scenarios, [describe advanced usage]
+```
+
+## Available Tools
+
+When this skill is active, you can use:
+- [List available tools/functions]
+- [Describe what each tool does]
+
+## Best Practices
+
+- [List best practices for using this skill]
+- [Mention any important considerations]
+- [Provide tips for optimal usage]
+
+## Error Handling
+
+This skill handles errors by:
+- [Describe error handling approach]
+- [List common errors and solutions]
+
+## Integration
+
+This skill integrates with:
+- [List related skills or tools]
+- [Describe integration patterns]
+
+---
+
+Generated from VTCode skill template v1.0.0

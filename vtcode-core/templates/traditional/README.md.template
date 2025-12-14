@@ -1,0 +1,51 @@
+# {{skill_name}}
+
+{{description}}
+
+## Installation
+
+This skill is automatically discovered by VTCode when placed in the skills directory.
+
+## Usage
+
+Once installed, this skill can be invoked through the VTCode agent interface.
+
+## Structure
+
+```
+{{skill_name}}/
+├── SKILL.md              # Skill metadata and instructions
+├── README.md             # This file
+├── scripts/              # Executable scripts
+│   └── helper.py
+└── templates/            # Template files
+    └── example.json
+```
+
+## Development
+
+To modify this skill:
+
+1. Edit the `SKILL.md` file to update instructions
+2. Modify scripts in the `scripts/` directory
+3. Update templates in the `templates/` directory
+4. Test the skill using VTCode's validation tools
+
+## Testing
+
+Validate the skill using VTCode's built-in validation:
+```bash
+vtcode validate-skill {{skill_name}}
+```
+
+## Contributing
+
+When contributing to this skill:
+- Follow the existing code style
+- Update documentation as needed
+- Test thoroughly before submitting changes
+- Consider backward compatibility
+
+## License
+
+This skill is part of the VTCode project.

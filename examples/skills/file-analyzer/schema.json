@@ -1,0 +1,55 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "file_path": {
+      "type": "string",
+      "description": "Path to the file to analyze",
+      "minLength": 1
+    },
+    "language": {
+      "type": "string",
+      "description": "Programming language (auto-detected if not specified)",
+      "enum": ["auto", "rust", "python", "javascript", "typescript", "go"],
+      "default": "auto"
+    },
+    "analysis_type": {
+      "type": "string",
+      "description": "Type of analysis to perform",
+      "enum": ["basic", "detailed", "full"],
+      "default": "detailed"
+    },
+    "metrics": {
+      "type": "array",
+      "description": "Specific metrics to calculate",
+      "items": {
+        "type": "string",
+        "enum": ["complexity", "dependencies", "structure", "quality", "duplication"]
+      },
+      "default": ["complexity", "structure", "quality"]
+    },
+    "thresholds": {
+      "type": "object",
+      "description": "Thresholds for quality warnings",
+      "properties": {
+        "max_complexity": {
+          "type": "integer",
+          "default": 10,
+          "minimum": 1
+        },
+        "max_function_length": {
+          "type": "integer",
+          "default": 50,
+          "minimum": 10
+        },
+        "max_file_length": {
+          "type": "integer",
+          "default": 500,
+          "minimum": 100
+        }
+      }
+    }
+  },
+  "required": ["file_path"],
+  "additionalProperties": false
+}

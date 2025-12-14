@@ -601,6 +601,8 @@ pub struct ToolRegistry {
     mcp_healthy: bool,
     mcp_last_failed: Option<SystemTime>,
     initialized: bool,
+    // Caching
+    cached_available_tools: Arc<RwLock<Option<Vec<String>>>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -701,6 +703,7 @@ impl ToolRegistry {
             mcp_healthy: true,
             mcp_last_failed: None,
             initialized: false,
+            cached_available_tools: Arc::new(RwLock::new(None)),
         };
 
         registry.sync_policy_catalog().await;
@@ -764,7 +767,12 @@ impl ToolRegistry {
     /// # Returns
     /// `Result<()>` indicating success or an error if the tool is already registered
     pub fn register_tool(&mut self, registration: ToolRegistration) -> Result<()> {
-        self.inventory.register_tool(registration)
+        self.inventory.register_tool(registration)?;
+        // Invalidate cache
+        if let Ok(mut cache) = self.cached_available_tools.write() {
+            *cache = None;
+        }
+        Ok(())
     }
 
     /// Get a list of all available tools, including MCP tools
@@ -772,19 +780,37 @@ impl ToolRegistry {
     /// # Returns
     /// A `Vec<String>` containing the names of all available tools
     pub async fn available_tools(&self) -> Vec<String> {
+        // Use try_read to avoid blocking on contested locks
+        match self.cached_available_tools.try_read() {
+            Ok(cache) if cache.is_some() => return cache.as_ref().unwrap().clone(),
+            _ => {} // Continue with computation if cache miss or lock contested
+        }
+
         let mut tools = self.inventory.available_tools();
         tools.extend(self.inventory.registered_aliases());
 
         // Add MCP tools if available
-        if let Some(mcp_client) = &self.mcp_client
-            && let Ok(mcp_tools) = mcp_client.list_mcp_tools().await
-        {
-            for tool in mcp_tools {
-                tools.push(format!("mcp_{}", tool.name));
+        if let Some(mcp_client) = &self.mcp_client {
+            match mcp_client.list_mcp_tools().await {
+                Ok(mcp_tools) => {
+                    tools.reserve(mcp_tools.len());
+                    for tool in mcp_tools {
+                        tools.push(format!("mcp_{}", tool.name));
+                    }
+                }
+                Err(e) => {
+                    tracing::debug!("Failed to list MCP tools: {}", e);
+                }
             }
         }
 
-        tools.sort();
+        tools.sort_unstable();
+        
+        // Update cache with try_write to avoid blocking
+        if let Ok(mut cache) = self.cached_available_tools.try_write() {
+            *cache = Some(tools.clone());
+        }
+
         tools
     }
 

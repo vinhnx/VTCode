@@ -1,0 +1,73 @@
+# {{skill_name}} Instructions
+
+## Purpose
+
+This skill provides {{description}}.
+
+## When to Use
+
+Use this skill when you need to:
+- [List specific use cases]
+- [Describe scenarios where this skill is helpful]
+- [Mention any prerequisites]
+
+## How to Use
+
+### Basic Operations
+
+1. **Setup**: [Describe any setup required]
+2. **Execution**: [Describe how to execute the skill]
+3. **Results**: [Describe what results to expect]
+
+### Advanced Features
+
+- [List advanced features]
+- [Describe complex usage patterns]
+- [Provide examples of advanced usage]
+
+## Available Functions
+
+### Function 1: [Name]
+- **Purpose**: [What it does]
+- **Parameters**: [Required parameters]
+- **Returns**: [What it returns]
+- **Example**: [Usage example]
+
+### Function 2: [Name]
+- **Purpose**: [What it does]
+- **Parameters**: [Required parameters]
+- **Returns**: [What it returns]
+- **Example**: [Usage example]
+
+## Error Handling
+
+This skill handles errors by:
+- [Describe error handling approach]
+- [List common errors and their meanings]
+- [Provide troubleshooting guidance]
+
+## Performance Considerations
+
+- [List performance characteristics]
+- [Mention resource usage]
+- [Provide optimization tips]
+
+## Security Notes
+
+- [List security considerations]
+- [Mention any security features]
+- [Provide security best practices]
+
+## Integration with Other Skills
+
+This skill works well with:
+- [List complementary skills]
+- [Describe integration patterns]
+- [Provide integration examples]
+
+## Customization
+
+You can customize this skill by:
+- [List customization options]
+- [Describe how to modify behavior]
+- [Provide customization examples]

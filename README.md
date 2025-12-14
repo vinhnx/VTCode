@@ -134,6 +134,7 @@ For full configuration options, see [Configuration](./docs/config/CONFIGURATION_
 -   **Multi-Provider AI**: OpenAI, Anthropic, xAI, DeepSeek, Gemini, Z.AI, Moonshot AI, OpenRouter, MiniMax, Ollama (local)
 -   **Code Intelligence**: Tree-sitter parsers for Rust, Python, JavaScript/TypeScript, Go, Java, Swift
 -   **Smart Tools**: Built-in code analysis, file operations, terminal commands, and refactoring
+-   **Agent Skills**: Comprehensive skills location system with multi-location support and precedence handling ([docs](./docs/SKILLS_GUIDE.md))
 -   **Editor Integration**: Native support for Zed IDE via Agent Client Protocol (ACP)
 -   **Lifecycle Hooks**: Execute custom shell commands in response to agent events for context enrichment, policy enforcement, and automation ([docs](./docs/guides/lifecycle-hooks.md))
 -   **Context Management**: Advanced token budget tracking and context curation
@@ -171,6 +172,7 @@ See [Security Model](./docs/SECURITY_MODEL.md) for details.
 -   [**Context Engineering**](./docs/context_engineering.md)
     -   [Token budget management](./docs/context_engineering_implementation.md#token-budget-tracking--attention-management)
     -   [Dynamic context curation](./docs/context_engineering_implementation.md#phase-2-dynamic-context-curation)
+-   [**Agent Skills**](./docs/SKILLS_GUIDE.md) - Comprehensive skills location system with multi-location support, precedence handling, and Anthropic's Agent Skills specification
 -   [**Code Intelligence**](./docs/user-guide/tree-sitter-integration.md)
 -   [**Agent Client Protocol (ACP)**](./docs/guides/zed-acp.md)
 -   [**Zed Integration**](./docs/guides/zed-acp.md) - Agent Client Protocol Integration. VT Code is fully [capable ACP agent](https://agentclientprotocol.com/overview/agents), works with [ACP Clients](https://agentclientprotocol.com/overview/clients), for example [Zed](https://zed.dev/).

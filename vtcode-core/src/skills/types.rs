@@ -3,11 +3,12 @@
 //! Defines core types for Anthropic Agent Skills integration, including
 //! skill metadata, manifest parsing, and resource management.
 
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
 /// Skill manifest metadata from SKILL.md frontmatter
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SkillManifest {
     /// Unique identifier (lowercase, hyphens, max 64 chars)
     pub name: String,

@@ -2,6 +2,23 @@
 
 All notable changes to vtcode will be documented in this file.
 
+## [Unreleased] - 2025-12-14
+
+### Added
+- **Comprehensive Skills Location System**: Implemented multi-location skill discovery with precedence handling
+  - VTCode User Skills (`~/.vtcode/skills/`) - Highest precedence
+  - VTCode Project Skills (`.vtcode/skills/`) - Project-specific skills  
+  - Pi Framework Skills (`~/.pi/skills/`, `.pi/skills/`)
+  - Claude Code Skills (`~/.claude/skills/`, `.claude/skills/`)
+  - Codex CLI Skills (`~/.codex/skills/`)
+- **Precedence System**: Skills from higher precedence locations override lower precedence skills with the same name
+- **Migration Support**: All existing skills migrated from `.claude/skills` to `.vtcode/skills` with backward compatibility
+- **Enhanced Skill Loader**: Updated loader to integrate with new location system while maintaining backward compatibility
+
+### Changed
+- Updated skills documentation to reflect new location system and precedence handling
+- Enhanced skill discovery to support recursive scanning and proper name collision resolution
+
 ## [Version 0.43.0] - 2025-11-09
 # [Version 0.49.1] - 2025-12-13
 

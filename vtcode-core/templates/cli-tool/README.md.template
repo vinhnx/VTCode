@@ -1,0 +1,40 @@
+# {{tool_name}}
+
+{{tool_description}}
+
+## Overview
+
+This is a CLI tool integration for VTCode that wraps the `{{tool_command}}` command.
+
+## Installation
+
+1. Ensure `{{tool_command}}` is installed on your system
+2. Place this skill directory in your VTCode skills directory
+3. Make sure `tool.sh` is executable: `chmod +x tool.sh`
+
+## Configuration
+
+Edit `tool.json` to customize:
+- `executable_path`: Path to the actual tool executable
+- `timeout_seconds`: Maximum execution time
+- `supports_json`: Whether the tool supports JSON I/O
+- `environment`: Environment variables to set
+
+## Usage
+
+Once installed, this tool can be invoked through VTCode's skill system.
+
+## Schema
+
+If `schema.json` is present, it will be used to validate input arguments.
+
+## Examples
+
+See the instructions in the VTCode interface for usage examples.
+
+## Troubleshooting
+
+- Ensure the wrapped command (`{{tool_command}}`) is available in PATH
+- Check that `tool.sh` has execute permissions
+- Verify the configuration in `tool.json`
+- Look at the tool's output for error messages

@@ -1,0 +1,159 @@
+#!/bin/bash
+# {{tool_name}} - CLI tool wrapper for VTCode
+# {{tool_description}}
+
+set -e
+
+# Configuration
+TOOL_NAME="{{tool_name}}"
+TOOL_COMMAND="{{tool_command}}"
+SUPPORTS_JSON="{{supports_json}}"
+
+# Logging function
+log() {
+    echo "[$TOOL_NAME] $1" >&2
+}
+
+# Error handling
+error_exit() {
+    echo "{\"status\": \"error\", \"error\": \"$1\", \"tool\": \"$TOOL_NAME\"}" >&2
+    exit 1
+}
+
+# Parse arguments
+INPUT_FILE=""
+OUTPUT_FILE=""
+VERBOSE=false
+JSON_MODE=false
+ARGS=()
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --input|-i)
+            INPUT_FILE="$2"
+            shift 2
+            ;;
+        --output|-o)
+            OUTPUT_FILE="$2"
+            shift 2
+            ;;
+        --json)
+            JSON_MODE=true
+            shift
+            ;;
+        --verbose|-v)
+            VERBOSE=true
+            shift
+            ;;
+        --help)
+            echo "Usage: $0 [OPTIONS] [-- COMMAND_ARGS]"
+            echo "Options:"
+            echo "  --input FILE     Input file"
+            echo "  --output FILE    Output file"
+            echo "  --json           Enable JSON mode"
+            echo "  --verbose        Verbose output"
+            echo "  --help           Show this help"
+            echo "  -- COMMAND_ARGS  Arguments to pass to wrapped command"
+            exit 0
+            ;;
+        --)
+            shift
+            ARGS+=("$@")
+            break
+            ;;
+        *)
+            ARGS+=("$1")
+            shift
+            ;;
+    esac
+done
+
+# Verbose logging
+if [[ "$VERBOSE" == "true" ]]; then
+    log "Starting $TOOL_NAME"
+    log "Input file: $INPUT_FILE"
+    log "Output file: $OUTPUT_FILE"
+    log "JSON mode: $JSON_MODE"
+    log "Command args: ${ARGS[*]}"
+fi
+
+# Handle input
+if [[ -n "$INPUT_FILE" ]]; then
+    if [[ ! -f "$INPUT_FILE" ]]; then
+        error_exit "Input file not found: $INPUT_FILE"
+    fi
+    
+    if [[ "$JSON_MODE" == "true" ]] && [[ "$SUPPORTS_JSON" == "true" ]]; then
+        # Parse JSON input and convert to command arguments
+        if command -v jq >/dev/null 2>&1; then
+            # Convert JSON to command-line arguments
+            JSON_INPUT=$(cat "$INPUT_FILE")
+            ARGS+=($(echo "$JSON_INPUT" | jq -r 'to_entries[] | "--\(.key) \(.value)"' 2>/dev/null || echo ""))
+        else
+            log "Warning: jq not available, cannot parse JSON input"
+        fi
+    fi
+fi
+
+# Execute the wrapped command
+if [[ "$VERBOSE" == "true" ]]; then
+    log "Executing: $TOOL_COMMAND ${ARGS[*]}"
+fi
+
+# Capture output
+OUTPUT=""
+ERROR_OUTPUT=""
+EXIT_CODE=0
+
+if [[ -n "$OUTPUT_FILE" ]]; then
+    # Execute and capture to output file
+    if "$TOOL_COMMAND" "${ARGS[@]}" > "$OUTPUT_FILE" 2>"${OUTPUT_FILE}.stderr"; then
+        EXIT_CODE=0
+    else
+        EXIT_CODE=$?
+        ERROR_OUTPUT=$(cat "${OUTPUT_FILE}.stderr" 2>/dev/null || echo "Command failed with exit code $EXIT_CODE")
+    fi
+else
+    # Execute and capture output
+    if OUTPUT=$("$TOOL_COMMAND" "${ARGS[@]}" 2>&1); then
+        EXIT_CODE=0
+    else
+        EXIT_CODE=$?
+        ERROR_OUTPUT="$OUTPUT"
+        OUTPUT=""
+    fi
+fi
+
+# Handle JSON output
+if [[ "$JSON_MODE" == "true" ]] && [[ "$SUPPORTS_JSON" == "true" ]]; then
+    # Try to parse output as JSON
+    if [[ -n "$OUTPUT" ]] && echo "$OUTPUT" | jq . >/dev/null 2>&1; then
+        # Valid JSON output
+        JSON_RESULT="$OUTPUT"
+    else
+        # Wrap non-JSON output
+        JSON_RESULT=$(cat <<EOF
+{
+  "status": "$([[ $EXIT_CODE -eq 0 ]] && echo \"success\" || echo \"error\")",
+  "output": $(echo "$OUTPUT" | jq -R -s . 2>/dev/null || echo "null"),
+  "exit_code": $EXIT_CODE,
+  "tool": "$TOOL_NAME",
+  "command": "$TOOL_COMMAND",
+  "args": $(echo "${ARGS[*]}" | jq -R -s 'split(" ")' 2>/dev/null || echo "[]")
+}
+EOF
+        )
+    fi
+    
+    echo "$JSON_RESULT"
+else
+    # Regular text output
+    if [[ $EXIT_CODE -eq 0 ]]; then
+        echo "$OUTPUT"
+    else
+        echo "$ERROR_OUTPUT" >&2
+        exit $EXIT_CODE
+    fi
+fi
+
+exit $EXIT_CODE

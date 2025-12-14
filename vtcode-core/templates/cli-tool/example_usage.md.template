@@ -1,0 +1,72 @@
+## Example Usage
+
+### Basic Command Execution
+
+```
+User: Use {{tool_name}} to execute {{tool_command}} with arguments --help
+
+Agent: I'll execute {{tool_command}} with the --help argument using the {{tool_name}} skill.
+
+[Skill execution]
+
+Agent: Here's the help output from {{tool_command}}:
+[Help output displayed]
+```
+
+### JSON Mode Example
+
+```
+User: Use {{tool_name}} in JSON mode to process this data: {"url": "https://example.com"}
+
+Agent: I'll use the {{tool_name}} skill in JSON mode to process your data.
+
+[Skill execution]
+
+Agent: Here's the JSON result:
+{
+  "status": "success",
+  "output": "[command output]",
+  "exit_code": 0,
+  "tool": "{{tool_name}}",
+  "command": "{{tool_command}}"
+}
+```
+
+### File Processing Example
+
+```
+User: Use {{tool_name}} to process input.txt and save output to result.json
+
+Agent: I'll use the {{tool_name}} skill to process your input file and save the results.
+
+[Skill execution]
+
+Agent: Processing complete. Results saved to result.json.
+```
+
+### Error Handling Example
+
+```
+User: Use {{tool_name}} with invalid arguments
+
+Agent: I'll attempt to execute {{tool_command}} with your specified arguments.
+
+[Skill execution - command fails]
+
+Agent: The command failed with exit code 1. Error output:
+[Error message from {{tool_command}}]
+
+Let me try with corrected arguments...
+```
+
+### Integration Example
+
+```
+User: First list files in the directory, then use {{tool_name}} to process them
+
+Agent: I'll first list the files, then use {{tool_name}} to process them as needed.
+
+[File listing]
+[Processing with {{tool_name}}]
+[Results]
+```
