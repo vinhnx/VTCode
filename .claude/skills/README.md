@@ -27,8 +27,8 @@ pip install reportlab fpdf2 openpyxl python-docx
 
 **VTCode agents are instructed to prefer modern package managers:**
 
-- **Python**: `uv pip install` > `pip install`
-- **JavaScript**: `bun install` > `npm install` > `pnpm install`
+-   **Python**: `uv pip install` > `pip install`
+-   **JavaScript**: `bun install` > `npm install` > `pnpm install`
 
 These tools are faster, provide better dependency resolution, and are more reliable.
 
