@@ -112,15 +112,29 @@ impl IncrementalSystemPrompt {
     ) -> String {
         use std::fmt::Write;
 
-        let mut prompt = String::with_capacity(base_system_prompt.len() + 128);
+        let mut prompt = String::with_capacity(base_system_prompt.len() + 512);
         prompt.push_str(base_system_prompt);
 
-        if retry_attempts > 0 {
-            let _ = writeln!(
-                prompt,
-                "\n\nNote: This is attempt #{} at completing the task.",
-                retry_attempts
-            );
+        // Reinforce anti-giving-up policy based on context (main policy is in system prompt)
+        if retry_attempts > 0 || context.error_count > 0 {
+            let _ = writeln!(prompt, "\n\n# Persistence Reminder");
+            let _ = writeln!(prompt, "Review the Anti-Giving-Up Policy in your system prompt. You MUST try multiple approaches before giving up.");
+            
+            if retry_attempts > 0 {
+                let _ = writeln!(
+                    prompt,
+                    "\nThis is attempt #{}. Previous attempts failed. Focus on trying fundamentally DIFFERENT approaches, not repeating the same steps.",
+                    retry_attempts
+                );
+            }
+            
+            if context.error_count > 0 {
+                let _ = writeln!(
+                    prompt,
+                    "\nError analysis: {} errors encountered. Look for patterns: file/path issues? permission problems? tool failures? Try solutions specific to the error type.",
+                    context.error_count
+                );
+            }
         }
 
         let has_context = context.conversation_length > 0

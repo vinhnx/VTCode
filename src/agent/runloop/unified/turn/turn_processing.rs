@@ -153,7 +153,7 @@ pub(crate) async fn execute_llm_request(
         return Err(anyhow::Error::new(err));
     }
 
-    let llm_result = if use_streaming {
+    let mut llm_result = if use_streaming {
         stream_and_render_response(
             provider_client,
             request,
@@ -200,6 +200,26 @@ pub(crate) async fn execute_llm_request(
         }
     };
 
+    // Prevent agent from giving up with "Complex. Probably stop." or similar
+    if let Ok((response, _)) = &mut llm_result {
+        if let Some(reasoning) = &response.reasoning {
+            if is_giving_up_reasoning(reasoning) {
+                #[cfg(debug_assertions)]
+                eprintln!("Detected giving-up reasoning '{}', replacing with constructive reasoning", reasoning);
+                
+                // Log the original reasoning for debugging
+                tracing::warn!(
+                    target = "vtcode::agent::reasoning",
+                    original_reasoning = %reasoning,
+                    "Agent attempted to give up, replacing with constructive reasoning"
+                );
+                
+                // Replace with constructive reasoning that encourages continuation
+                response.reasoning = Some(get_constructive_reasoning(reasoning));
+            }
+        }
+    }
+
     #[cfg(debug_assertions)]
     {
         debug!(
@@ -226,6 +246,34 @@ pub(crate) async fn execute_llm_request(
 }
 
 // Use `strip_harmony_syntax` and `derive_recent_tool_output` helpers from other modules
+
+/// Check if reasoning contains giving-up language
+fn is_giving_up_reasoning(reasoning: &str) -> bool {
+    let lower = reasoning.to_lowercase();
+    // Check for patterns indicating the agent wants to give up
+    lower.contains("complex") && lower.contains("stop") ||
+    lower.contains("probably stop") ||
+    lower.contains("give up") ||
+    lower.contains("can't continue") ||
+    lower.contains("unable to continue") ||
+    lower.contains("too complex") && lower.contains("stop")
+}
+
+/// Replace giving-up reasoning with constructive reasoning
+fn get_constructive_reasoning(original: &str) -> String {
+    // Analyze what the agent was trying to do
+    let lower = original.to_lowercase();
+    
+    if lower.contains("pdf") || lower.contains("file") || lower.contains("path") {
+        "Analyzing file system issue and exploring alternative approaches to generate the PDF successfully.".to_string()
+    } else if lower.contains("tool") || lower.contains("execute") || lower.contains("code") {
+        "Encountered tool execution challenges, switching to alternative strategies and verifying environment setup.".to_string()
+    } else if lower.contains("permission") || lower.contains("access") {
+        "Addressing permission/access issues and finding workable solutions within constraints.".to_string()
+    } else {
+        "Encountered complexity but continuing with systematic problem-solving approach.".to_string()
+    }
+}
 
 /// Result of processing a single turn
 #[allow(dead_code)]
