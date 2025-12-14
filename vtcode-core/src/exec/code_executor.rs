@@ -175,10 +175,23 @@ impl CodeExecutor {
         };
 
         // Write code to temporary file in workspace
-        let code_file = self.workspace_root.join(".vtcode").join("code_temp");
-        tokio::fs::create_dir_all(self.workspace_root.join(".vtcode"))
+        // Use code_temp as a directory, not a file
+        let code_temp_dir = self.workspace_root.join(".vtcode").join("code_temp");
+        tokio::fs::create_dir_all(&code_temp_dir)
             .await
-            .context("failed to create .vtcode directory")?;
+            .context("failed to create .vtcode/code_temp directory")?;
+        
+        // Use a unique temp file name based on timestamp
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_micros();
+        let ext = match self.language {
+            Language::Python3 => "py",
+            Language::JavaScript => "js",
+        };
+        let code_file = code_temp_dir.join(format!("exec_{}.{}", timestamp, ext));
+        
         tokio::fs::write(&code_file, &complete_code)
             .await
             .context("failed to write code file")?;
