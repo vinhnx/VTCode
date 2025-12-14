@@ -46,4 +46,4 @@ This index collects provider-specific guides for configuring VT Code with differ
 -   **Catalog:** Also ships with `lmstudio-community/meta-llama-3-8b-instruct`, `lmstudio-community/qwen2.5-7b-instruct`, `lmstudio-community/gemma-2-2b-it`, `lmstudio-community/gemma-2-9b-it`, and `lmstudio-community/phi-3.1-mini-4k-instruct`, plus any custom GGUF models you expose
 -   **Features:** Streaming, tool calling, structured output, and reasoning effort passthrough via the shared OpenAI surface
 
-> ℹ️ Additional provider-specific guides will be added as new integrations land in VT Code.
+> ℹ Additional provider-specific guides will be added as new integrations land in VT Code.

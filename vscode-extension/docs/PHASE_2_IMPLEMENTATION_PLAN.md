@@ -55,14 +55,14 @@ Create separate files for each command:
 
 ```
 src/commands/
-├── index.ts                 (barrel export)
-├── askCommand.ts            (ask agent a question)
-├── askSelectionCommand.ts   (ask about selected code)
-├── analyzeCommand.ts        (analyze workspace)
-├── updatePlanCommand.ts     (update execution plan)
-├── configCommand.ts         (open configuration)
-├── trustCommand.ts          (trust workspace)
-└── refreshCommand.ts        (refresh CLI availability)
+ index.ts                 (barrel export)
+ askCommand.ts            (ask agent a question)
+ askSelectionCommand.ts   (ask about selected code)
+ analyzeCommand.ts        (analyze workspace)
+ updatePlanCommand.ts     (update execution plan)
+ configCommand.ts         (open configuration)
+ trustCommand.ts          (trust workspace)
+ refreshCommand.ts        (refresh CLI availability)
 ```
 
 Each command follows the ICommand interface pattern.
@@ -139,11 +139,11 @@ Create base participants (can be extended later):
 
 ```
 src/participants/
-├── index.ts
-├── workspaceParticipant.ts    (@workspace context)
-├── codeParticipant.ts         (@code context)
-├── terminalParticipant.ts     (@terminal context)
-└── gitParticipant.ts          (@git context)
+ index.ts
+ workspaceParticipant.ts    (@workspace context)
+ codeParticipant.ts         (@code context)
+ terminalParticipant.ts     (@terminal context)
+ gitParticipant.ts          (@git context)
 ```
 
 **Example**: CodeParticipant provides selected code context
@@ -275,67 +275,67 @@ class ConversationManager {
 
 ```
 vscode-extension/
-├── src/
-│   ├── types/
-│   │   ├── command.ts           ✨ NEW
-│   │   ├── participant.ts       ✨ NEW
-│   │   ├── message.ts           ✨ NEW
-│   │   └── index.ts
-│   │
-│   ├── commands/                ✨ NEW
-│   │   ├── askCommand.ts
-│   │   ├── askSelectionCommand.ts
-│   │   ├── analyzeCommand.ts
-│   │   ├── updatePlanCommand.ts
-│   │   ├── configCommand.ts
-│   │   ├── trustCommand.ts
-│   │   ├── refreshCommand.ts
-│   │   └── index.ts
-│   │
-│   ├── commandRegistry.ts       ✨ NEW
-│   │
-│   ├── participants/            ✨ NEW
-│   │   ├── workspaceParticipant.ts
-│   │   ├── codeParticipant.ts
-│   │   ├── terminalParticipant.ts
-│   │   ├── gitParticipant.ts
-│   │   └── index.ts
-│   │
-│   ├── participantRegistry.ts   ✨ NEW
-│   │
-│   ├── state/                   ✨ NEW
-│   │   ├── messageStore.ts
-│   │   ├── conversationState.ts
-│   │   └── index.ts
-│   │
-│   ├── conversation/            ✨ NEW
-│   │   ├── conversationManager.ts
-│   │   └── index.ts
-│   │
-│   ├── extension.ts             (REFACTORED - ~300 lines removed)
-│   ├── chatView.ts              (Enhanced with participants)
-│   ├── vtcodeBackend.ts
-│   └── ... other existing files
-│
-├── src/test/
-│   ├── unit/
-│   │   ├── commands/
-│   │   │   ├── askCommand.test.ts
-│   │   │   └── ...
-│   │   ├── participants/
-│   │   │   ├── codeParticipant.test.ts
-│   │   │   └── ...
-│   │   ├── state/
-│   │   │   └── messageStore.test.ts
-│   │   └── ...
-│   └── integration/
-│       └── ... (new integration tests)
-│
-└── docs/
-    ├── ARCHITECTURE.md          (UPDATED)
-    ├── COMMAND_GUIDE.md         ✨ NEW
-    ├── PARTICIPANT_GUIDE.md     ✨ NEW
-    └── ...
+ src/
+    types/
+       command.ts            NEW
+       participant.ts        NEW
+       message.ts            NEW
+       index.ts
+   
+    commands/                 NEW
+       askCommand.ts
+       askSelectionCommand.ts
+       analyzeCommand.ts
+       updatePlanCommand.ts
+       configCommand.ts
+       trustCommand.ts
+       refreshCommand.ts
+       index.ts
+   
+    commandRegistry.ts        NEW
+   
+    participants/             NEW
+       workspaceParticipant.ts
+       codeParticipant.ts
+       terminalParticipant.ts
+       gitParticipant.ts
+       index.ts
+   
+    participantRegistry.ts    NEW
+   
+    state/                    NEW
+       messageStore.ts
+       conversationState.ts
+       index.ts
+   
+    conversation/             NEW
+       conversationManager.ts
+       index.ts
+   
+    extension.ts             (REFACTORED - ~300 lines removed)
+    chatView.ts              (Enhanced with participants)
+    vtcodeBackend.ts
+    ... other existing files
+
+ src/test/
+    unit/
+       commands/
+          askCommand.test.ts
+          ...
+       participants/
+          codeParticipant.test.ts
+          ...
+       state/
+          messageStore.test.ts
+       ...
+    integration/
+        ... (new integration tests)
+
+ docs/
+     ARCHITECTURE.md          (UPDATED)
+     COMMAND_GUIDE.md          NEW
+     PARTICIPANT_GUIDE.md      NEW
+     ...
 ```
 
 ---
@@ -423,24 +423,24 @@ None - Phase 2 can proceed independently.
 
 ```
 Week 3:  Command System Refactoring
-├─ Mon-Tue: Command infrastructure
-├─ Wed-Fri: Extract commands
-└─ Time: 4-5 days
+ Mon-Tue: Command infrastructure
+ Wed-Fri: Extract commands
+ Time: 4-5 days
 
 Week 4:  Participant System
-├─ Mon-Tue: Participant infrastructure
-├─ Wed-Fri: Build base participants
-└─ Time: 4-5 days
+ Mon-Tue: Participant infrastructure
+ Wed-Fri: Build base participants
+ Time: 4-5 days
 
 Week 5:  State Management
-├─ Mon: Enhanced message state
-├─ Tue-Wed: Conversation manager
-└─ Time: 2-3 days
+ Mon: Enhanced message state
+ Tue-Wed: Conversation manager
+ Time: 2-3 days
 
 Week 6:  Testing & Documentation
-├─ Mon-Wed: Unit & integration tests
-├─ Thu-Fri: Documentation & reviews
-└─ Time: 3-4 days
+ Mon-Wed: Unit & integration tests
+ Thu-Fri: Documentation & reviews
+ Time: 3-4 days
 ```
 
 **Total Effort**: ~20-25 developer days

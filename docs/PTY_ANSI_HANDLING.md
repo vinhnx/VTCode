@@ -158,9 +158,9 @@ Both commands should produce **zero matches** after these changes.
 ## Configuration
 
 PTY output ANSI handling is **automatic and not user-configurable**. The system always:
-1. ✅ Prevents ANSI generation at command spawn
-2. ✅ Strips any escaped sequences at capture
-3. ✅ Strips again at output return
-4. ✅ Provides clean text to agent
+1.  Prevents ANSI generation at command spawn
+2.  Strips any escaped sequences at capture
+3.  Strips again at output return
+4.  Provides clean text to agent
 
 This ensures consistency and reliability across all PTY commands.

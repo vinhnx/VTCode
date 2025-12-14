@@ -121,15 +121,15 @@ Public API to load files into the palette.
 The file browser appears as a centered modal overlay:
 
 ```
-┌─ File Browser (Page 1/3) ─────────────┐
-│ ↑↓ Navigate · PgUp/PgDn Page · ...    │
-│ Filter: src/main                       │
-├────────────────────────────────────────┤
-│ src/main.rs                            │ ← Selected (highlighted)
-│ src/main_modular.rs                    │
-│ tests/main_test.rs                     │
-│                                        │
-└────────────────────────────────────────┘
+ File Browser (Page 1/3) 
+ ↑↓ Navigate · PgUp/PgDn Page · ...    
+ Filter: src/main                       
+
+ src/main.rs                             ← Selected (highlighted)
+ src/main_modular.rs                    
+ tests/main_test.rs                     
+                                        
+
 ```
 
 **Advantages:**
@@ -285,32 +285,32 @@ Smarter matching algorithm:
 ### 5. File Preview
 Show file preview in modal:
 ```
-┌─ File Browser ─────────────────────────┐
-│ src/main.rs                            │
-├────────────────────────────────────────┤
-│ Preview:                               │
-│ fn main() {                            │
-│     println!("Hello");                 │
-│ }                                      │
-└────────────────────────────────────────┘
+ File Browser 
+ src/main.rs                            
+
+ Preview:                               
+ fn main() {                            
+     println!("Hello");                 
+ }                                      
+
 ```
 
 ### 6. Directory Navigation
 Browse directory structure:
 ```
 @src/
-  ├─ main.rs
-  ├─ lib.rs
-  └─ agent/
-      └─ runloop/
+   main.rs
+   lib.rs
+   agent/
+       runloop/
 ```
 
 ### 7. File Type Icons
 Visual indicators for file types:
 ```
-📄 README.md
-🦀 src/main.rs
-⚙️  vtcode.toml
+ README.md
+ src/main.rs
+  vtcode.toml
 ```
 
 ## Performance Considerations

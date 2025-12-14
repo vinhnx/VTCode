@@ -111,9 +111,9 @@ Immediately save the generated scenarios and spec summary:
 **Feature Files** (`./tests/bdd/*.feature`):
 ```
 ./tests/bdd/
-├── user-authentication.feature
-├── user-registration.feature
-└── password-reset.feature
+ user-authentication.feature
+ user-registration.feature
+ password-reset.feature
 ```
 
 **BDD Spec Summary** (`specs/BDD-SPEC-*.md`):

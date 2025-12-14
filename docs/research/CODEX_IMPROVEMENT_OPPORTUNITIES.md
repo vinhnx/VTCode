@@ -18,7 +18,7 @@ The current implementation is **solid and production-ready**, but there are oppo
 
 ## Critical Improvements (High Impact)
 
-### 1. Telemetry Event Sink Integration ⭐⭐⭐
+### 1. Telemetry Event Sink Integration 
 
 **Current State**: Events are emitted via `debug!()` but not sent to external observability platforms.
 
@@ -59,7 +59,7 @@ pub struct ToolRegistry {
 
 ---
 
-### 2. Configuration Validation at Startup ⭐⭐⭐
+### 2. Configuration Validation at Startup 
 
 **Current State**: Invalid timeout values might cause runtime panics.
 
@@ -98,7 +98,7 @@ impl ToolTimeoutPolicy {
 
 ---
 
-### 3. Add Metrics for Pattern Detection ⭐⭐
+### 3. Add Metrics for Pattern Detection 
 
 **Current State**: Telemetry events exist but no aggregation for pattern analysis.
 
@@ -145,7 +145,7 @@ impl ToolMetrics {
 
 ## Test Coverage Improvements (Medium Impact)
 
-### 4. Add Edge Case Tests ⭐⭐
+### 4. Add Edge Case Tests 
 
 **Language Consistency Tests** - Missing edge cases:
 
@@ -154,8 +154,8 @@ impl ToolMetrics {
 fn test_emoji_in_json_values() {
     // Emojis should be allowed in values
     let json = json!({
-        "status": "success 🎉",
-        "message": "Operation completed ✓ "
+        "status": "success ",
+        "message": "Operation completed  "
     });
     assert!(validate_json_language_consistency(&json).is_ok());
 }
@@ -172,7 +172,7 @@ fn test_unicode_normalization() {
 fn test_mixed_script_in_code_snippets() {
     // Code snippets might contain multiple languages
     let json = json!({
-        "code": "const greeting = '你好'; // Chinese hello"
+        "code": "const greeting = ''; // Chinese hello"
     });
     // Should be acceptable as it's in a code context
 }
@@ -239,7 +239,7 @@ fn test_no_duplicate_tool_names() {
 
 ---
 
-### 5. Performance Benchmarks ⭐
+### 5. Performance Benchmarks 
 
 **Current State**: No performance baseline for validation functions.
 
@@ -262,7 +262,7 @@ fn bench_json_validation(c: &mut Criterion) {
 }
 
 fn bench_script_detection(c: &mut Criterion) {
-    let mixed_text = "Hello world 你好世界 Привет мир مرحبا العالم".repeat(100);
+    let mixed_text = "Hello world  Привет мир مرحبا العالم".repeat(100);
 
     c.bench_function("detect_predominant_script", |b| {
         b.iter(|| {
@@ -287,7 +287,7 @@ criterion_main!(benches);
 
 ## Code Quality Improvements (Low-Medium Impact)
 
-### 6. Better Error Context ⭐⭐
+### 6. Better Error Context 
 
 **Current State**: Some errors lack actionable guidance.
 
@@ -317,7 +317,7 @@ fn sanitize_key_suggestion(key: &str) -> String {
 
 ---
 
-### 7. Structured Logging with Context ⭐
+### 7. Structured Logging with Context 
 
 **Current State**: Debug logs lack correlation IDs.
 
@@ -361,7 +361,7 @@ pub(super) async fn execute_apply_patch(&self, args: Value) -> Result<Value> {
 
 ---
 
-### 8. Add Property-Based Tests ⭐
+### 8. Add Property-Based Tests 
 
 **Current State**: Tests use fixed examples.
 
@@ -405,7 +405,7 @@ proptest! {
 
 ## Documentation Improvements
 
-### 9. Add Troubleshooting Guide ⭐⭐
+### 9. Add Troubleshooting Guide 
 
 **Create**: `docs/TOOL_TROUBLESHOOTING.md`
 
@@ -469,7 +469,7 @@ proptest! {
 
 ---
 
-### 10. Add Configuration Examples ⭐
+### 10. Add Configuration Examples 
 
 **Create**: `docs/CONFIG_EXAMPLES.md`
 
@@ -614,6 +614,6 @@ The current implementation is **production-ready and well-tested**. These improv
 9. Structured logging with correlation IDs
 
 **Estimated Effort**: 2-3 weeks for all improvements
-**Current Quality**: Production-ready ✓ 
-**Improved Quality**: Enterprise-grade 🚀
+**Current Quality**: Production-ready  
+**Improved Quality**: Enterprise-grade 
 ```

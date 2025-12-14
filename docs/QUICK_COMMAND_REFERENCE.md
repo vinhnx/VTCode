@@ -114,28 +114,28 @@ deny_glob = [
 ## Common Scenarios
 
 ### I need to run `docker build`
-✓  Works - It's in `docker *` pattern
+  Works - It's in `docker *` pattern
 
 ### I need to run `docker run`
-⤫  Blocked - Requires explicit review (container creation is restricted)
+  Blocked - Requires explicit review (container creation is restricted)
 
 ### I need to run `git reset --hard`
-✓  Works - It's in `git *` pattern (but agent may ask for confirmation on destructive ops)
+  Works - It's in `git *` pattern (but agent may ask for confirmation on destructive ops)
 
 ### I need to run `npm install`
-✓  Works - It's in `npm *` pattern
+  Works - It's in `npm *` pattern
 
 ### I need to run `rm`
-⤫  Blocked - Deletion is always denied to prevent accidents
+  Blocked - Deletion is always denied to prevent accidents
 
 ### I need to run `cargo test`
-✓  Works - It's in `cargo *` pattern
+  Works - It's in `cargo *` pattern
 
 ### I need to run `python script.py`
-✓  Works - It's in `python *` pattern
+  Works - It's in `python *` pattern
 
 ### I need to run `sudo something`
-⤫  Blocked - Privilege escalation is always denied
+  Blocked - Privilege escalation is always denied
 
 ## Troubleshooting
 

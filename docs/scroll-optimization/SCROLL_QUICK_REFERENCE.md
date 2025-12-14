@@ -14,7 +14,7 @@
 
 ## What Changed
 
-### 1️⃣ Remove Double Render (5 min fix)
+### 1⃣ Remove Double Render (5 min fix)
 **File**: `modern_integration.rs:87-102`
 
 Removed immediate `tui.terminal.draw()` after mouse scroll. Main loop renders naturally.
@@ -26,7 +26,7 @@ Removed immediate `tui.terminal.draw()` after mouse scroll. Main loop renders na
 
 ---
 
-### 2️⃣ Remove Full-Clear on Scroll (10 min fix)  
+### 2⃣ Remove Full-Clear on Scroll (10 min fix)  
 **File**: `session.rs:2816-2847`
 
 Removed `needs_full_clear = true` from scroll functions. Only scroll viewport, no full clear.
@@ -40,7 +40,7 @@ Removed `needs_full_clear = true` from scroll functions. Only scroll viewport, n
 
 ---
 
-### 3️⃣ Add Visible Lines Cache (25 min fix)
+### 3⃣ Add Visible Lines Cache (25 min fix)
 **File**: `session.rs`
 
 Cache visible lines by (scroll_offset, width). Reuse on same position.
@@ -59,7 +59,7 @@ Cache visible lines by (scroll_offset, width). Reuse on same position.
 
 ---
 
-### 4️⃣ Optimize Iterator (5 min fix)
+### 4⃣ Optimize Iterator (5 min fix)
 **File**: `transcript.rs:112-155`
 
 Use efficient iterator chain instead of loop with enumerate/skip.
@@ -80,11 +80,11 @@ Use efficient iterator chain instead of loop with enumerate/skip.
 
 ## Testing Checklist
 
-- ✓  `cargo check` - No errors
-- ✓  `cargo test --lib` - 17/17 tests pass
-- ✓  `cargo clippy` - No new warnings  
-- ✓  Backward compatible - No API changes
-- ✓  All scroll features work - Page up/down, arrow keys, mouse wheel
+-   `cargo check` - No errors
+-   `cargo test --lib` - 17/17 tests pass
+-   `cargo clippy` - No new warnings  
+-   Backward compatible - No API changes
+-   All scroll features work - Page up/down, arrow keys, mouse wheel
 
 ---
 
@@ -137,19 +137,19 @@ Use efficient iterator chain instead of loop with enumerate/skip.
 ```bash
 ./run.sh
 # Scroll rapidly through transcript
-# Feels smooth and responsive? ✓ Success
+# Feels smooth and responsive?  Success
 ```
 
 ### CPU Monitoring
 ```bash
 htop  # or Activity Monitor on macOS
-# During scroll: Lower CPU usage? ✓ Success
+# During scroll: Lower CPU usage?  Success
 ```
 
 ### Frame Rate
 ```bash
 # Watch for visual smoothness
-# No jank/stuttering during rapid scroll? ✓ Success
+# No jank/stuttering during rapid scroll?  Success
 ```
 
 ---
@@ -167,17 +167,17 @@ Complete documentation available in:
 
 ## Key Points
 
-✓  **What improved**
+  **What improved**
 - Scroll responsiveness: 80-85% faster
 - CPU usage: 60% less during scrolling
 - Memory efficiency: Fewer allocations
 
-✓  **What's the same**
+  **What's the same**
 - User experience: Seamless and transparent
 - API: No breaking changes
 - Compatibility: Works everywhere
 
-⚠️ **What to watch**
+ **What to watch**
 - Cache invalidation: Conservative (cleared on content change)
 - Worst case: Redundant collection (safe, just slower)
 - Edge cases: Terminal resize handled correctly
@@ -196,7 +196,7 @@ git revert <commit-hash> -- vtcode-core/src/ui/tui/modern_integration.rs
 git revert <commit-range>
 ```
 
-Risk level: **LOW** ✓  - Isolated changes, easy to revert
+Risk level: **LOW**   - Isolated changes, easy to revert
 
 ---
 
@@ -221,7 +221,7 @@ Risk level: **LOW** ✓  - Isolated changes, easy to revert
 ## Support
 
 **Question**: Is this safe to deploy?
-**Answer**: Yes. ✓  All tests pass, fully backward compatible, isolated changes.
+**Answer**: Yes.   All tests pass, fully backward compatible, isolated changes.
 
 **Question**: Will users notice anything different?
 **Answer**: Yes, but in a good way - scrolling will feel snappier and more responsive.
@@ -236,7 +236,7 @@ Risk level: **LOW** ✓  - Isolated changes, easy to revert
 
 ## Summary
 
-**Scroll Performance Optimizations - READY FOR DEPLOYMENT** ✓ 
+**Scroll Performance Optimizations - READY FOR DEPLOYMENT**  
 
 - **Status**: Complete and tested
 - **Risk**: Low (isolated, backward compatible)

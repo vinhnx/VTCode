@@ -29,7 +29,7 @@ dd if=/dev/zero bs=1M count=100 | base64
 
 **Expected Output**:
 ```
-[⚠️  Output size limit exceeded (50 MB). Further output truncated. Use 'spool to disk' for full output.]
+[  Output size limit exceeded (50 MB). Further output truncated. Use 'spool to disk' for full output.]
 ```
 
 ### Test 2: Large Git Diff
@@ -250,9 +250,9 @@ echo "Testing Issue #1397 Fix..."
 echo "Test 1: Byte limit enforcement"
 timeout 30 vtcode exec "dd if=/dev/zero bs=1M count=100 | base64" 2>&1 | grep -q "Output size limit exceeded"
 if [ $? -eq 0 ]; then
-    echo "✓ Test 1 passed"
+    echo " Test 1 passed"
 else
-    echo "✗ Test 1 failed"
+    echo " Test 1 failed"
     exit 1
 fi
 
@@ -260,9 +260,9 @@ fi
 echo "Test 2: Normal operation"
 timeout 10 vtcode exec "echo 'Hello World'" > /dev/null
 if [ $? -eq 0 ]; then
-    echo "✓ Test 2 passed"
+    echo " Test 2 passed"
 else
-    echo "✗ Test 2 failed"
+    echo " Test 2 failed"
     exit 1
 fi
 
@@ -270,13 +270,13 @@ fi
 echo "Test 3: Unit tests"
 cargo test --package vtcode-core pty::tests::scrollback --quiet
 if [ $? -eq 0 ]; then
-    echo "✓ Test 3 passed"
+    echo " Test 3 passed"
 else
-    echo "✗ Test 3 failed"
+    echo " Test 3 failed"
     exit 1
 fi
 
-echo "All tests passed! ✓"
+echo "All tests passed! "
 ```
 
 ## Expected Results Summary
@@ -318,13 +318,13 @@ echo "All tests passed! ✓"
 
 ## Success Criteria
 
-✓  All 6 unit tests pass  
-✓  Large git diff completes without hang  
-✓  Memory usage remains bounded  
-✓  Warning message appears at 50MB  
-✓  Normal commands work unchanged  
-✓  Program remains responsive during large output  
-✓  Can interrupt with Ctrl+C
+  All 6 unit tests pass  
+  Large git diff completes without hang  
+  Memory usage remains bounded  
+  Warning message appears at 50MB  
+  Normal commands work unchanged  
+  Program remains responsive during large output  
+  Can interrupt with Ctrl+C
 
 ---
 

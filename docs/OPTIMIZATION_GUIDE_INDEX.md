@@ -1,12 +1,12 @@
 # VT Code Optimization Guides - Complete Index
 
-## 📊 Overview
+##  Overview
 
 Complete optimization suite covering terminal output, scroll performance, ANSI rendering, and code efficiency. **7 strategic documents** + **implemented changes** ready for deployment.
 
 ---
 
-## 🎯 Quick Start
+##  Quick Start
 
 ### New to These Optimizations?
 Start here → **OPTIMIZATION_STATUS.md**
@@ -34,14 +34,14 @@ Start here → **SCROLL_BENCHMARKS.md**
 
 ---
 
-## 📚 Document Guide
+##  Document Guide
 
-### 1. Terminal Output Optimization (IMPLEMENTED ✓ )
+### 1. Terminal Output Optimization (IMPLEMENTED  )
 
 #### **TERMINAL_OUTPUT_OPTIMIZATION.md** (8.8 KB)
 **What it covers**:
 - Output format specification
-- Status indicators (`▶ RUN`, `✓ OK`)
+- Status indicators (` RUN`, ` OK`)
 - Command truncation rules
 - Footer format
 - Code changes (before/after)
@@ -51,15 +51,15 @@ Start here → **SCROLL_BENCHMARKS.md**
 **Key info**:
 ```
 BEFORE: 7 lines, 280 characters
-✓ [run_pty_cmd] cargo fmt · Command: cargo, fmt (exit: 0)
+ [run_pty_cmd] cargo fmt · Command: cargo, fmt (exit: 0)
 [END] [COMPLETED - 80x24] Session: run-1763462657610
-────────────────────────────────────────────────────────────
+
 
 AFTER: 4 lines, 100 characters
-✓ OK · cargo fmt · 80x24
+ OK · cargo fmt · 80x24
 $ cargo fmt
 (no output)
-✓ exit 0
+ exit 0
 ```
 
 #### **TERMINAL_OUTPUT_BEFORE_AFTER.md** (9.4 KB)
@@ -79,7 +79,7 @@ $ cargo fmt
 
 ---
 
-### 2. Scroll Performance Optimization (PLANNED 📋)
+### 2. Scroll Performance Optimization (PLANNED )
 
 #### **TUI_SCROLL_ANSI_OPTIMIZATION.md** (9.0 KB)
 **What it covers**:
@@ -150,10 +150,10 @@ cargo bench --bench ansi_parsing
 **Best for**: Project oversight and timeline planning
 
 **Timeline**:
-- Phase 1: Terminal Output ✓  DONE (1 day)
-- Phase 2: ANSI Caching 📋 TODO (1-2 hours)
-- Phase 3: Instrumentation 📋 TODO (30 min)
-- Phase 4: Testing 📋 TODO (1 hour)
+- Phase 1: Terminal Output   DONE (1 day)
+- Phase 2: ANSI Caching  TODO (1-2 hours)
+- Phase 3: Instrumentation  TODO (30 min)
+- Phase 4: Testing  TODO (1 hour)
 
 #### **OPTIMIZATION_SUMMARY.md** (8.5 KB)
 **What it covers**:
@@ -175,25 +175,25 @@ cargo bench --bench ansi_parsing
 
 ---
 
-## 🔗 Document Relationships
+##  Document Relationships
 
 ```
 OPTIMIZATION_STATUS.md ← START HERE
     ↓
-    ├─→ TUI_SCROLL_ANSI_OPTIMIZATION.md (strategic understanding)
-    │   └─→ SCROLL_OPTIMIZATION_IMPL.md (hands-on code)
-    │
-    ├─→ SCROLL_BENCHMARKS.md (testing approach)
-    │
-    ├─→ TERMINAL_OUTPUT_OPTIMIZATION.md (implemented already)
-    │   └─→ TERMINAL_OUTPUT_BEFORE_AFTER.md (visual comparison)
-    │
-    └─→ OPTIMIZATION_SUMMARY.md (quick reference)
+    → TUI_SCROLL_ANSI_OPTIMIZATION.md (strategic understanding)
+       → SCROLL_OPTIMIZATION_IMPL.md (hands-on code)
+    
+    → SCROLL_BENCHMARKS.md (testing approach)
+    
+    → TERMINAL_OUTPUT_OPTIMIZATION.md (implemented already)
+       → TERMINAL_OUTPUT_BEFORE_AFTER.md (visual comparison)
+    
+    → OPTIMIZATION_SUMMARY.md (quick reference)
 ```
 
 ---
 
-## 📋 Use Cases
+##  Use Cases
 
 ### "How do I understand what was optimized?"
 1. Read: **OPTIMIZATION_STATUS.md** (what's done/planned)
@@ -232,52 +232,52 @@ OPTIMIZATION_STATUS.md ← START HERE
 
 ---
 
-## 📊 Document Statistics
+##  Document Statistics
 
 | Document | Size | Category | Status |
 |---|---|---|---|
-| OPTIMIZATION_STATUS.md | 10 KB | Overview | ✓  Latest |
-| OPTIMIZATION_SUMMARY.md | 8.5 KB | Overview | ✓  Latest |
-| OPTIMIZATION_GUIDE_INDEX.md | 5 KB | Reference | ✓  This file |
-| TUI_SCROLL_ANSI_OPTIMIZATION.md | 9.0 KB | Architecture | ✓  Latest |
-| SCROLL_OPTIMIZATION_IMPL.md | 13 KB | Implementation | ✓  Latest |
-| SCROLL_BENCHMARKS.md | 9.4 KB | Testing | ✓  Latest |
-| TERMINAL_OUTPUT_OPTIMIZATION.md | 8.8 KB | Implementation | ✓  Latest |
-| TERMINAL_OUTPUT_BEFORE_AFTER.md | 9.4 KB | Comparison | ✓  Latest |
+| OPTIMIZATION_STATUS.md | 10 KB | Overview |   Latest |
+| OPTIMIZATION_SUMMARY.md | 8.5 KB | Overview |   Latest |
+| OPTIMIZATION_GUIDE_INDEX.md | 5 KB | Reference |   This file |
+| TUI_SCROLL_ANSI_OPTIMIZATION.md | 9.0 KB | Architecture |   Latest |
+| SCROLL_OPTIMIZATION_IMPL.md | 13 KB | Implementation |   Latest |
+| SCROLL_BENCHMARKS.md | 9.4 KB | Testing |   Latest |
+| TERMINAL_OUTPUT_OPTIMIZATION.md | 8.8 KB | Implementation |   Latest |
+| TERMINAL_OUTPUT_BEFORE_AFTER.md | 9.4 KB | Comparison |   Latest |
 
 **Total**: ~73 KB of optimized documentation
 
 ---
 
-## 🚀 Implementation Status
+##  Implementation Status
 
 ### Phase 1: Terminal Output Format
-- **Status**: ✓  IMPLEMENTED
+- **Status**:   IMPLEMENTED
 - **Files**: `src/agent/runloop/tool_output/commands.rs`
 - **Changes**: -43% output lines, -60% characters
 - **Verification**: Compiles, no warnings
 
 ### Phase 2: ANSI Parse Caching
-- **Status**: 📋 PLANNED
+- **Status**:  PLANNED
 - **Complexity**: Medium (1-2 hours)
 - **Impact**: 5-10x speedup on cache hits
 - **Guide**: SCROLL_OPTIMIZATION_IMPL.md - Priority 1
 
 ### Phase 3: Performance Instrumentation
-- **Status**: 📋 PLANNED
+- **Status**:  PLANNED
 - **Complexity**: Low (30 minutes)
 - **Impact**: Full visibility into scroll latency
 - **Guide**: SCROLL_OPTIMIZATION_IMPL.md - Priority 2
 
 ### Phase 4: ANSI Boundary Testing
-- **Status**: 📋 PLANNED
+- **Status**:  PLANNED
 - **Complexity**: Medium (1 hour)
 - **Impact**: Regression detection
 - **Guide**: SCROLL_BENCHMARKS.md - Test Pattern
 
 ---
 
-## 🎯 Key Metrics
+##  Key Metrics
 
 ### Terminal Output (Phase 1 - Implemented)
 ```
@@ -305,7 +305,7 @@ Commands:          20+ quick reference commands
 
 ---
 
-## 🔧 Tools & Resources
+##  Tools & Resources
 
 ### Development
 - **Build**: `cargo build`
@@ -327,7 +327,7 @@ Commands:          20+ quick reference commands
 
 ---
 
-## ❓ FAQ
+##  FAQ
 
 **Q: Where do I start?**
 A: Read OPTIMIZATION_STATUS.md, then choose your path based on your role.
@@ -352,7 +352,7 @@ A: No. Phase 1 is backward compatible (terminal output only). Phases 2-4 are int
 
 ---
 
-## 📞 Support
+##  Support
 
 ### For Questions About...
 
@@ -376,7 +376,7 @@ A: No. Phase 1 is backward compatible (terminal output only). Phases 2-4 are int
 
 ---
 
-## 🏁 Next Steps
+##  Next Steps
 
 1. **Review** - Read OPTIMIZATION_STATUS.md
 2. **Understand** - Pick a document based on your role

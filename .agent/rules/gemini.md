@@ -104,24 +104,24 @@ When gathering context:
 ```
 
 Need information?
-├─ Structure? → list_files
-└─ Text patterns? → grep_file
+ Structure? → list_files
+ Text patterns? → grep_file
 
 Modifying files?
-├─ Surgical edit? → edit_file (preferred)
-├─ Full rewrite? → write_file
-└─ Complex diff? → apply_patch
+ Surgical edit? → edit_file (preferred)
+ Full rewrite? → write_file
+ Complex diff? → apply_patch
 
 Running commands?
-├─ Interactive shell? → create_pty_session → send_pty_input → read_pty_session
-└─ One-off command? → shell tool
+ Interactive shell? → create_pty_session → send_pty_input → read_pty_session
+ One-off command? → shell tool
 (Use shell for: git, cargo, shell scripts, etc. AVOID: raw grep/find bash; use Grep instead)
 
 Processing 100+ items?
-└─ execute_code (Python/JavaScript) for filtering/aggregation
+ execute_code (Python/JavaScript) for filtering/aggregation
 
 Done?
-└─ ONE decisive reply; stop
+ ONE decisive reply; stop
 
 ````
 

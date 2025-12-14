@@ -270,17 +270,17 @@ self.suspend_terminal_for_command(|| {
 
 ```
 vtcode (binary) - Main TUI app
-├── src/tui.rs - Tui struct + ExternalAppLauncher trait
-│   └── For async/event-driven contexts
-├── src/main.rs - Main event loop
-└── src/interactive_list.rs - Interactive selection UI
+ src/tui.rs - Tui struct + ExternalAppLauncher trait
+    For async/event-driven contexts
+ src/main.rs - Main event loop
+ src/interactive_list.rs - Interactive selection UI
 
 vtcode-core (library)
-├── src/tools/terminal_app.rs - TerminalAppLauncher
-│   ├── launch_editor() - Uses suspend_terminal_for_command()
-│   ├── launch_git_interface() - Uses suspend_terminal_for_command()
-│   └── suspend_terminal_for_command() - Unified logic
-└── Works in blocking contexts
+ src/tools/terminal_app.rs - TerminalAppLauncher
+    launch_editor() - Uses suspend_terminal_for_command()
+    launch_git_interface() - Uses suspend_terminal_for_command()
+    suspend_terminal_for_command() - Unified logic
+ Works in blocking contexts
 ```
 
 ### Two Integration Patterns

@@ -7,61 +7,61 @@ VTCode uses a **fully async architecture** for all I/O operations, providing non
 ## Architecture Diagram
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                     User Interface (TUI)                     │
-│                    (Always Responsive)                       │
-└────────────────────────┬────────────────────────────────────┘
-                         │
-                         ▼
-┌─────────────────────────────────────────────────────────────┐
-│                  Agent Turn Loop (Async)                     │
-│              - Tool call detection                           │
-│              - Timeout handling                              │
-│              - Cancellation support                          │
-└────────────────────────┬────────────────────────────────────┘
-                         │
-                         ▼
-┌─────────────────────────────────────────────────────────────┐
-│            execute_tool_with_timeout (Async)                 │
-│              - tokio::select! for cancellation               │
-│              - tokio::time::timeout for timeouts             │
-└────────────────────────┬────────────────────────────────────┘
-                         │
-                         ▼
-┌─────────────────────────────────────────────────────────────┐
-│            ToolRegistry::execute_tool (Async)                │
-│              - Dispatches to appropriate tool                │
-└────────────────────────┬────────────────────────────────────┘
-                         │
-                         ▼
-┌─────────────────────────────────────────────────────────────┐
-│                   Tool Implementations                       │
-│                                                              │
-│  ┌──────────────────┐  ┌──────────────────┐                │
-│  │  PTY Operations  │  │  File Operations │                │
-│  │                  │  │                  │                │
-│  │  PtyManager      │  │  tokio::fs       │                │
-│  │  ::run_command   │  │  ::read_to_string│                │
-│  │                  │  │  ::write         │                │
-│  │  Uses:           │  │  ::metadata      │                │
-│  │  spawn_blocking  │  │  ::canonicalize  │                │
-│  └──────────────────┘  └──────────────────┘                │
-│                                                              │
-│  ┌──────────────────┐  ┌──────────────────┐                │
-│  │  HTTP Requests   │  │  Search/Grep     │                │
-│  │                  │  │                  │                │
-│  │  reqwest         │  │  tokio::fs       │                │
-│  │  (async)         │  │  (async)         │                │
-│  └──────────────────┘  └──────────────────┘                │
-└─────────────────────────────────────────────────────────────┘
-                         │
-                         ▼
-┌─────────────────────────────────────────────────────────────┐
-│                  Tokio Async Runtime                         │
-│              - Thread pool management                        │
-│              - Task scheduling                               │
-│              - Non-blocking I/O                              │
-└─────────────────────────────────────────────────────────────┘
+
+                     User Interface (TUI)                     
+                    (Always Responsive)                       
+
+                         
+                         
+
+                  Agent Turn Loop (Async)                     
+              - Tool call detection                           
+              - Timeout handling                              
+              - Cancellation support                          
+
+                         
+                         
+
+            execute_tool_with_timeout (Async)                 
+              - tokio::select! for cancellation               
+              - tokio::time::timeout for timeouts             
+
+                         
+                         
+
+            ToolRegistry::execute_tool (Async)                
+              - Dispatches to appropriate tool                
+
+                         
+                         
+
+                   Tool Implementations                       
+                                                              
+                    
+    PTY Operations      File Operations                 
+                                                        
+    PtyManager          tokio::fs                       
+    ::run_command       ::read_to_string                
+                        ::write                         
+    Uses:               ::metadata                      
+    spawn_blocking      ::canonicalize                  
+                    
+                                                              
+                    
+    HTTP Requests       Search/Grep                     
+                                                        
+    reqwest             tokio::fs                       
+    (async)             (async)                         
+                    
+
+                         
+                         
+
+                  Tokio Async Runtime                         
+              - Thread pool management                        
+              - Task scheduling                               
+              - Non-blocking I/O                              
+
 ```
 
 ## Key Components
@@ -88,10 +88,10 @@ impl PtyManager {
 ```
 
 **Key Features**:
-- ✓  Non-blocking from async runtime perspective
-- ✓  Proper timeout handling
-- ✓  Process cancellation support
-- ✓  Separate threads for reading and waiting
+-   Non-blocking from async runtime perspective
+-   Proper timeout handling
+-   Process cancellation support
+-   Separate threads for reading and waiting
 
 ### 2. Tool Registry (Async)
 
@@ -111,9 +111,9 @@ impl ToolRegistry {
 ```
 
 **Key Features**:
-- ✓  Fully async execution
-- ✓  Tool-specific implementations
-- ✓  Error handling and recovery
+-   Fully async execution
+-   Tool-specific implementations
+-   Error handling and recovery
 
 ### 3. Tool Execution Pipeline (Async)
 
@@ -145,10 +145,10 @@ pub async fn execute_tool_with_timeout(
 ```
 
 **Key Features**:
-- ✓  Timeout support (5 minutes default)
-- ✓  Cancellation via Ctrl+C
-- ✓  Proper error handling
-- ✓  Status tracking
+-   Timeout support (5 minutes default)
+-   Cancellation via Ctrl+C
+-   Proper error handling
+-   Status tracking
 
 ### 4. File Operations (Async)
 
@@ -172,14 +172,14 @@ tokio::fs::create_dir_all(path).await?;
 ```
 
 **Files Using Async I/O**:
-- ✓  `tree_sitter/refactoring.rs`
-- ✓  `tree_sitter/analyzer.rs`
-- ✓  `srgn.rs`
-- ✓  `file_search.rs`
-- ✓  `curl_tool.rs`
-- ✓  `file_ops.rs`
-- ✓  `apply_patch.rs`
-- ✓  And more...
+-   `tree_sitter/refactoring.rs`
+-   `tree_sitter/analyzer.rs`
+-   `srgn.rs`
+-   `file_search.rs`
+-   `curl_tool.rs`
+-   `file_ops.rs`
+-   `apply_patch.rs`
+-   And more...
 
 ## Async Patterns Used
 
@@ -296,7 +296,7 @@ tokio::select! {
 
 ## Best Practices
 
-### DO ✓ 
+### DO  
 
 1. **Use `tokio::fs` for file operations**
    ```rust
@@ -318,32 +318,32 @@ tokio::select! {
    tokio::select! { ... }
    ```
 
-### DON'T ⤫ 
+### DON'T  
 
 1. **Don't use `std::fs` in async code**
    ```rust
-   // ⤫  Bad
+   //   Bad
    std::fs::read_to_string(path)?
    
-   // ✓  Good
+   //   Good
    tokio::fs::read_to_string(path).await?
    ```
 
 2. **Don't block the async runtime**
    ```rust
-   // ⤫  Bad
+   //   Bad
    std::thread::sleep(duration);
    
-   // ✓  Good
+   //   Good
    tokio::time::sleep(duration).await;
    ```
 
 3. **Don't forget to await**
    ```rust
-   // ⤫  Bad
+   //   Bad
    let future = async_operation();
    
-   // ✓  Good
+   //   Good
    let result = async_operation().await?;
    ```
 
@@ -421,5 +421,5 @@ async fn operation() -> Result<T> {
 ---
 
 **Last Updated**: December 2024  
-**Status**: Production Ready ✓   
-**Coverage**: 100% Async I/O ✓ 
+**Status**: Production Ready    
+**Coverage**: 100% Async I/O  

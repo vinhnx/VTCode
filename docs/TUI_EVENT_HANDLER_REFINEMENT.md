@@ -167,14 +167,14 @@ impl Drop for Tui {
 
 ```rust
 // Improvements:
-✓ Background event handler task
-✓ Configurable tick/frame rates
-✓ Async event loop via .next().await
-✓ All crossterm event types supported
-✓ Composable and reusable
-✓ Graceful shutdown with cancellation tokens
-✓ Deref simplifies terminal access
-✓ Drop-safe cleanup
+ Background event handler task
+ Configurable tick/frame rates
+ Async event loop via .next().await
+ All crossterm event types supported
+ Composable and reusable
+ Graceful shutdown with cancellation tokens
+ Deref simplifies terminal access
+ Drop-safe cleanup
 ```
 
 ## Usage Example

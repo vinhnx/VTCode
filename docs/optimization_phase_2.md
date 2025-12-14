@@ -123,30 +123,30 @@ RATE_LIMIT_PATTERNS.iter().any(|pattern|
 
 ## Optimization Plan
 
-### Phase 1: Critical Fixes (High Impact) ✅ COMPLETED
-1. ✅ **Consolidate error handling to `error_handling.rs`**
+### Phase 1: Critical Fixes (High Impact)  COMPLETED
+1.  **Consolidate error handling to `error_handling.rs`**
    - Removed duplicate `handle_http_error` from `common.rs` (39 lines)
    - Updated `deepseek.rs` and `moonshot.rs` to use `handle_openai_http_error`
    - Added `format_http_error` helper to reduce duplication
    
-2. ✅ **Optimize string allocations in `common.rs` message serialization**
+2.  **Optimize string allocations in `common.rs` message serialization**
    - Changed `json!` macro to use references instead of cloning tool call data
    - Reduced 3 `.clone()` calls per tool call
    
-3. ✅ **Optimize streaming buffer management in `processor.rs`**
+3.  **Optimize streaming buffer management in `processor.rs`**
    - Replaced `buffer[processed_chars..].to_owned()` with `buffer.drain(..processed_chars)`
    - Eliminates allocation on every processed line in streaming
    
-4. ✅ **Add helper for HTTP error formatting**
+4.  **Add helper for HTTP error formatting**
    - Created `format_http_error()` in `error_handling.rs`
    - Updated `handle_gemini_http_error` and `handle_openai_http_error` to use it
 
-### Phase 2: Performance Improvements (Medium Impact) ✅ COMPLETED
-5. ✅ **Optimize rate limit detection**
+### Phase 2: Performance Improvements (Medium Impact)  COMPLETED
+5.  **Optimize rate limit detection**
    - Changed `is_rate_limit_error` to avoid creating lowercase copy
    - Note: Still allocates but pattern is clearer for future optimization
    
-6. ✅ **Use `Cow<str>` in error handling where appropriate**
+6.  **Use `Cow<str>` in error handling where appropriate**
    - Changed `parse_anthropic_error_message` to return `Cow<'_, str>`
    - Avoids allocation when returning error_text directly
    
@@ -154,8 +154,8 @@ RATE_LIMIT_PATTERNS.iter().any(|pattern|
    - Already done in `processor.rs` (lines 70, 82, 135)
    - Could be improved with profiling data
 
-### Phase 3: Code Quality (Low Impact, High Maintainability) 🔄 IN PROGRESS
-8. ✅ **Remove duplicate error handling functions**
+### Phase 3: Code Quality (Low Impact, High Maintainability)  IN PROGRESS
+8.  **Remove duplicate error handling functions**
    - Removed 39 lines from `common.rs`
    - Centralized all error handling in `error_handling.rs`
    
@@ -163,7 +163,7 @@ RATE_LIMIT_PATTERNS.iter().any(|pattern|
    - Already present in `error_handling.rs` and `common.rs`
    - Could add more based on profiling
    
-10. ✅ **Document optimization decisions**
+10.  **Document optimization decisions**
     - Added comments explaining optimizations in code
     - This report serves as documentation
 
@@ -175,7 +175,7 @@ RATE_LIMIT_PATTERNS.iter().any(|pattern|
 - **Reduced allocations**: ~30% reduction in hot paths
 
 ### Build Status
-✅ **All checks passing**
+ **All checks passing**
 ```
 cargo check: SUCCESS (10.05s)
 Warnings: 1 (unrelated dead code in tool_pipeline.rs)
@@ -202,14 +202,14 @@ Warnings: 1 (unrelated dead code in tool_pipeline.rs)
 
 ## Next Steps
 
-1. ✅ Complete Phase 3 optimizations
+1.  Complete Phase 3 optimizations
 2. Run comprehensive tests to verify all changes
 3. Review and optimize remaining large files (turn_loop.rs, context_manager.rs)
 4. Document optimization patterns for future development
 5. Create performance benchmarks to measure impact
 
 ## Status Legend
-- ✅ Completed
-- 🔄 In Progress
+-  Completed
+-  In Progress
 - ⏳ Planned
-- ❌ Blocked
+-  Blocked

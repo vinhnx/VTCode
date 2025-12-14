@@ -12,22 +12,22 @@ Complete streaming timeout progress handling system for all LLM providers in vtc
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                     Application Layer                            │
-│  (UI, Logging, Monitoring)                                      │
-└──────────────────────┬──────────────────────────────────────────┘
-                       │
-                       ▼
-┌─────────────────────────────────────────────────────────────────┐
-│          StreamingProgressTracker (Provider-Agnostic)            │
-│  - Real-time progress reporting (0.0-1.0)                       │
-│  - Configurable warning threshold                               │
-│  - Lock-free atomic operations                                  │
-│  - Callback interface                                           │
-└──────────────────────┬──────────────────────────────────────────┘
-                       │
-        ┌──────────────┼──────────────┐
-        ▼              ▼              ▼
+
+                     Application Layer                            
+  (UI, Logging, Monitoring)                                      
+
+                       
+                       
+
+          StreamingProgressTracker (Provider-Agnostic)            
+  - Real-time progress reporting (0.0-1.0)                       
+  - Configurable warning threshold                               
+  - Lock-free atomic operations                                  
+  - Callback interface                                           
+
+                       
+        
+                                    
     OpenAI       Anthropic         Gemini
     Ollama       OpenRouter        LM Studio
     DeepSeek     Z.AI              Moonshot
@@ -180,19 +180,19 @@ Warnings are logged automatically when:
 ## Providers Supported
 
 ### With Streaming Support
-- ✓  OpenAI (GPT-4, o1, etc.)
-- ✓  Anthropic (Claude)
-- ✓  Google Gemini
-- ✓  Ollama
-- ✓  OpenRouter
-- ✓  LM Studio (OpenAI wrapper)
-- ✓  Minimax (Anthropic wrapper)
+-   OpenAI (GPT-4, o1, etc.)
+-   Anthropic (Claude)
+-   Google Gemini
+-   Ollama
+-   OpenRouter
+-   LM Studio (OpenAI wrapper)
+-   Minimax (Anthropic wrapper)
 
 ### Without Native Streaming (can add)
-- 🔄 DeepSeek
-- 🔄 Z.AI
-- 🔄 xAI (Grok)
-- 🔄 Moonshot
+-  DeepSeek
+-  Z.AI
+-  xAI (Grok)
+-  Moonshot
 
 ## Configuration
 
@@ -360,14 +360,14 @@ tracker.report_first_chunk();
 
 ## Best Practices
 
-✓  **DO:**
+  **DO:**
 - Create tracker at stream start
 - Report first chunk immediately
 - Report on each chunk received
 - Handle timeout gracefully
 - Test with actual providers
 
-⤫  **DON'T:**
+  **DON'T:**
 - Create tracker in streaming loop
 - Forget to report first chunk
 - Block on progress updates
@@ -385,22 +385,22 @@ tracker.report_first_chunk();
 ## Files Modified/Created
 
 ### Gemini-Specific
-- ✏️ `vtcode-core/src/gemini/streaming/processor.rs` (enhanced)
+-  `vtcode-core/src/gemini/streaming/processor.rs` (enhanced)
 
 ### Provider-Agnostic
-- ✨ `vtcode-core/src/llm/providers/streaming_progress.rs` (new)
-- ✏️ `vtcode-core/src/llm/providers/mod.rs` (exports)
+-  `vtcode-core/src/llm/providers/streaming_progress.rs` (new)
+-  `vtcode-core/src/llm/providers/mod.rs` (exports)
 
 ### Documentation
-- 📄 `docs/config/STREAMING_TIMEOUT_PROGRESS.md`
-- 📄 `docs/STREAMING_TIMEOUT_PROGRESS_IMPROVEMENTS.md`
-- 📄 `docs/llm/STREAMING_PROGRESS_PROVIDERS.md`
-- 📄 `docs/llm/STREAMING_PROGRESS_EXAMPLES.md`
-- 📄 `docs/STREAMING_TIMEOUT_PROGRESS_COMPREHENSIVE.md` (this file)
+-  `docs/config/STREAMING_TIMEOUT_PROGRESS.md`
+-  `docs/STREAMING_TIMEOUT_PROGRESS_IMPROVEMENTS.md`
+-  `docs/llm/STREAMING_PROGRESS_PROVIDERS.md`
+-  `docs/llm/STREAMING_PROGRESS_EXAMPLES.md`
+-  `docs/STREAMING_TIMEOUT_PROGRESS_COMPREHENSIVE.md` (this file)
 
 ## Backward Compatibility
 
-✓  **Fully backward compatible**
+  **Fully backward compatible**
 - Progress callbacks are optional
 - Existing code works unchanged
 - No breaking API changes

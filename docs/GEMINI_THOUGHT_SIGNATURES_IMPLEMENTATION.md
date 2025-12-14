@@ -2,7 +2,7 @@
 
 ## Changes Made
 
-### 1. Updated Response Conversion (✓ Complete)
+### 1. Updated Response Conversion ( Complete)
 
 **File**: `vtcode-core/src/llm/providers/gemini.rs`
 
@@ -26,7 +26,7 @@ Part::FunctionCall { function_call, thought_signature } => {
 }
 ```
 
-### 2. Request Conversion Already Correct (✓ Verified)
+### 2. Request Conversion Already Correct ( Verified)
 
 **File**: `vtcode-core/src/llm/providers/gemini.rs`
 
@@ -41,7 +41,7 @@ parts.push(Part::FunctionCall {
 });
 ```
 
-### 3. Data Structures Already Support Thought Signatures (✓ Verified)
+### 3. Data Structures Already Support Thought Signatures ( Verified)
 
 **File**: `vtcode-core/src/gemini/models/mod.rs`
 
@@ -77,7 +77,7 @@ pub struct ToolCall {
 }
 ```
 
-### 4. Fixed Streaming Response (✓ Complete)
+### 4. Fixed Streaming Response ( Complete)
 
 **File**: `vtcode-core/src/llm/providers/gemini.rs`
 
@@ -90,7 +90,7 @@ parts: vec![Part::Text {
 }],
 ```
 
-### 5. Added Tests (✓ Complete)
+### 5. Added Tests ( Complete)
 
 **File**: `vtcode-core/src/llm/providers/gemini.rs`
 
@@ -100,7 +100,7 @@ Added three comprehensive tests:
 2. `thought_signature_roundtrip_in_request()` - Verifies signatures sent back in requests
 3. `parallel_function_calls_single_signature()` - Verifies parallel call pattern (only first has signature)
 
-### 6. Created Documentation (✓ Complete)
+### 6. Created Documentation ( Complete)
 
 **File**: `docs/GEMINI_THOUGHT_SIGNATURES.md`
 
@@ -114,7 +114,7 @@ Comprehensive guide covering:
 
 ## Implementation Status
 
-✅ **Complete** - All required changes implemented:
+ **Complete** - All required changes implemented:
 
 -   Response conversion extracts thought signatures
 -   Request conversion preserves thought signatures
@@ -137,9 +137,9 @@ cargo nextest run --package vtcode-core thought_signature
 
 Expected results:
 
--   ✅ `thought_signature_preserved_in_function_call_response` - PASS
--   ✅ `thought_signature_roundtrip_in_request` - PASS
--   ✅ `parallel_function_calls_single_signature` - PASS
+-    `thought_signature_preserved_in_function_call_response` - PASS
+-    `thought_signature_roundtrip_in_request` - PASS
+-    `parallel_function_calls_single_signature` - PASS
 
 ## How It Works
 
@@ -185,10 +185,10 @@ Expected results:
 
 ### No Changes Required For:
 
--   ✅ **Tool execution**: Signatures transparent to tool layer
--   ✅ **Conversation management**: Works with existing message history
--   ✅ **Other LLM providers**: Field ignored by OpenAI/Anthropic/etc.
--   ✅ **Streaming**: Handled automatically in streaming responses
+-    **Tool execution**: Signatures transparent to tool layer
+-    **Conversation management**: Works with existing message history
+-    **Other LLM providers**: Field ignored by OpenAI/Anthropic/etc.
+-    **Streaming**: Handled automatically in streaming responses
 
 ### Automatic Handling
 

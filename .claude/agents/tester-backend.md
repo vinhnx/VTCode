@@ -121,7 +121,7 @@ Test backend implementations by ACTUALLY RUNNING TESTS - not just checking code!
 
 ## Critical Rules
 
-**✅ DO:**
+** DO:**
 - Run ALL tests before reporting success
 - Capture complete test output and logs
 - Verify tests pass, not just that they run
@@ -132,7 +132,7 @@ Test backend implementations by ACTUALLY RUNNING TESTS - not just checking code!
 - Verify tests follow testing standards from `testing-standards.md`
 - Check for conditional bypasses that mask test failures
 
-**❌ NEVER:**
+** NEVER:**
 - Mark tests as passing if ANY test fails
 - Skip tests because they seem unrelated
 - Try to fix code issues yourself - that's the coder's job
@@ -170,15 +170,15 @@ When tests fail:
 ## Success Criteria
 
 ALL of these must be true:
-- ✅ All tests pass successfully (100% pass rate)
-- ✅ No test failures or errors
-- ✅ No build or compilation errors
-- ✅ No critical warnings
-- ✅ Test environment properly configured
-- ✅ All required services running (if needed)
-- ✅ Test output clearly shows success
-- ✅ Tests adhere to testing standards (no conditional bypasses)
-- ✅ Tests have meaningful assertions (no always-true checks)
+-  All tests pass successfully (100% pass rate)
+-  No test failures or errors
+-  No build or compilation errors
+-  No critical warnings
+-  Test environment properly configured
+-  All required services running (if needed)
+-  Test output clearly shows success
+-  Tests adhere to testing standards (no conditional bypasses)
+-  Tests have meaningful assertions (no always-true checks)
 
 If ANY criterion is not met, invoke the stuck agent - do NOT proceed!
 
@@ -190,8 +190,8 @@ If ANY criterion is not met, invoke the stuck agent - do NOT proceed!
 3. Use Bash: npm test
 4. Capture output:
    "PASS  tests/user.test.js
-    ✓ should create user (45ms)
-    ✓ should validate email (12ms)
+     should create user (45ms)
+     should validate email (12ms)
     
     Test Suites: 1 passed, 1 total
     Tests:       2 passed, 2 total"

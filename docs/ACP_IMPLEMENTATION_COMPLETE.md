@@ -51,27 +51,27 @@ The Agent Communication Protocol (ACP) integration is fully implemented and test
 
 ## Test Results
 
-✓  All unit tests passing (6/6 ACP tests)
-✓  All tool tests passing (0 failures)
-✓  Full test suite passing (14/14 tests)
-✓  Clippy linting passing
-✓  Code formatting valid
-✓  Example builds successfully
+  All unit tests passing (6/6 ACP tests)
+  All tool tests passing (0 failures)
+  Full test suite passing (14/14 tests)
+  Clippy linting passing
+  Code formatting valid
+  Example builds successfully
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────┐
-│         Main Agent (VTCode)                     │
-│  ┌────────────────────────────────────────┐    │
-│  │ MCP Tools (acp_call, acp_discover)     │    │
-│  └──────────────┬─────────────────────────┘    │
-│                 │ HTTP RPC                      │
-└─────────────────┼──────────────────────────────┘
-                  │
-      ┌───────────┼───────────┐
-      │           │           │
-      ▼           ▼           ▼
+
+         Main Agent (VTCode)                     
+      
+   MCP Tools (acp_call, acp_discover)         
+      
+                  HTTP RPC                      
+
+                  
+      
+                            
+                            
    Agent 1    Agent 2     Agent N
 ```
 
@@ -169,11 +169,11 @@ cargo clippy && cargo fmt --check
 
 ## Integration with VTCode Ecosystem
 
--   ✓  Zed editor integration
--   ✓  VS Code extension support
--   ✓  CLI headless mode compatible
--   ✓  TUI slash command support
--   ✓  MCP tool ecosystem integrated
+-     Zed editor integration
+-     VS Code extension support
+-     CLI headless mode compatible
+-     TUI slash command support
+-     MCP tool ecosystem integrated
 
 ## Commit Details
 
@@ -190,5 +190,5 @@ e8171ae5 feat: Implement Agent Communication Protocol (ACP) integration
 
 ---
 
-**Status**: ✓  Complete and tested
+**Status**:   Complete and tested
 **Ready for**: Next minor version release (0.43.0)

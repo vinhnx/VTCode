@@ -237,12 +237,12 @@ Each skill is a directory with:
 
 ```
 skill-name/
-├── SKILL.md              # Metadata (YAML) + Instructions (Markdown)
-├── ADVANCED.md           # Optional: Advanced documentation
-├── scripts/              # Optional: Executable scripts
-│   └── helper.py
-└── templates/            # Optional: Reference templates
-    └── example.json
+ SKILL.md              # Metadata (YAML) + Instructions (Markdown)
+ ADVANCED.md           # Optional: Advanced documentation
+ scripts/              # Optional: Executable scripts
+    helper.py
+ templates/            # Optional: Reference templates
+     example.json
 ```
 
 ---

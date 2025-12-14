@@ -1,12 +1,12 @@
 # VT Code System Prompt v3 - Documentation Index
 
 **Version**: 3.0 (Context Optimized)  
-**Status**: ✓  Complete - Ready for Testing  
+**Status**:   Complete - Ready for Testing  
 **Date**: Nov 19, 2025
 
 ---
 
-## 📚 Documentation Map
+##  Documentation Map
 
 ### Quick Start (5-10 minutes)
 - **[SYSTEM_PROMPT_V3_QUICK_REFERENCE.md](SYSTEM_PROMPT_V3_QUICK_REFERENCE.md)** (5 min read)
@@ -55,7 +55,7 @@
 
 ---
 
-## 🎯 By Use Case
+##  By Use Case
 
 ### "I want to understand the changes quickly"
 → Start here: **SYSTEM_PROMPT_V3_QUICK_REFERENCE.md** (5 min)
@@ -74,22 +74,22 @@
 
 ---
 
-## 📊 Content Overview
+##  Content Overview
 
 ### QUICK_REFERENCE.md
 ```
-⚡ Core Principles (30 sec)
-📊 Context Engineering (1 min)
-🛠️ Tool Selection (1 min)
-🚫 Loop Prevention (30 sec)
-🌍 Multi-LLM Compatibility
-📋 Context Triage
-🔍 grep_file Patterns
-✓  Behavioral Checklist
-🎯 Success Metrics
-📁 Key Files
-🚀 Next Steps
-❓ Common Q&A
+ Core Principles (30 sec)
+ Context Engineering (1 min)
+ Tool Selection (1 min)
+ Loop Prevention (30 sec)
+ Multi-LLM Compatibility
+ Context Triage
+ grep_file Patterns
+  Behavioral Checklist
+ Success Metrics
+ Key Files
+ Next Steps
+ Common Q&A
 ```
 **Best for**: Quick lookups, reference material
 
@@ -150,41 +150,41 @@ Conclusion
 
 ---
 
-## 🔗 Relationships
+##  Relationships
 
 ```
 OUTCOME_REPORT.md
-├─ Summarizes all work
-├─ Links to IMPLEMENTATION.md
-├─ Links to CONTEXT_OPTIMIZATION_SUMMARY.md
-└─ Links to QUICK_REFERENCE.md
+ Summarizes all work
+ Links to IMPLEMENTATION.md
+ Links to CONTEXT_OPTIMIZATION_SUMMARY.md
+ Links to QUICK_REFERENCE.md
 
 IMPLEMENTATION.md
-├─ Detailed step-by-step guide
-├─ References CONTEXT_OPTIMIZATION_SUMMARY.md for research
-├─ References QUICK_REFERENCE.md for quick lookup
-└─ Includes testing strategy
+ Detailed step-by-step guide
+ References CONTEXT_OPTIMIZATION_SUMMARY.md for research
+ References QUICK_REFERENCE.md for quick lookup
+ Includes testing strategy
 
 CONTEXT_OPTIMIZATION_SUMMARY.md
-├─ Deep research analysis
-├─ 9 findings that drive v3 design
-├─ Cited in IMPLEMENTATION.md
-└─ Summarized in OUTCOME_REPORT.md
+ Deep research analysis
+ 9 findings that drive v3 design
+ Cited in IMPLEMENTATION.md
+ Summarized in OUTCOME_REPORT.md
 
 QUICK_REFERENCE.md
-├─ Fast lookup for all major topics
-├─ Links to detailed docs for expansion
-├─ Designed for agent/developer use
-└─ Portable (5 minute read)
+ Fast lookup for all major topics
+ Links to detailed docs for expansion
+ Designed for agent/developer use
+ Portable (5 minute read)
 
 Actual Code:
-├─ vtcode-core/src/prompts/system.rs (integrated v3)
-└─ vtcode-core/src/prompts/system_v3.rs (standalone module)
+ vtcode-core/src/prompts/system.rs (integrated v3)
+ vtcode-core/src/prompts/system_v3.rs (standalone module)
 ```
 
 ---
 
-## 📈 Reading Paths
+##  Reading Paths
 
 ### Path 1: "I'm an agent/developer using v3"
 1. QUICK_REFERENCE.md (5 min) - Learn the rules
@@ -208,20 +208,20 @@ Actual Code:
 
 ---
 
-## 🎯 Key Sections by Topic
+##  Key Sections by Topic
 
 ### Context Engineering
-- QUICK_REFERENCE.md → "📊 Context Engineering"
+- QUICK_REFERENCE.md → " Context Engineering"
 - IMPLEMENTATION.md → "Core Structural Changes" + "Key Innovations"
 - CONTEXT_OPTIMIZATION_SUMMARY.md → "Research Findings" #1
 
 ### Tool Optimization
-- QUICK_REFERENCE.md → "🛠️ Tool Selection" + "📋 Context Triage"
+- QUICK_REFERENCE.md → " Tool Selection" + " Context Triage"
 - IMPLEMENTATION.md → "Innovation 2: Per-Tool Output Rules"
 - CONTEXT_OPTIMIZATION_SUMMARY.md → "Research Findings" #2
 
 ### Multi-LLM Support
-- QUICK_REFERENCE.md → "🌍 Multi-LLM Compatibility"
+- QUICK_REFERENCE.md → " Multi-LLM Compatibility"
 - IMPLEMENTATION.md → "Multi-LLM Compatibility Matrix"
 - CONTEXT_OPTIMIZATION_SUMMARY.md → "Research Findings" #4
 
@@ -231,7 +231,7 @@ Actual Code:
 - CONTEXT_OPTIMIZATION_SUMMARY.md → "Research Findings" #4, #5
 
 ### Loop Prevention
-- QUICK_REFERENCE.md → "🚫 Loop Prevention"
+- QUICK_REFERENCE.md → " Loop Prevention"
 - IMPLEMENTATION.md → "Innovation 5: Hard Thresholds"
 - CONTEXT_OPTIMIZATION_SUMMARY.md → "Research Findings" #8
 
@@ -245,7 +245,7 @@ Actual Code:
 
 ---
 
-## ✓  Checklist for Using This Documentation
+##   Checklist for Using This Documentation
 
 ### For Quick Lookup
 - [ ] Bookmark QUICK_REFERENCE.md
@@ -272,7 +272,7 @@ Actual Code:
 
 ---
 
-## 🔍 Finding Specific Information
+##  Finding Specific Information
 
 | Question | Find In |
 |----------|---------|
@@ -290,10 +290,10 @@ Actual Code:
 
 ---
 
-## 📞 Support & Questions
+##  Support & Questions
 
 ### Common Questions
-→ See: QUICK_REFERENCE.md § ❓ Common Questions
+→ See: QUICK_REFERENCE.md §  Common Questions
 
 ### Implementation Issues
 → See: IMPLEMENTATION.md § Common Issues & Resolutions
@@ -309,7 +309,7 @@ Actual Code:
 
 ---
 
-## 📊 Document Statistics
+##  Document Statistics
 
 | Document | Lines | Read Time | Purpose |
 |----------|-------|-----------|---------|
@@ -321,7 +321,7 @@ Actual Code:
 
 ---
 
-## 🚀 Getting Started
+##  Getting Started
 
 1. **If you have 5 minutes**: Read QUICK_REFERENCE.md
 2. **If you have 30 minutes**: Read IMPLEMENTATION.md § Phase 1
@@ -330,11 +330,11 @@ Actual Code:
 
 ---
 
-## 📅 Version History
+##  Version History
 
 | Version | Date | Status | Focus |
 |---------|------|--------|-------|
-| 1.0 | Nov 19, 2025 | ✓  Complete | Initial v3 documentation |
+| 1.0 | Nov 19, 2025 |   Complete | Initial v3 documentation |
 
 ---
 

@@ -7,7 +7,7 @@ ANSI escape sequences (color codes, text styling) in tool command output are aut
 ## Configuration
 
 ### Default Behavior
-- **Status**: ✅ Enabled
+- **Status**:  Enabled
 - **Config Option**: `ui.allow_tool_ansi`
 - **Default Value**: `false` (ANSI codes are stripped)
 
@@ -133,18 +133,18 @@ Only enable if using VTCode in a context that properly handles ANSI codes.
 
 The ANSI stripping function is comprehensively tested with 16 test cases covering:
 
-✅ **Basic Cases**
+ **Basic Cases**
 - No ANSI codes (zero-copy fast path)
 - Simple color codes (most common)
 - Multiple sequential codes
 
-✅ **Real-World Scenarios**
+ **Real-World Scenarios**
 - `cargo check` output patterns
 - Rust compiler warnings/errors
 - Unicode + ANSI combination
 - Git/ls colored output
 
-✅ **Edge Cases**
+ **Edge Cases**
 - 256-color mode (38;5;N)
 - True color/24-bit RGB (38;2;R;G;B)
 - Cursor movement (CUU, CUD, etc.)

@@ -2,7 +2,7 @@
 
 ## Issues Fixed
 
-### 1. ✓  Infinite Repeated Tool Calls (CRITICAL)
+### 1.   Infinite Repeated Tool Calls (CRITICAL)
 **Status**: FIXED  
 **Files Modified**: `src/agent/runloop/unified/turn/run_loop.rs`
 
@@ -18,11 +18,11 @@
 
 **Impact**: Legitimate repeated tool calls now work correctly. Failure detection preserved.
 
-**Testing**: ✓  Compiles, ✓  All tests pass
+**Testing**:   Compiles,   All tests pass
 
 ---
 
-### 2. ✓  Scroll Performance (MAJOR)
+### 2.   Scroll Performance (MAJOR)
 **Status**: IMPLEMENTED  
 **Files Modified**: 
 - `vtcode-core/src/ui/tui/modern_integration.rs`
@@ -49,7 +49,7 @@
 | Full clears | Every scroll | Content only | **60%** |
 | CPU usage | High | Low | **60%** |
 
-**Testing**: ✓  User reports: "scroll is smooth now"
+**Testing**:   User reports: "scroll is smooth now"
 
 ---
 
@@ -143,14 +143,14 @@ If content changed elsewhere → Invalidate cache
 ## Code Quality Metrics
 
 ### Before Fixes
-- Tool repeat limit: ⤫  Confusing logic, wrong counter behavior
-- Scroll rendering: ⤫  Double renders, excessive clearing, poor cache strategy
-- Error messages: ⤫  Misleading ("unsuccessful attempts" when counting all attempts)
+- Tool repeat limit:   Confusing logic, wrong counter behavior
+- Scroll rendering:   Double renders, excessive clearing, poor cache strategy
+- Error messages:   Misleading ("unsuccessful attempts" when counting all attempts)
 
 ### After Fixes
-- Tool repeat limit: ✓  Clear logic, counts only failures, resets on success
-- Scroll rendering: ✓  Single render, smart cache, minimal clearing
-- Error messages: ✓  Accurate ("failed N times with identical arguments")
+- Tool repeat limit:   Clear logic, counts only failures, resets on success
+- Scroll rendering:   Single render, smart cache, minimal clearing
+- Error messages:   Accurate ("failed N times with identical arguments")
 
 ---
 
@@ -159,7 +159,7 @@ If content changed elsewhere → Invalidate cache
 ### Automated Tests
 ```bash
 $ cargo test --lib
-✓  17/17 tests pass
+  17/17 tests pass
 ```
 
 ### Manual Testing Checklist
@@ -196,11 +196,11 @@ htop                     # Monitor during scroll, should be low
 ## Deployment Readiness
 
 ### Safety Assessment
-- ✓  All tests pass
-- ✓  No breaking changes
-- ✓  Backward compatible
-- ✓  Isolated changes (can revert individually)
-- ✓  Performance improvements verified by user
+-   All tests pass
+-   No breaking changes
+-   Backward compatible
+-   Isolated changes (can revert individually)
+-   Performance improvements verified by user
 
 ### Risk Analysis
 | Change | Risk | Notes |
@@ -227,13 +227,13 @@ git revert --no-edit <commit-range>
 
 | Component | Metric | Before | After | Change |
 |-----------|--------|--------|-------|--------|
-| **Tool Execution** | Repeated success calls | Blocked at 3 | Unlimited | ✓  FIXED |
-| **Tool Execution** | Failed tool limit | Same | Same | ✓  Preserved |
-| **Scroll** | Latency (ms) | 50-100 | 5-15 | ✓  80-85% ↓ |
-| **Scroll** | Renders per event | 2x | 1x | ✓  50% ↓ |
-| **Scroll** | Full clears | Every | Content only | ✓  60% ↓ |
-| **Rendering** | CPU during scroll | High | Low | ✓  60% ↓ |
-| **Memory** | Allocations | Many | Few | ✓  40% ↓ |
+| **Tool Execution** | Repeated success calls | Blocked at 3 | Unlimited |   FIXED |
+| **Tool Execution** | Failed tool limit | Same | Same |   Preserved |
+| **Scroll** | Latency (ms) | 50-100 | 5-15 |   80-85% ↓ |
+| **Scroll** | Renders per event | 2x | 1x |   50% ↓ |
+| **Scroll** | Full clears | Every | Content only |   60% ↓ |
+| **Rendering** | CPU during scroll | High | Low |   60% ↓ |
+| **Memory** | Allocations | Many | Few |   40% ↓ |
 
 ---
 
@@ -284,10 +284,10 @@ git revert --no-edit <commit-range>
 ## Conclusion
 
 ### What We've Accomplished
-✓  Fixed critical infinite loop in tool execution  
-✓  Improved scroll performance by 80-85%  
-✓  Improved code clarity with better naming  
-✓  Comprehensive documentation of changes  
+  Fixed critical infinite loop in tool execution  
+  Improved scroll performance by 80-85%  
+  Improved code clarity with better naming  
+  Comprehensive documentation of changes  
 
 ### Current State
 - Both fixes are production-ready
@@ -303,4 +303,4 @@ git revert --no-edit <commit-range>
 
 ---
 
-**Status**: READY FOR DEPLOYMENT ✓ 
+**Status**: READY FOR DEPLOYMENT  

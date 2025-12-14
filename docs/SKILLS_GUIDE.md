@@ -77,14 +77,14 @@ Every skill is a directory with a required `SKILL.md` file:
 
 ```
 my-skill/
-├── SKILL.md
-│   ├── YAML frontmatter (metadata)
-│   └── Markdown body (instructions)
-├── scripts/
-│   └── helper.py          # Optional: executable scripts
-├── ADVANCED.md            # Optional: detailed guides
-└── templates/
-    └── example.json       # Optional: reference materials
+ SKILL.md
+    YAML frontmatter (metadata)
+    Markdown body (instructions)
+ scripts/
+    helper.py          # Optional: executable scripts
+ ADVANCED.md            # Optional: detailed guides
+ templates/
+     example.json       # Optional: reference materials
 ```
 
 ### SKILL.md Format
@@ -582,16 +582,16 @@ You can further organize skills by purpose:
 
 ```
 ~/.vtcode/skills/
-├── coding/
-│   ├── code-review/
-│   ├── refactoring/
-│   └── testing/
-├── documentation/
-│   ├── api-docs/
-│   └── architecture/
-└── operations/
-    ├── deployment/
-    └── monitoring/
+ coding/
+    code-review/
+    refactoring/
+    testing/
+ documentation/
+    api-docs/
+    architecture/
+ operations/
+     deployment/
+     monitoring/
 ```
 
 ---
@@ -603,10 +603,10 @@ You can further organize skills by purpose:
 Write descriptions that help Claude understand when and how to use the skill:
 
 ```yaml
-# Good ❌
+# Good 
 description: Analyzes code
 
-# Better ✅
+# Better 
 description: Performs comprehensive code reviews, checking for security vulnerabilities, performance bottlenecks, and code quality issues in Python and Go
 ```
 
@@ -667,10 +667,10 @@ Bundle scripts in `scripts/` for deterministic operations:
 
 ```bash
 my-skill/scripts/
-├── validate.py           # Validate input
-├── process.py            # Core logic
-├── format_output.py      # Format results
-└── README.md             # Script documentation
+ validate.py           # Validate input
+ process.py            # Core logic
+ format_output.py      # Format results
+ README.md             # Script documentation
 ```
 
 ---

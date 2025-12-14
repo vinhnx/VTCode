@@ -20,13 +20,13 @@ VT Code system prompt can work across multiple LLM providers. This guide documen
 
 | Feature | Claude 3.5 | GPT-4o | Gemini 2.0 | Notes |
 |---------|-----------|--------|-----------|-------|
-| **XML Tags** | ✓  Excellent | ✓  Good | ✓  Good | Structured thinking |
-| **Markdown Headers** | ✓  Excellent | ✓  Excellent | ✓  Excellent | Preferred |
-| **Nested Conditionals** | ✓  Works (5 levels) | ⚠️ Works (3 levels) | ⚠️ Works (2 levels) | Keep flat when possible |
-| **Long Instructions** | ✓  200K tokens | ⚠️ 128K tokens | ✓  1M tokens | Compress for GPT |
-| **Few-Shot Examples** | ✓  5+ examples | ✓  3-5 examples | ✓  3-5 examples | Quality > quantity |
-| **Structured Output** | ✓  JSON/XML | ✓  JSON/XML | ✓  JSON/XML | All support |
-| **Tool Use** | ✓  Native | ✓  Native | ✓  Native | Different formats |
+| **XML Tags** |   Excellent |   Good |   Good | Structured thinking |
+| **Markdown Headers** |   Excellent |   Excellent |   Excellent | Preferred |
+| **Nested Conditionals** |   Works (5 levels) |  Works (3 levels) |  Works (2 levels) | Keep flat when possible |
+| **Long Instructions** |   200K tokens |  128K tokens |   1M tokens | Compress for GPT |
+| **Few-Shot Examples** |   5+ examples |   3-5 examples |   3-5 examples | Quality > quantity |
+| **Structured Output** |   JSON/XML |   JSON/XML |   JSON/XML | All support |
+| **Tool Use** |   Native |   Native |   Native | Different formats |
 
 ### Context Window & Token Management
 
@@ -42,7 +42,7 @@ VT Code system prompt can work across multiple LLM providers. This guide documen
 
 ### Universal Patterns (Works Everywhere)
 
-✓  **Use These**:
+  **Use These**:
 ```
 - Direct commands: "Find the fetch_user function"
 - Active voice: "Add validation to the email field"
@@ -210,42 +210,42 @@ Test these scenarios on **all three models**:
 1. **Simple Task** (file read + edit)
    ```
    Model: Claude | GPT | Gemini
-   ✓ Completed task
-   ✓ Token usage reasonable
-   ✓ Error handling worked
+    Completed task
+    Token usage reasonable
+    Error handling worked
    ```
 
 2. **Tool Chain Task** (search → read → edit → verify)
    ```
    Model: Claude | GPT | Gemini
-   ✓ Followed tool order
-   ✓ Understood context between steps
-   ✓ Verified results
+    Followed tool order
+    Understood context between steps
+    Verified results
    ```
 
 3. **Error Recovery Task** (command fails, tries alternative)
    ```
    Model: Claude | GPT | Gemini
-   ✓ Detected error
-   ✓ Tried recovery strategy
-   ✓ Gave up appropriately
+    Detected error
+    Tried recovery strategy
+    Gave up appropriately
    ```
 
 4. **Long Task** (100+ token conversation)
    ```
    Model: Claude | GPT | Gemini
-   ✓ Maintained context
-   ✓ Didn't loop indefinitely
-   ✓ Created .progress.md if needed
+    Maintained context
+    Didn't loop indefinitely
+    Created .progress.md if needed
    ```
 
 5. **Complex Coding Task** (multi-file refactoring)
    ```
    Model: Claude | GPT | Gemini
-   ✓ Understood scope
-   ✓ Checked for side effects
-   ✓ Ran tests
-   ✓ Completed successfully
+    Understood scope
+    Checked for side effects
+    Ran tests
+    Completed successfully
    ```
 
 ---
@@ -414,11 +414,11 @@ max_tokens = 2048 (Claude), 1024 (GPT), 2048 (Gemini)
 
 VT Code can achieve **95%+ compatibility** across Claude, GPT, Gemini through:
 
-1. ✓  Universal base prompt (Tiers 0-3)
-2. ✓  Model-specific sections (marked with [Model] tags)
-3. ✓  Consistent testing & benchmarking
-4. ✓  Clear error handling + retry patterns
-5. ✓  Token budget awareness per model
+1.   Universal base prompt (Tiers 0-3)
+2.   Model-specific sections (marked with [Model] tags)
+3.   Consistent testing & benchmarking
+4.   Clear error handling + retry patterns
+5.   Token budget awareness per model
 
 **Next Steps**:
 1. Implement conditional sections in system prompt

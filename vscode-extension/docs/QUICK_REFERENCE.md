@@ -17,11 +17,11 @@ indicator.setModel("gpt-4");
 
 ### Status Values
 ```
-"idle"      → ⚪ Ready
-"thinking"  → 🔵 Thinking...
-"streaming" → 📤 Streaming response...
-"executing" → ⚙️ Executing tools...
-"error"     → ⤫  Error occurred
+"idle"      →  Ready
+"thinking"  →  Thinking...
+"streaming" →  Streaming response...
+"executing" →  Executing tools...
+"error"     →   Error occurred
 ```
 
 ### Methods
@@ -36,11 +36,11 @@ reset(): void
 
 ### Output Examples
 ```
-⚪ Ready
-🔵 Thinking...
-📤 Streaming response... | 1s | 250 tokens | gpt-4
-⚙️ Executing tools (2/5) | 45s
-⤫  Error occurred
+ Ready
+ Thinking...
+ Streaming response... | 1s | 250 tokens | gpt-4
+ Executing tools (2/5) | 45s
+  Error occurred
 ```
 
 ---
@@ -90,7 +90,7 @@ getContext(error: Error | string): Record<string, unknown>
 VTCode cannot connect to the backend service. The service may be starting 
 up or encountered an issue.
 
-💡 **Suggestion:** Try again in a few moments. If the problem persists, 
+ **Suggestion:** Try again in a few moments. If the problem persists, 
 restart the extension.
 ```
 
@@ -233,10 +233,10 @@ npm test -- --coverage
 
 ### Expected Results
 ```
-✓ StatusIndicator (10 tests)
-✓ ErrorPresentationHandler (12 tests)
-✓ Coverage: >92%
-✓ All passing
+ StatusIndicator (10 tests)
+ ErrorPresentationHandler (12 tests)
+ Coverage: >92%
+ All passing
 ```
 
 ---
@@ -282,13 +282,13 @@ import { ErrorPresentationHandler, type ErrorPresentation } from "./error/errorP
 
 ## Performance Tips
 
-### ✓  Do
+###   Do
 - Update status every 100-500ms
 - Batch updates when possible
 - Use debouncing for frequent updates
 - Sample metrics instead of every event
 
-### ⤫  Avoid
+###   Avoid
 - Status updates > 10 per second
 - Large error messages in logs
 - Unbounded message history

@@ -28,14 +28,14 @@ respectively and are re-exported from the crate root for convenience.
 PowerShell commands when the `powershell-process` feature is enabled. Each
 command helper sanitizes paths and patterns (via
 [`shell_escape`](https://docs.rs/shell-escape)) so user-provided strings cannot
-break out of quoting contexts.【F:vtcode-bash-runner/src/runner.rs†L1-L229】【F:vtcode-bash-runner/src/runner.rs†L344-L372】
+break out of quoting contexts.F:vtcode-bash-runner/src/runner.rs†L1-L229F:vtcode-bash-runner/src/runner.rs†L344-L372
 
 Because execution is delegated through the `CommandExecutor` trait, downstream
 crates can support additional shell families or simulation modes without
 modifying the runner logic. The crate now ships with built-in executors for
 process-backed shells, pure-Rust filesystem shims, dry-run logging, and
 execution telemetry forwarding so adopters can pick the strategy that matches
-their environment.【F:vtcode-bash-runner/src/executor.rs†L1-L470】
+their environment.F:vtcode-bash-runner/src/executor.rs†L1-L470
 
 ### Feature Flags
 
@@ -66,7 +66,7 @@ Policies run before every command execution and receive the
 `CommandInvocation` with shell family, command string, working directory,
 and the set of touched paths. `WorkspaceGuardPolicy` ensures invocations and
 paths stay within a configured `WorkspacePaths` root and optionally enforces
-an allowlist of permitted command categories.【F:vtcode-bash-runner/src/policy.rs†L1-L73】
+an allowlist of permitted command categories.F:vtcode-bash-runner/src/policy.rs†L1-L73
 
 This separation lets applications plug in auditing, logging, or approval
 workflows while retaining the same runner API.
@@ -84,7 +84,7 @@ cargo run -p vtcode-bash-runner --example dry_run
 ```
 
 The example uses `tempfile` to create an isolated workspace and prints the
-captured invocations and synthetic output.【F:vtcode-bash-runner/examples/dry_run.rs†L1-L55】
+captured invocations and synthetic output.F:vtcode-bash-runner/examples/dry_run.rs†L1-L55
 
 ## Pure-Rust Execution
 
@@ -92,7 +92,7 @@ Enable the `pure-rust` feature to avoid spawning shell processes altogether.
 The `PureRustCommandExecutor` implements core filesystem operations with the
 standard library, respecting workspace boundaries enforced by the runner. When
 combined with custom policies this mode is ideal for serverless or sandboxed
-deployments that restrict shell access.【F:vtcode-bash-runner/src/executor.rs†L204-L356】
+deployments that restrict shell access.F:vtcode-bash-runner/src/executor.rs†L204-L356
 
 ## Telemetry Integration
 
@@ -100,7 +100,7 @@ Downstream platforms can enable the `exec-events` feature to wrap any executor
 with the `EventfulExecutor`. The wrapper emits `ThreadEvent` updates from the
 `vtcode-exec-events` crate before and after each command, including the
 aggregated output and exit code, so command activity can be replayed in
-dashboards or persisted alongside other execution telemetry.【F:vtcode-bash-runner/src/executor.rs†L358-L470】
+dashboards or persisted alongside other execution telemetry.F:vtcode-bash-runner/src/executor.rs†L358-L470
 
 ## Next Steps
 

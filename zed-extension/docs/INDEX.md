@@ -4,17 +4,17 @@ Complete navigation guide for the VTCode Zed extension documentation.
 
 ## Quick Navigation
 
-### 🚀 Getting Started
+###  Getting Started
 - **[SETUP_GUIDE.md](SETUP_GUIDE.md)** - Installation and setup instructions
 - **[QUICK_START.md](QUICK_START.md)** - 5-minute quick start guide
 - **[README.md](README.md)** - Extension overview and features
 
-### 📚 Documentation
+###  Documentation
 - **[extension-features.md](extension-features.md)** - Detailed feature documentation
 - **[IMPLEMENTATION_ROADMAP.md](IMPLEMENTATION_ROADMAP.md)** - Development roadmap
 - **[DEVELOPMENT.md](DEVELOPMENT.md)** - Development setup and workflow
 
-### 📋 License
+###  License
 - **[LICENSE](LICENSE)** - MIT License
 
 ---
@@ -208,31 +208,31 @@ export OPENAI_API_KEY="sk-..."
 
 ```
 zed-extension/
-├── Documentation Files (*.md)
-│   ├── INDEX.md (this file)
-│   ├── README.md (overview)
-│   ├── SETUP_GUIDE.md (installation)
-│   ├── QUICK_START.md (5-min guide)
-│   ├── DEVELOPMENT.md (dev setup)
-│   ├── IMPLEMENTATION_ROADMAP.md (roadmap)
-│   └── extension-features.md (features)
-│
-├── Configuration Files
-│   ├── extension.toml (extension metadata)
-│   ├── Cargo.toml (Rust config)
-│   └── languages/vtcode/config.toml (language support)
-│
-├── Source Code
-│   └── src/lib.rs (extension code)
-│
-├── Build Artifacts
-│   └── target/
-│       ├── debug/
-│       └── release/libvtcode.dylib
-│
-└── Project Files
-    ├── LICENSE (MIT)
-    └── .gitignore
+ Documentation Files (*.md)
+    INDEX.md (this file)
+    README.md (overview)
+    SETUP_GUIDE.md (installation)
+    QUICK_START.md (5-min guide)
+    DEVELOPMENT.md (dev setup)
+    IMPLEMENTATION_ROADMAP.md (roadmap)
+    extension-features.md (features)
+
+ Configuration Files
+    extension.toml (extension metadata)
+    Cargo.toml (Rust config)
+    languages/vtcode/config.toml (language support)
+
+ Source Code
+    src/lib.rs (extension code)
+
+ Build Artifacts
+    target/
+        debug/
+        release/libvtcode.dylib
+
+ Project Files
+     LICENSE (MIT)
+     .gitignore
 ```
 
 ---
@@ -295,24 +295,24 @@ zed-extension/
 ## Quick Links
 
 ### Installation & Setup
-- 🚀 [Get Started in 5 Minutes](QUICK_START.md)
-- 📖 [Full Setup Guide](SETUP_GUIDE.md)
-- ⚙️ [Troubleshooting](SETUP_GUIDE.md#troubleshooting-installation)
+-  [Get Started in 5 Minutes](QUICK_START.md)
+-  [Full Setup Guide](SETUP_GUIDE.md)
+-  [Troubleshooting](SETUP_GUIDE.md#troubleshooting-installation)
 
 ### Understanding the Extension
-- 📚 [Features & Capabilities](extension-features.md)
-- 🏗️ [Architecture](extension-features.md#architecture)
-- 📋 [Configuration Options](extension-features.md#configuration-structure)
+-  [Features & Capabilities](extension-features.md)
+-  [Architecture](extension-features.md#architecture)
+-  [Configuration Options](extension-features.md#configuration-structure)
 
 ### Development
-- 🛠️ [Development Setup](DEVELOPMENT.md)
-- 🗺️ [Implementation Roadmap](IMPLEMENTATION_ROADMAP.md)
-- 💻 [Source Code](src/lib.rs)
+-  [Development Setup](DEVELOPMENT.md)
+-  [Implementation Roadmap](IMPLEMENTATION_ROADMAP.md)
+-  [Source Code](src/lib.rs)
 
 ### Community & Support
-- 🐛 [Report Issues](https://github.com/vinhnx/vtcode/issues)
-- 💬 [Discussions](https://github.com/vinhnx/vtcode/discussions)
-- ⭐ [Star on GitHub](https://github.com/vinhnx/vtcode)
+-  [Report Issues](https://github.com/vinhnx/vtcode/issues)
+-  [Discussions](https://github.com/vinhnx/vtcode/discussions)
+-  [Star on GitHub](https://github.com/vinhnx/vtcode)
 
 ---
 

@@ -4,9 +4,9 @@ This document details the Phase 1 implementation of core features for the VTCode
 
 ## What's New in v0.2.0
 
-### ✓ Completed Features
+###  Completed Features
 
-#### 1. Process Execution Integration ✓
+#### 1. Process Execution Integration 
 
 -   **Module**: `src/executor.rs`
 -   **Capabilities**:
@@ -33,7 +33,7 @@ if result.is_success() {
 }
 ```
 
-#### 2. Configuration Management ✓
+#### 2. Configuration Management 
 
 -   **Module**: `src/config.rs`
 -   **Capabilities**:
@@ -59,7 +59,7 @@ pub struct Config {
 }
 ```
 
-#### 3. Extension Core Initialization ✓
+#### 3. Extension Core Initialization 
 
 -   **Module**: `src/lib.rs`
 -   **Capabilities**:
@@ -76,22 +76,22 @@ pub fn config(&self) -> Option<&Config>
 pub fn is_vtcode_available(&self) -> bool
 ```
 
-### 📊 Code Statistics
+###  Code Statistics
 
 ```
 Module Statistics:
-├── src/lib.rs           - 79 lines (core extension)
-├── src/executor.rs      - 105 lines (CLI execution)
-├── src/config.rs        - 185 lines (configuration management)
-└── Total               - ~369 lines of production code
+ src/lib.rs           - 79 lines (core extension)
+ src/executor.rs      - 105 lines (CLI execution)
+ src/config.rs        - 185 lines (configuration management)
+ Total               - ~369 lines of production code
 
 Test Coverage:
-├── 9 unit tests
-├── 100% test pass rate
-└── Tests for all major functions
+ 9 unit tests
+ 100% test pass rate
+ Tests for all major functions
 ```
 
-### 📦 Build Statistics
+###  Build Statistics
 
 ```
 Binary Size: 500KB (release build)
@@ -110,31 +110,31 @@ Compile Status: No warnings, no errors
 
 ```
 VTCode Zed Extension (v0.2.0)
-┌─────────────────────────────────────────────┐
-│          Main Extension (lib.rs)             │
-│  ┌──────────────────────────────────────┐   │
-│  │  VTCodeExtension struct              │   │
-│  │  - config: Option<Config>            │   │
-│  │  - vtcode_available: bool            │   │
-│  │                                      │   │
-│  │  Methods:                            │   │
-│  │  - initialize()                      │   │
-│  │  - config()                          │   │
-│  │  - is_vtcode_available()             │   │
-│  └──────────────────────────────────────┘   │
-└────────────┬─────────────────────────────────┘
-             │
-    ┌────────┼────────┐
-    │        │        │
-    ▼        ▼        ▼
-┌────────┐ ┌──────────────┐ ┌────────────┐
-│Config  │ │ Executor     │ │ Extension  │
-│Module  │ │ Module       │ │ Core       │
-│        │ │              │ │            │
-│- Load  │ │- Execute     │ │- Init      │
-│- Parse │ │- Check CLI   │ │- Status    │
-│- Find  │ │- Version     │ │            │
-└────────┘ └──────────────┘ └────────────┘
+
+          Main Extension (lib.rs)             
+     
+    VTCodeExtension struct                 
+    - config: Option<Config>               
+    - vtcode_available: bool               
+                                           
+    Methods:                               
+    - initialize()                         
+    - config()                             
+    - is_vtcode_available()                
+     
+
+             
+    
+                    
+                    
+  
+Config    Executor       Extension  
+Module    Module         Core       
+                                    
+- Load   - Execute      - Init      
+- Parse  - Check CLI    - Status    
+- Find   - Version                  
+  
 ```
 
 ## API Reference
@@ -387,14 +387,14 @@ The following features are planned for Phase 2 (v0.3.0):
 
 ```
 zed-extension/
-├── src/
-│   ├── lib.rs              # Main extension logic
-│   ├── executor.rs         # CLI execution (NEW)
-│   └── config.rs           # Configuration management (NEW)
-├── Cargo.toml              # Updated dependencies
-├── extension.toml          # Version 0.2.0
-├── tests/                  # Unit tests (integrated in src)
-└── [documentation files...]
+ src/
+    lib.rs              # Main extension logic
+    executor.rs         # CLI execution (NEW)
+    config.rs           # Configuration management (NEW)
+ Cargo.toml              # Updated dependencies
+ extension.toml          # Version 0.2.0
+ tests/                  # Unit tests (integrated in src)
+ [documentation files...]
 ```
 
 ## Building and Installation
@@ -464,11 +464,11 @@ cargo install vtcode
 
 ### v0.2.0 (Phase 1) - 2024-11-09
 
--   ✓ Process execution integration
--   ✓ Configuration management system
--   ✓ Extension initialization
--   ✓ Unit tests (9 tests, 100% pass)
--   ✓ Complete documentation
+-    Process execution integration
+-    Configuration management system
+-    Extension initialization
+-    Unit tests (9 tests, 100% pass)
+-    Complete documentation
 
 ### v0.1.0 (Initial) - 2024-11-09
 
@@ -495,7 +495,7 @@ To contribute to Phase 1 or work on Phase 2:
 
 ---
 
-**Status**: Phase 1 Complete ✓
+**Status**: Phase 1 Complete 
 **Target Release**: v0.2.0
 **Next Phase**: v0.3.0 (Command Palette & Output Channel)
 **Estimated Timeline**: 2-3 weeks

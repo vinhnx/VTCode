@@ -25,7 +25,7 @@ After deep analysis, I discovered **three separate bugs** that compounded to cre
 
 ---
 
-## Bug #1: Newline Handling Creates Malformed Output ⚠️ CRITICAL
+## Bug #1: Newline Handling Creates Malformed Output  CRITICAL
 
 **Location**: `/vtcode-core/src/tools/registry/file_helpers.rs` lines 74-79, 100-105
 
@@ -79,7 +79,7 @@ new_content = result_lines.join("\n");
 
 ---
 
-## Bug #2: Overly Strict Matching Prevents Fuzzy Matching ⚠️ CRITICAL
+## Bug #2: Overly Strict Matching Prevents Fuzzy Matching  CRITICAL
 
 **Location**: `/vtcode-core/src/tools/registry/file_helpers.rs` lines 66-87 (original)
 
@@ -141,7 +141,7 @@ if !replacement_occurred {
 
 ---
 
-## Bug #3: Trailing Newlines Not Preserved ⚠️ FILE CORRUPTION
+## Bug #3: Trailing Newlines Not Preserved  FILE CORRUPTION
 
 **Location**: `/vtcode-core/src/tools/registry/file_helpers.rs` (entire function)
 
@@ -233,13 +233,13 @@ This mirrors the approach used in `PatchContextMatcher` (see `vtcode-core/src/to
 ### Compilation
 ```bash
 cargo check --package vtcode-core
-# ✓ Compiles successfully with 0 errors
+#  Compiles successfully with 0 errors
 ```
 
 ### Test Coverage
 ```bash
 ./scripts/test_edit_file_fix.sh
-# ✓ All edge cases verified
+#  All edge cases verified
 ```
 
 ### Test Cases Covered
@@ -351,9 +351,9 @@ This fix also improves:
 ## Comparison with apply_patch
 
 The `apply_patch` system already had these features:
-- ✅ Multi-level fallback matching (`PatchContextMatcher`)
-- ✅ Trailing newline preservation (`load_file_lines` + `write_patched_content`)
-- ✅ Proper line joining (no extra newlines)
+-  Multi-level fallback matching (`PatchContextMatcher`)
+-  Trailing newline preservation (`load_file_lines` + `write_patched_content`)
+-  Proper line joining (no extra newlines)
 
 Now `edit_file` is **aligned** with `apply_patch` and follows the same best practices.
 
@@ -362,8 +362,8 @@ Now `edit_file` is **aligned** with `apply_patch` and follows the same best prac
 ## Summary
 
 **Three bugs fixed**:
-1. ✅ Newline handling (no more malformed output)
-2. ✅ Fuzzy matching (handles formatting differences)
-3. ✅ Trailing newlines (preserves Unix convention)
+1.  Newline handling (no more malformed output)
+2.  Fuzzy matching (handles formatting differences)
+3.  Trailing newlines (preserves Unix convention)
 
 **Result**: Production-ready, robust, well-tested, and documented solution that addresses all root causes and prevents future failures.

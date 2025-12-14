@@ -25,10 +25,10 @@ vtcode currently uses **two different approaches** for ANSI parsing:
    - More comprehensive but only used for color stripping
 
 ### Dependency Stack
-- ✓  `vte = "0.15"` - Already present (alternative ANSI parser)
-- ✓  `anstyle = "1.0"` - Already present (ANSI styling library)
-- ✓  `anstyle-crossterm = "4.0"` - Already present (terminal backend)
-- ⤫  `anstyle-parse` - NOT present (would complement existing stack)
+-   `vte = "0.15"` - Already present (alternative ANSI parser)
+-   `anstyle = "1.0"` - Already present (ANSI styling library)
+-   `anstyle-crossterm = "4.0"` - Already present (terminal backend)
+-   `anstyle-parse` - NOT present (would complement existing stack)
 
 ## anstyle-parse Capabilities
 
@@ -159,7 +159,7 @@ anstyle-parse = "0.2"
 
 ## Recommendation
 
-### ✓  Add anstyle-parse as a dependency
+###   Add anstyle-parse as a dependency
 
 **Rationale:**
 1. **Complements existing stack** - Works naturally with `anstyle` (already in use)
@@ -170,7 +170,7 @@ anstyle-parse = "0.2"
 
 ### Implementation Priority
 
-1. **Add dependency** (immediate) ✓ 
+1. **Add dependency** (immediate)  
 2. **Create wrapper module** `vtcode-core/src/utils/ansi_parser.rs` (high priority)
 3. **Add tests** with existing test suite (high priority)
 4. **Gradual replacement** of vte in non-critical paths (medium priority)
@@ -238,9 +238,9 @@ pub fn parse_ansi(text: &str) -> AnsiInfo {
 ## Conclusion
 
 Adding `anstyle-parse` is a **low-risk, high-value enhancement** that:
-- ✓  Integrates naturally with current tooling
-- ✓  Reduces custom parsing code
-- ✓  Enables advanced features for output processing
-- ✓  Improves code maintainability
+-   Integrates naturally with current tooling
+-   Reduces custom parsing code
+-   Enables advanced features for output processing
+-   Improves code maintainability
 
 **Recommendation: Proceed with integration as outlined in the implementation roadmap.**

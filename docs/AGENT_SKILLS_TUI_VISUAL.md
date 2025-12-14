@@ -5,25 +5,25 @@ Step-by-step visual guide for using Agent Skills in the Terminal User Interface.
 ## Screen Layout
 
 ```
-┌──────────────────────────────────────────────────────────────────────────┐
-│                         VTCode Chat Session                              │
-├──────────────────────────────────────────────────────────────────────────┤
-│                                                                          │
-│  [Conversation Transcript Area - scrollable]                            │
-│                                                                          │
-│  User: /skills list                                                    │
-│  Agent: Available Skills:                                              │
-│    • spreadsheet-generator - Excel spreadsheets                        │
-│    • doc-generator - Word documents                                    │
-│    • pdf-report-generator - PDF files                                  │
-│                                                                          │
-│  User: /skills load spreadsheet-generator                             │
-│  Agent: ✓ Loaded skill: spreadsheet-generator (v1.0.0)               │
-│                                                                          │
-├──────────────────────────────────────────────────────────────────────────┤
-│ Input: Create Excel spreadsheet with Q4 financial data                  │
-│ [Autocomplete available: Tab to complete, Shift+Enter for new line]   │
-└──────────────────────────────────────────────────────────────────────────┘
+
+                         VTCode Chat Session                              
+
+                                                                          
+  [Conversation Transcript Area - scrollable]                            
+                                                                          
+  User: /skills list                                                    
+  Agent: Available Skills:                                              
+    • spreadsheet-generator - Excel spreadsheets                        
+    • doc-generator - Word documents                                    
+    • pdf-report-generator - PDF files                                  
+                                                                          
+  User: /skills load spreadsheet-generator                             
+  Agent:  Loaded skill: spreadsheet-generator (v1.0.0)               
+                                                                          
+
+ Input: Create Excel spreadsheet with Q4 financial data                  
+ [Autocomplete available: Tab to complete, Shift+Enter for new line]   
+
                               [Model: claude...] [TUI Mode]
 ```
 
@@ -37,15 +37,15 @@ $ vtcode chat
 
 **You see:**
 ```
-┌────────────────────────────────────────────────────────┐
-│                VTCode Interactive Chat                 │
-│                                                        │
-│  Ready to chat!                                       │
-│  Type /help for commands                             │
-│                                                        │
-├────────────────────────────────────────────────────────┤
-│ Input: _                                              │
-└────────────────────────────────────────────────────────┘
+
+                VTCode Interactive Chat                 
+                                                        
+  Ready to chat!                                       
+  Type /help for commands                             
+                                                        
+
+ Input: _                                              
+
 ```
 
 ---
@@ -62,7 +62,7 @@ Type: /
 
 **Visual:**
 ```
-Input: /sk█
+Input: /sk
          ↓
     Suggestions:
     • /status
@@ -81,32 +81,32 @@ Press: Enter
 
 **Output:**
 ```
-┌────────────────────────────────────────────────────────┐
-│                                                        │
-│  User: /skills list                                   │
-│                                                        │
-│  Agent: Available Skills:                             │
-│                                                        │
-│  • spreadsheet-generator                              │
-│    Generate professional Excel spreadsheets with      │
-│    data, charts, and formatting                       │
-│                                                        │
-│  • doc-generator                                      │
-│    Generate professional Word documents with          │
-│    formatted text, tables, and layouts                │
-│                                                        │
-│  • pdf-report-generator                               │
-│    Generate professional PDF documents with           │
-│    charts, styling, and complex layouts               │
-│                                                        │
-│  • strict-architecture                                │
-│    Enforces universal strict governance rules         │
-│                                                        │
-│  Use '/skills info <name>' for details                │
-│                                                        │
-├────────────────────────────────────────────────────────┤
-│ Input: _                                              │
-└────────────────────────────────────────────────────────┘
+
+                                                        
+  User: /skills list                                   
+                                                        
+  Agent: Available Skills:                             
+                                                        
+  • spreadsheet-generator                              
+    Generate professional Excel spreadsheets with      
+    data, charts, and formatting                       
+                                                        
+  • doc-generator                                      
+    Generate professional Word documents with          
+    formatted text, tables, and layouts                
+                                                        
+  • pdf-report-generator                               
+    Generate professional PDF documents with           
+    charts, styling, and complex layouts               
+                                                        
+  • strict-architecture                                
+    Enforces universal strict governance rules         
+                                                        
+  Use '/skills info <name>' for details                
+                                                        
+
+ Input: _                                              
+
 ```
 
 ---
@@ -120,36 +120,36 @@ Press: Enter
 
 **Output:**
 ```
-┌────────────────────────────────────────────────────────┐
-│                                                        │
-│  User: /skills info spreadsheet-generator             │
-│                                                        │
-│  Agent: Skill: spreadsheet-generator                  │
-│  Description: Generate professional Excel             │
-│  Version: 1.0.0                                       │
-│  Author: VTCode Team                                  │
-│                                                        │
-│  --- Instructions ---                                 │
-│  When asked to generate a spreadsheet:                │
-│                                                        │
-│  1. Understand Requirements                           │
-│     Parse request for content, structure, format      │
-│                                                        │
-│  2. Plan the Spreadsheet                              │
-│     Sketch layout and column structure                │
-│                                                        │
-│  3. Create with Code Execution                        │
-│     Use Anthropic xlsx Agent Skill                    │
-│                                                        │
-│  4. Extract File Reference                            │
-│     Return file ID for download                       │
-│                                                        │
-│  --- Available Resources ---                          │
-│  • scripts/helper.py                                  │
-│                                                        │
-├────────────────────────────────────────────────────────┤
-│ Input: _                                              │
-└────────────────────────────────────────────────────────┘
+
+                                                        
+  User: /skills info spreadsheet-generator             
+                                                        
+  Agent: Skill: spreadsheet-generator                  
+  Description: Generate professional Excel             
+  Version: 1.0.0                                       
+  Author: VTCode Team                                  
+                                                        
+  --- Instructions ---                                 
+  When asked to generate a spreadsheet:                
+                                                        
+  1. Understand Requirements                           
+     Parse request for content, structure, format      
+                                                        
+  2. Plan the Spreadsheet                              
+     Sketch layout and column structure                
+                                                        
+  3. Create with Code Execution                        
+     Use Anthropic xlsx Agent Skill                    
+                                                        
+  4. Extract File Reference                            
+     Return file ID for download                       
+                                                        
+  --- Available Resources ---                          
+  • scripts/helper.py                                  
+                                                        
+
+ Input: _                                              
+
 ```
 
 ---
@@ -163,20 +163,20 @@ Press: Enter
 
 **Output:**
 ```
-┌────────────────────────────────────────────────────────┐
-│                                                        │
-│  User: /skills load spreadsheet-generator             │
-│                                                        │
-│  Agent: ✓ Loaded skill: spreadsheet-generator (v1.0.0)│
-│          Description: Generate professional Excel...  │
-│          Resources: 0 files                           │
-│                                                        │
-│          Skill is ready to use. Use it in your next   │
-│          message.                                     │
-│                                                        │
-├────────────────────────────────────────────────────────┤
-│ Input: _                                              │
-└────────────────────────────────────────────────────────┘
+
+                                                        
+  User: /skills load spreadsheet-generator             
+                                                        
+  Agent:  Loaded skill: spreadsheet-generator (v1.0.0)
+          Description: Generate professional Excel...  
+          Resources: 0 files                           
+                                                        
+          Skill is ready to use. Use it in your next   
+          message.                                     
+                                                        
+
+ Input: _                                              
+
 ```
 
 **What Happened:**
@@ -199,40 +199,40 @@ Press: Enter
 
 **Agent Response:**
 ```
-┌────────────────────────────────────────────────────────┐
-│                                                        │
-│  User: Create Excel spreadsheet with Q4 2024          │
-│  financial data...                                    │
-│                                                        │
-│  Agent: I'll create a comprehensive Excel spreadsheet │
-│  with Q4 2024 financial data. Let me use the          │
-│  spreadsheet-generator skill...                       │
-│                                                        │
-│  [Thinking...] ◐                                      │
-│                                                        │
-│  Creating spreadsheet with revenue data...            │
-│  Adding expense breakdown...                          │
-│  Calculating profit margins...                        │
-│  Creating Q3 comparison...                            │
-│                                                        │
-│  ✓ Spreadsheet created successfully!                  │
-│                                                        │
-│  The Excel file contains:                             │
-│  - Sheet 1: Monthly Financial Data                    │
-│    • Jan-Dec 2024 revenue                             │
-│    • Expense categories with percentages              │
-│    • Net profit calculations                          │
-│                                                        │
-│  - Sheet 2: Quarterly Comparison                      │
-│    • Q3 vs Q4 metrics                                 │
-│    • Growth percentages                               │
-│    • Performance summary                              │
-│                                                        │
-│  File ready for download. Download ID: [file-id]     │
-│                                                        │
-├────────────────────────────────────────────────────────┤
-│ Input: _                                              │
-└────────────────────────────────────────────────────────┘
+
+                                                        
+  User: Create Excel spreadsheet with Q4 2024          
+  financial data...                                    
+                                                        
+  Agent: I'll create a comprehensive Excel spreadsheet 
+  with Q4 2024 financial data. Let me use the          
+  spreadsheet-generator skill...                       
+                                                        
+  [Thinking...]                                       
+                                                        
+  Creating spreadsheet with revenue data...            
+  Adding expense breakdown...                          
+  Calculating profit margins...                        
+  Creating Q3 comparison...                            
+                                                        
+   Spreadsheet created successfully!                  
+                                                        
+  The Excel file contains:                             
+  - Sheet 1: Monthly Financial Data                    
+    • Jan-Dec 2024 revenue                             
+    • Expense categories with percentages              
+    • Net profit calculations                          
+                                                        
+  - Sheet 2: Quarterly Comparison                      
+    • Q3 vs Q4 metrics                                 
+    • Growth percentages                               
+    • Performance summary                              
+                                                        
+  File ready for download. Download ID: [file-id]     
+                                                        
+
+ Input: _                                              
+
 ```
 
 ---
@@ -242,53 +242,53 @@ Press: Enter
 ### Scenario: Create Financial Dashboard
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│ STEP 1: Start & Explore                                │
-├─────────────────────────────────────────────────────────┤
-│ $ vtcode chat                                           │
-│ > /skills list                                          │
-│   [See all available skills]                            │
-│                                                         │
-├─────────────────────────────────────────────────────────┤
-│ STEP 2: Learn About Skill                              │
-├─────────────────────────────────────────────────────────┤
-│ > /skills info spreadsheet-generator                    │
-│   [Read full documentation]                             │
-│   [Understand features and use cases]                   │
-│                                                         │
-├─────────────────────────────────────────────────────────┤
-│ STEP 3: Load Skill                                     │
-├─────────────────────────────────────────────────────────┤
-│ > /skills load spreadsheet-generator                    │
-│   ✓ Loaded (metadata ~100 tokens)                       │
-│   [Ready to use]                                        │
-│                                                         │
-├─────────────────────────────────────────────────────────┤
-│ STEP 4: Use Skill                                      │
-├─────────────────────────────────────────────────────────┤
-│ > Create financial dashboard with:                      │
-│   - Revenue by quarter                                 │
-│   - Expense breakdown                                  │
-│   - Profit margins                                     │
-│                                                         │
-│   Agent Response:                                       │
-│   [Loads full instructions ~5K tokens]                  │
-│   [Creates spreadsheet via code execution]              │
-│   ✓ File created                                        │
-│                                                         │
-├─────────────────────────────────────────────────────────┤
-│ STEP 5: Download or Continue                           │
-├─────────────────────────────────────────────────────────┤
-│ File ready for:                                         │
-│ • Download                                             │
-│ • Sharing                                              │
-│ • Further editing in Excel                              │
-│                                                         │
-│ Or continue chat:                                       │
-│ > Add pie charts for expenses                           │
-│ > Change formatting to blue theme                       │
-│ > Create summary sheet                                  │
-└─────────────────────────────────────────────────────────┘
+
+ STEP 1: Start & Explore                                
+
+ $ vtcode chat                                           
+ > /skills list                                          
+   [See all available skills]                            
+                                                         
+
+ STEP 2: Learn About Skill                              
+
+ > /skills info spreadsheet-generator                    
+   [Read full documentation]                             
+   [Understand features and use cases]                   
+                                                         
+
+ STEP 3: Load Skill                                     
+
+ > /skills load spreadsheet-generator                    
+    Loaded (metadata ~100 tokens)                       
+   [Ready to use]                                        
+                                                         
+
+ STEP 4: Use Skill                                      
+
+ > Create financial dashboard with:                      
+   - Revenue by quarter                                 
+   - Expense breakdown                                  
+   - Profit margins                                     
+                                                         
+   Agent Response:                                       
+   [Loads full instructions ~5K tokens]                  
+   [Creates spreadsheet via code execution]              
+    File created                                        
+                                                         
+
+ STEP 5: Download or Continue                           
+
+ File ready for:                                         
+ • Download                                             
+ • Sharing                                              
+ • Further editing in Excel                              
+                                                         
+ Or continue chat:                                       
+ > Add pie charts for expenses                           
+ > Change formatting to blue theme                       
+ > Create summary sheet                                  
+
 ```
 
 ---
@@ -298,37 +298,37 @@ Press: Enter
 ### During Input
 
 ```
-┌─────────────────────────────────────────────┐
-│ EDITING                                     │
-├─────────────────────────────────────────────┤
-│ Ctrl+A    Jump to start of line            │
-│ Ctrl+E    Jump to end of line              │
-│ Ctrl+K    Clear to end                     │
-│ Ctrl+U    Clear entire line                │
-│ Ctrl+W    Delete previous word             │
-├─────────────────────────────────────────────┤
-│ SUBMISSION                                  │
-├─────────────────────────────────────────────┤
-│ Enter        Send message                  │
-│ Shift+Enter  New line (multi-line input)   │
-│ Ctrl+C       Cancel/interrupt              │
-│ Ctrl+D       Exit chat (when empty)        │
-└─────────────────────────────────────────────┘
+
+ EDITING                                     
+
+ Ctrl+A    Jump to start of line            
+ Ctrl+E    Jump to end of line              
+ Ctrl+K    Clear to end                     
+ Ctrl+U    Clear entire line                
+ Ctrl+W    Delete previous word             
+
+ SUBMISSION                                  
+
+ Enter        Send message                  
+ Shift+Enter  New line (multi-line input)   
+ Ctrl+C       Cancel/interrupt              
+ Ctrl+D       Exit chat (when empty)        
+
 ```
 
 ### In Transcript
 
 ```
-┌─────────────────────────────────────────────┐
-│ NAVIGATION                                  │
-├─────────────────────────────────────────────┤
-│ ↑ / ↓           Scroll up/down             │
-│ Page Up/Down    Page scroll                │
-│ Home            Jump to top                │
-│ End             Jump to bottom             │
-│ Tab             Autocomplete command       │
-│ Ctrl+L          Clear screen               │
-└─────────────────────────────────────────────┘
+
+ NAVIGATION                                  
+
+ ↑ / ↓           Scroll up/down             
+ Page Up/Down    Page scroll                
+ Home            Jump to top                
+ End             Jump to bottom             
+ Tab             Autocomplete command       
+ Ctrl+L          Clear screen               
+
 ```
 
 ---
@@ -336,35 +336,35 @@ Press: Enter
 ## Common Commands Cheat Sheet
 
 ```
-┌────────────────────────────────────────────────────┐
-│ SKILL COMMANDS                                     │
-├────────────────────────────────────────────────────┤
-│ /skills list                                       │
-│   → Show all available skills                      │
-│                                                    │
-│ /skills info <name>                                │
-│   → Show detailed skill documentation              │
-│                                                    │
-│ /skills load <name>                                │
-│   → Load skill for this session                    │
-│                                                    │
-│ /skills unload <name>                              │
-│   → Unload skill (frees context)                   │
-│                                                    │
-│ /skills use <name> <input>                         │
-│   → Execute skill with input immediately           │
-├────────────────────────────────────────────────────┤
-│ CONTEXT COMMANDS                                   │
-├────────────────────────────────────────────────────┤
-│ /clear                                             │
-│   → Clear transcript & history                     │
-│                                                    │
-│ /new                                               │
-│   → Start new session (skills reset)               │
-│                                                    │
-│ /help                                              │
-│   → Show all slash commands                        │
-└────────────────────────────────────────────────────┘
+
+ SKILL COMMANDS                                     
+
+ /skills list                                       
+   → Show all available skills                      
+                                                    
+ /skills info <name>                                
+   → Show detailed skill documentation              
+                                                    
+ /skills load <name>                                
+   → Load skill for this session                    
+                                                    
+ /skills unload <name>                              
+   → Unload skill (frees context)                   
+                                                    
+ /skills use <name> <input>                         
+   → Execute skill with input immediately           
+
+ CONTEXT COMMANDS                                   
+
+ /clear                                             
+   → Clear transcript & history                     
+                                                    
+ /new                                               
+   → Start new session (skills reset)               
+                                                    
+ /help                                              
+   → Show all slash commands                        
+
 ```
 
 ---
@@ -375,13 +375,13 @@ Press: Enter
 
 ```
 Step 1: Load Multiple Skills
-───────────────────────────────
+
 /skills load spreadsheet-generator
 /skills load doc-generator
 /skills load pdf-report-generator
 
 Step 2: Create Spreadsheet
-───────────────────────────
+
 > Create quarterly financial spreadsheet with:
   - Revenue by month
   - Expense breakdown
@@ -390,7 +390,7 @@ Step 2: Create Spreadsheet
 Agent: [Creates Excel file]
 
 Step 3: Create Document
-───────────────────────
+
 > Add analysis document explaining the data:
   - Executive summary
   - Key findings
@@ -399,13 +399,13 @@ Step 3: Create Document
 Agent: [Creates Word document]
 
 Step 4: Create PDF
-──────────────────
+
 > Generate PDF summary of key metrics
 
 Agent: [Creates PDF file]
 
 Step 5: Complete!
-─────────────────
+
 Result: Three files ready
   • Financial_Data.xlsx
   • Analysis.docx
@@ -510,15 +510,15 @@ Solution:
 ## Color Indicators in TUI
 
 ```
-┌────────────────────────────────────┐
-│ COLORS MEANING                     │
-├────────────────────────────────────┤
-│ 🟢 Green    Successful action      │
-│ 🔵 Blue     Information/prompts    │
-│ 🟡 Yellow   Warnings               │
-│ 🔴 Red      Errors                 │
-│ ⚪ White    Regular text           │
-└────────────────────────────────────┘
+
+ COLORS MEANING                     
+
+  Green    Successful action      
+  Blue     Information/prompts    
+  Yellow   Warnings               
+  Red      Errors                 
+  White    Regular text           
+
 ```
 
 ---

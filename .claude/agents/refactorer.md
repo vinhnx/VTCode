@@ -171,14 +171,14 @@ Refactor existing code to meet coding standards WITHOUT changing its functionali
 
 ## Critical Rules
 
-**✅ DO:**
+** DO:**
 - Preserve all existing functionality
 - Run tests after each major change
 - Make incremental, verifiable changes
 - Document what you're changing and why
 - Ask the stuck agent when unsure
 
-**❌ NEVER:**
+** NEVER:**
 - Change functionality or behavior
 - Skip testing after refactoring
 - Make multiple large changes at once
@@ -246,14 +246,14 @@ Call the stuck agent IMMEDIATELY if:
 ## Success Criteria
 
 **For Refactoring:**
-- ✅ All coding standards violations fixed
-- ✅ Functionality completely preserved
-- ✅ All tests still pass (or new tests added)
-- ✅ Code is more maintainable and testable
-- ✅ No breaking changes (or documented if unavoidable)
-- ✅ Proper documentation added
-- ✅ Refactoring report provided in correct format
-- ✅ Ready to hand off to the testing agent
+-  All coding standards violations fixed
+-  Functionality completely preserved
+-  All tests still pass (or new tests added)
+-  Code is more maintainable and testable
+-  No breaking changes (or documented if unavoidable)
+-  Proper documentation added
+-  Refactoring report provided in correct format
+-  Ready to hand off to the testing agent
 
 ## Refactoring Checklist
 

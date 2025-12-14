@@ -163,13 +163,13 @@ Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
 
 ```powershell
 # No suitable directory found
-✗ No suitable installation directory found
+ No suitable installation directory found
 
 # Download failed
-✗ Failed to download from https://...
+ Failed to download from https://...
 
 # Extraction failed
-✗ Failed to extract archive: ...
+ Failed to extract archive: ...
 ```
 
 All errors exit with code 1 for CI/CD integration.
@@ -253,31 +253,31 @@ Then commit and push to your tap repository.
 
 | Feature | Shell (macOS/Linux) | PowerShell (Windows) | Homebrew |
 |---------|---------------------|---------------------|----------|
-| Platform detection | ✓ Auto | ✓ Auto | ✓ Auto |
-| Version management | ✗ Latest only | ✗ Latest only | ✓ Version tracking |
-| PATH configuration | ✓ Auto | ✓ Auto | ✓ Auto |
-| Easy uninstall | ✓ One command | ✓ One command | ✓ `brew uninstall` |
-| Admin required | ✗ Optional | ✗ Optional (fallback) | ✗ No |
-| Custom path | ✗ No | ✓ Yes | ✗ No |
-| Simple | ✓ Yes | Moderate | ✓ Yes |
+| Platform detection |  Auto |  Auto |  Auto |
+| Version management |  Latest only |  Latest only |  Version tracking |
+| PATH configuration |  Auto |  Auto |  Auto |
+| Easy uninstall |  One command |  One command |  `brew uninstall` |
+| Admin required |  Optional |  Optional (fallback) |  No |
+| Custom path |  No |  Yes |  No |
+| Simple |  Yes | Moderate |  Yes |
 
 ---
 
 ## Security
 
 All installers:
-- ✓ HTTPS-only downloads
-- ✓ Use official GitHub releases
-- ✓ Verify binary exists after extraction
-- ✓ Display clear error messages
-- ✓ Never ask for root/admin unless necessary
-- ✓ Clean up temporary files
+-  HTTPS-only downloads
+-  Use official GitHub releases
+-  Verify binary exists after extraction
+-  Display clear error messages
+-  Never ask for root/admin unless necessary
+-  Clean up temporary files
 
 No:
-- ✗ Custom code execution
-- ✗ Hardcoded URLs (except GitHub)
-- ✗ Hidden operations
-- ✗ Telemetry
+-  Custom code execution
+-  Hardcoded URLs (except GitHub)
+-  Hidden operations
+-  Telemetry
 
 ---
 

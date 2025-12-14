@@ -28,14 +28,14 @@ This document outlines the complete distribution setup for VT Code across multip
 
 ```
 vtcode/
-├── Cargo.toml                    # Main crate metadata
-├── vtcode-core/
-│   └── Cargo.toml               # Core library metadata
-│   ├── index.js               # Main entry point
-│   ├── bin/
-│   │   └── vtcode            # Executable wrapper
-│   └── scripts/
-│       ├── postinstall.js     # Binary download script
+ Cargo.toml                    # Main crate metadata
+ vtcode-core/
+    Cargo.toml               # Core library metadata
+    index.js               # Main entry point
+    bin/
+       vtcode            # Executable wrapper
+    scripts/
+        postinstall.js     # Binary download script
 
 ## Release Process
 

@@ -59,7 +59,7 @@ func (r *UserRepository) validateUserID(userID string) error {
 ```go
 // Go doesn't support default arguments, so this is enforced by the language
 
-// ✅ GOOD - All parameters explicit
+//  GOOD - All parameters explicit
 func CreateUser(name, email, role string) (*User, error) {
     // Implementation
 }
@@ -84,14 +84,14 @@ func CreateUser(name, email string, opts ...UserOption) (*User, error) {
 
 ### No Environment Variable Access
 ```go
-// ❌ BAD - Reading env vars in function
+//  BAD - Reading env vars in function
 func ConnectToDatabase() (*sql.DB, error) {
     host := os.Getenv("DB_HOST")
     port := os.Getenv("DB_PORT")
     return connect(host, port)
 }
 
-// ✅ GOOD - Configuration passed as arguments
+//  GOOD - Configuration passed as arguments
 func ConnectToDatabase(config DatabaseConfig) (*sql.DB, error) {
     return connect(config.Host, config.Port)
 }
@@ -120,7 +120,7 @@ db, err := ConnectToDatabase(config)
 
 ### Context as First Parameter
 ```go
-// ✅ GOOD - Context always first parameter
+//  GOOD - Context always first parameter
 func (r *UserRepository) FindUser(ctx context.Context, userID string) (*User, error) {
     // Implementation
 }
@@ -162,7 +162,7 @@ func (r *UserRepository) FindUser(ctx context.Context, userID string) (*User, er
 
 ### Error Propagation
 ```go
-// ✅ GOOD - Propagate errors with context
+//  GOOD - Propagate errors with context
 func GetUser(ctx context.Context, repo *UserRepository, userID string) (*User, error) {
     user, err := repo.FindUser(ctx, userID)
     if err != nil {
@@ -171,7 +171,7 @@ func GetUser(ctx context.Context, repo *UserRepository, userID string) (*User, e
     return user, nil
 }
 
-// ❌ BAD - Silent failure
+//  BAD - Silent failure
 func GetUser(ctx context.Context, repo *UserRepository, userID string) *User {
     user, err := repo.FindUser(ctx, userID)
     if err != nil {
@@ -185,7 +185,7 @@ func GetUser(ctx context.Context, repo *UserRepository, userID string) *User {
 
 ### Small, Focused Interfaces
 ```go
-// ✅ GOOD - Small, focused interfaces
+//  GOOD - Small, focused interfaces
 type UserFinder interface {
     FindUser(ctx context.Context, userID string) (*User, error)
 }
@@ -203,7 +203,7 @@ type UserRepository interface {
 
 ### Accept Interfaces, Return Structs
 ```go
-// ✅ GOOD - Accept interface, return concrete type
+//  GOOD - Accept interface, return concrete type
 func NewUserService(repo UserRepository, sender EmailSender) *UserService {
     return &UserService{
         repo:   repo,
@@ -211,7 +211,7 @@ func NewUserService(repo UserRepository, sender EmailSender) *UserService {
     }
 }
 
-// ❌ BAD - Returning interface unnecessarily
+//  BAD - Returning interface unnecessarily
 func NewUserService(repo UserRepository, sender EmailSender) UserService {
     return &userService{
         repo:   repo,
@@ -271,7 +271,7 @@ func getEnv(key, defaultValue string) string {
 
 ### Constructor Functions
 ```go
-// ✅ GOOD - Dependencies injected via constructor
+//  GOOD - Dependencies injected via constructor
 type UserService struct {
     repo   UserRepository
     sender EmailSender
@@ -304,7 +304,7 @@ func (s *UserService) RegisterUser(ctx context.Context, email, name string) (*Us
 
 ### Use Context for Cancellation
 ```go
-// ✅ GOOD - Respect context cancellation
+//  GOOD - Respect context cancellation
 func (r *UserRepository) FindUsers(ctx context.Context, filter UserFilter) ([]User, error) {
     select {
     case <-ctx.Done():
@@ -318,7 +318,7 @@ func (r *UserRepository) FindUsers(ctx context.Context, filter UserFilter) ([]Us
 
 ### Goroutine Management
 ```go
-// ✅ GOOD - Wait for goroutines to complete
+//  GOOD - Wait for goroutines to complete
 func ProcessUsers(ctx context.Context, users []User) error {
     var wg sync.WaitGroup
     errCh := make(chan error, len(users))
@@ -385,7 +385,7 @@ func TestCreateUser(t *testing.T) {
 
 ### Testable Design with Interfaces
 ```go
-// ✅ GOOD - Easy to test with interfaces
+//  GOOD - Easy to test with interfaces
 type UserService struct {
     repo   UserRepository
     sender EmailSender
@@ -468,7 +468,7 @@ import (
 
 ### When to Use Pointers
 ```go
-// ✅ Use pointers for:
+//  Use pointers for:
 // - Large structs
 // - Structs that need to be modified
 // - Implementing interfaces with pointer receivers

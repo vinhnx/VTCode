@@ -27,7 +27,7 @@ VTCode's MCP implementation is **well-designed and functional**, with all critic
 
 ## Current Implementation Strengths
 
-### ✅ Well-Structured Architecture
+###  Well-Structured Architecture
 
 **MCP Client Core:** `vtcode-core/src/mcp/mod.rs`
 - Clean provider abstraction
@@ -44,7 +44,7 @@ VTCode's MCP implementation is **well-designed and functional**, with all critic
 - Context-efficient for LLM agents
 - Keyword-based search
 
-### ✅ Solid Async Integration
+###  Solid Async Integration
 
 **AsyncMcpManager:** `src/agent/runloop/unified/async_mcp_manager.rs`
 - Background initialization with timeout
@@ -56,7 +56,7 @@ VTCode's MCP implementation is **well-designed and functional**, with all critic
 - Tool definitions exposed to agent
 - Clean initialization flow
 
-### ✅ Production-Ready Features
+###  Production-Ready Features
 
 - Tool execution with parameter validation
 - Provider health status tracking
@@ -69,7 +69,7 @@ VTCode's MCP implementation is **well-designed and functional**, with all critic
 
 ## Identified Alignment Gaps
 
-### 1. Transport Layer 🟡 Medium Priority
+### 1. Transport Layer  Medium Priority
 
 **Gap:** Custom transport construction vs RMCP wrappers
 
@@ -96,7 +96,7 @@ let transport = TokioChildProcess::new(cmd)?;
 
 ---
 
-### 2. Schema Generation 🟡 Medium Priority
+### 2. Schema Generation  Medium Priority
 
 **Gap:** Manual JSON schema handling vs type-safe generation
 
@@ -127,7 +127,7 @@ let schema = schemars::schema_for!(ToolInput);
 
 ---
 
-### 3. Error Handling 🟡 Medium Priority
+### 3. Error Handling  Medium Priority
 
 **Gap:** Custom error enum vs unified anyhow pattern
 
@@ -156,7 +156,7 @@ pub async fn initialize() -> anyhow::Result<Client> {
 
 ---
 
-### 4. Async Lifecycle Management 🟡 Medium Priority
+### 4. Async Lifecycle Management  Medium Priority
 
 **Gap:** Manual state machine vs ServiceExt trait
 
@@ -186,7 +186,7 @@ let status = client.get_status();
 
 ---
 
-### 5. Health Check Support 🔴 High Priority Gap
+### 5. Health Check Support  High Priority Gap
 
 **Missing:** Provider health checks
 
@@ -204,7 +204,7 @@ client.ping().await?;
 
 ---
 
-### 6. OAuth 2.1 Support 🔴 High Priority Gap
+### 6. OAuth 2.1 Support  High Priority Gap
 
 **Missing:** Authorization for protected resources
 
@@ -221,7 +221,7 @@ client.ping().await?;
 
 ---
 
-### 7. Streaming Support ⚠️ Medium-High Priority Gap
+### 7. Streaming Support  Medium-High Priority Gap
 
 **Missing:** Long-running operation support
 
@@ -241,7 +241,7 @@ client.ping().await?;
 
 ## Implementation Roadmap
 
-### Phase 1: Foundation (Weeks 1-2) ✅ High ROI
+### Phase 1: Foundation (Weeks 1-2)  High ROI
 
 **Changes:**
 - Update RMCP dependency to v0.9.0+
@@ -257,7 +257,7 @@ client.ping().await?;
 
 ---
 
-### Phase 2: Async Simplification (Weeks 2-3) ✅ Medium ROI
+### Phase 2: Async Simplification (Weeks 2-3)  Medium ROI
 
 **Changes:**
 - Refactor AsyncMcpManager with RMCP patterns
@@ -272,7 +272,7 @@ client.ping().await?;
 
 ---
 
-### Phase 3: Advanced Features (Weeks 3-4) ✅ High ROI
+### Phase 3: Advanced Features (Weeks 3-4)  High ROI
 
 **Changes:**
 - Add health check service
@@ -287,7 +287,7 @@ client.ping().await?;
 
 ---
 
-### Phase 4: OAuth & Beyond (Week 4+) 🔮 Future
+### Phase 4: OAuth & Beyond (Week 4+)  Future
 
 **Changes:**
 - OAuth 2.1 authorization
@@ -303,41 +303,41 @@ client.ping().await?;
 
 ### Current VTCode Pattern
 ```
-┌─────────────────┐
-│   Agent Loop    │
-├─────────────────┤
-│ AsyncMcpManager │
-├─────────────────┤
-│   McpClient     │
-├─────────────────┤
-│  McpProvider(s) │
-├─────────────────┤
-│  RmcpClient     │
-├─────────────────┤
-│  Transport      │
-│  (stdio/HTTP)   │
-└─────────────────┘
+
+   Agent Loop    
+
+ AsyncMcpManager 
+
+   McpClient     
+
+  McpProvider(s) 
+
+  RmcpClient     
+
+  Transport      
+  (stdio/HTTP)   
+
 ```
 
 ### RMCP-Aligned Pattern
 ```
-┌─────────────────┐
-│   Agent Loop    │
-├─────────────────┤
-│AsyncMcpManager  │
-├─────────────────┤
-│ManagedMcpClient │
-│ (trait object)  │
-├─────────────────┤
-│MultiProvider    │
-│    Client       │
-├─────────────────┤
-│ ServiceExt      │
-│ (RMCP)          │
-├─────────────────┤
-│  Transport      │
-│(RMCP wrappers)  │
-└─────────────────┘
+
+   Agent Loop    
+
+AsyncMcpManager  
+
+ManagedMcpClient 
+ (trait object)  
+
+MultiProvider    
+    Client       
+
+ ServiceExt      
+ (RMCP)          
+
+  Transport      
+(RMCP wrappers)  
+
 ```
 
 **Key differences:**
@@ -353,7 +353,7 @@ client.ping().await?;
 | File | Assessment | Action |
 |------|-----------|--------|
 | `vtcode-core/src/mcp/mod.rs` | Good, needs refactor | Use trait objects |
-| `vtcode-core/src/mcp/tool_discovery.rs` | Excellent ✅ | Keep as-is |
+| `vtcode-core/src/mcp/tool_discovery.rs` | Excellent  | Keep as-is |
 | `vtcode-config/src/mcp.rs` | Good | Add auth config |
 | `src/agent/runloop/unified/async_mcp_manager.rs` | Good, needs simplify | Use RMCP patterns |
 | `vtcode-core/src/tools/registry/mod.rs` | Good | Add streaming |
@@ -427,26 +427,26 @@ vtcode doctor
 ## Recommendations
 
 ### Immediate (Next Sprint)
-1. ✅ Review `MCP_RUST_SDK_ALIGNMENT.md` with team
-2. ✅ Create feature branch `feat/rmcp-alignment`
-3. ✅ Start Phase 1 implementation
-4. ✅ Update Cargo.toml with rmcp v0.9.0+
+1.  Review `MCP_RUST_SDK_ALIGNMENT.md` with team
+2.  Create feature branch `feat/rmcp-alignment`
+3.  Start Phase 1 implementation
+4.  Update Cargo.toml with rmcp v0.9.0+
 
 ### Short-term (1-2 months)
-1. ✅ Complete Phase 1-2 implementation
-2. ✅ Full test coverage of changes
-3. ✅ Merge to main with staged rollout
-4. ✅ Document patterns in AGENTS.md
+1.  Complete Phase 1-2 implementation
+2.  Full test coverage of changes
+3.  Merge to main with staged rollout
+4.  Document patterns in AGENTS.md
 
 ### Medium-term (2-3 months)
-1. ✅ Phase 3 (streaming, health checks)
-2. ✅ Performance benchmarking
-3. ✅ Gather user feedback
+1.  Phase 3 (streaming, health checks)
+2.  Performance benchmarking
+3.  Gather user feedback
 
 ### Long-term (3+ months)
-1. 🔮 Phase 4 (OAuth, mTLS)
-2. 🔮 WebSocket/gRPC transports
-3. 🔮 Advanced auth patterns
+1.  Phase 4 (OAuth, mTLS)
+2.  WebSocket/gRPC transports
+3.  Advanced auth patterns
 
 ---
 
@@ -533,11 +533,11 @@ cargo bench               # Benchmarks
 
 VTCode has a solid, production-ready MCP implementation. Aligning with official RMCP patterns will:
 
-1. ✅ **Reduce code complexity** by 30-40%
-2. ✅ **Improve maintainability** through standard patterns
-3. ✅ **Enable advanced features** (OAuth, streaming, health checks)
-4. ✅ **Future-proof the implementation** as spec evolves
-5. ✅ **Enhance reliability** through battle-tested patterns
+1.  **Reduce code complexity** by 30-40%
+2.  **Improve maintainability** through standard patterns
+3.  **Enable advanced features** (OAuth, streaming, health checks)
+4.  **Future-proof the implementation** as spec evolves
+5.  **Enhance reliability** through battle-tested patterns
 
 **Recommended next step:** Begin Phase 1 implementation with a 2-week timeline.
 

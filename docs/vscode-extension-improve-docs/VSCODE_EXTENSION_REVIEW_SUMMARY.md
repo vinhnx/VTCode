@@ -6,7 +6,7 @@ This directory now contains a comprehensive review of VS Copilot Chat open-sourc
 
 ---
 
-## 📋 Documents Included
+##  Documents Included
 
 ### 1. **VSCODE_EXTENSION_IMPROVEMENTS.md**
 **Purpose**: High-level improvement recommendations
@@ -72,17 +72,17 @@ Navigation and quick reference
 
 ---
 
-## 🎯 Key Findings
+##  Key Findings
 
 ### Current State of VT Code VSCode Extension
-✓  **Strengths**:
+  **Strengths**:
 - Solid command-line integration via PTY
 - Good configuration management (TOML-based)
 - MCP server support
 - IDE context bridge for semantic awareness
 - Workspace trust implementation
 
-⤫  **Weaknesses**:
+  **Weaknesses**:
 - Monolithic `extension.ts` (~2500 lines)
 - Hardcoded context handling
 - Basic error messages
@@ -101,7 +101,7 @@ Navigation and quick reference
 
 ---
 
-## 🚀 Quick Start Guide
+##  Quick Start Guide
 
 ### For Decision Makers
 1. Read the **Improvements Overview** section of `VSCODE_EXTENSION_IMPROVEMENTS.md`
@@ -125,42 +125,42 @@ Navigation and quick reference
 
 ---
 
-## 💡 Top 10 Improvements (Ranked by Impact × Simplicity)
+##  Top 10 Improvements (Ranked by Impact × Simplicity)
 
 ### Quick Wins (Implement First - Weeks 1-2)
-1. ✨ **Improved Chat UI Styling** - Better markdown, copy buttons, spacing
-2. 📊 **Status Indicators** - Show model, tokens, elapsed time
-3. 📝 **Better Error Messages** - Friendly explanations + suggested actions
-4. 🧪 **Testing Infrastructure** - Enable confident future changes
-5. 📚 **Architecture Documentation** - Help team understand codebase
+1.  **Improved Chat UI Styling** - Better markdown, copy buttons, spacing
+2.  **Status Indicators** - Show model, tokens, elapsed time
+3.  **Better Error Messages** - Friendly explanations + suggested actions
+4.  **Testing Infrastructure** - Enable confident future changes
+5.  **Architecture Documentation** - Help team understand codebase
 
 ### Medium Impact (Weeks 3-6)
-6. 🔧 **Command System Refactoring** - Modularize commands (reduce extension.ts)
-7. 👤 **Participant System** - Enable context-aware assistance
-8. 📋 **State Management** - Better separation of concerns
+6.  **Command System Refactoring** - Modularize commands (reduce extension.ts)
+7.  **Participant System** - Enable context-aware assistance
+8.  **State Management** - Better separation of concerns
 
 ### High Impact (Weeks 7-12)
-9. ✓  **Tool Approval UI** - Professional approval workflow
-10. 💾 **Conversation Persistence** - Save/load chat threads
+9.   **Tool Approval UI** - Professional approval workflow
+10.  **Conversation Persistence** - Save/load chat threads
 
 ---
 
-## 📊 Estimated Effort & Value
+##  Estimated Effort & Value
 
 | Feature | Effort | User Value | Developer Value | Timeline |
 |---------|--------|-----------|-----------------|----------|
-| UI Polish | 4 days | ⭐⭐⭐⭐ | ⭐⭐ | Week 1 |
-| Status Display | 2 days | ⭐⭐⭐ | ⭐⭐ | Week 1 |
-| Better Errors | 2 days | ⭐⭐⭐⭐ | ⭐⭐ | Week 1 |
-| Commands Refactor | 2 weeks | ⭐⭐ | ⭐⭐⭐⭐⭐ | Weeks 3-4 |
-| Participants | 2 weeks | ⭐⭐⭐⭐ | ⭐⭐⭐⭐ | Weeks 4-6 |
-| Tool Approval | 2 weeks | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ | Weeks 7-8 |
-| Conversations | 2 weeks | ⭐⭐⭐⭐ | ⭐⭐ | Weeks 9-10 |
-| Error Recovery | 1 week | ⭐⭐⭐ | ⭐⭐⭐ | Week 10 |
+| UI Polish | 4 days |  |  | Week 1 |
+| Status Display | 2 days |  |  | Week 1 |
+| Better Errors | 2 days |  |  | Week 1 |
+| Commands Refactor | 2 weeks |  |  | Weeks 3-4 |
+| Participants | 2 weeks |  |  | Weeks 4-6 |
+| Tool Approval | 2 weeks |  |  | Weeks 7-8 |
+| Conversations | 2 weeks |  |  | Weeks 9-10 |
+| Error Recovery | 1 week |  |  | Week 10 |
 
 ---
 
-## 🔑 Key Architectural Improvements
+##  Key Architectural Improvements
 
 ### 1. Participant System (New)
 ```
@@ -212,7 +212,7 @@ Benefits:
 
 ---
 
-## 🎓 Learning Resources
+##  Learning Resources
 
 ### VS Copilot Chat Architecture
 - **Repository**: https://github.com/microsoft/vscode-copilot-chat
@@ -229,7 +229,7 @@ Benefits:
 
 ---
 
-## 🛠️ Implementation Approach
+##  Implementation Approach
 
 ### Recommended Strategy: Iterative Rollout
 
@@ -256,7 +256,7 @@ Benefits:
 
 ---
 
-## 📈 Success Criteria
+##  Success Criteria
 
 ### Phase 1 (UI & Quality)
 - [ ] Test coverage >80%
@@ -284,7 +284,7 @@ Benefits:
 
 ---
 
-## ⚠️ Critical Success Factors
+##  Critical Success Factors
 
 1. **Maintain Backward Compatibility**: Never break existing workflows
 2. **Comprehensive Testing**: Each phase needs >85% code coverage
@@ -295,17 +295,17 @@ Benefits:
 
 ---
 
-## 🚫 What NOT to Do
+##  What NOT to Do
 
-1. ⤫  Rewrite extension.ts in one go
-2. ⤫  Break existing commands or configuration
-3. ⤫  Implement all features without user feedback
-4. ⤫  Skip testing to save time
-5. ⤫  Neglect documentation
+1.   Rewrite extension.ts in one go
+2.   Break existing commands or configuration
+3.   Implement all features without user feedback
+4.   Skip testing to save time
+5.   Neglect documentation
 
 ---
 
-## 📞 Questions & Clarifications
+##  Questions & Clarifications
 
 ### "How long will this take?"
 **Answer**: 12 weeks with 2 developers (1 primary, 1 support). Can be adjusted based on team size.
@@ -324,84 +324,84 @@ Benefits:
 
 ---
 
-## 📁 File Structure After Implementation
+##  File Structure After Implementation
 
 ```
 vscode-extension/
-├── src/
-│   ├── extension.ts          (reduced from 2500 → 500 lines)
-│   ├── chatView.ts
-│   ├── vtcodeBackend.ts
-│   │
-│   ├── types/
-│   │   ├── command.ts        (NEW)
-│   │   ├── participant.ts    (NEW)
-│   │   ├── toolApproval.ts   (NEW)
-│   │   └── ...
-│   │
-│   ├── commands/             (NEW - modularized)
-│   │   ├── askCommand.ts
-│   │   ├── askSelectionCommand.ts
-│   │   ├── commandRegistry.ts
-│   │   └── ...
-│   │
-│   ├── participants/         (NEW - context providers)
-│   │   ├── participantRegistry.ts
-│   │   ├── workspaceParticipant.ts
-│   │   ├── codeParticipant.ts
-│   │   └── ...
-│   │
-│   ├── chat/                 (ENHANCED)
-│   │   ├── conversationManager.ts     (NEW)
-│   │   ├── chatState.ts               (NEW)
-│   │   └── ...
-│   │
-│   ├── tools/                (NEW - tool management)
-│   │   ├── toolApprovalManager.ts
-│   │   ├── toolRiskAssessment.ts
-│   │   └── ...
-│   │
-│   ├── ui/                   (NEW - UI components)
-│   │   ├── statusIndicator.ts
-│   │   ├── quickActionsView.ts
-│   │   └── ...
-│   │
-│   ├── error/                (ENHANCED)
-│   │   ├── errorRecoveryHandler.ts    (NEW)
-│   │   ├── errorMessages.ts           (ENHANCED)
-│   │   └── ...
-│   │
-│   └── ...
-│
-├── tests/
-│   ├── unit/
-│   │   ├── commands/
-│   │   ├── participants/
-│   │   ├── tools/
-│   │   └── ...
-│   ├── integration/
-│   │   └── chatFlow.integration.test.ts
-│   └── fixtures/
-│
-├── media/
-│   ├── chatView.html
-│   ├── styles/
-│   │   ├── chat.css          (ENHANCED)
-│   │   └── theme.css         (NEW)
-│   └── ...
-│
-├── docs/
-│   ├── ARCHITECTURE.md        (NEW)
-│   ├── FEATURES.md            (NEW)
-│   ├── USER_GUIDE.md          (NEW)
-│   └── ...
-│
-└── ...
+ src/
+    extension.ts          (reduced from 2500 → 500 lines)
+    chatView.ts
+    vtcodeBackend.ts
+   
+    types/
+       command.ts        (NEW)
+       participant.ts    (NEW)
+       toolApproval.ts   (NEW)
+       ...
+   
+    commands/             (NEW - modularized)
+       askCommand.ts
+       askSelectionCommand.ts
+       commandRegistry.ts
+       ...
+   
+    participants/         (NEW - context providers)
+       participantRegistry.ts
+       workspaceParticipant.ts
+       codeParticipant.ts
+       ...
+   
+    chat/                 (ENHANCED)
+       conversationManager.ts     (NEW)
+       chatState.ts               (NEW)
+       ...
+   
+    tools/                (NEW - tool management)
+       toolApprovalManager.ts
+       toolRiskAssessment.ts
+       ...
+   
+    ui/                   (NEW - UI components)
+       statusIndicator.ts
+       quickActionsView.ts
+       ...
+   
+    error/                (ENHANCED)
+       errorRecoveryHandler.ts    (NEW)
+       errorMessages.ts           (ENHANCED)
+       ...
+   
+    ...
+
+ tests/
+    unit/
+       commands/
+       participants/
+       tools/
+       ...
+    integration/
+       chatFlow.integration.test.ts
+    fixtures/
+
+ media/
+    chatView.html
+    styles/
+       chat.css          (ENHANCED)
+       theme.css         (NEW)
+    ...
+
+ docs/
+    ARCHITECTURE.md        (NEW)
+    FEATURES.md            (NEW)
+    USER_GUIDE.md          (NEW)
+    ...
+
+ ...
 ```
 
 ---
 
-## 🔄 Next Steps
+##  Next Steps
 
 ### Immediate (This Week)
 1. [ ] Share documents with team
@@ -429,49 +429,49 @@ vscode-extension/
 
 ---
 
-## 📊 Comparative Analysis
+##  Comparative Analysis
 
 ### How VT Code Compares to VS Copilot Chat
 
 | Aspect | VS Copilot | VT Code | After Improvements |
 |--------|-----------|---------|-------------------|
-| Architecture | Modular participants | Monolithic | ✓  Modular |
-| Commands | Registered system | Inline in extension.ts | ✓  Registered |
-| UI | Professional, rich | Basic HTML | ✓  Professional |
-| Tool Approval | User-friendly modal | Scattered logic | ✓  Centralized UI |
-| Context Management | Multi-source | Single source | ✓  Multi-source |
-| Error Handling | Auto-recovery | Basic messages | ✓  Recoverable |
-| MCP Integration | Advanced | Basic | ✓  Enhanced |
-| State Management | Structured | Simple array | ✓  Structured |
+| Architecture | Modular participants | Monolithic |   Modular |
+| Commands | Registered system | Inline in extension.ts |   Registered |
+| UI | Professional, rich | Basic HTML |   Professional |
+| Tool Approval | User-friendly modal | Scattered logic |   Centralized UI |
+| Context Management | Multi-source | Single source |   Multi-source |
+| Error Handling | Auto-recovery | Basic messages |   Recoverable |
+| MCP Integration | Advanced | Basic |   Enhanced |
+| State Management | Structured | Simple array |   Structured |
 
 ---
 
-## 🎉 Expected Benefits
+##  Expected Benefits
 
 ### For Users
-- ✨ More polished, professional interface
-- 📊 Better visibility into what's happening
-- 💾 Can save and manage multiple conversations
-- 🛡️ Safer tool execution with clear approval flow
-- 🚀 Faster responses with better error recovery
+-  More polished, professional interface
+-  Better visibility into what's happening
+-  Can save and manage multiple conversations
+-  Safer tool execution with clear approval flow
+-  Faster responses with better error recovery
 
 ### For Developers
-- 📐 Cleaner architecture and codebase
-- 🧪 Better testing and confidence
-- 🔧 Easier to add new features
-- 📚 Clear documentation
-- 🎯 Better code organization
+-  Cleaner architecture and codebase
+-  Better testing and confidence
+-  Easier to add new features
+-  Clear documentation
+-  Better code organization
 
 ### For Maintainers
-- 📉 Reduced support burden (better error messages)
-- 🔍 Better observability (status indicators)
-- 🛠️ Easier debugging and troubleshooting
-- 📈 Clearer metrics and success criteria
-- 🚀 Faster release cycles
+-  Reduced support burden (better error messages)
+-  Better observability (status indicators)
+-  Easier debugging and troubleshooting
+-  Clearer metrics and success criteria
+-  Faster release cycles
 
 ---
 
-## 📝 Conclusion
+##  Conclusion
 
 The improvements outlined in these documents represent a realistic, achievable path to modernizing VT Code's VSCode extension. By adopting patterns from VS Copilot Chat and following the phased roadmap, VT Code can:
 
@@ -485,7 +485,7 @@ The 12-week timeline is achievable with a small team and focuses on delivering v
 
 ---
 
-## 📚 Related Documents
+##  Related Documents
 
 - [`VSCODE_EXTENSION_IMPROVEMENTS.md`](./VSCODE_EXTENSION_IMPROVEMENTS.md) - Detailed improvements
 - [`VSCODE_EXTENSION_CODE_EXAMPLES.md`](./VSCODE_EXTENSION_CODE_EXAMPLES.md) - Implementation code

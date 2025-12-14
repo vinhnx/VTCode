@@ -150,34 +150,34 @@ Result: All files needing import updates
 ```
 What do you want to find?
 
-├─ Functions/Classes?
-│  ├─ Rust: ^(pub )?fn \w+|^pub struct
-│  ├─ Python: ^def |^class 
-│  └─ TypeScript: ^export (function|class)
-│
-├─ Imports/Exports?
-│  ├─ TypeScript/JS: ^import|^export
-│  └─ Python: ^import |^from
-│
-├─ Error handling?
-│  ├─ Rust: panic!|unwrap|Result
-│  ├─ JS/TS: try|catch|throw
-│  └─ Python: try|except|raise
-│
-├─ TODOs/Comments?
-│  └─ (TODO|FIXME|HACK|XXX)
-│
-├─ API/Database?
-│  ├─ HTTP: \.get\(|\.post\(|\.put\(
-│  └─ SQL: SELECT|INSERT|UPDATE
-│
-└─ Config/Constants?
-   └─ config\.|process.env|os.getenv
+ Functions/Classes?
+   Rust: ^(pub )?fn \w+|^pub struct
+   Python: ^def |^class 
+   TypeScript: ^export (function|class)
+
+ Imports/Exports?
+   TypeScript/JS: ^import|^export
+   Python: ^import |^from
+
+ Error handling?
+   Rust: panic!|unwrap|Result
+   JS/TS: try|catch|throw
+   Python: try|except|raise
+
+ TODOs/Comments?
+   (TODO|FIXME|HACK|XXX)
+
+ API/Database?
+   HTTP: \.get\(|\.post\(|\.put\(
+   SQL: SELECT|INSERT|UPDATE
+
+ Config/Constants?
+    config\.|process.env|os.getenv
 ```
 
 ## Common Mistakes
 
-| ⤫  Wrong | ✓  Right | Why |
+|   Wrong |   Right | Why |
 |---------|---------|-----|
 | `pattern: "fn test"` | `pattern: "^fn test"` | Anchor patterns to line start |
 | `glob_pattern: "*.rs"` | `glob_pattern: "**/*.rs"` | Use `**` for recursive |

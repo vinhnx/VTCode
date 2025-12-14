@@ -54,7 +54,7 @@ A potential loop was detected
 This can happen due to repetitive tool calls or other model behavior. Do you want to keep loop
 detection enabled or disable it for this session?
 
-● 1. Keep loop detection enabled (esc)
+ 1. Keep loop detection enabled (esc)
   2. Disable loop detection for this session
 
 Note: To disable loop detection checks for all future sessions, set "model.skipLoopDetection"
@@ -151,29 +151,29 @@ All 7 tests passing:
 
 ## Implementation Status
 
-✓  **COMPLETED** - Full TUI integration with user interaction
+  **COMPLETED** - Full TUI integration with user interaction
 
 ### What's Implemented
 
-1. ✓  Loop detection core module (`loop_detection.rs`)
+1.   Loop detection core module (`loop_detection.rs`)
    - LoopDetector struct with HashMap-based signature tracking
    - Threshold-based detection algorithm
    - Enable/disable control
    - State reset functionality
 
-2. ✓  TUI-based interactive prompt (`show_loop_detection_prompt_tui()`)
+2.   TUI-based interactive prompt (`show_loop_detection_prompt_tui()`)
    - Uses `dialoguer` crate for selection UI
    - Two options presented to user
    - Proper error handling with fallback behavior
 
-3. ✓  Session integration (`turn/session.rs`)
+3.   Session integration (`turn/session.rs`)
    - Configuration-driven initialization
    - Real-time loop detection during tool call processing
    - Session-level override support (disable for remainder of session)
    - User message feedback for each response type
    - Proper control flow (skip call on KeepEnabled, continue on DisableForSession)
 
-4. ✓  Comprehensive unit tests
+4.   Comprehensive unit tests
    - Core detection logic verified
    - State management tested
    - Response enum validated

@@ -53,10 +53,10 @@ python3 scripts/sync_embedded_assets.py --dry-run
 
 **Always run the sync script after making changes to synchronized assets:**
 
-- ✓  After editing `prompts/custom/vtcode.md`
-- ✓  After editing `prompts/custom/generate-agent-file.md`
-- ✓  After editing `docs/vtcode_docs_map.md`
-- ✓  After adding or removing synchronized assets
+-   After editing `prompts/custom/vtcode.md`
+-   After editing `prompts/custom/generate-agent-file.md`
+-   After editing `docs/vtcode_docs_map.md`
+-   After adding or removing synchronized assets
 
 ### **Integration with Development Workflow**
 

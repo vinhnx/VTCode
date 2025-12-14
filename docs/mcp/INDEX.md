@@ -4,7 +4,7 @@
 
 ---
 
-## 🎯 By Task
+##  By Task
 
 ### "I want to understand MCP"
 1. **Start:** [README.md](README.md) - 2 min overview
@@ -32,12 +32,12 @@ Covers: Error handling, Schema validation, Transport, Testing patterns
 
 ---
 
-## 📂 By Directory
+##  By Directory
 
 ### Root (Main Documentation)
 | File | Purpose | Read Time |
 |------|---------|-----------|
-| [README.md](README.md) | **👈 START HERE** | 2 min |
+| [README.md](README.md) | ** START HERE** | 2 min |
 | [MCP_MASTER_GUIDE.md](MCP_MASTER_GUIDE.md) | Main reference + APIs + roadmap | 15 min |
 | [INDEX.md](INDEX.md) | This file - navigation | 2 min |
 | [MIGRATION_SUMMARY.md](MIGRATION_SUMMARY.md) | Why structure changed | 5 min |
@@ -47,13 +47,13 @@ Covers: Error handling, Schema validation, Transport, Testing patterns
 | File | Purpose | Details |
 |------|---------|---------|
 | [FINAL_REVIEW.md](phase1/FINAL_REVIEW.md) | 3 issues, all fixed | Type checking, exports, error helpers |
-| [VERIFICATION.md](phase1/VERIFICATION.md) | Test results (23 tests) | Quality checklist ✅ |
+| [VERIFICATION.md](phase1/VERIFICATION.md) | Test results (23 tests) | Quality checklist  |
 
 ### Phase 2 (`phase2/`)
 | File | Purpose | Details |
 |------|---------|---------|
 | [COMPLETION.md](phase2/COMPLETION.md) | 2/5 objectives done | Transport integration, JSON Schema validation |
-| [VERIFICATION.md](phase2/VERIFICATION.md) | Test results (10 new tests) | Quality checklist ✅ |
+| [VERIFICATION.md](phase2/VERIFICATION.md) | Test results (10 new tests) | Quality checklist  |
 
 ### Archive (`archive/`)
 17 historical documents preserved for reference:
@@ -64,7 +64,7 @@ Covers: Error handling, Schema validation, Transport, Testing patterns
 
 ---
 
-## 🔍 Quick Reference Tables
+##  Quick Reference Tables
 
 ### API Functions
 
@@ -80,22 +80,22 @@ Covers: Error handling, Schema validation, Transport, Testing patterns
 
 | Phase | Status | Completeness | Key Docs |
 |-------|--------|--------------|----------|
-| Phase 1 | ✅ Complete | 100% | [phase1/](phase1/) |
-| Phase 2 | ✅ Partial | 40% (2/5) | [phase2/](phase2/) |
-| Phase 3 | 🕐 Planned | 0% | [MCP_MASTER_GUIDE.md#phase-3-roadmap](MCP_MASTER_GUIDE.md#phase-3-roadmap) |
+| Phase 1 |  Complete | 100% | [phase1/](phase1/) |
+| Phase 2 |  Partial | 40% (2/5) | [phase2/](phase2/) |
+| Phase 3 |  Planned | 0% | [MCP_MASTER_GUIDE.md#phase-3-roadmap](MCP_MASTER_GUIDE.md#phase-3-roadmap) |
 
 ### Test Coverage
 
 | Component | Tests | Status | Details |
 |-----------|-------|--------|---------|
-| Error helpers | 7 | ✅ | [phase1/VERIFICATION.md](phase1/VERIFICATION.md) |
-| Schema validation | 8 | ✅ | [phase1/VERIFICATION.md](phase1/VERIFICATION.md) |
-| Phase 2 additions | 10 | ✅ | [phase2/VERIFICATION.md](phase2/VERIFICATION.md) |
-| **Total** | **25** | **✅ 100% pass** | All tests passing |
+| Error helpers | 7 |  | [phase1/VERIFICATION.md](phase1/VERIFICATION.md) |
+| Schema validation | 8 |  | [phase1/VERIFICATION.md](phase1/VERIFICATION.md) |
+| Phase 2 additions | 10 |  | [phase2/VERIFICATION.md](phase2/VERIFICATION.md) |
+| **Total** | **25** | ** 100% pass** | All tests passing |
 
 ---
 
-## 📋 Document Overview
+##  Document Overview
 
 ### MCP_MASTER_GUIDE.md (New - Main Reference)
 **What's in it:**
@@ -153,7 +153,7 @@ Covers: Error handling, Schema validation, Transport, Testing patterns
 
 ---
 
-## ⚡ Recommended Reading Paths
+##  Recommended Reading Paths
 
 ### 5-Minute Overview
 1. [README.md](README.md) (2 min)
@@ -170,7 +170,7 @@ Covers: Error handling, Schema validation, Transport, Testing patterns
 1. [README.md](README.md) (2 min)
 2. [MCP_MASTER_GUIDE.md#api-reference](MCP_MASTER_GUIDE.md#api-reference) (5 min)
 3. [MCP_PHASE1_USAGE_GUIDE.md](MCP_PHASE1_USAGE_GUIDE.md) (15 min)
-4. Start using the APIs! 🚀
+4. Start using the APIs! 
 
 ### Planner Path (Phase 3)
 1. [MCP_MASTER_GUIDE.md#phase-3-roadmap](MCP_MASTER_GUIDE.md#phase-3-roadmap) (5 min)
@@ -184,7 +184,7 @@ Covers: Error handling, Schema validation, Transport, Testing patterns
 
 ---
 
-## 🎓 Learning Order
+##  Learning Order
 
 **Step 1:** Understand what MCP is  
 → Read [MCP_MASTER_GUIDE.md](MCP_MASTER_GUIDE.md) Session Overview section
@@ -203,7 +203,7 @@ Covers: Error handling, Schema validation, Transport, Testing patterns
 
 ---
 
-## ✅ Verification Checklist
+##  Verification Checklist
 
 Before using MCP, make sure you know:
 
@@ -214,11 +214,11 @@ Before using MCP, make sure you know:
 - [ ] I know how to create transports
 - [ ] I've seen code examples in [MCP_PHASE1_USAGE_GUIDE.md](MCP_PHASE1_USAGE_GUIDE.md)
 
-**You're ready to use MCP! ✅**
+**You're ready to use MCP! **
 
 ---
 
-## 🤔 Common Questions
+##  Common Questions
 
 **Q: Where do I start?**  
 A: [README.md](README.md) → [MCP_MASTER_GUIDE.md](MCP_MASTER_GUIDE.md)
@@ -244,5 +244,5 @@ A: [archive/](archive/) - all preserved
 ---
 
 **Last Updated:** 2025-11-20 (Deployment guide integrated)
-**Status:** ✅ Migration Complete + Deployment Ready
+**Status:**  Migration Complete + Deployment Ready
 **Recommendation:** Start with [README.md](README.md), then [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) to launch

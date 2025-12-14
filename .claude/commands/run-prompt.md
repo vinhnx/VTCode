@@ -240,10 +240,10 @@ By delegating to a sub-task, the actual implementation work happens in fresh con
 
 <output>
 <single_prompt_output>
-✓ Executed: ./prompts/005-implement-feature.md
-✓ Executor: tdd (auto-detected)
-✓ TDD Flow: test-creator ✓ → coder ✓ → standards ✓ → tester ✓
-✓ Archived to: ./prompts/completed/005-implement-feature.md
+ Executed: ./prompts/005-implement-feature.md
+ Executor: tdd (auto-detected)
+ TDD Flow: test-creator  → coder  → standards  → tester 
+ Archived to: ./prompts/completed/005-implement-feature.md
 
 <results>
 [Summary of what the sub-task accomplished, including tests created and implementation]
@@ -251,13 +251,13 @@ By delegating to a sub-task, the actual implementation work happens in fresh con
 </single_prompt_output>
 
 <parallel_output>
-✓ Executed in PARALLEL:
+ Executed in PARALLEL:
 
 - ./prompts/005-implement-auth.md (executor: tdd, TDD flow completed)
 - ./prompts/006-research-competitors.md (executor: general-purpose)
 - ./prompts/007-implement-ui.md (executor: coder, direct implementation flow)
 
-✓ All archived to ./prompts/completed/
+ All archived to ./prompts/completed/
 
 <results>
 Prompt 005 (tdd): [Tests created → Implementation summary with quality gate results]
@@ -267,13 +267,13 @@ Prompt 007 (coder): [Implementation summary with quality gate results]
 </parallel_output>
 
 <sequential_output>
-✓ Executed SEQUENTIALLY:
+ Executed SEQUENTIALLY:
 
-1. ./prompts/005-setup-database.md → Success (executor: tdd, TDD flow ✓)
-2. ./prompts/006-create-migrations.md → Success (executor: coder, quality gates ✓)
-3. ./prompts/007-seed-data.md → Success (executor: tdd, TDD flow ✓)
+1. ./prompts/005-setup-database.md → Success (executor: tdd, TDD flow )
+2. ./prompts/006-create-migrations.md → Success (executor: coder, quality gates )
+3. ./prompts/007-seed-data.md → Success (executor: tdd, TDD flow )
 
-✓ All archived to ./prompts/completed/
+ All archived to ./prompts/completed/
 
 <results>
 [Consolidated summary showing progression through each step with TDD flows and quality gate results]
@@ -357,21 +357,21 @@ This overrides auto-detection.
 <benefits>
 
 <intelligent_routing>
-✅ **Test-Driven Development**: Code tasks default to TDD workflow (tests written first)
-✅ **Automatic Quality Gates**: All code tasks get standards checks and tests
-✅ **Lightweight Non-Code Tasks**: Research, documentation, analysis tasks skip unnecessary quality gates
-✅ **Flexible Control**: Frontmatter allows explicit executor control when needed
-✅ **Smart Defaults**: Auto-detection means prompts "just work" without manual configuration
-✅ **CI/CD Ready**: Autonomous execution with appropriate quality gates per task type
+ **Test-Driven Development**: Code tasks default to TDD workflow (tests written first)
+ **Automatic Quality Gates**: All code tasks get standards checks and tests
+ **Lightweight Non-Code Tasks**: Research, documentation, analysis tasks skip unnecessary quality gates
+ **Flexible Control**: Frontmatter allows explicit executor control when needed
+ **Smart Defaults**: Auto-detection means prompts "just work" without manual configuration
+ **CI/CD Ready**: Autonomous execution with appropriate quality gates per task type
 </intelligent_routing>
 
 <workflow_integration>
-✅ **TDD First Approach**: Tests are created before implementation, providing clear specifications
-✅ **Leverages Agent Infrastructure**: Reuses existing hooks, agents, and quality gate workflows
-✅ **Consistent Quality**: Code changes always go through the same rigorous process
-✅ **Hook-Driven**: SubagentStop hooks automatically coordinate quality gates
-✅ **Clear Specification**: test-creator agent provides clear contract for coder agent to fulfill
-✅ **Better Coverage**: Tests written first ensure comprehensive test coverage
+ **TDD First Approach**: Tests are created before implementation, providing clear specifications
+ **Leverages Agent Infrastructure**: Reuses existing hooks, agents, and quality gate workflows
+ **Consistent Quality**: Code changes always go through the same rigorous process
+ **Hook-Driven**: SubagentStop hooks automatically coordinate quality gates
+ **Clear Specification**: test-creator agent provides clear contract for coder agent to fulfill
+ **Better Coverage**: Tests written first ensure comprehensive test coverage
 </workflow_integration>
 
 <examples>
@@ -383,13 +383,13 @@ Prompt content:
 Auto-detection:
 - Keywords found: "implement" (1), "component" (1), "React" (1), "authentication" (1), "tests" (1), "standards" (1)
 - Code score: 6
-- Decision: Route to TDD workflow ✓
+- Decision: Route to TDD workflow 
 - Execution flow:
   1. test-creator creates failing tests for authentication component
   2. coder implements component to pass tests
   3. coding-standards-checker verifies code quality
   4. tester validates functionality
-- Quality gates applied: TDD ✓ | Standards ✓ | Tests ✓
+- Quality gates applied: TDD  | Standards  | Tests 
 </example_auto_detection_tdd>
 
 <example_auto_detection_research>
@@ -399,7 +399,7 @@ Prompt content:
 Auto-detection:
 - Keywords found: "research" (1), "document" (1), "report" (1)
 - Non-code score: 3, Code score: 0
-- Decision: Route to general-purpose ✓
+- Decision: Route to general-purpose 
 - Quality gates: None (not needed for research)
 </example_auto_detection_research>
 
@@ -416,12 +416,12 @@ Quick fix: Update the login button color to match brand guidelines.
 Execution:
 - Frontmatter detected: executor = coder
 - Auto-detection skipped (frontmatter takes precedence)
-- Routed to: coder agent (direct implementation, skip test-creator) ✓
+- Routed to: coder agent (direct implementation, skip test-creator) 
 - Execution flow:
   1. coder implements the change
   2. coding-standards-checker verifies code quality
   3. tester validates functionality
-- Quality gates: Standards ✓ | Tests ✓
+- Quality gates: Standards  | Tests 
 - Note: TDD test-creator skipped for simple change
 </example_frontmatter_override_direct>
 
@@ -438,7 +438,7 @@ Research the latest React 19 features and create a summary document.
 Execution:
 - Frontmatter detected: executor = general-purpose
 - Auto-detection skipped (frontmatter takes precedence)
-- Routed to: general-purpose agent ✓
+- Routed to: general-purpose agent 
 - Quality gates: None (research task)
 </example_frontmatter_override_general>
 
@@ -488,7 +488,7 @@ Execution:
   2. coder implements authentication to pass all tests
   3. coding-standards-checker verifies code quality
   4. tester validates all scenarios pass
-- Quality gates: TDD ✓ | Standards ✓ | Tests ✓
+- Quality gates: TDD  | Standards  | Tests 
 - Note: BDD prompts always run sequentially (--sequential flag)
 </example_bdd_execution>
 

@@ -7,31 +7,31 @@ This guide documents best practices for terminal UI event handling in VT Code, d
 VT Code uses a modular event-driven architecture with async/await and `tokio::select!`. The pattern is:
 
 ```
-┌─────────────────┐
-│  crossterm      │  Raw terminal input
-│  event::read()  │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────────────────────────────┐
-│  src/tui.rs                             │  Event filtering & multiplexing
-│  Tui::start() spawns task               │
-│  tokio::select! on 3 channels:          │
-│  - tick_interval                        │
-│  - render_interval                      │
-│  - crossterm::event::read()             │
-└────────┬────────────────────────────────┘
-         │
-         ▼
-┌─────────────────────────────────────────┐
-│  Event enum                             │  Application event abstraction
-│  Key | Mouse | Resize | Paste | etc.    │
-└────────┬────────────────────────────────┘
-         │
-         ▼
-┌─────────────────────────────────────────┐
-│  event_rx: UnboundedReceiver<Event>     │  Async channel to main loop
-└─────────────────────────────────────────┘
+
+  crossterm        Raw terminal input
+  event::read()  
+
+         
+         
+
+  src/tui.rs                               Event filtering & multiplexing
+  Tui::start() spawns task               
+  tokio::select! on 3 channels:          
+  - tick_interval                        
+  - render_interval                      
+  - crossterm::event::read()             
+
+         
+         
+
+  Event enum                               Application event abstraction
+  Key | Mouse | Resize | Paste | etc.    
+
+         
+         
+
+  event_rx: UnboundedReceiver<Event>       Async channel to main loop
+
 ```
 
 ## Key Implementation Details
@@ -248,14 +248,14 @@ if key.kind == KeyEventKind::Press {
 
 ### 2. Don't Call terminal.draw() Multiple Times
 
-⤫  **Bad:**
+  **Bad:**
 ```rust
 tui.draw(|f| f.render_widget(widget1, ...))?;
 tui.draw(|f| f.render_widget(widget2, ...))?;
 tui.draw(|f| f.render_widget(widget3, ...))?;
 ```
 
-✓  **Good:**
+  **Good:**
 ```rust
 tui.draw(|f| {
     f.render_widget(widget1, ...);
@@ -306,14 +306,14 @@ match tui.next().await {
 
 ### Pitfall 1: Blocking the Async Runtime
 
-⤫  **Bad:**
+  **Bad:**
 ```rust
 let task = tokio::spawn(async {
     let _ = crossterm::event::read();  // Blocks the tokio runtime!
 });
 ```
 
-✓  **Good:**
+  **Good:**
 ```rust
 let task = tokio::spawn(async {
     let _ = tokio::task::spawn_blocking(|| {
@@ -324,14 +324,14 @@ let task = tokio::spawn(async {
 
 ### Pitfall 2: Rendering in Tick Handler
 
-⤫  **Bad:**
+  **Bad:**
 ```rust
 Event::Tick => {
     tui.draw(|f| { /* ... */ })?;  // Blocks state updates
 }
 ```
 
-✓  **Good:**
+  **Good:**
 ```rust
 Event::Tick => {
     // Update internal state only
@@ -344,14 +344,14 @@ Event::Render => {
 
 ### Pitfall 3: Not Draining Events on Suspend
 
-⤫  **Bad:**
+  **Bad:**
 ```rust
 crossterm::terminal::disable_raw_mode()?;
 external_app_result = f();  // Garbage input in external app!
 crossterm::terminal::enable_raw_mode()?;
 ```
 
-✓  **Good:** (as in `with_suspended_tui`)
+  **Good:** (as in `with_suspended_tui`)
 ```rust
 while crossterm::event::poll(Duration::from_millis(0)).unwrap_or(false) {
     let _ = crossterm::event::read();  // Drain buffered events

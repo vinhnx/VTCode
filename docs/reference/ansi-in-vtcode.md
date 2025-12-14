@@ -37,9 +37,9 @@ pub fn ansi_style_to_ratatui_style(style: AnsiStyle) -> Style
 ```
 
 **Color Support**:
-- ✅ 8/16 colors (ANSI standard)
-- ✅ 256 colors (8-bit)
-- ✅ RGB/Truecolor (24-bit)
+-  8/16 colors (ANSI standard)
+-  256 colors (8-bit)
+-  RGB/Truecolor (24-bit)
 
 ### 3. ANSI Renderer (`vtcode-core/src/utils/ansi.rs`)
 
@@ -264,11 +264,11 @@ fn test_ansi_style_to_ratatui_style() {
 ### 1. Always Strip ANSI for Token Counting
 
 ```rust
-// ✅ Good
+//  Good
 let cleaned = strip_ansi(&pty_output);
 let token_count = count_tokens(&cleaned);
 
-// ❌ Bad - ANSI codes inflate token count
+//  Bad - ANSI codes inflate token count
 let token_count = count_tokens(&pty_output);
 ```
 
@@ -283,24 +283,24 @@ fs::write("output.log", raw_output)?;
 ### 3. Use Ratatui Styles in TUI
 
 ```rust
-// ✅ Good - Use Ratatui's style system
+//  Good - Use Ratatui's style system
 let style = Style::default().fg(Color::Red).add_modifier(Modifier::BOLD);
 Span::styled("Error", style)
 
-// ❌ Bad - Don't embed ANSI in TUI text
+//  Bad - Don't embed ANSI in TUI text
 Span::raw("\x1b[31mError\x1b[0m") // Ratatui will render this literally
 ```
 
 ### 4. Handle Non-UTF8 Gracefully
 
 ```rust
-// ✅ Good
+//  Good
 if let Ok(s) = std::str::from_utf8(chunk) {
     let clean = strip_ansi(s);
     // Process clean text
 }
 
-// ❌ Bad
+//  Bad
 let s = String::from_utf8(chunk).unwrap(); // May panic
 ```
 
@@ -333,12 +333,12 @@ For complete ANSI sequence reference, see:
 ## Summary
 
 VTCode has comprehensive ANSI support:
-- ✅ Stripping for clean text processing
-- ✅ Parsing for style extraction
-- ✅ Conversion to Ratatui styles
-- ✅ Rendering for terminal output
-- ✅ Full color support (8/16/256/RGB)
-- ✅ All standard text effects
-- ✅ Cursor and screen control
+-  Stripping for clean text processing
+-  Parsing for style extraction
+-  Conversion to Ratatui styles
+-  Rendering for terminal output
+-  Full color support (8/16/256/RGB)
+-  All standard text effects
+-  Cursor and screen control
 
 The implementation follows best practices and is well-tested.

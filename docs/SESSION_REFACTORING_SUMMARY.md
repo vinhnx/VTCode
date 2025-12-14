@@ -80,28 +80,28 @@ Successfully refactored `vtcode-core/src/ui/tui/session.rs` by extracting distin
 
 ```
 vtcode-core/src/ui/tui/session/
-├── config.rs              # Configuration management
-├── error.rs               # Error types
-├── events.rs              # Event handling (keyboard, mouse, paste)
-├── file_palette.rs        # File browser palette
-├── file_tree.rs           # File tree widget
-├── header.rs              # Header rendering
-├── input.rs               # Input field rendering
-├── input_manager.rs       # Input state management
-├── message.rs             # Message line types and labels
-├── modal.rs               # Modal dialog system
-├── navigation.rs          # Navigation sidebar
-├── palette_renderer.rs    # Palette rendering utilities
-├── performance.rs         # Performance monitoring
-├── prompt_palette.rs      # Prompt browser palette
-├── queue.rs               # Queue overlay rendering
-├── scroll.rs              # Scroll management
-├── slash.rs               # Slash command processing
-├── slash_palette.rs       # Slash command palette
-├── spinner.rs             # ✨ NEW: Thinking indicator animation
-├── styling.rs             # ✨ NEW: Centralized styling
-├── text_utils.rs          # ✨ NEW: Text processing utilities
-└── transcript.rs          # Transcript caching and rendering
+ config.rs              # Configuration management
+ error.rs               # Error types
+ events.rs              # Event handling (keyboard, mouse, paste)
+ file_palette.rs        # File browser palette
+ file_tree.rs           # File tree widget
+ header.rs              # Header rendering
+ input.rs               # Input field rendering
+ input_manager.rs       # Input state management
+ message.rs             # Message line types and labels
+ modal.rs               # Modal dialog system
+ navigation.rs          # Navigation sidebar
+ palette_renderer.rs    # Palette rendering utilities
+ performance.rs         # Performance monitoring
+ prompt_palette.rs      # Prompt browser palette
+ queue.rs               # Queue overlay rendering
+ scroll.rs              # Scroll management
+ slash.rs               # Slash command processing
+ slash_palette.rs       # Slash command palette
+ spinner.rs             #  NEW: Thinking indicator animation
+ styling.rs             #  NEW: Centralized styling
+ text_utils.rs          #  NEW: Text processing utilities
+ transcript.rs          # Transcript caching and rendering
 ```
 
 ## Code Changes
@@ -131,7 +131,7 @@ let style = self.styles.tool_inline_style(tool_name)
 
 ## Compilation Status
 
-✅ **Success**: All modules compile without errors
+ **Success**: All modules compile without errors
 
 -   Only 8 warnings for unused public functions (expected during refactoring)
 -   All type errors resolved
@@ -196,14 +196,14 @@ Create `session/message_processor.rs`:
 
 ## Rust Best Practices Applied
 
-1. ✅ **Module Organization**: Logical grouping of related functionality
-2. ✅ **Encapsulation**: Private fields with public accessor methods
-3. ✅ **Documentation**: Clear module purposes and API documentation
-4. ✅ **Error Handling**: Maintained anyhow::Result patterns
-5. ✅ **Type Safety**: Strong typing with no unsafe code
-6. ✅ **Testing**: Unit tests for critical utilities
-7. ✅ **Performance**: No unnecessary allocations or copies
-8. ✅ **Consistency**: Follows project conventions (snake_case, 4-space indentation)
+1.  **Module Organization**: Logical grouping of related functionality
+2.  **Encapsulation**: Private fields with public accessor methods
+3.  **Documentation**: Clear module purposes and API documentation
+4.  **Error Handling**: Maintained anyhow::Result patterns
+5.  **Type Safety**: Strong typing with no unsafe code
+6.  **Testing**: Unit tests for critical utilities
+7.  **Performance**: No unnecessary allocations or copies
+8.  **Consistency**: Follows project conventions (snake_case, 4-space indentation)
 
 ## Impact Summary
 

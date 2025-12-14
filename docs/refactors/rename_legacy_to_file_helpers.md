@@ -11,12 +11,12 @@ The file `vtcode-core/src/tools/registry/legacy.rs` had a misleading name that s
 ## Changes Made
 
 ### File Renames
-- ✅ `legacy.rs` → `file_helpers.rs`
-- ✅ `legacy_tests.rs` → `file_helpers_tests.rs`
+-  `legacy.rs` → `file_helpers.rs`
+-  `legacy_tests.rs` → `file_helpers_tests.rs`
 
 ### Module Updates
-- ✅ Updated `mod.rs` to import `file_helpers` instead of `legacy`
-- ✅ Added comprehensive module documentation explaining purpose
+-  Updated `mod.rs` to import `file_helpers` instead of `legacy`
+-  Added comprehensive module documentation explaining purpose
 
 ### Documentation Added
 ```rust
@@ -38,7 +38,7 @@ The new name accurately reflects the module's purpose:
 
 ```bash
 cargo check --package vtcode-core
-# ✓ Compiles successfully with 0 errors
+#  Compiles successfully with 0 errors
 ```
 
 ## Impact

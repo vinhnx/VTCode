@@ -67,27 +67,27 @@ Use selective reset when the user chooses "Keep enabled" to only clear the probl
 
 ```
 loop_detection.rs:
-├── LoopDetector struct
-│   ├── record_tool_call() → (bool, usize)  [NEW: returns tuple]
-│   ├── reset()
-│   ├── reset_signature()                   [NEW]
-│   └── utility methods
-├── LoopDetectionResponse enum
-├── prompt_for_loop_detection()
-└── show_loop_detection_prompt_tui()        [ENHANCED: takes context]
+ LoopDetector struct
+    record_tool_call() → (bool, usize)  [NEW: returns tuple]
+    reset()
+    reset_signature()                   [NEW]
+    utility methods
+ LoopDetectionResponse enum
+ prompt_for_loop_detection()
+ show_loop_detection_prompt_tui()        [ENHANCED: takes context]
 ```
 
 ### Session Integration
 
 ```
 session.rs:
-├── Initialize LoopDetector from config
-├── For each tool call:
-│   ├── Get (detected, count) tuple
-│   ├── If detected, show enhanced prompt with context
-│   └── Handle user response:
-│       ├── KeepEnabled → reset_signature() & skip call
-│       └── DisableForSession → reset() & process call
+ Initialize LoopDetector from config
+ For each tool call:
+    Get (detected, count) tuple
+    If detected, show enhanced prompt with context
+    Handle user response:
+        KeepEnabled → reset_signature() & skip call
+        DisableForSession → reset() & process call
 ```
 
 ## Test Coverage
@@ -161,7 +161,7 @@ Potential future improvements:
 
 ## Status
 
-✓  Complete and tested
+  Complete and tested
 - All 11 loop detection tests passing
 - Code formatted and linted
 - Ready for production

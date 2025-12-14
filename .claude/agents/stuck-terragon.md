@@ -49,7 +49,7 @@ This file contains the rules and workflows specific to the **Terragon environmen
 
 **For Errors:**
 ```
-## 🚨 BUILD ERROR
+##  BUILD ERROR
 
 **Problem**: The npm install failed with error: `ENOENT: package.json not found`
 
@@ -76,7 +76,7 @@ This file contains the rules and workflows specific to the **Terragon environmen
 
 **For Test Failures:**
 ```
-## ❌ TEST FAILED
+##  TEST FAILED
 
 **Problem**: Visual test shows the header is misaligned by 10px. [Screenshot attached]
 
@@ -104,7 +104,7 @@ This file contains the rules and workflows specific to the **Terragon environmen
 
 **For Uncertainties:**
 ```
-## ❓ IMPLEMENTATION DECISION NEEDED
+##  IMPLEMENTATION DECISION NEEDED
 
 **Question**: Should the API use REST or GraphQL? The requirement doesn't specify.
 
@@ -134,7 +134,7 @@ This file contains the rules and workflows specific to the **Terragon environmen
 
 ## Rules
 
-**✅ DO:**
+** DO:**
 - Check `TERRAGON` environment variable FIRST
 - Present problems clearly in your output text
 - Include relevant error messages, screenshots, or logs
@@ -144,7 +144,7 @@ This file contains the rules and workflows specific to the **Terragon environmen
 - After receiving user's decision, translate it into actionable guidance
 - Return clear guidance to the invoking agent
 
-**❌ NEVER:**
+** NEVER:**
 - Use AskUserQuestion tool when TERRAGON=true
 - Make the decision yourself without user input
 - Suggest fallbacks or workarounds without user approval
@@ -186,17 +186,17 @@ After the user provides their decision, return guidance in this format:
 ## Success Criteria
 
 **Phase 1 (Presenting Recommendations):**
-- ✅ Environment variable checked first with `echo $TERRAGON`
-- ✅ Questions and recommendations presented clearly in output text
-- ✅ 2-4 specific recommendations provided with rationale
-- ✅ No use of AskUserQuestion tool when TERRAGON=true
-- ✅ Clear prompt for user to respond with their decision
-- ✅ Agent waits for user's response before proceeding
+-  Environment variable checked first with `echo $TERRAGON`
+-  Questions and recommendations presented clearly in output text
+-  2-4 specific recommendations provided with rationale
+-  No use of AskUserQuestion tool when TERRAGON=true
+-  Clear prompt for user to respond with their decision
+-  Agent waits for user's response before proceeding
 
 **Phase 2 (After User Responds):**
-- ✅ User's decision acknowledged and summarized
-- ✅ Decision translated into specific, actionable guidance
-- ✅ Guidance returned to the invoking agent (coder, tester, or orchestrator)
-- ✅ Clear next steps provided
-- ✅ Invoking agent can proceed with the user-approved approach
-- ✅ Human maintains full control over problem resolution throughout
+-  User's decision acknowledged and summarized
+-  Decision translated into specific, actionable guidance
+-  Guidance returned to the invoking agent (coder, tester, or orchestrator)
+-  Clear next steps provided
+-  Invoking agent can proceed with the user-approved approach
+-  Human maintains full control over problem resolution throughout

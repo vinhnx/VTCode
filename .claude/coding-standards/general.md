@@ -57,13 +57,13 @@ Language-agnostic principles that apply to all code.
 
 ### Example Pattern
 ```
-// ❌ BAD - Reading env var inside function
+//  BAD - Reading env var inside function
 function connectDatabase() {
   const host = process.env.DB_HOST;
   return connect(host);
 }
 
-// ✅ GOOD - Configuration passed as argument
+//  GOOD - Configuration passed as argument
 function connectDatabase(config) {
   return connect(config.dbHost);
 }

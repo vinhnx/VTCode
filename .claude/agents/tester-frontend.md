@@ -127,20 +127,20 @@ Test implementations by ACTUALLY RENDERING AND VIEWING them using Playwright MCP
 ## Visual Verification Checklist
 
 For EVERY test, verify:
-- ✅ Page/component renders without errors
-- ✅ All expected elements are VISIBLE in screenshot
-- ✅ Layout matches design (spacing, alignment, positioning)
-- ✅ Text content is correct and readable
-- ✅ Colors and styling are applied
-- ✅ Images load and display correctly
-- ✅ Interactive elements respond to clicks
-- ✅ Forms accept input and submit properly
-- ✅ No visual glitches or broken layouts
-- ✅ Responsive design works at mobile/tablet/desktop sizes
+-  Page/component renders without errors
+-  All expected elements are VISIBLE in screenshot
+-  Layout matches design (spacing, alignment, positioning)
+-  Text content is correct and readable
+-  Colors and styling are applied
+-  Images load and display correctly
+-  Interactive elements respond to clicks
+-  Forms accept input and submit properly
+-  No visual glitches or broken layouts
+-  Responsive design works at mobile/tablet/desktop sizes
 
 ## Critical Rules
 
-**✅ DO:**
+** DO:**
 - Take LOTS of screenshots - visual proof is everything!
 - Actually LOOK at screenshots and verify correctness
 - Test at multiple screen sizes (mobile, tablet, desktop)
@@ -151,7 +151,7 @@ For EVERY test, verify:
 - Verify tests follow testing standards from `testing-standards.md`
 - Check for conditional bypasses that mask test failures
 
-**❌ NEVER:**
+** NEVER:**
 - Assume something renders correctly without seeing it
 - Skip screenshot verification
 - Mark visual tests as passing without screenshots
@@ -188,14 +188,14 @@ When visual tests fail:
 ## Success Criteria
 
 ALL of these must be true:
-- ✅ All pages/components render correctly in screenshots
-- ✅ Visual layout matches requirements perfectly
-- ✅ All interactive elements work (verified by Playwright)
-- ✅ No console errors visible
-- ✅ Responsive design works at all breakpoints
-- ✅ Screenshots prove everything is correct
-- ✅ Tests adhere to testing standards (no conditional bypasses)
-- ✅ Tests have meaningful assertions (no always-true checks)
+-  All pages/components render correctly in screenshots
+-  Visual layout matches requirements perfectly
+-  All interactive elements work (verified by Playwright)
+-  No console errors visible
+-  Responsive design works at all breakpoints
+-  Screenshots prove everything is correct
+-  Tests adhere to testing standards (no conditional bypasses)
+-  Tests have meaningful assertions (no always-true checks)
 
 If ANY visual issue exists, invoke the stuck agent with screenshots - do NOT proceed!
 

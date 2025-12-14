@@ -1,28 +1,28 @@
 # VT Code VSCode Extension: Quick Reference Guide
 
-## 📚 How to Use These Documents
+##  How to Use These Documents
 
 ```
 Start Here
     ↓
 VSCODE_EXTENSION_REVIEW_SUMMARY.md
-    │
-    ├─→ Want Overview? 
-    │   └─→ Read "Key Findings" & "Top 10 Improvements"
-    │
-    ├─→ Want Implementation Details?
-    │   └─→ VSCODE_EXTENSION_CODE_EXAMPLES.md
-    │
-    ├─→ Want Project Plan?
-    │   └─→ VSCODE_EXTENSION_MIGRATION_ROADMAP.md
-    │
-    └─→ Want Everything?
-        └─→ VSCODE_EXTENSION_IMPROVEMENTS.md
+    
+    → Want Overview? 
+       → Read "Key Findings" & "Top 10 Improvements"
+    
+    → Want Implementation Details?
+       → VSCODE_EXTENSION_CODE_EXAMPLES.md
+    
+    → Want Project Plan?
+       → VSCODE_EXTENSION_MIGRATION_ROADMAP.md
+    
+    → Want Everything?
+        → VSCODE_EXTENSION_IMPROVEMENTS.md
 ```
 
 ---
 
-## 🎯 By Role
+##  By Role
 
 ### Project Manager
 1. Read: `VSCODE_EXTENSION_REVIEW_SUMMARY.md` (Key Findings + Timeline)
@@ -88,7 +88,7 @@ VSCODE_EXTENSION_REVIEW_SUMMARY.md
 
 ---
 
-## 📊 Quick Stats
+##  Quick Stats
 
 | Metric | Value |
 |--------|-------|
@@ -102,44 +102,44 @@ VSCODE_EXTENSION_REVIEW_SUMMARY.md
 
 ---
 
-## 🔑 Key Improvements at a Glance
+##  Key Improvements at a Glance
 
 ### Phase 1: Quick Wins (Weeks 1-2)
 ```
-✨ UI Polish          → Better markdown, copy buttons
-📊 Status Display     → Show model, tokens, time
-📝 Better Errors      → Friendly messages + suggestions
-🧪 Testing Setup      → Enable confident changes
-📚 Documentation      → Help team understand code
+ UI Polish          → Better markdown, copy buttons
+ Status Display     → Show model, tokens, time
+ Better Errors      → Friendly messages + suggestions
+ Testing Setup      → Enable confident changes
+ Documentation      → Help team understand code
 ```
 
 ### Phase 2: Architecture (Weeks 3-6)
 ```
-🔧 Modular Commands   → Reduce extension.ts complexity
-👤 Participant System → Enable context-aware assistance
-📋 State Management   → Better separation of concerns
-🎯 Extension Cleanup  → From 2500 → 500 lines
+ Modular Commands   → Reduce extension.ts complexity
+ Participant System → Enable context-aware assistance
+ State Management   → Better separation of concerns
+ Extension Cleanup  → From 2500 → 500 lines
 ```
 
 ### Phase 3: Features (Weeks 7-10)
 ```
-✓  Tool Approval      → Professional approval UI
-💾 Conversations      → Save/load chat threads
-📤 Enhanced Streaming → Token counting, timeouts
-🛡️ Error Recovery     → Auto-retry strategies
+  Tool Approval      → Professional approval UI
+ Conversations      → Save/load chat threads
+ Enhanced Streaming → Token counting, timeouts
+ Error Recovery     → Auto-retry strategies
 ```
 
 ### Phase 4: Polish (Weeks 11-12)
 ```
-🧪 Integration Tests  → End-to-end validation
-⚡ Performance        → Profiling & optimization
-📖 User Docs          → Feature guides & FAQ
-🚀 Release Prep       → Changelog & marketing
+ Integration Tests  → End-to-end validation
+ Performance        → Profiling & optimization
+ User Docs          → Feature guides & FAQ
+ Release Prep       → Changelog & marketing
 ```
 
 ---
 
-## 💾 File Changes Summary
+##  File Changes Summary
 
 ### New Files (~25-30)
 ```
@@ -168,27 +168,27 @@ package.json        (Maybe some deps)
 
 ---
 
-## 🚦 Risk Assessment
+##  Risk Assessment
 
-### Low Risk ✓ 
+### Low Risk  
 - UI improvements (Phase 1)
 - Documentation
 - Test infrastructure
 - Status indicators
 
-### Medium Risk ⚠️
+### Medium Risk 
 - Command system refactoring
 - Participant system
 - State management
 
-### High Risk 🔴
+### High Risk 
 - None (phased approach mitigates risk)
 
 **Mitigation**: Each phase has tests, reviews, and rollback points
 
 ---
 
-## 📈 Success Metrics
+##  Success Metrics
 
 ### User Experience
 - Response time: <2s (90th percentile)
@@ -210,7 +210,7 @@ package.json        (Maybe some deps)
 
 ---
 
-## 🛠️ Essential Tools & Skills
+##  Essential Tools & Skills
 
 ### Required Knowledge
 - TypeScript/JavaScript
@@ -228,7 +228,7 @@ package.json        (Maybe some deps)
 
 ---
 
-## 📞 Decision Checklist
+##  Decision Checklist
 
 ### Before Starting Phase 1
 - [ ] Team agrees on approach
@@ -260,7 +260,7 @@ package.json        (Maybe some deps)
 
 ---
 
-## 🎓 Learning Path
+##  Learning Path
 
 ### Day 1: Understanding
 1. Read review summary
@@ -284,7 +284,7 @@ package.json        (Maybe some deps)
 
 ---
 
-## ⚡ Execution Quick Start
+##  Execution Quick Start
 
 ### Step 1: Setup (30 min)
 ```bash
@@ -317,7 +317,7 @@ Apply same pattern for each task in Phase 1
 
 ---
 
-## 🔍 Code Review Checklist
+##  Code Review Checklist
 
 Every PR should have:
 - [ ] Tests (unit + integration)
@@ -332,29 +332,29 @@ Every PR should have:
 
 ---
 
-## 🚨 Common Pitfalls to Avoid
+##  Common Pitfalls to Avoid
 
-1. ⤫  Trying to do everything at once
-   ✓  Follow the phased approach
+1.   Trying to do everything at once
+     Follow the phased approach
 
-2. ⤫  Skipping tests to save time
-   ✓  Tests provide confidence
+2.   Skipping tests to save time
+     Tests provide confidence
 
-3. ⤫  Breaking existing commands
-   ✓  Maintain backward compatibility
+3.   Breaking existing commands
+     Maintain backward compatibility
 
-4. ⤫  Neglecting documentation
-   ✓  Documentation is part of the feature
+4.   Neglecting documentation
+     Documentation is part of the feature
 
-5. ⤫  Not getting user feedback early
-   ✓  Validate assumptions with users
+5.   Not getting user feedback early
+     Validate assumptions with users
 
-6. ⤫  Complexity in Phase 2 architecture
-   ✓  Keep it simple, iterate later
+6.   Complexity in Phase 2 architecture
+     Keep it simple, iterate later
 
 ---
 
-## 💬 Communication Templates
+##  Communication Templates
 
 ### To Stakeholders
 > "We're improving VT Code's VSCode extension through a 12-week plan focused on user experience and code quality. Phase 1 ships UI improvements in weeks 1-2, with larger architectural work following. No breaking changes planned."
@@ -367,7 +367,7 @@ Every PR should have:
 
 ---
 
-## 📋 Weekly Status Template
+##  Weekly Status Template
 
 ```markdown
 # Week X Status Report
@@ -395,7 +395,7 @@ Every PR should have:
 
 ---
 
-## 🎯 Phase Completion Checklist
+##  Phase Completion Checklist
 
 ### Phase 1 Complete When:
 - [ ] All UI improvements shipped
@@ -435,7 +435,7 @@ Every PR should have:
 
 ---
 
-## 🔗 Important Links
+##  Important Links
 
 **Documentation**
 - [VS Code Extension API](https://code.visualstudio.com/api)
@@ -456,7 +456,7 @@ Every PR should have:
 
 ---
 
-## ❓ FAQ
+##  FAQ
 
 **Q: Can we do this with fewer developers?**
 A: Yes, it will just take longer. One developer can do it in 20-24 weeks.
@@ -484,22 +484,22 @@ A: No. We maintain backward compatibility throughout.
 
 ---
 
-## 🎉 Expected Outcome
+##  Expected Outcome
 
 After 12 weeks:
-- ✓  Professional, polished chat interface
-- ✓  Cleaner, more maintainable codebase
-- ✓  Better error messages & recovery
-- ✓  Persistent conversations
-- ✓  Professional tool approval UI
-- ✓  Modular, extensible architecture
-- ✓  >85% test coverage
-- ✓  Complete documentation
-- ✓  Happy users & developers
+-   Professional, polished chat interface
+-   Cleaner, more maintainable codebase
+-   Better error messages & recovery
+-   Persistent conversations
+-   Professional tool approval UI
+-   Modular, extensible architecture
+-   >85% test coverage
+-   Complete documentation
+-   Happy users & developers
 
 ---
 
-## 📞 Contact & Questions
+##  Contact & Questions
 
 For detailed questions, refer to the specific documents:
 - **"What should we improve?"** → `VSCODE_EXTENSION_IMPROVEMENTS.md`

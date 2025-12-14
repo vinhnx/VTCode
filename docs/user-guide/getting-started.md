@@ -433,4 +433,4 @@ Interested in contributing? Check out:
 
 ---
 
-**Happy coding with VT Code!** 🚀
+**Happy coding with VT Code!** 

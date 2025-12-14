@@ -1,6 +1,6 @@
 # Git Commands - Quick Reference
 
-## ✓  Allowed Operations
+##   Allowed Operations
 
 ### View Operations
 ```bash
@@ -56,37 +56,37 @@ git stash apply              # Apply without removing
 git stash drop               # Delete stash
 ```
 
-## ⤫  Blocked Operations
+##   Blocked Operations
 
 ### Force Operations (Unsafe)
 ```bash
-git push --force             # ⤫  Force push (not allowed)
-git add --force              # ⤫  Force add (not allowed)
-git checkout --force         # ⤫  Force checkout (not allowed)
+git push --force             #   Force push (not allowed)
+git add --force              #   Force add (not allowed)
+git checkout --force         #   Force checkout (not allowed)
 ```
 
 ### Destructive Reset
 ```bash
-git reset --hard             # ⤫  Discard all changes (not allowed)
-git reset --merge            # ⤫  Merge mode reset (not allowed)
-git reset --keep             # ⤫  Keep mode reset (not allowed)
+git reset --hard             #   Discard all changes (not allowed)
+git reset --merge            #   Merge mode reset (not allowed)
+git reset --keep             #   Keep mode reset (not allowed)
 ```
 
 ### Cleanup
 ```bash
-git clean                    # ⤫  Remove untracked files (not allowed)
+git clean                    #   Remove untracked files (not allowed)
 ```
 
 ### History Rewriting
 ```bash
-git rebase                   # ⤫  Reapply commits (not allowed)
-git filter-branch            # ⤫  Rewrite history (not allowed)
-git cherry-pick              # ⤫  Apply individual commits (not allowed)
+git rebase                   #   Reapply commits (not allowed)
+git filter-branch            #   Rewrite history (not allowed)
+git cherry-pick              #   Apply individual commits (not allowed)
 ```
 
 ### Maintenance
 ```bash
-git gc --aggressive          # ⤫  Aggressive GC (not allowed)
+git gc --aggressive          #   Aggressive GC (not allowed)
 ```
 
 ## Common Workflows

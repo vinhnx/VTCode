@@ -2,7 +2,7 @@
 
 Welcome to the comprehensive documentation for **VT Code**, a Rust-based terminal coding agent with modular architecture supporting multiple LLM providers and advanced code analysis capabilities.
 
-## 🚀 Quick Installation
+##  Quick Installation
 
 [![Crates.io](https://img.shields.io/crates/v/vtcode.svg)](https://crates.io/crates/vtcode)
 [![Homebrew](https://img.shields.io/badge/dynamic/json?url=https://formulae.brew.sh/api/formula/vtcode.json&query=$.versions.stable&label=homebrew)](https://formulae.brew.sh/formula/vtcode)
@@ -16,7 +16,7 @@ Welcome to the comprehensive documentation for **VT Code**, a Rust-based termina
 cargo install vtcode
 ```
 
-📚 [API Documentation](https://docs.rs/vtcode) | 📦 [Crates.io](https://crates.io/crates/vtcode)
+ [API Documentation](https://docs.rs/vtcode) |  [Crates.io](https://crates.io/crates/vtcode)
 
 #### Homebrew (macOS)
 
@@ -24,7 +24,7 @@ cargo install vtcode
 brew install vtcode
 ```
 
-🍺 [Homebrew Formula](https://formulae.brew.sh/formula/vtcode)
+ [Homebrew Formula](https://formulae.brew.sh/formula/vtcode)
 
 #### Pre-built Binaries
 
@@ -231,8 +231,8 @@ VT Code is evaluated on industry-standard benchmarks to measure code generation 
 | Cost           | $0.00 (free tier) |
 
 **[View Full Benchmark Results](./benchmarks/HUMANEVAL_2025-10-22.md)**
-📈 **[Model Comparison](./benchmarks/COMPARISON.md)**
-🔧 **[Run Your Own Benchmarks](./benchmarks/README.md)**
+ **[Model Comparison](./benchmarks/COMPARISON.md)**
+ **[Run Your Own Benchmarks](./benchmarks/README.md)**
 
 ### Running Benchmarks
 

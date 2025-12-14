@@ -10,17 +10,17 @@ This document explains how the three permission system modules (CommandResolver,
 User Input (Command)
     ↓
 CommandPolicyEvaluator.evaluate_with_resolution()
-    ├─ Check Cache (PermissionCache)
-    │  ├─ Hit → Return cached decision (PermissionDecision::Cached)
-    │  └─ Miss → Continue to resolution
-    ├─ Resolve Command (CommandResolver)
-    │  └─ Map "cargo fmt" → "/Users/user/.cargo/bin/cargo"
-    ├─ Evaluate Policy (existing allow/deny rules)
-    ├─ Record in Audit (PermissionAuditLog)
-    │  └─ Write JSON event to ~/.vtcode/audit/permissions-{date}.log
-    ├─ Cache Decision (PermissionCache)
-    │  └─ Store result with 5min TTL
-    └─ Return (allowed, resolved_path, reason, decision)
+     Check Cache (PermissionCache)
+       Hit → Return cached decision (PermissionDecision::Cached)
+       Miss → Continue to resolution
+     Resolve Command (CommandResolver)
+       Map "cargo fmt" → "/Users/user/.cargo/bin/cargo"
+     Evaluate Policy (existing allow/deny rules)
+     Record in Audit (PermissionAuditLog)
+       Write JSON event to ~/.vtcode/audit/permissions-{date}.log
+     Cache Decision (PermissionCache)
+       Store result with 5min TTL
+     Return (allowed, resolved_path, reason, decision)
          ↓
     Execute or Deny Command
 ```

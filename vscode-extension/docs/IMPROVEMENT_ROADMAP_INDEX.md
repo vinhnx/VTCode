@@ -1,6 +1,6 @@
 # VTCode VSCode Extension - Complete Improvement Roadmap Index
 
-**Overall Status**: Phase 1 Complete ✓  | Phase 2 Ready to Start 🚀  
+**Overall Status**: Phase 1 Complete   | Phase 2 Ready to Start   
 **Total Timeline**: 12 weeks (September - December 2025)  
 **Project Goal**: Modern, extensible VSCode extension  
 
@@ -8,27 +8,27 @@
 
 ## Quick Navigation
 
-### 🎯 Start Here (Choose Your Role)
+###  Start Here (Choose Your Role)
 
-**👤 Executive / Decision Maker** (20 min read)
+** Executive / Decision Maker** (20 min read)
 1. Read: `PHASE_2_SUMMARY.md` (5 min)
 2. Review: Timeline and metrics
 3. Decision: Approve Phase 2 resources
 4. Next: Sign off on PHASE_2_LAUNCH.md
 
-**👨‍💻 Developer / Tech Contributor** (1 hour)
+**‍ Developer / Tech Contributor** (1 hour)
 1. Read: `PHASE_2_QUICK_START.md` (15 min)
 2. Review: Your assigned tasks
 3. Start: First task this week
 4. Reference: `PHASE_2_IMPLEMENTATION_PLAN.md` as needed
 
-**🏗️ Tech Lead / Architect** (2 hours)
+** Tech Lead / Architect** (2 hours)
 1. Read: `PHASE_2_SUMMARY.md` (10 min)
 2. Review: `PHASE_2_IMPLEMENTATION_PLAN.md` (30 min)
 3. Plan: Use `PHASE_2_GITHUB_ISSUES.md` to create tasks
 4. Execute: Run `PHASE_2_LAUNCH.md` checklist
 
-**📊 Project Manager / Team Lead** (45 min)
+** Project Manager / Team Lead** (45 min)
 1. Read: `PHASE_2_SUMMARY.md` (10 min)
 2. Review: `PHASE_2_LAUNCH.md` (15 min)
 3. Plan: Create GitHub issues and milestones
@@ -42,36 +42,36 @@
 
 | Document | Purpose | Audience | Time | Status |
 |----------|---------|----------|------|--------|
-| **PHASE_2_SUMMARY.md** | Executive overview | Everyone | 10 min | ✓  Ready |
-| **PHASE_2_LAUNCH.md** | Launch checklist | Tech Lead | 15 min | ✓  Ready |
-| **PHASE_2_QUICK_START.md** | Developer guide | Developers | 15 min | ✓  Ready |
-| **PHASE_2_IMPLEMENTATION_PLAN.md** | Technical specs | Tech Lead + Devs | 30 min | ✓  Ready |
-| **PHASE_2_GITHUB_ISSUES.md** | Issue templates | Tech Lead | 20 min | ✓  Ready |
+| **PHASE_2_SUMMARY.md** | Executive overview | Everyone | 10 min |   Ready |
+| **PHASE_2_LAUNCH.md** | Launch checklist | Tech Lead | 15 min |   Ready |
+| **PHASE_2_QUICK_START.md** | Developer guide | Developers | 15 min |   Ready |
+| **PHASE_2_IMPLEMENTATION_PLAN.md** | Technical specs | Tech Lead + Devs | 30 min |   Ready |
+| **PHASE_2_GITHUB_ISSUES.md** | Issue templates | Tech Lead | 20 min |   Ready |
 
 ### Phase 1 Reference Documents (Already Complete)
 
 | Document | Purpose | Status |
 |----------|---------|--------|
-| **PHASE_1_STATUS.md** | Phase 1 completion | ✓  Complete |
-| **PHASE_1_DELIVERABLES.txt** | What was delivered | ✓  Complete |
-| `docs/PHASE_1_IMPROVEMENTS.md` | Component details | ✓  Complete |
-| `docs/PHASE_1_INTEGRATION.md` | Integration guide | ✓  Complete |
+| **PHASE_1_STATUS.md** | Phase 1 completion |   Complete |
+| **PHASE_1_DELIVERABLES.txt** | What was delivered |   Complete |
+| `docs/PHASE_1_IMPROVEMENTS.md` | Component details |   Complete |
+| `docs/PHASE_1_INTEGRATION.md` | Integration guide |   Complete |
 
 ### Analysis & Research Documents
 
 | Location | Purpose | Status |
 |----------|---------|--------|
-| `docs/vscode-extension-improve-docs/INDEX.md` | Navigation hub | ✓  Complete |
-| `docs/vscode-extension-improve-docs/VSCODE_EXTENSION_IMPROVEMENTS.md` | Architecture ideas | ✓  Complete |
-| `docs/vscode-extension-improve-docs/VSCODE_EXTENSION_MIGRATION_ROADMAP.md` | Full 12-week plan | ✓  Complete |
-| `docs/vscode-extension-improve-docs/VSCODE_EXTENSION_CODE_EXAMPLES.md` | Code patterns | ✓  Complete |
-| `docs/vscode-extension-improve-docs/VSCODE_QUICK_REFERENCE.md` | Quick lookup | ✓  Complete |
+| `docs/vscode-extension-improve-docs/INDEX.md` | Navigation hub |   Complete |
+| `docs/vscode-extension-improve-docs/VSCODE_EXTENSION_IMPROVEMENTS.md` | Architecture ideas |   Complete |
+| `docs/vscode-extension-improve-docs/VSCODE_EXTENSION_MIGRATION_ROADMAP.md` | Full 12-week plan |   Complete |
+| `docs/vscode-extension-improve-docs/VSCODE_EXTENSION_CODE_EXAMPLES.md` | Code patterns |   Complete |
+| `docs/vscode-extension-improve-docs/VSCODE_QUICK_REFERENCE.md` | Quick lookup |   Complete |
 
 ---
 
 ## The Complete 12-Week Roadmap
 
-### Phase 1: Foundation & Quality (Weeks 1-2) ✓  COMPLETE
+### Phase 1: Foundation & Quality (Weeks 1-2)   COMPLETE
 **Status**: Production Ready  
 **Deliverables**: Status indicators, error handling, CSS improvements  
 **Documents**: PHASE_1_STATUS.md
@@ -82,7 +82,7 @@
 - Enhanced CSS for better markdown rendering
 - >92% test coverage
 
-### Phase 2: Architecture Refactoring (Weeks 3-6) 🚀 READY TO START
+### Phase 2: Architecture Refactoring (Weeks 3-6)  READY TO START
 **Status**: Fully planned, awaiting approval  
 **Deliverables**: Modular commands, participant system, state management  
 **Documents**: PHASE_2_SUMMARY.md, PHASE_2_LAUNCH.md, PHASE_2_QUICK_START.md
@@ -120,28 +120,28 @@
 
 ## Where To Find What
 
-### 🎯 Need to Make a Decision?
+###  Need to Make a Decision?
 → Read: `PHASE_2_SUMMARY.md`
 
-### 🚀 Ready to Start Phase 2?
+###  Ready to Start Phase 2?
 → Follow: `PHASE_2_LAUNCH.md` checklist
 
-### 👨‍💻 Assigned a task in Phase 2?
+### ‍ Assigned a task in Phase 2?
 → Start with: `PHASE_2_QUICK_START.md`
 
-### 📋 Need detailed technical specs?
+###  Need detailed technical specs?
 → Reference: `PHASE_2_IMPLEMENTATION_PLAN.md`
 
-### 📝 Creating GitHub issues?
+###  Creating GitHub issues?
 → Use: `PHASE_2_GITHUB_ISSUES.md` templates
 
-### 📚 Want to understand the full vision?
+###  Want to understand the full vision?
 → Explore: `docs/vscode-extension-improve-docs/`
 
-### 🔍 Looking for specific patterns?
+###  Looking for specific patterns?
 → See: `PHASE_2_QUICK_START.md` - Technical Implementation Details
 
-### ✓  How is Phase 1 coming?
+###   How is Phase 1 coming?
 → Check: `PHASE_1_STATUS.md`
 
 ---
@@ -149,23 +149,23 @@
 ## Success Timeline
 
 ```
-┌─────────────────────── 12 WEEK TIMELINE ──────────────────────┐
-│                                                                 │
-│  Phase 1     │  Phase 2        │  Phase 3      │  Phase 4     │
-│  UI Polish   │  Architecture   │  Features     │  Release     │
-│  (W1-2)      │  (W3-6)         │  (W7-9)       │  (W10-12)    │
-│  ✓  DONE     │  🚀 READY       │  ⏳ PLANNED   │  ⏳ PLANNED  │
-│              │                 │               │              │
-│  ▓▓▓▓░░░░░░ │  ░░░░░▓▓▓▓▓░░░ │  ░░░░░░░░░░░ │  ░░░░░░░░░░░│
-│   8 days      │   25 days       │   20 days     │   14 days    │
-│              │                 │               │              │
-│              └─ FOUNDATION ────────────────────────────────────│
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+ 12 WEEK TIMELINE 
+                                                                 
+  Phase 1       Phase 2          Phase 3        Phase 4     
+  UI Polish     Architecture     Features       Release     
+  (W1-2)        (W3-6)           (W7-9)         (W10-12)    
+    DONE        READY         ⏳ PLANNED     ⏳ PLANNED  
+                                                            
+           
+   8 days         25 days          20 days        14 days    
+                                                            
+               FOUNDATION 
+                                                                 
+
 
 Status updates:
-- Week 2: Phase 1 complete ✓ 
-- Week 3 (Nov 11): Phase 2 starts 🚀
+- Week 2: Phase 1 complete  
+- Week 3 (Nov 11): Phase 2 starts 
 - Week 6 (Dec 6): Phase 2 complete, Phase 3 planning
 - Week 9 (Dec 27): Phase 3 complete, Phase 4 starts
 - Week 12 (Jan 17): Extension ready for marketplace
@@ -177,9 +177,9 @@ Status updates:
 
 | Milestone | Date | Deliverable | Status |
 |-----------|------|-------------|--------|
-| Phase 1 Launch | Nov 1 | Status indicator + Error handler | ✓  Complete |
-| Phase 1 Complete | Nov 8 | All Phase 1 components | ✓  Complete |
-| **Phase 2 Launch** | **Nov 11** | **All issues created, team ready** | 🚀 Ready |
+| Phase 1 Launch | Nov 1 | Status indicator + Error handler |   Complete |
+| Phase 1 Complete | Nov 8 | All Phase 1 components |   Complete |
+| **Phase 2 Launch** | **Nov 11** | **All issues created, team ready** |  Ready |
 | Phase 2 Week 3 | Nov 15 | Command system working | ⏳ Upcoming |
 | Phase 2 Week 4 | Nov 22 | Participant system working | ⏳ Upcoming |
 | Phase 2 Complete | Dec 6 | All tests + documentation | ⏳ Upcoming |
@@ -210,11 +210,11 @@ Status updates:
 ## Quality Standards
 
 ### Code Quality
-- ✓  TypeScript strict mode
-- ✓  ESLint compliance
-- ✓  >85% test coverage (Phase 1)
-- ✓  >90% test coverage (Phase 2 goal)
-- ✓  Full JSDoc documentation
+-   TypeScript strict mode
+-   ESLint compliance
+-   >85% test coverage (Phase 1)
+-   >90% test coverage (Phase 2 goal)
+-   Full JSDoc documentation
 
 ### Testing Strategy
 - Unit tests (>90% coverage)
@@ -297,36 +297,36 @@ Status updates:
 
 ```
 vscode-extension/
-├── IMPROVEMENT_ROADMAP_INDEX.md      ← You are here
-├── PHASE_1_STATUS.md                 ← Phase 1 summary
-├── PHASE_1_DELIVERABLES.txt          ← What Phase 1 delivered
-├── PHASE_2_SUMMARY.md                ← Executive overview
-├── PHASE_2_LAUNCH.md                 ← Launch checklist
-├── PHASE_2_QUICK_START.md            ← Developer guide
-├── PHASE_2_IMPLEMENTATION_PLAN.md    ← Detailed specs
-├── PHASE_2_GITHUB_ISSUES.md          ← Issue templates
-│
-├── src/
-│   ├── ui/
-│   │   ├── statusIndicator.ts        ← Phase 1 ✓ 
-│   │   └── statusIndicator.test.ts   ← Phase 1 ✓ 
-│   ├── error/
-│   │   ├── errorPresentation.ts      ← Phase 1 ✓ 
-│   │   └── errorPresentation.test.ts ← Phase 1 ✓ 
-│   ├── extension.ts                  ← Will be refactored in Phase 2
-│   └── ... (existing files)
-│
-├── media/
-│   ├── chat-view.css                 ← Phase 1 enhanced ✓ 
-│   └── ... (existing files)
-│
-├── docs/
-│   ├── vscode-extension-improve-docs/    ← Full analysis
-│   ├── PHASE_1_IMPROVEMENTS.md           ← Phase 1 details
-│   ├── PHASE_1_INTEGRATION.md            ← Integration guide
-│   └── ... (existing files)
-│
-└── ... (other standard files)
+ IMPROVEMENT_ROADMAP_INDEX.md      ← You are here
+ PHASE_1_STATUS.md                 ← Phase 1 summary
+ PHASE_1_DELIVERABLES.txt          ← What Phase 1 delivered
+ PHASE_2_SUMMARY.md                ← Executive overview
+ PHASE_2_LAUNCH.md                 ← Launch checklist
+ PHASE_2_QUICK_START.md            ← Developer guide
+ PHASE_2_IMPLEMENTATION_PLAN.md    ← Detailed specs
+ PHASE_2_GITHUB_ISSUES.md          ← Issue templates
+
+ src/
+    ui/
+       statusIndicator.ts        ← Phase 1  
+       statusIndicator.test.ts   ← Phase 1  
+    error/
+       errorPresentation.ts      ← Phase 1  
+       errorPresentation.test.ts ← Phase 1  
+    extension.ts                  ← Will be refactored in Phase 2
+    ... (existing files)
+
+ media/
+    chat-view.css                 ← Phase 1 enhanced  
+    ... (existing files)
+
+ docs/
+    vscode-extension-improve-docs/    ← Full analysis
+    PHASE_1_IMPROVEMENTS.md           ← Phase 1 details
+    PHASE_1_INTEGRATION.md            ← Integration guide
+    ... (existing files)
+
+ ... (other standard files)
 ```
 
 ---
@@ -336,14 +336,14 @@ vscode-extension/
 **Should we proceed with Phase 2?**
 
 ```
-┌─ Is Phase 1 complete? ──→ YES ✓ 
-├─ Are requirements clear? → YES ✓ 
-├─ Are resources available? → YES ✓ 
-├─ Is timeline realistic? → YES ✓ 
-├─ Are risks acceptable? → YES ✓ 
-└─ Will this enable Phase 3-4? → YES ✓ 
+ Is Phase 1 complete? → YES  
+ Are requirements clear? → YES  
+ Are resources available? → YES  
+ Is timeline realistic? → YES  
+ Are risks acceptable? → YES  
+ Will this enable Phase 3-4? → YES  
 
-DECISION: ✓  PROCEED WITH PHASE 2
+DECISION:   PROCEED WITH PHASE 2
 ```
 
 ---
@@ -369,17 +369,17 @@ A: No. Sets pattern for Phase 3-4. Future phases follow same architecture.
 
 ## Next Actions (Priority Order)
 
-### 🔴 Critical (Do Today)
+###  Critical (Do Today)
 - [ ] Decision maker reads PHASE_2_SUMMARY.md
 - [ ] Tech lead reviews PHASE_2_IMPLEMENTATION_PLAN.md
 - [ ] Get approval to proceed
 
-### 🟡 Important (Do Tomorrow)
+###  Important (Do Tomorrow)
 - [ ] Run PHASE_2_LAUNCH.md pre-launch checklist
 - [ ] Create GitHub issues from PHASE_2_GITHUB_ISSUES.md
 - [ ] Assign team members to tasks
 
-### 🟢 Normal (Do Monday)
+###  Normal (Do Monday)
 - [ ] Hold kickoff meeting (use PHASE_2_SUMMARY.md)
 - [ ] Team reads PHASE_2_QUICK_START.md
 - [ ] First developer starts Task 2.1.1
@@ -390,14 +390,14 @@ A: No. Sets pattern for Phase 3-4. Future phases follow same architecture.
 
 **Phase 2 is successful when:**
 
-✓  extension.ts reduced from 500+ to <200 lines  
-✓  7 commands extracted into modular classes  
-✓  4 participants implemented with @ mention support  
-✓  Message state and lifecycle working  
-✓  >90% test coverage achieved  
-✓  Zero breaking changes to users  
-✓  Documentation complete and reviewed  
-✓  Team confident to proceed to Phase 3  
+  extension.ts reduced from 500+ to <200 lines  
+  7 commands extracted into modular classes  
+  4 participants implemented with @ mention support  
+  Message state and lifecycle working  
+  >90% test coverage achieved  
+  Zero breaking changes to users  
+  Documentation complete and reviewed  
+  Team confident to proceed to Phase 3  
 
 ---
 
@@ -424,8 +424,8 @@ A: No. Sets pattern for Phase 3-4. Future phases follow same architecture.
 | Document Version | 1.0 |
 | Created | November 8, 2025 |
 | Last Updated | November 8, 2025 |
-| Status | ✓  Ready for Review |
-| Confidence | 🟢 High |
+| Status |   Ready for Review |
+| Confidence |  High |
 
 ---
 
@@ -451,16 +451,16 @@ A: No. Sets pattern for Phase 3-4. Future phases follow same architecture.
 
 ## Quick Links
 
-**📖 Main Documents**
+** Main Documents**
 - [PHASE_2_SUMMARY.md](./PHASE_2_SUMMARY.md) - Executive overview
 - [PHASE_2_LAUNCH.md](./PHASE_2_LAUNCH.md) - Launch checklist
 - [PHASE_2_QUICK_START.md](./PHASE_2_QUICK_START.md) - Developer guide
 
-**📋 Technical Specs**
+** Technical Specs**
 - [PHASE_2_IMPLEMENTATION_PLAN.md](./PHASE_2_IMPLEMENTATION_PLAN.md) - Detailed specs
 - [PHASE_2_GITHUB_ISSUES.md](./PHASE_2_GITHUB_ISSUES.md) - Issue templates
 
-**📚 Reference**
+** Reference**
 - [PHASE_1_STATUS.md](./PHASE_1_STATUS.md) - Phase 1 completion
 - [Full Analysis](./docs/vscode-extension-improve-docs/INDEX.md) - Research docs
 
@@ -476,7 +476,7 @@ A: No. Sets pattern for Phase 3-4. Future phases follow same architecture.
 
 ---
 
-**👉 Ready to launch? Start with [PHASE_2_SUMMARY.md](./PHASE_2_SUMMARY.md)**
+** Ready to launch? Start with [PHASE_2_SUMMARY.md](./PHASE_2_SUMMARY.md)**
 
 ---
 

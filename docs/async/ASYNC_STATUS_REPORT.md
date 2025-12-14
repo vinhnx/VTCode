@@ -1,13 +1,13 @@
 # Async Execution Status Report
 
-## Current State: Already Mostly Async! ✓
+## Current State: Already Mostly Async! 
 
 ### Good News
 The VTCode codebase is **already using async execution** for tool calls and PTY operations. The architecture is well-designed with proper async/await patterns.
 
 ## Async Components (Already Implemented)
 
-### 1. PTY Manager ✓
+### 1. PTY Manager 
 **File**: `vtcode-core/src/tools/pty.rs`
 **Status**: **ASYNC**
 
@@ -30,7 +30,7 @@ pub async fn run_command(&self, request: PtyCommandRequest) -> Result<PtyCommand
 - Proper timeout handling with `mpsc::channel`
 - Non-blocking from the async runtime perspective
 
-### 2. Tool Registry ✓
+### 2. Tool Registry 
 **File**: `vtcode-core/src/tools/registry/mod.rs`
 **Status**: **ASYNC**
 
@@ -40,7 +40,7 @@ pub async fn execute_tool(&mut self, name: &str, args: Value) -> Result<Value> {
 }
 ```
 
-### 3. Tool Execution Pipeline ✓
+### 3. Tool Execution Pipeline 
 **File**: `src/agent/runloop/unified/tool_pipeline.rs`
 **Status**: **ASYNC**
 
@@ -82,19 +82,19 @@ Results returned via async channels
 
 ### Key Features Already Working
 
-1. **Non-blocking Execution**: ✓
+1. **Non-blocking Execution**: 
    - PTY operations run in `spawn_blocking` thread pool
    - Main async runtime remains responsive
 
-2. **Timeout Support**: ✓
+2. **Timeout Support**: 
    - `tokio::time::timeout` wrapper
    - Proper process killing on timeout
 
-3. **Cancellation Support**: ✓
+3. **Cancellation Support**: 
    - `tokio::select!` with Ctrl+C handling
    - Clean cancellation via `CtrlCState`
 
-4. **Concurrent Execution**: ✓
+4. **Concurrent Execution**: 
    - Multiple tools can run simultaneously
    - Tokio runtime handles scheduling
 
@@ -195,7 +195,7 @@ pub async fn run_command_streaming(
 
 ### Priority 3: Audit All Tool Implementations
 Ensure all tools use async I/O:
-- [ ] BashTool - ✓ (uses PtyManager)
+- [ ] BashTool -  (uses PtyManager)
 - [ ] CurlTool - Check if using async reqwest
 - [ ] FileOps - Check if using tokio::fs
 - [ ] GrepSearchManager - Confirm ripgrep spawn + output streaming stay non-blocking
@@ -205,10 +205,10 @@ Ensure all tools use async I/O:
 **The system is already well-architected for async execution!**
 
 The current implementation:
-- ✓ Uses async/await throughout
-- ✓ Properly isolates blocking operations
-- ✓ Supports cancellation and timeouts
-- ✓ Maintains responsive UI
+-  Uses async/await throughout
+-  Properly isolates blocking operations
+-  Supports cancellation and timeouts
+-  Maintains responsive UI
 
 **No major refactoring needed** - the architecture is sound.
 

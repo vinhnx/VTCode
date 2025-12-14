@@ -10,11 +10,11 @@
 
 | Feature | v3 | v4 | Benefit |
 |---------|----|----|---------|
-| **Semantic Context** | ⤫  | ✓  | Better reasoning, -35% tokens |
-| **Extended Thinking** | ⤫  | ✓  | 15-20% quality on complex tasks |
-| **Persistent Memory** | ⚠️ | ✓  Enhanced | Long-horizon task support |
-| **Outcome-Focused Tools** | ⤫  | ✓  | Better decisions, fewer loops |
-| **Error Recovery** | ⚠️ | ✓  Enhanced | -50% error-retry loops |
+| **Semantic Context** |   |   | Better reasoning, -35% tokens |
+| **Extended Thinking** |   |   | 15-20% quality on complex tasks |
+| **Persistent Memory** |  |   Enhanced | Long-horizon task support |
+| **Outcome-Focused Tools** |   |   | Better decisions, fewer loops |
+| **Error Recovery** |  |   Enhanced | -50% error-retry loops |
 | **Multi-LLM Support** | 72% | 95% | Consistent across models |
 
 ---
@@ -23,8 +23,8 @@
 
 ### 1. Semantic Context Pattern
 ```
-⤫  "Use grep_file to find validate_token"
-✓  "Find token validation entry point. Auth module lives in 
+  "Use grep_file to find validate_token"
+  "Find token validation entry point. Auth module lives in 
     src/auth/mod.rs, uses anyhow::Result. Look for functions 
     that check JWT expiration or verify signatures."
 ```
@@ -157,11 +157,11 @@ Specific action + line numbers
 ## Multi-LLM Compatibility
 
 ### Universal Patterns (All Models)
-- ✓  Direct task language: "Find X", "Create Y"
-- ✓  Active voice: "Add validation logic"
-- ✓  Specific outcomes: "Return file path + line"
-- ✓  Flat structures: Max 2 nesting levels
-- ✓  Clear examples: Input/output pairs
+-   Direct task language: "Find X", "Create Y"
+-   Active voice: "Add validation logic"
+-   Specific outcomes: "Return file path + line"
+-   Flat structures: Max 2 nesting levels
+-   Clear examples: Input/output pairs
 
 ### Model-Specific Enhancements (Optional)
 
@@ -195,7 +195,7 @@ Specific action + line numbers
 | Context waste | 15% | 5% | -67% |
 | 1st-try completion | 85% | 92% | +7% |
 | Loop prevention | 90% | 98% | +8% |
-| Long-task support | ⤫  | ✓  | NEW |
+| Long-task support |   |   | NEW |
 
 ---
 
@@ -301,6 +301,6 @@ Process 100+ items? → execute_code
 ---
 
 **Created**: November 19, 2025  
-**Status**: ✓  Ready for Production  
+**Status**:   Ready for Production  
 **Version**: 4.0 (Semantic Efficiency Optimized)  
 **Next Steps**: Validate on 50-task benchmark

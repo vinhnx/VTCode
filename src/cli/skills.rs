@@ -15,6 +15,33 @@ pub struct SkillsCommandOptions {
     pub workspace: PathBuf,
 }
 
+/// Generate a comprehensive validation report
+pub async fn handle_skills_validate_all(options: &SkillsCommandOptions) -> Result<()> {
+    let mut loader = EnhancedSkillLoader::new(options.workspace.clone());
+
+    println!(" Generating comprehensive container skills validation report...\n");
+
+    match loader.generate_validation_report().await {
+        Ok(report) => {
+            println!("{}", report.format_report());
+            
+            if !report.incompatible_skills.is_empty() {
+                println!("\n Next Steps:");
+                println!("  1. Use skills marked with  for guaranteed compatibility");
+                println!("  2. Skills marked with   work but require following fallback instructions");
+                println!("  3. For incompatible skills, use the suggested Python libraries with execute_code");
+                println!("  4. Check 'vtcode skills info <name>' for detailed compatibility info");
+            }
+        }
+        Err(e) => {
+            println!(" Failed to generate validation report: {}", e);
+            return Err(e.into());
+        }
+    }
+
+    Ok(())
+}
+
 /// List available skills
 pub async fn handle_skills_list(options: &SkillsCommandOptions) -> Result<()> {
     let mut loader = EnhancedSkillLoader::new(options.workspace.clone());
@@ -33,9 +60,53 @@ pub async fn handle_skills_list(options: &SkillsCommandOptions) -> Result<()> {
     println!("{:<30} | {}", "Name", "Description");
     println!("{:-<30}-+-{:-<60}", "", "");
 
+    // Track skills that need warnings
+    let mut warnings = Vec::new();
+
     for skill_ctx in &skills {
         let manifest = skill_ctx.manifest();
-        println!("{:<30} | {}", manifest.name, manifest.description);
+        
+        // Quick validation check for display
+        let mut temp_loader = EnhancedSkillLoader::new(options.workspace.clone());
+        match temp_loader.get_skill(&manifest.name).await {
+            Ok(enhanced_skill) => {
+                match enhanced_skill {
+                    vtcode_core::skills::loader::EnhancedSkill::Traditional(skill) => {
+                        let analysis = temp_loader.check_container_requirements(&skill);
+                        
+                        let status_indicator = match analysis.requirement {
+                            vtcode_core::skills::container_validation::ContainerSkillsRequirement::Required => {
+                                warnings.push(format!(" {} - Requires container skills (not compatible)", manifest.name));
+                                ""
+                            }
+                            vtcode_core::skills::container_validation::ContainerSkillsRequirement::RequiredWithFallback => {
+                                warnings.push(format!("  {} - Has container skills fallback", manifest.name));
+                                ""
+                            }
+                            _ => "",
+                        };
+                        
+                        println!("{} {:<28} | {}", status_indicator, manifest.name, manifest.description);
+                    }
+                    vtcode_core::skills::loader::EnhancedSkill::CliTool(_) => {
+                        println!(" {:<30} | {}", manifest.name, manifest.description);
+                    }
+                }
+            }
+            Err(_) => {
+                // Skill failed to load, likely due to container skills validation
+                warnings.push(format!(" {} - Requires container skills (validation failed)", manifest.name));
+                println!(" {:<28} | {}", manifest.name, manifest.description);
+            }
+        }
+    }
+
+    if !warnings.is_empty() {
+        println!("\n  Container Skills Compatibility Warnings:");
+        for warning in warnings {
+            println!("  {}", warning);
+        }
+        println!("\n Use 'vtcode skills info <name>' to see compatibility details and alternatives.");
     }
 
     println!("\nUse 'vtcode skills info <name>' for details");
@@ -51,6 +122,9 @@ pub async fn handle_skills_load(
     let mut loader = EnhancedSkillLoader::new(options.workspace.clone());
 
     println!("Loading skill: {}...", name);
+    
+    // Ensure skills are discovered before loading
+    loader.discover_all_skills().await.context("Failed to discover skills")?;
 
     let skill = loader
         .get_skill(name)
@@ -59,12 +133,12 @@ pub async fn handle_skills_load(
 
     match skill {
         vtcode_core::skills::loader::EnhancedSkill::Traditional(skill) => {
-            println!("✓ Loaded skill: {} (v{})", skill.name(), skill.manifest.version.as_deref().unwrap_or("0.0.1"));
+            println!("Loaded skill: {} (v{})", skill.name(), skill.manifest.version.as_deref().unwrap_or("0.0.1"));
             println!("  Description: {}", skill.description());
             println!("  Resources: {} files", skill.list_resources().len());
         }
         vtcode_core::skills::loader::EnhancedSkill::CliTool(bridge) => {
-            println!("✓ Loaded CLI tool skill: {}", bridge.config.name);
+            println!("Loaded CLI tool skill: {}", bridge.config.name);
             println!("  Description: {}", bridge.config.description);
         }
     }
@@ -80,6 +154,9 @@ pub async fn handle_skills_info(options: &SkillsCommandOptions, name: &str) -> R
     let mut loader = EnhancedSkillLoader::new(options.workspace.clone());
 
     println!("Loading skill: {}...\n", name);
+    
+    // Ensure skills are discovered before loading
+    loader.discover_all_skills().await.context("Failed to discover skills")?;
 
     let skill = loader
         .get_skill(name)
@@ -95,6 +172,31 @@ pub async fn handle_skills_info(options: &SkillsCommandOptions, name: &str) -> R
             }
             if let Some(author) = &skill.manifest.author {
                 println!("Author: {}", author);
+            }
+
+            // Add container skills compatibility check
+            let analysis = loader.check_container_requirements(&skill);
+            println!("\n--- Compatibility ---");
+            match analysis.requirement {
+                vtcode_core::skills::container_validation::ContainerSkillsRequirement::Required => {
+                    println!(" Requires Anthropic container skills - NOT COMPATIBLE with VTCode");
+                }
+                vtcode_core::skills::container_validation::ContainerSkillsRequirement::RequiredWithFallback => {
+                    println!("  Uses container skills but provides VTCode-compatible alternatives");
+                }
+                vtcode_core::skills::container_validation::ContainerSkillsRequirement::NotRequired => {
+                    println!(" Fully compatible with VTCode");
+                }
+                vtcode_core::skills::container_validation::ContainerSkillsRequirement::Unknown => {
+                    println!(" Compatibility unknown - proceed with caution");
+                }
+            }
+            
+            if !analysis.recommendations.is_empty() {
+                println!("\n--- Recommendations ---");
+                for rec in &analysis.recommendations {
+                    println!("{}", rec);
+                }
             }
 
             println!("\n--- Instructions ---");
@@ -143,7 +245,7 @@ pub async fn handle_skills_create(skill_path: &PathBuf) -> Result<()> {
     // Create scripts directory
     fs::create_dir(skill_path.join("scripts")).ok(); // Optional
 
-    println!("✓ Created skill template at: {}", skill_path.display());
+    println!("Created skill template at: {}", skill_path.display());
     println!("  • SKILL.md - Skill metadata and instructions");
     println!("  • scripts/ - Optional: executable scripts");
     println!("\nNext steps:");
@@ -164,7 +266,7 @@ pub async fn handle_skills_validate(skill_path: &PathBuf) -> Result<()> {
 
     manifest.validate()?;
 
-    println!("✓ SKILL.md is valid");
+    println!("SKILL.md is valid");
     println!("  Name: {}", manifest.name);
     println!("  Description: {}", manifest.description);
     if let Some(version) = &manifest.version {

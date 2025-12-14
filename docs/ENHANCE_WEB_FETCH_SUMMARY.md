@@ -132,15 +132,15 @@ Located in `.vtcode/` directory (included in release):
 
 ### Built-in Protections (Always Active)
 
--   ✓  Blocks known banking/payment sites
--   ✓  Blocks authentication services
--   ✓  Blocks email providers
--   ✓  Detects typosquatting domains
--   ✓  Detects malware file patterns
--   ✓  Blocks credentials in URLs
--   ✓  Blocks known malware hosting services
--   ✓  Blocks access to localhost/private networks
--   ✓  Enforces HTTPS by default
+-     Blocks known banking/payment sites
+-     Blocks authentication services
+-     Blocks email providers
+-     Detects typosquatting domains
+-     Detects malware file patterns
+-     Blocks credentials in URLs
+-     Blocks known malware hosting services
+-     Blocks access to localhost/private networks
+-     Enforces HTTPS by default
 
 ### Configurable Features
 
@@ -172,10 +172,10 @@ Located in `.vtcode/` directory (included in release):
 
 ## Backward Compatibility
 
-✓  All existing behavior preserved
-✓  Default configuration unchanged
-✓  Configuration is optional - tool works without external files
-✓  Tests still pass (network timeouts expected, test endpoints attempt real connections)
+  All existing behavior preserved
+  Default configuration unchanged
+  Configuration is optional - tool works without external files
+  Tests still pass (network timeouts expected, test endpoints attempt real connections)
 
 ## Usage Examples
 
@@ -253,7 +253,7 @@ cargo test web_fetch --lib
 
 ## Integration Status
 
-### Completed ✓ 
+### Completed  
 
 -   Domain constants extracted to separate module
 -   Dynamic configuration loading methods implemented
@@ -272,7 +272,7 @@ cargo test web_fetch --lib
 ## Compilation Status
 
 ```
-✓  cargo check - PASS
-✓  No errors or warnings
-✓  All tests compile
+  cargo check - PASS
+  No errors or warnings
+  All tests compile
 ```

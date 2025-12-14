@@ -410,31 +410,31 @@ container={
 
 ```
 VTCode/
-├── .claude/skills/                          # Project skills
-│   ├── README.md                            # Skills overview
-│   ├── spreadsheet-generator/
-│   │   └── SKILL.md
-│   ├── doc-generator/
-│   │   └── SKILL.md
-│   ├── pdf-report-generator/
-│   │   └── SKILL.md
-│   └── [other skills]/
-│
-├── docs/
-│   ├── AGENT_SKILLS_INTEGRATION.md          # Integration guide
-│   ├── AGENT_SKILLS_QUICKREF.md             # Quick reference
-│   ├── AGENT_SKILLS_SUMMARY.md              # Implementation summary
-│   ├── SKILLS_GUIDE.md                      # Complete skills guide
-│   ├── INDEX_AGENT_SKILLS.md                # This file
-│   └── skills/
-│       ├── SPREADSHEET_EXAMPLE.md
-│       ├── WORD_DOCUMENT_EXAMPLE.md
-│       └── PDF_GENERATION_EXAMPLE.md
-│
-└── examples/
-    ├── skills_spreadsheet.py
-    ├── skills_word_document.py
-    └── skills_pdf_generation.py
+ .claude/skills/                          # Project skills
+    README.md                            # Skills overview
+    spreadsheet-generator/
+       SKILL.md
+    doc-generator/
+       SKILL.md
+    pdf-report-generator/
+       SKILL.md
+    [other skills]/
+
+ docs/
+    AGENT_SKILLS_INTEGRATION.md          # Integration guide
+    AGENT_SKILLS_QUICKREF.md             # Quick reference
+    AGENT_SKILLS_SUMMARY.md              # Implementation summary
+    SKILLS_GUIDE.md                      # Complete skills guide
+    INDEX_AGENT_SKILLS.md                # This file
+    skills/
+        SPREADSHEET_EXAMPLE.md
+        WORD_DOCUMENT_EXAMPLE.md
+        PDF_GENERATION_EXAMPLE.md
+
+ examples/
+     skills_spreadsheet.py
+     skills_word_document.py
+     skills_pdf_generation.py
 ```
 
 ---

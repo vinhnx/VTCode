@@ -8,8 +8,8 @@ Enhanced the git diff patch rendering system in `vtcode-core` to provide a more 
 
 ### 1. File Header Enhancement (`render_summary`)
 - **Before**: `• Edited path/to/file (+1 -2)`
-- **After**: `▸ Edit path/to/file +1 -2`
-- Improved visual distinction with directional arrow (`▸`) instead of bullet
+- **After**: ` Edit path/to/file +1 -2`
+- Improved visual distinction with directional arrow (``) instead of bullet
 - Changed label from "Edited" to "Edit" for brevity and consistency
 - Removed parentheses around statistics for cleaner formatting
 
@@ -31,7 +31,7 @@ Enhanced the git diff patch rendering system in `vtcode-core` to provide a more 
 
 ### 3. Unified Diff Header (`render_diff`)
 - **Added**: Proper unified diff format headers (`--- a/` and `+++ b/`)
-- **Added**: Visual separator line (`─`) above file summary
+- **Added**: Visual separator line (``) above file summary
 - Follows standard git diff format conventions
 
 **Benefits:**
@@ -41,13 +41,13 @@ Enhanced the git diff patch rendering system in `vtcode-core` to provide a more 
 
 ### 4. Operation Summary Enhancement (`render_operation_summary`)
 - **Before**: `[Success] Operation Files affected: 3 Operation completed successfully!`
-- **After**: `✓ [Success] Operation` with tree-like structure:
+- **After**: ` [Success] Operation` with tree-like structure:
   ```
-  ✓ [Success] Apply patch
-  └─ 3 file(s) affected
+   [Success] Apply patch
+   3 file(s) affected
      Operation completed successfully
   ```
-- Uses semantic indicators (✓/✗) instead of text labels
+- Uses semantic indicators (/) instead of text labels
 - Adds visual hierarchy with tree-like formatting
 - Better structured and easier to scan
 
@@ -92,7 +92,7 @@ All changes are backward compatible:
 
 ### After
 ```
-─ ▸ Edit vtcode-core/src/llm/providers/lmstudio.rs +1 -2
+  Edit vtcode-core/src/llm/providers/lmstudio.rs +1 -2
 --- a/vtcode-core/src/llm/providers/lmstudio.rs
 +++ b/vtcode-core/src/llm/providers/lmstudio.rs
 

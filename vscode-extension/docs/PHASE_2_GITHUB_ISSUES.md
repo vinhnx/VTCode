@@ -39,7 +39,7 @@ Create the foundational interfaces and registry system for modular commands.
 Subtask of Phase 2 - Architecture Refactoring
 
 ## Priority
-🔴 Critical
+ Critical
 ```
 
 ---
@@ -95,7 +95,7 @@ export class AskCommand implements ICommand {
 Subtask of Task 2.1.2 - Extract Commands
 
 ## Priority
-🟡 High
+ High
 ```
 
 ---
@@ -129,7 +129,7 @@ Focus on code selection context. Verify selection API usage.
 Subtask of Task 2.1.2 - Extract Commands
 
 ## Priority
-🟡 High
+ High
 ```
 
 ---
@@ -163,7 +163,7 @@ This command triggers workspace analysis. Test with multiple project types.
 Subtask of Task 2.1.2 - Extract Commands
 
 ## Priority
-🟡 High
+ High
 ```
 
 ---
@@ -206,7 +206,7 @@ Ensure all commands have consistent error handling and logging.
 Subtask of Task 2.1.2 - Extract Commands
 
 ## Priority
-🟡 High
+ High
 ```
 
 ---
@@ -254,7 +254,7 @@ export async function activate() {
 End of Task 2.1 - Command System Refactoring
 
 ## Priority
-🔴 Critical
+ Critical
 ```
 
 ---
@@ -293,7 +293,7 @@ Create the foundational interfaces and registry system for participants.
 Subtask of Phase 2 - Architecture Refactoring
 
 ## Priority
-🔴 Critical
+ Critical
 ```
 
 ---
@@ -348,7 +348,7 @@ class CodeParticipant implements ChatParticipant {
 4-6 hours
 
 ## Priority
-🟡 High
+ High
 ```
 
 ---
@@ -381,7 +381,7 @@ Create `@workspace` participant for project structure context.
 4-6 hours
 
 ## Priority
-🟡 High
+ High
 ```
 
 ---
@@ -421,7 +421,7 @@ Git Participant:
 1 day (both participants)
 
 ## Priority
-🟡 High
+ High
 ```
 
 ---
@@ -462,7 +462,7 @@ Update ChatView to support participant system with @ mentions.
 1-2 days
 
 ## Priority
-🟡 High
+ High
 ```
 
 ---
@@ -516,7 +516,7 @@ interface ChatMessage {
 2-3 days
 
 ## Priority
-🟡 High
+ High
 ```
 
 ---
@@ -561,7 +561,7 @@ class ConversationManager {
 1-2 days
 
 ## Priority
-🟡 High
+ High
 ```
 
 ---
@@ -596,7 +596,7 @@ Create comprehensive unit tests for all extracted commands.
 1-2 days
 
 ## Priority
-🟡 High
+ High
 ```
 
 ---
@@ -629,7 +629,7 @@ Create comprehensive unit tests for all participants.
 1 day
 
 ## Priority
-🟡 High
+ High
 ```
 
 ---
@@ -664,7 +664,7 @@ Create end-to-end integration tests for Phase 2 systems.
 1-2 days
 
 ## Priority
-🟡 High
+ High
 ```
 
 ---
@@ -701,7 +701,7 @@ Update and create architecture documentation for Phase 2 systems.
 1 day
 
 ## Priority
-🟡 High
+ High
 ```
 
 ---

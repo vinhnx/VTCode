@@ -104,14 +104,14 @@ npm run lint
 
 ```
 vscode-extension/
-├── package.json          # Extension manifest and configuration
-├── src/
-│   └── extension.ts      # Main extension entry point
-├── tsconfig.json         # TypeScript configuration
-├── .vscode/
-│   └── launch.json       # Debug launch configurations
-├── syntaxes/             # Language syntax definitions
-└── dist/                 # Compiled output directory
+ package.json          # Extension manifest and configuration
+ src/
+    extension.ts      # Main extension entry point
+ tsconfig.json         # TypeScript configuration
+ .vscode/
+    launch.json       # Debug launch configurations
+ syntaxes/             # Language syntax definitions
+ dist/                 # Compiled output directory
 ```
 
 ## Debugging the Extension

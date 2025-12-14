@@ -51,11 +51,11 @@ class UserRepository:
 
 ### No Default Arguments
 ```python
-# ❌ BAD - Default arguments
+#  BAD - Default arguments
 def create_user(name, email, role="user"):
     pass
 
-# ✅ GOOD - Explicit arguments
+#  GOOD - Explicit arguments
 def create_user(name, email, role):
     pass
 ```
@@ -70,7 +70,7 @@ from typing import Optional
 
 app = FastAPI()
 
-# ✅ ALLOWED - FastAPI optional form parameters
+#  ALLOWED - FastAPI optional form parameters
 @app.post("/users")
 async def create_user(
     name: str = Form(...),
@@ -80,11 +80,11 @@ async def create_user(
     # phone is optional and defaults to None
     pass
 
-# ❌ STILL BAD - Regular function defaults
+#  STILL BAD - Regular function defaults
 def process_user(name, email, phone=None):  # Not allowed
     pass
 
-# ✅ GOOD - Pass optional values explicitly
+#  GOOD - Pass optional values explicitly
 def process_user(name, email, phone):
     # If phone can be None, use Optional[str] type hint
     pass
@@ -98,13 +98,13 @@ def process_user(name, email, phone):
 
 ### No Environment Variable Access
 ```python
-# ❌ BAD - Reading env vars in function
+#  BAD - Reading env vars in function
 def connect_to_database():
     host = os.getenv("DB_HOST")
     port = os.getenv("DB_PORT")
     return connect(host, port)
 
-# ✅ GOOD - Configuration passed as arguments
+#  GOOD - Configuration passed as arguments
 def connect_to_database(host, port):
     return connect(host, port)
 
@@ -143,14 +143,14 @@ class ValidationError(Exception):
 
 ### Error Propagation
 ```python
-# ✅ GOOD - Let errors propagate
+#  GOOD - Let errors propagate
 def get_user(user_id):
     user = repository.find(user_id)
     if not user:
         raise UserNotFoundError(f"User {user_id} not found")
     return user
 
-# ❌ BAD - Silent failure
+#  BAD - Silent failure
 def get_user(user_id):
     try:
         return repository.find(user_id)
@@ -193,7 +193,7 @@ repository = UserRepository(config)
 
 ### Testable Design
 ```python
-# ✅ GOOD - Easy to test with dependency injection
+#  GOOD - Easy to test with dependency injection
 class UserService:
     def __init__(self, repository, email_sender):
         self.repository = repository

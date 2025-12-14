@@ -9,21 +9,21 @@ The tools system has been refactored from a monolithic 3371-line file into a cle
 ### Before (Monolithic)
 ```
 tools_legacy.rs - 3371 lines
-├── Mixed tool implementations
-├── Complex interdependencies
-└── Single large file
+ Mixed tool implementations
+ Complex interdependencies
+ Single large file
 ```
 
 ### After (Modular)
 ```
 tools/
-├── mod.rs           # Clean exports
-├── traits.rs        # Composability traits
-├── types.rs         # Common types
-├── grep_file.rs     # Ripgrep-backed search manager
-├── file_ops.rs      # File operations
-├── command.rs       # Command execution
-└── registry.rs      # Tool coordination
+ mod.rs           # Clean exports
+ traits.rs        # Composability traits
+ types.rs         # Common types
+ grep_file.rs     # Ripgrep-backed search manager
+ file_ops.rs      # File operations
+ command.rs       # Command execution
+ registry.rs      # Tool coordination
 ```
 
 ## Backward Compatibility

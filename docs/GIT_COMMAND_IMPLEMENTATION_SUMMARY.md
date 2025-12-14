@@ -56,7 +56,7 @@ Added 10 new tests:
 - `test_validate_git_stash` - Tests stash operation validation
 - Plus existing tests for other commands (echo, pwd, printenv, which)
 
-**Test Results**: ✓  All 10 git tests passing
+**Test Results**:   All 10 git tests passing
 
 ### 3. Documentation
 **File**: `docs/tools/GIT_COMMAND_EXECUTION.md`
@@ -124,21 +124,21 @@ cargo test --lib execpolicy
 ```
 
 Results:
-- ✓  test_validate_git_read_only - PASSED
-- ✓  test_validate_git_safe_operations - PASSED  
-- ✓  test_validate_git_dangerous_operations_blocked - PASSED
-- ✓  test_validate_git_commit - PASSED
-- ✓  test_validate_git_reset - PASSED
-- ✓  test_validate_git_stash - PASSED
-- ✓  test_validate_echo - PASSED
-- ✓  test_validate_pwd - PASSED
-- ✓  test_validate_printenv - PASSED
-- ✓  test_validate_which - PASSED
+-   test_validate_git_read_only - PASSED
+-   test_validate_git_safe_operations - PASSED  
+-   test_validate_git_dangerous_operations_blocked - PASSED
+-   test_validate_git_commit - PASSED
+-   test_validate_git_reset - PASSED
+-   test_validate_git_stash - PASSED
+-   test_validate_echo - PASSED
+-   test_validate_pwd - PASSED
+-   test_validate_printenv - PASSED
+-   test_validate_which - PASSED
 
 Code quality:
-- ✓  cargo check - PASSED
-- ✓  cargo clippy - No new warnings
-- ✓  Compilation - Clean
+-   cargo check - PASSED
+-   cargo clippy - No new warnings
+-   Compilation - Clean
 
 ## Usage Examples
 

@@ -15,15 +15,15 @@ Transform VSCode extension from monolithic → modular architecture
 
 ```
 WEEK 3: Commands        WEEK 4: Participants     WEEK 5: State Mgmt
-├─ ask                  ├─ @workspace            ├─ Message types
-├─ askSelection         ├─ @code                 ├─ Message store
-├─ analyze              ├─ @terminal             └─ Conversation mgr
-├─ updatePlan           ├─ @git
-├─ config               
-├─ trust                WEEK 6: Tests + Docs
-└─ refresh              ├─ Unit tests (>90%)
-                        ├─ Integration tests
-                        └─ Architecture docs
+ ask                   @workspace             Message types
+ askSelection          @code                  Message store
+ analyze               @terminal              Conversation mgr
+ updatePlan            @git
+ config               
+ trust                WEEK 6: Tests + Docs
+ refresh               Unit tests (>90%)
+                         Integration tests
+                         Architecture docs
 ```
 
 ---
@@ -43,11 +43,11 @@ WEEK 3: Commands        WEEK 4: Participants     WEEK 5: State Mgmt
 ## Timeline
 
 ```
-Week 3 (Nov 11-15): ▓▓▓▓░ Command system
-Week 4 (Nov 18-22): ░▓▓▓▓░ Participant system  
-Week 5 (Nov 25-29): ░░▓▓░ State management
-Week 6 (Dec 02-06): ░░░▓▓ Testing + Docs
-                    ─────────────────
+Week 3 (Nov 11-15):  Command system
+Week 4 (Nov 18-22):  Participant system  
+Week 5 (Nov 25-29):  State management
+Week 6 (Dec 02-06):  Testing + Docs
+                    
                     25 dev days total
 ```
 
@@ -55,24 +55,24 @@ Week 6 (Dec 02-06): ░░░▓▓ Testing + Docs
 
 ## For Each Role
 
-### 👤 Decision Maker
+###  Decision Maker
 1. Read: PHASE_2_SUMMARY.md (5 min)
 2. Action: Approve resources
 3. When: November 11
 
-### 👨‍💻 Developer
+### ‍ Developer
 1. Read: PHASE_2_QUICK_START.md (15 min)
 2. Get assigned task from GitHub
 3. Code using patterns shown in Quick Start
 4. Create PR when done
 
-### 🏗️ Tech Lead
+###  Tech Lead
 1. Read: PHASE_2_IMPLEMENTATION_PLAN.md (30 min)
 2. Run: PHASE_2_LAUNCH.md checklist
 3. Create: GitHub issues from templates
 4. Lead: Weekly standups
 
-### 📊 Project Manager
+###  Project Manager
 1. Create: GitHub issues and milestones
 2. Track: Weekly progress
 3. Report: Status to stakeholders
@@ -133,12 +133,12 @@ it('should execute', async () => {
 
 ## Red Flags (Stop & Ask Tech Lead)
 
-🚩 Don't know what to do next  
-🚩 Breaking existing functionality  
-🚩 Can't write tests  
-🚩 Code doesn't match patterns  
-🚩 Running behind schedule  
-🚩 Confused about requirements  
+ Don't know what to do next  
+ Breaking existing functionality  
+ Can't write tests  
+ Code doesn't match patterns  
+ Running behind schedule  
+ Confused about requirements  
 
 **→ Ask immediately. Don't guess.**
 
@@ -173,7 +173,7 @@ it('should execute', async () => {
 | Nov 15 (Fri) | Week 3 review |
 | Nov 22 (Fri) | Week 4 review |
 | Nov 29 (Fri) | Week 5 review |
-| Dec 6 (Fri) | Phase 2 complete ✓  |
+| Dec 6 (Fri) | Phase 2 complete   |
 | Dec 9 (Mon) | Phase 3 starts |
 
 ---
@@ -249,28 +249,28 @@ VtcodeBackend (agent)
 
 ## Common Mistakes to Avoid
 
-⤫  Hardcoding VS Code APIs in commands  
-✓  Inject via constructor
+  Hardcoding VS Code APIs in commands  
+  Inject via constructor
 
-⤫  Making participants do too much  
-✓  Focus on one context type
+  Making participants do too much  
+  Focus on one context type
 
-⤫  Skipping error handling  
-✓  Use try-catch + logging
+  Skipping error handling  
+  Use try-catch + logging
 
-⤫  Tests after code  
-✓  Write tests alongside code
+  Tests after code  
+  Write tests alongside code
 
 ---
 
 ## Definition of Done (Per Task)
 
-✓  Code written  
-✓  Tests passing  
-✓  Linter passing  
-✓  Documented  
-✓  Code reviewed  
-✓  Merged to main  
+  Code written  
+  Tests passing  
+  Linter passing  
+  Documented  
+  Code reviewed  
+  Merged to main  
 
 ---
 
@@ -305,7 +305,7 @@ VtcodeBackend (agent)
 
 ---
 
-**Status**: 🚀 Ready to Launch  
+**Status**:  Ready to Launch  
 **Start Date**: November 11, 2025  
 **Duration**: 4 weeks  
 **Effort**: 25 dev days  

@@ -230,16 +230,16 @@ fn try_get_tools(provider: &str) -> McpResult<Vec<Tool>> {
 
 ## What's NOT Supported in Phase 1
 
-❌ Full JSON Schema validation (use Phase 2)
+ Full JSON Schema validation (use Phase 2)
 - No support for: `minLength`, `maxLength`, `pattern`, `enum`, `oneOf`, `anyOf`, `allOf`
 - No nested schema validation beyond property types
 - No array item type validation
 
-❌ HTTP transport
+ HTTP transport
 
-❌ Complex error context (coming Phase 2)
+ Complex error context (coming Phase 2)
 
-❌ Tool schema caching (coming Phase 2)
+ Tool schema caching (coming Phase 2)
 
 ---
 

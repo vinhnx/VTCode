@@ -32,11 +32,11 @@ line.push_str(&styled);
 #### Location: `src/agent/runloop/unified/turn/session.rs:1666`
 ```rust
 // CURRENT
-&format!("\x1b[31m✗\x1b[0m Tool '{}' failed", name),
+&format!("\x1b[31m\x1b[0m Tool '{}' failed", name),
 
 // GOAL
 &format!("{} Tool '{}' failed", 
-    render_styled("✗", ColorPalette::default().error, None), 
+    render_styled("", ColorPalette::default().error, None), 
     name)
 ```
 

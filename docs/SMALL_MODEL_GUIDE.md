@@ -345,10 +345,10 @@ temperature = 0.1                # Make more deterministic
 
 The small model tier enables:
 
-✓  **70-80% cost reduction** on ~50% of operations  
-✓  **Maintained quality** for parsing/summary tasks  
-✓  **Backward compatible** - Can be disabled completely  
-✓  **Flexible** - Customize per use case  
-✓  **Monitored** - Easy to track impact  
+  **70-80% cost reduction** on ~50% of operations  
+  **Maintained quality** for parsing/summary tasks  
+  **Backward compatible** - Can be disabled completely  
+  **Flexible** - Customize per use case  
+  **Monitored** - Easy to track impact  
 
 Start by enabling it for large file reads and web summaries. Expand based on results.

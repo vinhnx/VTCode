@@ -45,12 +45,12 @@ vtcode auto "Generate financial report"
 
 ```
 skill-name/
-├── SKILL.md              # Metadata + Instructions (REQUIRED)
-├── ADVANCED.md           # Optional: Extended guide
-├── scripts/              # Optional: Helper scripts
-│   └── helper.py
-└── templates/            # Optional: Reference materials
-    └── example.json
+ SKILL.md              # Metadata + Instructions (REQUIRED)
+ ADVANCED.md           # Optional: Extended guide
+ scripts/              # Optional: Helper scripts
+    helper.py
+ templates/            # Optional: Reference materials
+     example.json
 ```
 
 ## SKILL.md Template
@@ -164,10 +164,10 @@ No context loading
 vtcode skills validate <path>
 
 # Requirements:
-# ✓ Valid YAML frontmatter
-# ✓ name: 1-64 chars, lowercase
-# ✓ description: 1-1024 chars
-# ✗ Cannot contain "anthropic" or "claude"
+#  Valid YAML frontmatter
+#  name: 1-64 chars, lowercase
+#  description: 1-1024 chars
+#  Cannot contain "anthropic" or "claude"
 ```
 
 ## Examples Location

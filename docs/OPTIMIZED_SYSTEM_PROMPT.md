@@ -90,10 +90,10 @@ When conversation gets long:
 ```
 
 Gathering context?
-├─ File exists? → list_files(mode="find_name")
-├─ Pattern matching? → grep + glob (Grep tool for text, glob for file patterns)
-├─ Directory structure? → list_files(mode="list")
-├─ File contents needed? → read(path) for full, read(path, read_range=[N, M]) for sections
+ File exists? → list_files(mode="find_name")
+ Pattern matching? → grep + glob (Grep tool for text, glob for file patterns)
+ Directory structure? → list_files(mode="list")
+ File contents needed? → read(path) for full, read(path, read_range=[N, M]) for sections
 
 ```
 
@@ -101,9 +101,9 @@ Gathering context?
 ```
 
 Editing files?
-├─ Small change (1-5 lines)? → edit_file (surgical, preferred)
-├─ 50%+ file changed? → create_file (full rewrite)
-├─ Complex multi-file? → edit_file per file (not create_file)
+ Small change (1-5 lines)? → edit_file (surgical, preferred)
+ 50%+ file changed? → create_file (full rewrite)
+ Complex multi-file? → edit_file per file (not create_file)
 
 ```
 
@@ -111,9 +111,9 @@ Editing files?
 ```
 
 Running commands?
-├─ One-off (cargo, git, npm)? → Bash (preferred)
-├─ Interactive (debugger, REPL)? → PTY session (create, send, read, close)
-├─ Checking status? → Bash (cargo check, git diff, etc.)
+ One-off (cargo, git, npm)? → Bash (preferred)
+ Interactive (debugger, REPL)? → PTY session (create, send, read, close)
+ Checking status? → Bash (cargo check, git diff, etc.)
 
 Non-retryable errors:
 
@@ -127,9 +127,9 @@ Non-retryable errors:
 ```
 
 Processing data?
-├─ 100+ items? → execute_code (Python for filtering, can save massive tokens)
-├─ Complex transform? → execute_code
-├─ Simple grep/sort? → Bash or Grep tool
+ 100+ items? → execute_code (Python for filtering, can save massive tokens)
+ Complex transform? → execute_code
+ Simple grep/sort? → Bash or Grep tool
 
 ```
 
@@ -137,9 +137,9 @@ Processing data?
 ```
 
 Task tracking?
-├─ Simple task (<5 steps)? → Keep in context, no TODO needed
-├─ Complex task (5+ steps + dependencies)? → update_plan (TODO list)
-├─ Long task (100+ tokens)? → Create .progress.md with state
+ Simple task (<5 steps)? → Keep in context, no TODO needed
+ Complex task (5+ steps + dependencies)? → update_plan (TODO list)
+ Long task (100+ tokens)? → Create .progress.md with state
 
 ```
 
@@ -169,10 +169,10 @@ Task tracking?
 ## How to Write Effective Instructions (For Future Interactions)
 
 ### Use This Language
-- Direct: "Fix the type error in fetch_user" ✓
-- Specific: "Change X from A to B because C" ✓
-- Not: "There's a problem, fix it" ⤫
-- Not: "Do what makes sense" ⤫
+- Direct: "Fix the type error in fetch_user" 
+- Specific: "Change X from A to B because C" 
+- Not: "There's a problem, fix it" 
+- Not: "Do what makes sense" 
 
 ### Common Patterns
 

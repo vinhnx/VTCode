@@ -25,7 +25,7 @@ use std::{
 };
 use tokio::fs;
 use tokio::time::sleep;
-use tracing::{debug, trace, warn};
+use tracing::{debug, trace};
 
 use crate::config::constants::defaults::{
     DEFAULT_PTY_OUTPUT_BYTE_FUSE, DEFAULT_PTY_OUTPUT_MAX_TOKENS,
@@ -1147,7 +1147,19 @@ impl ToolRegistry {
 
             // Load skill using EnhancedSkillLoader (reads .claude/skills/*/SKILL.md)
             use crate::skills::{EnhancedSkillLoader, loader::EnhancedSkill};
-            let mut loader = EnhancedSkillLoader::new(workspace_root);
+            let mut loader = EnhancedSkillLoader::new(workspace_root.clone());
+
+            // Ensure skills are discovered before trying to load them
+            // This fixes the issue where skills loaded via CLI aren't available to the skill tool
+            match loader.discover_all_skills().await {
+                Ok(_) => {
+                    // Skills discovered successfully, continue with loading
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to discover skills: {}. Proceeding anyway.", e);
+                    // Continue even if discovery fails - skill might still be loadable
+                }
+            }
 
             match loader.get_skill(&parsed.name).await {
                 Ok(enhanced_skill) => {
@@ -1560,7 +1572,7 @@ impl ToolRegistry {
             .count();
 
         if delete_ops > 0 && add_ops > 0 {
-            warn!(
+            tracing::warn!(
                 delete_ops,
                 add_ops,
                 "apply_patch will delete and recreate files; ensure backups or incremental edits"
@@ -1809,7 +1821,7 @@ impl ToolRegistry {
         let results = match patch.apply(self.workspace_root()).await {
             Ok(results) => results,
             Err(err) => {
-                warn!(
+                tracing::warn!(
                     error = %err,
                     "apply_patch failed; consider falling back to incremental edits"
                 );

@@ -27,8 +27,8 @@ VT Code's system prompt v3 incorporates best practices from Anthropic's context 
 ## I. Implementation Strategy
 
 ### Phase 1: Immediate (This Week)
-1. ✓  Analyze research + best practices (Anthropic, tool complexity studies)
-2. ✓  Draft optimized system prompt with context engineering
+1.   Analyze research + best practices (Anthropic, tool complexity studies)
+2.   Draft optimized system prompt with context engineering
 3. ⏳ Update vtcode-core/src/prompts/system.rs with v3
 4. ⏳ Validate syntax + formatting (no truncation)
 
@@ -156,14 +156,14 @@ Specific action with file path + line numbers
 **Solution**: Unified instruction patterns tested across all three models:
 
 ```
-✓  USE (All Models):
+  USE (All Models):
 - Direct task language: "Find X", "Update Y"
 - Active voice: "Add validation logic"
 - Specific outcomes: "Return file path + line number"
 - Flat structures: Max 2 nesting levels
 - Clear examples: Input/output pairs
 
-⤫  AVOID (Compatibility Issues):
+  AVOID (Compatibility Issues):
 - Overuse of "IMPORTANT" (weaker on GPT/Gemini)
 - "Step-by-step reasoning" (can trigger verbosity)
 - Deep nesting (Gemini struggles with 3+ levels)
@@ -406,8 +406,8 @@ Flatten instruction hierarchy to single level
 ## XI. Next Steps
 
 ### Immediate (This Session)
-1. ✓  Finalize v3 system prompt content
-2. ✓  Integrate into system.rs
+1.   Finalize v3 system prompt content
+2.   Integrate into system.rs
 3. ⏳ Update documentation
 
 ### This Week
@@ -431,11 +431,11 @@ Flatten instruction hierarchy to single level
 
 VT Code's system prompt v3 represents a significant evolution in agentic AI prompt design. By incorporating context engineering best practices, explicit per-tool rules, long-horizon task support, and universal multi-LLM language, we achieve:
 
-✓  **33% reduction in context waste** through intelligent curation  
-✓  **95%+ multi-LLM compatibility** without separate prompts  
-✓  **Long-horizon task support** via structured note-taking  
-✓  **98% loop prevention success** via hard thresholds  
-✓  **Reduced maintenance burden** through cleaner structure  
+  **33% reduction in context waste** through intelligent curation  
+  **95%+ multi-LLM compatibility** without separate prompts  
+  **Long-horizon task support** via structured note-taking  
+  **98% loop prevention success** via hard thresholds  
+  **Reduced maintenance burden** through cleaner structure  
 
 This represents the state-of-the-art for coding agent prompts as of Q4 2025.
 

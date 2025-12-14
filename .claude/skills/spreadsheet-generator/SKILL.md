@@ -11,7 +11,7 @@ Generate professional Excel spreadsheets with structured data, formulas, charts,
 
 ## Instructions
 
-**⚠️ IMPORTANT: vtcode Compatibility Note**
+** IMPORTANT: vtcode Compatibility Note**
 
 This skill requires Anthropic's container skills feature (xlsx skill) which is only available through:
 

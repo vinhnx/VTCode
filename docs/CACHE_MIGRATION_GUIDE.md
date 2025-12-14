@@ -12,10 +12,10 @@ VT Code has consolidated its caching implementations from 5 separate modules to 
 
 | Deprecated API                               | New API                                                | Status        |
 | -------------------------------------------- | ------------------------------------------------------ | ------------- |
-| `improvements_cache::LruCache`               | `crate::cache::UnifiedCache`                           | ✅ Deprecated |
-| `improvements_cache::CacheStats`             | `crate::cache::CacheStats`                             | ✅ Deprecated |
-| `smart_cache::SmartResultCache`              | `result_cache::ToolResultCache::with_fuzzy_matching()` | ⚠️ Superseded |
-| `smart_cache::ResultSignature::similarity()` | `result_cache::FuzzyMatcher::similarity()`             | ⚠️ Superseded |
+| `improvements_cache::LruCache`               | `crate::cache::UnifiedCache`                           |  Deprecated |
+| `improvements_cache::CacheStats`             | `crate::cache::CacheStats`                             |  Deprecated |
+| `smart_cache::SmartResultCache`              | `result_cache::ToolResultCache::with_fuzzy_matching()` |  Superseded |
+| `smart_cache::ResultSignature::similarity()` | `result_cache::FuzzyMatcher::similarity()`             |  Superseded |
 
 ## Migration Examples
 
@@ -163,12 +163,12 @@ where
 
 **Benefits:**
 
--   ✅ Single unified caching API across entire codebase
--   ✅ Consistent eviction policies (LRU, LFU, FIFO, TTL-only)
--   ✅ Better integration with existing infrastructure
--   ✅ Improved maintainability (3 implementations vs 5)
--   ✅ Same performance characteristics
--   ✅ Zero runtime overhead
+-    Single unified caching API across entire codebase
+-    Consistent eviction policies (LRU, LFU, FIFO, TTL-only)
+-    Better integration with existing infrastructure
+-    Improved maintainability (3 implementations vs 5)
+-    Same performance characteristics
+-    Zero runtime overhead
 
 **Deprecated modules still work** but will be removed in v0.50.0 (Q2 2026).
 

@@ -236,32 +236,32 @@ Debugging steps:
 When an MCP tool fails, follow this decision tree:
 
 ```
-┌─ Tool Invocation Failed
-├─ Exit Code 127 ("command not found")
-│  └─ → Explain MCP ≠ shell command
-│     → Show correct tool interface usage
-│     → Suggest manual server verification
-│
-├─ EPIPE / Broken Pipe
-│  └─ → Server crashed or exited
-│     → Check .mcp.json configuration
-│     → Suggest manual server startup
-│     → Recommend timeout/logging tweaks
-│
-├─ Timeout
-│  └─ → Server too slow to start
-│     → Increase startup_timeout_seconds
-│     → Check system resources
-│     → Enable debug logging
-│
-├─ "No such process"
-│  └─ → Server not configured properly
-│     → Verify .mcp.json format
-│     → Check command path in PATH
-│     → Install MCP server package
-│
-└─ Runtime Tool Error (FAILURE status)
-   └─ → MCP server running, tool failed
+ Tool Invocation Failed
+ Exit Code 127 ("command not found")
+   → Explain MCP ≠ shell command
+     → Show correct tool interface usage
+     → Suggest manual server verification
+
+ EPIPE / Broken Pipe
+   → Server crashed or exited
+     → Check .mcp.json configuration
+     → Suggest manual server startup
+     → Recommend timeout/logging tweaks
+
+ Timeout
+   → Server too slow to start
+     → Increase startup_timeout_seconds
+     → Check system resources
+     → Enable debug logging
+
+ "No such process"
+   → Server not configured properly
+     → Verify .mcp.json format
+     → Check command path in PATH
+     → Install MCP server package
+
+ Runtime Tool Error (FAILURE status)
+    → MCP server running, tool failed
       → Verify tool parameters
       → Check server version
       → Suggest manual tool testing

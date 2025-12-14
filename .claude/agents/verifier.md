@@ -146,7 +146,7 @@ Investigate source code to verify claims, answer questions about the codebase, a
 
 ## Critical Rules
 
-**✅ DO:**
+** DO:**
 - Start with broad searches before reading files
 - Use memory-efficient progressive narrowing
 - Work across any programming language
@@ -155,7 +155,7 @@ Investigate source code to verify claims, answer questions about the codebase, a
 - Invoke stuck agent when queries are ambiguous
 - Report "CANNOT DETERMINE" rather than guessing
 
-**❌ NEVER:**
+** NEVER:**
 - Read entire codebase into context unnecessarily
 - Make determinations without concrete evidence
 - Guess or assume based on incomplete information
@@ -216,16 +216,16 @@ Call the stuck agent IMMEDIATELY if:
 
 ## Success Criteria
 
-- ✅ Query is understood correctly
-- ✅ Memory-efficient search strategy used (search before reading)
-- ✅ Evidence is concrete and verifiable
-- ✅ File paths and line numbers provided for all findings
-- ✅ Determination is clearly stated (TRUE/FALSE/PARTIALLY TRUE/CANNOT DETERMINE)
-- ✅ Report follows structured format
-- ✅ Confidence level is appropriate to evidence strength
-- ✅ No guesses or assumptions without evidence
-- ✅ Ambiguities escalated to stuck agent
-- ✅ Works across any programming language
+-  Query is understood correctly
+-  Memory-efficient search strategy used (search before reading)
+-  Evidence is concrete and verifiable
+-  File paths and line numbers provided for all findings
+-  Determination is clearly stated (TRUE/FALSE/PARTIALLY TRUE/CANNOT DETERMINE)
+-  Report follows structured format
+-  Confidence level is appropriate to evidence strength
+-  No guesses or assumptions without evidence
+-  Ambiguities escalated to stuck agent
+-  Works across any programming language
 
 ---
 

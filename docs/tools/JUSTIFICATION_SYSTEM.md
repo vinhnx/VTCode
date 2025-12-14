@@ -183,27 +183,27 @@ User requests: "Run the build and check for errors"
    - Extracted reason: "Need to verify code compiles before refactoring"
 4. Approval dialog shows:
    
-   ┌─ Tool Permission Required ─────────────────────┐
-   │ Tool: run_command                              │
-   │ Action: Execute build                          │
-   │   command: cargo build                         │
-   │                                                │
-   │ Agent Reasoning:                               │
-   │   Need to verify code compiles before          │
-   │   refactoring                                  │
-   │                                                │
-   │ Expected Outcome:                              │
-   │   Will capture command output for analysis     │
-   │   and decision-making.                         │
-   │                                                │
-   │ Risk Level: High                               │
-   │ Approved 3 times previously (100%)             │
-   │                                                │
-   │ ○ Approve Once                                 │
-   │ ○ Allow for Session                            │
-   │ ● Always Allow ← (if high history)            │
-   │ ○ Deny                                         │
-   └────────────────────────────────────────────────┘
+    Tool Permission Required 
+    Tool: run_command                              
+    Action: Execute build                          
+      command: cargo build                         
+                                                   
+    Agent Reasoning:                               
+      Need to verify code compiles before          
+      refactoring                                  
+                                                   
+    Expected Outcome:                              
+      Will capture command output for analysis     
+      and decision-making.                         
+                                                   
+    Risk Level: High                               
+    Approved 3 times previously (100%)             
+                                                   
+     Approve Once                                 
+     Allow for Session                            
+     Always Allow ← (if high history)            
+     Deny                                         
+   
    
 5. User selects "Always Allow"
 6. Decision recorded:

@@ -391,21 +391,21 @@ const path = vscode.workspace.asRelativePath(uri);
 ### Suggested Structure
 ```
 src/
-├── types/              # Interfaces and types
-│   ├── command.ts
-│   ├── participant.ts
-│   └── index.ts
-├── commands/           # Command implementations
-│   ├── askCommand.ts
-│   ├── myCommand.ts
-│   └── index.ts
-├── participants/       # Participant implementations
-│   ├── workspaceParticipant.ts
-│   ├── myParticipant.ts
-│   └── index.ts
-├── commandRegistry.ts  # Command registry
-├── participantRegistry.ts # Participant registry
-└── extension.ts        # Main extension file
+ types/              # Interfaces and types
+    command.ts
+    participant.ts
+    index.ts
+ commands/           # Command implementations
+    askCommand.ts
+    myCommand.ts
+    index.ts
+ participants/       # Participant implementations
+    workspaceParticipant.ts
+    myParticipant.ts
+    index.ts
+ commandRegistry.ts  # Command registry
+ participantRegistry.ts # Participant registry
+ extension.ts        # Main extension file
 ```
 
 ---

@@ -36,18 +36,18 @@ When there are more items beyond the current page, a visual indicator is shown a
 ## Example Display
 
 ```
-┌─ File Browser (Page 1/3) ──────────┐
-│ ↑↓ Navigate · PgUp/PgDn Page · ... │
-│ Showing 50 files (List view)       │
-│                                     │
-│ ▶ src/                              │
-│ ▶ tests/                            │
-│   README.md                         │
-│   Cargo.toml                        │
-│   main.rs                           │
-│   ... (17 more files here)          │
-│   ... (30 more items)               │  ← New continuation indicator
-└─────────────────────────────────────┘
+ File Browser (Page 1/3) 
+ ↑↓ Navigate · PgUp/PgDn Page · ... 
+ Showing 50 files (List view)       
+                                     
+  src/                              
+  tests/                            
+   README.md                         
+   Cargo.toml                        
+   main.rs                           
+   ... (17 more files here)          
+   ... (30 more items)                 ← New continuation indicator
+
 ```
 
 ## User Benefits
@@ -116,8 +116,8 @@ fn test_pagination() {
 ```
 
 ### Test Results
-✓  All 12 file_palette tests passing
-✓  Cargo check succeeds
+  All 12 file_palette tests passing
+  Cargo check succeeds
 
 ## Files Modified
 

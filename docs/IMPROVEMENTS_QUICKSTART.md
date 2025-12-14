@@ -241,7 +241,7 @@ let history = vec![
 
 match detector.detect(&history) {
     PatternState::Degradation => {
-        println!("🚨 User is frustrated - results are getting worse");
+        println!(" User is frustrated - results are getting worse");
         println!("Suggestion: Try a different approach");
     }
     _ => {}

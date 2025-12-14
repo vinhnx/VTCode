@@ -4,7 +4,7 @@ Complete guide to VT Code's security documentation.
 
 ## Quick Start
 
-🚀 **New to VT Code Security?** Start here:
+ **New to VT Code Security?** Start here:
 - [Security Quick Reference](./SECURITY_QUICK_REFERENCE.md) - Security at a glance
 
 ## Core Documentation
@@ -17,7 +17,7 @@ Complete guide to VT Code's security documentation.
 - Best practices
 - Incident response
 
-⚡ **[Security Quick Reference](./SECURITY_QUICK_REFERENCE.md)**
+ **[Security Quick Reference](./SECURITY_QUICK_REFERENCE.md)**
 - 5-layer security model summary
 - Allowed/blocked commands
 - Quick security checks
@@ -45,7 +45,7 @@ Complete guide to VT Code's security documentation.
 - Compliance considerations
 - Deployment guidelines
 
-📋 **[Tool Policies](./vtcode_tools_policy.md)**
+ **[Tool Policies](./vtcode_tools_policy.md)**
 - Command execution policies
 - Approval workflows
 - Policy configuration
@@ -54,12 +54,12 @@ Complete guide to VT Code's security documentation.
 
 ### October 25, 2025 Security Hardening
 
-📝 **[Security Fix: Ripgrep Preprocessor](./SECURITY_FIX_2025-10-25.md)**
+ **[Security Fix: Ripgrep Preprocessor](./SECURITY_FIX_2025-10-25.md)**
 - Fixed HIGH severity vulnerability
 - Ripgrep `--pre` flag argument injection
 - Comprehensive test suite added
 
-📊 **[Security Summary](./SECURITY_SUMMARY.md)**
+ **[Security Summary](./SECURITY_SUMMARY.md)**
 - Executive summary of security work
 - Testing results
 - Impact assessment

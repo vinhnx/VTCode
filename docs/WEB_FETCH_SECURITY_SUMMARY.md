@@ -90,12 +90,12 @@ bit.ly/, short.link/            - URL shorteners
 
 ## Code Quality
 
-- ✓  Compiles without errors or warnings
-- ✓  Passes `cargo clippy` checks
-- ✓  Formatted with `cargo fmt`
-- ✓  All tests included in the implementation
-- ✓  Well-commented code with clear intent
-- ✓  Follows project error handling patterns (`anyhow::Result`)
+-   Compiles without errors or warnings
+-   Passes `cargo clippy` checks
+-   Formatted with `cargo fmt`
+-   All tests included in the implementation
+-   Well-commented code with clear intent
+-   Follows project error handling patterns (`anyhow::Result`)
 
 ## Lines of Code Added
 
@@ -121,7 +121,7 @@ cargo test --lib web_fetch
 
 ## Backward Compatibility
 
-✓  All changes are backward compatible:
+  All changes are backward compatible:
 - Existing valid URLs continue to work
 - Only adds additional security checks
 - No API changes to `WebFetchTool` or its interface

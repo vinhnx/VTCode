@@ -165,25 +165,25 @@ fn test_strip_preserves_text() {
 
 ## Common Mistakes
 
-### ❌ Don't embed ANSI in Ratatui
+###  Don't embed ANSI in Ratatui
 ```rust
 // BAD - Ratatui will render escape codes literally
 Span::raw("\x1b[31mError\x1b[0m")
 ```
 
-### ✅ Use Ratatui styles instead
+###  Use Ratatui styles instead
 ```rust
 // GOOD
 Span::styled("Error", Style::default().fg(Color::Red))
 ```
 
-### ❌ Don't count tokens with ANSI
+###  Don't count tokens with ANSI
 ```rust
 // BAD - ANSI codes inflate count
 let tokens = count_tokens(&pty_output);
 ```
 
-### ✅ Strip first
+###  Strip first
 ```rust
 // GOOD
 let clean = strip_ansi(&pty_output);
@@ -239,13 +239,13 @@ let clean = ANSI_REGEX.replace_all(text, "");
 
 ### Avoid Repeated Stripping
 ```rust
-// ❌ BAD - strips multiple times
+//  BAD - strips multiple times
 for line in output.lines() {
     let clean = strip_ansi(line);
     process(clean);
 }
 
-// ✅ GOOD - strip once
+//  GOOD - strip once
 let clean_output = strip_ansi(&output);
 for line in clean_output.lines() {
     process(line);
@@ -255,21 +255,21 @@ for line in clean_output.lines() {
 ## Quick Reference Card
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│ ANSI Quick Reference                                    │
-├─────────────────────────────────────────────────────────┤
-│ Reset:        \x1b[0m                                   │
-│ Bold:         \x1b[1m                                   │
-│ Dim:          \x1b[2m                                   │
-│ Red:          \x1b[31m                                  │
-│ Green:        \x1b[32m                                  │
-│ Yellow:       \x1b[33m                                  │
-│ Blue:         \x1b[34m                                  │
-│ Clear line:   \x1b[2K                                   │
-│ Hide cursor:  \x1b[?25l                                 │
-│ Show cursor:  \x1b[?25h                                 │
-│ Alt buffer:   \x1b[?1049h (enable) \x1b[?1049l (disable)│
-└─────────────────────────────────────────────────────────┘
+
+ ANSI Quick Reference                                    
+
+ Reset:        \x1b[0m                                   
+ Bold:         \x1b[1m                                   
+ Dim:          \x1b[2m                                   
+ Red:          \x1b[31m                                  
+ Green:        \x1b[32m                                  
+ Yellow:       \x1b[33m                                  
+ Blue:         \x1b[34m                                  
+ Clear line:   \x1b[2K                                   
+ Hide cursor:  \x1b[?25l                                 
+ Show cursor:  \x1b[?25h                                 
+ Alt buffer:   \x1b[?1049h (enable) \x1b[?1049l (disable)
+
 ```
 
 ## See Also

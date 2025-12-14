@@ -77,13 +77,13 @@ namespace MyApp.Services
 
 ### No Default Arguments
 ```csharp
-// ❌ BAD - Default arguments
+//  BAD - Default arguments
 public User CreateUser(string name, string email, string role = "user")
 {
     // ...
 }
 
-// ✅ GOOD - Explicit arguments
+//  GOOD - Explicit arguments
 public User CreateUser(string name, string email, string role)
 {
     // ...
@@ -92,7 +92,7 @@ public User CreateUser(string name, string email, string role)
 
 ### No Environment Variable Access
 ```csharp
-// ❌ BAD - Reading env vars in method
+//  BAD - Reading env vars in method
 public DatabaseConnection ConnectToDatabase()
 {
     var host = Environment.GetEnvironmentVariable("DB_HOST");
@@ -100,7 +100,7 @@ public DatabaseConnection ConnectToDatabase()
     return Connect(host, port);
 }
 
-// ✅ GOOD - Configuration passed as arguments
+//  GOOD - Configuration passed as arguments
 public DatabaseConnection ConnectToDatabase(DatabaseConfig config)
 {
     return Connect(config.Host, config.Port);
@@ -125,18 +125,18 @@ var connection = ConnectToDatabase(config);
 
 ### Explicit Typing
 ```csharp
-// ✅ GOOD - Explicit types
+//  GOOD - Explicit types
 public async Task<List<User>> ProcessUsersAsync(List<User> users, bool filterActive)
 {
     // Implementation
 }
 
 // Avoid 'var' when type is not obvious
-// ✅ GOOD - var is acceptable when type is clear from right side
+//  GOOD - var is acceptable when type is clear from right side
 var repository = new UserRepository(connection, logger);
 var users = await repository.GetAllUsersAsync();
 
-// ❌ BAD - var when type is not obvious
+//  BAD - var when type is not obvious
 var result = ProcessData();  // What type is result?
 ```
 
@@ -181,7 +181,7 @@ namespace MyApp.Exceptions
 
 ### Error Propagation
 ```csharp
-// ✅ GOOD - Let errors propagate
+//  GOOD - Let errors propagate
 public async Task<User> GetUserAsync(string userId)
 {
     var user = await _repository.FindByIdAsync(userId);
@@ -192,7 +192,7 @@ public async Task<User> GetUserAsync(string userId)
     return user;
 }
 
-// ❌ BAD - Silent failure
+//  BAD - Silent failure
 public async Task<User> GetUserAsync(string userId)
 {
     try
@@ -205,7 +205,7 @@ public async Task<User> GetUserAsync(string userId)
     }
 }
 
-// ✅ GOOD - Wrap and rethrow with context
+//  GOOD - Wrap and rethrow with context
 public async Task<User> GetUserAsync(string userId)
 {
     try
@@ -291,7 +291,7 @@ public class UserRepository
 
 ### Constructor Injection
 ```csharp
-// ✅ GOOD - Dependencies injected via constructor
+//  GOOD - Dependencies injected via constructor
 public class UserService
 {
     private readonly IUserRepository _repository;
@@ -339,7 +339,7 @@ services.AddSingleton<ICacheService, CacheService>();
 
 ### Always Use Async/Await for I/O Operations
 ```csharp
-// ✅ GOOD - Async all the way
+//  GOOD - Async all the way
 public async Task<User> GetUserAsync(string userId)
 {
     var user = await _repository.FindByIdAsync(userId);
@@ -347,20 +347,20 @@ public async Task<User> GetUserAsync(string userId)
     return user;
 }
 
-// ❌ BAD - Blocking on async code
+//  BAD - Blocking on async code
 public User GetUser(string userId)
 {
     var user = _repository.FindByIdAsync(userId).Result; // Don't use .Result!
     return user;
 }
 
-// ❌ BAD - Unnecessary async
+//  BAD - Unnecessary async
 public async Task<int> CalculateSum(int a, int b)
 {
     return a + b; // No await, should not be async
 }
 
-// ✅ GOOD - No async keyword needed
+//  GOOD - No async keyword needed
 public Task<int> CalculateSum(int a, int b)
 {
     return Task.FromResult(a + b);
@@ -382,13 +382,13 @@ public async Task<User> GetUserAsync(string userId)
 
 ### Avoid Async Void
 ```csharp
-// ❌ BAD - Async void (only allowed in event handlers)
+//  BAD - Async void (only allowed in event handlers)
 public async void ProcessUser(User user)
 {
     await _repository.SaveAsync(user);
 }
 
-// ✅ GOOD - Async Task
+//  GOOD - Async Task
 public async Task ProcessUserAsync(User user)
 {
     await _repository.SaveAsync(user);
@@ -399,14 +399,14 @@ public async Task ProcessUserAsync(User user)
 
 ### Prefer Method Syntax
 ```csharp
-// ✅ GOOD - Method syntax (preferred for most cases)
+//  GOOD - Method syntax (preferred for most cases)
 var activeUsers = users
     .Where(u => u.IsActive)
     .OrderBy(u => u.Name)
     .Select(u => new UserDto { Name = u.Name, Email = u.Email })
     .ToList();
 
-// ✅ ACCEPTABLE - Query syntax (useful for complex joins)
+//  ACCEPTABLE - Query syntax (useful for complex joins)
 var userOrders = from user in users
                  join order in orders on user.Id equals order.UserId
                  where user.IsActive
@@ -415,12 +415,12 @@ var userOrders = from user in users
 
 ### Deferred Execution
 ```csharp
-// ✅ GOOD - Understand deferred execution
+//  GOOD - Understand deferred execution
 var query = users.Where(u => u.IsActive); // Not executed yet
 var count = query.Count(); // Executed here
 var list = query.ToList(); // Executed again here
 
-// ✅ GOOD - Materialize once if needed multiple times
+//  GOOD - Materialize once if needed multiple times
 var activeUsers = users.Where(u => u.IsActive).ToList();
 var count = activeUsers.Count;
 var first = activeUsers.FirstOrDefault();
@@ -468,11 +468,11 @@ public class UserService
 
 ### Null-Forgiving Operator (Use Sparingly)
 ```csharp
-// ❌ AVOID - Null-forgiving operator
+//  AVOID - Null-forgiving operator
 var user = await _repository.FindByIdAsync(userId);
 Console.WriteLine(user!.Name); // Suppresses null warning
 
-// ✅ GOOD - Explicit null check
+//  GOOD - Explicit null check
 var user = await _repository.FindByIdAsync(userId);
 if (user != null)
 {
@@ -484,7 +484,7 @@ if (user != null)
 
 ### Testable Design with Dependency Injection
 ```csharp
-// ✅ GOOD - Easy to test with interfaces
+//  GOOD - Easy to test with interfaces
 public interface IUserRepository
 {
     Task<User?> FindByIdAsync(string userId);
@@ -575,7 +575,7 @@ public decimal CalculateTotal(List<Item> items, decimal taxRate)
 Controllers should only orchestrate calls to services. All business logic must be in the service layer.
 
 ```csharp
-// ❌ BAD - Business logic in controller
+//  BAD - Business logic in controller
 [ApiController]
 [Route("api/[controller]")]
 public class UsersController : ControllerBase
@@ -590,22 +590,22 @@ public class UsersController : ControllerBase
     [HttpGet("{id}")]
     public async Task<IActionResult> GetUser(string id)
     {
-        // ❌ BAD - Validation logic in controller
+        //  BAD - Validation logic in controller
         if (string.IsNullOrEmpty(id))
         {
             return BadRequest("User ID is required");
         }
 
-        // ❌ BAD - Direct repository access
+        //  BAD - Direct repository access
         var user = await _repository.FindByIdAsync(id);
 
-        // ❌ BAD - Business logic in controller
+        //  BAD - Business logic in controller
         if (user == null)
         {
             return NotFound($"User {id} not found");
         }
 
-        // ❌ BAD - Data transformation in controller
+        //  BAD - Data transformation in controller
         var dto = new UserDto
         {
             Name = user.Name,
@@ -616,7 +616,7 @@ public class UsersController : ControllerBase
     }
 }
 
-// ✅ GOOD - Thin controller, logic in service
+//  GOOD - Thin controller, logic in service
 [ApiController]
 [Route("api/[controller]")]
 public class UsersController : ControllerBase
@@ -837,10 +837,10 @@ global using Microsoft.Extensions.Logging;
 
 ### Use Records for DTOs
 ```csharp
-// ✅ GOOD - Record for immutable DTO
+//  GOOD - Record for immutable DTO
 public record UserDto(string Id, string Name, string Email);
 
-// ✅ GOOD - Record with validation
+//  GOOD - Record with validation
 public record CreateUserRequest
 {
     public string Name { get; init; }
@@ -863,7 +863,7 @@ public record CreateUserRequest
 
 ### Use Pattern Matching
 ```csharp
-// ✅ GOOD - Modern pattern matching
+//  GOOD - Modern pattern matching
 public string GetUserStatus(User user) => user switch
 {
     { IsActive: true, LastLoginDate: var date } when date > DateTime.Now.AddDays(-7) => "Active",
@@ -872,7 +872,7 @@ public string GetUserStatus(User user) => user switch
     _ => "Unknown"
 };
 
-// ✅ GOOD - Type pattern matching
+//  GOOD - Type pattern matching
 public decimal CalculatePrice(IProduct product) => product switch
 {
     PhysicalProduct p => p.Price + p.ShippingCost,

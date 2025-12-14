@@ -1,6 +1,6 @@
 # MCP Phase 2 Roadmap
 
-**Phase 1 Status:** ✅ Complete  
+**Phase 1 Status:**  Complete  
 **Next Phase:** Phase 2 - Enhanced Validation & HTTP Transport  
 **Priority:** Medium (foundation complete, ready for expansion)
 
@@ -219,10 +219,10 @@ jsonschema = "0.17"  # For full JSON Schema support
 ## Backward Compatibility
 
 All Phase 2 changes maintain Phase 1 API stability:
-- ✅ `McpResult<T>` type unchanged
-- ✅ Error helper function signatures unchanged
-- ✅ Schema validation function signatures unchanged
-- ✅ Transport creation signatures unchanged
+-  `McpResult<T>` type unchanged
+-  Error helper function signatures unchanged
+-  Schema validation function signatures unchanged
+-  Transport creation signatures unchanged
 
 New functionality added as:
 - New optional parameters
@@ -248,6 +248,6 @@ New functionality added as:
 
 ---
 
-**Phase 1 Complete:** ✅  
-**Ready for Phase 2:** ✅ Yes  
+**Phase 1 Complete:**   
+**Ready for Phase 2:**  Yes  
 **Estimated Phase 2 Effort:** 10-12 hours

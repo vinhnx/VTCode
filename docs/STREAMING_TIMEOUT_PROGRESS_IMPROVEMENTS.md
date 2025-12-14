@@ -40,34 +40,34 @@ WARN Streaming operation at 80% of timeout limit (480/600s elapsed). Approaching
 
 ### Before
 ```
-┌─────────────────────────────┐
-│  StreamingProcessor         │
-│  - config                   │
-│  - metrics                  │
-│  - current_event_data       │
-└─────────────────────────────┘
-         │
-         ├─► process_stream()
-         │   └─► Timeout occurs
-         │       └─► Return error (silent)
+
+  StreamingProcessor         
+  - config                   
+  - metrics                  
+  - current_event_data       
+
+         
+          process_stream()
+             Timeout occurs
+                 Return error (silent)
 ```
 
 ### After
 ```
-┌─────────────────────────────────────┐
-│  StreamingProcessor                 │
-│  - config                           │
-│  - metrics                          │
-│  - current_event_data               │
-│  + progress_callback (NEW)          │
-│  + warning_threshold (NEW)          │
-└─────────────────────────────────────┘
-         │
-         ├─► process_stream()
-         │   ├─► First chunk: report_progress() → 0.1
-         │   ├─► Each chunk: report_progress_with_timeout() → 0.1-0.99
-         │   │   └─► If >= threshold: warn + callback
-         │   └─► Timeout: report_progress_at_timeout() → 1.0 + error
+
+  StreamingProcessor                 
+  - config                           
+  - metrics                          
+  - current_event_data               
+  + progress_callback (NEW)          
+  + warning_threshold (NEW)          
+
+         
+          process_stream()
+             First chunk: report_progress() → 0.1
+             Each chunk: report_progress_with_timeout() → 0.1-0.99
+                If >= threshold: warn + callback
+             Timeout: report_progress_at_timeout() → 1.0 + error
 ```
 
 ## Code Changes
@@ -97,7 +97,7 @@ pub type ProgressCallback = Box<dyn Fn(f32) + Send + Sync>;
 let processor = StreamingProcessor::new()
     .with_progress_callback(Box::new(|progress: f32| {
         if progress >= 0.8 {
-            eprintln!("⚠️  Approaching timeout at {:.0}%", progress * 100.0);
+            eprintln!("  Approaching timeout at {:.0}%", progress * 100.0);
         }
     }));
 ```
@@ -125,12 +125,12 @@ let processor = StreamingProcessor::new()
 
 ## Benefits
 
-✓  **Early Warning**: Know when operations are approaching timeout before failure  
-✓  **User Feedback**: Display real-time progress to users  
-✓  **Monitoring**: Track streaming performance in production  
-✓  **Debugging**: Log progress points for troubleshooting  
-✓  **Non-Blocking**: No impact on streaming performance  
-✓  **Configurable**: Adjust warning threshold per use case  
+  **Early Warning**: Know when operations are approaching timeout before failure  
+  **User Feedback**: Display real-time progress to users  
+  **Monitoring**: Track streaming performance in production  
+  **Debugging**: Log progress points for troubleshooting  
+  **Non-Blocking**: No impact on streaming performance  
+  **Configurable**: Adjust warning threshold per use case  
 
 ## Testing
 
@@ -160,7 +160,7 @@ async fn test_streaming_progress() {
 
 ## Backward Compatibility
 
-✓  **Fully backward compatible**
+  **Fully backward compatible**
 - Progress callback is optional
 - Existing code works unchanged
 - No breaking API changes

@@ -166,14 +166,14 @@ If you see temperature-related errors:
 
 | Feature | Claude Models | MiniMax-M2 |
 |---------|--------------|------------|
-| Text Generation | ✓ | ✓ |
-| Streaming | ✓ | ✓ |
-| Tool Calling | ✓ | ✓ |
-| System Prompts | ✓ | ✓ |
-| Image Input | ✓ | ✗ |
-| Document Input | ✓ | ✗ |
-| Reasoning Effort | ✓ | ✓ |
-| Prompt Caching | ✓ | ? |
+| Text Generation |  |  |
+| Streaming |  |  |
+| Tool Calling |  |  |
+| System Prompts |  |  |
+| Image Input |  |  |
+| Document Input |  |  |
+| Reasoning Effort |  |  |
+| Prompt Caching |  | ? |
 
 ## Related Documentation
 

@@ -5,7 +5,7 @@ This document summarizes the improvements made to the file reference feature's t
 
 ## Improvements Implemented
 
-### 1. ✓  Proper Tree State Management
+### 1.   Proper Tree State Management
 **Before:** Tree state was created but not fully utilized for stateful navigation.
 
 **After:** All navigation methods (`move_selection_up`, `move_selection_down`, `move_to_first`, `move_to_last`) now properly delegate to `TreeState` methods when in tree mode.
@@ -16,7 +16,7 @@ This document summarizes the improvements made to the file reference feature's t
 - `move_to_first()` → calls `tree_state.select_first()` in tree mode
 - `move_to_last()` → documented as unsupported (TreeState limitation)
 
-### 2. ✓  Tree Caching
+### 2.   Tree Caching
 **Before:** Tree was being rebuilt on every render.
 
 **After:** Tree structure is cached and only rebuilt when:
@@ -35,7 +35,7 @@ pub fn get_tree_items(&mut self) -> &[TreeItem<'static, String>] {
 }
 ```
 
-### 3. ✓  Selection Highlighting
+### 3.   Selection Highlighting
 **Before:** Tree rendering used static tree items without state.
 
 **After:** Tree widget uses stateful rendering with highlight support:
@@ -45,10 +45,10 @@ frame.render_stateful_widget(styled_tree, area, palette.tree_state_mut());
 
 The tree now shows:
 - Visual highlight on selected item
-- Highlight symbol `▶` for better visibility
+- Highlight symbol `` for better visibility
 - Proper styling from theme configuration
 
-### 4. ✓  Smart Pagination/Expansion in Tree Mode
+### 4.   Smart Pagination/Expansion in Tree Mode
 **Before:** Pagination keys (PgUp/PgDn) were disabled in tree mode.
 
 **After:** Repurposed for tree operations:
@@ -61,7 +61,7 @@ The tree now shows:
 - **Enter** → Toggle expand/collapse
 - **t** → Toggle between tree and list view
 
-### 5. ✓  Default to List View
+### 5.   Default to List View
 **Before:** Could have defaulted to tree (more complex).
 
 **After:** File palette now defaults to simpler list view:
@@ -103,7 +103,7 @@ Updated instruction text to clearly show available keys:
 ```
 
 ## Testing
-All tests pass ✓ :
+All tests pass  :
 - 11 file_palette tests
 - 3 file_tree tests
 - Total: 14/14 passing

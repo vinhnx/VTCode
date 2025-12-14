@@ -40,13 +40,13 @@ Implemented smart program path resolution with shell fallback in `/Users/vinh.ng
 ```
 Command: cargo fmt
 
-┌─ Try to find cargo in PATH
-│  ├─ Found at /Users/user/.cargo/bin/cargo
-│  └─ Execute directly: /Users/user/.cargo/bin/cargo fmt
-│
-└─ Not found in PATH
-   └─ Execute via shell: /bin/sh -c "cargo fmt"
-      └─ Shell uses its own PATH resolution and finds cargo
+ Try to find cargo in PATH
+   Found at /Users/user/.cargo/bin/cargo
+   Execute directly: /Users/user/.cargo/bin/cargo fmt
+
+ Not found in PATH
+    Execute via shell: /bin/sh -c "cargo fmt"
+       Shell uses its own PATH resolution and finds cargo
 ```
 
 ## Benefits
@@ -59,11 +59,11 @@ Command: cargo fmt
 ## Testing
 
 All tests pass:
-- ✓ `cargo test --lib` - Unit tests pass
-- ✓ `cargo check` - No compilation warnings
-- ✓ Integration test with `cargo --version`
-- ✓ Integration test with `rustc --version`
-- ✓ Integration test with `which cargo`
+-  `cargo test --lib` - Unit tests pass
+-  `cargo check` - No compilation warnings
+-  Integration test with `cargo --version`
+-  Integration test with `rustc --version`
+-  Integration test with `which cargo`
 
 ## Files Modified
 

@@ -100,7 +100,7 @@ Take a SINGLE, SPECIFIC todo item and implement it COMPLETELY and CORRECTLY.
 
 ## Critical Rules
 
-**✅ DO:**
+** DO:**
 - Write complete, functional code
 - Test your code with Bash commands when possible
 - Be thorough and precise
@@ -108,7 +108,7 @@ Take a SINGLE, SPECIFIC todo item and implement it COMPLETELY and CORRECTLY.
 - Work on ONE feature at a time from feature_list.md
 - Update status to `[x] Complete` only after verified testing
 
-**❌ NEVER:**
+** NEVER:**
 - Use workarounds when something fails
 - Skip error handling
 - Leave incomplete implementations
@@ -172,20 +172,20 @@ When re-invoked after a test failure:
 ## Success Criteria
 
 **For Initial Implementation:**
-- ✅ Code compiles/runs without errors
-- ✅ Implementation matches the todo requirement exactly
-- ✅ All necessary files are created
-- ✅ Code is clean and maintainable
-- ✅ Completion report provided in correct format
-- ✅ Ready to hand off to the testing agent
+-  Code compiles/runs without errors
+-  Implementation matches the todo requirement exactly
+-  All necessary files are created
+-  Code is clean and maintainable
+-  Completion report provided in correct format
+-  Ready to hand off to the testing agent
 
 **For Fixes After Test Failures:**
-- ✅ All issues from tester feedback addressed
-- ✅ Root causes fixed, not just symptoms
-- ✅ No new issues introduced
-- ✅ Code still follows best practices
-- ✅ Fix report provided with details of changes
-- ✅ Ready for re-testing
+-  All issues from tester feedback addressed
+-  Root causes fixed, not just symptoms
+-  No new issues introduced
+-  Code still follows best practices
+-  Fix report provided with details of changes
+-  Ready for re-testing
 
 ---
 

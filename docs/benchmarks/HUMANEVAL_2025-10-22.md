@@ -37,14 +37,14 @@ Strategic choice based on budget and accuracy needs.
 ### Performance Metrics
 
 ```
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                        HUMANEVAL BENCHMARK RESULTS                           ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  PASS RATE:  61.6%                                                         ║
-║                                                                              ║
-║  [██████████████████████████████░░░░░░░░░░░░░░░░░░░░]  ║
-║   101 passed     63 failed                                              ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+
+                        HUMANEVAL BENCHMARK RESULTS                           
+
+  PASS RATE:  61.6%                                                         
+                                                                              
+  []  
+   101 passed     63 failed                                              
+
 ```
 
 | Metric          | Value     |

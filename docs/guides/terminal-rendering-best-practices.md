@@ -6,7 +6,7 @@ This guide documents rendering patterns and best practices specific to VT Code, 
 
 VT Code follows the **Ratatui recipe** of rendering everything in a single `terminal.draw()` closure per frame cycle.
 
-### ⤫  Anti-Pattern: Multiple Draws
+###   Anti-Pattern: Multiple Draws
 
 ```rust
 loop {
@@ -24,7 +24,7 @@ loop {
 
 **Why it fails:** Ratatui uses **double buffering**—only the last `draw()` call within a frame cycle gets rendered. The first two calls are overwritten.
 
-### ✓  Correct Pattern: Single Orchestrated Draw
+###   Correct Pattern: Single Orchestrated Draw
 
 ```rust
 loop {
@@ -112,18 +112,18 @@ The `Layout` algorithm ensures all constraints fit within `area`.
 If you calculate regions manually, be defensive:
 
 ```rust
-// ⤫  Unsafe: Unguarded math can overflow
+//   Unsafe: Unguarded math can overflow
 let width = area.width - 2;
 let y = area.top() + some_offset;
 
-// ✓  Safe: Use `saturating_sub()` and `clamp()`
+//   Safe: Use `saturating_sub()` and `clamp()`
 let width = area.width.saturating_sub(2);
 let y = (area.top() as u32 + offset).min(area.bottom() as u32) as u16;
 ```
 
 Better yet, use iterators:
 ```rust
-// ✓  Safest: Iterator-based (can't go out of bounds)
+//   Safest: Iterator-based (can't go out of bounds)
 for (i, cell) in f.buffer_mut().content.iter_mut().enumerate() {
     if i < max_items {
         // Safe to write
@@ -139,15 +139,15 @@ VT Code composes widgets hierarchically. Each "pane" renders into its allocated 
 
 **Structure:**
 ```
-┌─────────────────────────────────┐
-│ Header: Info, status, theme     │  Render size: full_width × 1
-├─────────────────────────────────┤
-│ │ Nav │ Transcript  │ Modal │  │
-│ │     │  (messages) │ (if   │  │
-│ │     │             │  any) │  │
-├─────────────────────────────────┤
-│ Input bar (user text)           │  Render size: full_width × 1-3
-└─────────────────────────────────┘
+
+ Header: Info, status, theme       Render size: full_width × 1
+
+  Nav  Transcript   Modal   
+        (messages)  (if     
+                     any)   
+
+ Input bar (user text)             Render size: full_width × 1-3
+
 ```
 
 **Implementation:**
@@ -281,10 +281,10 @@ VT Code uses the **Tick/Render split pattern**:
 
 ```
 Event::Tick (4 Hz)
-  └─ Update internal state (messages, selection, etc.)
+   Update internal state (messages, selection, etc.)
   
 Event::Render (60 FPS)
-  └─ Redraw UI from state (Ratatui handles diffing)
+   Redraw UI from state (Ratatui handles diffing)
 ```
 
 This separates "state updates" from "rendering," making both efficient.
@@ -294,13 +294,13 @@ This separates "state updates" from "rendering," making both efficient.
 Text widgets cache strings when possible:
 
 ```rust
-// ⤫  Bad: Allocates new string every frame
+//   Bad: Allocates new string every frame
 loop {
     let text = format!("Status: {}", status);
     f.render_widget(Paragraph::new(text), area);
 }
 
-// ✓  Good: Reuse string if unchanged
+//   Good: Reuse string if unchanged
 if status_changed {
     self.status_str = format!("Status: {}", status);
 }

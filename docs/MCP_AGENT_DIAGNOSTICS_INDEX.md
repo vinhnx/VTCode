@@ -5,20 +5,20 @@
 ## Quick Navigation
 
 ### For Fast Lookups
-👉 **Start here:** [`docs/mcp/MCP_AGENT_QUICK_REFERENCE.md`](./mcp/MCP_AGENT_QUICK_REFERENCE.md)
+ **Start here:** [`docs/mcp/MCP_AGENT_QUICK_REFERENCE.md`](./mcp/MCP_AGENT_QUICK_REFERENCE.md)
 - Error type → solution mapping
 - One-line diagnoses
 - Command cheat sheet
 
 ### For Detailed Guidance
-👉 **Full diagnostics:** [`docs/mcp/MCP_DIAGNOSTIC_GUIDE.md`](./mcp/MCP_DIAGNOSTIC_GUIDE.md)
+ **Full diagnostics:** [`docs/mcp/MCP_DIAGNOSTIC_GUIDE.md`](./mcp/MCP_DIAGNOSTIC_GUIDE.md)
 - 5 common MCP failure types
 - Detailed diagnostics per error
 - Decision tree for agents
 - Implementation checklist
 
 ### For Agent Implementation
-👉 **Agent guidelines:** [`docs/AGENT_MCP_FAILURE_HANDLING.md`](./AGENT_MCP_FAILURE_HANDLING.md)
+ **Agent guidelines:** [`docs/AGENT_MCP_FAILURE_HANDLING.md`](./AGENT_MCP_FAILURE_HANDLING.md)
 - Agent response templates
 - Type-by-type response map
 - Implementation checklist
@@ -98,22 +98,22 @@ The time tool will be available once the server starts.
 
 ```
 docs/
-├── AGENT_MCP_FAILURE_HANDLING.md     ← Agent implementation guide
-├── MCP_AGENT_DIAGNOSTICS_INDEX.md   ← This file
-└── mcp/
-    ├── MCP_AGENT_QUICK_REFERENCE.md  ← Quick lookup
-    ├── MCP_DIAGNOSTIC_GUIDE.md        ← Full diagnostics
-    ├── MCP_DIAGNOSTIC_GUIDE.md
-    ├── MCP_INITIALIZATION_TIMEOUT.md
-    ├── MCP_COMPLETE_IMPLEMENTATION_STATUS.md
-    └── [other MCP docs]
+ AGENT_MCP_FAILURE_HANDLING.md     ← Agent implementation guide
+ MCP_AGENT_DIAGNOSTICS_INDEX.md   ← This file
+ mcp/
+     MCP_AGENT_QUICK_REFERENCE.md  ← Quick lookup
+     MCP_DIAGNOSTIC_GUIDE.md        ← Full diagnostics
+     MCP_DIAGNOSTIC_GUIDE.md
+     MCP_INITIALIZATION_TIMEOUT.md
+     MCP_COMPLETE_IMPLEMENTATION_STATUS.md
+     [other MCP docs]
 ```
 
 ## Key Principles for Agents
 
 When diagnosing MCP failures:
 
-✅ **DO:**
+ **DO:**
 - Identify error type (exit code, error message)
 - Explain in non-technical terms
 - Provide diagnostic commands
@@ -121,7 +121,7 @@ When diagnosing MCP failures:
 - Verify after fix is applied
 - Reference documentation
 
-❌ **DON'T:**
+ **DON'T:**
 - Suggest shell invocation syntax
 - Generic "try again" advice
 - Unexplained "restart" recommendations

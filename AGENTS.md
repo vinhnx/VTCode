@@ -2,7 +2,7 @@
 
 **VT Code**: Rust terminal coding agent with modular architecture, multi-LLM support (OpenAI, Anthropic, Gemini), tree-sitter parsing for 6+ languages.
 
-## ⚡ Autonomy First
+##  Autonomy First
 
 **Act, Don't Ask:**
 
@@ -345,32 +345,32 @@ When gathering context:
 ```
 
 Explicit "run <cmd>" request?
-└─ ALWAYS use run_pty_cmd with exact command
-└─ "run ls -a" → {"command": "ls -a"} (do NOT interpret as list_files)
+ ALWAYS use run_pty_cmd with exact command
+ "run ls -a" → {"command": "ls -a"} (do NOT interpret as list_files)
 
 Need information?
-├─ Structure? → list_files
-│ └─ 50+ items? Use summarization (counts + sample)
-└─ Text patterns? → grep_file
-└─ 100+ matches? Show top 5, mark overflow
+ Structure? → list_files
+  50+ items? Use summarization (counts + sample)
+ Text patterns? → grep_file
+ 100+ matches? Show top 5, mark overflow
 
 Modifying files?
-├─ Surgical edit (1-5 lines)? → edit_file (preferred)
-├─ Full rewrite (50%+ changes)? → write_file
-└─ Complex multi-file? → edit_file per file (loop)
+ Surgical edit (1-5 lines)? → edit_file (preferred)
+ Full rewrite (50%+ changes)? → write_file
+ Complex multi-file? → edit_file per file (loop)
 
 Running commands?
-├─ One-off (cargo, git, npm)? → shell tool
-│ └─ 1000+ line output? Extract errors + 2 context lines
-└─ Interactive (debugger, REPL)? → create_pty_session
-└─ Session output? Keep only key observations
+ One-off (cargo, git, npm)? → shell tool
+  1000+ line output? Extract errors + 2 context lines
+ Interactive (debugger, REPL)? → create_pty_session
+ Session output? Keep only key observations
 
 Processing 100+ items?
-└─ execute_code (Python/JavaScript) for filtering/aggregation
-└─ Return: count + summary, not raw list
+ execute_code (Python/JavaScript) for filtering/aggregation
+ Return: count + summary, not raw list
 
 Done?
-└─ ONE decisive reply; stop (no re-running model unnecessarily)
+ ONE decisive reply; stop (no re-running model unnecessarily)
 
 ````
 

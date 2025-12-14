@@ -36,22 +36,22 @@
 
 ### Performance
 
-✓  **61.6% Pass@1** - Good for a free-tier model
-✓  **Sub-second median latency** - Fast enough for interactive use
-✓  **Zero cost** - Ideal for development and prototyping
+  **61.6% Pass@1** - Good for a free-tier model
+  **Sub-second median latency** - Fast enough for interactive use
+  **Zero cost** - Ideal for development and prototyping
 
 ### Quality
 
-✓  **No syntax errors** - All generated code was valid Python
-✓  **Consistent performance** - Tight latency distribution
-⚠️ **Logic errors only** - Failed tests had incorrect implementations
+  **No syntax errors** - All generated code was valid Python
+  **Consistent performance** - Tight latency distribution
+ **Logic errors only** - Failed tests had incorrect implementations
 
 ### Use Cases
 
--   ✓  Development and prototyping
--   ✓  Code suggestions and completions
--   ✓  Learning and experimentation
--   ⚠️ Production code (consider premium models for >70% accuracy)
+-     Development and prototyping
+-     Code suggestions and completions
+-     Learning and experimentation
+-    Production code (consider premium models for >70% accuracy)
 
 ## Generating Your Own Charts
 

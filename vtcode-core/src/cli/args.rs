@@ -796,6 +796,10 @@ pub enum SkillsSubcommand {
         path: PathBuf,
     },
 
+    /// Validate all skills for container skills compatibility
+    #[command(name = "check-compatibility")]
+    CheckCompatibility,
+
     /// Show skill configuration and search paths
     #[command(name = "config")]
     Config,

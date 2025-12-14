@@ -11,7 +11,7 @@ The file reference feature allows you to quickly browse and insert file referenc
 Type `@` in the chat input to open the file browser modal:
 
 ```
-❯ @
+ @
 ```
 
 The file browser will appear immediately, showing a loading state while files are being indexed.
@@ -23,25 +23,25 @@ The file browser supports two display modes:
 #### Tree View (Default)
 Shows files in a hierarchical tree structure:
 ```
-▶ src/
-  ├─ ▶ agent/
-  │   ├─ mod.rs
-  │   └─ runloop.rs
-  ├─ main.rs
-  └─ lib.rs
-▶ tests/
-  └─ test.rs
+ src/
+    agent/
+      mod.rs
+      runloop.rs
+   main.rs
+   lib.rs
+ tests/
+   test.rs
 ```
 
 #### List View
 Shows files in a flat list:
 ```
-▶ src/
+ src/
   agent/mod.rs
   agent/runloop.rs
   main.rs
   lib.rs
-▶ tests/
+ tests/
   test.rs
 ```
 
@@ -62,17 +62,17 @@ Shows files in a flat list:
 #### Filtering
 Type any text after `@` to filter files:
 ```
-❯ @main
+ @main
 ```
 This will show only files matching "main" in their path.
 
 ### Visual Indicators
 
 #### Directories
-- Prefix: `▶`
+- Prefix: ``
 - Style: Bold
 - Suffix: `/` (trailing slash)
-- Example: `▶ src/`
+- Example: ` src/`
 
 #### Files
 - Prefix: `  ` (two spaces for indentation)
@@ -84,8 +84,8 @@ This will show only files matching "main" in their path.
 When you select a file (Enter or Tab), the reference is inserted at the cursor position:
 
 ```
-Before: ❯ @main
-After:  ❯ @main.rs
+Before:  @main
+After:   @main.rs
 ```
 
 The file browser closes automatically after selection.
@@ -233,22 +233,22 @@ The file browser respects your project's configuration:
 ## Keyboard Reference Card
 
 ```
-┌─────────────────────────────────────────┐
-│         File Browser Controls           │
-├─────────────────────────────────────────┤
-│ Navigation                              │
-│   ↑/↓         Move selection            │
-│   PgUp/PgDn   Jump pages                │
-│   Home/End    Jump to first/last        │
-│                                         │
-│ Actions                                 │
-│   Enter/Tab   Select file               │
-│   t           Toggle tree/list view     │
-│   Esc         Close browser             │
-│                                         │
-│ Filtering                               │
-│   @text       Filter files by text      │
-└─────────────────────────────────────────┘
+
+         File Browser Controls           
+
+ Navigation                              
+   ↑/↓         Move selection            
+   PgUp/PgDn   Jump pages                
+   Home/End    Jump to first/last        
+                                         
+ Actions                                 
+   Enter/Tab   Select file               
+   t           Toggle tree/list view     
+   Esc         Close browser             
+                                         
+ Filtering                               
+   @text       Filter files by text      
+
 ```
 
 ## Advanced Usage
@@ -258,7 +258,7 @@ The file browser respects your project's configuration:
 You can insert multiple file references in a single message:
 
 ```
-❯ I need to refactor @src/main.rs and @src/lib.rs
+ I need to refactor @src/main.rs and @src/lib.rs
 ```
 
 Just type `@` again after inserting the first reference.
@@ -267,7 +267,7 @@ Just type `@` again after inserting the first reference.
 
 File references work seamlessly with other chat features:
 ```
-❯ /ask How can I improve @src/main.rs?
+ /ask How can I improve @src/main.rs?
 ```
 
 ### Workspace Context
@@ -290,11 +290,11 @@ The file browser is workspace-aware:
 The file reference feature provides a fast, keyboard-driven way to browse and insert file references into your chat messages. With support for tree and list views, smart filtering, and ignore files, it's designed to help you work efficiently in any project size.
 
 **Key Features**:
-- ✓  Instant file browser with `@`
-- ✓  Tree and list views
-- ✓  Smart filtering
-- ✓  Ignore files support
-- ✓  Keyboard-driven navigation
-- ✓  Fast and efficient
+-   Instant file browser with `@`
+-   Tree and list views
+-   Smart filtering
+-   Ignore files support
+-   Keyboard-driven navigation
+-   Fast and efficient
 
 Happy coding!
