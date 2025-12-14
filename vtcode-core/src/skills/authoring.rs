@@ -668,12 +668,15 @@ mod tests {
 		assert!(rendered.contains("Trigger rules:"));
 		assert!(rendered.contains("$SkillName"));
 		assert!(rendered.contains("progressive disclosure"));
+		assert!(rendered.contains("Package managers"));
+		assert!(rendered.contains("uv pip install"));
+		assert!(rendered.contains("bun install"));
 		assert!(rendered.contains("Context hygiene"));
 
 		// Verify token efficiency - should be much smaller than full content
-		// Lean format: ~200 tokens per skill + 200 for rules = ~600 total
+		// Lean format: ~200 tokens per skill + 400 for rules (with package manager prefs) = ~800 total
 		// Full format would be 5K+ tokens per skill
-		assert!(rendered.len() < 2000, "Lean rendering should be compact");
+		assert!(rendered.len() < 2500, "Lean rendering should be compact");
 	}
 
 	#[test]
