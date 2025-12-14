@@ -1,7 +1,7 @@
 ---
 description: Refactor existing code to adhere to coding standards while preserving functionality
 argument-hint: [file-or-directory-path]
-model: claude-3-5-sonnet-20241022
+model: claude-4-5-sonnet
 ---
 
 # Refactor Command
@@ -15,6 +15,7 @@ Use the Task tool to invoke the `refactorer` subagent with the following details
 **subagent_type**: `refactorer`
 
 **Prompt**:
+
 ```text
 Refactor the code at: $ARGUMENTS
 
@@ -33,7 +34,7 @@ If $ARGUMENTS is empty, analyze and refactor all code in the current project.
 
 ## Important
 
-- Pass the file/directory path from $ARGUMENTS to the refactorer agent
-- If no arguments provided, the refactorer should analyze the entire project
-- The refactorer will handle all the details of the refactoring process
-- The refactorer will invoke the stuck agent if issues arise
+-   Pass the file/directory path from $ARGUMENTS to the refactorer agent
+-   If no arguments provided, the refactorer should analyze the entire project
+-   The refactorer will handle all the details of the refactoring process
+-   The refactorer will invoke the stuck agent if issues arise

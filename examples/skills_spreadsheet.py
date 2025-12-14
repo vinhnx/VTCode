@@ -22,25 +22,25 @@ import sys
 def create_spreadsheet_example():
     """
     Create an Excel spreadsheet with climate data using Agent Skills.
-    
+
     This example shows:
     - Enabling Agent Skills in the API
     - Using code execution with skills
     - Handling file outputs from skills
     """
-    
+
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         print("Error: ANTHROPIC_API_KEY environment variable not set")
         sys.exit(1)
-    
+
     client = anthropic.Anthropic(api_key=api_key)
-    
+
     print("Creating spreadsheet with Agent Skills...")
     print("-" * 60)
-    
+
     response = client.messages.create(
-        model="claude-3-5-sonnet-20241022",
+        model="claude-4-5-sonnet",
         max_tokens=4096,
         tools=[
             {
@@ -53,7 +53,7 @@ def create_spreadsheet_example():
             {
                 "role": "user",
                 "content": """Create an Excel spreadsheet with the following structure:
-                
+
 Sheet 1 - Climate Data:
 - Column A: City names (New York, London, Tokyo, Sydney, Dubai)
 - Column B: Average Temperature (°C)
@@ -72,17 +72,17 @@ Make the spreadsheet professional-looking with proper column widths."""
             "skills-2025-10-02"
         ]
     )
-    
+
     print("\nResponse from Claude:")
     print("-" * 60)
-    
+
     # Print all content blocks
     for block in response.content:
         if hasattr(block, 'text'):
             print(block.text)
         elif hasattr(block, 'type'):
             print(f"[{block.type}]")
-    
+
     # Look for file references
     print("\n" + "-" * 60)
     print("File References:")
@@ -90,7 +90,7 @@ Make the spreadsheet professional-looking with proper column widths."""
         if hasattr(block, 'type') and block.type == 'file':
             print(f"  File ID: {block.file_id}")
             print(f"  MIME Type: {block.mime_type if hasattr(block, 'mime_type') else 'N/A'}")
-    
+
     return response
 
 
@@ -98,19 +98,19 @@ def create_financial_spreadsheet():
     """
     Create a financial spreadsheet with formulas and charts.
     """
-    
+
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         print("Error: ANTHROPIC_API_KEY environment variable not set")
         sys.exit(1)
-    
+
     client = anthropic.Anthropic(api_key=api_key)
-    
+
     print("\nCreating financial spreadsheet...")
     print("-" * 60)
-    
+
     response = client.messages.create(
-        model="claude-3-5-sonnet-20241022",
+        model="claude-4-5-sonnet",
         max_tokens=4096,
         tools=[
             {
@@ -149,14 +149,14 @@ Include:
             "skills-2025-10-02"
         ]
     )
-    
+
     print("\nFinancial Spreadsheet Response:")
     for block in response.content:
         if hasattr(block, 'text'):
             print(block.text[:500] + "...")
         elif hasattr(block, 'type'):
             print(f"[{block.type}]")
-    
+
     return response
 
 
@@ -170,7 +170,7 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"Error: {e}")
         sys.exit(1)
-    
+
     # Run second example
     try:
         create_financial_spreadsheet()

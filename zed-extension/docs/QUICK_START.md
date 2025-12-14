@@ -20,6 +20,7 @@ npm install -g vtcode-ai
 ```
 
 Verify installation:
+
 ```bash
 vtcode --version
 ```
@@ -75,9 +76,9 @@ human_in_the_loop = true
 
 Get API credentials from your chosen provider:
 
-- **Anthropic**: [console.anthropic.com](https://console.anthropic.com)
-- **OpenAI**: [platform.openai.com](https://platform.openai.com)
-- **Google**: [aistudio.google.com](https://aistudio.google.com)
+-   **Anthropic**: [console.anthropic.com](https://console.anthropic.com)
+-   **OpenAI**: [platform.openai.com](https://platform.openai.com)
+-   **Google**: [aistudio.google.com](https://aistudio.google.com)
 
 Set your API key (the CLI will prompt for it, or set the environment variable):
 
@@ -98,17 +99,20 @@ export OPENAI_API_KEY="your-api-key"
 ### Basic Workflow
 
 **Ask a Question:**
+
 1. Open command palette
 2. Type "VTCode: Ask the Agent"
 3. Enter your question
 4. Response appears in the output
 
 **Analyze Your Code:**
+
 1. Highlight code in editor
 2. Right-click → "Ask with VTCode"
 3. Follow prompts in output
 
 **Edit Configuration:**
+
 1. Open command palette
 2. Type "VTCode: Open Configuration"
 3. Edit `vtcode.toml` with syntax highlighting
@@ -129,7 +133,7 @@ model = "gpt-4o"
 ```toml
 [ai]
 provider = "anthropic"
-model = "claude-3-5-sonnet-20241022"
+model = "claude-4-5-sonnet"
 
 [workspace]
 analyze_on_startup = false
@@ -150,7 +154,7 @@ top_p = 0.9
 ```toml
 [ai]
 provider = "anthropic"
-model = "claude-3-5-sonnet-20241022"
+model = "claude-4-5-sonnet"
 
 [workspace]
 analyze_on_startup = false
@@ -161,29 +165,29 @@ log_level = "debug"
 
 ### Extension Not Found
 
-- **Issue**: "vtcode" command not found
-- **Solution**: Verify installation with `which vtcode` or `vtcode --version`
+-   **Issue**: "vtcode" command not found
+-   **Solution**: Verify installation with `which vtcode` or `vtcode --version`
 
 ### Commands Don't Appear
 
-- **Issue**: VTCode commands missing from command palette
-- **Solution**: Reload Zed (Cmd/Ctrl + R) or close and reopen
+-   **Issue**: VTCode commands missing from command palette
+-   **Solution**: Reload Zed (Cmd/Ctrl + R) or close and reopen
 
 ### API Key Errors
 
-- **Issue**: "Invalid API key" or authentication errors
-- **Solution**:
-  - Check your `vtcode.toml` provider configuration
-  - Verify API key is set: `echo $ANTHROPIC_API_KEY` (for Anthropic)
-  - Get a new API key from your provider's console
+-   **Issue**: "Invalid API key" or authentication errors
+-   **Solution**:
+    -   Check your `vtcode.toml` provider configuration
+    -   Verify API key is set: `echo $ANTHROPIC_API_KEY` (for Anthropic)
+    -   Get a new API key from your provider's console
 
 ### Configuration Not Loading
 
-- **Issue**: Settings not being applied
-- **Solution**:
-  - Ensure `vtcode.toml` is in workspace root
-  - Check file syntax (should be valid TOML)
-  - Reload workspace (close/reopen folder in Zed)
+-   **Issue**: Settings not being applied
+-   **Solution**:
+    -   Ensure `vtcode.toml` is in workspace root
+    -   Check file syntax (should be valid TOML)
+    -   Reload workspace (close/reopen folder in Zed)
 
 ## Next Steps
 
@@ -194,9 +198,9 @@ log_level = "debug"
 
 ## Support
 
-- **GitHub Issues**: [VTCode Issues](https://github.com/vinhnx/vtcode/issues)
-- **Documentation**: [VTCode Docs](https://github.com/vinhnx/vtcode#documentation)
-- **Discord**: [Join our community](https://discord.com/invite/...)
+-   **GitHub Issues**: [VTCode Issues](https://github.com/vinhnx/vtcode/issues)
+-   **Documentation**: [VTCode Docs](https://github.com/vinhnx/vtcode#documentation)
+-   **Discord**: [Join our community](https://discord.com/invite/...)
 
 ## Tips & Tricks
 
@@ -210,10 +214,10 @@ log_level = "debug"
 
 ### Performance Tips
 
-- Keep `max_context_tokens` reasonable (4000-8000)
-- Exclude large directories in `ignore_patterns`
-- Set `analyze_on_startup = false` for faster startup
-- Use appropriate AI models (smaller for speed, larger for quality)
+-   Keep `max_context_tokens` reasonable (4000-8000)
+-   Exclude large directories in `ignore_patterns`
+-   Set `analyze_on_startup = false` for faster startup
+-   Use appropriate AI models (smaller for speed, larger for quality)
 
 ---
 

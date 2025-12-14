@@ -13,9 +13,9 @@ def generate_pdf():
     Generate a PDF document using Agent Skills.
     """
     client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
-    
+
     response = client.messages.create(
-        model="claude-3-5-sonnet-20241022",
+        model="claude-4-5-sonnet",
         max_tokens=4096,
         tools=[
             {
@@ -41,7 +41,7 @@ def generate_pdf():
             "skills-2025-10-02"
         ]
     )
-    
+
     return response
 
 def download_pdf(client, file_id, output_path):
@@ -49,33 +49,34 @@ def download_pdf(client, file_id, output_path):
     Download a generated PDF file using the Files API.
     """
     pdf_content = client.beta.files.retrieve_raw(file_id)
-    
+
     with open(output_path, 'wb') as f:
         f.write(pdf_content.read())
-    
+
     print(f"PDF saved to: {output_path}")
 
 if __name__ == "__main__":
     client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
-    
+
     result = generate_pdf()
-    
+
     # Extract file ID and download
     file_id = None
     for content_block in result.content:
         if hasattr(content_block, 'type') and content_block.type == 'file':
             file_id = content_block.file_id
             break
-    
+
     if file_id:
         download_pdf(client, file_id, "generated_document.pdf")
-    
+
     print(result)
 ```
 
 ## Common PDF Use Cases
 
 ### 1. Invoice Generation
+
 ```python
 message = """Generate an invoice PDF with:
 - Invoice number and date
@@ -87,6 +88,7 @@ message = """Generate an invoice PDF with:
 ```
 
 ### 2. Certificate Generation
+
 ```python
 message = """Create a certificate PDF with:
 - Ornate border design
@@ -98,6 +100,7 @@ message = """Create a certificate PDF with:
 ```
 
 ### 3. Report with Charts
+
 ```python
 message = """Generate a data report PDF containing:
 - Executive summary
@@ -109,6 +112,7 @@ message = """Generate a data report PDF containing:
 ```
 
 ### 4. Data Sheet
+
 ```python
 message = """Create a technical data sheet PDF with:
 - Product specifications
@@ -121,12 +125,12 @@ message = """Create a technical data sheet PDF with:
 
 ## Key Features
 
-- **Styling**: Full control over fonts, colors, and layouts
-- **Tables**: Create complex tables with merged cells
-- **Images**: Embed images and graphics
-- **Headers/Footers**: Add page numbers and persistent headers
-- **Sections**: Create multi-section documents
-- **Watermarks**: Add background text or images
+-   **Styling**: Full control over fonts, colors, and layouts
+-   **Tables**: Create complex tables with merged cells
+-   **Images**: Embed images and graphics
+-   **Headers/Footers**: Add page numbers and persistent headers
+-   **Sections**: Create multi-section documents
+-   **Watermarks**: Add background text or images
 
 ## Integration with VTCode Skills
 
@@ -161,10 +165,10 @@ When asked to generate a PDF report:
 
 ## Performance Considerations
 
-- **Large Documents**: For documents >50 pages, consider pagination strategies
-- **Image Quality**: Optimize image resolution for file size vs. quality
-- **Rendering Time**: Complex layouts may require longer processing
-- **File Size**: Typical documents are 100KB-5MB
+-   **Large Documents**: For documents >50 pages, consider pagination strategies
+-   **Image Quality**: Optimize image resolution for file size vs. quality
+-   **Rendering Time**: Complex layouts may require longer processing
+-   **File Size**: Typical documents are 100KB-5MB
 
 ## Error Handling
 
@@ -181,6 +185,6 @@ except IOError as e:
 
 ## See Also
 
-- SPREADSHEET_EXAMPLE.md - Create Excel spreadsheets
-- WORD_DOCUMENT_EXAMPLE.md - Create Word documents
-- CONTAINER_GUIDE.md - Understand skill containers
+-   SPREADSHEET_EXAMPLE.md - Create Excel spreadsheets
+-   WORD_DOCUMENT_EXAMPLE.md - Create Word documents
+-   CONTAINER_GUIDE.md - Understand skill containers

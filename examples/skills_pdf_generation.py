@@ -23,19 +23,19 @@ def generate_invoice_pdf():
     """
     Generate an invoice PDF using Agent Skills.
     """
-    
+
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         print("Error: ANTHROPIC_API_KEY environment variable not set")
         sys.exit(1)
-    
+
     client = anthropic.Anthropic(api_key=api_key)
-    
+
     print("Generating invoice PDF with Agent Skills...")
     print("-" * 60)
-    
+
     response = client.messages.create(
-        model="claude-3-5-sonnet-20241022",
+        model="claude-4-5-sonnet",
         max_tokens=4096,
         tools=[
             {
@@ -88,16 +88,16 @@ Formatting:
             "skills-2025-10-02"
         ]
     )
-    
+
     print("\nInvoice PDF Generated:")
     print("-" * 60)
-    
+
     for block in response.content:
         if hasattr(block, 'text'):
             print(block.text)
         elif hasattr(block, 'type'):
             print(f"[{block.type}]")
-    
+
     return response
 
 
@@ -105,19 +105,19 @@ def generate_report_pdf():
     """
     Generate a data report PDF with charts and analysis.
     """
-    
+
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         print("Error: ANTHROPIC_API_KEY environment variable not set")
         sys.exit(1)
-    
+
     client = anthropic.Anthropic(api_key=api_key)
-    
+
     print("\nGenerating report PDF...")
     print("-" * 60)
-    
+
     response = client.messages.create(
-        model="claude-3-5-sonnet-20241022",
+        model="claude-4-5-sonnet",
         max_tokens=4096,
         tools=[
             {
@@ -180,7 +180,7 @@ Styling:
             "skills-2025-10-02"
         ]
     )
-    
+
     print("\nReport PDF Generated:")
     text_blocks = [block for block in response.content if hasattr(block, 'text')]
     if text_blocks:
@@ -189,13 +189,13 @@ Styling:
             print(text[:500] + "...")
         else:
             print(text)
-    
+
     # Print file references
     print("\nGenerated Files:")
     for block in response.content:
         if hasattr(block, 'type') and block.type == 'file':
             print(f"  - File ID: {block.file_id}")
-    
+
     return response
 
 
@@ -203,10 +203,10 @@ if __name__ == "__main__":
     try:
         # Generate invoice PDF
         generate_invoice_pdf()
-        
+
         # Generate report PDF
         generate_report_pdf()
-        
+
     except anthropic.APIError as e:
         print(f"API Error: {e}")
         sys.exit(1)
