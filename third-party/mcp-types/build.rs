@@ -3,6 +3,28 @@ use std::{env, fs, path::Path};
 use typify::{TypeSpace, TypeSpaceSettings};
 
 fn main() {
+    // Suppress macOS malloc warnings in build output
+    #[cfg(target_os = "macos")]
+    {
+        // Unset all malloc-related environment variables that might cause warnings
+        std::env::remove_var("MallocStackLogging");
+        std::env::remove_var("MallocStackLoggingDirectory");
+        std::env::remove_var("MallocScribble");
+        std::env::remove_var("MallocGuardEdges");
+        std::env::remove_var("MallocCheckHeapStart");
+        std::env::remove_var("MallocCheckHeapEach");
+        std::env::remove_var("MallocCheckHeapAbort");
+        std::env::remove_var("MallocCheckHeapSleep");
+        std::env::remove_var("MallocErrorAbort");
+        std::env::remove_var("MallocCorruptionAbort");
+        std::env::remove_var("MallocHelpOptions");
+        std::env::remove_var("MallocStackLoggingNoCompact");
+        
+        // Set environment to explicitly disable malloc debugging
+        std::env::set_var("MallocStackLogging", "0");
+        std::env::set_var("MallocStackLoggingDirectory", "");
+    }
+    
     println!("cargo:rerun-if-env-changed=MCP_TYPES_FORCE_REGEN");
 
     if env::var_os("MCP_TYPES_FORCE_REGEN").is_some() {

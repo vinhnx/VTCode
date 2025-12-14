@@ -16,6 +16,28 @@ const EMBEDDED_ASSETS: &[(&str, &str)] = &[
 ];
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Suppress macOS malloc warnings in build output
+    #[cfg(target_os = "macos")]
+    {
+        // Unset all malloc-related environment variables that might cause warnings
+        std::env::remove_var("MallocStackLogging");
+        std::env::remove_var("MallocStackLoggingDirectory");
+        std::env::remove_var("MallocScribble");
+        std::env::remove_var("MallocGuardEdges");
+        std::env::remove_var("MallocCheckHeapStart");
+        std::env::remove_var("MallocCheckHeapEach");
+        std::env::remove_var("MallocCheckHeapAbort");
+        std::env::remove_var("MallocCheckHeapSleep");
+        std::env::remove_var("MallocErrorAbort");
+        std::env::remove_var("MallocCorruptionAbort");
+        std::env::remove_var("MallocHelpOptions");
+        std::env::remove_var("MallocStackLoggingNoCompact");
+        
+        // Set environment to explicitly disable malloc debugging
+        std::env::set_var("MallocStackLogging", "0");
+        std::env::set_var("MallocStackLoggingDirectory", "");
+    }
+    
     let is_docsrs = env::var_os("DOCS_RS").is_some();
 
     if is_docsrs {
