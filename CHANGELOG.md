@@ -3,6 +3,29 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.49.6] - 2025-12-15
+
+
+### Bug Fixes
+    - fix: include templates directory in package for crates.io publishing
+
+
+### Documentation
+    - docs: update changelog for v0.49.5 [skip ci]
+    - docs: update changelog for v0.49.4 [skip ci]
+    - docs: update changelog for v0.49.3 [skip ci]
+    - docs: update changelog for v0.49.2 [skip ci]
+
+
+### Chores
+    - chore: update VSCode extension package.json to v0.49.5 [skip ci]
+    - chore: update npm package.json to v0.49.5 [skip ci]
+    - chore: release v0.49.5
+    - chore: release v0.49.4
+    - chore: release v0.49.3
+    - chore: release v0.49.2
+    - chore: update VSCode extension package.json to v0.49.1 [skip ci]
+    - chore: update npm package.json to v0.49.1 [skip ci]
 # [Version 0.49.5] - 2025-12-14
 
 
