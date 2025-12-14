@@ -309,11 +309,38 @@ fn preprocess_terminal_stdout<'a>(tokens: Option<&[String]>, stdout: &'a str) ->
         return Cow::Borrowed(stdout);
     }
 
-    let stripped = strip_ansi_codes(stdout);
+    // Filter out macOS malloc debugging messages first
+    let filtered_text = if stdout.contains("MallocStackLogging:") || stdout.contains("malloc: enabling abort()") {
+        let lines: Vec<&str> = stdout.lines().collect();
+        let filtered: Vec<&str> = lines
+            .iter()
+            .filter(|line| {
+                !line.contains("MallocStackLogging:")
+                    && !line.contains("malloc: enabling abort()")
+                    && !line.contains("can't turn off malloc stack logging")
+            })
+            .copied()
+            .collect();
+        
+        if filtered.len() == lines.len() {
+            None  // No filtering needed
+        } else {
+            Some(filtered.join("\n"))
+        }
+    } else {
+        None  // No filtering needed
+    };
+
+    // Use filtered text if available, otherwise original
+    let text_to_process = filtered_text.as_deref().unwrap_or(stdout);
+    
+    // Continue with ANSI stripping and normalization
+    let stripped = strip_ansi_codes(text_to_process);
     let normalized = match stripped {
         Cow::Borrowed(text) => normalize_carriage_returns(text),
         Cow::Owned(text) => normalize_carriage_returns(&text).into_owned().into(),
     };
+    
     let should_strip_numbers = tokens
         .map(command_can_emit_rust_diagnostics)
         .unwrap_or(false)

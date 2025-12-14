@@ -467,7 +467,8 @@ enable_tracing = false
 
 # Trace level: "error", "warn", "info", "debug", "trace"
 # Lower levels (error) are more selective; higher levels (trace) are verbose
-trace_level = "info"
+# Set to "warn" to reduce PTY operation logging
+trace_level = "warn"
 
 # Comma-separated list of tracing targets (modules to trace)
 # Examples: "vtcode_core::agent", "vtcode_core::tools", "vtcode::*"
@@ -610,7 +611,8 @@ bottleneck_tracing = false
 # Syntax highlighting configuration
 [syntax_highlighting]
 # Enable syntax highlighting for code in tool output
-enabled = true
+# Set to false to remove ANSI codes from pty_cmd output
+enabled = false
 
 # Theme for syntax highlighting
 theme = "base16-ocean.dark"
