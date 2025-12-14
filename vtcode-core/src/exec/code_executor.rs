@@ -62,6 +62,35 @@ impl Language {
             Self::JavaScript => "node",
         }
     }
+
+    /// Get the best available Python interpreter (venv > uv > system)
+    pub fn detect_python_interpreter(workspace_root: &PathBuf) -> String {
+        // 1. Check for activated venv
+        if let Ok(venv_python) = std::env::var("VIRTUAL_ENV") {
+            let venv_bin = PathBuf::from(venv_python).join("bin").join("python");
+            if venv_bin.exists() {
+                debug!("Using venv Python: {:?}", venv_bin);
+                return venv_bin.to_string_lossy().into_owned();
+            }
+        }
+
+        // 2. Check for .venv in workspace
+        let workspace_venv = workspace_root.join(".venv").join("bin").join("python");
+        if workspace_venv.exists() {
+            debug!("Using workspace .venv Python: {:?}", workspace_venv);
+            return workspace_venv.to_string_lossy().into_owned();
+        }
+
+        // 3. Check for uv in PATH
+        if which::which("uv").is_ok() {
+            debug!("Using uv for Python execution");
+            return "uv".to_string();
+        }
+
+        // 4. Fall back to system python3
+        debug!("Using system python3");
+        "python3".to_string()
+    }
 }
 
 /// Result of code execution.
@@ -290,9 +319,25 @@ impl CodeExecutor {
             Ok(())
         });
 
+        // Detect best Python interpreter for safe execution
+        let (program, args) = match self.language {
+            Language::Python3 => {
+                let interpreter = Language::detect_python_interpreter(&self.workspace_root);
+                if interpreter == "uv" {
+                    // uv run python script.py
+                    ("uv".to_string(), vec!["run".to_string(), "python".to_string(), code_file.to_string_lossy().into_owned()])
+                } else {
+                    (interpreter, vec![code_file.to_string_lossy().into_owned()])
+                }
+            },
+            Language::JavaScript => {
+                (self.language.interpreter().to_string(), vec![code_file.to_string_lossy().into_owned()])
+            }
+        };
+
         let options = ProcessOptions {
-            program: self.language.interpreter().to_string(),
-            args: vec![code_file.to_string_lossy().into_owned()],
+            program,
+            args,
             env,
             current_dir: Some(self.workspace_root.clone()),
             timeout: Some(Duration::from_secs(self.config.timeout_secs)),

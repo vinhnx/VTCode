@@ -2,6 +2,29 @@
 
 This directory contains Claude Agent Skills tailored for VTCode development and document generation workflows.
 
+## Python Environment Support
+
+**VTCode automatically detects and uses safe Python environments** for skill execution:
+
+1. **Active venv** - Uses `$VIRTUAL_ENV/bin/python` if virtual environment is activated
+2. **Workspace .venv** - Uses `.venv/bin/python` if exists in project root
+3. **uv** - Uses `uv run python` if uv is available in PATH (recommended)
+4. **System python3** - Falls back to system Python as last resort
+
+### Recommended Setup
+
+```bash
+# Option 1: Create project venv
+python3 -m venv .venv
+source .venv/bin/activate
+pip install reportlab fpdf2 openpyxl python-docx
+
+# Option 2: Use uv (faster, better isolation)
+uv pip install reportlab fpdf2 openpyxl python-docx
+```
+
+Skills will automatically use your detected environment - no configuration needed!
+
 ## Available Skills
 
 ### Document Generation Skills
