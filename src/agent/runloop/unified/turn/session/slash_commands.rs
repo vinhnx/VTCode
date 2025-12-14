@@ -961,7 +961,8 @@ pub async fn handle_outcome(
                                 format!("/skills use {} [executed]", skill_name)
                             ));
                             
-                            ctx.conversation_history.push(uni::Message::assistant(result));
+                            let result_string: String = result;
+                            ctx.conversation_history.push(uni::Message::assistant(result_string));
                             
                             Ok(SlashCommandControl::Continue)
                         }

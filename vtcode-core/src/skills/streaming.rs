@@ -523,6 +523,7 @@ impl StreamingSkillExecutor {
 #[derive(Debug, Clone)]
 pub struct ProgressTracker {
     start_time: Instant,
+    #[allow(dead_code)]
     update_interval_ms: u64,
     total_output_bytes: usize,
     last_output_time: Instant,

@@ -1,4 +1,4 @@
-#![allow(clippy::collapsible_if)]
+#![allow(clippy::collapsible_if, clippy::result_large_err)]
 
 use super::AnthropicProvider;
 use crate::config::TimeoutsConfig;

@@ -148,28 +148,35 @@ pub(crate) async fn run_single_agent_loop_unified(
         if let Some(resume_session) = resume_ref {
             let skill_names_to_restore = &resume_session.snapshot.metadata.loaded_skills;
             if !skill_names_to_restore.is_empty() {
-                use vtcode_core::skills::loader::SkillLoader;
+                use vtcode_core::skills::loader::EnhancedSkillLoader;
                 use vtcode_core::skills::executor::SkillToolAdapter;
                 use vtcode_core::tools::ToolRegistration;
                 use vtcode_core::config::types::CapabilityLevel;
                 use std::sync::Arc;
 
-                let skill_loader = SkillLoader::new(config.workspace.clone());
+                let mut skill_loader = EnhancedSkillLoader::new(config.workspace.clone());
                 for skill_name in skill_names_to_restore {
-                    match skill_loader.load_skill(skill_name) {
-                        Ok(skill) => {
-                            let adapter = SkillToolAdapter::new(skill.clone());
-                            let adapter_arc = Arc::new(adapter);
-                            let name_static: &'static str = Box::leak(Box::new(skill_name.clone()));
-                            let registration = ToolRegistration::from_tool(
-                                name_static,
-                                CapabilityLevel::Bash,
-                                adapter_arc,
-                            );
-                            if let Err(e) = tool_registry.register_tool(registration) {
-                                tracing::warn!("Failed to restore skill '{}': {}", skill_name, e);
-                            } else {
-                                loaded_skills.write().await.insert(skill_name.clone(), skill);
+                    match skill_loader.get_skill(skill_name).await {
+                        Ok(enhanced_skill) => {
+                            match enhanced_skill {
+                                vtcode_core::skills::loader::EnhancedSkill::Traditional(skill) => {
+                                    let adapter = SkillToolAdapter::new(skill.clone());
+                                    let adapter_arc = Arc::new(adapter);
+                                    let name_static: &'static str = Box::leak(Box::new(skill_name.clone()));
+                                    let registration = ToolRegistration::from_tool(
+                                        name_static,
+                                        CapabilityLevel::Bash,
+                                        adapter_arc,
+                                    );
+                                    if let Err(e) = tool_registry.register_tool(registration) {
+                                        tracing::warn!("Failed to restore skill '{}': {}", skill_name, e);
+                                    } else {
+                                        loaded_skills.write().await.insert(skill_name.clone(), skill);
+                                    }
+                                }
+                                vtcode_core::skills::loader::EnhancedSkill::CliTool(_bridge) => {
+                                    tracing::warn!("Cannot restore CLI tool skill '{}' as traditional skill", skill_name);
+                                }
                             }
                         }
                         Err(e) => {

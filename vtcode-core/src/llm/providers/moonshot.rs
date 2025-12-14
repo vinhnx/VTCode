@@ -1,4 +1,4 @@
-#![allow(clippy::collapsible_if)]
+#![allow(clippy::collapsible_if, clippy::result_large_err)]
 
 use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};

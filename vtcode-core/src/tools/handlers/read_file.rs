@@ -541,6 +541,7 @@ mod defaults {
 
 #[cfg(test)]
 mod tests {
+    #[allow(unused_imports)]
     use super::indentation::*;
     use super::slice::*;
     use super::*;

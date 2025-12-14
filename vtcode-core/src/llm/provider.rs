@@ -1,3 +1,4 @@
+#![allow(clippy::result_large_err)]
 //! Universal LLM provider abstraction with API-specific role handling
 //!
 //! This module provides a unified interface for different LLM providers (OpenAI, Anthropic, Gemini)
@@ -1334,6 +1335,7 @@ pub trait LLMProvider: Send + Sync {
     fn supported_models(&self) -> Vec<String>;
 
     /// Validate request for this provider
+    #[allow(clippy::result_large_err)]
     fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError>;
 }
 
@@ -1368,6 +1370,7 @@ impl LLMErrorMetadata {
 }
 
 #[derive(Debug, thiserror::Error)]
+#[allow(clippy::result_large_err)]
 pub enum LLMError {
     #[error("Authentication failed: {message}")]
     Authentication {

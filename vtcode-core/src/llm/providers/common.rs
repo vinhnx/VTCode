@@ -1,3 +1,4 @@
+#![allow(clippy::result_large_err)]
 use crate::config::core::{PromptCachingConfig, ProviderPromptCachingConfig};
 use crate::llm::error_display;
 use crate::llm::provider::{FinishReason, LLMError, LLMRequest, Message, ToolCall, ToolDefinition};

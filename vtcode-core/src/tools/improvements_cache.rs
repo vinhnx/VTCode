@@ -287,6 +287,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[allow(deprecated)]
     fn test_cache_basic_get_put() {
         let cache = LruCache::new(10, Duration::from_secs(60));
 
@@ -297,6 +298,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_cache_ttl_expiration() {
         let cache = LruCache::new(10, Duration::from_millis(100));
 
@@ -311,6 +313,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_cache_lru_eviction() {
         let cache = LruCache::new(3, Duration::from_secs(60));
 
@@ -340,6 +343,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_cache_stats() {
         let cache = LruCache::new(10, Duration::from_secs(60));
 
@@ -357,6 +361,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_cache_clear() {
         let cache = LruCache::new(10, Duration::from_secs(60));
 
@@ -370,6 +375,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_cache_evict_expired() {
         let cache = LruCache::new(10, Duration::from_millis(100));
 
