@@ -12,10 +12,12 @@ const EMBEDDED_OPENROUTER_MODELS: &str = include_str!("build_data/openrouter_mod
 
 fn main() {
     // Suppress macOS malloc stack logging warnings by unsetting environment variables
-    std::env::remove_var("MallocStackLogging");
-    std::env::remove_var("MallocStackLoggingDirectory");
-    std::env::remove_var("MallocScribble");
-    std::env::remove_var("MallocGuardEdges");
+    unsafe {
+        std::env::remove_var("MallocStackLogging");
+        std::env::remove_var("MallocStackLoggingDirectory");
+        std::env::remove_var("MallocScribble");
+        std::env::remove_var("MallocGuardEdges");
+    }
     
     let is_docsrs = std::env::var_os("DOCS_RS").is_some();
 

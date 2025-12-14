@@ -5,7 +5,7 @@
 //! depending on VTCode's internal configuration structs.
 
 use std::borrow::Cow;
-use std::path::Path;
+
 use std::path::PathBuf;
 
 use anyhow::Error;

@@ -25,14 +25,20 @@ mod shared {
             .ok_or_else(|| anyhow::anyhow!(ERR_ARGS_OBJECT))
     }
 
-    pub fn get_required_field(
-        obj: &serde_json::Map<String, Value>,
+    pub fn get_required_field<'a>(
+        obj: &'a serde_json::Map<String, Value>,
         field: &str,
-        custom_err: Option<&str>,
-    ) -> anyhow::Result<&str> {
+        custom_err: Option<&'static str>,
+    ) -> anyhow::Result<&'a str> {
         obj.get(field)
             .and_then(|v| v.as_str())
-            .ok_or_else(|| anyhow::anyhow!(custom_err.unwrap_or(&format!("Invalid {}", field))))
+            .ok_or_else(|| {
+                if let Some(err) = custom_err {
+                    anyhow::anyhow!(err)
+                } else {
+                    anyhow::anyhow!("Invalid {}", field)
+                }
+            })
     }
 
     pub fn check_client_initialized(client: &Option<AcpClient>) -> anyhow::Result<&AcpClient> {
