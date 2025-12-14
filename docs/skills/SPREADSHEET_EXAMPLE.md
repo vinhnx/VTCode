@@ -14,9 +14,9 @@ def create_spreadsheet():
     Create an Excel spreadsheet with climate data using Agent Skills.
     """
     client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
-    
+
     response = client.messages.create(
-        model="claude-3-5-sonnet-20241022",
+        model="claude-4-5-sonnet",
         max_tokens=4096,
         tools=[
             {
@@ -36,7 +36,7 @@ def create_spreadsheet():
             "skills-2025-10-02"
         ]
     )
-    
+
     return response
 
 if __name__ == "__main__":
@@ -54,9 +54,10 @@ if __name__ == "__main__":
 ## Expected Output
 
 The response will include:
-- Claude's planning and execution steps
-- File creation commands
-- A file reference containing the created Excel spreadsheet
+
+-   Claude's planning and execution steps
+-   File creation commands
+-   A file reference containing the created Excel spreadsheet
 
 ## Next Steps
 

@@ -6,25 +6,25 @@ This document outlines the features provided by the VTCode extension for Zed.
 
 ### 1. Language Support for vtcode.toml
 
-- **Syntax Highlighting**: TOML syntax highlighting specific to VTCode configuration files
-- **File Association**: Automatically detects and highlights `vtcode.toml` files
-- **Configuration Validation**: Basic TOML validation through Zed's language support
+-   **Syntax Highlighting**: TOML syntax highlighting specific to VTCode configuration files
+-   **File Association**: Automatically detects and highlights `vtcode.toml` files
+-   **Configuration Validation**: Basic TOML validation through Zed's language support
 
 ### 2. Integration with VTCode CLI
 
 The extension provides seamless integration with the VTCode command-line agent:
 
-- Launches VTCode CLI commands from within Zed
-- Passes workspace context to the agent
-- Streams responses directly in the editor
+-   Launches VTCode CLI commands from within Zed
+-   Passes workspace context to the agent
+-   Streams responses directly in the editor
 
 ### 3. Configuration Management
 
 Users can edit their `vtcode.toml` configuration with:
 
-- Syntax highlighting for all configuration sections
-- Inline documentation for common settings
-- File validation for TOML syntax
+-   Syntax highlighting for all configuration sections
+-   Inline documentation for common settings
+-   File validation for TOML syntax
 
 ## Planned Features
 
@@ -32,32 +32,32 @@ The following features are planned for future releases:
 
 ### Commands in Command Palette
 
-- **Ask the Agent**: Send arbitrary questions to VTCode agent
-- **Analyze Workspace**: Run VTCode's workspace analysis
-- **Launch Chat**: Open an interactive chat session
-- **Edit Configuration**: Quick access to vtcode.toml
-- **View Status**: Show VTCode CLI installation status
+-   **Ask the Agent**: Send arbitrary questions to VTCode agent
+-   **Analyze Workspace**: Run VTCode's workspace analysis
+-   **Launch Chat**: Open an interactive chat session
+-   **Edit Configuration**: Quick access to vtcode.toml
+-   **View Status**: Show VTCode CLI installation status
 
 ### Integration Features
 
-- **Selection Queries**: Ask about highlighted code snippets
-- **Code Analysis**: Get semantic analysis of workspace
-- **Refactoring Suggestions**: Receive AI-powered refactoring recommendations
-- **Context Awareness**: Automatic context passing to agent
+-   **Selection Queries**: Ask about highlighted code snippets
+-   **Code Analysis**: Get semantic analysis of workspace
+-   **Refactoring Suggestions**: Receive AI-powered refactoring recommendations
+-   **Context Awareness**: Automatic context passing to agent
 
 ### Editor Features
 
-- **Completions**: Code completions from VTCode agent
-- **Diagnostics**: Integration with VTCode's diagnostic tools
-- **Code Lens**: Display actionable information inline
-- **Quick Fixes**: VTCode agent-powered code fixes
+-   **Completions**: Code completions from VTCode agent
+-   **Diagnostics**: Integration with VTCode's diagnostic tools
+-   **Code Lens**: Display actionable information inline
+-   **Quick Fixes**: VTCode agent-powered code fixes
 
 ### Settings and Configuration
 
-- **Custom VTCode Path**: Override default vtcode command path
-- **API Key Management**: Secure handling of AI provider API keys
-- **Output Channel**: Dedicated output channel for VTCode responses
-- **Logging Options**: Control verbosity of logging
+-   **Custom VTCode Path**: Override default vtcode command path
+-   **API Key Management**: Secure handling of AI provider API keys
+-   **Output Channel**: Dedicated output channel for VTCode responses
+-   **Logging Options**: Control verbosity of logging
 
 ## Architecture
 
@@ -88,7 +88,7 @@ The extension expects the following `vtcode.toml` structure:
 # AI Provider Configuration
 [ai]
 provider = "anthropic"  # or "openai", "gemini", etc.
-model = "claude-3-5-sonnet-20241022"
+model = "claude-4-5-sonnet"
 
 # Workspace Settings
 [workspace]
@@ -127,49 +127,49 @@ allowed_tools = ["read_file", "edit_file", "analyze_code"]
 
 ## Dependencies
 
-- **VTCode CLI**: Must be installed and in PATH
-- **Zed**: Version 0.150.0 or higher recommended
-- **Rust**: For building from source (development only)
+-   **VTCode CLI**: Must be installed and in PATH
+-   **Zed**: Version 0.150.0 or higher recommended
+-   **Rust**: For building from source (development only)
 
 ## Compatibility
 
-- **Platforms**: macOS, Linux, Windows
-- **Zed Versions**: Latest stable release
-- **VTCode Versions**: 0.1.0 and later
+-   **Platforms**: macOS, Linux, Windows
+-   **Zed Versions**: Latest stable release
+-   **VTCode Versions**: 0.1.0 and later
 
 ## Performance Considerations
 
-- Extension runs in WebAssembly sandbox
-- All heavy computation delegated to VTCode CLI
-- Minimal memory footprint in editor process
-- Asynchronous command execution prevents UI blocking
+-   Extension runs in WebAssembly sandbox
+-   All heavy computation delegated to VTCode CLI
+-   Minimal memory footprint in editor process
+-   Asynchronous command execution prevents UI blocking
 
 ## Security Model
 
-- Extension runs in isolated WASM environment
-- No direct file system access
-- All commands validated before execution
-- Respects Zed's trust model for workspaces
+-   Extension runs in isolated WASM environment
+-   No direct file system access
+-   All commands validated before execution
+-   Respects Zed's trust model for workspaces
 
 ## Troubleshooting
 
 ### VTCode CLI Not Found
 
-- Ensure VTCode is installed: `cargo install vtcode`
-- Check PATH: `which vtcode`
-- Configure custom path in Zed settings
+-   Ensure VTCode is installed: `cargo install vtcode`
+-   Check PATH: `which vtcode`
+-   Configure custom path in Zed settings
 
 ### Configuration Not Loading
 
-- Verify `vtcode.toml` exists in workspace root
-- Check TOML syntax validity
-- Review Zed logs for error details
+-   Verify `vtcode.toml` exists in workspace root
+-   Check TOML syntax validity
+-   Review Zed logs for error details
 
 ### Commands Not Appearing
 
-- Reload extension: Close and reopen Zed
-- Check extension installation in Extensions panel
-- Verify extension.toml is valid
+-   Reload extension: Close and reopen Zed
+-   Check extension installation in Extensions panel
+-   Verify extension.toml is valid
 
 ## Feedback and Support
 
@@ -178,6 +178,6 @@ Report issues or request features at:
 
 ## Related Documentation
 
-- [VTCode Main Documentation](https://github.com/vinhnx/vtcode)
-- [Zed Editor Documentation](https://zed.dev/docs)
-- [TOML Specification](https://toml.io/)
+-   [VTCode Main Documentation](https://github.com/vinhnx/vtcode)
+-   [Zed Editor Documentation](https://zed.dev/docs)
+-   [TOML Specification](https://toml.io/)

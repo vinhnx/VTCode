@@ -13,9 +13,9 @@ def create_word_document():
     Create a Word document with formatted content using Agent Skills.
     """
     client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
-    
+
     response = client.messages.create(
-        model="claude-3-5-sonnet-20241022",
+        model="claude-4-5-sonnet",
         max_tokens=4096,
         tools=[
             {
@@ -41,7 +41,7 @@ def create_word_document():
             "skills-2025-10-02"
         ]
     )
-    
+
     return response
 
 def extract_file_id(response):
@@ -54,28 +54,29 @@ def extract_file_id(response):
 
 if __name__ == "__main__":
     result = create_word_document()
-    
+
     # Extract and print file ID
     file_id = extract_file_id(result)
     if file_id:
         print(f"Created document with file ID: {file_id}")
-    
+
     print(result)
 ```
 
 ## Features Supported
 
-- **Text Formatting**: Bold, italic, underline
-- **Headings**: Multiple heading levels
-- **Lists**: Bullet points and numbered lists
-- **Tables**: Create and format tables
-- **Page Breaks**: Insert page breaks between sections
-- **Images**: Embed images in documents
-- **Styles**: Apply predefined or custom styles
+-   **Text Formatting**: Bold, italic, underline
+-   **Headings**: Multiple heading levels
+-   **Lists**: Bullet points and numbered lists
+-   **Tables**: Create and format tables
+-   **Page Breaks**: Insert page breaks between sections
+-   **Images**: Embed images in documents
+-   **Styles**: Apply predefined or custom styles
 
 ## Usage Patterns
 
 ### Pattern 1: Meeting Minutes
+
 ```python
 "Create a Word document for meeting minutes with:
 - Date and attendees
@@ -85,6 +86,7 @@ if __name__ == "__main__":
 ```
 
 ### Pattern 2: API Documentation
+
 ```python
 "Generate API documentation in Word format with:
 - Endpoint descriptions
@@ -94,6 +96,7 @@ if __name__ == "__main__":
 ```
 
 ### Pattern 3: Report Generation
+
 ```python
 "Create a professional report with:
 - Executive summary
@@ -113,5 +116,5 @@ vtcode /skills use doc-generator "Create a project proposal document"
 
 ## See Also
 
-- PDF_GENERATION_EXAMPLE.md - Generate PDFs
-- SPREADSHEET_EXAMPLE.md - Create Excel spreadsheets
+-   PDF_GENERATION_EXAMPLE.md - Generate PDFs
+-   SPREADSHEET_EXAMPLE.md - Create Excel spreadsheets

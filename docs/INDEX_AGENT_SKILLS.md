@@ -6,56 +6,64 @@ Complete reference for all Agent Skills documentation, examples, and guides.
 
 ### I just want to...
 
-- **Use skills right now** → [Quick Reference](#quick-reference)
-- **Understand how skills work** → [Integration Guide](#integration-guide)
-- **See working code** → [Examples](#examples)
-- **Create a custom skill** → [Skills Guide](#skills-guide)
-- **Troubleshoot** → [Troubleshooting](#troubleshooting)
+-   **Use skills right now** → [Quick Reference](#quick-reference)
+-   **Understand how skills work** → [Integration Guide](#integration-guide)
+-   **See working code** → [Examples](#examples)
+-   **Create a custom skill** → [Skills Guide](#skills-guide)
+-   **Troubleshoot** → [Troubleshooting](#troubleshooting)
 
 ---
 
 ## Documentation Files
 
 ### Quick Reference
+
 **File:** `docs/AGENT_SKILLS_QUICKREF.md`
-- One-page quick reference
-- CLI commands at a glance
-- Common tasks
-- Built-in skills table
-- Error quick fixes
+
+-   One-page quick reference
+-   CLI commands at a glance
+-   Common tasks
+-   Built-in skills table
+-   Error quick fixes
 
 **Start here if:** You want quick answers
 
 ### Integration Guide
+
 **File:** `docs/AGENT_SKILLS_INTEGRATION.md`
-- Complete integration guide
-- How to use skills with VTCode agent
-- Agent integration points
-- Code examples (Rust and Python)
-- Workflow patterns
-- Best practices
+
+-   Complete integration guide
+-   How to use skills with VTCode agent
+-   Agent integration points
+-   Code examples (Rust and Python)
+-   Workflow patterns
+-   Best practices
 
 **Start here if:** You need to understand how to use skills in the agent
 
 ### Complete Skills Guide
+
 **File:** `docs/SKILLS_GUIDE.md`
-- Comprehensive skills documentation
-- Skill structure and creation
-- SKILL.md format and requirements
-- Progressive disclosure explained
-- File organization
-- Advanced topics
+
+-   Comprehensive skills documentation
+-   Skill structure and creation
+-   SKILL.md format and requirements
+-   Progressive disclosure explained
+-   File organization
+-   Advanced topics
 
 **Start here if:** You want to create or deeply understand skills
 
 ### Summary
+
 **File:** `docs/AGENT_SKILLS_SUMMARY.md`
-- What was implemented
-- How to use skills
-- Architecture overview
-- File structure
-- Key features
-- Next steps
+
+-   What was implemented
+-   How to use skills
+-   Architecture overview
+-   File structure
+-   Key features
+-   Next steps
 
 **Start here if:** You want an overview of the implementation
 
@@ -64,64 +72,77 @@ Complete reference for all Agent Skills documentation, examples, and guides.
 ## Skills Directory
 
 ### Project Skills Location
+
 **Directory:** `.claude/skills/`
 
 Contains VTCode's project-specific skills:
-- `spreadsheet-generator/` - Excel/xlsx skill
-- `doc-generator/` - Word/docx skill
-- `pdf-report-generator/` - PDF skill
-- `strict-architecture/` - Code governance skill
-- `bdd-workflow/` - BDD/TDD workflow skill
-- `code-orchestration/` - Orchestration skill
-- `forensic-debugging/` - CRASH-RCA skill
+
+-   `spreadsheet-generator/` - Excel/xlsx skill
+-   `doc-generator/` - Word/docx skill
+-   `pdf-report-generator/` - PDF skill
+-   `strict-architecture/` - Code governance skill
+-   `bdd-workflow/` - BDD/TDD workflow skill
+-   `code-orchestration/` - Orchestration skill
+-   `forensic-debugging/` - CRASH-RCA skill
 
 ### Skills Directory Guide
+
 **File:** `.claude/skills/README.md`
-- All available skills documented
-- Usage patterns and examples
-- How to create new skills
-- Validation requirements
-- Tips and best practices
+
+-   All available skills documented
+-   Usage patterns and examples
+-   How to create new skills
+-   Validation requirements
+-   Tips and best practices
 
 ---
 
 ## Skill Examples
 
 ### Spreadsheet Generation
+
 **File:** `docs/skills/SPREADSHEET_EXAMPLE.md`
-- Excel/xlsx skill examples
-- Use cases: financial reports, data analysis, inventory
-- Features: formulas, charts, formatting
-- Integration patterns
+
+-   Excel/xlsx skill examples
+-   Use cases: financial reports, data analysis, inventory
+-   Features: formulas, charts, formatting
+-   Integration patterns
 
 **Code:** `examples/skills_spreadsheet.py`
-- Create climate data spreadsheet
-- Create financial spreadsheet
-- Demonstrates code execution with xlsx skill
+
+-   Create climate data spreadsheet
+-   Create financial spreadsheet
+-   Demonstrates code execution with xlsx skill
 
 ### Word Document Generation
+
 **File:** `docs/skills/WORD_DOCUMENT_EXAMPLE.md`
-- Word/docx skill examples
-- Use cases: proposals, meeting minutes, technical docs
-- Features: formatting, tables, styles
-- Document types and best practices
+
+-   Word/docx skill examples
+-   Use cases: proposals, meeting minutes, technical docs
+-   Features: formatting, tables, styles
+-   Document types and best practices
 
 **Code:** `examples/skills_word_document.py`
-- Create business report document
-- Create meeting minutes document
-- Demonstrates code execution with docx skill
+
+-   Create business report document
+-   Create meeting minutes document
+-   Demonstrates code execution with docx skill
 
 ### PDF Generation
+
 **File:** `docs/skills/PDF_GENERATION_EXAMPLE.md`
-- PDF skill examples
-- Use cases: invoices, certificates, reports
-- Features: styling, charts, professional layout
-- Performance considerations
+
+-   PDF skill examples
+-   Use cases: invoices, certificates, reports
+-   Features: styling, charts, professional layout
+-   Performance considerations
 
 **Code:** `examples/skills_pdf_generation.py`
-- Generate invoice PDF
-- Generate data report PDF
-- Demonstrates code execution with pdf skill
+
+-   Generate invoice PDF
+-   Generate data report PDF
+-   Demonstrates code execution with pdf skill
 
 ---
 
@@ -137,12 +158,13 @@ python examples/skills_pdf_generation.py
 ```
 
 ### Example: Create Spreadsheet
+
 ```python
 import anthropic
 
 client = anthropic.Anthropic()
 response = client.messages.create(
-    model="claude-3-5-sonnet-20241022",
+    model="claude-4-5-sonnet",
     max_tokens=4096,
     tools=[{"type": "code_execution", "name": "bash"}],
     messages=[{
@@ -158,6 +180,7 @@ response = client.messages.create(
 ```
 
 ### Example: Use in VTCode Agent
+
 ```bash
 vtcode ask "Create Excel spreadsheet with Q4 financial data"
 ```
@@ -168,26 +191,27 @@ vtcode ask "Create Excel spreadsheet with Q4 financial data"
 
 ### Document Generation Skills
 
-| Skill | Type | Location | Use For |
-|-------|------|----------|---------|
+| Skill                   | Type           | Location                                | Use For                          |
+| ----------------------- | -------------- | --------------------------------------- | -------------------------------- |
 | `spreadsheet-generator` | Anthropic xlsx | `.claude/skills/spreadsheet-generator/` | Excel, dashboards, data analysis |
-| `doc-generator` | Anthropic docx | `.claude/skills/doc-generator/` | Word docs, proposals, reports |
-| `pdf-report-generator` | Anthropic pdf | `.claude/skills/pdf-report-generator/` | PDFs, invoices, certificates |
+| `doc-generator`         | Anthropic docx | `.claude/skills/doc-generator/`         | Word docs, proposals, reports    |
+| `pdf-report-generator`  | Anthropic pdf  | `.claude/skills/pdf-report-generator/`  | PDFs, invoices, certificates     |
 
 ### Development Skills
 
-| Skill | Type | Location | Use For |
-|-------|------|----------|---------|
+| Skill                 | Type            | Location                              | Use For                          |
+| --------------------- | --------------- | ------------------------------------- | -------------------------------- |
 | `strict-architecture` | Code Governance | `.claude/skills/strict-architecture/` | Architecture review, constraints |
-| `bdd-workflow` | Process | `.claude/skills/bdd-workflow/` | TDD/BDD feature development |
-| `code-orchestration` | Process | `.claude/skills/code-orchestration/` | Orchestrated development |
-| `forensic-debugging` | Process | `.claude/skills/forensic-debugging/` | Bug investigation |
+| `bdd-workflow`        | Process         | `.claude/skills/bdd-workflow/`        | TDD/BDD feature development      |
+| `code-orchestration`  | Process         | `.claude/skills/code-orchestration/`  | Orchestrated development         |
+| `forensic-debugging`  | Process         | `.claude/skills/forensic-debugging/`  | Bug investigation                |
 
 ---
 
 ## How to Use Skills
 
 ### Method 1: CLI Commands
+
 ```bash
 # List skills
 vtcode skills list
@@ -206,11 +230,13 @@ vtcode skills config
 ```
 
 ### Method 2: Ask Agent
+
 ```bash
 vtcode ask "Create Excel spreadsheet with Q4 financial data"
 ```
 
 ### Method 3: Interactive Chat
+
 ```bash
 vtcode chat
 # Then: /skills load spreadsheet-generator
@@ -218,6 +244,7 @@ vtcode chat
 ```
 
 ### Method 4: Auto Mode
+
 ```bash
 vtcode auto "Generate financial report with spreadsheet-generator"
 ```
@@ -227,6 +254,7 @@ vtcode auto "Generate financial report with spreadsheet-generator"
 ## Common Tasks
 
 ### Create Financial Dashboard
+
 ```bash
 vtcode ask "Use spreadsheet-generator to create Q4 financial dashboard"
 ```
@@ -235,6 +263,7 @@ vtcode ask "Use spreadsheet-generator to create Q4 financial dashboard"
 **Code:** `examples/skills_spreadsheet.py`
 
 ### Generate Project Proposal
+
 ```bash
 vtcode ask "Use doc-generator to create project proposal document"
 ```
@@ -243,6 +272,7 @@ vtcode ask "Use doc-generator to create project proposal document"
 **Code:** `examples/skills_word_document.py`
 
 ### Create PDF Report
+
 ```bash
 vtcode ask "Use pdf-report-generator to create quarterly report"
 ```
@@ -251,6 +281,7 @@ vtcode ask "Use pdf-report-generator to create quarterly report"
 **Code:** `examples/skills_pdf_generation.py`
 
 ### Code Architecture Review
+
 ```bash
 vtcode ask "Review this code using strict-architecture rules"
 ```
@@ -264,6 +295,7 @@ vtcode ask "Review this code using strict-architecture rules"
 ### Issue: Skill Not Found
 
 **Solution:**
+
 ```bash
 # Check available skills
 vtcode skills list
@@ -277,6 +309,7 @@ vtcode skills config
 ### Issue: Invalid SKILL.md
 
 **Solution:**
+
 ```bash
 # Validate manifest
 vtcode skills validate <path>
@@ -293,6 +326,7 @@ vtcode skills validate <path>
 ### Issue: File Not Generated
 
 **Solution:**
+
 1. Check code execution errors in response
 2. Verify skill is enabled in container
 3. Ensure API key is valid
@@ -346,24 +380,27 @@ container={
 ## Best Practices
 
 1. **Choose Right Skill**
-   - Spreadsheets for data/analysis
-   - Word docs for collaborative content
-   - PDFs for final distribution
+
+    - Spreadsheets for data/analysis
+    - Word docs for collaborative content
+    - PDFs for final distribution
 
 2. **Leverage Progressive Disclosure**
-   - Metadata loaded first (cheap)
-   - Instructions on-demand
-   - Minimal context overhead
+
+    - Metadata loaded first (cheap)
+    - Instructions on-demand
+    - Minimal context overhead
 
 3. **Error Handling**
-   - Check code execution in responses
-   - Verify file IDs
-   - Handle API errors gracefully
+
+    - Check code execution in responses
+    - Verify file IDs
+    - Handle API errors gracefully
 
 4. **Integration**
-   - Combine multiple skills
-   - Use code execution alongside
-   - Chain for complex workflows
+    - Combine multiple skills
+    - Use code execution alongside
+    - Chain for complex workflows
 
 **Read:** `docs/AGENT_SKILLS_INTEGRATION.md` → Best Practices
 
@@ -404,25 +441,27 @@ VTCode/
 
 ## Related Documentation
 
-- `.claude/CLAUDE.md` - Claude Code configuration
-- `README.md` - Project overview
-- `CONTRIBUTING.md` - Contribution guidelines
-- `.claude/skills/README.md` - Skills directory guide
+-   `.claude/CLAUDE.md` - Claude Code configuration
+-   `README.md` - Project overview
+-   `CONTRIBUTING.md` - Contribution guidelines
+-   `.claude/skills/README.md` - Skills directory guide
 
 ---
 
 ## Resources
 
 ### Official Documentation
-- [Anthropic Agent Skills Overview](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview)
-- [Agent Skills Quickstart](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/quickstart)
-- [Agent Skills API Guide](https://platform.claude.com/docs/en/build-with-claude/skills-guide)
-- [Skills Cookbook](https://github.com/anthropics/claude-cookbooks/tree/main/skills)
+
+-   [Anthropic Agent Skills Overview](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview)
+-   [Agent Skills Quickstart](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/quickstart)
+-   [Agent Skills API Guide](https://platform.claude.com/docs/en/build-with-claude/skills-guide)
+-   [Skills Cookbook](https://github.com/anthropics/claude-cookbooks/tree/main/skills)
 
 ### VTCode Implementation
-- `vtcode-core/src/skills/` - Core skills module
-- `src/cli/skills.rs` - CLI command handlers
-- `src/agent/runloop/skills_commands.rs` - Agent integration
+
+-   `vtcode-core/src/skills/` - Core skills module
+-   `src/cli/skills.rs` - CLI command handlers
+-   `src/agent/runloop/skills_commands.rs` - Agent integration
 
 ---
 
@@ -440,6 +479,7 @@ VTCode/
 ## Support
 
 For help:
+
 1. Check relevant documentation file (see above)
 2. Review examples in `examples/`
 3. Check troubleshooting section

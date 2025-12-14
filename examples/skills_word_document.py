@@ -23,19 +23,19 @@ def create_word_document():
     """
     Create a Word document with formatted content using Agent Skills.
     """
-    
+
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         print("Error: ANTHROPIC_API_KEY environment variable not set")
         sys.exit(1)
-    
+
     client = anthropic.Anthropic(api_key=api_key)
-    
+
     print("Creating Word document with Agent Skills...")
     print("-" * 60)
-    
+
     response = client.messages.create(
-        model="claude-3-5-sonnet-20241022",
+        model="claude-4-5-sonnet",
         max_tokens=4096,
         tools=[
             {
@@ -89,17 +89,17 @@ Add professional formatting:
             "skills-2025-10-02"
         ]
     )
-    
+
     print("\nWord Document Created:")
     print("-" * 60)
-    
+
     # Print response content
     for block in response.content:
         if hasattr(block, 'text'):
             print(block.text)
         elif hasattr(block, 'type'):
             print(f"[{block.type}]")
-    
+
     return response
 
 
@@ -107,19 +107,19 @@ def create_meeting_minutes():
     """
     Create a meeting minutes document.
     """
-    
+
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         print("Error: ANTHROPIC_API_KEY environment variable not set")
         sys.exit(1)
-    
+
     client = anthropic.Anthropic(api_key=api_key)
-    
+
     print("\nCreating meeting minutes document...")
     print("-" * 60)
-    
+
     response = client.messages.create(
-        model="claude-3-5-sonnet-20241022",
+        model="claude-4-5-sonnet",
         max_tokens=4096,
         tools=[
             {
@@ -147,12 +147,12 @@ Content:
    - Timeline on track
    - Budget 95% allocated
    - Next milestone: January 15, 2025
-   
+
    Item 2: Q1 Planning (John Smith)
    - Three strategic initiatives
    - Resource allocation discussion
    - Timeline development
-   
+
    Item 3: Team Building Event (Lisa Anderson)
    - Proposed dates: January 20-22
    - Budget request: $5,000
@@ -179,7 +179,7 @@ Format with:
             "skills-2025-10-02"
         ]
     )
-    
+
     print("\nMeeting Minutes Created:")
     for block in response.content:
         if hasattr(block, 'text'):
@@ -191,7 +191,7 @@ Format with:
                 print(text)
         elif hasattr(block, 'type'):
             print(f"[{block.type}]")
-    
+
     return response
 
 
@@ -199,10 +199,10 @@ if __name__ == "__main__":
     try:
         # Create main report
         create_word_document()
-        
+
         # Create meeting minutes
         create_meeting_minutes()
-        
+
     except anthropic.APIError as e:
         print(f"API Error: {e}")
         sys.exit(1)

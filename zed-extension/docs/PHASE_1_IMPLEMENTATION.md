@@ -4,17 +4,19 @@ This document details the Phase 1 implementation of core features for the VTCode
 
 ## What's New in v0.2.0
 
-### ✓  Completed Features
+### ✓ Completed Features
 
 #### 1. Process Execution Integration ✓
-- **Module**: `src/executor.rs`
-- **Capabilities**:
-  - Execute VTCode CLI commands from Rust
-  - Capture stdout and stderr
-  - Return structured results with status codes
-  - Error handling for missing CLI
+
+-   **Module**: `src/executor.rs`
+-   **Capabilities**:
+    -   Execute VTCode CLI commands from Rust
+    -   Capture stdout and stderr
+    -   Return structured results with status codes
+    -   Error handling for missing CLI
 
 **Key Functions**:
+
 ```rust
 pub fn execute_command(command: &str, args: &[&str]) -> Result<CommandResult, String>
 pub fn check_vtcode_available() -> bool
@@ -22,6 +24,7 @@ pub fn get_vtcode_version() -> Result<String, String>
 ```
 
 **Usage Example**:
+
 ```rust
 // Execute a vtcode ask command
 let result = execute_command("ask", &["--query", "explain this code"])?;
@@ -31,20 +34,23 @@ if result.is_success() {
 ```
 
 #### 2. Configuration Management ✓
-- **Module**: `src/config.rs`
-- **Capabilities**:
-  - Parse `vtcode.toml` TOML files
-  - Support for AI, workspace, and security settings
-  - Default configurations
-  - Recursive search for config file in parent directories
+
+-   **Module**: `src/config.rs`
+-   **Capabilities**:
+    -   Parse `vtcode.toml` TOML files
+    -   Support for AI, workspace, and security settings
+    -   Default configurations
+    -   Recursive search for config file in parent directories
 
 **Key Functions**:
+
 ```rust
 pub fn load_config(path: &Path) -> Result<Config, String>
 pub fn find_config(start_path: &Path) -> Option<Config>
 ```
 
 **Configuration Structure**:
+
 ```rust
 pub struct Config {
     pub ai: AiConfig,
@@ -54,14 +60,16 @@ pub struct Config {
 ```
 
 #### 3. Extension Core Initialization ✓
-- **Module**: `src/lib.rs`
-- **Capabilities**:
-  - Initialize extension with workspace detection
-  - Load configuration from workspace
-  - Verify VTCode CLI availability
-  - Provide access to configuration and status
+
+-   **Module**: `src/lib.rs`
+-   **Capabilities**:
+    -   Initialize extension with workspace detection
+    -   Load configuration from workspace
+    -   Verify VTCode CLI availability
+    -   Provide access to configuration and status
 
 **Key Methods**:
+
 ```rust
 pub fn initialize(&mut self, workspace_root: &str) -> Result<(), String>
 pub fn config(&self) -> Option<&Config>
@@ -87,7 +95,7 @@ Test Coverage:
 
 ```
 Binary Size: 500KB (release build)
-Dependencies: 
+Dependencies:
   - zed_extension_api 0.1.0
   - serde 1.0
   - serde_json 1.0
@@ -134,6 +142,7 @@ VTCode Zed Extension (v0.2.0)
 ### VTCodeExtension
 
 #### Initialization
+
 ```rust
 impl Extension for VTCodeExtension {
     fn new() -> Self {
@@ -144,6 +153,7 @@ impl Extension for VTCodeExtension {
 ```
 
 #### Methods
+
 ```rust
 pub fn initialize(&mut self, workspace_root: &str) -> Result<(), String>
 // Initialize with workspace configuration
@@ -159,6 +169,7 @@ pub fn is_vtcode_available(&self) -> bool
 ### Config Module
 
 #### Main Structures
+
 ```rust
 pub struct Config {
     pub ai: AiConfig,           // AI provider settings
@@ -184,6 +195,7 @@ pub struct SecurityConfig {
 ```
 
 #### Functions
+
 ```rust
 pub fn load_config(path: &Path) -> Result<Config, String>
 // Load configuration from a specific file
@@ -195,6 +207,7 @@ pub fn find_config(start_path: &Path) -> Option<Config>
 ### Executor Module
 
 #### Result Structure
+
 ```rust
 pub struct CommandResult {
     pub status: i32,            // Exit code
@@ -209,8 +222,9 @@ impl CommandResult {
 ```
 
 #### Functions
+
 ```rust
-pub fn execute_command(command: &str, args: &[&str]) 
+pub fn execute_command(command: &str, args: &[&str])
     -> Result<CommandResult, String>
 // Execute a vtcode command and capture output
 
@@ -230,7 +244,7 @@ use vtcode::{VTCodeExtension};
 
 fn main() {
     let mut ext = VTCodeExtension::new();
-    
+
     match ext.initialize("/path/to/workspace") {
         Ok(()) => {
             println!("Extension initialized");
@@ -283,22 +297,26 @@ fn load_workspace_config() {
 ## Testing
 
 ### Run All Tests
+
 ```bash
 cargo test
 ```
 
 ### Run Specific Test Module
+
 ```bash
 cargo test config::tests
 cargo test executor::tests
 ```
 
 ### Run with Output
+
 ```bash
 cargo test -- --nocapture
 ```
 
 ### Test Results
+
 ```
 running 9 tests
 test config::tests::test_ai_config_defaults ... ok
@@ -321,7 +339,7 @@ test result: ok. 9 passed; 0 failed
 ```toml
 [ai]
 provider = "anthropic"
-model = "claude-3-5-sonnet-20241022"
+model = "claude-4-5-sonnet"
 
 [workspace]
 analyze_on_startup = false
@@ -336,30 +354,34 @@ allowed_tools = ["read_file", "edit_file"]
 ### Configuration Defaults
 
 If `vtcode.toml` is not found:
-- AI Provider: `anthropic`
-- Model: `claude-3-5-sonnet-20241022`
-- Max tokens: `8000`
-- Auto-analysis: `false`
-- Human-in-loop: `true`
+
+-   AI Provider: `anthropic`
+-   Model: `claude-4-5-sonnet`
+-   Max tokens: `8000`
+-   Auto-analysis: `false`
+-   Human-in-loop: `true`
 
 ## Next Steps (Phase 2)
 
 The following features are planned for Phase 2 (v0.3.0):
 
 ### Command Palette Integration
-- Expose commands via Zed's command palette
-- User-friendly command prompts
-- Command history
+
+-   Expose commands via Zed's command palette
+-   User-friendly command prompts
+-   Command history
 
 ### Output Channel
-- Dedicated output channel in Zed
-- Syntax highlighting for code blocks
-- Streaming response support
+
+-   Dedicated output channel in Zed
+-   Syntax highlighting for code blocks
+-   Streaming response support
 
 ### Editor Integration
-- Code selection context passing
-- Inline diagnostics
-- Status bar integration
+
+-   Code selection context passing
+-   Inline diagnostics
+-   Status bar integration
 
 ## File Structure After Phase 1
 
@@ -378,17 +400,20 @@ zed-extension/
 ## Building and Installation
 
 ### Build Release
+
 ```bash
 cargo build --release
 # Binary: target/release/libvtcode.dylib (419KB)
 ```
 
 ### Install as Dev Extension
+
 1. Open Zed
 2. Extensions → "Install Dev Extension"
 3. Select the zed-extension directory
 
 ### Verify Installation
+
 ```bash
 # Check extension appears in Zed Extensions panel
 # Verify vtcode commands are available in command palette
@@ -397,17 +422,20 @@ cargo build --release
 ## Troubleshooting
 
 ### Build Fails
+
 ```bash
 cargo clean
 cargo build --release
 ```
 
 ### Tests Fail
+
 ```bash
 cargo test -- --nocapture --test-threads=1
 ```
 
 ### VTCode CLI Not Found
+
 ```bash
 # Verify installation
 which vtcode
@@ -419,32 +447,34 @@ cargo install vtcode
 
 ## Performance Notes
 
-- **Startup Time**: <100ms (CLI check)
-- **Config Load**: <10ms (TOML parsing)
-- **Command Execution**: Depends on VTCode CLI performance
-- **Memory**: <5MB (extension overhead)
+-   **Startup Time**: <100ms (CLI check)
+-   **Config Load**: <10ms (TOML parsing)
+-   **Command Execution**: Depends on VTCode CLI performance
+-   **Memory**: <5MB (extension overhead)
 
 ## Compatibility
 
-- **Rust Edition**: 2021
-- **Minimum Rust**: 1.70.0
-- **Target**: WebAssembly (wasm32-unknown-unknown)
-- **Zed Version**: 0.150.0+
-- **VTCode CLI**: 0.1.0+
+-   **Rust Edition**: 2021
+-   **Minimum Rust**: 1.70.0
+-   **Target**: WebAssembly (wasm32-unknown-unknown)
+-   **Zed Version**: 0.150.0+
+-   **VTCode CLI**: 0.1.0+
 
 ## Changelog
 
 ### v0.2.0 (Phase 1) - 2024-11-09
-- ✓  Process execution integration
-- ✓  Configuration management system
-- ✓  Extension initialization
-- ✓  Unit tests (9 tests, 100% pass)
-- ✓  Complete documentation
+
+-   ✓ Process execution integration
+-   ✓ Configuration management system
+-   ✓ Extension initialization
+-   ✓ Unit tests (9 tests, 100% pass)
+-   ✓ Complete documentation
 
 ### v0.1.0 (Initial) - 2024-11-09
-- Basic extension scaffold
-- Language support for vtcode.toml
-- Initial documentation
+
+-   Basic extension scaffold
+-   Language support for vtcode.toml
+-   Initial documentation
 
 ## Contributing
 
@@ -458,14 +488,14 @@ To contribute to Phase 1 or work on Phase 2:
 
 ## References
 
-- [VTCode Main Repository](https://github.com/vinhnx/vtcode)
-- [Zed Extension API](https://zed.dev/docs/extensions)
-- [Rust std::process](https://doc.rust-lang.org/std/process/)
-- [TOML Format](https://toml.io/)
+-   [VTCode Main Repository](https://github.com/vinhnx/vtcode)
+-   [Zed Extension API](https://zed.dev/docs/extensions)
+-   [Rust std::process](https://doc.rust-lang.org/std/process/)
+-   [TOML Format](https://toml.io/)
 
 ---
 
-**Status**: Phase 1 Complete ✓  
-**Target Release**: v0.2.0  
-**Next Phase**: v0.3.0 (Command Palette & Output Channel)  
+**Status**: Phase 1 Complete ✓
+**Target Release**: v0.2.0
+**Next Phase**: v0.3.0 (Command Palette & Output Channel)
 **Estimated Timeline**: 2-3 weeks

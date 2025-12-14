@@ -14,24 +14,27 @@ Generate professional Excel spreadsheets with structured data, formulas, charts,
 **⚠️ IMPORTANT: vtcode Compatibility Note**
 
 This skill requires Anthropic's container skills feature (xlsx skill) which is only available through:
-- Anthropic's official CLI (`anthropic` command)
-- Claude Desktop app with skills enabled
-- Direct Anthropic API with `container.skills` parameter
+
+-   Anthropic's official CLI (`anthropic` command)
+-   Claude Desktop app with skills enabled
+-   Direct Anthropic API with `container.skills` parameter
 
 **vtcode does not currently support Anthropic container skills.** Instead, use one of these approaches:
 
 ### Option 1: Use Anthropic CLI (Recommended)
+
 ```bash
 # Install Anthropic CLI: pip install anthropic
 # Set API key: export ANTHROPIC_API_KEY=your_key
 anthropic messages create \
-  --model claude-3-5-sonnet-20241022 \
+  --model claude-4-5-sonnet \
   --max-tokens 4096 \
   --container-skills anthropic:xlsx:latest \
   --message "Create an Excel file with [your specification]"
 ```
 
 ### Option 2: Python Script with openpyxl
+
 Use vtcode's `execute_code` tool with Python and openpyxl library:
 
 ```python
@@ -69,6 +72,7 @@ print("Spreadsheet created: financial_dashboard.xlsx")
 ```
 
 ### Option 3: Use CSV + Manual Import
+
 Generate CSV data that users can import into Excel:
 
 ```python
@@ -94,62 +98,67 @@ When using Anthropic's official tools with container skills:
 1. **Understand Requirements**: Parse data content, structure, formatting, charts, formulas
 2. **Plan the Spreadsheet**: Sketch layout, identify calculations, determine chart types
 3. **Create with Anthropic API**:
-   ```python
-   import anthropic
-   
-   client = anthropic.Anthropic()
-   response = client.messages.create(
-       model="claude-3-5-sonnet-20241022",
-       max_tokens=4096,
-       tools=[{"type": "code_execution", "name": "bash"}],
-       messages=[{
-           "role": "user",
-           "content": "Create an Excel file with [specification]"
-       }],
-       container={
-           "type": "skills",
-           "skills": [{"type": "anthropic", "skill_id": "xlsx", "version": "latest"}]
-       },
-       betas=["code-execution-2025-08-25", "skills-2025-10-02"]
-   )
-   ```
+
+    ```python
+    import anthropic
+
+    client = anthropic.Anthropic()
+    response = client.messages.create(
+        model="claude-4-5-sonnet",
+        max_tokens=4096,
+        tools=[{"type": "code_execution", "name": "bash"}],
+        messages=[{
+            "role": "user",
+            "content": "Create an Excel file with [specification]"
+        }],
+        container={
+            "type": "skills",
+            "skills": [{"type": "anthropic", "skill_id": "xlsx", "version": "latest"}]
+        },
+        betas=["code-execution-2025-08-25", "skills-2025-10-02"]
+    )
+    ```
+
 4. **Extract File Reference**: Locate file_id in response content blocks
 
 ## Examples
 
 ### Financial Dashboard
+
 **Input**: "Create a quarterly financial dashboard with revenue, expenses, and profit margins"
 **Output**: Excel file with multiple sheets - raw data, calculations, visual dashboard
 
 ### Sales Analysis
+
 **Input**: "Generate a sales report for Q4 2024 by region with growth percentages and trend analysis"
 **Output**: Structured spreadsheet with regional data, metrics, and charts
 
 ### Inventory Tracking
+
 **Input**: "Create an inventory management spreadsheet with SKU, quantity, cost, and reorder levels"
 **Output**: Professional inventory tracker with formulas and conditional formatting
 
 ## Features Supported
 
-- **Multiple Sheets**: Create and organize data across sheets
-- **Formatting**: Colors, fonts, number formats, borders
-- **Formulas**: SUM, AVERAGE, IF, VLOOKUP, and complex calculations
-- **Charts**: Bar, line, pie, scatter plots with proper labeling
-- **Tables**: Formatted data ranges with filters
-- **Conditional Formatting**: Highlight cells based on values
-- **Merged Cells**: Professional layout with spans
-- **Number Formats**: Currency, percentages, dates
+-   **Multiple Sheets**: Create and organize data across sheets
+-   **Formatting**: Colors, fonts, number formats, borders
+-   **Formulas**: SUM, AVERAGE, IF, VLOOKUP, and complex calculations
+-   **Charts**: Bar, line, pie, scatter plots with proper labeling
+-   **Tables**: Formatted data ranges with filters
+-   **Conditional Formatting**: Highlight cells based on values
+-   **Merged Cells**: Professional layout with spans
+-   **Number Formats**: Currency, percentages, dates
 
 ## Use Cases
 
-- Financial reporting and analysis
-- Sales performance dashboards
-- Employee records and payroll
-- Inventory and asset management
-- Budget planning and tracking
-- Data analysis and summaries
-- Project timelines and schedules
-- Survey results compilation
+-   Financial reporting and analysis
+-   Sales performance dashboards
+-   Employee records and payroll
+-   Inventory and asset management
+-   Budget planning and tracking
+-   Data analysis and summaries
+-   Project timelines and schedules
+-   Survey results compilation
 
 ## Best Practices
 
@@ -162,13 +171,13 @@ When using Anthropic's official tools with container skills:
 
 ## Related Skills
 
-- `doc-generator` - For written reports and documentation
-- `pdf-report-generator` - For final distribution-ready reports
-- `presentation-builder` - For stakeholder presentations
+-   `doc-generator` - For written reports and documentation
+-   `pdf-report-generator` - For final distribution-ready reports
+-   `presentation-builder` - For stakeholder presentations
 
 ## Limitations
 
-- Maximum file size: ~50MB for code execution environment
-- Complex VBA macros not supported
-- Real-time data connection limitations
-- Advanced Power Query workflows require manual setup post-generation
+-   Maximum file size: ~50MB for code execution environment
+-   Complex VBA macros not supported
+-   Real-time data connection limitations
+-   Advanced Power Query workflows require manual setup post-generation

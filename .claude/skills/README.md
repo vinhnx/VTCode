@@ -9,72 +9,81 @@ This directory contains Claude Agent Skills tailored for VTCode development and 
 These skills leverage Anthropic's Agent Skills API to generate professional documents using Claude.
 
 #### spreadsheet-generator
+
 **v1.0.0** | VTCode Team
 
 Generate professional Excel spreadsheets with data, charts, and formatting.
 
 **Features:**
-- Multiple sheets with complex layouts
-- Data formulas (SUM, AVERAGE, VLOOKUP, etc.)
-- Charts and visualizations
-- Professional formatting and styling
-- Conditional formatting and number formats
+
+-   Multiple sheets with complex layouts
+-   Data formulas (SUM, AVERAGE, VLOOKUP, etc.)
+-   Charts and visualizations
+-   Professional formatting and styling
+-   Conditional formatting and number formats
 
 **Use Cases:**
-- Financial reporting and dashboards
-- Sales performance analysis
-- Inventory management
-- Budget planning and tracking
-- Data analysis and summaries
+
+-   Financial reporting and dashboards
+-   Sales performance analysis
+-   Inventory management
+-   Budget planning and tracking
+-   Data analysis and summaries
 
 **See:** `docs/skills/SPREADSHEET_EXAMPLE.md` and `examples/skills_spreadsheet.py`
 
 ---
 
 #### doc-generator
+
 **v1.0.0** | VTCode Team
 
 Generate professional Word documents with formatted text, tables, and complex layouts.
 
 **Features:**
-- Rich text formatting (bold, italic, underline, colors)
-- Heading styles and text hierarchy
-- Tables with merged cells and formatting
-- Lists (bullet points and numbered)
-- Page breaks and section management
-- Images and professional layout
+
+-   Rich text formatting (bold, italic, underline, colors)
+-   Heading styles and text hierarchy
+-   Tables with merged cells and formatting
+-   Lists (bullet points and numbered)
+-   Page breaks and section management
+-   Images and professional layout
 
 **Use Cases:**
-- Business proposals and reports
-- Meeting minutes and agendas
-- Technical documentation
-- Training materials and manuals
-- Employee handbooks and policies
+
+-   Business proposals and reports
+-   Meeting minutes and agendas
+-   Technical documentation
+-   Training materials and manuals
+-   Employee handbooks and policies
 
 **See:** `docs/skills/WORD_DOCUMENT_EXAMPLE.md` and `examples/skills_word_document.py`
 
 ---
 
 #### pdf-report-generator
+
 **v1.0.0** | VTCode Team
 
 Generate professional PDF documents with charts, styling, and complex layouts.
 
 **Features:**
-- Advanced styling and custom fonts
-- Headers, footers, and page numbers
-- Charts and data visualizations
-- Images and professional branding
-- Color coordination and watermarks
-- Multi-section documents
+
+-   Advanced styling and custom fonts
+-   Headers, footers, and page numbers
+-   Charts and data visualizations
+-   Images and professional branding
+-   Color coordination and watermarks
+-   Multi-section documents
 
 **Use Cases:**
-- Financial and audit reports
-- Invoice and receipt generation
-- Certificates and diplomas
-- Marketing proposals
-- Technical specifications
-- Customer proposals and quotes
+
+-   Financial and audit reports
+-   Invoice and receipt generation
+-   Certificates and diplomas
+-   Marketing proposals
+-   Technical specifications
+-   Customer proposals and quotes
 
 **See:** `docs/skills/PDF_GENERATION_EXAMPLE.md` and `examples/skills_pdf_generation.py`
 
@@ -83,26 +92,30 @@ Generate professional PDF documents with charts, styling, and complex layouts.
 ### Development Process Skills
 
 #### strict-architecture
+
 **v0.0.1** | Anthropic
 
 Enforces universal strict governance rules for Python, Golang, and .NET codebases.
 
 **Constraints:**
-- 500 lines per file maximum
-- 5 functions per file maximum
-- 4 function arguments maximum
-- Interface-first I/O design
+
+-   500 lines per file maximum
+-   5 functions per file maximum
+-   4 function arguments maximum
+-   Interface-first I/O design
 
 **Use:** Apply during code reviews and refactoring to maintain clean architecture.
 
 ---
 
 #### bdd-workflow
+
 **v1.0.0** | VTCode Team
 
 BDD and TDD development workflow for feature implementation.
 
 **Flow:**
+
 1. Create greenfield specification
 2. Generate Gherkin scenarios
 3. Convert to TDD prompts
@@ -113,25 +126,29 @@ BDD and TDD development workflow for feature implementation.
 ---
 
 #### code-orchestration
+
 **v1.0.0** | VTCode Team
 
 Orchestrated development with automatic task breakdown and delegation.
 
 **Includes:**
-- Task decomposition
-- Delegated implementation
-- Coding standards enforcement
-- Automated testing
-- Quality gates
+
+-   Task decomposition
+-   Delegated implementation
+-   Coding standards enforcement
+-   Automated testing
+-   Quality gates
 
 ---
 
 #### forensic-debugging
+
 **v1.0.0** | VTCode Team
 
 CRASH-RCA forensic debugging for systematic bug investigation.
 
 **Workflow:**
+
 1. Initialize session with issue description
 2. Log hypotheses with confidence levels
 3. Gather evidence with read-only tools
@@ -168,7 +185,7 @@ import anthropic
 
 client = anthropic.Anthropic()
 response = client.messages.create(
-    model="claude-3-5-sonnet-20241022",
+    model="claude-4-5-sonnet",
     max_tokens=4096,
     tools=[{"type": "code_execution", "name": "bash"}],
     messages=[{
@@ -192,18 +209,21 @@ See `examples/skills_*.py` for complete implementations.
 ## Examples
 
 ### Run Spreadsheet Example
+
 ```bash
 export ANTHROPIC_API_KEY=your-key-here
 python examples/skills_spreadsheet.py
 ```
 
 ### Run Word Document Example
+
 ```bash
 export ANTHROPIC_API_KEY=your-key-here
 python examples/skills_word_document.py
 ```
 
 ### Run PDF Generation Example
+
 ```bash
 export ANTHROPIC_API_KEY=your-key-here
 python examples/skills_pdf_generation.py
@@ -266,20 +286,21 @@ vtcode skills validate ./.claude/skills/spreadsheet-generator
 ```
 
 Requirements:
-- Valid YAML frontmatter
-- `name`: lowercase, alphanumeric + hyphens, 1-64 chars
-- `description`: 1-1024 characters
-- Must not contain "anthropic" or "claude" in name
+
+-   Valid YAML frontmatter
+-   `name`: lowercase, alphanumeric + hyphens, 1-64 chars
+-   `description`: 1-1024 characters
+-   Must not contain "anthropic" or "claude" in name
 
 ---
 
 ## Related Documentation
 
-- `docs/SKILLS_GUIDE.md` - Complete skills guide
-- `docs/skills/CONTAINER_GUIDE.md` - Container configuration
-- `docs/skills/SPREADSHEET_EXAMPLE.md` - Spreadsheet examples
-- `docs/skills/WORD_DOCUMENT_EXAMPLE.md` - Document examples
-- `docs/skills/PDF_GENERATION_EXAMPLE.md` - PDF examples
+-   `docs/SKILLS_GUIDE.md` - Complete skills guide
+-   `docs/skills/CONTAINER_GUIDE.md` - Container configuration
+-   `docs/skills/SPREADSHEET_EXAMPLE.md` - Spreadsheet examples
+-   `docs/skills/WORD_DOCUMENT_EXAMPLE.md` - Document examples
+-   `docs/skills/PDF_GENERATION_EXAMPLE.md` - PDF examples
 
 ---
 
@@ -296,6 +317,7 @@ Requirements:
 ## Support
 
 For issues or questions:
+
 1. Check skill documentation in SKILL.md
 2. Review examples in `examples/` directory
 3. See troubleshooting in `docs/SKILLS_GUIDE.md`

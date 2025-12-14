@@ -184,6 +184,7 @@ author: VTCode Team
 ### Document Generation (Anthropic Agent Skills)
 
 #### spreadsheet-generator
+
 Generate Excel spreadsheets with data, formulas, and charts.
 
 **Integrates with:** Anthropic `xlsx` Agent Skill
@@ -194,14 +195,16 @@ vtcode ask "Create a sales performance spreadsheet for Q4 2024"
 ```
 
 **Features:**
-- Multiple sheets and complex layouts
-- Formulas (SUM, AVERAGE, VLOOKUP)
-- Charts and visualizations
-- Professional formatting
+
+-   Multiple sheets and complex layouts
+-   Formulas (SUM, AVERAGE, VLOOKUP)
+-   Charts and visualizations
+-   Professional formatting
 
 ---
 
 #### doc-generator
+
 Generate Word documents with formatted text, tables, and styles.
 
 **Integrates with:** Anthropic `docx` Agent Skill
@@ -212,14 +215,16 @@ vtcode ask "Create project proposal document with timeline and budget"
 ```
 
 **Features:**
-- Rich text formatting
-- Heading styles and hierarchy
-- Tables and lists
-- Page management
+
+-   Rich text formatting
+-   Heading styles and hierarchy
+-   Tables and lists
+-   Page management
 
 ---
 
 #### pdf-report-generator
+
 Generate PDF documents with charts, styling, and layouts.
 
 **Integrates with:** Anthropic `pdf` Agent Skill
@@ -230,16 +235,18 @@ vtcode ask "Generate quarterly financial report PDF"
 ```
 
 **Features:**
-- Advanced styling
-- Charts and visualizations
-- Headers/footers
-- Professional branding
+
+-   Advanced styling
+-   Charts and visualizations
+-   Headers/footers
+-   Professional branding
 
 ---
 
 ### Development Process Skills
 
 #### strict-architecture
+
 Enforce strict governance rules (500 lines, 5 functions, 4 args).
 
 **Location:** `.claude/skills/strict-architecture/`
@@ -251,6 +258,7 @@ vtcode ask "Review this code with strict-architecture rules"
 ---
 
 #### bdd-workflow
+
 BDD and TDD feature development.
 
 **Location:** `.claude/skills/bdd-workflow/`
@@ -258,6 +266,7 @@ BDD and TDD feature development.
 ---
 
 #### code-orchestration
+
 Orchestrated development with task breakdown.
 
 **Location:** `.claude/skills/code-orchestration/`
@@ -265,6 +274,7 @@ Orchestrated development with task breakdown.
 ---
 
 #### forensic-debugging
+
 Systematic CRASH-RCA debugging.
 
 **Location:** `.claude/skills/forensic-debugging/`
@@ -372,7 +382,7 @@ client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 
 # Enable spreadsheet skill
 response = client.messages.create(
-    model="claude-3-5-sonnet-20241022",
+    model="claude-4-5-sonnet",
     max_tokens=4096,
     tools=[{"type": "code_execution", "name": "bash"}],
     messages=[{
@@ -485,29 +495,33 @@ vtcode chat
 ## Best Practices
 
 1. **Use Appropriate Skill**
-   - Financial reports → spreadsheet-generator
-   - Technical docs → doc-generator
-   - Final distribution → pdf-report-generator
+
+    - Financial reports → spreadsheet-generator
+    - Technical docs → doc-generator
+    - Final distribution → pdf-report-generator
 
 2. **Progressive Disclosure**
-   - Metadata loaded first (minimal cost)
-   - Full instructions on-demand
-   - Resources executed without loading
+
+    - Metadata loaded first (minimal cost)
+    - Full instructions on-demand
+    - Resources executed without loading
 
 3. **Error Handling**
-   - Check API responses for errors
-   - Validate file creation
-   - Handle edge cases gracefully
+
+    - Check API responses for errors
+    - Validate file creation
+    - Handle edge cases gracefully
 
 4. **Performance**
-   - Large documents may take longer
-   - Optimize charts and images
-   - Use summaries for 100+ page documents
+
+    - Large documents may take longer
+    - Optimize charts and images
+    - Use summaries for 100+ page documents
 
 5. **Integration**
-   - Combine multiple skills for complex workflows
-   - Use code execution alongside skills
-   - Chain skills for multi-step tasks
+    - Combine multiple skills for complex workflows
+    - Use code execution alongside skills
+    - Chain skills for multi-step tasks
 
 ---
 
@@ -570,11 +584,11 @@ vtcode ask "Create file with <skill>"
 
 ## Resources
 
-- `.claude/skills/README.md` - Skills directory overview
-- `docs/SKILLS_GUIDE.md` - Complete skills guide
-- `examples/skills_*.py` - Working examples
-- `docs/skills/*.md` - Specific skill documentation
-- https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview - Anthropic skills spec
+-   `.claude/skills/README.md` - Skills directory overview
+-   `docs/SKILLS_GUIDE.md` - Complete skills guide
+-   `examples/skills_*.py` - Working examples
+-   `docs/skills/*.md` - Specific skill documentation
+-   https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview - Anthropic skills spec
 
 ---
 
