@@ -132,7 +132,7 @@ impl Skill {
     ) -> anyhow::Result<Self> {
         manifest.validate()?;
 		// Determine scope based on path
-		let scope = if path.to_string_lossy().contains(".vtcode/skills") 
+		let scope = if path.to_string_lossy().contains(".vtcode/skills")
 			|| path.to_string_lossy().contains(".codex/skills") {
 			SkillScope::Repo
 		} else {
