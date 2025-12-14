@@ -506,6 +506,10 @@ pub fn render_skills_lean(skills: &[crate::skills::types::Skill]) -> Option<Stri
   2) If `SKILL.md` points to extra folders such as `references/`, load only the specific files needed for the request.
   3) If `scripts/` exist, prefer running them instead of retyping code.
   4) If `assets/` or templates exist, reuse them.
+- Package managers (IMPORTANT - use modern tools):
+  • Python: ALWAYS use `uv pip install` (NOT pip). If uv unavailable, use `pip install` as fallback.
+  • JavaScript: ALWAYS use `bun install` or `bun add` (NOT npm/pnpm). If bun unavailable, use npm as fallback.
+  • Examples: `uv pip install pandas`, `bun add axios`, `uv run python script.py`, `bun run script.js`
 - Description as trigger: The YAML `description` in `SKILL.md` is the primary trigger signal.
 - Context hygiene: Keep context small - summarize long sections, only load extra files when needed, avoid deeply nested references."###.to_string());
 
