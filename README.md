@@ -29,7 +29,9 @@
   <a href="https://github.com/vinhnx/vtcode/releases">
     <img src="https://img.shields.io/github/v/release/vinhnx/vtcode?color=orange&label=Release" alt="GitHub Release"/>
   </a>
-  <a href="https://deepwiki.com/vinhnx/vtcode"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
+  <a href="https://smithery.ai/skills?ns=vinhnx&utm_source=github&utm_medium=badge">
+  <img src="https://smithery.ai/badge/skills/vinhnx" alt="Run in Smithery">
+</a>
 </p>
 
 <p align="center"><strong>VT Code</strong> is a Rust-based terminal coding agent with semantic code intelligence via Tree-sitter. Supports multiple LLM providers with automatic failover and efficient context management.</p>
@@ -43,9 +45,14 @@
 
 ---
 
-## Installation
+## Documents
 
-[![Run in Smithery](https://smithery.ai/badge/skills/vinhnx)](https://smithery.ai/skills?ns=vinhnx&utm_source=github&utm_medium=badge)
++ DeepWiki <a href="https://deepwiki.com/vinhnx/vtcode"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
++ CodeWiki <a href="[https://deepwiki.com/vinhnx/vtcode](https://codewiki.google/github.com/vinhnx/vtcode)"><img src="https://img.shields.io/badge/google%20gemini-8E75B2?style=for-the-badge&logo=google%20gemini&logoColor=white" alt="Ask CodeWiki"></a>
+
+---
+
+## Installation
 
 **macOS & Linux:**
 
@@ -172,7 +179,7 @@ See [Security Model](./docs/SECURITY_MODEL.md) for details.
 -   [**Context Engineering**](./docs/context_engineering.md)
     -   [Token budget management](./docs/context_engineering_implementation.md#token-budget-tracking--attention-management)
     -   [Dynamic context curation](./docs/context_engineering_implementation.md#phase-2-dynamic-context-curation)
--   [**Agent Skills**](./docs/SKILLS_GUIDE.md) - Comprehensive skills location system with multi-location support, precedence handling, and Anthropic's Agent Skills specification
+-   [**Agent Skills**](./docs/SKILLS_GUIDE.md) - Comprehensive skills location system with multi-location support, precedence handling, and Anthropic's Agent Skills specification. 
 -   [**Code Intelligence**](./docs/user-guide/tree-sitter-integration.md)
 -   [**Agent Client Protocol (ACP)**](./docs/guides/zed-acp.md)
 -   [**Zed Integration**](./docs/guides/zed-acp.md) - Agent Client Protocol Integration. VT Code is fully [capable ACP agent](https://agentclientprotocol.com/overview/agents), works with [ACP Clients](https://agentclientprotocol.com/overview/clients), for example [Zed](https://zed.dev/).
