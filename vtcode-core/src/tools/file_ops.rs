@@ -2236,15 +2236,24 @@ impl FileOpsTool {
         input: &Input,
         _file_size: usize,
     ) -> Result<(String, bool)> {
-        // Validate the offset and page size parameters
+        // Validate and extract parameters
         let offset_lines = input.offset_lines.unwrap_or(0);
-        let page_size_lines = input.page_size_lines.unwrap_or(usize::MAX); // Default to read all lines from offset
+        let page_size_lines = input.page_size_lines.unwrap_or(1000); // Reasonable default: 1000 lines
 
+        // Validate offset and page size
         if offset_lines > usize::MAX / 2 {
-            // Prevent potential overflow
+            return Err(anyhow!("Offset too large: {}", offset_lines));
+        }
+        if page_size_lines == 0 {
+            return Err(anyhow!("Page size must be greater than 0"));
+        }
+
+        // Check for overflow before adding
+        if offset_lines > usize::MAX - page_size_lines {
             return Err(anyhow!(
-                "Offset_lines parameter too large: {}",
-                offset_lines
+                "Offset_lines + page_size_lines would overflow: {} + {}",
+                offset_lines,
+                page_size_lines
             ));
         }
 
@@ -2255,26 +2264,17 @@ impl FileOpsTool {
         let all_lines: Vec<&str> = content.lines().collect();
         let total_lines = all_lines.len();
 
-        // Handle empty file case
-        if total_lines == 0 {
+        // Handle empty file or offset beyond bounds
+        if total_lines == 0 || offset_lines >= total_lines {
             return Ok((String::new(), false));
         }
 
-        // Validate offset is not beyond the file size
-        if offset_lines >= total_lines {
-            if offset_lines == 0 {
-                // Special case: if offset is 0 but file is empty, return empty string
-                return Ok((String::new(), false));
-            }
-            return Ok((String::new(), false)); // Return empty if offset is beyond file size
-        }
-
-        // Calculate the end position (don't exceed file boundaries)
+        // Calculate end position (safe because we validated overflow above)
         let end_pos = std::cmp::min(offset_lines + page_size_lines, total_lines);
         let selected_lines = &all_lines[offset_lines..end_pos];
 
         let final_content = selected_lines.join("\n");
-        let is_truncated = end_pos < total_lines; // indicate if we didn't read all lines
+        let is_truncated = end_pos < total_lines;
 
         Ok((final_content, is_truncated))
     }
@@ -2288,19 +2288,19 @@ impl FileOpsTool {
     ) -> Result<(String, bool)> {
         use tokio::io::AsyncReadExt;
 
+        // Validate and extract parameters
         let offset_bytes = input.offset_bytes.unwrap_or(0);
-        let page_size_bytes = input.page_size_bytes.unwrap_or(file_size as usize);
+        let page_size_bytes = input.page_size_bytes.unwrap_or(8192); // Reasonable default: 8KB
 
-        // Validate offset is not beyond the file size
+        // Validate offset and page size
         if offset_bytes >= file_size {
-            if offset_bytes == 0 && file_size == 0 {
-                // Special case: empty file with offset 0
-                return Ok((String::new(), false));
-            }
-            return Ok((String::new(), false)); // Return empty if offset is beyond file size
+            return Ok((String::new(), false));
+        }
+        if page_size_bytes == 0 {
+            return Err(anyhow!("Page size must be greater than 0"));
         }
 
-        // Prevent potential overflow when calculating end position
+        // Check for overflow before adding (safe cast since page_size_bytes < file_size)
         let page_size_u64 = page_size_bytes as u64;
         if offset_bytes > u64::MAX - page_size_u64 {
             return Err(anyhow!(
@@ -2346,9 +2346,8 @@ impl FileOpsTool {
         }
 
         // Convert to string, handling potential UTF-8 errors gracefully
-        let content = String::from_utf8_lossy(&buffer[..bytes_read]);
-        let final_content = content.to_string();
-        let is_truncated = end_pos < file_size; // indicate if we didn't read the entire file
+        let final_content = String::from_utf8_lossy(&buffer[..bytes_read]).into_owned();
+        let is_truncated = end_pos < file_size;
 
         Ok((final_content, is_truncated))
     }

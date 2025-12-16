@@ -24,8 +24,12 @@ pub struct ToolCallSafetyValidator {
     session_count: usize,
     /// Call rate limit (max calls per second)
     rate_limit_per_second: usize,
+    /// Optional per-minute cap to prevent bursts that dodge the per-second window
+    rate_limit_per_minute: Option<usize>,
     /// Tools called in current window
     calls_in_window: Vec<Instant>,
+    /// Tools called in the current minute window
+    calls_in_minute: Vec<Instant>,
 }
 
 impl ToolCallSafetyValidator {
@@ -37,14 +41,28 @@ impl ToolCallSafetyValidator {
         destructive.insert("shell");
         destructive.insert("apply_patch");
 
+        // Allow overriding the rate limit without a config migration so we can tune in prod.
+        let rate_limit_per_second = std::env::var("VTCODE_TOOL_RATE_LIMIT_PER_SECOND")
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok())
+            .filter(|v| *v > 0)
+            .unwrap_or(5);
+
+        let rate_limit_per_minute = std::env::var("VTCODE_TOOL_CALLS_PER_MIN")
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok())
+            .filter(|v| *v > 0);
+
         Self {
             destructive_tools: destructive,
             max_per_turn: 10,
             max_per_session: 100,
             current_turn_count: 0,
             session_count: 0,
-            rate_limit_per_second: 5,
+            rate_limit_per_second,
             calls_in_window: Vec::new(),
+            rate_limit_per_minute,
+            calls_in_minute: Vec::new(),
         }
     }
 
@@ -60,6 +78,28 @@ impl ToolCallSafetyValidator {
         self.max_per_session = max_per_session;
     }
 
+    /// Override the per-second rate limit (e.g., from runtime config)
+    pub fn set_rate_limit_per_second(&mut self, limit: usize) {
+        if limit > 0 {
+            self.rate_limit_per_second = limit;
+        }
+    }
+
+    /// Override the per-minute rate limit (None disables minute-based throttling)
+    pub fn set_rate_limit_per_minute(&mut self, limit: Option<usize>) {
+        self.rate_limit_per_minute = limit.filter(|v| *v > 0);
+    }
+
+    /// Inspect the current rate limit for coordination with outer caps.
+    pub fn rate_limit_per_second(&self) -> usize {
+        self.rate_limit_per_second
+    }
+
+    /// Inspect the current per-minute rate limit.
+    pub fn rate_limit_per_minute(&self) -> Option<usize> {
+        self.rate_limit_per_minute
+    }
+
     /// Validate a tool call before execution
     pub fn validate_call(&mut self, tool_name: &str) -> Result<CallValidation> {
         // Check if tool is destructive
@@ -67,6 +107,7 @@ impl ToolCallSafetyValidator {
 
         // Check rate limit
         self.enforce_rate_limit()?;
+        self.enforce_minute_rate_limit()?;
 
         // Enforce per-turn and session limits
         if self.current_turn_count >= self.max_per_turn {
@@ -113,6 +154,29 @@ impl ToolCallSafetyValidator {
         Ok(())
     }
 
+    /// Enforce per-minute rate limiting
+    fn enforce_minute_rate_limit(&mut self) -> Result<()> {
+        let Some(limit) = self.rate_limit_per_minute else {
+            return Ok(());
+        };
+
+        let now = Instant::now();
+        self.calls_in_minute
+            .retain(|call_time| now.duration_since(*call_time) < Duration::from_secs(60));
+
+        if self.calls_in_minute.len() >= limit {
+            return Err(anyhow::anyhow!(
+                "Tool call rate limit exceeded: {} calls/minute (max: {})",
+                self.calls_in_minute.len(),
+                limit
+            ))
+            .context("Please wait before making another tool call");
+        }
+
+        self.calls_in_minute.push(now);
+        Ok(())
+    }
+
     /// Check if tool is destructive
     #[allow(dead_code)]
     pub fn is_destructive(&self, tool_name: &str) -> bool {
@@ -128,6 +192,7 @@ impl ToolCallSafetyValidator {
     /// Reset rate limit tracking
     pub fn reset_rate_limit(&mut self) {
         self.calls_in_window.clear();
+        self.calls_in_minute.clear();
     }
 }
 

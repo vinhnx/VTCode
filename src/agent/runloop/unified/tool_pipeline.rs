@@ -28,10 +28,12 @@ use vtcode_core::config::loader::VTCodeConfig;
 // No direct use of ApprovalRecorder or DecisionOutcome in this module; these are referenced via `RunLoopContext`.
 
 /// Default timeout for tool execution if no policy is configured
-const DEFAULT_TOOL_TIMEOUT: Duration = Duration::from_secs(300);
-const TOOL_TIMEOUT_WARNING_HEADROOM: Duration = Duration::from_secs(5);
+const DEFAULT_TOOL_TIMEOUT: Duration = Duration::from_secs(180);
+/// Minimum buffer before cancelling a tool once a warning fires
+const MIN_TIMEOUT_WARNING_HEADROOM: Duration = Duration::from_secs(5);
 const MAX_TOOL_RETRIES: usize = 2;
 const RETRY_BACKOFF_BASE: Duration = Duration::from_millis(200);
+const MAX_RETRY_BACKOFF: Duration = Duration::from_secs(3);
 
 /// Guard that ensures timeout warning tasks are cancelled when the tool attempt ends early
 struct TimeoutWarningGuard {
@@ -40,13 +42,19 @@ struct TimeoutWarningGuard {
 }
 
 impl TimeoutWarningGuard {
-    fn new(tool_name: &str, start_time: Instant, tool_timeout: Duration) -> Self {
+    fn new(
+        tool_name: &str,
+        start_time: Instant,
+        tool_timeout: Duration,
+        warning_fraction: f32,
+    ) -> Self {
         let cancel_token = CancellationToken::new();
         let handle = spawn_timeout_warning_task(
             tool_name.to_string(),
             start_time,
             cancel_token.clone(),
             tool_timeout,
+            warning_fraction,
         );
         Self {
             cancel_token,
@@ -234,12 +242,16 @@ pub(crate) async fn run_tool_call(
         name.as_str(),
         "read_file" | "list_files" | "grep_search" | "find_files" | "tree_sitter_analyze"
     );
+    let cache_target = cache_target_path(&name, &args_val);
 
     // Attempt cache retrieval for read-only tools
     if is_read_only_tool {
         let mut cache = ctx.tool_result_cache.write().await;
-        let cache_key =
-            vtcode_core::tools::result_cache::ToolCacheKey::from_json(&name, &args_val, "");
+        let cache_key = vtcode_core::tools::result_cache::ToolCacheKey::from_json(
+            &name,
+            &args_val,
+            &cache_target,
+        );
         if let Some(cached_output) = cache.get(&cache_key) {
             let cached_json: serde_json::Value =
                 serde_json::from_str(&cached_output).unwrap_or(serde_json::json!({}));
@@ -254,9 +266,8 @@ pub(crate) async fn run_tool_call(
         }
     }
 
-    // Force TUI redraw to ensure stable UI
+    // Force TUI redraw to ensure stable UI without added delay
     ctx.handle.force_redraw();
-    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
 
     // Execute with progress reporter
     let progress_reporter = ProgressReporter::new();
@@ -293,7 +304,9 @@ pub(crate) async fn run_tool_call(
                     // Tool was blocked due to loop detection - try to get cached result
                     let mut cache = ctx.tool_result_cache.write().await;
                     let cache_key = vtcode_core::tools::result_cache::ToolCacheKey::from_json(
-                        &name, &args_val, "",
+                        &name,
+                        &args_val,
+                        &cache_target,
                     );
                     if let Some(cached_output) = cache.get(&cache_key) {
                         // We have a cached result from a previous successful call - return it
@@ -332,8 +345,11 @@ pub(crate) async fn run_tool_call(
         if is_read_only_tool && *command_success {
             let mut cache = ctx.tool_result_cache.write().await;
             let output_json = serde_json::to_string(&output).unwrap_or_else(|_| "{}".to_string());
-            let cache_key =
-                vtcode_core::tools::result_cache::ToolCacheKey::from_json(&name, &args_val, "");
+            let cache_key = vtcode_core::tools::result_cache::ToolCacheKey::from_json(
+                &name,
+                &args_val,
+                &cache_target,
+            );
             cache.insert_arc(cache_key, Arc::new(output_json));
         }
     }
@@ -351,6 +367,12 @@ pub(crate) async fn run_tool_call(
                 &args_val,
                 pipeline_outcome.command_success,
             );
+            if pipeline_outcome.command_success {
+                let mut cache = ctx.tool_result_cache.write().await;
+                for path in &pipeline_outcome.modified_files {
+                    cache.invalidate_for_path(path);
+                }
+            }
             // modified_files are kept as-is
         } else {
             // Reverted by confirm function; clear modified files
@@ -503,14 +525,13 @@ async fn run_single_tool_attempt(
     tool_timeout: Duration,
 ) -> ToolExecutionStatus {
     let start_time = Instant::now();
-    let mut warning_guard = TimeoutWarningGuard::new(name, start_time, tool_timeout);
+    let warning_fraction = registry.timeout_policy().warning_fraction();
+    let mut warning_guard = TimeoutWarningGuard::new(name, start_time, tool_timeout, warning_fraction);
 
     progress_reporter
         .set_message(format!("Preparing {}...", name))
         .await;
     progress_reporter.set_progress(5).await;
-
-    tokio::time::sleep(Duration::from_millis(5)).await;
 
     if ctrl_c_state.is_cancel_requested() || ctrl_c_state.is_exit_requested() {
         progress_reporter
@@ -527,7 +548,6 @@ async fn run_single_tool_attempt(
     progress_reporter.set_progress(20).await;
 
     let status = loop {
-        let mut registry_clone = registry.clone();
 
         if ctrl_c_state.is_cancel_requested() || ctrl_c_state.is_exit_requested() {
             progress_reporter
@@ -555,10 +575,10 @@ async fn run_single_tool_attempt(
         progress_reporter.set_progress(estimated_progress).await;
 
         let token = CancellationToken::new();
-        let exec_future = cancellation::with_tool_cancellation(token.clone(), async move {
+        let exec_future = cancellation::with_tool_cancellation(token.clone(), async {
             progress_reporter.set_progress(40).await;
 
-            let result = registry_clone.execute_tool_ref(name, args).await;
+            let result = registry.execute_tool_ref(name, args).await;
 
             progress_reporter
                 .set_message(format!("Processing {} results...", name))
@@ -611,8 +631,6 @@ async fn run_single_tool_attempt(
                             .set_message(format!("Finalizing {}...", name))
                             .await;
                         progress_reporter.set_progress(95).await;
-
-                        tokio::time::sleep(Duration::from_millis(5)).await;
 
                         progress_reporter.set_progress(100).await;
                         progress_reporter
@@ -673,7 +691,12 @@ fn retry_delay_for_status(status: &ToolExecutionStatus, attempt: usize) -> Optio
 }
 
 fn backoff_for_attempt(attempt: usize) -> Duration {
-    RETRY_BACKOFF_BASE * ((attempt + 1) as u32)
+    let exp = 2_u64.saturating_pow(attempt.min(4) as u32); // cap exponent growth
+    let jitter = Duration::from_millis(((attempt as u64 * 37) % 120).min(120));
+    let backoff = RETRY_BACKOFF_BASE
+        .saturating_mul(exp as u32)
+        .saturating_add(jitter);
+    backoff.min(MAX_RETRY_BACKOFF)
 }
 
 /// Process the output from a tool execution and convert it to a ToolExecutionStatus
@@ -800,28 +823,53 @@ fn spawn_timeout_warning_task(
     start_time: std::time::Instant,
     cancel_token: CancellationToken,
     tool_timeout: Duration,
+    warning_fraction: f32,
 ) -> Option<JoinHandle<()>> {
-    let warning_delay = tool_timeout
-        .checked_sub(TOOL_TIMEOUT_WARNING_HEADROOM)
-        .filter(|delay| !delay.is_zero())?;
+    let fraction = warning_fraction.clamp(0.1, 0.95);
+    let fraction_delay = tool_timeout.mul_f32(fraction);
+    let headroom_delay = tool_timeout.saturating_sub(MIN_TIMEOUT_WARNING_HEADROOM);
+    let warning_delay = fraction_delay.min(headroom_delay);
+
+    if warning_delay.is_zero() {
+        return None;
+    }
 
     Some(tokio::spawn(async move {
         tokio::select! {
             _ = cancel_token.cancelled() => {}
             _ = tokio::time::sleep(warning_delay) => {
-                let elapsed = start_time.elapsed().as_secs();
+                let elapsed_secs = start_time.elapsed().as_secs();
                 let timeout_secs = tool_timeout.as_secs();
-                let remaining_secs = TOOL_TIMEOUT_WARNING_HEADROOM.as_secs();
+                let remaining_secs = tool_timeout
+                    .saturating_sub(Duration::from_secs(elapsed_secs))
+                    .as_secs();
                 warn!(
                     "Tool '{}' has run for {} seconds and is approaching the {} second time limit ({} seconds remaining). It will be cancelled soon unless it completes.",
                     tool_name,
-                    elapsed,
+                    elapsed_secs,
                     timeout_secs,
                     remaining_secs
                 );
             }
         }
     }))
+}
+
+fn cache_target_path(tool_name: &str, args: &Value) -> String {
+    if let Some(path) = args.get("path").and_then(|v| v.as_str()) {
+        return path.to_string();
+    }
+    if let Some(root) = args.get("root").and_then(|v| v.as_str()) {
+        return root.to_string();
+    }
+    if let Some(target) = args.get("target_path").and_then(|v| v.as_str()) {
+        return target.to_string();
+    }
+    if let Some(dir) = args.get("dir").and_then(|v| v.as_str()) {
+        return dir.to_string();
+    }
+
+    tool_name.to_string()
 }
 
 #[cfg(test)]
