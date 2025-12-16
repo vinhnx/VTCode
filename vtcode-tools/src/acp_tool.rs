@@ -30,15 +30,13 @@ mod shared {
         field: &str,
         custom_err: Option<&'static str>,
     ) -> anyhow::Result<&'a str> {
-        obj.get(field)
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| {
-                if let Some(err) = custom_err {
-                    anyhow::anyhow!(err)
-                } else {
-                    anyhow::anyhow!("Invalid {}", field)
-                }
-            })
+        obj.get(field).and_then(|v| v.as_str()).ok_or_else(|| {
+            if let Some(err) = custom_err {
+                anyhow::anyhow!(err)
+            } else {
+                anyhow::anyhow!("Invalid {}", field)
+            }
+        })
     }
 
     pub fn check_client_initialized(client: &Option<AcpClient>) -> anyhow::Result<&AcpClient> {

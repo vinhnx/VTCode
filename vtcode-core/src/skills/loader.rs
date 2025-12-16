@@ -4,12 +4,14 @@
 //! context management for efficient memory usage and comprehensive skill discovery.
 
 use crate::skills::cli_bridge::{CliToolBridge, CliToolConfig};
-use crate::skills::context_manager::{ContextManager, ContextConfig, ContextLevel};
+use crate::skills::container_validation::{
+    ContainerSkillsValidator, ContainerValidationReport, ContainerValidationResult,
+};
+use crate::skills::context_manager::{ContextConfig, ContextLevel, ContextManager};
 use crate::skills::discovery::{DiscoveryConfig, SkillDiscovery};
-use crate::skills::locations::{SkillLocations, DiscoveredSkill, SkillLocationType};
-use crate::skills::manifest::{parse_skill_file};
+use crate::skills::locations::{DiscoveredSkill, SkillLocationType, SkillLocations};
+use crate::skills::manifest::parse_skill_file;
 use crate::skills::types::{Skill, SkillContext, SkillManifest};
-use crate::skills::container_validation::{ContainerSkillsValidator, ContainerValidationResult, ContainerValidationReport};
 use anyhow::{Result, anyhow};
 use std::path::{Path, PathBuf};
 use tracing::{debug, info, warn};
@@ -17,12 +19,12 @@ use tracing::{debug, info, warn};
 /// Enhanced skill search paths including CLI tools
 #[allow(dead_code)]
 const ENHANCED_SKILL_SEARCH_PATHS: &[&str] = &[
-    ".claude/skills",     // Project-local skills (traditional)
-    "./skills",           // Workspace skills (traditional)
-    "~/.vtcode/skills",   // User global skills (traditional)
-    "./tools",            // Project-local CLI tools
-    "./vendor/tools",     // Vendor CLI tools
-    "~/.vtcode/tools",    // User global CLI tools
+    ".claude/skills",   // Project-local skills (traditional)
+    "./skills",         // Workspace skills (traditional)
+    "~/.vtcode/skills", // User global skills (traditional)
+    "./tools",          // Project-local CLI tools
+    "./vendor/tools",   // Vendor CLI tools
+    "~/.vtcode/tools",  // User global CLI tools
 ];
 
 /// Enhanced skill loader with CLI tool integration and context management
@@ -64,10 +66,10 @@ impl EnhancedSkillLoader {
         for location_type in skill_locations.get_location_types() {
             if let Some(loc) = skill_locations.get_location(location_type) {
                 match location_type {
-                    crate::skills::locations::SkillLocationType::VtcodeUser |
-                    crate::skills::locations::SkillLocationType::VtcodeProject |
-                    crate::skills::locations::SkillLocationType::ClaudeUser |
-                    crate::skills::locations::SkillLocationType::ClaudeProject => {
+                    crate::skills::locations::SkillLocationType::VtcodeUser
+                    | crate::skills::locations::SkillLocationType::VtcodeProject
+                    | crate::skills::locations::SkillLocationType::ClaudeUser
+                    | crate::skills::locations::SkillLocationType::ClaudeProject => {
                         discovery_config.skill_paths.push(loc.base_path.clone());
                     }
                     _ => {
@@ -128,7 +130,8 @@ impl EnhancedSkillLoader {
 
         // Register all discovered skills in context manager
         for discovered in &discovered_skills {
-            self.context_manager.register_skill_metadata(discovered.skill_context.manifest().clone())?;
+            self.context_manager
+                .register_skill_metadata(discovered.skill_context.manifest().clone())?;
         }
 
         // Also run traditional discovery for CLI tools and backward compatibility
@@ -136,8 +139,10 @@ impl EnhancedSkillLoader {
 
         // Register CLI tools
         for tool_config in &discovery_result.tools {
-            let skill_context = crate::skills::discovery::tool_config_to_skill_context(tool_config)?;
-            self.context_manager.register_skill_metadata(skill_context.manifest().clone())?;
+            let skill_context =
+                crate::skills::discovery::tool_config_to_skill_context(tool_config)?;
+            self.context_manager
+                .register_skill_metadata(skill_context.manifest().clone())?;
         }
 
         let discovery_time = start_time.elapsed();
@@ -146,16 +151,17 @@ impl EnhancedSkillLoader {
 
         info!(
             "Discovery complete: {} skills from locations, {} CLI tools from traditional discovery in {:?}",
-            traditional_count,
-            cli_count,
-            discovery_time
+            traditional_count, cli_count, discovery_time
         );
 
         // Cache the discovered skills
         self.discovered_skills = Some(discovered_skills.clone());
 
         Ok(EnhancedDiscoveryResult {
-            traditional_skills: discovered_skills.into_iter().map(|d| d.skill_context).collect(),
+            traditional_skills: discovered_skills
+                .into_iter()
+                .map(|d| d.skill_context)
+                .collect(),
             cli_tools: discovery_result.tools,
             stats: EnhancedDiscoveryStats {
                 discovery_time_ms: discovery_time.as_millis() as u64,
@@ -185,21 +191,28 @@ impl EnhancedSkillLoader {
                     if let Some(skill) = &context_entry.skill {
                         Ok(EnhancedSkill::Traditional(skill.clone()))
                     } else {
-                        Err(anyhow!("Skill '{}' context indicates full loading but no skill object found", name))
+                        Err(anyhow!(
+                            "Skill '{}' context indicates full loading but no skill object found",
+                            name
+                        ))
                     }
                 }
             };
         }
 
         // Skill not found - attempt targeted discovery instead of full scan
-        debug!("Skill '{}' not found in context manager, attempting targeted discovery", name);
+        debug!(
+            "Skill '{}' not found in context manager, attempting targeted discovery",
+            name
+        );
 
         // Try to discover just this skill using locations system
         match self.discover_single_skill(name).await {
             Ok(Some(skill_context)) => {
                 debug!("Successfully discovered skill '{}' during get_skill", name);
                 // Register this single skill in context manager
-                self.context_manager.register_skill_metadata(skill_context.manifest().clone())?;
+                self.context_manager
+                    .register_skill_metadata(skill_context.manifest().clone())?;
 
                 // Also register in discovered_skills cache for load_full_skill to find it
                 if let Some(skill_path) = self.find_skill_path_from_context(name) {
@@ -216,7 +229,11 @@ impl EnhancedSkillLoader {
                     if let Some(cache) = &mut self.discovered_skills {
                         cache.push(discovered_skill);
                     }
-                    debug!("Cached discovered skill '{}' at path '{}'", name, skill_path.display());
+                    debug!(
+                        "Cached discovered skill '{}' at path '{}'",
+                        name,
+                        skill_path.display()
+                    );
                 }
 
                 // Now load the full skill
@@ -234,7 +251,8 @@ impl EnhancedSkillLoader {
                 // Discovery failed - provide helpful error
                 Err(anyhow!(
                     "Failed to discover skill '{}': {}. Ensure the skill exists in one of the skill directories.",
-                    name, e
+                    name,
+                    e
                 ))
             }
         }
@@ -293,7 +311,9 @@ impl EnhancedSkillLoader {
                 skill.name(),
                 container_analysis.recommendations.join("\n")
             ));
-        } else if container_analysis.requirement != crate::skills::container_validation::ContainerSkillsRequirement::NotRequired {
+        } else if container_analysis.requirement
+            != crate::skills::container_validation::ContainerSkillsRequirement::NotRequired
+        {
             info!(
                 "Skill '{}' container skills analysis: {}",
                 skill.name(),
@@ -325,7 +345,10 @@ impl EnhancedSkillLoader {
     }
 
     /// Create skill from context entry
-    fn create_skill_from_context(&self, context_entry: &crate::skills::context_manager::SkillContextEntry) -> Result<EnhancedSkill> {
+    fn create_skill_from_context(
+        &self,
+        context_entry: &crate::skills::context_manager::SkillContextEntry,
+    ) -> Result<EnhancedSkill> {
         if let Some(skill) = &context_entry.skill {
             return Ok(EnhancedSkill::Traditional(skill.clone()));
         }
@@ -349,7 +372,10 @@ impl EnhancedSkillLoader {
             }
         }
 
-        Err(anyhow!("Cannot create skill from context for '{}'", context_entry.name))
+        Err(anyhow!(
+            "Cannot create skill from context for '{}'",
+            context_entry.name
+        ))
     }
 
     /// Expand path with home directory and workspace root
@@ -381,7 +407,10 @@ impl EnhancedSkillLoader {
                 None
             }
             Err(e) => {
-                debug!("Failed to discover skills while looking for path for '{}': {}", skill_name, e);
+                debug!(
+                    "Failed to discover skills while looking for path for '{}': {}",
+                    skill_name, e
+                );
                 None
             }
         }
@@ -398,12 +427,12 @@ impl EnhancedSkillLoader {
                 let path = entry.path();
 
                 if path.is_file() {
-                    let rel_path = path.strip_prefix(&skill.path)
+                    let rel_path = path
+                        .strip_prefix(&skill.path)
                         .map(|p| p.to_string_lossy().to_string())
                         .unwrap_or_default();
 
-                    let resource_type = match path.extension()
-                        .and_then(|e| e.to_str()) {
+                    let resource_type = match path.extension().and_then(|e| e.to_str()) {
                         Some("py") | Some("sh") | Some("bash") => {
                             crate::skills::types::ResourceType::Script
                         }
@@ -411,9 +440,10 @@ impl EnhancedSkillLoader {
                         Some("json") | Some("yaml") | Some("yml") => {
                             crate::skills::types::ResourceType::Reference
                         }
-                        _ => crate::skills::types::ResourceType::Other(
-                            format!("{:?}", path.extension())
-                        ),
+                        _ => crate::skills::types::ResourceType::Other(format!(
+                            "{:?}",
+                            path.extension()
+                        )),
                     };
 
                     skill.add_resource(
@@ -455,7 +485,8 @@ impl EnhancedSkillLoader {
         let discovery_result = self.discovery.discover_all(&self.workspace_root).await?;
         for tool_config in &discovery_result.tools {
             if tool_config.name == name {
-                let skill_context = crate::skills::discovery::tool_config_to_skill_context(tool_config)?;
+                let skill_context =
+                    crate::skills::discovery::tool_config_to_skill_context(tool_config)?;
                 debug!("Found CLI tool skill '{}' during targeted discovery", name);
                 return Ok(Some(skill_context));
             }
@@ -473,7 +504,11 @@ impl EnhancedSkillLoader {
         } else if available.len() <= 5 {
             format!("{}", available.join(", "))
         } else {
-            format!("{} (and {} more)", available[..5].join(", "), available.len() - 5)
+            format!(
+                "{} (and {} more)",
+                available[..5].join(", "),
+                available.len() - 5
+            )
         }
     }
 
@@ -550,7 +585,7 @@ impl EnhancedSkillLoader {
                         report.add_incompatible_skill(
                             skill_context.manifest().name.clone(),
                             skill_context.manifest().description.clone(),
-                            e.to_string()
+                            e.to_string(),
                         );
                     }
                 }
@@ -657,51 +692,51 @@ impl EnhancedSkill {
 /// assert!(matches.contains(&"pdf-analyzer".to_string()));
 /// ```
 pub fn detect_skill_mentions(user_input: &str, available_skills: &[SkillManifest]) -> Vec<String> {
-	let mut matches = Vec::new();
-	let input_lower = user_input.to_lowercase();
+    let mut matches = Vec::new();
+    let input_lower = user_input.to_lowercase();
 
-	for skill in available_skills {
-		// Pattern 1: Explicit $skill-name mention (Codex pattern)
-		if input_lower.contains(&format!("${}", skill.name)) {
-			matches.push(skill.name.clone());
-			continue;
-		}
+    for skill in available_skills {
+        // Pattern 1: Explicit $skill-name mention (Codex pattern)
+        if input_lower.contains(&format!("${}", skill.name)) {
+            matches.push(skill.name.clone());
+            continue;
+        }
 
-		// Pattern 2: Description keyword matching (fuzzy)
-		// Extract key terms from description (words 4+ chars)
-		let description_keywords: Vec<&str> = skill
-			.description
-			.split_whitespace()
-			.filter(|word| word.len() >= 4)
-			.map(|word| word.trim_matches(|c: char| !c.is_alphanumeric()))
-			.collect();
+        // Pattern 2: Description keyword matching (fuzzy)
+        // Extract key terms from description (words 4+ chars)
+        let description_keywords: Vec<&str> = skill
+            .description
+            .split_whitespace()
+            .filter(|word| word.len() >= 4)
+            .map(|word| word.trim_matches(|c: char| !c.is_alphanumeric()))
+            .collect();
 
-		// Check if multiple keywords match (requires at least 2 matches for confidence)
-		let keyword_matches = description_keywords
-			.iter()
-			.filter(|keyword| input_lower.contains(&keyword.to_lowercase()))
-			.count();
+        // Check if multiple keywords match (requires at least 2 matches for confidence)
+        let keyword_matches = description_keywords
+            .iter()
+            .filter(|keyword| input_lower.contains(&keyword.to_lowercase()))
+            .count();
 
-		if keyword_matches >= 2 {
-			matches.push(skill.name.clone());
-		}
-	}
+        if keyword_matches >= 2 {
+            matches.push(skill.name.clone());
+        }
+    }
 
-	// Deduplicate
-	matches.sort();
-	matches.dedup();
-	matches
+    // Deduplicate
+    matches.sort();
+    matches.dedup();
+    matches
 }
 
 /// Search path types
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SearchPathType {
-	/// Traditional skills only
-	Traditional,
-	/// CLI tools only
-	Tool,
-	/// Both types
-	Both,
+    /// Traditional skills only
+    Traditional,
+    /// CLI tools only
+    Tool,
+    /// Both types
+    Both,
 }
 
 /// Legacy skill loader for backward compatibility
@@ -719,14 +754,18 @@ impl LegacySkillLoader {
     pub fn discover_skills(&self) -> Result<Vec<SkillContext>> {
         // This would need to be implemented with async runtime
         // For now, return an error indicating the need to upgrade
-        Err(anyhow!("Legacy skill discovery requires async runtime. Use EnhancedSkillLoader::discover_all_skills() instead."))
+        Err(anyhow!(
+            "Legacy skill discovery requires async runtime. Use EnhancedSkillLoader::discover_all_skills() instead."
+        ))
     }
 
     /// Load skill by name
     pub async fn load_skill(&mut self, name: &str) -> Result<Skill> {
         match self.enhanced.get_skill(name).await? {
             EnhancedSkill::Traditional(skill) => Ok(skill),
-            EnhancedSkill::CliTool(_) => Err(anyhow!("CLI tool skills are not supported in legacy loader")),
+            EnhancedSkill::CliTool(_) => Err(anyhow!(
+                "CLI tool skills are not supported in legacy loader"
+            )),
         }
     }
 }
@@ -764,101 +803,101 @@ mod tests {
         assert_eq!(SearchPathType::Both, SearchPathType::Both);
     }
 
-	#[test]
-	fn test_enhanced_skill_types() {
-		// Test would need actual Skill and CliToolBridge instances
-		// This is a placeholder for the test structure
-	}
+    #[test]
+    fn test_enhanced_skill_types() {
+        // Test would need actual Skill and CliToolBridge instances
+        // This is a placeholder for the test structure
+    }
 
-	#[test]
-	fn test_detect_skill_mentions_explicit_syntax() {
-		let skills = vec![SkillManifest {
-			name: "pdf-analyzer".to_string(),
-			description: "Extract text and tables from PDF documents".to_string(),
-			version: None,
-			author: None,
-			vtcode_native: None,
-		}];
+    #[test]
+    fn test_detect_skill_mentions_explicit_syntax() {
+        let skills = vec![SkillManifest {
+            name: "pdf-analyzer".to_string(),
+            description: "Extract text and tables from PDF documents".to_string(),
+            version: None,
+            author: None,
+            vtcode_native: None,
+        }];
 
-		// Test explicit $skill-name syntax (Codex pattern)
-		let input = "Use $pdf-analyzer to process the document";
-		let matches = detect_skill_mentions(input, &skills);
-		assert_eq!(matches.len(), 1);
-		assert_eq!(matches[0], "pdf-analyzer");
-	}
+        // Test explicit $skill-name syntax (Codex pattern)
+        let input = "Use $pdf-analyzer to process the document";
+        let matches = detect_skill_mentions(input, &skills);
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0], "pdf-analyzer");
+    }
 
-	#[test]
-	fn test_detect_skill_mentions_description_match() {
-		let skills = vec![SkillManifest {
-			name: "spreadsheet-generator".to_string(),
-			description: "Generate Excel spreadsheets with data analysis and charts".to_string(),
-			version: None,
-			author: None,
-			vtcode_native: None,
-		}];
+    #[test]
+    fn test_detect_skill_mentions_description_match() {
+        let skills = vec![SkillManifest {
+            name: "spreadsheet-generator".to_string(),
+            description: "Generate Excel spreadsheets with data analysis and charts".to_string(),
+            version: None,
+            author: None,
+            vtcode_native: None,
+        }];
 
-		// Test description keyword matching (requires 2+ keyword matches)
-		let input = "Create a spreadsheet with analysis charts for the quarterly report";
-		let matches = detect_skill_mentions(input, &skills);
-		assert_eq!(matches.len(), 1);
-		assert_eq!(matches[0], "spreadsheet-generator");
-	}
+        // Test description keyword matching (requires 2+ keyword matches)
+        let input = "Create a spreadsheet with analysis charts for the quarterly report";
+        let matches = detect_skill_mentions(input, &skills);
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0], "spreadsheet-generator");
+    }
 
-	#[test]
-	fn test_detect_skill_mentions_no_match() {
-		let skills = vec![SkillManifest {
-			name: "pdf-analyzer".to_string(),
-			description: "Extract text and tables from PDF documents".to_string(),
-			version: None,
-			author: None,
-			vtcode_native: None,
-		}];
+    #[test]
+    fn test_detect_skill_mentions_no_match() {
+        let skills = vec![SkillManifest {
+            name: "pdf-analyzer".to_string(),
+            description: "Extract text and tables from PDF documents".to_string(),
+            version: None,
+            author: None,
+            vtcode_native: None,
+        }];
 
-		// No match - only 1 keyword
-		let input = "Process this document";
-		let matches = detect_skill_mentions(input, &skills);
-		assert_eq!(matches.len(), 0);
-	}
+        // No match - only 1 keyword
+        let input = "Process this document";
+        let matches = detect_skill_mentions(input, &skills);
+        assert_eq!(matches.len(), 0);
+    }
 
-	#[test]
-	fn test_detect_skill_mentions_case_insensitive() {
-		let skills = vec![SkillManifest {
-			name: "doc-generator".to_string(),
-			description: "Generate technical documentation".to_string(),
-			version: None,
-			author: None,
-			vtcode_native: None,
-		}];
+    #[test]
+    fn test_detect_skill_mentions_case_insensitive() {
+        let skills = vec![SkillManifest {
+            name: "doc-generator".to_string(),
+            description: "Generate technical documentation".to_string(),
+            version: None,
+            author: None,
+            vtcode_native: None,
+        }];
 
-		// Case insensitive matching
-		let input = "Use $DOC-GENERATOR to create the docs";
-		let matches = detect_skill_mentions(input, &skills);
-		assert_eq!(matches.len(), 1);
-		assert_eq!(matches[0], "doc-generator");
-	}
+        // Case insensitive matching
+        let input = "Use $DOC-GENERATOR to create the docs";
+        let matches = detect_skill_mentions(input, &skills);
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0], "doc-generator");
+    }
 
-	#[test]
-	fn test_detect_skill_mentions_multiple_skills() {
-		let skills = vec![
-			SkillManifest {
-				name: "pdf-analyzer".to_string(),
-				description: "Extract text from PDF documents".to_string(),
-				version: None,
-				author: None,
-				vtcode_native: None,
-			},
-			SkillManifest {
-				name: "spreadsheet-generator".to_string(),
-				description: "Generate Excel spreadsheets with charts".to_string(),
-				version: None,
-				author: None,
-				vtcode_native: None,
-			},
-		];
+    #[test]
+    fn test_detect_skill_mentions_multiple_skills() {
+        let skills = vec![
+            SkillManifest {
+                name: "pdf-analyzer".to_string(),
+                description: "Extract text from PDF documents".to_string(),
+                version: None,
+                author: None,
+                vtcode_native: None,
+            },
+            SkillManifest {
+                name: "spreadsheet-generator".to_string(),
+                description: "Generate Excel spreadsheets with charts".to_string(),
+                version: None,
+                author: None,
+                vtcode_native: None,
+            },
+        ];
 
-		// Multiple skills triggered
-		let input = "Extract data from PDF and create spreadsheet with charts";
-		let matches = detect_skill_mentions(input, &skills);
-		assert!(matches.len() >= 1); // At least one should match
-	}
+        // Multiple skills triggered
+        let input = "Extract data from PDF and create spreadsheet with charts";
+        let matches = detect_skill_mentions(input, &skills);
+        assert!(matches.len() >= 1); // At least one should match
+    }
 }

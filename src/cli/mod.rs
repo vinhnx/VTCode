@@ -40,8 +40,8 @@ pub use mcp::handle_mcp_command;
 pub use revert::handle_revert_command;
 pub use sessions::handle_resume_session_command;
 pub use skills::{
-    handle_skills_config, handle_skills_create, handle_skills_info, handle_skills_list,
-    handle_skills_load, handle_skills_validate, handle_skills_validate_all, SkillsCommandOptions,
+    SkillsCommandOptions, handle_skills_config, handle_skills_create, handle_skills_info,
+    handle_skills_list, handle_skills_load, handle_skills_validate, handle_skills_validate_all,
 };
 pub use snapshots::{handle_cleanup_snapshots_command, handle_snapshots_command};
 pub use trajectory::handle_trajectory_command as handle_trajectory_logs_command;

@@ -49,13 +49,13 @@
     "web_fetch": "prompt",
     "write_file": "allow",
     "search_replace": "prompt",
-    "skill": "allow",
+    "skill": "prompt",
+    "mcp_fetch": "prompt",
+    "mcp_fetch_fetch": "prompt",
     "mcp_convert_time": "prompt",
     "mcp_time_convert_time": "prompt",
     "mcp_get_current_time": "prompt",
-    "mcp_time_get_current_time": "prompt",
-    "mcp_fetch": "prompt",
-    "mcp_fetch_fetch": "prompt"
+    "mcp_time_get_current_time": "prompt"
   },
   "constraints": {},
   "mcp": {

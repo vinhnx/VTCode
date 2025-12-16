@@ -23,28 +23,28 @@ use tracing::info;
 pub struct ValidationConfig {
     /// Enable security checks
     pub enable_security_checks: bool,
-    
+
     /// Enable performance validation
     pub enable_performance_checks: bool,
-    
+
     /// Maximum execution time for validation tests (seconds)
     pub max_validation_time: u64,
-    
+
     /// Maximum script size (bytes)
     pub max_script_size: usize,
-    
+
     /// Allowed script extensions
     pub allowed_script_extensions: Vec<String>,
-    
+
     /// Blocked commands/patterns
     pub blocked_commands: Vec<String>,
-    
+
     /// Required metadata fields
     pub required_metadata_fields: Vec<String>,
-    
+
     /// Enable JSON schema validation
     pub enable_schema_validation: bool,
-    
+
     /// Strict mode (fail on warnings)
     pub strict_mode: bool,
 }
@@ -74,10 +74,7 @@ impl Default for ValidationConfig {
                 "curl.*|.*sh".to_string(),
                 "wget.*|.*sh".to_string(),
             ],
-            required_metadata_fields: vec![
-                "name".to_string(),
-                "description".to_string(),
-            ],
+            required_metadata_fields: vec!["name".to_string(), "description".to_string()],
             enable_schema_validation: true,
             strict_mode: false,
         }
@@ -89,22 +86,22 @@ impl Default for ValidationConfig {
 pub struct ValidationReport {
     /// Overall validation status
     pub status: ValidationStatus,
-    
+
     /// Skill name
     pub skill_name: String,
-    
+
     /// Validation timestamp
     pub timestamp: chrono::DateTime<chrono::Utc>,
-    
+
     /// Individual check results
     pub checks: HashMap<String, CheckResult>,
-    
+
     /// Performance metrics
     pub performance: PerformanceMetrics,
-    
+
     /// Security assessment
     pub security: SecurityAssessment,
-    
+
     /// Recommendations for improvement
     pub recommendations: Vec<String>,
 }
@@ -125,16 +122,16 @@ pub enum ValidationStatus {
 pub struct CheckResult {
     /// Check name
     pub name: String,
-    
+
     /// Check status
     pub status: CheckStatus,
-    
+
     /// Detailed message
     pub message: String,
-    
+
     /// Additional details
     pub details: Option<Value>,
-    
+
     /// Execution time
     pub execution_time_ms: u64,
 }
@@ -157,19 +154,19 @@ pub enum CheckStatus {
 pub struct PerformanceMetrics {
     /// Total validation time
     pub total_time_ms: u64,
-    
+
     /// Skill loading time
     pub loading_time_ms: u64,
-    
+
     /// Schema validation time
     pub schema_validation_time_ms: u64,
-    
+
     /// Script validation time
     pub script_validation_time_ms: u64,
-    
+
     /// Memory usage estimate (bytes)
     pub memory_usage_bytes: usize,
-    
+
     /// Token usage estimate
     pub token_usage_estimate: usize,
 }
@@ -179,13 +176,13 @@ pub struct PerformanceMetrics {
 pub struct SecurityAssessment {
     /// Overall security level
     pub security_level: SecurityLevel,
-    
+
     /// Security warnings
     pub warnings: Vec<SecurityWarning>,
-    
+
     /// Blocked content found
     pub blocked_content: Vec<String>,
-    
+
     /// Safe to execute
     pub safe_to_execute: bool,
 }
@@ -209,13 +206,13 @@ pub enum SecurityLevel {
 pub struct SecurityWarning {
     /// Warning type
     pub warning_type: String,
-    
+
     /// Warning message
     pub message: String,
-    
+
     /// Severity level
     pub severity: SecurityLevel,
-    
+
     /// Suggested remediation
     pub suggestion: Option<String>,
 }
@@ -231,7 +228,7 @@ impl SkillValidator {
     pub fn new() -> Self {
         Self::with_config(ValidationConfig::default())
     }
-    
+
     /// Create new validator with custom configuration
     pub fn with_config(config: ValidationConfig) -> Self {
         Self {
@@ -239,57 +236,61 @@ impl SkillValidator {
             // schema_cache: HashMap::new(), // TODO: Enable when jsonschema is available
         }
     }
-    
+
     /// Validate a traditional skill from directory
-    pub async fn validate_skill_directory(&mut self, skill_path: &Path) -> Result<ValidationReport> {
+    pub async fn validate_skill_directory(
+        &mut self,
+        skill_path: &Path,
+    ) -> Result<ValidationReport> {
         let start_time = Instant::now();
         let mut checks = HashMap::new();
         let mut performance = PerformanceMetrics::default();
-        
+
         info!("Validating skill directory: {}", skill_path.display());
-        
+
         // Check if directory exists
         let check_result = self.check_directory_exists(skill_path).await;
         checks.insert("directory_exists".to_string(), check_result);
-        
+
         // Validate SKILL.md file
         let skill_file = skill_path.join("SKILL.md");
         let check_result = self.validate_skill_file(&skill_file).await;
         checks.insert("skill_file_valid".to_string(), check_result.clone());
-        
+
         let skill_name = if let Some(manifest) = &check_result.details {
-            manifest.get("name")
+            manifest
+                .get("name")
                 .and_then(|v| v.as_str())
                 .unwrap_or("unknown")
                 .to_string()
         } else {
             "unknown".to_string()
         };
-        
+
         // Validate scripts directory
         let scripts_dir = skill_path.join("scripts");
         if scripts_dir.exists() {
             let check_result = self.validate_scripts_directory(&scripts_dir).await;
             checks.insert("scripts_valid".to_string(), check_result);
         }
-        
+
         // Validate resources
         let resources_result = self.validate_resources(skill_path).await;
         for (name, result) in resources_result {
             checks.insert(format!("resource_{}", name), result);
         }
-        
+
         // Security assessment
         let security = self.assess_security(&checks);
-        
+
         // Generate recommendations
         let recommendations = self.generate_recommendations(&checks, &security);
-        
+
         // Determine overall status
         let status = self.determine_overall_status(&checks, &security);
-        
+
         performance.total_time_ms = start_time.elapsed().as_millis() as u64;
-        
+
         Ok(ValidationReport {
             status,
             skill_name,
@@ -300,50 +301,52 @@ impl SkillValidator {
             recommendations,
         })
     }
-    
+
     /// Validate CLI tool configuration
     pub async fn validate_cli_tool(&mut self, config: &CliToolConfig) -> Result<ValidationReport> {
         let start_time = Instant::now();
         let mut checks = HashMap::new();
-        
+
         info!("Validating CLI tool: {}", config.name);
-        
+
         // Check executable exists
         let check_result = self.check_executable_exists(&config.executable_path).await;
         checks.insert("executable_exists".to_string(), check_result);
-        
+
         // Check executable permissions
-        let check_result = self.check_executable_permissions(&config.executable_path).await;
+        let check_result = self
+            .check_executable_permissions(&config.executable_path)
+            .await;
         checks.insert("executable_permissions".to_string(), check_result);
-        
+
         // Validate README if present
         if let Some(readme_path) = &config.readme_path {
             let check_result = self.validate_readme_file(readme_path).await;
             checks.insert("readme_valid".to_string(), check_result);
         }
-        
+
         // Validate JSON schema if present
         if let Some(schema_path) = &config.schema_path {
             let check_result = self.validate_json_schema(schema_path).await;
             checks.insert("schema_valid".to_string(), check_result);
         }
-        
+
         // Test tool execution (basic)
         let check_result = self.test_tool_execution(config).await;
         checks.insert("tool_executable".to_string(), check_result);
-        
+
         // Security assessment
         let security = self.assess_security(&checks);
-        
+
         // Generate recommendations
         let recommendations = self.generate_recommendations(&checks, &security);
-        
+
         // Determine overall status
         let status = self.determine_overall_status(&checks, &security);
-        
+
         let mut performance = PerformanceMetrics::default();
         performance.total_time_ms = start_time.elapsed().as_millis() as u64;
-        
+
         Ok(ValidationReport {
             status,
             skill_name: config.name.clone(),
@@ -354,23 +357,23 @@ impl SkillValidator {
             recommendations,
         })
     }
-    
+
     /// Check if directory exists
     async fn check_directory_exists(&self, path: &Path) -> CheckResult {
         let start_time = Instant::now();
-        
+
         let status = if path.exists() && path.is_dir() {
             CheckStatus::Passed
         } else {
             CheckStatus::Failed
         };
-        
+
         let message = if status == CheckStatus::Passed {
             format!("Directory exists: {}", path.display())
         } else {
             format!("Directory does not exist: {}", path.display())
         };
-        
+
         CheckResult {
             name: "directory_exists".to_string(),
             status,
@@ -379,11 +382,11 @@ impl SkillValidator {
             execution_time_ms: start_time.elapsed().as_millis() as u64,
         }
     }
-    
+
     /// Validate SKILL.md file
     async fn validate_skill_file(&mut self, skill_file: &Path) -> CheckResult {
         let start_time = Instant::now();
-        
+
         if !skill_file.exists() {
             return CheckResult {
                 name: "skill_file_valid".to_string(),
@@ -393,12 +396,12 @@ impl SkillValidator {
                 execution_time_ms: start_time.elapsed().as_millis() as u64,
             };
         }
-        
+
         match parse_skill_file(skill_file.parent().unwrap()) {
             Ok((manifest, _instructions)) => {
                 // Validate required fields
                 let mut warnings = vec![];
-                
+
                 for field in &self.config.required_metadata_fields {
                     match field.as_str() {
                         "name" => {
@@ -414,25 +417,37 @@ impl SkillValidator {
                         _ => {}
                     }
                 }
-                
+
                 let status = if warnings.is_empty() {
                     CheckStatus::Passed
                 } else {
                     CheckStatus::Warning
                 };
-                
+
                 let message = if status == CheckStatus::Passed {
                     format!("SKILL.md is valid: {}", manifest.name)
                 } else {
                     format!("SKILL.md has warnings: {}", warnings.join(", "))
                 };
-                
+
                 let mut details = serde_json::Map::new();
-                details.insert("name".to_string(), serde_json::Value::String(manifest.name.clone()));
-                details.insert("description".to_string(), serde_json::Value::String(manifest.description.clone()));
-                details.insert("version".to_string(), serde_json::to_value(&manifest.version).unwrap());
-                details.insert("warnings".to_string(), serde_json::to_value(&warnings).unwrap());
-                
+                details.insert(
+                    "name".to_string(),
+                    serde_json::Value::String(manifest.name.clone()),
+                );
+                details.insert(
+                    "description".to_string(),
+                    serde_json::Value::String(manifest.description.clone()),
+                );
+                details.insert(
+                    "version".to_string(),
+                    serde_json::to_value(&manifest.version).unwrap(),
+                );
+                details.insert(
+                    "warnings".to_string(),
+                    serde_json::to_value(&warnings).unwrap(),
+                );
+
                 CheckResult {
                     name: "skill_file_valid".to_string(),
                     status,
@@ -441,23 +456,21 @@ impl SkillValidator {
                     execution_time_ms: start_time.elapsed().as_millis() as u64,
                 }
             }
-            Err(e) => {
-                CheckResult {
-                    name: "skill_file_valid".to_string(),
-                    status: CheckStatus::Failed,
-                    message: format!("Failed to parse SKILL.md: {}", e),
-                    details: None,
-                    execution_time_ms: start_time.elapsed().as_millis() as u64,
-                }
-            }
+            Err(e) => CheckResult {
+                name: "skill_file_valid".to_string(),
+                status: CheckStatus::Failed,
+                message: format!("Failed to parse SKILL.md: {}", e),
+                details: None,
+                execution_time_ms: start_time.elapsed().as_millis() as u64,
+            },
         }
     }
-    
+
     /// Validate scripts directory
     async fn validate_scripts_directory(&self, scripts_dir: &Path) -> CheckResult {
         let start_time = Instant::now();
         let mut issues = vec![];
-        
+
         for entry in std::fs::read_dir(scripts_dir).unwrap() {
             if let Ok(entry) = entry {
                 let path = entry.path();
@@ -472,20 +485,27 @@ impl SkillValidator {
                             ));
                         }
                     }
-                    
+
                     // Check extension
                     if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-                        if !self.config.allowed_script_extensions.contains(&ext.to_string()) {
+                        if !self
+                            .config
+                            .allowed_script_extensions
+                            .contains(&ext.to_string())
+                        {
                             issues.push(format!("Unsupported script type: {}", ext));
                         }
                     }
-                    
+
                     // Security check
                     if self.config.enable_security_checks {
                         if let Ok(content) = std::fs::read_to_string(&path) {
                             for blocked in &self.config.blocked_commands {
                                 if content.contains(blocked) {
-                                    issues.push(format!("Potentially dangerous content found: {}", blocked));
+                                    issues.push(format!(
+                                        "Potentially dangerous content found: {}",
+                                        blocked
+                                    ));
                                 }
                             }
                         }
@@ -493,19 +513,19 @@ impl SkillValidator {
                 }
             }
         }
-        
+
         let status = if issues.is_empty() {
             CheckStatus::Passed
         } else {
             CheckStatus::Warning
         };
-        
+
         let message = if status == CheckStatus::Passed {
             "Scripts directory is valid".to_string()
         } else {
             format!("Scripts directory has issues: {}", issues.join(", "))
         };
-        
+
         CheckResult {
             name: "scripts_valid".to_string(),
             status,
@@ -514,36 +534,43 @@ impl SkillValidator {
             execution_time_ms: start_time.elapsed().as_millis() as u64,
         }
     }
-    
+
     /// Validate resources
     async fn validate_resources(&self, skill_path: &Path) -> HashMap<String, CheckResult> {
         let mut results = HashMap::new();
-        
+
         // Check for common resource directories
         for resource_dir in &["templates", "data", "config"] {
             let dir_path = skill_path.join(resource_dir);
             if dir_path.exists() {
-                let result = self.validate_resource_directory(&dir_path, resource_dir).await;
+                let result = self
+                    .validate_resource_directory(&dir_path, resource_dir)
+                    .await;
                 results.insert(resource_dir.to_string(), result);
             }
         }
-        
+
         results
     }
-    
+
     /// Validate resource directory
-    async fn validate_resource_directory(&self, dir_path: &Path, resource_type: &str) -> CheckResult {
+    async fn validate_resource_directory(
+        &self,
+        dir_path: &Path,
+        resource_type: &str,
+    ) -> CheckResult {
         let start_time = Instant::now();
-        
+
         let mut issues = vec![];
-        
+
         for entry in std::fs::read_dir(dir_path).unwrap() {
             if let Ok(entry) = entry {
                 let path = entry.path();
                 if path.is_file() {
                     // Check file size
                     if let Ok(metadata) = entry.metadata() {
-                        if metadata.len() > 10 * 1024 * 1024 { // 10MB limit for resources
+                        if metadata.len() > 10 * 1024 * 1024 {
+                            // 10MB limit for resources
                             issues.push(format!(
                                 "Resource file too large: {} ({} bytes)",
                                 path.display(),
@@ -554,19 +581,23 @@ impl SkillValidator {
                 }
             }
         }
-        
+
         let status = if issues.is_empty() {
             CheckStatus::Passed
         } else {
             CheckStatus::Warning
         };
-        
+
         let message = if status == CheckStatus::Passed {
             format!("{} directory is valid", resource_type)
         } else {
-            format!("{} directory has issues: {}", resource_type, issues.join(", "))
+            format!(
+                "{} directory has issues: {}",
+                resource_type,
+                issues.join(", ")
+            )
         };
-        
+
         CheckResult {
             name: format!("resource_{}", resource_type),
             status,
@@ -575,23 +606,23 @@ impl SkillValidator {
             execution_time_ms: start_time.elapsed().as_millis() as u64,
         }
     }
-    
+
     /// Check if executable exists
     async fn check_executable_exists(&self, path: &Path) -> CheckResult {
         let start_time = Instant::now();
-        
+
         let status = if path.exists() {
             CheckStatus::Passed
         } else {
             CheckStatus::Failed
         };
-        
+
         let message = if status == CheckStatus::Passed {
             format!("Executable exists: {}", path.display())
         } else {
             format!("Executable not found: {}", path.display())
         };
-        
+
         CheckResult {
             name: "executable_exists".to_string(),
             status,
@@ -600,31 +631,31 @@ impl SkillValidator {
             execution_time_ms: start_time.elapsed().as_millis() as u64,
         }
     }
-    
+
     /// Check executable permissions
     async fn check_executable_permissions(&self, path: &Path) -> CheckResult {
         let start_time = Instant::now();
-        
+
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            
+
             if let Ok(metadata) = std::fs::metadata(path) {
                 let permissions = metadata.permissions();
                 let is_executable = permissions.mode() & 0o111 != 0;
-                
+
                 let status = if is_executable {
                     CheckStatus::Passed
                 } else {
                     CheckStatus::Failed
                 };
-                
+
                 let message = if status == CheckStatus::Passed {
                     "Executable has proper permissions".to_string()
                 } else {
                     "Executable lacks execute permissions".to_string()
                 };
-                
+
                 return CheckResult {
                     name: "executable_permissions".to_string(),
                     status,
@@ -634,7 +665,7 @@ impl SkillValidator {
                 };
             }
         }
-        
+
         // Windows or metadata error - assume valid
         CheckResult {
             name: "executable_permissions".to_string(),
@@ -644,11 +675,11 @@ impl SkillValidator {
             execution_time_ms: start_time.elapsed().as_millis() as u64,
         }
     }
-    
+
     /// Validate README file
     async fn validate_readme_file(&self, readme_path: &Path) -> CheckResult {
         let start_time = Instant::now();
-        
+
         if !readme_path.exists() {
             return CheckResult {
                 name: "readme_valid".to_string(),
@@ -658,7 +689,7 @@ impl SkillValidator {
                 execution_time_ms: start_time.elapsed().as_millis() as u64,
             };
         }
-        
+
         match std::fs::read_to_string(readme_path) {
             Ok(content) => {
                 if content.len() < 100 {
@@ -679,22 +710,20 @@ impl SkillValidator {
                     }
                 }
             }
-            Err(e) => {
-                CheckResult {
-                    name: "readme_valid".to_string(),
-                    status: CheckStatus::Failed,
-                    message: format!("Failed to read README: {}", e),
-                    details: None,
-                    execution_time_ms: start_time.elapsed().as_millis() as u64,
-                }
-            }
+            Err(e) => CheckResult {
+                name: "readme_valid".to_string(),
+                status: CheckStatus::Failed,
+                message: format!("Failed to read README: {}", e),
+                details: None,
+                execution_time_ms: start_time.elapsed().as_millis() as u64,
+            },
         }
     }
-    
+
     /// Validate JSON schema
     async fn validate_json_schema(&mut self, schema_path: &Path) -> CheckResult {
         let start_time = Instant::now();
-        
+
         if !schema_path.exists() {
             return CheckResult {
                 name: "schema_valid".to_string(),
@@ -704,7 +733,7 @@ impl SkillValidator {
                 execution_time_ms: start_time.elapsed().as_millis() as u64,
             };
         }
-        
+
         match std::fs::read_to_string(schema_path) {
             Ok(content) => {
                 match serde_json::from_str::<Value>(&content) {
@@ -719,38 +748,34 @@ impl SkillValidator {
                             execution_time_ms: start_time.elapsed().as_millis() as u64,
                         }
                     }
-                    Err(e) => {
-                        CheckResult {
-                            name: "schema_valid".to_string(),
-                            status: CheckStatus::Failed,
-                            message: format!("Invalid JSON in schema file: {}", e),
-                            details: None,
-                            execution_time_ms: start_time.elapsed().as_millis() as u64,
-                        }
-                    }
+                    Err(e) => CheckResult {
+                        name: "schema_valid".to_string(),
+                        status: CheckStatus::Failed,
+                        message: format!("Invalid JSON in schema file: {}", e),
+                        details: None,
+                        execution_time_ms: start_time.elapsed().as_millis() as u64,
+                    },
                 }
             }
-            Err(e) => {
-                CheckResult {
-                    name: "schema_valid".to_string(),
-                    status: CheckStatus::Failed,
-                    message: format!("Failed to read schema file: {}", e),
-                    details: None,
-                    execution_time_ms: start_time.elapsed().as_millis() as u64,
-                }
-            }
+            Err(e) => CheckResult {
+                name: "schema_valid".to_string(),
+                status: CheckStatus::Failed,
+                message: format!("Failed to read schema file: {}", e),
+                details: None,
+                execution_time_ms: start_time.elapsed().as_millis() as u64,
+            },
         }
     }
-    
+
     /// Test basic tool execution
     async fn test_tool_execution(&self, config: &CliToolConfig) -> CheckResult {
         let start_time = Instant::now();
-        
+
         // Try to execute with --help or -h
         let output = std::process::Command::new(&config.executable_path)
             .arg("--help")
             .output();
-        
+
         match output {
             Ok(output) => {
                 if output.status.success() {
@@ -766,7 +791,7 @@ impl SkillValidator {
                     let output = std::process::Command::new(&config.executable_path)
                         .arg("-h")
                         .output();
-                    
+
                     match output {
                         Ok(output) => {
                             if output.status.success() {
@@ -781,42 +806,39 @@ impl SkillValidator {
                                 CheckResult {
                                     name: "tool_executable".to_string(),
                                     status: CheckStatus::Warning,
-                                    message: "Tool executed but returned non-zero exit code".to_string(),
+                                    message: "Tool executed but returned non-zero exit code"
+                                        .to_string(),
                                     details: None,
                                     execution_time_ms: start_time.elapsed().as_millis() as u64,
                                 }
                             }
                         }
-                        Err(e) => {
-                            CheckResult {
-                                name: "tool_executable".to_string(),
-                                status: CheckStatus::Failed,
-                                message: format!("Failed to execute tool: {}", e),
-                                details: None,
-                                execution_time_ms: start_time.elapsed().as_millis() as u64,
-                            }
-                        }
+                        Err(e) => CheckResult {
+                            name: "tool_executable".to_string(),
+                            status: CheckStatus::Failed,
+                            message: format!("Failed to execute tool: {}", e),
+                            details: None,
+                            execution_time_ms: start_time.elapsed().as_millis() as u64,
+                        },
                     }
                 }
             }
-            Err(e) => {
-                CheckResult {
-                    name: "tool_executable".to_string(),
-                    status: CheckStatus::Failed,
-                    message: format!("Failed to execute tool: {}", e),
-                    details: None,
-                    execution_time_ms: start_time.elapsed().as_millis() as u64,
-                }
-            }
+            Err(e) => CheckResult {
+                name: "tool_executable".to_string(),
+                status: CheckStatus::Failed,
+                message: format!("Failed to execute tool: {}", e),
+                details: None,
+                execution_time_ms: start_time.elapsed().as_millis() as u64,
+            },
         }
     }
-    
+
     /// Assess security based on checks
     fn assess_security(&self, checks: &HashMap<String, CheckResult>) -> SecurityAssessment {
         let mut warnings = vec![];
         let blocked_content = vec![];
         let mut security_level = SecurityLevel::Safe;
-        
+
         // Check for script security issues
         if let Some(scripts_check) = checks.get("scripts_valid") {
             if scripts_check.status == CheckStatus::Warning {
@@ -829,7 +851,9 @@ impl SkillValidator {
                                         warning_type: "dangerous_content".to_string(),
                                         message: issue_str.to_string(),
                                         severity: SecurityLevel::HighRisk,
-                                        suggestion: Some("Review script content for security issues".to_string()),
+                                        suggestion: Some(
+                                            "Review script content for security issues".to_string(),
+                                        ),
                                     });
                                     security_level = SecurityLevel::HighRisk;
                                 }
@@ -839,9 +863,9 @@ impl SkillValidator {
                 }
             }
         }
-        
+
         let safe_to_execute = security_level != SecurityLevel::HighRisk;
-        
+
         SecurityAssessment {
             security_level,
             warnings,
@@ -849,45 +873,65 @@ impl SkillValidator {
             safe_to_execute,
         }
     }
-    
+
     /// Generate recommendations based on validation results
-    fn generate_recommendations(&self, checks: &HashMap<String, CheckResult>, security: &SecurityAssessment) -> Vec<String> {
+    fn generate_recommendations(
+        &self,
+        checks: &HashMap<String, CheckResult>,
+        security: &SecurityAssessment,
+    ) -> Vec<String> {
         let mut recommendations = vec![];
-        
+
         // General recommendations based on check results
         for check in checks.values() {
             match check.status {
                 CheckStatus::Warning => {
-                    recommendations.push(format!("Address warning in {}: {}", check.name, check.message));
+                    recommendations.push(format!(
+                        "Address warning in {}: {}",
+                        check.name, check.message
+                    ));
                 }
                 CheckStatus::Failed => {
-                    recommendations.push(format!("Fix failed check {}: {}", check.name, check.message));
+                    recommendations.push(format!(
+                        "Fix failed check {}: {}",
+                        check.name, check.message
+                    ));
                 }
                 _ => {}
             }
         }
-        
+
         // Security recommendations
         if security.security_level == SecurityLevel::HighRisk {
-            recommendations.push("Review and fix security issues before using this skill".to_string());
+            recommendations
+                .push("Review and fix security issues before using this skill".to_string());
         }
-        
+
         // Performance recommendations
         if let Some(loading_check) = checks.get("skill_file_valid") {
             if loading_check.execution_time_ms > 1000 {
-                recommendations.push("Consider optimizing skill file parsing performance".to_string());
+                recommendations
+                    .push("Consider optimizing skill file parsing performance".to_string());
             }
         }
-        
+
         recommendations
     }
-    
+
     /// Determine overall validation status
-    fn determine_overall_status(&self, checks: &HashMap<String, CheckResult>, security: &SecurityAssessment) -> ValidationStatus {
-        let has_failures = checks.values().any(|check| check.status == CheckStatus::Failed);
-        let has_warnings = checks.values().any(|check| check.status == CheckStatus::Warning);
+    fn determine_overall_status(
+        &self,
+        checks: &HashMap<String, CheckResult>,
+        security: &SecurityAssessment,
+    ) -> ValidationStatus {
+        let has_failures = checks
+            .values()
+            .any(|check| check.status == CheckStatus::Failed);
+        let has_warnings = checks
+            .values()
+            .any(|check| check.status == CheckStatus::Warning);
         let has_high_risk = security.security_level == SecurityLevel::HighRisk;
-        
+
         if has_failures || has_high_risk {
             ValidationStatus::Invalid
         } else if has_warnings {
@@ -896,19 +940,22 @@ impl SkillValidator {
             ValidationStatus::Valid
         }
     }
-    
+
     /// Validate multiple skills in batch
-    pub async fn validate_batch(&mut self, skill_paths: Vec<&Path>) -> Vec<Result<ValidationReport>> {
+    pub async fn validate_batch(
+        &mut self,
+        skill_paths: Vec<&Path>,
+    ) -> Vec<Result<ValidationReport>> {
         let mut results = vec![];
-        
+
         for path in skill_paths {
             let result = self.validate_skill_directory(path).await;
             results.push(result);
         }
-        
+
         results
     }
-    
+
     /// Get cached schema
     #[allow(dead_code)]
     fn get_cached_schema(&mut self, _schema_path: &Path) -> Option<&serde_json::Value> {
@@ -916,7 +963,7 @@ impl SkillValidator {
         None
         // self.schema_cache.get(schema_path)
     }
-    
+
     /// Cache schema
     #[allow(dead_code)]
     fn cache_schema(&mut self, _schema_path: PathBuf, _schema: serde_json::Value) {
@@ -930,19 +977,19 @@ impl SkillValidator {
 pub struct BatchValidationResult {
     /// Total skills validated
     pub total_skills: usize,
-    
+
     /// Valid skills
     pub valid_skills: Vec<String>,
-    
+
     /// Skills with warnings
     pub warning_skills: Vec<String>,
-    
+
     /// Invalid skills
     pub invalid_skills: Vec<String>,
-    
+
     /// Average validation time
     pub average_validation_time_ms: u64,
-    
+
     /// Validation reports
     pub reports: Vec<ValidationReport>,
 }
@@ -952,7 +999,7 @@ pub async fn validate_skill_batch(skill_paths: Vec<&Path>) -> Result<BatchValida
     let mut validator = SkillValidator::new();
     let mut reports = vec![];
     let mut total_time = 0u64;
-    
+
     for path in skill_paths {
         match validator.validate_skill_directory(path).await {
             Ok(report) => {
@@ -974,28 +1021,31 @@ pub async fn validate_skill_batch(skill_paths: Vec<&Path>) -> Result<BatchValida
             }
         }
     }
-    
-    let valid_skills: Vec<String> = reports.iter()
+
+    let valid_skills: Vec<String> = reports
+        .iter()
         .filter(|r| r.status == ValidationStatus::Valid)
         .map(|r| r.skill_name.clone())
         .collect();
-    
-    let warning_skills: Vec<String> = reports.iter()
+
+    let warning_skills: Vec<String> = reports
+        .iter()
         .filter(|r| r.status == ValidationStatus::Warning)
         .map(|r| r.skill_name.clone())
         .collect();
-    
-    let invalid_skills: Vec<String> = reports.iter()
+
+    let invalid_skills: Vec<String> = reports
+        .iter()
         .filter(|r| r.status == ValidationStatus::Invalid)
         .map(|r| r.skill_name.clone())
         .collect();
-    
+
     let average_time = if !reports.is_empty() {
         total_time / reports.len() as u64
     } else {
         0
     };
-    
+
     Ok(BatchValidationResult {
         total_skills: reports.len(),
         valid_skills,
@@ -1010,7 +1060,7 @@ pub async fn validate_skill_batch(skill_paths: Vec<&Path>) -> Result<BatchValida
 mod tests {
     use super::*;
     use tempfile::TempDir;
-    
+
     #[test]
     fn test_validation_config_default() {
         let config = ValidationConfig::default();
@@ -1018,22 +1068,22 @@ mod tests {
         assert!(config.enable_performance_checks);
         assert_eq!(config.max_validation_time, 30);
     }
-    
+
     #[tokio::test]
     async fn test_validator_creation() {
         let _validator = SkillValidator::new();
         // assert_eq!(validator.schema_cache.len(), 0); // Commented out since schema_cache is disabled
     }
-    
+
     #[tokio::test]
     async fn test_invalid_skill_directory() {
         let mut validator = SkillValidator::new();
         let temp_dir = TempDir::new().unwrap();
         let non_existent = temp_dir.path().join("non_existent");
-        
+
         let result = validator.validate_skill_directory(&non_existent).await;
         assert!(result.is_ok());
-        
+
         let report = result.unwrap();
         assert_eq!(report.status, ValidationStatus::Invalid);
     }

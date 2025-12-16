@@ -25,7 +25,7 @@ use std::{
 };
 use tokio::fs;
 use tokio::time::sleep;
-use tracing::{debug, trace, info, warn};
+use tracing::{debug, info, trace, warn};
 
 use crate::config::constants::defaults::{
     DEFAULT_PTY_OUTPUT_BYTE_FUSE, DEFAULT_PTY_OUTPUT_MAX_TOKENS,
@@ -609,7 +609,7 @@ impl ToolRegistry {
                  - pattern (required, string): regex pattern to search for\n\
                  - path (optional, string): directory to search (defaults to '.')\n\
                  - max_results (optional, number): max results to return\n\
-                 Example: {\"pattern\": \"TODO\", \"path\": \"src\", \"max_results\": 5}"
+                 Example: {\"pattern\": \"TODO\", \"path\": \"src\", \"max_results\": 5}",
             )?;
 
             // Validate pattern parameter
@@ -1076,7 +1076,8 @@ impl ToolRegistry {
                     .filter_map(|ctx| {
                         if let SkillContext::MetadataOnly(manifest) = ctx {
                             let name_matches = manifest.name.to_lowercase().contains(&query_lower);
-                            let desc_matches = manifest.description.to_lowercase().contains(&query_lower);
+                            let desc_matches =
+                                manifest.description.to_lowercase().contains(&query_lower);
                             if name_matches || desc_matches {
                                 Some(manifest)
                             } else {
@@ -1109,7 +1110,10 @@ impl ToolRegistry {
                 }));
             }
 
-            let tools_json: Vec<Value> = all_results.iter().map(|r| r.to_json(detail_level)).collect();
+            let tools_json: Vec<Value> = all_results
+                .iter()
+                .map(|r| r.to_json(detail_level))
+                .collect();
 
             // Implement AGENTS.md pattern for large result sets
             let matched = all_results.len();
@@ -1142,8 +1146,8 @@ impl ToolRegistry {
                 name: String,
             }
 
-            let parsed: SkillArgs = serde_json::from_value(args)
-                .context("skill requires 'name' field")?;
+            let parsed: SkillArgs =
+                serde_json::from_value(args).context("skill requires 'name' field")?;
 
             // Load skill using EnhancedSkillLoader (reads .claude/skills/*/SKILL.md)
             use crate::skills::{EnhancedSkillLoader, loader::EnhancedSkill};
@@ -1186,24 +1190,25 @@ impl ToolRegistry {
                                 serde_json::to_string_pretty(&resources).unwrap_or_default()
                             }
                         );
-                        
+
                         // Add file tracking information if the skill mentions file generation
                         use crate::skills::skill_file_tracker::SkillFileTracker;
                         let _tracker = SkillFileTracker::new(workspace_root.clone());
-                        
+
                         // Scan the instructions for file generation patterns
-                        if skill.instructions.contains("output") || 
-                           skill.instructions.contains("generate") || 
-                           skill.instructions.contains("create") ||
-                           skill.instructions.contains(".pdf") ||
-                           skill.instructions.contains(".xlsx") ||
-                           skill.instructions.contains(".csv") {
+                        if skill.instructions.contains("output")
+                            || skill.instructions.contains("generate")
+                            || skill.instructions.contains("create")
+                            || skill.instructions.contains(".pdf")
+                            || skill.instructions.contains(".xlsx")
+                            || skill.instructions.contains(".csv")
+                        {
                             output.push_str("
 === Auto File Tracking ===
 This skill generates files. After execution, file locations will be automatically detected and reported.
 ");
                         }
-                        
+
                         output.push_str("\n⚠️  IMPORTANT: Follow the instructions above to complete the task. Do NOT call this tool again.");
 
                         Ok(json!({
@@ -1226,13 +1231,11 @@ This skill generates files. After execution, file locations will be automaticall
                         }))
                     }
                 }
-                Err(e) => {
-                    Ok(json!({
-                        "success": false,
-                        "error": format!("Failed to load skill '{}': {}", parsed.name, e),
-                        "hint": "Use search_tools to discover available skills"
-                    }))
-                }
+                Err(e) => Ok(json!({
+                    "success": false,
+                    "error": format!("Failed to load skill '{}': {}", parsed.name, e),
+                    "hint": "Use search_tools to discover available skills"
+                })),
             }
         })
     }
@@ -1241,7 +1244,7 @@ This skill generates files. After execution, file locations will be automaticall
         let mcp_client = self.mcp_client.clone();
         let workspace_root = self.workspace_root_owned();
         let file_tracker = crate::tools::file_tracker::FileTracker::new(workspace_root.clone());
-        
+
         Box::pin(async move {
             use crate::exec::code_executor::{CodeExecutor, Language};
 
@@ -1257,7 +1260,7 @@ This skill generates files. After execution, file locations will be automaticall
 
             let parsed: ExecuteCodeArgs = serde_json::from_value(args)
                 .context("execute_code requires 'code' and 'language' fields")?;
-            
+
             // Record timestamp before execution for file tracking
             let execution_start = std::time::SystemTime::now();
 
@@ -1365,7 +1368,7 @@ This skill generates files. After execution, file locations will be automaticall
                 has_json_result = result.json_result.is_some(),
                 "Code execution completed"
             );
-            
+
             // File tracking: detect newly created files if enabled
             let mut file_tracking_info = None;
             if parsed.track_files.unwrap_or(true) {
@@ -1433,7 +1436,7 @@ This skill generates files. After execution, file locations will be automaticall
             if let Some(json_result) = result.json_result {
                 response["result"] = json_result;
             }
-            
+
             // Include file tracking info if available
             if let Some(file_info) = file_tracking_info {
                 response["generated_files"] = file_info;

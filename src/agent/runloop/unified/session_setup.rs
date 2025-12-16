@@ -70,7 +70,7 @@ pub(crate) struct SessionState {
     pub search_metrics: Arc<RwLock<SearchMetrics>>,
 
     pub custom_prompts: CustomPromptRegistry,
-    
+
     /// Skills loaded in current session (name -> Skill mapping)
     pub loaded_skills: Arc<RwLock<HashMap<String, vtcode_core::skills::types::Skill>>>,
 }

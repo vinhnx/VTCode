@@ -805,7 +805,7 @@ impl ToolRegistry {
         }
 
         tools.sort_unstable();
-        
+
         // Update cache with try_write to avoid blocking
         if let Ok(mut cache) = self.cached_available_tools.try_write() {
             *cache = Some(tools.clone());

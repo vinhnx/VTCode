@@ -289,7 +289,7 @@ pub(crate) fn render_read_file_output(renderer: &mut AnsiRenderer, val: &Value) 
             let path = get_string(val, "path").unwrap_or("file");
             let lang = detect_language_from_path(path);
             let lang_hint = lang.unwrap_or("text");
-            
+
             // Wrap in markdown code block for proper rendering with syntax highlighting
             // This ensures indentation is preserved and normalized correctly
             let formatted = format!("```{}\n{}\n```", lang_hint, content);

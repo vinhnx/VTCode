@@ -211,10 +211,7 @@ impl SkillContainer {
         let mut seen_ids = HashSet::new();
         for spec in &self.skills {
             if !seen_ids.insert(&spec.skill_id) {
-                anyhow::bail!(
-                    "Duplicate skill ID in container: '{}'",
-                    spec.skill_id
-                );
+                anyhow::bail!("Duplicate skill ID in container: '{}'", spec.skill_id);
             }
         }
 
@@ -347,10 +344,7 @@ mod tests {
         }
         assert_eq!(container.len(), 7);
 
-        let specs = vec![
-            SkillSpec::custom("skill7"),
-            SkillSpec::custom("skill8"),
-        ];
+        let specs = vec![SkillSpec::custom("skill7"), SkillSpec::custom("skill8")];
         assert!(container.add_skills(specs).is_err());
     }
 
@@ -407,7 +401,9 @@ mod tests {
     fn test_container_validation() {
         let mut container = SkillContainer::new();
         for i in 0..8 {
-            container.add_skill(SkillSpec::custom(format!("skill{}", i))).ok();
+            container
+                .add_skill(SkillSpec::custom(format!("skill{}", i)))
+                .ok();
         }
         assert!(container.validate().is_ok());
     }
@@ -426,7 +422,10 @@ mod tests {
 
         assert_eq!(deserialized.skill_id, "my-skill");
         assert_eq!(deserialized.skill_type, SkillType::Custom);
-        assert_eq!(deserialized.version, SkillVersion::Specific("1759178010641129".to_string()));
+        assert_eq!(
+            deserialized.version,
+            SkillVersion::Specific("1759178010641129".to_string())
+        );
     }
 
     #[test]

@@ -413,22 +413,26 @@ const MAX_REASONING_DISPLAY_CHARS: usize = 500;
 fn is_giving_up_reasoning(reasoning: &str) -> bool {
     let lower = reasoning.to_lowercase();
     // Check for patterns indicating the agent wants to give up
-    lower.contains("complex") && lower.contains("stop") ||
-    lower.contains("probably stop") ||
-    lower.contains("give up") ||
-    lower.contains("can't continue") ||
-    lower.contains("unable to continue") ||
-    lower.contains("too complex") && lower.contains("stop")
+    lower.contains("complex") && lower.contains("stop")
+        || lower.contains("probably stop")
+        || lower.contains("give up")
+        || lower.contains("can't continue")
+        || lower.contains("unable to continue")
+        || lower.contains("too complex") && lower.contains("stop")
 }
 
 /// Replace giving-up reasoning with constructive, action-oriented reasoning
 fn get_constructive_reasoning(original: &str) -> String {
     let lower = original.to_lowercase();
-    
+
     // Provide specific, actionable guidance based on context
     if lower.contains("pdf") || lower.contains("file") || lower.contains("path") {
         "File system issue detected. Solution: 1) Verify directory exists with list_files, 2) Use absolute paths, 3) Create missing directories, 4) Try alternative output locations.".to_string()
-    } else if lower.contains("tool") || lower.contains("execute") || lower.contains("code") || lower.contains("python") {
+    } else if lower.contains("tool")
+        || lower.contains("execute")
+        || lower.contains("code")
+        || lower.contains("python")
+    {
         "Tool execution failed. Solution: 1) Check if tool exists with bash 'which command', 2) Install missing dependencies, 3) Verify file permissions, 4) Try alternative tools or approaches.".to_string()
     } else if lower.contains("permission") || lower.contains("access") || lower.contains("denied") {
         "Permission issue detected. Solution: 1) Check file permissions with ls -la, 2) Use sudo for system paths, 3) Work in user-writable directories, 4) Adjust permissions with chmod.".to_string()
@@ -889,20 +893,23 @@ pub(crate) async fn stream_and_render_response(
     if let Some(reasoning) = &response.reasoning {
         if is_giving_up_reasoning(reasoning) {
             #[cfg(debug_assertions)]
-            eprintln!("Detected giving-up reasoning '{}', replacing with constructive reasoning", reasoning);
-            
+            eprintln!(
+                "Detected giving-up reasoning '{}', replacing with constructive reasoning",
+                reasoning
+            );
+
             // Log the original reasoning for debugging
             tracing::warn!(
                 target = "vtcode::agent::reasoning",
                 original_reasoning = %reasoning,
                 "Agent attempted to give up, replacing with constructive reasoning"
             );
-            
+
             // Replace with constructive reasoning that provides specific solutions
             response.reasoning = Some(get_constructive_reasoning(reasoning));
         }
     }
-    
+
     // Also ensure response content doesn't contain giving-up messages
     if let Some(content) = &response.content {
         let lower = content.to_lowercase();
@@ -1111,17 +1118,27 @@ mod tests {
     #[test]
     fn test_detects_giving_up_reasoning() {
         assert!(is_giving_up_reasoning("Complex. Probably stop."));
-        assert!(is_giving_up_reasoning("This is too complex, I should stop."));
-        assert!(is_giving_up_reasoning("I can't continue, it's too complex."));
+        assert!(is_giving_up_reasoning(
+            "This is too complex, I should stop."
+        ));
+        assert!(is_giving_up_reasoning(
+            "I can't continue, it's too complex."
+        ));
         assert!(is_giving_up_reasoning("Probably should stop here."));
-        assert!(is_giving_up_reasoning("Unable to continue with this complex task."));
+        assert!(is_giving_up_reasoning(
+            "Unable to continue with this complex task."
+        ));
     }
 
     #[test]
     fn test_does_not_detect_normal_reasoning() {
         assert!(!is_giving_up_reasoning("I'm analyzing the file structure."));
-        assert!(!is_giving_up_reasoning("Let me check the directory contents."));
-        assert!(!is_giving_up_reasoning("Processing the request systematically."));
+        assert!(!is_giving_up_reasoning(
+            "Let me check the directory contents."
+        ));
+        assert!(!is_giving_up_reasoning(
+            "Processing the request systematically."
+        ));
         assert!(!is_giving_up_reasoning("Continue with the next step."));
     }
 
@@ -1131,17 +1148,26 @@ mod tests {
         let constructive = get_constructive_reasoning(original);
         assert!(!constructive.is_empty());
         assert!(!constructive.to_lowercase().contains("stop"));
-        assert!(constructive.to_lowercase().contains("solution") || constructive.to_lowercase().contains("try"));
+        assert!(
+            constructive.to_lowercase().contains("solution")
+                || constructive.to_lowercase().contains("try")
+        );
     }
 
     #[test]
     fn test_constructive_reasoning_task_specific() {
         let pdf_reasoning = "Complex PDF generation, probably stop.";
         let pdf_constructive = get_constructive_reasoning(pdf_reasoning);
-        assert!(pdf_constructive.to_lowercase().contains("file") || pdf_constructive.to_lowercase().contains("path"));
-        
+        assert!(
+            pdf_constructive.to_lowercase().contains("file")
+                || pdf_constructive.to_lowercase().contains("path")
+        );
+
         let tool_reasoning = "Tool execution too complex, can't continue.";
         let tool_constructive = get_constructive_reasoning(tool_reasoning);
-        assert!(tool_constructive.to_lowercase().contains("tool") || tool_constructive.to_lowercase().contains("execut"));
+        assert!(
+            tool_constructive.to_lowercase().contains("tool")
+                || tool_constructive.to_lowercase().contains("execut")
+        );
     }
 }

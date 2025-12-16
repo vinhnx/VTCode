@@ -118,8 +118,11 @@ impl IncrementalSystemPrompt {
         // Reinforce anti-giving-up policy based on context (main policy is in system prompt)
         if retry_attempts > 0 || context.error_count > 0 {
             let _ = writeln!(prompt, "\n\n# Persistence Reminder");
-            let _ = writeln!(prompt, "Review the Anti-Giving-Up Policy in your system prompt. You MUST try multiple approaches before giving up.");
-            
+            let _ = writeln!(
+                prompt,
+                "Review the Anti-Giving-Up Policy in your system prompt. You MUST try multiple approaches before giving up."
+            );
+
             if retry_attempts > 0 {
                 let _ = writeln!(
                     prompt,
@@ -127,7 +130,7 @@ impl IncrementalSystemPrompt {
                     retry_attempts
                 );
             }
-            
+
             if context.error_count > 0 {
                 let _ = writeln!(
                     prompt,

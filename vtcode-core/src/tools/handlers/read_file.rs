@@ -1,10 +1,10 @@
 use std::collections::VecDeque;
 use std::path::PathBuf;
 
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tokio::fs::File;
 use tokio::io::{AsyncBufReadExt, BufReader};
 
@@ -213,11 +213,7 @@ impl Tool for ReadFileHandler {
 mod slice {
     use super::*;
 
-    pub async fn read(
-        path: &std::path::Path,
-        offset: usize,
-        limit: usize,
-    ) -> Result<Vec<String>> {
+    pub async fn read(path: &std::path::Path, offset: usize, limit: usize) -> Result<Vec<String>> {
         let file = File::open(path)
             .await
             .context(format!("failed to open file: {}", path.display()))?;

@@ -922,8 +922,8 @@ impl Default for Cli {
             continue_latest: false,
             debug: false,
             enable_skills: false, // Skills disabled by default
-            tick_rate: 250, // Default tick rate: 250ms
-            frame_rate: 60, // Default frame rate: 60 FPS
+            tick_rate: 250,       // Default tick rate: 250ms
+            frame_rate: 60,       // Default frame rate: 60 FPS
             command: Some(Commands::Chat),
         }
     }
