@@ -281,65 +281,22 @@ pub(crate) fn render_read_file_output(renderer: &mut AnsiRenderer, val: &Value) 
         )?;
     }
 
-    // Render file content as markdown code block if present
+    // Suppress raw content echo to keep token usage low; only report summary
     if let Some(content) = get_string(val, "content") {
         if !content.is_empty() {
-            renderer.line(MessageStyle::Response, "")?;
-            // Get file path for language detection
-            let path = get_string(val, "path").unwrap_or("file");
-            let lang = detect_language_from_path(path);
-            let lang_hint = lang.unwrap_or("text");
-
-            // Wrap in markdown code block for proper rendering with syntax highlighting
-            // This ensures indentation is preserved and normalized correctly
-            let formatted = format!("```{}\n{}\n```", lang_hint, content);
-            // Use stream_markdown_response to render as markdown code block
-            // This ensures proper syntax highlighting and indentation normalization
-            renderer.stream_markdown_response(&formatted, 0)?;
-            renderer.line(MessageStyle::Response, "")?;
+            let line_count = content.lines().count();
+            let byte_count = content.len();
+            renderer.line(
+                MessageStyle::Info,
+                &format!(
+                    "  content: loaded ({} lines, {} bytes); output suppressed to save tokens",
+                    line_count, byte_count
+                ),
+            )?;
         }
     }
 
     Ok(())
-}
-
-/// Detect programming language from file path extension
-fn detect_language_from_path(path: &str) -> Option<&'static str> {
-    if path.ends_with(".rs") {
-        Some("rust")
-    } else if path.ends_with(".py") {
-        Some("python")
-    } else if path.ends_with(".js") {
-        Some("javascript")
-    } else if path.ends_with(".ts") {
-        Some("typescript")
-    } else if path.ends_with(".tsx") {
-        Some("tsx")
-    } else if path.ends_with(".jsx") {
-        Some("jsx")
-    } else if path.ends_with(".go") {
-        Some("go")
-    } else if path.ends_with(".java") {
-        Some("java")
-    } else if path.ends_with(".bash") || path.ends_with(".sh") {
-        Some("bash")
-    } else if path.ends_with(".json") {
-        Some("json")
-    } else if path.ends_with(".yaml") || path.ends_with(".yml") {
-        Some("yaml")
-    } else if path.ends_with(".toml") {
-        Some("toml")
-    } else if path.ends_with(".xml") {
-        Some("xml")
-    } else if path.ends_with(".html") {
-        Some("html")
-    } else if path.ends_with(".css") {
-        Some("css")
-    } else if path.ends_with(".sql") {
-        Some("sql")
-    } else {
-        None
-    }
 }
 
 /// Render diff content lines with proper truncation and styling

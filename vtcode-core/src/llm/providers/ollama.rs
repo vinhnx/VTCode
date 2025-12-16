@@ -130,35 +130,52 @@ impl OllamaProvider {
         })
     }
 
+    fn is_local_base_url(base_url: &str) -> bool {
+        let lowered = base_url.trim().to_ascii_lowercase();
+        const LOCAL_PREFIXES: &[&str] = &[
+            "http://localhost",
+            "https://localhost",
+            "http://127.",
+            "https://127.",
+            "http://0.0.0.0",
+            "https://0.0.0.0",
+            "http://[::1]",
+            "https://[::1]",
+        ];
+
+        LOCAL_PREFIXES
+            .iter()
+            .any(|prefix| lowered.starts_with(prefix))
+    }
+
     fn with_model_internal(
         model: String,
         base_url: Option<String>,
         api_key: Option<String>,
     ) -> Self {
-        let api_key = Self::normalize_api_key(api_key);
-
-        // Determine if this is a cloud model based on the model name
-        // Cloud models are identified by having ":cloud" or "-cloud" in their name
+        let normalized_api_key = Self::normalize_api_key(api_key);
         let is_cloud_model = model.contains(":cloud") || model.contains("-cloud");
 
-        // For local Ollama models (not cloud ones), do not use any API key
-        // This prevents sending an API key to local Ollama instances
-        let effective_api_key = if is_cloud_model {
-            api_key
-        } else {
-            None // Always use no API key for local Ollama models
-        };
-
-        // Use appropriate base URL based on whether it's a cloud model or not
         let default_base = if is_cloud_model {
             urls::OLLAMA_CLOUD_API_BASE
         } else {
             urls::OLLAMA_API_BASE
         };
 
+        let resolved_base =
+            override_base_url(default_base, base_url, Some(env_vars::OLLAMA_BASE_URL));
+        let target_is_local = Self::is_local_base_url(&resolved_base);
+
+        // Never send API keys to local endpoints; keep keys for cloud/remote targets
+        let effective_api_key = if target_is_local {
+            None
+        } else {
+            normalized_api_key
+        };
+
         Self {
             http_client: HttpClient::new(),
-            base_url: override_base_url(default_base, base_url, Some(env_vars::OLLAMA_BASE_URL)),
+            base_url: resolved_base,
             model,
             api_key: effective_api_key,
         }
@@ -356,6 +373,7 @@ impl OllamaProvider {
             model: request.model.clone(),
             messages,
             stream,
+            format: request.output_format.clone(),
             options,
             tools,
             think: Self::think_value(request),
@@ -497,6 +515,8 @@ struct OllamaChatRequest {
     model: String,
     messages: Vec<OllamaChatMessage>,
     stream: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    format: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     options: Option<OllamaChatOptions>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -896,4 +916,83 @@ impl LLMClient for OllamaProvider {
     fn model_id(&self) -> &str {
         &self.model
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::constants::{models, urls};
+        use serde_json::json;
+
+    #[test]
+    fn strips_api_key_for_local_targets() {
+        let provider = OllamaProvider::from_config(
+            Some("secret".to_string()),
+            Some(models::ollama::DEFAULT_LOCAL_MODEL.to_string()),
+            Some(urls::OLLAMA_API_BASE.to_string()),
+            None,
+            None,
+        );
+
+        assert!(provider.api_key.is_none());
+    }
+
+    #[test]
+    fn keeps_api_key_for_cloud_models() {
+        let provider = OllamaProvider::from_config(
+            Some("secret".to_string()),
+            Some(models::ollama::DEFAULT_CLOUD_MODEL.to_string()),
+            None,
+            None,
+            None,
+        );
+
+        assert_eq!(provider.api_key, Some("secret".to_string()));
+        assert_eq!(provider.base_url, urls::OLLAMA_CLOUD_API_BASE.to_string());
+    }
+
+    #[test]
+    fn keeps_api_key_for_remote_overrides() {
+        let provider = OllamaProvider::from_config(
+            Some("secret".to_string()),
+            Some(models::ollama::DEFAULT_LOCAL_MODEL.to_string()),
+            Some("https://remote-ollama.example.com".to_string()),
+            None,
+            None,
+        );
+
+        assert_eq!(provider.api_key, Some("secret".to_string()));
+        assert_eq!(provider.base_url, "https://remote-ollama.example.com".to_string());
+    }
+
+        #[test]
+        fn forwards_output_format_into_payload() {
+            let provider = OllamaProvider::from_config(
+                None,
+                Some(models::ollama::DEFAULT_LOCAL_MODEL.to_string()),
+                None,
+                None,
+                None,
+            );
+
+            let request = LLMRequest {
+                messages: vec![Message::user("hi".to_string())],
+                system_prompt: None,
+                tools: None,
+                model: models::ollama::DEFAULT_LOCAL_MODEL.to_string(),
+                max_tokens: None,
+                temperature: None,
+                stream: false,
+                output_format: Some(json!("json")),
+                tool_choice: None,
+                parallel_tool_calls: None,
+                parallel_tool_config: None,
+                reasoning_effort: None,
+                verbosity: None,
+            };
+
+            let payload = provider.build_payload(&request, false).unwrap();
+            assert_eq!(payload.format, Some(json!("json")));
+            assert!(!payload.stream);
+        }
 }

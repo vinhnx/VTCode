@@ -866,7 +866,10 @@ mod tests {
         let options = MODEL_OPTIONS.as_slice();
         assert!(has_model(options, ModelId::OllamaGptOss20b));
         assert!(has_model(options, ModelId::OllamaGptOss120bCloud));
-        assert!(has_model(options, ModelId::OllamaDeepseekV31_671bCloud));
+        assert!(has_model(options, ModelId::OllamaDeepseekV32Cloud));
+        assert!(has_model(options, ModelId::OllamaQwen3Next80bCloud));
+        assert!(has_model(options, ModelId::OllamaMistralLarge3675bCloud));
+        assert!(has_model(options, ModelId::OllamaKimiK2ThinkingCloud));
         assert!(has_model(options, ModelId::OllamaQwen3Coder480bCloud));
         assert!(has_model(options, ModelId::OllamaGlm46Cloud));
         assert!(has_model(options, ModelId::MinimaxM2));
