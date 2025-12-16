@@ -120,7 +120,7 @@ impl Provider {
             Provider::Ollama => models::ollama::REASONING_LEVEL_MODELS.contains(&model),
             Provider::LmStudio => false,
             Provider::Moonshot => false,
-            Provider::XAI => model == models::xai::GROK_4 | model == models::xai::GROK_4_CODE,
+            Provider::XAI => model == models::xai::GROK_4 || model == models::xai::GROK_4_CODE,
             Provider::ZAI => model == models::zai::GLM_4_6,
             Provider::Minimax => model == models::minimax::MINIMAX_M2,
         }
