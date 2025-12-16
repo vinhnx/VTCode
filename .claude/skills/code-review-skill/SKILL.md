@@ -19,7 +19,7 @@ disallow-container: true
 
 ## Instructions
 
-- Tools: use **Read** for context and **Grep** for pattern searches. Do not write or execute commands.
+-   Tools: use **Read** for context and **Grep** for pattern searches. Do not write or execute commands.
 
 1. Analyze the provided code for:
 
