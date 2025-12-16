@@ -541,17 +541,11 @@ pub async fn handle_slash_command(
                     Ok(SlashCommandOutcome::ManageSkills { action })
                 }
                 Ok(None) => {
-                    renderer.line(
-                        MessageStyle::Error,
-                        "Skills command parse error",
-                    )?;
+                    renderer.line(MessageStyle::Error, "Skills command parse error")?;
                     Ok(SlashCommandOutcome::Handled)
                 }
                 Err(e) => {
-                    renderer.line(
-                        MessageStyle::Error,
-                        &format!("Skills command error: {}", e),
-                    )?;
+                    renderer.line(MessageStyle::Error, &format!("Skills command error: {}", e))?;
                     Ok(SlashCommandOutcome::Handled)
                 }
             }

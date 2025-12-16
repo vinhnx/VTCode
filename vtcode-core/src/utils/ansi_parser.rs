@@ -408,8 +408,14 @@ mod tests {
         assert_eq!(strip_ansi("\x1b[47mWhite bg\x1b[0m"), "White bg");
 
         // Bright background colors (100-107)
-        assert_eq!(strip_ansi("\x1b[100mBright black bg\x1b[0m"), "Bright black bg");
-        assert_eq!(strip_ansi("\x1b[107mBright white bg\x1b[0m"), "Bright white bg");
+        assert_eq!(
+            strip_ansi("\x1b[100mBright black bg\x1b[0m"),
+            "Bright black bg"
+        );
+        assert_eq!(
+            strip_ansi("\x1b[107mBright white bg\x1b[0m"),
+            "Bright white bg"
+        );
 
         // 256-color background
         assert_eq!(strip_ansi("\x1b[48;5;196mRed 256\x1b[0m"), "Red 256");

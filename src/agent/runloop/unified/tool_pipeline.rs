@@ -292,21 +292,24 @@ pub(crate) async fn run_tool_call(
                 if loop_detected {
                     // Tool was blocked due to loop detection - try to get cached result
                     let mut cache = ctx.tool_result_cache.write().await;
-                    let cache_key =
-                        vtcode_core::tools::result_cache::ToolCacheKey::from_json(&name, &args_val, "");
+                    let cache_key = vtcode_core::tools::result_cache::ToolCacheKey::from_json(
+                        &name, &args_val, "",
+                    );
                     if let Some(cached_output) = cache.get(&cache_key) {
                         // We have a cached result from a previous successful call - return it
                         let cached_json: serde_json::Value =
                             serde_json::from_str(&cached_output).unwrap_or(serde_json::json!({}));
                         drop(cache);
                         tool_spinner.finish();
-                        return Ok(ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
-                            output: cached_json,
-                            stdout: None,
-                            modified_files: vec![],
-                            command_success: true,
-                            has_more: false,
-                        }));
+                        return Ok(ToolPipelineOutcome::from_status(
+                            ToolExecutionStatus::Success {
+                                output: cached_json,
+                                stdout: None,
+                                modified_files: vec![],
+                                command_success: true,
+                                has_more: false,
+                            },
+                        ));
                     }
                 }
             }
@@ -701,9 +704,7 @@ fn process_tool_output(output: Value) -> ToolExecutionStatus {
                 1. Check if you already have the result from a previous successful call in your conversation history\n\
                 2. If not available, use a different approach or modify your request\n\n\
                 Original error: {}",
-                tool_name,
-                repeat_count,
-                base_error_msg
+                tool_name, repeat_count, base_error_msg
             );
             return ToolExecutionStatus::Failure {
                 error: anyhow::anyhow!(clear_error_msg),
@@ -985,7 +986,10 @@ mod tests {
             assert!(error_msg.contains("DO NOT retry"));
             assert!(error_msg.contains("ACTION REQUIRED"));
         } else {
-            panic!("Expected Failure variant for loop detection, got: {:?}", status);
+            panic!(
+                "Expected Failure variant for loop detection, got: {:?}",
+                status
+            );
         }
     }
 

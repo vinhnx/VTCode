@@ -171,7 +171,10 @@ impl AutonomousExecutor {
             }
             Err(_) => {
                 // If we can't get the lock, don't block execution
-                tracing::debug!("Could not acquire loop detector read lock for {}", tool_name);
+                tracing::debug!(
+                    "Could not acquire loop detector read lock for {}",
+                    tool_name
+                );
             }
         }
         None

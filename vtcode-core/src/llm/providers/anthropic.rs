@@ -153,8 +153,6 @@ impl AnthropicProvider {
             .unwrap_or("5m")
     }
 
-
-
     /// Returns the beta header value for Anthropic API prompt caching.
     /// - Always includes "prompt-caching-2024-07-31"
     /// - Adds "extended-cache-ttl-2025-04-11" only when using 1h TTL
@@ -595,17 +593,25 @@ impl AnthropicProvider {
                 MessageRole::Assistant => {
                     if let Some(details) = &msg.reasoning_details {
                         for detail in details {
-                             if detail.get("type").and_then(|t| t.as_str()) == Some("thinking") {
-                                 let thinking = detail.get("thinking").and_then(|t| t.as_str()).unwrap_or("").to_string();
-                                 let signature = detail.get("signature").and_then(|t| t.as_str()).unwrap_or("").to_string();
-                                 if !thinking.is_empty() && !signature.is_empty() {
-                                      blocks.push(AnthropicContentBlock::Thinking {
-                                           thinking,
-                                           signature,
-                                           cache_control: None,
-                                      });
-                                 }
-                             }
+                            if detail.get("type").and_then(|t| t.as_str()) == Some("thinking") {
+                                let thinking = detail
+                                    .get("thinking")
+                                    .and_then(|t| t.as_str())
+                                    .unwrap_or("")
+                                    .to_string();
+                                let signature = detail
+                                    .get("signature")
+                                    .and_then(|t| t.as_str())
+                                    .unwrap_or("")
+                                    .to_string();
+                                if !thinking.is_empty() && !signature.is_empty() {
+                                    blocks.push(AnthropicContentBlock::Thinking {
+                                        thinking,
+                                        signature,
+                                        cache_control: None,
+                                    });
+                                }
+                            }
                         }
                     }
 
@@ -643,7 +649,9 @@ impl AnthropicProvider {
                 MessageRole::Tool => {
                     if let Some(tool_call_id) = &msg.tool_call_id {
                         let tool_content_blocks = Self::tool_result_blocks(&content_text);
-                        let content_val = if tool_content_blocks.len() == 1 && tool_content_blocks[0]["type"] == "text" {
+                        let content_val = if tool_content_blocks.len() == 1
+                            && tool_content_blocks[0]["type"] == "text"
+                        {
                             json!(tool_content_blocks[0]["text"])
                         } else {
                             json!(tool_content_blocks)
@@ -733,7 +741,10 @@ impl AnthropicProvider {
             }
         }
 
-        let mut final_tool_choice = request.tool_choice.as_ref().map(|tc| tc.to_provider_format("anthropic"));
+        let mut final_tool_choice = request
+            .tool_choice
+            .as_ref()
+            .map(|tc| tc.to_provider_format("anthropic"));
         if request.output_format.is_some() && self.supports_structured_output(&request.model) {
             final_tool_choice = Some(json!({
                 "type": "tool",
@@ -744,20 +755,24 @@ impl AnthropicProvider {
         let anthropic_request = AnthropicRequest {
             model: request.model.clone(),
             messages,
-            max_tokens: request.max_tokens.unwrap_or(defaults::ANTHROPIC_DEFAULT_MAX_TOKENS),
+            max_tokens: request
+                .max_tokens
+                .unwrap_or(defaults::ANTHROPIC_DEFAULT_MAX_TOKENS),
             system: system_value,
-            temperature: if self.supports_reasoning_effort(&request.model) { None } else { request.temperature },
+            temperature: if self.supports_reasoning_effort(&request.model) {
+                None
+            } else {
+                request.temperature
+            },
             tools,
             tool_choice: final_tool_choice,
             reasoning: reasoning_val,
             stream: request.stream,
         };
 
-        serde_json::to_value(anthropic_request).map_err(|e| {
-            LLMError::Provider {
-                message: format!("Serialization error: {}", e),
-                metadata: None,
-            }
+        serde_json::to_value(anthropic_request).map_err(|e| LLMError::Provider {
+            message: format!("Serialization error: {}", e),
+            metadata: None,
         })
     }
 

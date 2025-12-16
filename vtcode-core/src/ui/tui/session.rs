@@ -1183,7 +1183,10 @@ mod tests {
         let text = "hello world";
         let mut session = session_with_input(text, 0);
 
-        let event = KeyEvent::new(KeyCode::Char('e'), KeyModifiers::CONTROL | KeyModifiers::SUPER);
+        let event = KeyEvent::new(
+            KeyCode::Char('e'),
+            KeyModifiers::CONTROL | KeyModifiers::SUPER,
+        );
         let result = session.process_key(event);
 
         // Should not launch editor when both Control and Super (Cmd) are pressed

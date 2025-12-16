@@ -47,7 +47,7 @@ fn normalize_args_for_detection(tool_name: &str, args: &serde_json::Value) -> se
 
 #[derive(Debug, Clone)]
 pub struct ToolCallRecord {
-    pub tool_name: &'static str,  // Use &'static str for known tool names to avoid allocations
+    pub tool_name: &'static str, // Use &'static str for known tool names to avoid allocations
     pub args_hash: u64,
     pub timestamp: Instant,
 }
@@ -114,7 +114,7 @@ impl LoopDetector {
         }
 
         let record = ToolCallRecord {
-            tool_name: Box::leak(tool_name.to_string().into_boxed_str()),  // Leak for &'static str
+            tool_name: Box::leak(tool_name.to_string().into_boxed_str()), // Leak for &'static str
             args_hash,
             timestamp: Instant::now(),
         };

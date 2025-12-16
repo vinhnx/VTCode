@@ -43,7 +43,7 @@ pub enum ExecutionStatus {
 /// Tool execution tracker with bounded memory usage
 pub struct ExecutionTracker {
     /// Mapping of tool names to IDs (deduplicate strings)
-    tool_ids: Vec<&'static str>,  // Use &'static str to avoid allocations
+    tool_ids: Vec<&'static str>, // Use &'static str to avoid allocations
     /// Bounded execution history
     history: VecDeque<ExecutionRecord>,
     /// Maximum history size

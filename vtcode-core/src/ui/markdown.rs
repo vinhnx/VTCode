@@ -1059,9 +1059,21 @@ fn normalize_code_indentation(code: &str, language: Option<&str>) -> String {
     let has_language_hint = language.map_or(false, |hint| {
         matches!(
             hint.to_lowercase().as_str(),
-            "rust" | "rs" | "python" | "py" | "javascript" | "js" | "jsx"
-                | "typescript" | "ts" | "tsx" | "go" | "golang" | "java"
-                | "bash" | "sh"
+            "rust"
+                | "rs"
+                | "python"
+                | "py"
+                | "javascript"
+                | "js"
+                | "jsx"
+                | "typescript"
+                | "ts"
+                | "tsx"
+                | "go"
+                | "golang"
+                | "java"
+                | "bash"
+                | "sh"
         )
     });
 

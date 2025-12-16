@@ -13,9 +13,9 @@
 //! 4. Tool calls are executed and results are fed back
 //! 5. Final response is returned
 
+use crate::llm::provider::{FinishReason, LLMProvider, LLMRequest, Message, ToolDefinition};
 use crate::skills::types::Skill;
 use crate::tool_policy::ToolPolicy;
-use crate::llm::provider::{LLMProvider, LLMRequest, Message, ToolDefinition, FinishReason};
 use crate::tools::ToolRegistry;
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
@@ -93,13 +93,14 @@ pub async fn execute_skill_with_sub_llm(
         let response = provider.generate(request.clone()).await?;
 
         // Extract content - handle Option
-        let content = response
-            .content
-            .unwrap_or_else(|| String::new());
+        let content = response.content.unwrap_or_else(|| String::new());
 
         // Add assistant response to conversation
         if let Some(tool_calls) = &response.tool_calls {
-            messages.push(Message::assistant_with_tools(content.clone(), tool_calls.clone()));
+            messages.push(Message::assistant_with_tools(
+                content.clone(),
+                tool_calls.clone(),
+            ));
         } else {
             messages.push(Message::assistant(content.clone()));
         }
@@ -107,7 +108,11 @@ pub async fn execute_skill_with_sub_llm(
         // Check if there are tool calls to handle
         if let Some(tool_calls) = response.tool_calls {
             if !tool_calls.is_empty() {
-                info!("Skill '{}' made {} tool calls", skill.name(), tool_calls.len());
+                info!(
+                    "Skill '{}' made {} tool calls",
+                    skill.name(),
+                    tool_calls.len()
+                );
 
                 // Execute each tool call
                 for tool_call in tool_calls {
@@ -116,23 +121,25 @@ pub async fn execute_skill_with_sub_llm(
                         let tool_name = &function.name;
                         let tool_args_str = &function.arguments;
 
-                        debug!("Executing tool '{}' for skill '{}'", tool_name, skill.name());
+                        debug!(
+                            "Executing tool '{}' for skill '{}'",
+                            tool_name,
+                            skill.name()
+                        );
 
                         // Parse arguments as JSON
                         let tool_args = serde_json::from_str::<Value>(tool_args_str)
                             .unwrap_or_else(|_| serde_json::json!({}));
 
                         // Execute tool via registry
-                        let tool_result = match tool_registry
-                            .execute_tool_ref(tool_name, &tool_args)
-                            .await
-                        {
-                            Ok(result) => result.to_string(),
-                            Err(e) => {
-                                warn!("Tool '{}' failed: {}", tool_name, e);
-                                format!("Error executing {}: {}", tool_name, e)
-                            }
-                        };
+                        let tool_result =
+                            match tool_registry.execute_tool_ref(tool_name, &tool_args).await {
+                                Ok(result) => result.to_string(),
+                                Err(e) => {
+                                    warn!("Tool '{}' failed: {}", tool_name, e);
+                                    format!("Error executing {}: {}", tool_name, e)
+                                }
+                            };
 
                         // Add tool result to conversation
                         messages.push(Message::tool_response(tool_call.id.clone(), tool_result));
@@ -168,7 +175,10 @@ pub async fn execute_skill_with_sub_llm(
                 return Ok(content);
             }
             FinishReason::ContentFilter => {
-                warn!("Skill '{}' response filtered by content policy", skill.name());
+                warn!(
+                    "Skill '{}' response filtered by content policy",
+                    skill.name()
+                );
                 return Ok(content);
             }
             FinishReason::Error(ref msg) => {
@@ -200,10 +210,7 @@ impl SkillToolAdapter {
     }
 
     /// Execute skill by invoking LLM with skill instructions as system prompt
-    async fn execute_skill_with_lm(
-        &self,
-        user_input: Value,
-    ) -> Result<Value> {
+    async fn execute_skill_with_lm(&self, user_input: Value) -> Result<Value> {
         debug!("Executing skill: {}", self.skill.name());
 
         // Return structured result with skill instructions and context
@@ -322,8 +329,12 @@ mod tests {
             vtcode_native: Some(true),
         };
 
-        let skill = Skill::new(manifest, PathBuf::from("/tmp"), "# Instructions".to_string())
-            .expect("failed to create skill");
+        let skill = Skill::new(
+            manifest,
+            PathBuf::from("/tmp"),
+            "# Instructions".to_string(),
+        )
+        .expect("failed to create skill");
 
         let adapter = SkillToolAdapter::new(skill);
         assert_eq!(adapter.name(), "test-skill");
@@ -339,8 +350,12 @@ mod tests {
             vtcode_native: Some(true),
         };
 
-        let skill = Skill::new(manifest, PathBuf::from("/tmp"), "# Test Instructions".to_string())
-            .expect("failed to create skill");
+        let skill = Skill::new(
+            manifest,
+            PathBuf::from("/tmp"),
+            "# Test Instructions".to_string(),
+        )
+        .expect("failed to create skill");
 
         let adapter = SkillToolAdapter::new(skill);
         let args = serde_json::json!({"test": "value"});

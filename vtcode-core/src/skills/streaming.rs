@@ -13,7 +13,7 @@ use std::pin::Pin;
 use std::process::Stdio;
 use std::time::{Duration, Instant};
 use tokio::io::{AsyncReadExt, BufReader};
-use tokio::process::{Command as TokioCommand};
+use tokio::process::Command as TokioCommand;
 use tokio::time::{interval, timeout};
 
 /// Streaming execution configuration
@@ -21,25 +21,25 @@ use tokio::time::{interval, timeout};
 pub struct StreamingConfig {
     /// Enable streaming output
     pub enable_streaming: bool,
-    
+
     /// Buffer size for reading output
     pub buffer_size: usize,
-    
+
     /// Update interval for progress reports
     pub update_interval_ms: u64,
-    
+
     /// Maximum execution time
     pub max_execution_time_secs: u64,
-    
+
     /// Enable partial JSON parsing
     pub enable_partial_json: bool,
-    
+
     /// Enable progress reporting
     pub enable_progress_reporting: bool,
-    
+
     /// Include stderr in stream
     pub include_stderr: bool,
-    
+
     /// Split output by lines
     pub line_based_streaming: bool,
 }
@@ -133,12 +133,12 @@ impl StreamingSkillExecutor {
     pub fn new() -> Self {
         Self::with_config(StreamingConfig::default())
     }
-    
+
     /// Create new streaming executor with custom configuration
     pub fn with_config(config: StreamingConfig) -> Self {
         Self { config }
     }
-    
+
     /// Execute CLI tool with streaming output
     pub fn execute_cli_tool_streaming(
         &self,
@@ -148,51 +148,51 @@ impl StreamingSkillExecutor {
         let config = self.config.clone();
         let bridge = bridge.clone();
         let args = args.clone();
-        
+
         Box::pin(stream! {
             let start_time = Instant::now();
             let start_datetime = chrono::Utc::now();
-            
+
             // Build command
             let mut cmd = TokioCommand::new(&bridge.config.executable_path);
-            
+
             // Set working directory
             if let Some(working_dir) = &bridge.config.working_dir {
                 cmd.current_dir(working_dir);
             }
-            
+
             // Set environment variables
             if let Some(env) = &bridge.config.environment {
                 for (key, value) in env {
                     cmd.env(key, value);
                 }
             }
-            
+
             // Configure I/O for streaming
             cmd.stdin(Stdio::null())
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped())
                 .kill_on_drop(true);
-            
+
             // Add arguments
             if let Err(e) = Self::configure_arguments(&mut cmd, &args) {
                 yield Err(anyhow!("Failed to configure arguments: {}", e));
                 return;
             }
-            
+
             // Get command string for logging
             let _command_str = format!("{:?}", cmd);
             let args: Vec<String> = cmd.as_std().get_args()
                 .map(|arg| arg.to_string_lossy().to_string())
                 .collect();
-            
+
             // Emit started event
             yield Ok(StreamEvent::Started {
                 command: bridge.config.executable_path.display().to_string(),
                 args,
                 start_time: start_datetime,
             });
-            
+
             // Start the process
             let mut child = match cmd.spawn() {
                 Ok(child) => child,
@@ -201,7 +201,7 @@ impl StreamingSkillExecutor {
                     return;
                 }
             };
-            
+
             let stdout = match child.stdout.take() {
                 Some(stdout) => stdout,
                 None => {
@@ -209,17 +209,17 @@ impl StreamingSkillExecutor {
                     return;
                 }
             };
-            
+
             let stderr = if config.include_stderr {
                 child.stderr.take()
             } else {
                 None
             };
-            
+
             // Create progress tracking
             let progress_tracker = ProgressTracker::new(config.update_interval_ms);
             let mut progress_interval = interval(Duration::from_millis(config.update_interval_ms));
-            
+
             // Stream stdout
             let stdout_stream = Self::stream_output(
                 stdout,
@@ -227,7 +227,7 @@ impl StreamingSkillExecutor {
                 config.clone(),
                 progress_tracker.clone(),
             );
-            
+
             // Stream stderr if enabled
             let stderr_stream = if let Some(stderr) = stderr {
                 Some(Self::stream_output(
@@ -239,16 +239,16 @@ impl StreamingSkillExecutor {
             } else {
                 None
             };
-            
+
             // Combine streams
             let mut stdout_stream = Box::pin(stdout_stream);
             let mut stderr_stream = stderr_stream.map(|s| Box::pin(s));
-            
+
             // Stream events
             let mut output_buffer = String::new();
             let mut json_buffer = String::new();
             let _is_parsing_json = false;
-            
+
             loop {
                 tokio::select! {
                     // Progress updates
@@ -261,13 +261,13 @@ impl StreamingSkillExecutor {
                             estimated_remaining_ms: progress.estimated_remaining_ms,
                         });
                     }
-                    
+
                     // Stdout events
                     Some(event) = stdout_stream.next() => {
                         match event {
                             Ok(StreamEvent::Output { data, output_type, is_partial }) => {
                                 output_buffer.push_str(&data);
-                                
+
                                 // Try to detect JSON objects
                                 if config.enable_partial_json {
                                     if let Some(json_events) = Self::extract_json_objects(&mut json_buffer, &data) {
@@ -276,7 +276,7 @@ impl StreamingSkillExecutor {
                                         }
                                     }
                                 }
-                                
+
                                 yield Ok(StreamEvent::Output {
                                     data,
                                     output_type,
@@ -290,7 +290,7 @@ impl StreamingSkillExecutor {
                             }
                         }
                     }
-                    
+
                     // Stderr events
                     Some(event_result) = async {
                         match &mut stderr_stream {
@@ -312,13 +312,13 @@ impl StreamingSkillExecutor {
                             }
                         }
                     }
-                    
+
                     // Process completion
                     else => {
                         break;
                     }
                 }
-                
+
                 // Check timeout
                 if start_time.elapsed().as_secs() > config.max_execution_time_secs {
                     let _ = child.kill().await;
@@ -326,7 +326,7 @@ impl StreamingSkillExecutor {
                     return;
                 }
             }
-            
+
             // Wait for process completion
             let exit_status = match timeout(
                 Duration::from_secs(config.max_execution_time_secs),
@@ -342,10 +342,10 @@ impl StreamingSkillExecutor {
                     return;
                 }
             };
-            
+
             let exit_code = exit_status.code().unwrap_or(-1);
             let total_time_ms = start_time.elapsed().as_millis() as u64;
-            
+
             // Create final result
             let result = CliToolResult {
                 exit_code,
@@ -354,7 +354,7 @@ impl StreamingSkillExecutor {
                 json_output: None,
                 execution_time_ms: total_time_ms,
             };
-            
+
             yield Ok(StreamEvent::Completed {
                 exit_code,
                 total_time_ms,
@@ -362,7 +362,7 @@ impl StreamingSkillExecutor {
             });
         })
     }
-    
+
     /// Stream output from a reader
     fn stream_output<R>(
         reader: R,
@@ -377,7 +377,7 @@ impl StreamingSkillExecutor {
             let mut reader = BufReader::new(reader);
             let mut buffer = vec![0u8; config.buffer_size];
             let mut line_buffer = String::new();
-            
+
             loop {
                 match reader.read(&mut buffer).await {
                     Ok(0) => {
@@ -394,15 +394,15 @@ impl StreamingSkillExecutor {
                     }
                     Ok(n) => {
                         let data = String::from_utf8_lossy(&buffer[..n]);
-                        
+
                         if config.line_based_streaming {
                             line_buffer.push_str(&data);
-                            
+
                             // Process complete lines
                             while let Some(line_end) = line_buffer.find('\n') {
                                 let line = line_buffer[..line_end + 1].to_string();
                                 line_buffer.drain(..line_end + 1);
-                                
+
                                 progress_tracker.update_with_output(&line);
                                 yield Ok(StreamEvent::Output {
                                     data: line,
@@ -428,18 +428,18 @@ impl StreamingSkillExecutor {
             }
         })
     }
-    
+
     /// Extract JSON objects from output
     fn extract_json_objects(json_buffer: &mut String, new_data: &str) -> Option<Vec<StreamEvent>> {
         json_buffer.push_str(new_data);
-        
+
         let mut events = vec![];
-        
+
         // Try to find complete JSON objects
         while let Some(brace_start) = json_buffer.find('{') {
             let mut brace_count = 0;
             let mut end_pos = None;
-            
+
             for (i, ch) in json_buffer[brace_start..].chars().enumerate() {
                 match ch {
                     '{' => brace_count += 1,
@@ -453,16 +453,16 @@ impl StreamingSkillExecutor {
                     _ => {}
                 }
             }
-            
+
             if let Some(end) = end_pos {
                 let json_str = &json_buffer[brace_start..end];
-                
+
                 if let Ok(value) = serde_json::from_str::<Value>(json_str) {
                     events.push(StreamEvent::JsonObject {
                         value,
                         raw: json_str.to_string(),
                     });
-                    
+
                     // Remove processed JSON from buffer
                     json_buffer.drain(..end);
                 } else {
@@ -474,20 +474,20 @@ impl StreamingSkillExecutor {
                 break;
             }
         }
-        
+
         if events.is_empty() {
             None
         } else {
             Some(events)
         }
     }
-    
+
     /// Configure command arguments from JSON
     fn configure_arguments(cmd: &mut TokioCommand, args: &Value) -> Result<()> {
         if args.is_null() {
             return Ok(());
         }
-        
+
         match args {
             Value::String(s) => {
                 cmd.arg(s);
@@ -514,7 +514,7 @@ impl StreamingSkillExecutor {
                 cmd.arg(json_str);
             }
         }
-        
+
         Ok(())
     }
 }
@@ -541,22 +541,22 @@ impl ProgressTracker {
             estimated_total_bytes: None,
         }
     }
-    
+
     /// Update with new output
     pub fn update_with_output(&mut self, output: &str) {
         self.total_output_bytes += output.len();
         self.last_output_time = Instant::now();
-        
+
         // Simple heuristic: estimate total based on output rate
         if self.estimated_total_bytes.is_none() && self.start_time.elapsed().as_secs() > 5 {
             let elapsed_secs = self.start_time.elapsed().as_secs().max(1);
             let bytes_per_second = self.total_output_bytes / elapsed_secs as usize;
-            
+
             // Estimate 2-5 minutes of output at current rate
             self.estimated_total_bytes = Some(bytes_per_second * 180); // 3 minutes
         }
     }
-    
+
     /// Get current progress
     pub fn get_progress(&self) -> ProgressInfo {
         let elapsed_ms = self.start_time.elapsed().as_millis() as u64;
@@ -571,7 +571,7 @@ impl ProgressTracker {
             let estimated_total_ms = 300_000; // 5 minutes
             ((elapsed_ms as f32 / estimated_total_ms as f32) * 100.0).min(95.0)
         };
-        
+
         let estimated_remaining_ms = if let Some(estimated) = self.estimated_total_bytes {
             if self.total_output_bytes > 0 {
                 let bytes_remaining = estimated.saturating_sub(self.total_output_bytes);
@@ -583,7 +583,7 @@ impl ProgressTracker {
         } else {
             None
         };
-        
+
         let message = if percentage < 10.0 {
             "Starting execution...".to_string()
         } else if percentage < 50.0 {
@@ -593,7 +593,7 @@ impl ProgressTracker {
         } else {
             "Finalizing...".to_string()
         };
-        
+
         ProgressInfo {
             percentage,
             message,
@@ -608,13 +608,13 @@ impl ProgressTracker {
 pub struct ProgressInfo {
     /// Progress percentage (0-100)
     pub percentage: f32,
-    
+
     /// Status message
     pub message: String,
-    
+
     /// Elapsed time in milliseconds
     pub elapsed_ms: u64,
-    
+
     /// Estimated remaining time
     pub estimated_remaining_ms: Option<u64>,
 }
@@ -622,11 +622,17 @@ pub struct ProgressInfo {
 /// Extension trait for streaming execution
 pub trait StreamingExecution {
     /// Execute with streaming output
-    fn execute_streaming(&self, args: Value) -> Pin<Box<dyn Stream<Item = Result<StreamEvent>> + Send>>;
+    fn execute_streaming(
+        &self,
+        args: Value,
+    ) -> Pin<Box<dyn Stream<Item = Result<StreamEvent>> + Send>>;
 }
 
 impl StreamingExecution for CliToolBridge {
-    fn execute_streaming(&self, args: Value) -> Pin<Box<dyn Stream<Item = Result<StreamEvent>> + Send>> {
+    fn execute_streaming(
+        &self,
+        args: Value,
+    ) -> Pin<Box<dyn Stream<Item = Result<StreamEvent>> + Send>> {
         let executor = StreamingSkillExecutor::new();
         executor.execute_cli_tool_streaming(self, args)
     }
@@ -635,7 +641,7 @@ impl StreamingExecution for CliToolBridge {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_streaming_config_default() {
         let config = StreamingConfig::default();
@@ -643,32 +649,32 @@ mod tests {
         assert_eq!(config.buffer_size, 8192);
         assert_eq!(config.max_execution_time_secs, 300);
     }
-    
+
     #[test]
     fn test_progress_tracker() {
         let mut tracker = ProgressTracker::new(100);
-        
+
         // Initial progress
         let progress = tracker.get_progress();
         assert!(progress.percentage >= 0.0 && progress.percentage <= 100.0);
-        
+
         // Update with output
         tracker.update_with_output("test output");
         let progress = tracker.get_progress();
         assert!(progress.elapsed_ms > 0);
     }
-    
+
     #[tokio::test]
     async fn test_json_extraction() {
         let mut buffer = String::new();
         let data = r#"{"key": "value"} some text {"another": "object"}"#;
-        
+
         let events = StreamingSkillExecutor::extract_json_objects(&mut buffer, data);
         assert!(events.is_some());
-        
+
         let events = events.unwrap();
         assert_eq!(events.len(), 2);
-        
+
         match &events[0] {
             StreamEvent::JsonObject { value, .. } => {
                 assert_eq!(value["key"], "value");

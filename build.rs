@@ -16,7 +16,7 @@ fn main() {
             std::env::remove_var("MallocCorruptionAbort");
             std::env::remove_var("MallocHelpOptions");
             std::env::remove_var("MallocStackLoggingNoCompact");
-            
+
             // Set environment to explicitly disable malloc debugging
             std::env::set_var("MallocStackLogging", "0");
             std::env::set_var("MallocStackLoggingDirectory", "");

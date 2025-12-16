@@ -264,7 +264,7 @@ impl ContextOptimizer {
                 // If we have a max_tokens limit, use it for smarter truncation
                 // Default to ~8000 tokens (2000 lines * 4) if not specified
                 let token_limit = max_tokens.unwrap_or(MAX_FILE_LINES * 4);
-                
+
                 // Use token-based truncation if possible (more accurate)
                 // Otherwise fall back to line-based
                 let truncated = self.truncate_content(content, token_limit);
@@ -276,7 +276,7 @@ impl ContextOptimizer {
             // Reconstruct the object to ensure consistent field ordering and presence
             let mut standardized_obj = serde_json::Map::new();
             standardized_obj.insert("success".to_string(), json!(true));
-            
+
             if let Some(status) = obj.get("status") {
                 standardized_obj.insert("status".to_string(), status.clone());
             } else {
@@ -289,7 +289,7 @@ impl ContextOptimizer {
 
             // Always put content
             standardized_obj.insert("content".to_string(), json!(final_content));
-            
+
             if let Some(path) = obj.get("path").or_else(|| obj.get("file")) {
                 standardized_obj.insert("path".to_string(), path.clone());
             }
@@ -301,7 +301,7 @@ impl ContextOptimizer {
             if is_truncated {
                 standardized_obj.insert("is_truncated".to_string(), json!(true));
                 standardized_obj.insert("original_tokens".to_string(), json!(estimated_tokens));
-                
+
                 if let Some(omitted) = obj.get("omitted_line_count") {
                     standardized_obj.insert("omitted_line_count".to_string(), omitted.clone());
                 }
@@ -324,7 +324,7 @@ impl ContextOptimizer {
         if content.len() <= char_limit {
             return content.to_string();
         }
-        
+
         let truncated = &content[..char_limit];
         // Try to cut at last newline to avoid partial lines
         if let Some(last_newline) = truncated.rfind('\n') {
@@ -354,7 +354,12 @@ impl ContextOptimizer {
                 new_obj.insert("is_truncated".to_string(), json!(true));
                 new_obj.insert("original_lines".to_string(), json!(lines_count));
                 new_obj.insert("original_tokens".to_string(), json!(current_tokens));
-                new_obj.insert("note".to_string(), json!("Output truncated. Use 'grep_file' or specific commands to search content."));
+                new_obj.insert(
+                    "note".to_string(),
+                    json!(
+                        "Output truncated. Use 'grep_file' or specific commands to search content."
+                    ),
+                );
 
                 return Value::Object(new_obj);
             }
@@ -848,7 +853,7 @@ mod tests {
 
         // Verify truncation happened
         assert!(optimized["is_truncated"].as_bool().unwrap());
-        
+
         // Verify status/message preserved
         assert_eq!(optimized["status"], "success");
         assert_eq!(optimized["message"], "Successfully read file");

@@ -91,7 +91,10 @@ pub fn parse_skill_command(input: &str) -> Result<Option<SkillCommandAction>> {
                     }
                 }
 
-                Ok(Some(SkillCommandAction::Create { name: name_str, path }))
+                Ok(Some(SkillCommandAction::Create {
+                    name: name_str,
+                    path,
+                }))
             } else {
                 Err(anyhow::anyhow!("create: skill name required"))
             }
@@ -136,10 +139,7 @@ pub fn parse_skill_command(input: &str) -> Result<Option<SkillCommandAction>> {
             if let Some(rest_str) = parts.get(1) {
                 let use_parts: Vec<&str> = rest_str.splitn(2, ' ').collect();
                 if let Some(name) = use_parts.get(0) {
-                    let input = use_parts
-                        .get(1)
-                        .map(|s| s.to_string())
-                        .unwrap_or_default();
+                    let input = use_parts.get(1).map(|s| s.to_string()).unwrap_or_default();
                     Ok(Some(SkillCommandAction::Use {
                         name: name.to_string(),
                         input,
@@ -202,24 +202,20 @@ For more info: docs/SKILL_AUTHORING_GUIDE.md"#;
             })
         }
 
-        SkillCommandAction::Create { name, path } => {
-            match author.create_skill(&name, path) {
-                Ok(skill_dir) => {
-                    Ok(SkillCommandOutcome::Handled {
-                        message: format!(
-                            "✓ Created skill: {}\n\nNext steps:\n1. Edit {}/SKILL.md to complete the frontmatter and instructions\n2. Add scripts, references, or assets as needed\n3. Validate with: /skills validate {}\n4. Package with: /skills package {}",
-                            name,
-                            skill_dir.display(),
-                            name,
-                            name
-                        ),
-                    })
-                }
-                Err(e) => Ok(SkillCommandOutcome::Error {
-                    message: format!("Failed to create skill: {}", e),
-                }),
-            }
-        }
+        SkillCommandAction::Create { name, path } => match author.create_skill(&name, path) {
+            Ok(skill_dir) => Ok(SkillCommandOutcome::Handled {
+                message: format!(
+                    "✓ Created skill: {}\n\nNext steps:\n1. Edit {}/SKILL.md to complete the frontmatter and instructions\n2. Add scripts, references, or assets as needed\n3. Validate with: /skills validate {}\n4. Package with: /skills package {}",
+                    name,
+                    skill_dir.display(),
+                    name,
+                    name
+                ),
+            }),
+            Err(e) => Ok(SkillCommandOutcome::Error {
+                message: format!("Failed to create skill: {}", e),
+            }),
+        },
 
         SkillCommandAction::Validate { name } => {
             let skill_dir = workspace.join("skills").join(&name);
@@ -230,11 +226,9 @@ For more info: docs/SKILL_AUTHORING_GUIDE.md"#;
             }
 
             match author.validate_skill(&skill_dir) {
-                Ok(report) => {
-                    Ok(SkillCommandOutcome::Handled {
-                        message: report.format(),
-                    })
-                }
+                Ok(report) => Ok(SkillCommandOutcome::Handled {
+                    message: report.format(),
+                }),
                 Err(e) => Ok(SkillCommandOutcome::Error {
                     message: format!("Validation error: {}", e),
                 }),
@@ -250,11 +244,9 @@ For more info: docs/SKILL_AUTHORING_GUIDE.md"#;
             }
 
             match author.package_skill(&skill_dir, Some(workspace.clone())) {
-                Ok(output_file) => {
-                    Ok(SkillCommandOutcome::Handled {
-                        message: format!("✓ Packaged skill to: {}", output_file.display()),
-                    })
-                }
+                Ok(output_file) => Ok(SkillCommandOutcome::Handled {
+                    message: format!("✓ Packaged skill to: {}", output_file.display()),
+                }),
                 Err(e) => Ok(SkillCommandOutcome::Error {
                     message: format!("Packaging failed: {}", e),
                 }),
@@ -279,93 +271,82 @@ For more info: docs/SKILL_AUTHORING_GUIDE.md"#;
                     manifest.name, manifest.description
                 ));
             }
-            output.push_str("\nUse `/skills info <name>` for details, `/skills load <name>` to load");
+            output
+                .push_str("\nUse `/skills info <name>` for details, `/skills load <name>` to load");
 
             Ok(SkillCommandOutcome::Handled { message: output })
         }
 
-        SkillCommandAction::Load { name } => {
-            match loader.get_skill(&name).await {
-                Ok(enhanced_skill) => {
-                    match enhanced_skill {
-                        vtcode_core::skills::loader::EnhancedSkill::Traditional(skill) => {
-                            Ok(SkillCommandOutcome::LoadSkill { skill })
-                        }
-                        vtcode_core::skills::loader::EnhancedSkill::CliTool(_) => {
-                            Ok(SkillCommandOutcome::Error {
-                                message: format!("Skill '{}' is a CLI tool, not a traditional skill", name),
-                            })
-                        }
-                    }
+        SkillCommandAction::Load { name } => match loader.get_skill(&name).await {
+            Ok(enhanced_skill) => match enhanced_skill {
+                vtcode_core::skills::loader::EnhancedSkill::Traditional(skill) => {
+                    Ok(SkillCommandOutcome::LoadSkill { skill })
                 }
-                Err(e) => Ok(SkillCommandOutcome::Error {
-                    message: format!("Failed to load skill '{}': {}", name, e),
-                }),
-            }
-        }
+                vtcode_core::skills::loader::EnhancedSkill::CliTool(_) => {
+                    Ok(SkillCommandOutcome::Error {
+                        message: format!("Skill '{}' is a CLI tool, not a traditional skill", name),
+                    })
+                }
+            },
+            Err(e) => Ok(SkillCommandOutcome::Error {
+                message: format!("Failed to load skill '{}': {}", name, e),
+            }),
+        },
 
         SkillCommandAction::Unload { name } => Ok(SkillCommandOutcome::UnloadSkill { name }),
 
-        SkillCommandAction::Info { name } => {
-            match loader.get_skill(&name).await {
-                Ok(enhanced_skill) => {
-                    match enhanced_skill {
-                        vtcode_core::skills::loader::EnhancedSkill::Traditional(skill) => {
-                            let mut output = String::new();
-                            output.push_str(&format!("Skill: {}\n", skill.name()));
-                            output.push_str(&format!("Description: {}\n", skill.description()));
+        SkillCommandAction::Info { name } => match loader.get_skill(&name).await {
+            Ok(enhanced_skill) => match enhanced_skill {
+                vtcode_core::skills::loader::EnhancedSkill::Traditional(skill) => {
+                    let mut output = String::new();
+                    output.push_str(&format!("Skill: {}\n", skill.name()));
+                    output.push_str(&format!("Description: {}\n", skill.description()));
 
-                            if let Some(version) = &skill.manifest.version {
-                                output.push_str(&format!("Version: {}\n", version));
-                            }
+                    if let Some(version) = &skill.manifest.version {
+                        output.push_str(&format!("Version: {}\n", version));
+                    }
 
-                            output.push_str("\n--- Instructions ---\n");
-                            output.push_str(&skill.instructions);
+                    output.push_str("\n--- Instructions ---\n");
+                    output.push_str(&skill.instructions);
 
-                            if !skill.list_resources().is_empty() {
-                                output.push_str("\n\n--- Resources ---\n");
-                                for resource in skill.list_resources() {
-                                    output.push_str(&format!("  • {}\n", resource));
-                                }
-                            }
-
-                            Ok(SkillCommandOutcome::Handled { message: output })
-                        }
-                        vtcode_core::skills::loader::EnhancedSkill::CliTool(bridge) => {
-                            let mut output = String::new();
-                            output.push_str(&format!("CLI Tool Skill: {}\n", bridge.config.name));
-                            output.push_str(&format!("Description: {}\n", bridge.config.description));
-                            output.push_str("\n--- Tool Configuration ---\n");
-                            output.push_str("Tool available for execution");
-                            Ok(SkillCommandOutcome::Handled { message: output })
+                    if !skill.list_resources().is_empty() {
+                        output.push_str("\n\n--- Resources ---\n");
+                        for resource in skill.list_resources() {
+                            output.push_str(&format!("  • {}\n", resource));
                         }
                     }
-                }
-                Err(e) => Ok(SkillCommandOutcome::Error {
-                    message: format!("Failed to load skill '{}': {}", name, e),
-                }),
-            }
-        }
 
-        SkillCommandAction::Use { name, input } => {
-            match loader.get_skill(&name).await {
-                Ok(enhanced_skill) => {
-                    match enhanced_skill {
-                        vtcode_core::skills::loader::EnhancedSkill::Traditional(skill) => {
-                            Ok(SkillCommandOutcome::UseSkill { skill, input })
-                        }
-                        vtcode_core::skills::loader::EnhancedSkill::CliTool(_) => {
-                            Ok(SkillCommandOutcome::Error {
-                                message: format!("Skill '{}' is a CLI tool, not a traditional skill", name),
-                            })
-                        }
-                    }
+                    Ok(SkillCommandOutcome::Handled { message: output })
                 }
-                Err(e) => Ok(SkillCommandOutcome::Error {
-                    message: format!("Failed to load skill '{}': {}", name, e),
-                }),
-            }
-        }
+                vtcode_core::skills::loader::EnhancedSkill::CliTool(bridge) => {
+                    let mut output = String::new();
+                    output.push_str(&format!("CLI Tool Skill: {}\n", bridge.config.name));
+                    output.push_str(&format!("Description: {}\n", bridge.config.description));
+                    output.push_str("\n--- Tool Configuration ---\n");
+                    output.push_str("Tool available for execution");
+                    Ok(SkillCommandOutcome::Handled { message: output })
+                }
+            },
+            Err(e) => Ok(SkillCommandOutcome::Error {
+                message: format!("Failed to load skill '{}': {}", name, e),
+            }),
+        },
+
+        SkillCommandAction::Use { name, input } => match loader.get_skill(&name).await {
+            Ok(enhanced_skill) => match enhanced_skill {
+                vtcode_core::skills::loader::EnhancedSkill::Traditional(skill) => {
+                    Ok(SkillCommandOutcome::UseSkill { skill, input })
+                }
+                vtcode_core::skills::loader::EnhancedSkill::CliTool(_) => {
+                    Ok(SkillCommandOutcome::Error {
+                        message: format!("Skill '{}' is a CLI tool, not a traditional skill", name),
+                    })
+                }
+            },
+            Err(e) => Ok(SkillCommandOutcome::Error {
+                message: format!("Failed to load skill '{}': {}", name, e),
+            }),
+        },
     }
 }
 

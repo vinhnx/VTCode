@@ -310,26 +310,27 @@ fn preprocess_terminal_stdout<'a>(tokens: Option<&[String]>, stdout: &'a str) ->
     }
 
     // Filter out macOS malloc debugging messages first
-    let filtered_text = if stdout.contains("MallocStackLogging:") || stdout.contains("malloc: enabling abort()") {
-        let lines: Vec<&str> = stdout.lines().collect();
-        let filtered: Vec<&str> = lines
-            .iter()
-            .filter(|line| {
-                !line.contains("MallocStackLogging:")
-                    && !line.contains("malloc: enabling abort()")
-                    && !line.contains("can't turn off malloc stack logging")
-            })
-            .copied()
-            .collect();
-        
-        if filtered.len() == lines.len() {
-            None  // No filtering needed
+    let filtered_text =
+        if stdout.contains("MallocStackLogging:") || stdout.contains("malloc: enabling abort()") {
+            let lines: Vec<&str> = stdout.lines().collect();
+            let filtered: Vec<&str> = lines
+                .iter()
+                .filter(|line| {
+                    !line.contains("MallocStackLogging:")
+                        && !line.contains("malloc: enabling abort()")
+                        && !line.contains("can't turn off malloc stack logging")
+                })
+                .copied()
+                .collect();
+
+            if filtered.len() == lines.len() {
+                None // No filtering needed
+            } else {
+                Some(filtered.join("\n"))
+            }
         } else {
-            Some(filtered.join("\n"))
-        }
-    } else {
-        None  // No filtering needed
-    };
+            None // No filtering needed
+        };
 
     // Continue with ANSI stripping and normalization
     let normalized = if let Some(filtered) = filtered_text {
@@ -347,7 +348,7 @@ fn preprocess_terminal_stdout<'a>(tokens: Option<&[String]>, stdout: &'a str) ->
             Cow::Owned(text) => normalize_carriage_returns(&text).into_owned().into(),
         }
     };
-    
+
     let should_strip_numbers = tokens
         .map(command_can_emit_rust_diagnostics)
         .unwrap_or(false)

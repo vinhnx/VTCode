@@ -18,7 +18,7 @@ fn main() {
         std::env::remove_var("MallocScribble");
         std::env::remove_var("MallocGuardEdges");
     }
-    
+
     let is_docsrs = std::env::var_os("DOCS_RS").is_some();
 
     if is_docsrs {

@@ -1,38 +1,38 @@
 //! Generic Skill Optimization Demo
-//! 
+//!
 //! Demonstrates how file tracking works for ALL skills generically,
 //! not just execute_code.
 
-use vtcode_core::tools::ToolRegistry;
-use vtcode_core::skills::auto_verification::AutoSkillVerifier;
 use serde_json::json;
 use tempfile::TempDir;
+use vtcode_core::skills::auto_verification::AutoSkillVerifier;
+use vtcode_core::tools::ToolRegistry;
 
 #[tokio::main]
 async fn main() {
     println!("=== Generic Skill File Tracking Demo ===\n");
-    
+
     let temp_dir = TempDir::new().unwrap();
     let workspace_root = temp_dir.path().to_path_buf();
-    
+
     println!("📁 Workspace: {}", workspace_root.display());
-    
+
     // Demo 1: PDF Generator Skill (Generic)
     println!("\n=== Demo 1: PDF Generator Skill ===");
     demo_pdf_generator(&workspace_root).await;
-    
+
     // Demo 2: Spreadsheet Generator Skill (Generic)
     println!("\n=== Demo 2: Spreadsheet Generator Skill ===");
     demo_spreadsheet_generator(&workspace_root).await;
-    
+
     // Demo 3: Doc Generator Skill (Generic)
     println!("\n=== Demo 3: Doc Generator Skill ===");
     demo_doc_generator(&workspace_root).await;
-    
+
     // Demo 4: Generic skill that generates multiple files
     println!("\n=== Demo 4: Multi-File Generator ===");
     demo_multi_file_generator(&workspace_root).await;
-    
+
     // Summary
     println!("\n=== Optimization Summary ===");
     println!("✅ Benefits for ALL skills:");
@@ -58,14 +58,17 @@ Output saved to: quarterly_report.pdf
 
 You can open this file with any PDF viewer.
     "#;
-    
+
     println!("📄 Skill output before auto-verification:");
     println!("{}", skill_output);
-    
+
     // Apply auto-verification (this happens automatically for all skills)
     let verifier = AutoSkillVerifier::new(workspace_root.to_path_buf());
-    let enhanced = verifier.process_skill_output("pdf-generator-vtcode", skill_output.to_string()).await.unwrap();
-    
+    let enhanced = verifier
+        .process_skill_output("pdf-generator-vtcode", skill_output.to_string())
+        .await
+        .unwrap();
+
     println!("\n🔍 After auto-verification:");
     println!("{}", enhanced);
 }
@@ -81,13 +84,16 @@ Created Excel spreadsheet with:
 
 Generated: financial_dashboard.xlsx
     "#;
-    
+
     println!("📄 Original output:");
     println!("{}", skill_output);
-    
+
     let verifier = AutoSkillVerifier::new(workspace_root.to_path_buf());
-    let enhanced = verifier.process_skill_output("spreadsheet-generator", skill_output.to_string()).await.unwrap();
-    
+    let enhanced = verifier
+        .process_skill_output("spreadsheet-generator", skill_output.to_string())
+        .await
+        .unwrap();
+
     println!("\n🔍 Enhanced with file tracking:");
     println!("{}", enhanced);
 }
@@ -103,13 +109,16 @@ Generated Word document:
 
 Document created at: project_proposal.docx
     "#;
-    
+
     println!("📄 Original output:");
     println!("{}", skill_output);
-    
+
     let verifier = AutoSkillVerifier::new(workspace_root.to_path_buf());
-    let enhanced = verifier.process_skill_output("doc-generator", skill_output.to_string()).await.unwrap();
-    
+    let enhanced = verifier
+        .process_skill_output("doc-generator", skill_output.to_string())
+        .await
+        .unwrap();
+
     println!("\n🔍 Enhanced with verification:");
     println!("{}", enhanced);
 }
@@ -126,13 +135,16 @@ Generated complete report package:
 
 All files saved to output directory.
     "#;
-    
+
     println!("📄 Original output (mentions 4 files):");
     println!("{}", skill_output);
-    
+
     let verifier = AutoSkillVerifier::new(workspace_root.to_path_buf());
-    let enhanced = verifier.process_skill_output("multi-report-generator", skill_output.to_string()).await.unwrap();
-    
+    let enhanced = verifier
+        .process_skill_output("multi-report-generator", skill_output.to_string())
+        .await
+        .unwrap();
+
     println!("\n🔍 Enhanced with multi-file verification:");
     println!("{}", enhanced);
 }

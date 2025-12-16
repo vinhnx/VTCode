@@ -325,14 +325,22 @@ impl CodeExecutor {
                 let interpreter = Language::detect_python_interpreter(&self.workspace_root);
                 if interpreter == "uv" {
                     // uv run python script.py
-                    ("uv".to_string(), vec!["run".to_string(), "python".to_string(), code_file.to_string_lossy().into_owned()])
+                    (
+                        "uv".to_string(),
+                        vec![
+                            "run".to_string(),
+                            "python".to_string(),
+                            code_file.to_string_lossy().into_owned(),
+                        ],
+                    )
                 } else {
                     (interpreter, vec![code_file.to_string_lossy().into_owned()])
                 }
-            },
-            Language::JavaScript => {
-                (self.language.interpreter().to_string(), vec![code_file.to_string_lossy().into_owned()])
             }
+            Language::JavaScript => (
+                self.language.interpreter().to_string(),
+                vec![code_file.to_string_lossy().into_owned()],
+            ),
         };
 
         let options = ProcessOptions {

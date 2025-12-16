@@ -877,15 +877,15 @@ impl FileOpsTool {
             }
 
             let size_bytes = metadata.len();
-            
+
             // Heuristic to decide between new handler (line/indentation) and legacy handler (byte-based)
             // If explicit "offset_bytes", "page_size_bytes" are used, stay with legacy.
             // If "mode", "indentation", "offset" (implied line) are used, prefer new handler.
-            let is_legacy_request = args.get("offset_bytes").is_some() 
+            let is_legacy_request = args.get("offset_bytes").is_some()
                 || args.get("page_size_bytes").is_some()
                 || args.get("offset_lines").is_some(); // Legacy also used offset_lines, but new one uses 'offset'
-            
-            let prefer_new_handler = args.get("mode").is_some() 
+
+            let prefer_new_handler = args.get("mode").is_some()
                 || args.get("indentation").is_some()
                 || args.get("offset").is_some();
 
@@ -895,40 +895,44 @@ impl FileOpsTool {
                 if let Some(obj) = handler_args_json.as_object_mut() {
                     // Inject resolved absolute path
                     obj.insert("file_path".to_string(), json!(canonical.to_string_lossy()));
-                    
+
                     // Map legacy param names if new ones aren't present
                     if !obj.contains_key("offset") && obj.contains_key("offset_lines") {
-                         obj["offset"] = obj["offset_lines"].clone();
+                        obj["offset"] = obj["offset_lines"].clone();
                     }
                     if !obj.contains_key("limit") && obj.contains_key("page_size_lines") {
-                         obj["limit"] = obj["page_size_lines"].clone();
+                        obj["limit"] = obj["page_size_lines"].clone();
                     }
                     if !obj.contains_key("limit") {
-                         // Default limit if not specified (ReadFileArgs defaults to 2000)
+                        // Default limit if not specified (ReadFileArgs defaults to 2000)
                     }
                 }
-                
+
                 // Attempt to parse
                 match serde_json::from_value::<ReadFileArgs>(handler_args_json) {
                     Ok(read_args) => {
-                         let handler = ReadFileHandler;
-                         let content = handler.handle(read_args).await?;
-                         return Ok(json!({
-                            "success": true,
-                            "status": "success",
-                            "message": format!("Successfully read file {}", self.workspace_relative_display(&canonical)),
-                            "content": content,
-                            "path": self.workspace_relative_display(&canonical),
-                            "metadata": {
-                                "size_bytes": size_bytes,
-                            }
-                         }));
+                        let handler = ReadFileHandler;
+                        let content = handler.handle(read_args).await?;
+                        return Ok(json!({
+                           "success": true,
+                           "status": "success",
+                           "message": format!("Successfully read file {}", self.workspace_relative_display(&canonical)),
+                           "content": content,
+                           "path": self.workspace_relative_display(&canonical),
+                           "metadata": {
+                               "size_bytes": size_bytes,
+                           }
+                        }));
                     }
                     Err(e) => {
                         // If parsing failed (e.g. invalid mode), allow falling back ONLY if it looks strictly like a legacy request,
                         // otherwise wrap the error.
                         if prefer_new_handler {
-                             return Err(anyhow!("Failed to parse arguments for read_file handler: {}. Args: {:?}", e, args));
+                            return Err(anyhow!(
+                                "Failed to parse arguments for read_file handler: {}. Args: {:?}",
+                                e,
+                                args
+                            ));
                         }
                         // Fall through to legacy
                     }
@@ -960,7 +964,7 @@ impl FileOpsTool {
                 "path": self.workspace_relative_display(&canonical),
                 "metadata": metadata
             });
-            
+
             // ... (legacy metadata logic) ...
             if let Some(encoding) = result
                 .get("metadata")
@@ -978,11 +982,11 @@ impl FileOpsTool {
                 .map(str::to_owned)
             {
                 result["content_kind"] = json!(content_kind);
-                 if matches!(content_kind.as_str(), "binary" | "image") {
+                if matches!(content_kind.as_str(), "binary" | "image") {
                     result["binary"] = json!(true);
                 }
             }
-             if let Some(mime_type) = result
+            if let Some(mime_type) = result
                 .get("metadata")
                 .and_then(|meta| meta.get("mime_type"))
                 .and_then(Value::as_str)
@@ -992,11 +996,23 @@ impl FileOpsTool {
             }
 
             // Add paging information
-             if input.offset_bytes.is_some() || input.page_size_bytes.is_some() || input.offset_lines.is_some() || input.page_size_lines.is_some() {
-                if let Some(offset_bytes) = input.offset_bytes { result["offset_bytes"] = json!(offset_bytes); }
-                if let Some(page_size_bytes) = input.page_size_bytes { result["page_size_bytes"] = json!(page_size_bytes); }
-                if let Some(offset_lines) = input.offset_lines { result["offset_lines"] = json!(offset_lines); }
-                if let Some(page_size_lines) = input.page_size_lines { result["page_size_lines"] = json!(page_size_lines); }
+            if input.offset_bytes.is_some()
+                || input.page_size_bytes.is_some()
+                || input.offset_lines.is_some()
+                || input.page_size_lines.is_some()
+            {
+                if let Some(offset_bytes) = input.offset_bytes {
+                    result["offset_bytes"] = json!(offset_bytes);
+                }
+                if let Some(page_size_bytes) = input.page_size_bytes {
+                    result["page_size_bytes"] = json!(page_size_bytes);
+                }
+                if let Some(offset_lines) = input.offset_lines {
+                    result["offset_lines"] = json!(offset_lines);
+                }
+                if let Some(page_size_lines) = input.page_size_lines {
+                    result["page_size_lines"] = json!(page_size_lines);
+                }
                 if truncated {
                     result["truncated"] = json!(true);
                     result["truncation_reason"] = json!("reached_end_of_file");

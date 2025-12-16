@@ -24,12 +24,16 @@ pub async fn handle_skills_validate_all(options: &SkillsCommandOptions) -> Resul
     match loader.generate_validation_report().await {
         Ok(report) => {
             println!("{}", report.format_report());
-            
+
             if !report.incompatible_skills.is_empty() {
                 println!("\n Next Steps:");
                 println!("  1. Use skills marked with  for guaranteed compatibility");
-                println!("  2. Skills marked with   work but require following fallback instructions");
-                println!("  3. For incompatible skills, use the suggested Python libraries with execute_code");
+                println!(
+                    "  2. Skills marked with   work but require following fallback instructions"
+                );
+                println!(
+                    "  3. For incompatible skills, use the suggested Python libraries with execute_code"
+                );
                 println!("  4. Check 'vtcode skills info <name>' for detailed compatibility info");
             }
         }
@@ -48,7 +52,10 @@ pub async fn handle_skills_list(options: &SkillsCommandOptions) -> Result<()> {
 
     println!("Discovering skills from standard locations...\n");
 
-    let discovery_result = loader.discover_all_skills().await.context("Failed to discover skills")?;
+    let discovery_result = loader
+        .discover_all_skills()
+        .await
+        .context("Failed to discover skills")?;
     let skills = discovery_result.traditional_skills;
     let cli_tools = discovery_result.cli_tools;
 
@@ -74,7 +81,7 @@ pub async fn handle_skills_list(options: &SkillsCommandOptions) -> Result<()> {
 
         for skill_ctx in &skills {
             let manifest = skill_ctx.manifest();
-            
+
             // Quick validation check for display
             let mut temp_loader = EnhancedSkillLoader::new(options.workspace.clone());
             match temp_loader.get_skill(&manifest.name).await {
@@ -82,7 +89,7 @@ pub async fn handle_skills_list(options: &SkillsCommandOptions) -> Result<()> {
                     match enhanced_skill {
                         vtcode_core::skills::loader::EnhancedSkill::Traditional(skill) => {
                             let analysis = temp_loader.check_container_requirements(&skill);
-                            
+
                             let status_indicator = match analysis.requirement {
                                 vtcode_core::skills::container_validation::ContainerSkillsRequirement::Required => {
                                     warnings.push(format!("❌ {} - Requires container skills (not compatible)", manifest.name));
@@ -94,8 +101,11 @@ pub async fn handle_skills_list(options: &SkillsCommandOptions) -> Result<()> {
                                 }
                                 _ => "✓",
                             };
-                            
-                            println!("{} {}\n  {}\n", status_indicator, manifest.name, manifest.description);
+
+                            println!(
+                                "{} {}\n  {}\n",
+                                status_indicator, manifest.name, manifest.description
+                            );
                         }
                         vtcode_core::skills::loader::EnhancedSkill::CliTool(_) => {
                             // CLI tools handled separately below
@@ -104,7 +114,10 @@ pub async fn handle_skills_list(options: &SkillsCommandOptions) -> Result<()> {
                 }
                 Err(_) => {
                     // Skill failed to load, likely due to container skills validation
-                    warnings.push(format!("❌ {} - Requires container skills (validation failed)", manifest.name));
+                    warnings.push(format!(
+                        "❌ {} - Requires container skills (validation failed)",
+                        manifest.name
+                    ));
                     println!("❌ {}\n  {}\n", manifest.name, manifest.description);
                 }
             }
@@ -123,10 +136,11 @@ pub async fn handle_skills_list(options: &SkillsCommandOptions) -> Result<()> {
     if !cli_tools.is_empty() {
         println!("\nAvailable CLI Tool Skills:");
         println!("{:-<70}", "");
-        
+
         for tool in &cli_tools {
-            println!("⚡ {}\n  {}\n  Path: {}\n", 
-                tool.name, 
+            println!(
+                "⚡ {}\n  {}\n  Path: {}\n",
+                tool.name,
                 tool.description,
                 tool.executable_path.display()
             );
@@ -150,9 +164,12 @@ pub async fn handle_skills_load(
     let mut loader = EnhancedSkillLoader::new(options.workspace.clone());
 
     println!("Loading skill: {}...", name);
-    
+
     // Ensure skills are discovered before loading
-    loader.discover_all_skills().await.context("Failed to discover skills")?;
+    loader
+        .discover_all_skills()
+        .await
+        .context("Failed to discover skills")?;
 
     let skill = loader
         .get_skill(name)
@@ -161,7 +178,11 @@ pub async fn handle_skills_load(
 
     match skill {
         vtcode_core::skills::loader::EnhancedSkill::Traditional(skill) => {
-            println!("Loaded skill: {} (v{})", skill.name(), skill.manifest.version.as_deref().unwrap_or("0.0.1"));
+            println!(
+                "Loaded skill: {} (v{})",
+                skill.name(),
+                skill.manifest.version.as_deref().unwrap_or("0.0.1")
+            );
             println!("  Description: {}", skill.description());
             println!("  Resources: {} files", skill.list_resources().len());
         }
@@ -170,8 +191,11 @@ pub async fn handle_skills_load(
             println!("  Description: {}", bridge.config.description);
         }
     }
-    
-    println!("\nSkill is ready to use. Use it in chat mode or with: vtcode ask 'Use {} for...'", name);
+
+    println!(
+        "\nSkill is ready to use. Use it in chat mode or with: vtcode ask 'Use {} for...'",
+        name
+    );
 
     info!("Loaded skill: {}", name);
     Ok(())
@@ -182,9 +206,12 @@ pub async fn handle_skills_info(options: &SkillsCommandOptions, name: &str) -> R
     let mut loader = EnhancedSkillLoader::new(options.workspace.clone());
 
     println!("Loading skill: {}...\n", name);
-    
+
     // Ensure skills are discovered before loading
-    loader.discover_all_skills().await.context("Failed to discover skills")?;
+    loader
+        .discover_all_skills()
+        .await
+        .context("Failed to discover skills")?;
 
     let skill = loader
         .get_skill(name)
@@ -219,7 +246,7 @@ pub async fn handle_skills_info(options: &SkillsCommandOptions, name: &str) -> R
                     println!(" Compatibility unknown - proceed with caution");
                 }
             }
-            
+
             if !analysis.recommendations.is_empty() {
                 println!("\n--- Recommendations ---");
                 for rec in &analysis.recommendations {

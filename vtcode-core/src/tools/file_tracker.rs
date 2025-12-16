@@ -1,4 +1,4 @@
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use serde_json::Value;
 use std::path::PathBuf;
 use std::time::SystemTime;
@@ -35,10 +35,10 @@ impl FileTracker {
     /// Scan for newly created or modified files matching tracked patterns
     pub async fn detect_new_files(&self, since: SystemTime) -> Result<Vec<TrackedFile>> {
         let mut new_files = Vec::new();
-        
+
         for pattern in &self.tracked_patterns {
             let matches = self.find_files_matching_pattern(pattern).await?;
-            
+
             for file_path in matches {
                 if let Ok(metadata) = tokio::fs::metadata(&file_path).await {
                     if let Ok(modified) = metadata.modified() {
@@ -53,26 +53,25 @@ impl FileTracker {
                 }
             }
         }
-        
+
         Ok(new_files)
     }
 
     /// Check if a specific file exists and return its info
     pub async fn verify_file_exists(&self, filename: &str) -> Result<Option<TrackedFile>> {
         let file_path = self.workspace_root.join(filename);
-        
+
         match tokio::fs::metadata(&file_path).await {
             Ok(metadata) if metadata.is_file() => {
-                let modified = metadata.modified()
-                    .unwrap_or_else(|_| SystemTime::now());
-                
+                let modified = metadata.modified().unwrap_or_else(|_| SystemTime::now());
+
                 Ok(Some(TrackedFile {
                     absolute_path: file_path,
                     size: metadata.len(),
                     modified,
                 }))
             }
-            Ok(_) => Ok(None), // Not a file
+            Ok(_) => Ok(None),  // Not a file
             Err(_) => Ok(None), // Doesn't exist
         }
     }
@@ -87,10 +86,10 @@ impl FileTracker {
         use tokio::task;
         let workspace = self.workspace_root.clone();
         let pattern = pattern.to_string();
-        
+
         task::spawn_blocking(move || {
             let mut files = Vec::new();
-            
+
             if let Ok(glob_pattern) = glob::glob(&format!("{}/{}", workspace.display(), pattern)) {
                 for entry in glob_pattern {
                     if let Ok(path) = entry {
@@ -98,7 +97,7 @@ impl FileTracker {
                     }
                 }
             }
-            
+
             Ok(files)
         })
         .await
@@ -129,7 +128,7 @@ sys.exit(0 if exists and is_file else 1)
         if files.is_empty() {
             return "No generated files detected.".to_string();
         }
-        
+
         let mut summary = String::from("Generated files:\n");
         for file in files {
             summary.push_str(&format!(
@@ -182,14 +181,12 @@ mod tests {
     #[test]
     fn test_file_summary_generation() {
         let tracker = FileTracker::new(PathBuf::from("/workspace"));
-        let files = vec![
-            TrackedFile {
-                absolute_path: PathBuf::from("/workspace/test.pdf"),
-                size: 1024,
-                modified: SystemTime::now(),
-            }
-        ];
-        
+        let files = vec![TrackedFile {
+            absolute_path: PathBuf::from("/workspace/test.pdf"),
+            size: 1024,
+            modified: SystemTime::now(),
+        }];
+
         let summary = tracker.generate_file_summary(&files);
         assert!(summary.contains("test.pdf"));
         assert!(summary.contains("1024 bytes"));

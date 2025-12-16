@@ -154,7 +154,10 @@ impl ContainerSkillsValidator {
         } else {
             (
                 ContainerSkillsRequirement::NotRequired,
-                format!("Skill '{}' does not require container skills.", skill.name()),
+                format!(
+                    "Skill '{}' does not require container skills.",
+                    skill.name()
+                ),
                 false,
             )
         };
@@ -167,34 +170,58 @@ impl ContainerSkillsValidator {
 
             // Provide specific alternatives based on skill type
             if skill.name().contains("pdf") || skill.name().contains("report") {
-                recommendations.push("  1. Use execute_code with Python libraries: reportlab, fpdf2, or weasyprint".to_string());
+                recommendations.push(
+                    "  1. Use execute_code with Python libraries: reportlab, fpdf2, or weasyprint"
+                        .to_string(),
+                );
                 recommendations.push("  2. Install: pip install reportlab".to_string());
                 recommendations.push("  3. Use Python code execution to generate PDFs".to_string());
             } else if skill.name().contains("spreadsheet") || skill.name().contains("excel") {
-                recommendations.push("  1. Use execute_code with Python libraries: openpyxl, xlsxwriter, or pandas".to_string());
+                recommendations.push(
+                    "  1. Use execute_code with Python libraries: openpyxl, xlsxwriter, or pandas"
+                        .to_string(),
+                );
                 recommendations.push("  2. Install: pip install openpyxl xlsxwriter".to_string());
-                recommendations.push("  3. Use Python code execution to create spreadsheets".to_string());
+                recommendations
+                    .push("  3. Use Python code execution to create spreadsheets".to_string());
             } else if skill.name().contains("doc") || skill.name().contains("word") {
-                recommendations.push("  1. Use execute_code with Python libraries: python-docx or docxtpl".to_string());
+                recommendations.push(
+                    "  1. Use execute_code with Python libraries: python-docx or docxtpl"
+                        .to_string(),
+                );
                 recommendations.push("  2. Install: pip install python-docx".to_string());
-                recommendations.push("  3. Use Python code execution to generate documents".to_string());
+                recommendations
+                    .push("  3. Use Python code execution to generate documents".to_string());
             } else if skill.name().contains("presentation") || skill.name().contains("ppt") {
-                recommendations.push("  1. Use execute_code with Python libraries: python-pptx".to_string());
+                recommendations
+                    .push("  1. Use execute_code with Python libraries: python-pptx".to_string());
                 recommendations.push("  2. Install: pip install python-pptx".to_string());
-                recommendations.push("  3. Use Python code execution to create presentations".to_string());
+                recommendations
+                    .push("  3. Use Python code execution to create presentations".to_string());
             } else {
-                recommendations.push("  1. Use execute_code with appropriate Python libraries".to_string());
-                recommendations.push("  2. Search for VTCode-compatible skills in the documentation".to_string());
+                recommendations
+                    .push("  1. Use execute_code with appropriate Python libraries".to_string());
+                recommendations.push(
+                    "  2. Search for VTCode-compatible skills in the documentation".to_string(),
+                );
             }
 
             recommendations.push("".to_string());
-            recommendations.push("Learn more about VTCode's code execution in the documentation.".to_string());
+            recommendations
+                .push("Learn more about VTCode's code execution in the documentation.".to_string());
             recommendations.push("Official Anthropic container skills documentation: https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview".to_string());
         } else if requirement == ContainerSkillsRequirement::RequiredWithFallback {
-            recommendations.push("This skill uses container skills but provides VTCode-compatible alternatives.".to_string());
-            recommendations.push("Use the fallback instructions in the skill documentation.".to_string());
-            recommendations.push("Look for sections marked 'Option 2' or 'VTCode Alternative'.".to_string());
-            recommendations.push("The skill instructions contain working examples using `execute_code`.".to_string());
+            recommendations.push(
+                "This skill uses container skills but provides VTCode-compatible alternatives."
+                    .to_string(),
+            );
+            recommendations
+                .push("Use the fallback instructions in the skill documentation.".to_string());
+            recommendations
+                .push("Look for sections marked 'Option 2' or 'VTCode Alternative'.".to_string());
+            recommendations.push(
+                "The skill instructions contain working examples using `execute_code`.".to_string(),
+            );
         }
 
         ContainerValidationResult {
@@ -208,11 +235,17 @@ impl ContainerSkillsValidator {
 
     /// Batch analyze multiple skills
     pub fn analyze_skills(&self, skills: &[Skill]) -> Vec<ContainerValidationResult> {
-        skills.iter().map(|skill| self.analyze_skill(skill)).collect()
+        skills
+            .iter()
+            .map(|skill| self.analyze_skill(skill))
+            .collect()
     }
 
     /// Filter skills that require container skills without fallback
-    pub fn filter_incompatible_skills(&self, skills: Vec<Skill>) -> (Vec<Skill>, Vec<IncompatibleSkillInfo>) {
+    pub fn filter_incompatible_skills(
+        &self,
+        skills: Vec<Skill>,
+    ) -> (Vec<Skill>, Vec<IncompatibleSkillInfo>) {
         let mut compatible_skills = Vec::new();
         let mut incompatible_skills = Vec::new();
 
@@ -324,8 +357,10 @@ impl ContainerValidationReport {
             description,
             reason,
             recommendations: vec![
-                "This skill requires Anthropic container skills which are not supported in VTCode.".to_string(),
-                "Consider using alternative approaches with VTCode's code execution tools.".to_string(),
+                "This skill requires Anthropic container skills which are not supported in VTCode."
+                    .to_string(),
+                "Consider using alternative approaches with VTCode's code execution tools."
+                    .to_string(),
             ],
         });
         self.summary.total_incompatible += 1;
@@ -333,12 +368,23 @@ impl ContainerValidationReport {
     }
 
     pub fn finalize(&mut self) {
-        self.summary.recommendation = match (self.summary.total_incompatible, self.summary.total_with_fallbacks) {
+        self.summary.recommendation = match (
+            self.summary.total_incompatible,
+            self.summary.total_with_fallbacks,
+        ) {
             (0, 0) => "All skills are fully compatible with VTCode.".to_string(),
-            (0, _) => format!("{} skills have container skills dependencies but provide VTCode-compatible fallbacks.", self.summary.total_with_fallbacks),
-            (_, 0) => format!("{} skills require container skills and cannot be used. Consider the suggested alternatives.", self.summary.total_incompatible),
-            (_, _) => format!("{} skills require container skills. {} skills have fallbacks. Use alternatives or fallback instructions.",
-                self.summary.total_incompatible, self.summary.total_with_fallbacks),
+            (0, _) => format!(
+                "{} skills have container skills dependencies but provide VTCode-compatible fallbacks.",
+                self.summary.total_with_fallbacks
+            ),
+            (_, 0) => format!(
+                "{} skills require container skills and cannot be used. Consider the suggested alternatives.",
+                self.summary.total_incompatible
+            ),
+            (_, _) => format!(
+                "{} skills require container skills. {} skills have fallbacks. Use alternatives or fallback instructions.",
+                self.summary.total_incompatible, self.summary.total_with_fallbacks
+            ),
         };
     }
 
@@ -346,10 +392,19 @@ impl ContainerValidationReport {
         let mut output = String::new();
         output.push_str(&format!("📊 Container Skills Validation Report\n"));
         output.push_str(&format!("=====================================\n\n"));
-        output.push_str(&format!("Total Skills Analyzed: {}\n", self.total_skills_analyzed));
+        output.push_str(&format!(
+            "Total Skills Analyzed: {}\n",
+            self.total_skills_analyzed
+        ));
         output.push_str(&format!("Compatible: {}\n", self.summary.total_compatible));
-        output.push_str(&format!("With Fallbacks: {}\n", self.summary.total_with_fallbacks));
-        output.push_str(&format!("Incompatible: {}\n\n", self.summary.total_incompatible));
+        output.push_str(&format!(
+            "With Fallbacks: {}\n",
+            self.summary.total_with_fallbacks
+        ));
+        output.push_str(&format!(
+            "Incompatible: {}\n\n",
+            self.summary.total_incompatible
+        ));
         output.push_str(&format!("{}", self.summary.recommendation));
 
         if !self.incompatible_skills.is_empty() {
@@ -382,7 +437,7 @@ impl Default for ContainerValidationReport {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::skills::types::{SkillManifest, Skill};
+    use crate::skills::types::{Skill, SkillManifest};
     use std::path::PathBuf;
 
     #[test]
@@ -450,7 +505,10 @@ mod tests {
         let skill = Skill::new(manifest, PathBuf::from("/tmp"), instructions.to_string()).unwrap();
         let result = validator.analyze_skill(&skill);
 
-        assert_eq!(result.requirement, ContainerSkillsRequirement::RequiredWithFallback);
+        assert_eq!(
+            result.requirement,
+            ContainerSkillsRequirement::RequiredWithFallback
+        );
         assert!(!result.should_filter);
         assert!(result.patterns_found.len() >= 2);
 
@@ -509,7 +567,7 @@ mod tests {
         report.add_incompatible_skill(
             "pdf-report-generator".to_string(),
             "Generate PDFs".to_string(),
-            "Requires container skills".to_string()
+            "Requires container skills".to_string(),
         );
 
         report.add_skill_analysis(
@@ -520,7 +578,7 @@ mod tests {
                 patterns_found: vec!["execute_code".to_string()],
                 recommendations: vec!["Use fallback".to_string()],
                 should_filter: false,
-            }
+            },
         );
 
         report.finalize();

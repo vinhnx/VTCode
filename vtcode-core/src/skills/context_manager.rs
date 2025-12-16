@@ -177,9 +177,9 @@ impl ContextManager {
 
     /// Create new context manager with custom configuration
     pub fn with_config(config: ContextConfig) -> Self {
-        let loaded_skills = Arc::new(Mutex::new(
-            LruCache::new(std::num::NonZeroUsize::new(config.max_cached_skills).unwrap())
-        ));
+        let loaded_skills = Arc::new(Mutex::new(LruCache::new(
+            std::num::NonZeroUsize::new(config.max_cached_skills).unwrap(),
+        )));
 
         Self {
             config,
@@ -206,7 +206,9 @@ impl ContextManager {
                 total_loaded_duration: std::time::Duration::ZERO,
                 token_cost: self.config.metadata_token_cost,
             },
-            memory_size: std::mem::size_of::<SkillContextEntry>() + name.len() + manifest.description.len(),
+            memory_size: std::mem::size_of::<SkillContextEntry>()
+                + name.len()
+                + manifest.description.len(),
         };
 
         // Update token usage
@@ -232,7 +234,8 @@ impl ContextManager {
         let mut stats = self.stats.lock().unwrap();
 
         // Calculate token cost
-        let instruction_tokens = (instructions.len() as f64 * self.config.instruction_token_factor) as usize;
+        let instruction_tokens =
+            (instructions.len() as f64 * self.config.instruction_token_factor) as usize;
         let total_cost = self.config.metadata_token_cost + instruction_tokens;
 
         // Check context budget
@@ -268,7 +271,10 @@ impl ContextManager {
         // Cache the entry
         loaded_skills.put(name.to_string(), entry);
 
-        info!("Loaded instructions for skill: {} ({} tokens)", name, instruction_tokens);
+        info!(
+            "Loaded instructions for skill: {} ({} tokens)",
+            name, instruction_tokens
+        );
 
         Ok(())
     }
@@ -372,13 +378,18 @@ impl ContextManager {
         *current_usage -= freed_tokens;
         stats.current_token_usage = *current_usage;
 
-        info!("Evicted {} skills to free {} tokens", evicted_skills.len(), freed_tokens);
+        info!(
+            "Evicted {} skills to free {} tokens",
+            evicted_skills.len(),
+            freed_tokens
+        );
         debug!("Evicted skills: {:?}", evicted_skills);
 
         if freed_tokens < required_tokens {
             return Err(anyhow!(
                 "Unable to free enough tokens. Required: {}, Freed: {}",
-                required_tokens, freed_tokens
+                required_tokens,
+                freed_tokens
             ));
         }
 
@@ -402,7 +413,8 @@ impl ContextManager {
         let mut stats = self.stats.lock().unwrap();
 
         let evicted_count = loaded_skills.len();
-        let evicted_tokens = stats.current_token_usage - (self.active_skills.len() * self.config.metadata_token_cost);
+        let evicted_tokens = stats.current_token_usage
+            - (self.active_skills.len() * self.config.metadata_token_cost);
 
         loaded_skills.clear();
         *current_usage = self.active_skills.len() * self.config.metadata_token_cost;
@@ -410,7 +422,10 @@ impl ContextManager {
         stats.total_skills_evicted += evicted_count as u64;
         stats.total_tokens_evicted += evicted_tokens as u64;
 
-        info!("Cleared {} loaded skills ({} tokens)", evicted_count, evicted_tokens);
+        info!(
+            "Cleared {} loaded skills ({} tokens)",
+            evicted_count, evicted_tokens
+        );
     }
 
     /// Get all active skill names
@@ -420,11 +435,16 @@ impl ContextManager {
 
     /// Get memory usage estimate
     pub fn get_memory_usage(&self) -> usize {
-        let active_memory: usize = self.active_skills.values()
+        let active_memory: usize = self
+            .active_skills
+            .values()
             .map(|entry| entry.memory_size)
             .sum();
 
-        let loaded_memory: usize = self.loaded_skills.lock().unwrap()
+        let loaded_memory: usize = self
+            .loaded_skills
+            .lock()
+            .unwrap()
             .iter()
             .map(|(_, entry)| entry.memory_size)
             .sum();
@@ -481,7 +501,10 @@ impl PersistentContextManager {
             timestamp: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)?
                 .as_secs(),
-            active_skills: self.inner.active_skills.values()
+            active_skills: self
+                .inner
+                .active_skills
+                .values()
                 .map(|entry| entry.manifest.clone())
                 .collect(),
         };

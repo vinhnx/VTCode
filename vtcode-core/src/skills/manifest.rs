@@ -54,8 +54,8 @@ pub fn parse_skill_content(content: &str) -> anyhow::Result<(SkillManifest, Stri
     let instructions = parts[2].trim_start().to_string();
 
     // Parse YAML frontmatter
-    let yaml: SkillYaml = serde_yaml::from_str(yaml_str)
-        .context("Failed to parse SKILL.md YAML frontmatter")?;
+    let yaml: SkillYaml =
+        serde_yaml::from_str(yaml_str).context("Failed to parse SKILL.md YAML frontmatter")?;
 
     let manifest = SkillManifest {
         name: yaml.name,

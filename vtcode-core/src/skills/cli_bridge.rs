@@ -19,7 +19,7 @@
 //! - Standard installation paths (/usr/local/bin, ~/.local/bin, etc.)
 
 use crate::skills::types::{Skill, SkillManifest, SkillResource};
-use anyhow::{Result, anyhow, Context};
+use anyhow::{Context, Result, anyhow};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -34,28 +34,28 @@ use tracing::{debug, info, warn};
 pub struct CliToolConfig {
     /// Tool name (must be unique)
     pub name: String,
-    
+
     /// Brief description
     pub description: String,
-    
+
     /// Path to the executable
     pub executable_path: PathBuf,
-    
+
     /// Path to README/documentation
     pub readme_path: Option<PathBuf>,
-    
+
     /// Path to JSON schema for arguments
     pub schema_path: Option<PathBuf>,
-    
+
     /// Timeout for execution (seconds)
     pub timeout_seconds: Option<u64>,
-    
+
     /// Whether tool supports JSON I/O
     pub supports_json: bool,
-    
+
     /// Environment variables to set
     pub environment: Option<std::collections::HashMap<String, String>>,
-    
+
     /// Working directory for execution
     pub working_dir: Option<PathBuf>,
 }
@@ -65,16 +65,16 @@ pub struct CliToolConfig {
 pub struct CliToolResult {
     /// Exit code
     pub exit_code: i32,
-    
+
     /// Standard output
     pub stdout: String,
-    
+
     /// Standard error
     pub stderr: String,
-    
+
     /// Parsed JSON output (if available)
     pub json_output: Option<Value>,
-    
+
     /// Execution time in milliseconds
     pub execution_time_ms: u64,
 }
@@ -92,52 +92,54 @@ impl CliToolBridge {
     pub fn new(config: CliToolConfig) -> Result<Self> {
         let instructions = Self::load_readme(&config)?;
         let schema = Self::load_schema(&config)?;
-        
+
         Ok(CliToolBridge {
             config,
             instructions,
             schema,
         })
     }
-    
+
     /// Create a bridge from a tool directory
     pub fn from_directory(tool_dir: &Path) -> Result<Self> {
         let config_path = tool_dir.join("tool.json");
         let config: CliToolConfig = if config_path.exists() {
-            let content = std::fs::read_to_string(&config_path)
-                .context("Failed to read tool.json")?;
-            serde_json::from_str(&content)
-                .context("Failed to parse tool.json")?
+            let content =
+                std::fs::read_to_string(&config_path).context("Failed to read tool.json")?;
+            serde_json::from_str(&content).context("Failed to parse tool.json")?
         } else {
             // Auto-discover tool configuration
             Self::auto_discover_config(tool_dir)?
         };
-        
+
         Self::new(config)
     }
-    
+
     /// Auto-discover tool configuration from directory
     fn auto_discover_config(tool_dir: &Path) -> Result<CliToolConfig> {
         // Look for executable files
         let executables = Self::find_executables(tool_dir)?;
         if executables.is_empty() {
-            return Err(anyhow!("No executable files found in {}", tool_dir.display()));
+            return Err(anyhow!(
+                "No executable files found in {}",
+                tool_dir.display()
+            ));
         }
-        
+
         // Look for README files
         let readme_files = Self::find_readmes(tool_dir)?;
-        
+
         // Use first executable and README (if found)
         let executable_path = executables[0].clone();
         let readme_path = readme_files.first().cloned();
-        
+
         // Try to determine tool name from executable
         let name = executable_path
             .file_stem()
             .and_then(|s| s.to_str())
             .ok_or_else(|| anyhow!("Invalid executable filename"))?
             .to_string();
-        
+
         Ok(CliToolConfig {
             name: name.clone(),
             description: format!("CLI tool: {}", name),
@@ -150,15 +152,15 @@ impl CliToolBridge {
             working_dir: Some(tool_dir.to_path_buf()),
         })
     }
-    
+
     /// Find executable files in directory
     fn find_executables(dir: &Path) -> Result<Vec<PathBuf>> {
         let mut executables = vec![];
-        
+
         for entry in std::fs::read_dir(dir)? {
             let entry = entry?;
             let path = entry.path();
-            
+
             if path.is_file() {
                 #[cfg(unix)]
                 {
@@ -169,7 +171,7 @@ impl CliToolBridge {
                         executables.push(path);
                     }
                 }
-                
+
                 #[cfg(windows)]
                 {
                     if let Some(ext) = path.extension() {
@@ -180,18 +182,18 @@ impl CliToolBridge {
                 }
             }
         }
-        
+
         Ok(executables)
     }
-    
+
     /// Find README files in directory
     fn find_readmes(dir: &Path) -> Result<Vec<PathBuf>> {
         let mut readmes = vec![];
-        
+
         for entry in std::fs::read_dir(dir)? {
             let entry = entry?;
             let path = entry.path();
-            
+
             if path.is_file() {
                 if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
                     if name.to_lowercase().starts_with("readme") && name.ends_with(".md") {
@@ -200,96 +202,99 @@ impl CliToolBridge {
                 }
             }
         }
-        
+
         Ok(readmes)
     }
-    
+
     /// Load README/documentation content
     fn load_readme(config: &CliToolConfig) -> Result<String> {
         if let Some(readme_path) = &config.readme_path {
             if readme_path.exists() {
-                return std::fs::read_to_string(readme_path)
-                    .context("Failed to read README file");
+                return std::fs::read_to_string(readme_path).context("Failed to read README file");
             }
         }
-        
+
         // Generate basic instructions if no README
         Ok(format!(
             "# {}\n\nCLI tool: {}\n\nExecute with provided arguments.\n",
-            config.name, config.executable_path.display()
+            config.name,
+            config.executable_path.display()
         ))
     }
-    
+
     /// Load JSON schema for validation
     fn load_schema(config: &CliToolConfig) -> Result<Option<Value>> {
         if let Some(schema_path) = &config.schema_path {
             if schema_path.exists() {
-                let content = std::fs::read_to_string(schema_path)
-                    .context("Failed to read schema file")?;
-                let schema: Value = serde_json::from_str(&content)
-                    .context("Failed to parse schema JSON")?;
+                let content =
+                    std::fs::read_to_string(schema_path).context("Failed to read schema file")?;
+                let schema: Value =
+                    serde_json::from_str(&content).context("Failed to parse schema JSON")?;
                 return Ok(Some(schema));
             }
         }
-        
+
         Ok(None)
     }
-    
+
     /// Execute the CLI tool with given arguments
     pub async fn execute(&self, args: Value) -> Result<CliToolResult> {
-        info!("Executing CLI tool: {} with args: {:?}", self.config.name, args);
-        
+        info!(
+            "Executing CLI tool: {} with args: {:?}",
+            self.config.name, args
+        );
+
         let start_time = std::time::Instant::now();
-        
+
         // Validate arguments against schema if available
         if let Some(schema) = &self.schema {
             self.validate_args(&args, schema)?;
         }
-        
+
         // Build command
         let mut cmd = Command::new(&self.config.executable_path);
-        
+
         // Set working directory
         if let Some(working_dir) = &self.config.working_dir {
             cmd.current_dir(working_dir);
         }
-        
+
         // Set environment variables
         if let Some(env) = &self.config.environment {
             for (key, value) in env {
                 cmd.env(key, value);
             }
         }
-        
+
         // Configure I/O
         cmd.stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
-        
+
         // Add arguments based on configuration and input
         self.configure_arguments(&mut cmd, &args)?;
-        
+
         // Execute with timeout
         let timeout_duration = Duration::from_secs(self.config.timeout_seconds.unwrap_or(30));
         let output_result = timeout(timeout_duration, cmd.output())
             .await
             .map_err(|_| anyhow!("Tool execution timed out"))?;
-        
+
         let execution_time_ms = start_time.elapsed().as_millis() as u64;
-        
+
         match output_result {
             Ok(output) => {
                 // Parse output
                 let stdout = String::from_utf8_lossy(&output.stdout).to_string();
                 let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-                
+
                 // Try to parse JSON output if supported
                 let json_output = if self.config.supports_json {
                     serde_json::from_str(&stdout).ok()
                 } else {
                     None
                 };
-                
+
                 Ok(CliToolResult {
                     exit_code: output.status.code().unwrap_or(-1),
                     stdout,
@@ -298,18 +303,16 @@ impl CliToolBridge {
                     execution_time_ms,
                 })
             }
-            Err(e) => {
-                Err(anyhow!("Failed to execute tool: {}", e))
-            }
+            Err(e) => Err(anyhow!("Failed to execute tool: {}", e)),
         }
     }
-    
+
     /// Configure command arguments based on input
     fn configure_arguments(&self, cmd: &mut Command, args: &Value) -> Result<()> {
         if args.is_null() || args == &Value::Null {
             return Ok(());
         }
-        
+
         // Handle different argument formats
         match args {
             Value::String(s) => {
@@ -341,15 +344,15 @@ impl CliToolBridge {
                 cmd.arg(json_str);
             }
         }
-        
+
         Ok(())
     }
-    
+
     /// Validate arguments against JSON schema
     fn validate_args(&self, args: &Value, schema: &Value) -> Result<()> {
         // Basic validation - in production, use jsonschema crate
         debug!("Validating args against schema: {:?}", schema);
-        
+
         // For now, just check required fields
         if let Some(required) = schema.get("required").and_then(|v| v.as_array()) {
             for field in required {
@@ -360,20 +363,22 @@ impl CliToolBridge {
                 }
             }
         }
-        
+
         Ok(())
     }
-    
+
     /// Test if tool supports JSON I/O
     pub async fn test_json_support(&self) -> Result<bool> {
         debug!("Testing JSON support for tool: {}", self.config.name);
-        
+
         // Try to execute with --help-json or similar flag
         let mut cmd = Command::new(&self.config.executable_path);
-        cmd.arg("--help-json").stdout(Stdio::piped()).stderr(Stdio::piped());
-        
+        cmd.arg("--help-json")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+
         let result = cmd.output().await;
-        
+
         match result {
             Ok(output) => {
                 let stdout = String::from_utf8_lossy(&output.stdout);
@@ -383,7 +388,7 @@ impl CliToolBridge {
             Err(_) => Ok(false),
         }
     }
-    
+
     /// Convert to VTCode Skill
     pub fn to_skill(&self) -> Result<Skill> {
         let manifest = SkillManifest {
@@ -393,13 +398,13 @@ impl CliToolBridge {
             author: Some("VTCode CLI Bridge".to_string()),
             vtcode_native: None,
         };
-        
+
         let mut skill = Skill::new(
             manifest,
             self.config.executable_path.parent().unwrap().to_path_buf(),
             self.instructions.clone(),
         )?;
-        
+
         // Add schema as resource if available
         if let Some(schema) = &self.schema {
             skill.add_resource(
@@ -411,7 +416,7 @@ impl CliToolBridge {
                 },
             );
         }
-        
+
         Ok(skill)
     }
 }
@@ -419,7 +424,7 @@ impl CliToolBridge {
 /// Discover CLI tools in standard locations
 pub fn discover_cli_tools() -> Result<Vec<CliToolConfig>> {
     let mut tools = vec![];
-    
+
     // Standard locations to search
     let search_paths = vec![
         PathBuf::from("/usr/local/bin"),
@@ -428,7 +433,7 @@ pub fn discover_cli_tools() -> Result<Vec<CliToolConfig>> {
         PathBuf::from("./tools"),
         PathBuf::from("./vendor/tools"),
     ];
-    
+
     for path in search_paths {
         if path.exists() && path.is_dir() {
             match discover_tools_in_directory(&path) {
@@ -437,7 +442,7 @@ pub fn discover_cli_tools() -> Result<Vec<CliToolConfig>> {
             }
         }
     }
-    
+
     info!("Discovered {} CLI tools", tools.len());
     Ok(tools)
 }
@@ -445,11 +450,11 @@ pub fn discover_cli_tools() -> Result<Vec<CliToolConfig>> {
 /// Discover tools in a specific directory
 fn discover_tools_in_directory(dir: &Path) -> Result<Vec<CliToolConfig>> {
     let mut tools = vec![];
-    
+
     for entry in std::fs::read_dir(dir)? {
         let entry = entry?;
         let path = entry.path();
-        
+
         if path.is_file() {
             // Check if it's an executable
             #[cfg(unix)]
@@ -461,7 +466,7 @@ fn discover_tools_in_directory(dir: &Path) -> Result<Vec<CliToolConfig>> {
                     continue;
                 }
             }
-            
+
             #[cfg(windows)]
             {
                 if let Some(ext) = path.extension() {
@@ -472,29 +477,33 @@ fn discover_tools_in_directory(dir: &Path) -> Result<Vec<CliToolConfig>> {
                     continue;
                 }
             }
-            
+
             // Look for accompanying README
             let readme_path = dir.join(format!(
                 "{}.md",
                 path.file_stem().unwrap().to_str().unwrap()
             ));
-            
+
             let config = CliToolConfig {
                 name: path.file_stem().unwrap().to_str().unwrap().to_string(),
                 description: format!("CLI tool: {}", path.display()),
                 executable_path: path.clone(),
-                readme_path: if readme_path.exists() { Some(readme_path) } else { None },
+                readme_path: if readme_path.exists() {
+                    Some(readme_path)
+                } else {
+                    None
+                },
                 schema_path: None,
                 timeout_seconds: Some(30),
                 supports_json: false,
                 environment: None,
                 working_dir: Some(dir.to_path_buf()),
             };
-            
+
             tools.push(config);
         }
     }
-    
+
     Ok(tools)
 }
 
@@ -519,7 +528,7 @@ mod tests {
     use super::*;
     #[allow(unused_imports)]
     use tempfile::TempDir;
-    
+
     #[test]
     fn test_cli_tool_config_creation() {
         let config = CliToolConfig {
@@ -533,11 +542,11 @@ mod tests {
             environment: None,
             working_dir: None,
         };
-        
+
         assert_eq!(config.name, "test-tool");
         assert_eq!(config.timeout_seconds, Some(10));
     }
-    
+
     #[tokio::test]
     async fn test_simple_tool_execution() {
         let config = CliToolConfig {
@@ -551,10 +560,13 @@ mod tests {
             environment: None,
             working_dir: None,
         };
-        
+
         let bridge = CliToolBridge::new(config).unwrap();
-        let result = bridge.execute(Value::String("hello world".to_string())).await.unwrap();
-        
+        let result = bridge
+            .execute(Value::String("hello world".to_string()))
+            .await
+            .unwrap();
+
         assert_eq!(result.exit_code, 0);
         assert!(result.stdout.contains("hello world"));
     }

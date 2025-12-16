@@ -11,6 +11,7 @@ use crate::core::agent::conversation::{
     build_conversation, build_messages_from_conversation, compose_system_instruction,
 };
 use crate::core::agent::events::{EventSink, ExecEventRecorder};
+use crate::core::agent::state::{ApiFailureTracker, TaskRunState};
 pub use crate::core::agent::task::{ContextItem, Task, TaskOutcome, TaskResults};
 use crate::core::agent::types::AgentType;
 use crate::core::context_optimizer::ContextOptimizer;
@@ -25,7 +26,6 @@ use crate::llm::{AnyClient, make_client};
 use crate::mcp::McpClient;
 use crate::prompts::system::compose_system_instruction_text;
 use crate::tools::{ToolRegistry, build_function_declarations};
-use crate::core::agent::state::{TaskRunState, ApiFailureTracker};
 
 use crate::utils::colors::style;
 use crate::utils::error_messages::ERR_TOOL_DENIED;

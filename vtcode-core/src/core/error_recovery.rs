@@ -248,7 +248,7 @@ impl ErrorRecoveryManager {
         // Use a more efficient approach for counting by type
         let mut errors_by_type = IndexMap::new();
         let mut total_attempts = 0usize;
-        
+
         for error in &self.errors {
             *errors_by_type.entry(error.error_type).or_insert(0) += 1;
             total_attempts += error.recovery_attempts.len();
@@ -258,7 +258,8 @@ impl ErrorRecoveryManager {
 
         // Get recent errors more efficiently
         let recent_count = total_errors.min(5);
-        let recent_errors: Vec<_> = self.errors
+        let recent_errors: Vec<_> = self
+            .errors
             .iter()
             .rev()
             .take(recent_count)

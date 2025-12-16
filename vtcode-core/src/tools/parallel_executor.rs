@@ -46,49 +46,63 @@ impl ParallelExecutionPlanner {
         let mut conflict_map = HashMap::new();
 
         // Define conflict relationships as static arrays for better performance
-        conflict_map.insert(tools::READ_FILE, &[
-            tools::WRITE_FILE,
-            tools::EDIT_FILE,
-            tools::DELETE_FILE,
-            tools::APPLY_PATCH,
-        ] as &[&str]);
-        
-        conflict_map.insert(tools::LIST_FILES, &[
-            tools::WRITE_FILE,
-            tools::EDIT_FILE,
-            tools::DELETE_FILE,
-            tools::APPLY_PATCH,
-        ] as &[&str]);
-        
-        conflict_map.insert(tools::GREP_FILE, &[
-            tools::WRITE_FILE,
-            tools::EDIT_FILE,
-            tools::APPLY_PATCH,
-        ] as &[&str]);
-        
-        conflict_map.insert(tools::WRITE_FILE, &[
+        conflict_map.insert(
             tools::READ_FILE,
+            &[
+                tools::WRITE_FILE,
+                tools::EDIT_FILE,
+                tools::DELETE_FILE,
+                tools::APPLY_PATCH,
+            ] as &[&str],
+        );
+
+        conflict_map.insert(
             tools::LIST_FILES,
+            &[
+                tools::WRITE_FILE,
+                tools::EDIT_FILE,
+                tools::DELETE_FILE,
+                tools::APPLY_PATCH,
+            ] as &[&str],
+        );
+
+        conflict_map.insert(
+            tools::GREP_FILE,
+            &[tools::WRITE_FILE, tools::EDIT_FILE, tools::APPLY_PATCH] as &[&str],
+        );
+
+        conflict_map.insert(
             tools::WRITE_FILE,
+            &[
+                tools::READ_FILE,
+                tools::LIST_FILES,
+                tools::WRITE_FILE,
+                tools::EDIT_FILE,
+                tools::APPLY_PATCH,
+            ] as &[&str],
+        );
+
+        conflict_map.insert(
             tools::EDIT_FILE,
+            &[
+                tools::READ_FILE,
+                tools::LIST_FILES,
+                tools::WRITE_FILE,
+                tools::EDIT_FILE,
+                tools::APPLY_PATCH,
+            ] as &[&str],
+        );
+
+        conflict_map.insert(
             tools::APPLY_PATCH,
-        ] as &[&str]);
-        
-        conflict_map.insert(tools::EDIT_FILE, &[
-            tools::READ_FILE,
-            tools::LIST_FILES,
-            tools::WRITE_FILE,
-            tools::EDIT_FILE,
-            tools::APPLY_PATCH,
-        ] as &[&str]);
-        
-        conflict_map.insert(tools::APPLY_PATCH, &[
-            tools::READ_FILE,
-            tools::LIST_FILES,
-            tools::WRITE_FILE,
-            tools::EDIT_FILE,
-            tools::APPLY_PATCH,
-        ] as &[&str]);
+            &[
+                tools::READ_FILE,
+                tools::LIST_FILES,
+                tools::WRITE_FILE,
+                tools::EDIT_FILE,
+                tools::APPLY_PATCH,
+            ] as &[&str],
+        );
 
         Self { conflict_map }
     }
@@ -292,12 +306,28 @@ mod tests {
     #[test]
     fn test_execution_grouping() {
         let planner = ParallelExecutionPlanner::new();
-        
+
         let calls = vec![
-            (tools::READ_FILE.to_string(), Arc::new(serde_json::json!({"path": "file1.txt"})), "call1".to_string()),
-            (tools::LIST_FILES.to_string(), Arc::new(serde_json::json!({"path": "."})), "call2".to_string()),
-            (tools::WRITE_FILE.to_string(), Arc::new(serde_json::json!({"path": "file2.txt", "content": "test"})), "call3".to_string()),
-            (tools::GREP_FILE.to_string(), Arc::new(serde_json::json!({"pattern": "test", "path": "."})), "call4".to_string()),
+            (
+                tools::READ_FILE.to_string(),
+                Arc::new(serde_json::json!({"path": "file1.txt"})),
+                "call1".to_string(),
+            ),
+            (
+                tools::LIST_FILES.to_string(),
+                Arc::new(serde_json::json!({"path": "."})),
+                "call2".to_string(),
+            ),
+            (
+                tools::WRITE_FILE.to_string(),
+                Arc::new(serde_json::json!({"path": "file2.txt", "content": "test"})),
+                "call3".to_string(),
+            ),
+            (
+                tools::GREP_FILE.to_string(),
+                Arc::new(serde_json::json!({"pattern": "test", "path": "."})),
+                "call4".to_string(),
+            ),
         ];
 
         let groups = planner.plan(&calls);
@@ -306,9 +336,13 @@ mod tests {
         assert!(groups.len() >= 2);
 
         // Verify that conflicting tools are in different groups
-        let read_group = groups.iter().find(|g| g.tool_calls.iter().any(|(t, _, _)| t == tools::READ_FILE));
-        let write_group = groups.iter().find(|g| g.tool_calls.iter().any(|(t, _, _)| t == tools::WRITE_FILE));
-        
+        let read_group = groups
+            .iter()
+            .find(|g| g.tool_calls.iter().any(|(t, _, _)| t == tools::READ_FILE));
+        let write_group = groups
+            .iter()
+            .find(|g| g.tool_calls.iter().any(|(t, _, _)| t == tools::WRITE_FILE));
+
         assert!(read_group.is_some());
         assert!(write_group.is_some());
         assert_ne!(read_group.unwrap().group_id, write_group.unwrap().group_id);

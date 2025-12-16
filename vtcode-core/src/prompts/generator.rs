@@ -91,26 +91,26 @@ impl<'a> SystemPromptGenerator<'a> {
         // Available skills section (like Codex does)
         if !self.context.available_skills.is_empty() {
             append!(PromptTemplates::skills_available_prompt());
-            
+
             // Sort skills alphabetically by name for stability
             let mut skills = self.context.available_skills.clone();
             skills.sort_by(|a, b| a.0.cmp(&b.0));
             skills.dedup_by(|a, b| a.0 == b.0);
-            
+
             let overflow = skills.len().saturating_sub(10);
             if overflow > 0 {
                 skills.truncate(10);
             }
-            
+
             if !first {
                 out.push_str("\n\n");
             }
-            
+
             // Render each skill as: - <name>: <description> (path: /path/to/skill)
             for (name, desc) in &skills {
                 let _ = write!(out, "  - {}: {}", name, desc);
             }
-            
+
             if overflow > 0 {
                 let _ = write!(out, " (+{} more skills not shown)", overflow);
             }
@@ -204,7 +204,11 @@ fn cache_key(config: &SystemPromptConfig, context: &PromptContext) -> String {
     tools.hash(&mut hasher);
 
     // Hash skills (name + description)
-    let mut skill_names: Vec<String> = context.available_skills.iter().map(|(n, _)| n.clone()).collect();
+    let mut skill_names: Vec<String> = context
+        .available_skills
+        .iter()
+        .map(|(n, _)| n.clone())
+        .collect();
     skill_names.sort();
     skill_names.hash(&mut hasher);
 
