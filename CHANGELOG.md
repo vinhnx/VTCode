@@ -3,6 +3,21 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.49.8] - 2025-12-16
+
+
+### Documentation
+    - docs: update changelog for v0.49.7 [skip ci]
+    - docs: update changelog for v0.49.6 [skip ci]
+
+
+### Chores
+    - chore: update VSCode extension package.json to v0.49.7 [skip ci]
+    - chore: update npm package.json to v0.49.7 [skip ci]
+    - chore: release v0.49.7
+    - chore: release v0.49.6
+    - chore: update VSCode extension package.json to v0.49.5 [skip ci]
+    - chore: update npm package.json to v0.49.5 [skip ci]
 # [Version 0.49.7] - 2025-12-15
 
 
