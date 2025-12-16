@@ -58,12 +58,8 @@ impl ContainerSkillsValidator {
             container_patterns: vec![
                 "container={".to_string(),
                 "container.skills".to_string(),
+                "betas=\"skills-".to_string(),
                 "betas=[\"skills-".to_string(),
-                "anthropic".to_string(),
-                "xlsx".to_string(),
-                "pdf".to_string(),
-                "docx".to_string(),
-                "pptx".to_string(),
             ],
             fallback_patterns: vec![
                 "vtcode does not currently support".to_string(),
@@ -81,6 +77,32 @@ impl ContainerSkillsValidator {
 
     /// Analyze a skill for container skills requirements
     pub fn analyze_skill(&self, skill: &Skill) -> ContainerValidationResult {
+        // Honor explicit manifest flags first; avoids keyword false-positives
+        if let Some(true) = skill.manifest.requires_container {
+            return ContainerValidationResult {
+                requirement: ContainerSkillsRequirement::Required,
+                analysis: "Manifest sets requires-container=true".to_string(),
+                patterns_found: vec!["requires-container".to_string()],
+                recommendations: vec![
+                    "This skill declares Anthropic container skills are required; VTCode cannot execute them directly.".to_string(),
+                    "Use a VTCode-native alternative or provide a fallback implementation.".to_string(),
+                ],
+                should_filter: true,
+            };
+        }
+
+        if let Some(true) = skill.manifest.disallow_container {
+            return ContainerValidationResult {
+                requirement: ContainerSkillsRequirement::NotRequired,
+                analysis: "Manifest sets disallow-container=true (VTCode-native only)".to_string(),
+                patterns_found: vec!["disallow-container".to_string()],
+                recommendations: vec![
+                    "Use VTCode-native execution paths (code_execution/bash) instead of Anthropic container skills.".to_string(),
+                ],
+                should_filter: false,
+            };
+        }
+
         // Check if skill uses VT Code native features (not container skills)
         if let Some(true) = skill.manifest.vtcode_native {
             return ContainerValidationResult {
@@ -451,6 +473,11 @@ mod tests {
             version: Some("1.0.0".to_string()),
             author: Some("Test".to_string()),
             vtcode_native: None,
+            allowed_tools: None,
+            disable_model_invocation: None,
+            when_to_use: None,
+            requires_container: None,
+            disallow_container: None,
         };
 
         let instructions = r#"
@@ -486,6 +513,11 @@ mod tests {
             version: Some("1.0.0".to_string()),
             author: Some("Test".to_string()),
             vtcode_native: Some(true),
+            allowed_tools: None,
+            disable_model_invocation: None,
+            when_to_use: None,
+            requires_container: None,
+            disallow_container: None,
         };
 
         let instructions = r#"
@@ -529,6 +561,11 @@ mod tests {
             version: Some("1.0.0".to_string()),
             author: Some("Test".to_string()),
             vtcode_native: None,
+            allowed_tools: None,
+            disable_model_invocation: None,
+            when_to_use: None,
+            requires_container: None,
+            disallow_container: None,
         };
 
         let instructions = r#"

@@ -396,7 +396,15 @@ impl CliToolBridge {
             description: self.config.description.clone(),
             version: Some("1.0.0".to_string()),
             author: Some("VTCode CLI Bridge".to_string()),
+            license: None,
+            model: None,
+            mode: None,
             vtcode_native: None,
+            allowed_tools: None,
+            disable_model_invocation: None,
+            when_to_use: None,
+            requires_container: None,
+            disallow_container: None,
         };
 
         let mut skill = Skill::new(

@@ -3,7 +3,7 @@
 //! Dynamically injects available skills information into system prompt,
 //! similar to OpenAI Codex's approach.
 
-use crate::skills::types::Skill;
+use crate::skills::types::{Skill, SkillScope};
 use std::collections::HashMap;
 use std::fmt::Write;
 
@@ -94,7 +94,7 @@ fn render_skills_full(skills: &HashMap<String, Skill>) -> String {
 fn render_skills_lean(skills: &HashMap<String, Skill>) -> String {
     let mut prompt = String::from("\n\n## Skills\n");
     prompt.push_str(
-		"Available skills (name: description + file path). Content on disk; open file when triggered.\n\n",
+        "Available skills (name: description + directory + scope). Content on disk; open SKILL.md when triggered.\n\n",
 	);
 
     // Sort skills by name for stable ordering
@@ -108,13 +108,28 @@ fn render_skills_lean(skills: &HashMap<String, Skill>) -> String {
     }
 
     for skill in skill_list {
-        // Lean format: only name, description, and file path
+        let mode_flag = match skill.manifest.mode {
+            Some(true) => " [mode]",
+            _ => "",
+        };
+        let location = skill
+            .path
+            .file_name()
+            .and_then(|p| p.to_str())
+            .unwrap_or("skill");
+        let scope = match skill.scope {
+            SkillScope::User => "user",
+            SkillScope::Repo => "repo",
+        };
+
         let _ = writeln!(
             prompt,
-            "- `{}`: {} (file: {})",
+            "- {}{}: {} (dir: {}, scope: {})",
             skill.name(),
+            mode_flag,
             skill.description(),
-            skill.path.display()
+            location,
+            scope
         );
     }
 
@@ -141,7 +156,15 @@ pub fn test_skills_prompt_generation() {
             description: "Analyze PDF documents".to_string(),
             version: Some("1.0.0".to_string()),
             author: Some("Test".to_string()),
-            vtcode_native: Some(true),
+                license: None,
+                model: None,
+                mode: None,
+                vtcode_native: Some(true),
+                allowed_tools: None,
+                disable_model_invocation: None,
+                when_to_use: None,
+                requires_container: None,
+                disallow_container: None,
         },
         PathBuf::from("/tmp/test"),
         "Instructions".to_string(),
@@ -182,7 +205,15 @@ mod tests {
                 description: "Test skill description".to_string(),
                 version: Some("1.0.0".to_string()),
                 author: Some("Test Author".to_string()),
+                license: None,
+                model: None,
+                mode: None,
                 vtcode_native: Some(true),
+                allowed_tools: None,
+                disable_model_invocation: None,
+                when_to_use: None,
+                requires_container: None,
+                disallow_container: None,
             },
             PathBuf::from("/tmp/test-skill"),
             "Test instructions".to_string(),
@@ -219,7 +250,15 @@ mod tests {
                     description: format!("Example skill number {}", i),
                     version: Some("2.1.0".to_string()),
                     author: Some("Developer Name".to_string()),
+                    license: None,
+                    model: None,
+                    mode: None,
                     vtcode_native: Some(true),
+                    allowed_tools: None,
+                    disable_model_invocation: None,
+                    when_to_use: None,
+                    requires_container: None,
+                    disallow_container: None,
                 },
                 PathBuf::from(format!("/path/to/skill-{}", i)),
                 "Instructions".to_string(),

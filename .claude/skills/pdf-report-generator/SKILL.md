@@ -3,6 +3,12 @@ name: pdf-report-generator
 description: Generate professional PDF documents with charts, styling, and complex layouts using Claude and Anthropic's pdf skill
 version: 1.0.0
 author: VTCode Team
+allowed_tools:
+    - code_execution
+disable-model-invocation: false
+when-to-use: "Distribution-ready PDFs with charts/layouts"
+requires-container: true
+disallow-container: false
 ---
 
 # PDF Report Generator Skill

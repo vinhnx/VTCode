@@ -3,6 +3,12 @@ name: spreadsheet-generator
 description: Generate professional Excel spreadsheets with data, charts, and formatting using Claude and Anthropic's xlsx skill
 version: 1.0.0
 author: VTCode Team
+allowed_tools:
+    - code_execution
+disable-model-invocation: false
+when-to-use: "Data-heavy spreadsheet builds, charts, formulas"
+requires-container: true
+disallow-container: false
 ---
 
 # Spreadsheet Generator Skill

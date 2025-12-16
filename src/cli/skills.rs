@@ -102,9 +102,15 @@ pub async fn handle_skills_list(options: &SkillsCommandOptions) -> Result<()> {
                                 _ => "✓",
                             };
 
+                            let mode_suffix = if manifest.mode.unwrap_or(false) {
+                                " [mode]"
+                            } else {
+                                ""
+                            };
+
                             println!(
-                                "{} {}\n  {}\n",
-                                status_indicator, manifest.name, manifest.description
+                                "{} {}{}\n  {}\n",
+                                status_indicator, manifest.name, mode_suffix, manifest.description
                             );
                         }
                         vtcode_core::skills::loader::EnhancedSkill::CliTool(_) => {
@@ -227,6 +233,32 @@ pub async fn handle_skills_info(options: &SkillsCommandOptions, name: &str) -> R
             }
             if let Some(author) = &skill.manifest.author {
                 println!("Author: {}", author);
+            }
+            if let Some(license) = &skill.manifest.license {
+                println!("License: {}", license);
+            }
+            if let Some(model) = &skill.manifest.model {
+                println!("Model: {}", model);
+            }
+            if let Some(mode) = skill.manifest.mode {
+                println!("Mode command: {}", mode);
+            }
+            if let Some(when_to_use) = &skill.manifest.when_to_use {
+                println!("When to use: {}", when_to_use);
+            }
+            if let Some(allowed_tools) = &skill.manifest.allowed_tools {
+                if !allowed_tools.is_empty() {
+                    println!("Allowed tools: {}", allowed_tools.join(", "));
+                }
+            }
+            if let Some(disable) = skill.manifest.disable_model_invocation {
+                println!("Disable model invocation: {}", disable);
+            }
+            if let Some(req) = skill.manifest.requires_container {
+                println!("Requires container: {}", req);
+            }
+            if let Some(disallow) = skill.manifest.disallow_container {
+                println!("Disallow container: {}", disallow);
             }
 
             // Add container skills compatibility check

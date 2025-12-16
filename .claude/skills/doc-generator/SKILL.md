@@ -3,6 +3,12 @@ name: doc-generator
 description: Generate professional Word documents with formatted text, tables, and layouts using Claude and Anthropic's docx skill
 version: 1.0.0
 author: VTCode Team
+allowed_tools:
+    - code_execution
+disable-model-invocation: false
+when-to-use: "Structured Word documents with styling/tables"
+requires-container: true
+disallow-container: false
 ---
 
 # Document Generator Skill

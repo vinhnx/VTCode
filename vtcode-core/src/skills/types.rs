@@ -50,11 +50,45 @@ pub struct SkillManifest {
     pub version: Option<String>,
     /// Optional author name
     pub author: Option<String>,
+    /// Optional license string for the skill
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub license: Option<String>,
+    /// Optional model preference (inherits session if unset)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    /// Marks the skill as a mode command (displayed prominently)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mode: Option<bool>,
     /// Indicates if skill uses VT Code native features (not container skills)
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "vtcode-native")]
     #[serde(alias = "vtcode_native")]
     pub vtcode_native: Option<bool>,
+    /// Explicit allowed tools for this skill (Claude-style allowlist)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "allowed-tools")]
+    #[serde(alias = "allowed_tools")]
+    pub allowed_tools: Option<Vec<String>>,
+    /// Optional guard to disable direct model invocations when skill is active
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "disable-model-invocation")]
+    #[serde(alias = "disable_model_invocation")]
+    pub disable_model_invocation: Option<bool>,
+    /// Optional guidance on when to use the skill (Claude frontmatter best practice)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "when-to-use")]
+    #[serde(alias = "when_to_use")]
+    pub when_to_use: Option<String>,
+    /// Indicates the skill explicitly requires container skills
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "requires-container")]
+    #[serde(alias = "requires_container")]
+    pub requires_container: Option<bool>,
+    /// Indicates the skill should not be run inside a container (force VTCode-native path)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "disallow-container")]
+    #[serde(alias = "disallow_container")]
+    pub disallow_container: Option<bool>,
 }
 
 impl SkillManifest {
@@ -78,6 +112,40 @@ impl SkillManifest {
 
         if self.description.is_empty() || self.description.len() > 1024 {
             anyhow::bail!("Skill description must be 1-1024 characters");
+        }
+
+        if let (Some(true), Some(true)) = (self.requires_container, self.disallow_container) {
+            anyhow::bail!(
+                "Skill manifest cannot set both requires-container and disallow-container"
+            );
+        }
+
+        if let Some(when_to_use) = &self.when_to_use {
+            if when_to_use.len() > 512 {
+                anyhow::bail!("when-to-use must be 0-512 characters");
+            }
+        }
+
+        if let Some(allowed_tools) = &self.allowed_tools {
+            if allowed_tools.len() > 16 {
+                anyhow::bail!("allowed_tools must list at most 16 tools");
+            }
+
+            if allowed_tools.iter().any(|tool| tool.trim().is_empty()) {
+                anyhow::bail!("allowed_tools entries must be non-empty");
+            }
+        }
+
+        if let Some(license) = &self.license {
+            if license.len() > 512 {
+                anyhow::bail!("license must be 0-512 characters");
+            }
+        }
+
+        if let Some(model) = &self.model {
+            if model.len() > 128 {
+                anyhow::bail!("model must be 0-128 characters");
+            }
         }
 
         Ok(())
@@ -265,7 +333,15 @@ mod tests {
             description: "A test skill".to_string(),
             version: None,
             author: None,
+            license: None,
+            model: None,
+            mode: None,
             vtcode_native: None,
+            allowed_tools: None,
+            disable_model_invocation: None,
+            when_to_use: None,
+            requires_container: None,
+            disallow_container: None,
         };
         assert!(m.validate().is_ok());
     }
@@ -277,7 +353,15 @@ mod tests {
             description: "Valid description".to_string(),
             version: None,
             author: None,
+            license: None,
+            model: None,
+            mode: None,
             vtcode_native: None,
+            allowed_tools: None,
+            disable_model_invocation: None,
+            when_to_use: None,
+            requires_container: None,
+            disallow_container: None,
         };
         assert!(m.validate().is_err());
     }
@@ -289,7 +373,15 @@ mod tests {
             description: "Valid description".to_string(),
             version: None,
             author: None,
+            license: None,
+            model: None,
+            mode: None,
             vtcode_native: None,
+            allowed_tools: None,
+            disable_model_invocation: None,
+            when_to_use: None,
+            requires_container: None,
+            disallow_container: None,
         };
         assert!(m.validate().is_err());
     }
@@ -301,7 +393,15 @@ mod tests {
             description: "Test".to_string(),
             version: None,
             author: None,
+            license: None,
+            model: None,
+            mode: None,
             vtcode_native: None,
+            allowed_tools: None,
+            disable_model_invocation: None,
+            when_to_use: None,
+            requires_container: None,
+            disallow_container: None,
         };
 
         let meta_ctx = SkillContext::MetadataOnly(manifest.clone());

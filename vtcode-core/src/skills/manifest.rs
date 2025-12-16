@@ -18,11 +18,37 @@ pub struct SkillYaml {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub author: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub license: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mode: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub tags: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "vtcode-native")]
     #[serde(alias = "vtcode_native")]
     pub vtcode_native: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "allowed-tools")]
+    #[serde(alias = "allowed_tools")]
+    pub allowed_tools: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "disable-model-invocation")]
+    #[serde(alias = "disable_model_invocation")]
+    pub disable_model_invocation: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "when-to-use")]
+    #[serde(alias = "when_to_use")]
+    pub when_to_use: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "requires-container")]
+    #[serde(alias = "requires_container")]
+    pub requires_container: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "disallow-container")]
+    #[serde(alias = "disallow_container")]
+    pub disallow_container: Option<bool>,
 }
 
 /// Parse SKILL.md file and extract manifest + instructions
@@ -62,7 +88,15 @@ pub fn parse_skill_content(content: &str) -> anyhow::Result<(SkillManifest, Stri
         description: yaml.description,
         version: yaml.version,
         author: yaml.author,
+        license: yaml.license,
+        model: yaml.model,
+        mode: yaml.mode,
         vtcode_native: yaml.vtcode_native,
+        allowed_tools: yaml.allowed_tools,
+        disable_model_invocation: yaml.disable_model_invocation,
+        when_to_use: yaml.when_to_use,
+        requires_container: yaml.requires_container,
+        disallow_container: yaml.disallow_container,
     };
 
     manifest.validate()?;
@@ -78,6 +112,17 @@ name: {}
 description: {}
 version: 0.1.0
 author: Anonymous
+license: MIT
+model: inherit
+mode: false
+# Optional skill controls (uncomment to use)
+# allowed-tools:
+#   - code_execution
+#   - bash
+# disable-model-invocation: false
+# when-to-use: "Trigger for data-heavy spreadsheet generation"
+# requires-container: false
+# disallow-container: false
 ---
 
 # {} Skill
