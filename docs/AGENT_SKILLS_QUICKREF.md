@@ -31,15 +31,15 @@ vtcode auto "Generate financial report"
 
 ## Built-in Skills
 
-| Skill | Type | Use For | Command |
-|-------|------|---------|---------|
+| Skill                   | Type     | Use For                          | Command                                   |
+| ----------------------- | -------- | -------------------------------- | ----------------------------------------- |
 | `spreadsheet-generator` | Document | Excel, dashboards, data analysis | `/skills use spreadsheet-generator "..."` |
-| `doc-generator` | Document | Word docs, proposals, reports | `/skills use doc-generator "..."` |
-| `pdf-report-generator` | Document | PDFs, invoices, certificates | `/skills use pdf-report-generator "..."` |
-| `strict-architecture` | Code | Architecture review, constraints | `/skills use strict-architecture "..."` |
-| `bdd-workflow` | Process | TDD/BDD feature development | `/skills load bdd-workflow` |
-| `code-orchestration` | Process | Orchestrated development | `/skills load code-orchestration` |
-| `forensic-debugging` | Process | Systematic bug investigation | `/skills load forensic-debugging` |
+| `doc-generator`         | Document | Word docs, proposals, reports    | `/skills use doc-generator "..."`         |
+| `pdf-report-generator`  | Document | PDFs, invoices, certificates     | `/skills use pdf-report-generator "..."`  |
+| `strict-architecture`   | Code     | Architecture review, constraints | `/skills use strict-architecture "..."`   |
+| `bdd-workflow`          | Process  | TDD/BDD feature development      | `/skills load bdd-workflow`               |
+| `code-orchestration`    | Process  | Orchestrated development         | `/skills load code-orchestration`         |
+| `forensic-debugging`    | Process  | Systematic bug investigation     | `/skills load forensic-debugging`         |
 
 ## Skill Structure
 
@@ -61,6 +61,17 @@ name: my-skill                    # lowercase, alphanumeric + hyphens
 description: What it does and when to use it  # 1-1024 chars
 version: 1.0.0                    # optional
 author: Your Name                 # optional
+license: MIT
+model: inherit
+mode: false
+# Optional controls
+# allowed-tools:
+#   - Read
+#   - Write
+# disable-model-invocation: false
+# when-to-use: "Trigger guidance (prefer descriptive 'description')"
+# requires-container: false
+# disallow-container: false
 ---
 
 # My Skill
@@ -92,26 +103,31 @@ author: Your Name                 # optional
 ## Common Tasks
 
 ### Create Financial Dashboard
+
 ```bash
 vtcode ask "Use spreadsheet-generator to create Q4 financial dashboard"
 ```
 
 ### Generate Project Proposal
+
 ```bash
 vtcode ask "Use doc-generator to create project proposal document"
 ```
 
 ### Build PDF Report
+
 ```bash
 vtcode ask "Use pdf-report-generator to create quarterly report"
 ```
 
 ### Code Architecture Review
+
 ```bash
 vtcode ask "Review this code using strict-architecture rules"
 ```
 
 ### Implement with TDD
+
 ```bash
 /skills load bdd-workflow
 # Then use /architect command for BDD workflow
@@ -120,6 +136,7 @@ vtcode ask "Review this code using strict-architecture rules"
 ## Skill Search Paths
 
 VTCode searches for skills in order:
+
 1. `.claude/skills/` (project-local)
 2. `./skills/` (workspace)
 3. `~/.vtcode/skills/` (user global)
@@ -127,9 +144,11 @@ VTCode searches for skills in order:
 ## File Handling
 
 ### Generated Files
+
 Files created by skills are in code execution environment.
 
 ### Extract File ID (Python)
+
 ```python
 file_id = None
 for block in response.content:
@@ -139,6 +158,7 @@ for block in response.content:
 ```
 
 ### Download File
+
 ```python
 pdf_content = client.beta.files.retrieve_raw(file_id)
 with open('output.pdf', 'wb') as f:
@@ -184,29 +204,33 @@ python examples/skills_spreadsheet.py
 
 ## Documentation
 
-- `docs/SKILLS_GUIDE.md` - Complete guide
-- `docs/AGENT_SKILLS_INTEGRATION.md` - Integration details
-- `.claude/skills/README.md` - Skills directory overview
-- `docs/skills/SPREADSHEET_EXAMPLE.md` - Spreadsheet examples
-- `docs/skills/WORD_DOCUMENT_EXAMPLE.md` - Document examples
-- `docs/skills/PDF_GENERATION_EXAMPLE.md` - PDF examples
+-   `docs/SKILLS_GUIDE.md` - Complete guide
+-   `docs/AGENT_SKILLS_INTEGRATION.md` - Integration details
+-   `.claude/skills/README.md` - Skills directory overview
+-   `docs/skills/SPREADSHEET_EXAMPLE.md` - Spreadsheet examples
+-   `docs/skills/WORD_DOCUMENT_EXAMPLE.md` - Document examples
+-   `docs/skills/PDF_GENERATION_EXAMPLE.md` - PDF examples
 
 ## Error Handling
 
-| Error | Solution |
-|-------|----------|
-| Skill not found | Check `vtcode skills list` and path |
-| Invalid SKILL.md | Run `vtcode skills validate` |
-| File not generated | Verify code execution succeeded |
-| API error | Check API key and beta headers |
+| Error              | Solution                            |
+| ------------------ | ----------------------------------- |
+| Skill not found    | Check `vtcode skills list` and path |
+| Invalid SKILL.md   | Run `vtcode skills validate`        |
+| File not generated | Verify code execution succeeded     |
+| API error          | Check API key and beta headers      |
 
 ## Tips
 
-- **Use metadata first** - Costs only 100 tokens initially
-- **Combine skills** - Chain multiple skills for complex workflows
-- **Iterate** - Ask agent to refine output
-- **Check examples** - See `examples/` for working code
-- **Validate skills** - Always validate before using
+-   **Use metadata first** - Costs only 100 tokens initially
+-   **Combine skills** - Chain multiple skills for complex workflows
+-   **Iterate** - Ask agent to refine output
+-   **Check examples** - See `examples/` for working code
+-   **Validate skills** - Always validate before using
+-   **Set container flags** - Use `requires-container` or `disallow-container` to control filtering instead of relying on keywords
+-   **Lean prompt hygiene** - Paths are rendered as `dir + scope` only to avoid leaking absolute paths
+-   **Use {baseDir} for paths** - Reference bundled resources with `{baseDir}` to keep skills portable
+-   **Keep allowed-tools minimal** - Limit to the tools the skill actually needs (e.g., `Read,Write`)
 
 ## Slash Commands (In Chat)
 
@@ -223,10 +247,10 @@ python examples/skills_spreadsheet.py
 
 VTCode integrates Anthropic's pre-built skills:
 
-- **xlsx** - Excel spreadsheet generation
-- **docx** - Word document generation
-- **pdf** - PDF document generation
-- **pptx** - PowerPoint presentation generation
+-   **xlsx** - Excel spreadsheet generation
+-   **docx** - Word document generation
+-   **pdf** - PDF document generation
+-   **pptx** - PowerPoint presentation generation
 
 Access via `spreadsheet-generator`, `doc-generator`, `pdf-report-generator` skills.
 

@@ -817,6 +817,11 @@ mod tests {
             version: None,
             author: None,
             vtcode_native: None,
+            allowed_tools: None,
+            disable_model_invocation: None,
+            when_to_use: None,
+            requires_container: None,
+            disallow_container: None,
         }];
 
         // Test explicit $skill-name syntax (Codex pattern)
@@ -834,6 +839,11 @@ mod tests {
             version: None,
             author: None,
             vtcode_native: None,
+            allowed_tools: None,
+            disable_model_invocation: None,
+            when_to_use: None,
+            requires_container: None,
+            disallow_container: None,
         }];
 
         // Test description keyword matching (requires 2+ keyword matches)
@@ -851,6 +861,11 @@ mod tests {
             version: None,
             author: None,
             vtcode_native: None,
+            allowed_tools: None,
+            disable_model_invocation: None,
+            when_to_use: None,
+            requires_container: None,
+            disallow_container: None,
         }];
 
         // No match - only 1 keyword
@@ -867,6 +882,11 @@ mod tests {
             version: None,
             author: None,
             vtcode_native: None,
+            allowed_tools: None,
+            disable_model_invocation: None,
+            when_to_use: None,
+            requires_container: None,
+            disallow_container: None,
         }];
 
         // Case insensitive matching
@@ -885,6 +905,11 @@ mod tests {
                 version: None,
                 author: None,
                 vtcode_native: None,
+                allowed_tools: None,
+                disable_model_invocation: None,
+                when_to_use: None,
+                requires_container: None,
+                disallow_container: None,
             },
             SkillManifest {
                 name: "spreadsheet-generator".to_string(),
@@ -892,6 +917,11 @@ mod tests {
                 version: None,
                 author: None,
                 vtcode_native: None,
+                allowed_tools: None,
+                disable_model_invocation: None,
+                when_to_use: None,
+                requires_container: None,
+                disallow_container: None,
             },
         ];
 

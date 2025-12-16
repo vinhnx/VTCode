@@ -304,6 +304,8 @@ examples/
 -   Code execution for skill implementation
 -   File handling via Files API
 -   Progressive disclosure of skill metadata
+-   Manifest controls: `allowed_tools`, `disable-model-invocation`, `when-to-use`, and explicit `requires-container`/`disallow-container` flags to reduce heuristic misclassification
+-   Lean prompt now shows `dir + scope` only (no absolute paths); tokenizer-backed budgeting replaces char/4 estimates for eviction
 
 ---
 

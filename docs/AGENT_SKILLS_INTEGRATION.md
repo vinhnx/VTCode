@@ -148,6 +148,11 @@ Level 3: Resources (scripts, templates)
  Executable scripts
  Reference materials
  No context loading
+
+**Prompt rendering and budgeting**
+
+- Lean prompt now shows `name: description (dir + scope)` without absolute paths/backticks to avoid path leakage.
+- Context manager uses tokenizer-backed sizing for instructions/resources instead of char/4 estimates; eviction honors actual token cost.
 ```
 
 ### Skill Metadata Structure
@@ -160,6 +165,17 @@ name: spreadsheet-generator
 description: Generate professional Excel spreadsheets with data, charts, and formatting
 version: 1.0.0
 author: VTCode Team
+license: MIT
+model: inherit
+mode: false
+# Optional controls
+# allowed-tools:
+#   - Read
+#   - Write
+# disable-model-invocation: false
+# when-to-use: "Trigger for multi-sheet spreadsheet builds"  # avoid relying on this; keep description explicit
+# requires-container: false
+# disallow-container: false
 ---
 
 # Spreadsheet Generator Skill
@@ -176,6 +192,18 @@ author: VTCode Team
 - Charts and visualizations
 - Professional formatting
 ```
+
+#### Manifest Control Fields
+
+-   `allowed-tools` (optional): explicit allowlist for the skill (e.g., `Read`, `Write`, `Bash(python {baseDir}/scripts/*:*)`). Keep minimal; do not expose unused tools.
+-   `disable-model-invocation` (optional): gate direct model calls when the skill is active; prefer tools/scripts.
+-   `when-to-use` (optional, <=512 chars): guidance appended to description in some stacks; rely on a descriptive `description` first since this field is not guaranteed in upstream docs.
+-   `requires-container` / `disallow-container` (optional, mutually exclusive): declare container requirements so VTCode can filter or prefer VTCode-native flows without string heuristics.
+-   `license` (optional): short license string for the skill.
+-   `model` (optional): override model; default inherits session.
+-   `mode` (optional): mark skills that change operating mode (highlighted separately in some UIs).
+
+**Pathing best practice:** use `{baseDir}` in instructions when referencing bundled resources to avoid absolute paths and keep skills portable.
 
 ---
 

@@ -327,6 +327,11 @@ mod tests {
             version: None,
             author: None,
             vtcode_native: Some(true),
+            allowed_tools: None,
+            disable_model_invocation: None,
+            when_to_use: None,
+            requires_container: None,
+            disallow_container: None,
         };
 
         let skill = Skill::new(
@@ -348,6 +353,11 @@ mod tests {
             version: None,
             author: None,
             vtcode_native: Some(true),
+            allowed_tools: None,
+            disable_model_invocation: None,
+            when_to_use: None,
+            requires_container: None,
+            disallow_container: None,
         };
 
         let skill = Skill::new(
@@ -375,6 +385,11 @@ mod tests {
             version: None,
             author: None,
             vtcode_native: Some(true),
+            allowed_tools: None,
+            disable_model_invocation: None,
+            when_to_use: None,
+            requires_container: None,
+            disallow_container: None,
         };
 
         let skill = Skill::new(manifest, PathBuf::from("/tmp"), "Instructions".to_string())

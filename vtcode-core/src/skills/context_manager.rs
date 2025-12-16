@@ -7,6 +7,7 @@
 //! - Memory usage monitoring
 //! - Skill state persistence
 
+use crate::llm::token_metrics::TokenCounter;
 use crate::skills::types::{Skill, SkillManifest};
 use anyhow::{Result, anyhow};
 use lru::LruCache;
@@ -152,6 +153,9 @@ pub struct ContextManager {
     /// Current context usage in tokens
     current_token_usage: Arc<Mutex<usize>>,
 
+    /// Token counter for accurate sizing
+    token_counter: Arc<Mutex<TokenCounter>>,
+
     /// Context usage statistics
     stats: Arc<Mutex<ContextStats>>,
 }
@@ -186,6 +190,7 @@ impl ContextManager {
             active_skills: HashMap::new(),
             loaded_skills,
             current_token_usage: Arc::new(Mutex::new(0)),
+            token_counter: Arc::new(Mutex::new(TokenCounter::new())),
             stats: Arc::new(Mutex::new(ContextStats::default())),
         }
     }
@@ -233,10 +238,8 @@ impl ContextManager {
         let mut current_usage = self.current_token_usage.lock().unwrap();
         let mut stats = self.stats.lock().unwrap();
 
-        // Calculate token cost
-        let instruction_tokens =
-            (instructions.len() as f64 * self.config.instruction_token_factor) as usize;
-        let total_cost = self.config.metadata_token_cost + instruction_tokens;
+        // Calculate token cost using tokenizer
+        let instruction_tokens = self.count_instruction_tokens(&instructions);
 
         // Check context budget
         if *current_usage + instruction_tokens > self.config.max_context_tokens {
@@ -259,7 +262,7 @@ impl ContextManager {
         // Update entry
         entry.level = ContextLevel::Instructions;
         entry.instructions = Some(instructions.clone());
-        entry.usage.token_cost = total_cost;
+        entry.usage.token_cost = instruction_tokens;
         entry.memory_size += instructions.len();
 
         // Update usage
@@ -286,13 +289,14 @@ impl ContextManager {
         let mut current_usage = self.current_token_usage.lock().unwrap();
         let mut stats = self.stats.lock().unwrap();
 
-        // Calculate token cost for resources
+        // Calculate token cost for resources and instructions
+        let instruction_tokens = self.count_instruction_tokens(&skill.instructions);
         let resource_tokens = skill.list_resources().len() * self.config.resource_token_cost;
-        let total_cost = skill.instructions.len() / 4 + resource_tokens; // Rough estimate
+        let incremental_cost = instruction_tokens + resource_tokens;
 
         // Check context budget
-        if *current_usage + total_cost > self.config.max_context_tokens {
-            self.evict_skills_to_make_room(total_cost)?;
+        if *current_usage + incremental_cost > self.config.max_context_tokens {
+            self.evict_skills_to_make_room(incremental_cost)?;
         }
 
         // Create entry
@@ -306,25 +310,36 @@ impl ContextManager {
                 access_count: 0,
                 last_access: std::time::Instant::now(),
                 total_loaded_duration: std::time::Duration::ZERO,
-                token_cost: total_cost,
+                token_cost: incremental_cost,
             },
             memory_size: std::mem::size_of::<Skill>() + name.len() * 2,
         };
 
         // Update usage
-        *current_usage += total_cost;
+        *current_usage += incremental_cost;
         stats.current_token_usage = *current_usage;
         stats.peak_token_usage = stats.peak_token_usage.max(*current_usage);
         stats.total_skills_loaded += 1;
-        stats.total_tokens_loaded += total_cost as u64;
+        stats.total_tokens_loaded += incremental_cost as u64;
 
         // Cache the entry
         let entry_name = entry.name.clone();
         loaded_skills.put(name, entry);
 
-        info!("Loaded full skill: {} ({} tokens)", entry_name, total_cost);
+        info!(
+            "Loaded full skill: {} ({} tokens)",
+            entry_name,
+            incremental_cost + self.config.metadata_token_cost
+        );
 
         Ok(())
+    }
+
+    fn count_instruction_tokens(&self, instructions: &str) -> usize {
+        match self.token_counter.lock() {
+            Ok(mut counter) => counter.count_with_profiling("docs", instructions).max(1),
+            Err(_) => (instructions.len() / 4).max(1),
+        }
     }
 
     /// Get skill context (with automatic loading)
@@ -563,6 +578,11 @@ mod tests {
             version: Some("1.0.0".to_string()),
             author: Some("Test".to_string()),
             vtcode_native: Some(true),
+            allowed_tools: None,
+            disable_model_invocation: None,
+            when_to_use: None,
+            requires_container: None,
+            disallow_container: None,
         };
 
         assert!(manager.register_skill_metadata(manifest).is_ok());
@@ -580,6 +600,11 @@ mod tests {
             version: None,
             author: None,
             vtcode_native: None,
+            allowed_tools: None,
+            disable_model_invocation: None,
+            when_to_use: None,
+            requires_container: None,
+            disallow_container: None,
         };
 
         manager.register_skill_metadata(manifest.clone()).unwrap();
