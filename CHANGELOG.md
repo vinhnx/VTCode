@@ -3,6 +3,23 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.50.0] - 2025-12-16
+
+
+### Features
+    - feat: implement rate limiting for tool calls and add Nemotron-3-Nano model support
+
+
+### Documentation
+    - docs: update changelog for v0.49.8 [skip ci]
+
+
+### Chores
+    - chore: update VSCode extension package.json to v0.49.8 [skip ci]
+    - chore: update npm package.json to v0.49.8 [skip ci]
+    - chore: release v0.49.8
+    - chore: update VSCode extension package.json to v0.49.7 [skip ci]
+    - chore: update npm package.json to v0.49.7 [skip ci]
 # [Version 0.49.8] - 2025-12-16
 
 
