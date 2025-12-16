@@ -1219,37 +1219,6 @@
           "doc_comment": "Kimi K2 (free) - Community tier for MoonshotAI Kimi K2"
         }
       },
-      "nvidia/nemotron-nano-9b-v2:free": {
-        "id": "nvidia/nemotron-nano-9b-v2:free",
-        "name": "NVIDIA: Nemotron Nano 9B v2 (free)",
-        "reasoning": false,
-        "tool_call": false,
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "context": 131072,
-        "max_output_tokens": null,
-        "cost": {
-          "input": 0.0,
-          "output": 0.0
-        },
-        "vtcode": {
-          "variant": "OpenRouterNvidiaNemotronNano9bV2Free",
-          "constant": "NVIDIA_NEMOTRON_NANO_9B_V2_FREE",
-          "vendor": "nvidia",
-          "display": "Nemotron Nano 9B v2 (free)",
-          "description": "NVIDIA Nemotron Nano 9B v2 community tier",
-          "efficient": true,
-          "top_tier": false,
-          "generation": "Nemotron-9B",
-          "doc_comment": "Nemotron Nano 9B v2 (free) - NVIDIA Nemotron Nano 9B v2 community tier"
-        }
-      },
       "openai/gpt-5": {
         "id": "openai/gpt-5",
         "name": "OpenAI: GPT-5",

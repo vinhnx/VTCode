@@ -284,14 +284,10 @@ pub enum ModelId {
     OpenRouterMoonshotaiKimiK20905,
     /// Kimi K2 Thinking - MoonshotAI reasoning-tier Kimi K2 release optimized for long-horizon agents
     OpenRouterMoonshotaiKimiK2Thinking,
-    /// Kimi K2 (free) - Community tier for MoonshotAI Kimi K2
-    OpenRouterMoonshotaiKimiK2Free,
     /// Qwen3 Max - Flagship Qwen3 mixture for general reasoning
     OpenRouterQwen3Max,
     /// Qwen3 235B A22B - Mixture-of-experts Qwen3 235B general model
     OpenRouterQwen3235bA22b,
-    /// Qwen3 235B A22B (free) - Community tier for Qwen3 235B A22B
-    OpenRouterQwen3235bA22bFree,
     /// Qwen3 235B A22B Instruct 2507 - Instruction-tuned Qwen3 235B A22B
     OpenRouterQwen3235bA22b2507,
     /// Qwen3 235B A22B Thinking 2507 - Deliberative Qwen3 235B A22B reasoning release
@@ -300,30 +296,20 @@ pub enum ModelId {
     OpenRouterQwen332b,
     /// Qwen3 30B A3B - Active-parameter 30B Qwen3 model
     OpenRouterQwen330bA3b,
-    /// Qwen3 30B A3B (free) - Community tier for Qwen3 30B A3B
-    OpenRouterQwen330bA3bFree,
     /// Qwen3 30B A3B Instruct 2507 - Instruction-tuned Qwen3 30B A3B
     OpenRouterQwen330bA3bInstruct2507,
     /// Qwen3 30B A3B Thinking 2507 - Deliberative Qwen3 30B A3B release
     OpenRouterQwen330bA3bThinking2507,
     /// Qwen3 14B - Lightweight Qwen3 14B model
     OpenRouterQwen314b,
-    /// Qwen3 14B (free) - Community tier for Qwen3 14B
-    OpenRouterQwen314bFree,
     /// Qwen3 8B - Compact Qwen3 8B deployment
     OpenRouterQwen38b,
-    /// Qwen3 8B (free) - Community tier for Qwen3 8B
-    OpenRouterQwen38bFree,
-    /// Qwen3 4B (free) - Entry level Qwen3 4B deployment
-    OpenRouterQwen34bFree,
     /// Qwen3 Next 80B A3B Instruct - Next-generation Qwen3 instruction model
     OpenRouterQwen3Next80bA3bInstruct,
     /// Qwen3 Next 80B A3B Thinking - Next-generation Qwen3 reasoning release
     OpenRouterQwen3Next80bA3bThinking,
     /// Qwen3 Coder - Qwen3-based coding model tuned for IDE workflows
     OpenRouterQwen3Coder,
-    /// Qwen3 Coder (free) - Community tier for Qwen3 Coder
-    OpenRouterQwen3CoderFree,
     /// Qwen3 Coder Plus - Premium Qwen3 coding model with long context
     OpenRouterQwen3CoderPlus,
     /// Qwen3 Coder Flash - Latency optimised Qwen3 coding model
@@ -344,16 +330,10 @@ pub enum ModelId {
     OpenRouterDeepSeekChatV31,
     /// DeepSeek R1 - DeepSeek R1 reasoning model with chain-of-thought
     OpenRouterDeepSeekR1,
-    /// DeepSeek Chat v3.1 (free) - Community tier for DeepSeek Chat v3.1
-    OpenRouterDeepSeekChatV31Free,
-    /// Nemotron Nano 9B v2 (free) - NVIDIA Nemotron Nano 9B v2 community tier
-    OpenRouterNvidiaNemotronNano9bV2Free,
     /// OpenAI gpt-oss-120b - Open-weight 120B reasoning model via OpenRouter
     OpenRouterOpenAIGptOss120b,
     /// OpenAI gpt-oss-20b - Open-weight 20B deployment via OpenRouter
     OpenRouterOpenAIGptOss20b,
-    /// OpenAI gpt-oss-20b (free) - Community tier for OpenAI gpt-oss-20b
-    OpenRouterOpenAIGptOss20bFree,
     /// OpenAI GPT-5 - OpenAI GPT-5 model accessed through OpenRouter
     OpenRouterOpenAIGpt5,
     /// OpenAI GPT-5 Codex - OpenRouter listing for GPT-5 Codex
@@ -372,8 +352,6 @@ pub enum ModelId {
     OpenRouterAnthropicClaudeHaiku45,
     /// Claude Opus 4.1 - Anthropic Claude Opus 4.1 listing
     OpenRouterAnthropicClaudeOpus41,
-    /// MiniMax-M2 (free) - Community tier for MiniMax-M2
-    OpenRouterMinimaxM2Free,
 }
 
 #[cfg(not(docsrs))]

@@ -23,8 +23,8 @@
       "context": 256000,
       "max_output_tokens": 10000,
       "cost": {
-        "input": 2E-7,
-        "output": 0.0000015
+        "input": 2e-07,
+        "output": 1.5e-06
       },
       "vtcode": {
         "variant": "OpenRouterGrokCodeFast1",
@@ -55,8 +55,8 @@
       "context": 2000000,
       "max_output_tokens": 30000,
       "cost": {
-        "input": 2E-7,
-        "output": 5E-7
+        "input": 2e-07,
+        "output": 5e-07
       },
       "vtcode": {
         "variant": "OpenRouterGrok4Fast",
@@ -119,8 +119,8 @@
       "context": 256000,
       "max_output_tokens": null,
       "cost": {
-        "input": 0.000003,
-        "output": 0.000015
+        "input": 3e-06,
+        "output": 1.5e-05
       },
       "vtcode": {
         "variant": "OpenRouterGrok4",
@@ -150,8 +150,8 @@
       "context": 202752,
       "max_output_tokens": 202752,
       "cost": {
-        "input": 5E-7,
-        "output": 0.00000175
+        "input": 5e-07,
+        "output": 1.75e-06
       },
       "vtcode": {
         "variant": "OpenRouterZaiGlm46",
@@ -181,8 +181,8 @@
       "context": 262144,
       "max_output_tokens": 262144,
       "cost": {
-        "input": 3.9E-7,
-        "output": 0.0000019
+        "input": 3.9e-07,
+        "output": 1.9e-06
       },
       "vtcode": {
         "variant": "OpenRouterMoonshotaiKimiK20905",
@@ -194,37 +194,6 @@
         "top_tier": true,
         "generation": "K2-0905",
         "doc_comment": "Kimi K2 0905 - MoonshotAI Kimi K2 0905 MoE release optimised for coding agents"
-      }
-    },
-    "moonshotai/kimi-k2:free": {
-      "id": "moonshotai/kimi-k2:free",
-      "name": "MoonshotAI: Kimi K2 (free)",
-      "reasoning": false,
-      "tool_call": false,
-      "modalities": {
-        "input": [
-          "text"
-        ],
-        "output": [
-          "text"
-        ]
-      },
-      "context": 262144,
-      "max_output_tokens": null,
-      "cost": {
-        "input": 0.0,
-        "output": 0.0
-      },
-      "vtcode": {
-        "variant": "OpenRouterMoonshotaiKimiK2Free",
-        "constant": "MOONSHOTAI_KIMI_K2_FREE",
-        "vendor": "moonshotai",
-        "display": "Kimi K2 (free)",
-        "description": "Community tier for MoonshotAI Kimi K2",
-        "efficient": false,
-        "top_tier": false,
-        "generation": "K2",
-        "doc_comment": "Kimi K2 (free) - Community tier for MoonshotAI Kimi K2"
       }
     },
     "qwen/qwen3-max": {
@@ -243,8 +212,8 @@
       "context": 256000,
       "max_output_tokens": 32768,
       "cost": {
-        "input": 0.0000012,
-        "output": 0.000006
+        "input": 1.2e-06,
+        "output": 6e-06
       },
       "vtcode": {
         "variant": "OpenRouterQwen3Max",
@@ -274,8 +243,8 @@
       "context": 40960,
       "max_output_tokens": 40960,
       "cost": {
-        "input": 1.8E-7,
-        "output": 5.4E-7
+        "input": 1.8e-07,
+        "output": 5.4e-07
       },
       "vtcode": {
         "variant": "OpenRouterQwen3235bA22b",
@@ -287,37 +256,6 @@
         "top_tier": true,
         "generation": "Qwen3",
         "doc_comment": "Qwen3 235B A22B - Mixture-of-experts Qwen3 235B general model"
-      }
-    },
-    "qwen/qwen3-235b-a22b:free": {
-      "id": "qwen/qwen3-235b-a22b:free",
-      "name": "Qwen: Qwen3 235B A22B (free)",
-      "reasoning": true,
-      "tool_call": true,
-      "modalities": {
-        "input": [
-          "text"
-        ],
-        "output": [
-          "text"
-        ]
-      },
-      "context": 131072,
-      "max_output_tokens": null,
-      "cost": {
-        "input": 0.0,
-        "output": 0.0
-      },
-      "vtcode": {
-        "variant": "OpenRouterQwen3235bA22bFree",
-        "constant": "QWEN3_235B_A22B_FREE",
-        "vendor": "qwen",
-        "display": "Qwen3 235B A22B (free)",
-        "description": "Community tier for Qwen3 235B A22B",
-        "efficient": false,
-        "top_tier": true,
-        "generation": "Qwen3",
-        "doc_comment": "Qwen3 235B A22B (free) - Community tier for Qwen3 235B A22B"
       }
     },
     "qwen/qwen3-235b-a22b-2507": {
@@ -336,8 +274,8 @@
       "context": 262144,
       "max_output_tokens": 262144,
       "cost": {
-        "input": 8E-8,
-        "output": 5.5E-7
+        "input": 8e-08,
+        "output": 5.5e-07
       },
       "vtcode": {
         "variant": "OpenRouterQwen3235bA22b2507",
@@ -367,8 +305,8 @@
       "context": 262144,
       "max_output_tokens": 262144,
       "cost": {
-        "input": 1.1E-7,
-        "output": 6E-7
+        "input": 1.1e-07,
+        "output": 6e-07
       },
       "vtcode": {
         "variant": "OpenRouterQwen3235bA22bThinking2507",
@@ -398,8 +336,8 @@
       "context": 40960,
       "max_output_tokens": 40960,
       "cost": {
-        "input": 5E-8,
-        "output": 2E-7
+        "input": 5e-08,
+        "output": 2e-07
       },
       "vtcode": {
         "variant": "OpenRouterQwen332b",
@@ -429,8 +367,8 @@
       "context": 40960,
       "max_output_tokens": 40960,
       "cost": {
-        "input": 6E-8,
-        "output": 2.2E-7
+        "input": 6e-08,
+        "output": 2.2e-07
       },
       "vtcode": {
         "variant": "OpenRouterQwen330bA3b",
@@ -442,37 +380,6 @@
         "top_tier": false,
         "generation": "Qwen3-30B",
         "doc_comment": "Qwen3 30B A3B - Active-parameter 30B Qwen3 model"
-      }
-    },
-    "qwen/qwen3-30b-a3b:free": {
-      "id": "qwen/qwen3-30b-a3b:free",
-      "name": "Qwen: Qwen3 30B A3B (free)",
-      "reasoning": true,
-      "tool_call": false,
-      "modalities": {
-        "input": [
-          "text"
-        ],
-        "output": [
-          "text"
-        ]
-      },
-      "context": 40960,
-      "max_output_tokens": null,
-      "cost": {
-        "input": 0.0,
-        "output": 0.0
-      },
-      "vtcode": {
-        "variant": "OpenRouterQwen330bA3bFree",
-        "constant": "QWEN3_30B_A3B_FREE",
-        "vendor": "qwen",
-        "display": "Qwen3 30B A3B (free)",
-        "description": "Community tier for Qwen3 30B A3B",
-        "efficient": false,
-        "top_tier": false,
-        "generation": "Qwen3-30B",
-        "doc_comment": "Qwen3 30B A3B (free) - Community tier for Qwen3 30B A3B"
       }
     },
     "qwen/qwen3-30b-a3b-instruct-2507": {
@@ -491,8 +398,8 @@
       "context": 262144,
       "max_output_tokens": 262144,
       "cost": {
-        "input": 8E-8,
-        "output": 3.3E-7
+        "input": 8e-08,
+        "output": 3.3e-07
       },
       "vtcode": {
         "variant": "OpenRouterQwen330bA3bInstruct2507",
@@ -522,8 +429,8 @@
       "context": 262144,
       "max_output_tokens": 262144,
       "cost": {
-        "input": 8E-8,
-        "output": 2.9E-7
+        "input": 8e-08,
+        "output": 2.9e-07
       },
       "vtcode": {
         "variant": "OpenRouterQwen330bA3bThinking2507",
@@ -553,8 +460,8 @@
       "context": 40960,
       "max_output_tokens": 40960,
       "cost": {
-        "input": 5E-8,
-        "output": 2.2E-7
+        "input": 5e-08,
+        "output": 2.2e-07
       },
       "vtcode": {
         "variant": "OpenRouterQwen314b",
@@ -566,37 +473,6 @@
         "top_tier": false,
         "generation": "Qwen3-14B",
         "doc_comment": "Qwen3 14B - Lightweight Qwen3 14B model"
-      }
-    },
-    "qwen/qwen3-14b:free": {
-      "id": "qwen/qwen3-14b:free",
-      "name": "Qwen: Qwen3 14B (free)",
-      "reasoning": true,
-      "tool_call": false,
-      "modalities": {
-        "input": [
-          "text"
-        ],
-        "output": [
-          "text"
-        ]
-      },
-      "context": 40960,
-      "max_output_tokens": null,
-      "cost": {
-        "input": 0.0,
-        "output": 0.0
-      },
-      "vtcode": {
-        "variant": "OpenRouterQwen314bFree",
-        "constant": "QWEN3_14B_FREE",
-        "vendor": "qwen",
-        "display": "Qwen3 14B (free)",
-        "description": "Community tier for Qwen3 14B",
-        "efficient": true,
-        "top_tier": false,
-        "generation": "Qwen3-14B",
-        "doc_comment": "Qwen3 14B (free) - Community tier for Qwen3 14B"
       }
     },
     "qwen/qwen3-8b": {
@@ -615,8 +491,8 @@
       "context": 128000,
       "max_output_tokens": 20000,
       "cost": {
-        "input": 3.5E-8,
-        "output": 1.38E-7
+        "input": 3.5e-08,
+        "output": 1.38e-07
       },
       "vtcode": {
         "variant": "OpenRouterQwen38b",
@@ -628,68 +504,6 @@
         "top_tier": false,
         "generation": "Qwen3-8B",
         "doc_comment": "Qwen3 8B - Compact Qwen3 8B deployment"
-      }
-    },
-    "qwen/qwen3-8b:free": {
-      "id": "qwen/qwen3-8b:free",
-      "name": "Qwen: Qwen3 8B (free)",
-      "reasoning": true,
-      "tool_call": false,
-      "modalities": {
-        "input": [
-          "text"
-        ],
-        "output": [
-          "text"
-        ]
-      },
-      "context": 40960,
-      "max_output_tokens": 40960,
-      "cost": {
-        "input": 0.0,
-        "output": 0.0
-      },
-      "vtcode": {
-        "variant": "OpenRouterQwen38bFree",
-        "constant": "QWEN3_8B_FREE",
-        "vendor": "qwen",
-        "display": "Qwen3 8B (free)",
-        "description": "Community tier for Qwen3 8B",
-        "efficient": true,
-        "top_tier": false,
-        "generation": "Qwen3-8B",
-        "doc_comment": "Qwen3 8B (free) - Community tier for Qwen3 8B"
-      }
-    },
-    "qwen/qwen3-4b:free": {
-      "id": "qwen/qwen3-4b:free",
-      "name": "Qwen: Qwen3 4B (free)",
-      "reasoning": true,
-      "tool_call": true,
-      "modalities": {
-        "input": [
-          "text"
-        ],
-        "output": [
-          "text"
-        ]
-      },
-      "context": 40960,
-      "max_output_tokens": null,
-      "cost": {
-        "input": 0.0,
-        "output": 0.0
-      },
-      "vtcode": {
-        "variant": "OpenRouterQwen34bFree",
-        "constant": "QWEN3_4B_FREE",
-        "vendor": "qwen",
-        "display": "Qwen3 4B (free)",
-        "description": "Entry level Qwen3 4B deployment",
-        "efficient": true,
-        "top_tier": false,
-        "generation": "Qwen3-4B",
-        "doc_comment": "Qwen3 4B (free) - Entry level Qwen3 4B deployment"
       }
     },
     "qwen/qwen3-next-80b-a3b-instruct": {
@@ -708,8 +522,8 @@
       "context": 262144,
       "max_output_tokens": 262144,
       "cost": {
-        "input": 1E-7,
-        "output": 8E-7
+        "input": 1e-07,
+        "output": 8e-07
       },
       "vtcode": {
         "variant": "OpenRouterQwen3Next80bA3bInstruct",
@@ -739,8 +553,8 @@
       "context": 262144,
       "max_output_tokens": null,
       "cost": {
-        "input": 1.4E-7,
-        "output": 0.0000012
+        "input": 1.4e-07,
+        "output": 1.2e-06
       },
       "vtcode": {
         "variant": "OpenRouterQwen3Next80bA3bThinking",
@@ -770,8 +584,8 @@
       "context": 262144,
       "max_output_tokens": 262144,
       "cost": {
-        "input": 2.2E-7,
-        "output": 9.5E-7
+        "input": 2.2e-07,
+        "output": 9.5e-07
       },
       "vtcode": {
         "variant": "OpenRouterQwen3Coder",
@@ -783,37 +597,6 @@
         "top_tier": true,
         "generation": "Qwen3-Coder",
         "doc_comment": "Qwen3 Coder - Qwen3-based coding model tuned for IDE workflows"
-      }
-    },
-    "qwen/qwen3-coder:free": {
-      "id": "qwen/qwen3-coder:free",
-      "name": "Qwen: Qwen3 Coder 480B A35B (free)",
-      "reasoning": false,
-      "tool_call": true,
-      "modalities": {
-        "input": [
-          "text"
-        ],
-        "output": [
-          "text"
-        ]
-      },
-      "context": 262144,
-      "max_output_tokens": null,
-      "cost": {
-        "input": 0.0,
-        "output": 0.0
-      },
-      "vtcode": {
-        "variant": "OpenRouterQwen3CoderFree",
-        "constant": "QWEN3_CODER_FREE",
-        "vendor": "qwen",
-        "display": "Qwen3 Coder (free)",
-        "description": "Community tier for Qwen3 Coder",
-        "efficient": false,
-        "top_tier": false,
-        "generation": "Qwen3-Coder",
-        "doc_comment": "Qwen3 Coder (free) - Community tier for Qwen3 Coder"
       }
     },
     "qwen/qwen3-coder-plus": {
@@ -832,8 +615,8 @@
       "context": 128000,
       "max_output_tokens": 65536,
       "cost": {
-        "input": 0.000001,
-        "output": 0.000005
+        "input": 1e-06,
+        "output": 5e-06
       },
       "vtcode": {
         "variant": "OpenRouterQwen3CoderPlus",
@@ -863,8 +646,8 @@
       "context": 128000,
       "max_output_tokens": 65536,
       "cost": {
-        "input": 3E-7,
-        "output": 0.0000015
+        "input": 3e-07,
+        "output": 1.5e-06
       },
       "vtcode": {
         "variant": "OpenRouterQwen3CoderFlash",
@@ -894,8 +677,8 @@
       "context": 262144,
       "max_output_tokens": 262144,
       "cost": {
-        "input": 6E-8,
-        "output": 2.5E-7
+        "input": 6e-08,
+        "output": 2.5e-07
       },
       "vtcode": {
         "variant": "OpenRouterQwen3Coder30bA3bInstruct",
@@ -925,8 +708,8 @@
       "context": 128000,
       "max_output_tokens": 8192,
       "cost": {
-        "input": 2.8E-7,
-        "output": 1.1E-6
+        "input": 2.8e-07,
+        "output": 1.1e-06
       },
       "vtcode": {
         "variant": "OpenRouterDeepseekChat",
@@ -956,8 +739,8 @@
       "context": 128000,
       "max_output_tokens": 8192,
       "cost": {
-        "input": 2.8E-7,
-        "output": 1.1E-6
+        "input": 2.8e-07,
+        "output": 1.1e-06
       },
       "vtcode": {
         "variant": "OpenRouterDeepSeekV32",
@@ -987,8 +770,8 @@
       "context": 128000,
       "max_output_tokens": 8192,
       "cost": {
-        "input": 5.5E-6,
-        "output": 2.2E-5
+        "input": 5.5e-06,
+        "output": 2.2e-05
       },
       "vtcode": {
         "variant": "OpenRouterDeepseekReasoner",
@@ -1018,8 +801,8 @@
       "context": 128000,
       "max_output_tokens": 8192,
       "cost": {
-        "input": 5.5E-6,
-        "output": 2.2E-5
+        "input": 5.5e-06,
+        "output": 2.2e-05
       },
       "vtcode": {
         "variant": "OpenRouterDeepSeekV32Speciale",
@@ -1049,8 +832,8 @@
       "context": 163840,
       "max_output_tokens": null,
       "cost": {
-        "input": 2.7E-7,
-        "output": 4E-7
+        "input": 2.7e-07,
+        "output": 4e-07
       },
       "vtcode": {
         "variant": "OpenRouterDeepSeekV32Exp",
@@ -1080,8 +863,8 @@
       "context": 163840,
       "max_output_tokens": 163840,
       "cost": {
-        "input": 2E-7,
-        "output": 8E-7
+        "input": 2e-07,
+        "output": 8e-07
       },
       "vtcode": {
         "variant": "OpenRouterDeepSeekChatV31",
@@ -1111,8 +894,8 @@
       "context": 163840,
       "max_output_tokens": 163840,
       "cost": {
-        "input": 4E-7,
-        "output": 0.000002
+        "input": 4e-07,
+        "output": 2e-06
       },
       "vtcode": {
         "variant": "OpenRouterDeepSeekR1",
@@ -1124,68 +907,6 @@
         "top_tier": true,
         "generation": "2025-01-20",
         "doc_comment": "DeepSeek R1 - DeepSeek R1 reasoning model with chain-of-thought"
-      }
-    },
-    "deepseek/deepseek-chat-v3.1:free": {
-      "id": "deepseek/deepseek-chat-v3.1:free",
-      "name": "DeepSeek: DeepSeek V3.1 (free)",
-      "reasoning": true,
-      "tool_call": false,
-      "modalities": {
-        "input": [
-          "text"
-        ],
-        "output": [
-          "text"
-        ]
-      },
-      "context": 163840,
-      "max_output_tokens": null,
-      "cost": {
-        "input": 0.0,
-        "output": 0.0
-      },
-      "vtcode": {
-        "variant": "OpenRouterDeepSeekChatV31Free",
-        "constant": "DEEPSEEK_CHAT_V3_1_FREE",
-        "vendor": "deepseek",
-        "display": "DeepSeek Chat v3.1 (free)",
-        "description": "Community tier for DeepSeek Chat v3.1",
-        "efficient": false,
-        "top_tier": false,
-        "generation": "2025-08-21",
-        "doc_comment": "DeepSeek Chat v3.1 (free) - Community tier for DeepSeek Chat v3.1"
-      }
-    },
-    "nvidia/nemotron-nano-9b-v2:free": {
-      "id": "nvidia/nemotron-nano-9b-v2:free",
-      "name": "NVIDIA: Nemotron Nano 9B v2 (free)",
-      "reasoning": false,
-      "tool_call": false,
-      "modalities": {
-        "input": [
-          "text"
-        ],
-        "output": [
-          "text"
-        ]
-      },
-      "context": 131072,
-      "max_output_tokens": null,
-      "cost": {
-        "input": 0.0,
-        "output": 0.0
-      },
-      "vtcode": {
-        "variant": "OpenRouterNvidiaNemotronNano9bV2Free",
-        "constant": "NVIDIA_NEMOTRON_NANO_9B_V2_FREE",
-        "vendor": "nvidia",
-        "display": "Nemotron Nano 9B v2 (free)",
-        "description": "NVIDIA Nemotron Nano 9B v2 community tier",
-        "efficient": true,
-        "top_tier": false,
-        "generation": "Nemotron-9B",
-        "doc_comment": "Nemotron Nano 9B v2 (free) - NVIDIA Nemotron Nano 9B v2 community tier"
       }
     },
     "openai/gpt-oss-120b": {
@@ -1204,8 +925,8 @@
       "context": 131072,
       "max_output_tokens": 131072,
       "cost": {
-        "input": 4E-8,
-        "output": 4E-7
+        "input": 4e-08,
+        "output": 4e-07
       },
       "vtcode": {
         "variant": "OpenRouterOpenAIGptOss120b",
@@ -1235,8 +956,8 @@
       "context": 131072,
       "max_output_tokens": null,
       "cost": {
-        "input": 3E-8,
-        "output": 1.4E-7
+        "input": 3e-08,
+        "output": 1.4e-07
       },
       "vtcode": {
         "variant": "OpenRouterOpenAIGptOss20b",
@@ -1248,37 +969,6 @@
         "top_tier": false,
         "generation": "OSS-20B",
         "doc_comment": "OpenAI gpt-oss-20b - Open-weight 20B deployment via OpenRouter"
-      }
-    },
-    "openai/gpt-oss-20b:free": {
-      "id": "openai/gpt-oss-20b:free",
-      "name": "OpenAI: gpt-oss-20b (free)",
-      "reasoning": true,
-      "tool_call": false,
-      "modalities": {
-        "input": [
-          "text"
-        ],
-        "output": [
-          "text"
-        ]
-      },
-      "context": 131072,
-      "max_output_tokens": 131072,
-      "cost": {
-        "input": 0.0,
-        "output": 0.0
-      },
-      "vtcode": {
-        "variant": "OpenRouterOpenAIGptOss20bFree",
-        "constant": "OPENAI_GPT_OSS_20B_FREE",
-        "vendor": "openai",
-        "display": "OpenAI gpt-oss-20b (free)",
-        "description": "Community tier for OpenAI gpt-oss-20b",
-        "efficient": false,
-        "top_tier": false,
-        "generation": "OSS-20B",
-        "doc_comment": "OpenAI gpt-oss-20b (free) - Community tier for OpenAI gpt-oss-20b"
       }
     },
     "openai/gpt-5": {
@@ -1299,8 +989,8 @@
       "context": 400000,
       "max_output_tokens": 128000,
       "cost": {
-        "input": 0.00000125,
-        "output": 0.00001
+        "input": 1.25e-06,
+        "output": 1e-05
       },
       "vtcode": {
         "variant": "OpenRouterOpenAIGpt5",
@@ -1331,8 +1021,8 @@
       "context": 400000,
       "max_output_tokens": 128000,
       "cost": {
-        "input": 0.00000125,
-        "output": 0.00001
+        "input": 1.25e-06,
+        "output": 1e-05
       },
       "vtcode": {
         "variant": "OpenRouterOpenAIGpt5Codex",
@@ -1364,8 +1054,8 @@
       "context": 128000,
       "max_output_tokens": 16384,
       "cost": {
-        "input": 0.00000125,
-        "output": 0.00001
+        "input": 1.25e-06,
+        "output": 1e-05
       },
       "vtcode": {
         "variant": "OpenRouterOpenAIGpt5Chat",
@@ -1397,8 +1087,8 @@
       "context": 1000000,
       "max_output_tokens": 64000,
       "cost": {
-        "input": 0.000003,
-        "output": 0.000015
+        "input": 3e-06,
+        "output": 1.5e-05
       },
       "vtcode": {
         "variant": "OpenRouterAnthropicClaudeSonnet45",
@@ -1456,8 +1146,8 @@
       "context": 200000,
       "max_output_tokens": 32000,
       "cost": {
-        "input": 0.000015,
-        "output": 0.000075
+        "input": 1.5e-05,
+        "output": 7.5e-05
       },
       "vtcode": {
         "variant": "OpenRouterAnthropicClaudeOpus41",
