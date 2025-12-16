@@ -3,6 +3,23 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.50.2] - 2025-12-16
+
+
+### Bug Fixes
+    - fix: correct logical operator for XAI provider model check
+
+
+### Documentation
+    - docs: update changelog for v0.50.1 [skip ci]
+
+
+### Chores
+    - chore: update VSCode extension package.json to v0.50.1 [skip ci]
+    - chore: update npm package.json to v0.50.1 [skip ci]
+    - chore: release v0.50.1
+    - chore: update VSCode extension package.json to v0.50.0 [skip ci]
+    - chore: update npm package.json to v0.50.0 [skip ci]
 # [Version 0.50.1] - 2025-12-16
 
 
