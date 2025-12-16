@@ -232,6 +232,7 @@ pub mod models {
             QWEN3_CODER_480B_CLOUD,
             GLM_46_CLOUD,
             MINIMAX_M2_CLOUD,
+            NEMOTRON_3_NANO_30B_CLOUD,
         ];
 
         /// Models that emit structured reasoning traces when `think` is enabled
@@ -245,6 +246,7 @@ pub mod models {
             QWEN3_CODER_480B_CLOUD,
             GLM_46_CLOUD,
             MINIMAX_M2_CLOUD,
+            NEMOTRON_3_NANO_30B_CLOUD,
         ];
 
         /// Models that require an explicit reasoning effort level instead of boolean toggle
@@ -260,6 +262,7 @@ pub mod models {
         pub const QWEN3_CODER_480B_CLOUD: &str = "qwen3-coder:480b-cloud";
         pub const GLM_46_CLOUD: &str = "glm-4.6:cloud";
         pub const MINIMAX_M2_CLOUD: &str = "minimax-m2:cloud";
+        pub const NEMOTRON_3_NANO_30B_CLOUD: &str = "nemotron-3-nano:30b-cloud";
     }
 
     // DeepSeek models (native API) - V3.2 released 2025-12-01

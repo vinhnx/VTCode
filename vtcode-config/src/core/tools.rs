@@ -34,6 +34,11 @@ pub struct ToolsConfig {
     #[serde(default = "default_max_repeated_tool_calls")]
     pub max_repeated_tool_calls: usize,
 
+    /// Optional per-second rate limit for tool calls to smooth bursty retries.
+    /// When unset, the runtime defaults apply.
+    #[serde(default = "default_max_tool_rate_per_second")]
+    pub max_tool_rate_per_second: Option<usize>,
+
     /// Web Fetch tool security configuration
     #[serde(default)]
     pub web_fetch: WebFetchConfig,
@@ -103,6 +108,7 @@ impl Default for ToolsConfig {
             policies,
             max_tool_loops: default_max_tool_loops(),
             max_repeated_tool_calls: default_max_repeated_tool_calls(),
+            max_tool_rate_per_second: default_max_tool_rate_per_second(),
             web_fetch: WebFetchConfig::default(),
             plugins: PluginRuntimeConfig::default(),
         }
@@ -157,6 +163,11 @@ const fn default_max_tool_loops() -> usize {
 #[inline]
 const fn default_max_repeated_tool_calls() -> usize {
     defaults::DEFAULT_MAX_REPEATED_TOOL_CALLS
+}
+
+#[inline]
+const fn default_max_tool_rate_per_second() -> Option<usize> {
+    None
 }
 
 #[inline]

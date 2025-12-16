@@ -271,6 +271,8 @@ pub enum ModelId {
     OllamaGlm46Cloud,
     /// MiniMax-M2 Cloud - MiniMax reasoning model via Ollama Cloud
     OllamaMinimaxM2Cloud,
+    /// Nemotron-3-Nano 30B Cloud - NVIDIA Nemotron-3-Nano 30B via Ollama Cloud
+    OllamaNemotron3Nano30bCloud,
 
     // LM Studio models
     /// Meta Llama 3 8B Instruct served locally via LM Studio
@@ -484,6 +486,7 @@ impl ModelId {
             ModelId::OllamaQwen3Coder480bCloud => models::ollama::QWEN3_CODER_480B_CLOUD,
             ModelId::OllamaGlm46Cloud => models::ollama::GLM_46_CLOUD,
             ModelId::OllamaMinimaxM2Cloud => models::ollama::MINIMAX_M2_CLOUD,
+            ModelId::OllamaNemotron3Nano30bCloud => models::ollama::NEMOTRON_3_NANO_30B_CLOUD,
             ModelId::LmStudioMetaLlama38BInstruct => models::lmstudio::META_LLAMA_3_8B_INSTRUCT,
             ModelId::LmStudioMetaLlama318BInstruct => models::lmstudio::META_LLAMA_31_8B_INSTRUCT,
             ModelId::LmStudioQwen257BInstruct => models::lmstudio::QWEN25_7B_INSTRUCT,
@@ -600,7 +603,8 @@ impl ModelId {
             | ModelId::OllamaDeepseekV31_671bCloud
             | ModelId::OllamaQwen3Coder480bCloud
             | ModelId::OllamaGlm46Cloud
-            | ModelId::OllamaMinimaxM2Cloud => Provider::Ollama,
+            | ModelId::OllamaMinimaxM2Cloud
+            | ModelId::OllamaNemotron3Nano30bCloud => Provider::Ollama,
             ModelId::LmStudioMetaLlama38BInstruct
             | ModelId::LmStudioMetaLlama318BInstruct
             | ModelId::LmStudioQwen257BInstruct
@@ -795,6 +799,7 @@ impl ModelId {
             ModelId::OllamaQwen3Coder480bCloud => "Qwen3 Coder 480B (cloud)",
             ModelId::OllamaGlm46Cloud => "GLM 4.6 (cloud)",
             ModelId::OllamaMinimaxM2Cloud => "MiniMax-M2 (cloud)",
+            ModelId::OllamaNemotron3Nano30bCloud => "Nemotron-3-Nano 30B (cloud)",
             ModelId::LmStudioMetaLlama38BInstruct => "Meta Llama 3 8B (LM Studio)",
             ModelId::LmStudioMetaLlama318BInstruct => "Meta Llama 3.1 8B (LM Studio)",
             ModelId::LmStudioQwen257BInstruct => "Qwen2.5 7B (LM Studio)",
@@ -919,6 +924,9 @@ impl ModelId {
             }
             ModelId::OllamaGlm46Cloud => {
                 "GLM 4.6 reasoning model offered by Ollama Cloud with extended context support"
+            }
+            ModelId::OllamaNemotron3Nano30bCloud => {
+                "NVIDIA Nemotron-3-Nano 30B deployed via Ollama Cloud for efficient inference"
             }
             ModelId::LmStudioMetaLlama38BInstruct => {
                 "Meta Llama 3 8B running through LM Studio's local OpenAI-compatible server"
@@ -1061,6 +1069,7 @@ impl ModelId {
             ModelId::OllamaQwen3Coder480bCloud,
             ModelId::OllamaGlm46Cloud,
             ModelId::OllamaMinimaxM2Cloud,
+            ModelId::OllamaNemotron3Nano30bCloud,
             // LM Studio models
             ModelId::LmStudioMetaLlama38BInstruct,
             ModelId::LmStudioMetaLlama318BInstruct,
@@ -1310,6 +1319,7 @@ impl ModelId {
             ModelId::OllamaQwen3Coder480bCloud => "qwen3",
             ModelId::OllamaGlm46Cloud => "glm-4.6",
             ModelId::OllamaMinimaxM2Cloud => "minimax-m2",
+            ModelId::OllamaNemotron3Nano30bCloud => "nemotron-3",
             ModelId::LmStudioMetaLlama38BInstruct => "meta-llama-3",
             ModelId::LmStudioMetaLlama318BInstruct => "meta-llama-3.1",
             ModelId::LmStudioQwen257BInstruct => "qwen2.5",
@@ -1467,6 +1477,9 @@ impl FromStr for ModelId {
             }
             s if s == models::ollama::GLM_46_CLOUD => Ok(ModelId::OllamaGlm46Cloud),
             s if s == models::ollama::MINIMAX_M2_CLOUD => Ok(ModelId::OllamaMinimaxM2Cloud),
+            s if s == models::ollama::NEMOTRON_3_NANO_30B_CLOUD => {
+                Ok(ModelId::OllamaNemotron3Nano30bCloud)
+            }
             s if s == models::lmstudio::META_LLAMA_3_8B_INSTRUCT => {
                 Ok(ModelId::LmStudioMetaLlama38BInstruct)
             }
@@ -2001,6 +2014,7 @@ mod tests {
         );
         assert_eq!(ModelId::OllamaQwen3Coder480bCloud.generation(), "qwen3");
         assert_eq!(ModelId::OllamaGlm46Cloud.generation(), "glm-4.6");
+        assert_eq!(ModelId::OllamaNemotron3Nano30bCloud.generation(), "nemotron-3");
         assert_eq!(
             ModelId::LmStudioMetaLlama38BInstruct.generation(),
             "meta-llama-3"
@@ -2073,7 +2087,8 @@ mod tests {
 
         assert!(ollama_models.contains(&ModelId::OllamaQwen3Coder480bCloud));
         assert!(ollama_models.contains(&ModelId::OllamaGlm46Cloud));
-        assert_eq!(ollama_models.len(), 7);
+        assert!(ollama_models.contains(&ModelId::OllamaNemotron3Nano30bCloud));
+        assert_eq!(ollama_models.len(), 8);
 
         let lmstudio_models = ModelId::models_for_provider(Provider::LmStudio);
         assert!(lmstudio_models.contains(&ModelId::LmStudioMetaLlama38BInstruct));

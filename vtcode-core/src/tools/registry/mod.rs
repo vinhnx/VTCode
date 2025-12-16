@@ -1058,6 +1058,10 @@ impl ToolRegistry {
         &self.timeout_policy
     }
 
+    pub fn rate_limit_per_minute(&self) -> Option<usize> {
+        self.execution_history.rate_limit_per_minute()
+    }
+
     fn initialize_resiliency_trackers(&mut self) {
         let categories = [
             ToolTimeoutCategory::Default,

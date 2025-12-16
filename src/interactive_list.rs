@@ -17,7 +17,7 @@ use ratatui::widgets::{
     Block, BorderType, Borders, List, ListDirection, ListItem, ListState, Paragraph, Wrap,
 };
 
-const CONTROLS_HINT: &str = "↑/↓ j/k to move  •  Home/End to jump  •  Enter confirm  •  Esc cancel";
+const CONTROLS_HINT: &str = "↑/↓ j/k to move  •  Home/End to jump  •  Enter/Tab confirm  •  Esc cancel";
 const NUMBER_JUMP_HINT: &str = "Tip: Type number to jump";
 
 /// Ratatui style definitions for interactive list UI
@@ -251,7 +251,7 @@ pub fn run_interactive_selection(
                         selected_index = (selected_index + step).min(total - 1);
                         number_buffer.clear();
                     }
-                    KeyCode::Enter => return Ok(Some(selected_index)),
+                    KeyCode::Enter | KeyCode::Tab => return Ok(Some(selected_index)),
                     KeyCode::Esc => return Ok(None),
                     KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                         return Err(SelectionInterrupted.into());
