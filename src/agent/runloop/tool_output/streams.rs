@@ -121,8 +121,10 @@ pub(crate) async fn render_stream_section(
         tool_name,
         Some(vtcode_core::config::constants::tools::RUN_PTY_CMD)
     );
+    let allow_ansi_for_tool = allow_ansi && !is_run_command;
+    let apply_line_styles = !is_run_command;
     let force_tail_mode = is_run_command;
-    let normalized_content = if allow_ansi {
+    let normalized_content = if allow_ansi_for_tool {
         Cow::Borrowed(content)
     } else {
         strip_ansi_codes(content)
@@ -249,7 +251,9 @@ pub(crate) async fn render_stream_section(
                 msg_buffer.push_str(prefix);
                 msg_buffer.push_str(&display_line);
             }
-            if let Some(style) = select_line_style(tool_name, &display_line, git_styles, ls_styles)
+            if apply_line_styles
+                && let Some(style) =
+                    select_line_style(tool_name, &display_line, git_styles, ls_styles)
             {
                 renderer.line_with_style(style, &msg_buffer)?;
                 continue;
@@ -340,7 +344,9 @@ pub(crate) async fn render_stream_section(
             display_buffer.push_str(line);
         }
 
-        if let Some(style) = select_line_style(tool_name, line, git_styles, ls_styles) {
+        if apply_line_styles
+            && let Some(style) = select_line_style(tool_name, line, git_styles, ls_styles)
+        {
             renderer.line_with_style(style, &display_buffer)?;
             continue;
         }

@@ -2143,9 +2143,9 @@ mod tests {
     fn enforce_tool_capabilities_disables_tools_for_restricted_models() {
         let provider = OpenRouterProvider::with_model(
             "test-key".to_string(),
-            models::openrouter::MOONSHOTAI_KIMI_K2_FREE.to_string(),
+            models::openrouter::MOONSHOTAI_KIMI_K2_0905.to_string(),
         );
-        let request = request_with_tools(models::openrouter::MOONSHOTAI_KIMI_K2_FREE);
+        let request = request_with_tools(models::openrouter::MOONSHOTAI_KIMI_K2_0905);
 
         match provider.enforce_tool_capabilities(&request) {
             Cow::Borrowed(_) => panic!("expected sanitized request"),
@@ -2153,7 +2153,7 @@ mod tests {
                 assert!(sanitized.tools.is_none());
                 assert!(matches!(sanitized.tool_choice, Some(ToolChoice::None)));
                 assert!(sanitized.parallel_tool_calls.is_none());
-                assert_eq!(sanitized.model, models::openrouter::MOONSHOTAI_KIMI_K2_FREE);
+                assert_eq!(sanitized.model, models::openrouter::MOONSHOTAI_KIMI_K2_0905);
                 assert_eq!(sanitized.messages, request.messages);
             }
         }

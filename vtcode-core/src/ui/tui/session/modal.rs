@@ -151,6 +151,14 @@ impl ModalState {
                     }
                     return ModalListKeyResult::HandledNoRedraw;
                 }
+                KeyCode::Tab => {
+                    if let Some(best_match) = list.get_best_matching_item(&search.query) {
+                        search.query = best_match;
+                        list.apply_search(&search.query);
+                        return ModalListKeyResult::Redraw;
+                    }
+                    return ModalListKeyResult::HandledNoRedraw;
+                }
                 KeyCode::Esc => {
                     if search.clear() {
                         list.apply_search(&search.query);
@@ -1020,6 +1028,21 @@ impl ModalListState {
             .and_then(|index| self.visible_indices.get(index))
             .and_then(|&item_index| self.items.get(item_index))
             .and_then(|item| item.selection.clone())
+    }
+
+    pub fn get_best_matching_item(&self, query: &str) -> Option<String> {
+        if query.is_empty() {
+            return None;
+        }
+
+        let normalized_query = normalize_query(query);
+        self.visible_indices
+            .iter()
+            .filter_map(|&idx| self.items.get(idx))
+            .filter(|item| item.selection.is_some())
+            .filter_map(|item| item.search_value.as_ref())
+            .find(|search_value| fuzzy_match(&normalized_query, search_value))
+            .cloned()
     }
 
     pub fn select_previous(&mut self) {

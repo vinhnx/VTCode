@@ -262,13 +262,23 @@ pub enum ModelId {
     OllamaGptOss120bCloud,
     /// Qwen3 1.7B - Qwen3 1.7B model served via Ollama
     OllamaQwen317b,
-    /// DeepSeek V3.1 671B Cloud - DeepSeek reasoning deployment via Ollama Cloud
-    OllamaDeepseekV31_671bCloud,
+    /// DeepSeek V3.2 Cloud - DeepSeek V3.2 reasoning deployment via Ollama Cloud
+    OllamaDeepseekV32Cloud,
+    /// Qwen3 Next 80B Cloud - Next-generation Qwen3 80B via Ollama Cloud
+    OllamaQwen3Next80bCloud,
+    /// Mistral Large 3 675B Cloud - Mistral Large 3 reasoning model via Ollama Cloud
+    OllamaMistralLarge3675bCloud,
+    /// Kimi K2 Thinking Cloud - MoonshotAI Kimi K2 thinking model via Ollama Cloud
+    OllamaKimiK2ThinkingCloud,
 
     /// Qwen3 Coder 480B Cloud - Large Qwen3 coding specialist via Ollama Cloud
     OllamaQwen3Coder480bCloud,
     /// GLM 4.6 Cloud - GLM 4.6 reasoning model via Ollama Cloud
     OllamaGlm46Cloud,
+    /// Gemini 3 Pro Preview Latest Cloud - Google Gemini 3 Pro Preview via Ollama Cloud
+    OllamaGemini3ProPreviewLatestCloud,
+    /// Devstral 2 123B Cloud - Mistral Devstral 2 123B model via Ollama Cloud
+    OllamaDevstral2123bCloud,
     /// MiniMax-M2 Cloud - MiniMax reasoning model via Ollama Cloud
     OllamaMinimaxM2Cloud,
     /// Nemotron-3-Nano 30B Cloud - NVIDIA Nemotron-3-Nano 30B via Ollama Cloud
@@ -459,10 +469,15 @@ impl ModelId {
             ModelId::OllamaGptOss20bCloud => models::ollama::GPT_OSS_20B_CLOUD,
             ModelId::OllamaGptOss120bCloud => models::ollama::GPT_OSS_120B_CLOUD,
             ModelId::OllamaQwen317b => models::ollama::QWEN3_1_7B,
-            ModelId::OllamaDeepseekV31_671bCloud => models::ollama::DEEPSEEK_V31_671B_CLOUD,
+            ModelId::OllamaDeepseekV32Cloud => models::ollama::DEEPSEEK_V32_CLOUD,
+            ModelId::OllamaQwen3Next80bCloud => models::ollama::QWEN3_NEXT_80B_CLOUD,
+            ModelId::OllamaMistralLarge3675bCloud => models::ollama::MISTRAL_LARGE_3_675B_CLOUD,
+            ModelId::OllamaKimiK2ThinkingCloud => models::ollama::KIMI_K2_THINKING_CLOUD,
 
             ModelId::OllamaQwen3Coder480bCloud => models::ollama::QWEN3_CODER_480B_CLOUD,
             ModelId::OllamaGlm46Cloud => models::ollama::GLM_46_CLOUD,
+            ModelId::OllamaGemini3ProPreviewLatestCloud => models::ollama::GEMINI_3_PRO_PREVIEW_LATEST_CLOUD,
+            ModelId::OllamaDevstral2123bCloud => models::ollama::DEVSTRAL_2_123B_CLOUD,
             ModelId::OllamaMinimaxM2Cloud => models::ollama::MINIMAX_M2_CLOUD,
             ModelId::OllamaNemotron3Nano30bCloud => models::ollama::NEMOTRON_3_NANO_30B_CLOUD,
             ModelId::LmStudioMetaLlama38BInstruct => models::lmstudio::META_LLAMA_3_8B_INSTRUCT,
@@ -577,9 +592,14 @@ impl ModelId {
             | ModelId::OllamaGptOss20bCloud
             | ModelId::OllamaGptOss120bCloud
             | ModelId::OllamaQwen317b
-            | ModelId::OllamaDeepseekV31_671bCloud
+            | ModelId::OllamaDeepseekV32Cloud
+            | ModelId::OllamaQwen3Next80bCloud
+            | ModelId::OllamaMistralLarge3675bCloud
+            | ModelId::OllamaKimiK2ThinkingCloud
             | ModelId::OllamaQwen3Coder480bCloud
             | ModelId::OllamaGlm46Cloud
+            | ModelId::OllamaGemini3ProPreviewLatestCloud
+            | ModelId::OllamaDevstral2123bCloud
             | ModelId::OllamaMinimaxM2Cloud
             | ModelId::OllamaNemotron3Nano30bCloud => Provider::Ollama,
             ModelId::LmStudioMetaLlama38BInstruct
@@ -742,7 +762,7 @@ impl ModelId {
             ModelId::GPT51Mini => "GPT-5.1 Mini",
             ModelId::CodexMiniLatest => "Codex Mini Latest",
             // Anthropic models
-            ModelId::ClaudeOpus41 => "Claude Opus 4.1",
+            ModelId::ClaudeOpus41 => "Claude Opus 4.5",
             ModelId::ClaudeOpus45 => "Claude Opus 4.5",
             ModelId::ClaudeSonnet45 => "Claude Sonnet 4.5",
             ModelId::ClaudeHaiku45 => "Claude Haiku 4.5",
@@ -770,10 +790,15 @@ impl ModelId {
             ModelId::OllamaGptOss20bCloud => "GPT-OSS 20B (cloud)",
             ModelId::OllamaGptOss120bCloud => "GPT-OSS 120B (cloud)",
             ModelId::OllamaQwen317b => "Qwen3 1.7B (local)",
-            ModelId::OllamaDeepseekV31_671bCloud => "DeepSeek V3.1 671B (cloud)",
+            ModelId::OllamaDeepseekV32Cloud => "DeepSeek V3.2 (cloud)",
+            ModelId::OllamaQwen3Next80bCloud => "Qwen3 Next 80B (cloud)",
+            ModelId::OllamaMistralLarge3675bCloud => "Mistral Large 3 675B (cloud)",
+            ModelId::OllamaKimiK2ThinkingCloud => "Kimi K2 Thinking (cloud)",
 
             ModelId::OllamaQwen3Coder480bCloud => "Qwen3 Coder 480B (cloud)",
             ModelId::OllamaGlm46Cloud => "GLM 4.6 (cloud)",
+            ModelId::OllamaGemini3ProPreviewLatestCloud => "Gemini 3 Pro Preview (cloud)",
+            ModelId::OllamaDevstral2123bCloud => "Devstral 2 123B (cloud)",
             ModelId::OllamaMinimaxM2Cloud => "MiniMax-M2 (cloud)",
             ModelId::OllamaNemotron3Nano30bCloud => "Nemotron-3-Nano 30B (cloud)",
             ModelId::LmStudioMetaLlama38BInstruct => "Meta Llama 3 8B (LM Studio)",
@@ -838,7 +863,7 @@ impl ModelId {
             }
             // Anthropic models
             ModelId::ClaudeOpus41 => {
-                "Latest most capable Anthropic model with advanced reasoning and structured outputs"
+                "Latest flagship model with exceptional reasoning. Most capable Anthropic model for complex multi-step tasks"
             }
             ModelId::ClaudeOpus45 => {
                 "Latest flagship model with exceptional reasoning. Most capable Anthropic model for complex multi-step tasks"
@@ -888,8 +913,24 @@ impl ModelId {
             ModelId::OllamaQwen317b => {
                 "Qwen3 1.7B served locally through Ollama without external API requirements"
             }
-            ModelId::OllamaDeepseekV31_671bCloud => {
-                "DeepSeek V3.1 671B cloud deployment via Ollama with tool use and long-form reasoning"
+            ModelId::OllamaDeepseekV32Cloud => {
+                "DeepSeek V3.2 cloud deployment via Ollama with enhanced reasoning and instruction following"
+            }
+            ModelId::OllamaQwen3Next80bCloud => {
+                "Qwen3 Next generation 80B model via Ollama Cloud with improved reasoning and long context"
+            }
+            ModelId::OllamaMistralLarge3675bCloud => {
+                "Mistral Large 3 675B reasoning model via Ollama Cloud for complex problem-solving"
+            }
+            ModelId::OllamaKimiK2ThinkingCloud => {
+                "MoonshotAI Kimi K2 thinking model via Ollama Cloud with explicit reasoning traces"
+            }
+
+            ModelId::OllamaGemini3ProPreviewLatestCloud => {
+                "Google Gemini 3 Pro Preview latest model via Ollama Cloud with multimodal capabilities"
+            }
+            ModelId::OllamaDevstral2123bCloud => {
+                "Mistral Devstral 2 123B model via Ollama Cloud optimized for development and coding tasks"
             }
 
             ModelId::OllamaMinimaxM2Cloud => {
@@ -1040,9 +1081,14 @@ impl ModelId {
             ModelId::OllamaGptOss20bCloud,
             ModelId::OllamaGptOss120bCloud,
             ModelId::OllamaQwen317b,
-            ModelId::OllamaDeepseekV31_671bCloud,
+            ModelId::OllamaDeepseekV32Cloud,
+            ModelId::OllamaQwen3Next80bCloud,
+            ModelId::OllamaMistralLarge3675bCloud,
+            ModelId::OllamaKimiK2ThinkingCloud,
             ModelId::OllamaQwen3Coder480bCloud,
             ModelId::OllamaGlm46Cloud,
+            ModelId::OllamaGemini3ProPreviewLatestCloud,
+            ModelId::OllamaDevstral2123bCloud,
             ModelId::OllamaMinimaxM2Cloud,
             ModelId::OllamaNemotron3Nano30bCloud,
             // LM Studio models
@@ -1263,8 +1309,8 @@ impl ModelId {
             | ModelId::OpenAIGptOss20b
             | ModelId::OpenAIGptOss120b => "5",
             // Anthropic generations
-            ModelId::ClaudeOpus41
-            | ModelId::ClaudeOpus45
+            ModelId::ClaudeOpus45
+            | ModelId::ClaudeOpus41
             | ModelId::ClaudeSonnet45
             | ModelId::ClaudeHaiku45 => "4.5",
             ModelId::ClaudeSonnet4 => "4",
@@ -1289,10 +1335,15 @@ impl ModelId {
             ModelId::OllamaGptOss20bCloud => "oss-cloud",
             ModelId::OllamaGptOss120bCloud => "oss-cloud",
             ModelId::OllamaQwen317b => "oss",
-            ModelId::OllamaDeepseekV31_671bCloud => "deepseek-v3.1",
+            ModelId::OllamaDeepseekV32Cloud => "deepseek-v3.2",
+            ModelId::OllamaQwen3Next80bCloud => "qwen3-next",
+            ModelId::OllamaMistralLarge3675bCloud => "mistral-large-3",
+            ModelId::OllamaKimiK2ThinkingCloud => "kimi-k2-thinking",
 
             ModelId::OllamaQwen3Coder480bCloud => "qwen3",
             ModelId::OllamaGlm46Cloud => "glm-4.6",
+            ModelId::OllamaGemini3ProPreviewLatestCloud => "gemini-3",
+            ModelId::OllamaDevstral2123bCloud => "devstral-2",
             ModelId::OllamaMinimaxM2Cloud => "minimax-m2",
             ModelId::OllamaNemotron3Nano30bCloud => "nemotron-3",
             ModelId::LmStudioMetaLlama38BInstruct => "meta-llama-3",
@@ -1437,19 +1488,32 @@ impl FromStr for ModelId {
             s if s == models::zai::GLM_4_5_AIRX => Ok(ModelId::ZaiGlm45Airx),
             s if s == models::zai::GLM_4_5_FLASH => Ok(ModelId::ZaiGlm45Flash),
             s if s == models::zai::GLM_4_32B_0414_128K => Ok(ModelId::ZaiGlm432b0414128k),
-            // Moonshot models
+            // Ollama models
             s if s == models::ollama::GPT_OSS_20B => Ok(ModelId::OllamaGptOss20b),
             s if s == models::ollama::GPT_OSS_20B_CLOUD => Ok(ModelId::OllamaGptOss20bCloud),
             s if s == models::ollama::GPT_OSS_120B_CLOUD => Ok(ModelId::OllamaGptOss120bCloud),
             s if s == models::ollama::QWEN3_1_7B => Ok(ModelId::OllamaQwen317b),
-            s if s == models::ollama::DEEPSEEK_V31_671B_CLOUD => {
-                Ok(ModelId::OllamaDeepseekV31_671bCloud)
+            s if s == models::ollama::DEEPSEEK_V32_CLOUD => Ok(ModelId::OllamaDeepseekV32Cloud),
+            s if s == models::ollama::QWEN3_NEXT_80B_CLOUD => {
+                Ok(ModelId::OllamaQwen3Next80bCloud)
+            }
+            s if s == models::ollama::MISTRAL_LARGE_3_675B_CLOUD => {
+                Ok(ModelId::OllamaMistralLarge3675bCloud)
+            }
+            s if s == models::ollama::KIMI_K2_THINKING_CLOUD => {
+                Ok(ModelId::OllamaKimiK2ThinkingCloud)
             }
 
             s if s == models::ollama::QWEN3_CODER_480B_CLOUD => {
                 Ok(ModelId::OllamaQwen3Coder480bCloud)
             }
             s if s == models::ollama::GLM_46_CLOUD => Ok(ModelId::OllamaGlm46Cloud),
+            s if s == models::ollama::GEMINI_3_PRO_PREVIEW_LATEST_CLOUD => {
+                Ok(ModelId::OllamaGemini3ProPreviewLatestCloud)
+            }
+            s if s == models::ollama::DEVSTRAL_2_123B_CLOUD => {
+                Ok(ModelId::OllamaDevstral2123bCloud)
+            }
             s if s == models::ollama::MINIMAX_M2_CLOUD => Ok(ModelId::OllamaMinimaxM2Cloud),
             s if s == models::ollama::NEMOTRON_3_NANO_30B_CLOUD => {
                 Ok(ModelId::OllamaNemotron3Nano30bCloud)
@@ -1792,7 +1856,7 @@ mod tests {
         );
         assert_eq!(
             ModelId::default_orchestrator_for_provider(Provider::Anthropic),
-            ModelId::ClaudeOpus41
+            ModelId::ClaudeOpus45
         );
         assert_eq!(
             ModelId::default_orchestrator_for_provider(Provider::DeepSeek),
@@ -1983,8 +2047,8 @@ mod tests {
         assert_eq!(ModelId::OllamaGptOss120bCloud.generation(), "oss-cloud");
         assert_eq!(ModelId::OllamaQwen317b.generation(), "oss");
         assert_eq!(
-            ModelId::OllamaDeepseekV31_671bCloud.generation(),
-            "deepseek-v3.1"
+            ModelId::OllamaDeepseekV32Cloud.generation(),
+            "deepseek-v3.2"
         );
         assert_eq!(ModelId::OllamaQwen3Coder480bCloud.generation(), "qwen3");
         assert_eq!(ModelId::OllamaGlm46Cloud.generation(), "glm-4.6");
@@ -2057,12 +2121,17 @@ mod tests {
         assert!(ollama_models.contains(&ModelId::OllamaGptOss20b));
         assert!(ollama_models.contains(&ModelId::OllamaGptOss120bCloud));
         assert!(ollama_models.contains(&ModelId::OllamaQwen317b));
-        assert!(ollama_models.contains(&ModelId::OllamaDeepseekV31_671bCloud));
-
+        assert!(ollama_models.contains(&ModelId::OllamaDeepseekV32Cloud));
+        assert!(ollama_models.contains(&ModelId::OllamaQwen3Next80bCloud));
+        assert!(ollama_models.contains(&ModelId::OllamaMistralLarge3675bCloud));
+        assert!(ollama_models.contains(&ModelId::OllamaKimiK2ThinkingCloud));
         assert!(ollama_models.contains(&ModelId::OllamaQwen3Coder480bCloud));
         assert!(ollama_models.contains(&ModelId::OllamaGlm46Cloud));
+        assert!(ollama_models.contains(&ModelId::OllamaGemini3ProPreviewLatestCloud));
+        assert!(ollama_models.contains(&ModelId::OllamaDevstral2123bCloud));
+        assert!(ollama_models.contains(&ModelId::OllamaMinimaxM2Cloud));
         assert!(ollama_models.contains(&ModelId::OllamaNemotron3Nano30bCloud));
-        assert_eq!(ollama_models.len(), 8);
+        assert_eq!(ollama_models.len(), 14);
 
         let lmstudio_models = ModelId::models_for_provider(Provider::LmStudio);
         assert!(lmstudio_models.contains(&ModelId::LmStudioMetaLlama38BInstruct));
@@ -2078,13 +2147,16 @@ mod tests {
     fn test_fallback_models() {
         let fallbacks = ModelId::fallback_models();
         assert!(!fallbacks.is_empty());
+        assert!(fallbacks.contains(&ModelId::Gemini25FlashPreview));
         assert!(fallbacks.contains(&ModelId::Gemini25Pro));
         assert!(fallbacks.contains(&ModelId::GPT52));
         assert!(fallbacks.contains(&ModelId::GPT5));
+        assert!(fallbacks.contains(&ModelId::GPT51));
+        assert!(fallbacks.contains(&ModelId::OpenAIGptOss20b));
+        assert!(fallbacks.contains(&ModelId::ClaudeOpus45));
         assert!(fallbacks.contains(&ModelId::ClaudeOpus41));
         assert!(fallbacks.contains(&ModelId::ClaudeSonnet45));
         assert!(fallbacks.contains(&ModelId::DeepSeekReasoner));
-        assert!(fallbacks.contains(&ModelId::OpenRouterMoonshotaiKimiK20905));
         assert!(fallbacks.contains(&ModelId::XaiGrok4));
         assert!(fallbacks.contains(&ModelId::ZaiGlm46));
         assert!(fallbacks.contains(&ModelId::OpenRouterGrokCodeFast1));
