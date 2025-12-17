@@ -3,6 +3,25 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.50.4] - 2025-12-18
+
+
+### Features
+    - feat: add Gemini 3 Flash Preview model and update configurations
+
+
+### Documentation
+    - docs: update changelog for v0.50.3 [skip ci]
+    - docs: update changelog for v0.50.2 [skip ci]
+
+
+### Chores
+    - chore: release v0.50.3
+    - chore: update VSCode extension package.json to v0.50.2 [skip ci]
+    - chore: update npm package.json to v0.50.2 [skip ci]
+    - chore: release v0.50.2
+    - chore: update VSCode extension package.json to v0.50.1 [skip ci]
+    - chore: update npm package.json to v0.50.1 [skip ci]
 # [Version 0.50.3] - 2025-12-18
 
 
