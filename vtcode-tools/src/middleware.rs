@@ -239,7 +239,7 @@ mod tests {
     #[tokio::test]
     async fn test_metrics_tracking() {
         let metrics = MetricsMiddleware::new();
-        let chain = MiddlewareChain::new().with_middleware(metrics.clone());
+        let chain = MiddlewareChain::new().add(metrics.clone());
 
         let req = ToolRequest {
             tool_name: "test".to_string(),

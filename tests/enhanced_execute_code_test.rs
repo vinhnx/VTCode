@@ -12,7 +12,7 @@ async fn test_execute_code_with_file_tracking() {
     let workspace_root = temp_dir.path().to_path_buf();
 
     // Create a ToolRegistry
-    let mut registry = ToolRegistry::new(workspace_root.clone());
+    let mut registry = ToolRegistry::new(workspace_root.clone()).await;
 
     // Test case 1: Generate a PDF file and verify tracking
     let python_code = r#"
@@ -32,7 +32,7 @@ print('PDF generated successfully')
         "track_files": true
     });
 
-    let result = registry.execute("execute_code", args).await.unwrap();
+    let result = registry.execute_tool("execute_code", args).await.unwrap();
 
     // Verify the response contains file tracking info
     assert!(result.get("generated_files").is_some());
@@ -59,7 +59,7 @@ print('PDF generated successfully')
 async fn test_execute_code_without_file_tracking() {
     let temp_dir = TempDir::new().unwrap();
     let workspace_root = temp_dir.path().to_path_buf();
-    let mut registry = ToolRegistry::new(workspace_root);
+    let mut registry = ToolRegistry::new(workspace_root).await;
 
     let python_code = r#"
 print('Hello World')
@@ -74,7 +74,7 @@ print(f'Result: {x}')
         "track_files": false  // Disable file tracking
     });
 
-    let result = registry.execute("execute_code", args).await.unwrap();
+    let result = registry.execute_tool("execute_code", args).await.unwrap();
 
     // Verify that no file tracking info is present
     assert!(result.get("generated_files").is_none());
@@ -97,7 +97,7 @@ print(f'Result: {x}')
 async fn test_multiple_file_generation() {
     let temp_dir = TempDir::new().unwrap();
     let workspace_root = temp_dir.path().to_path_buf();
-    let mut registry = ToolRegistry::new(workspace_root);
+    let mut registry = ToolRegistry::new(workspace_root).await;
 
     let python_code = r#"
 # Generate multiple files
@@ -120,7 +120,7 @@ print('Multiple files generated')
         "track_files": true
     });
 
-    let result = registry.execute("execute_code", args).await.unwrap();
+    let result = registry.execute_tool("execute_code", args).await.unwrap();
 
     let generated_files = result.get("generated_files").unwrap();
     let files_array = generated_files.get("files").unwrap().as_array().unwrap();

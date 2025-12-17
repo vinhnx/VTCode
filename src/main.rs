@@ -7,6 +7,7 @@ use clap::{CommandFactory, Parser};
 use colorchoice::ColorChoice as GlobalColorChoice;
 use std::io::IsTerminal;
 use std::io::{self, Read};
+use std::path::PathBuf;
 use vtcode::startup::StartupContext;
 use vtcode_core::cli::args::{Cli, Commands};
 use vtcode_core::config::api_keys::load_dotenv;
@@ -69,9 +70,33 @@ async fn main() -> Result<()> {
         GlobalColorChoice::Never.write_global();
     }
 
-    let startup = StartupContext::from_cli_args(&args)
-        .await
-        .context("failed to initialize VTCode startup context")?;
+    // Check if the workspace_path is actually a prompt (not a directory)
+    // This happens when a user runs `vtcode "some prompt"` - clap treats it as workspace_path
+    let (startup, potential_prompt) = if let Some(workspace_path) = &args.workspace_path {
+        if !workspace_path.exists() || !workspace_path.is_dir() {
+            // This looks like a prompt rather than a workspace directory
+            let prompt_text = workspace_path.to_string_lossy().to_string();
+            // Create startup context with current directory as workspace
+            let mut modified_args = args.clone();
+            modified_args.workspace_path = Some(std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+            let startup = StartupContext::from_cli_args(&modified_args)
+                .await
+                .context("failed to initialize VTCode startup context")?;
+            (startup, Some(prompt_text))
+        } else {
+            // Valid workspace directory, proceed normally
+            let startup = StartupContext::from_cli_args(&args)
+                .await
+                .context("failed to initialize VTCode startup context")?;
+            (startup, None)
+        }
+    } else {
+        let startup = StartupContext::from_cli_args(&args)
+            .await
+            .context("failed to initialize VTCode startup context")?;
+        (startup, None)
+    };
+
     cli::set_workspace_env(&startup.workspace);
 
     // Initialize tracing based on config if enabled
@@ -92,6 +117,12 @@ async fn main() -> Result<()> {
         let prompt = build_print_prompt(print_value)?;
         cli::handle_ask_single_command(core_cfg, &prompt, cli::AskCommandOptions::default())
             .await?;
+        return Ok(());
+    }
+
+    // Handle potential prompt from workspace_path argument (when user runs `vtcode "prompt"`)
+    if let Some(prompt) = potential_prompt {
+        cli::handle_ask_single_command(core_cfg, &prompt, cli::AskCommandOptions::default()).await?;
         return Ok(());
     }
 

@@ -783,6 +783,7 @@ mod tests {
                 tool_summaries: vec!["tool_a".to_string()],
                 token_usage: Some(usage.clone()),
                 max_context_tokens: Some(100),
+                loaded_skills: Vec::new(),
             }),
         };
 

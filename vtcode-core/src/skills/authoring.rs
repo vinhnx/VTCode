@@ -568,8 +568,12 @@ mod tests {
     use tempfile::TempDir;
 
     #[test]
-    fn test_validate_skill_name() {
-        let tmp = TempDir::new().unwrap();
+    fn test_validate_skill_name() -> anyhow::Result<()> {
+        let tmp = TempDir::new().map_err(|e| {
+            // Convert TempDir error into a test failure with context
+            eprintln!("Failed to create TempDir: {e}");
+            e
+        })?;
         let author = SkillAuthor::new(tmp.path().to_path_buf());
 
         // Valid names
@@ -605,26 +609,40 @@ mod tests {
         // Invalid: empty or too long
         assert!(!author.is_valid_skill_name(""));
         assert!(!author.is_valid_skill_name(&"a".repeat(65)));
+
+        Ok(())
     }
 
     #[test]
-    fn test_title_case_skill_name() {
-        let tmp = TempDir::new().unwrap();
+    fn test_title_case_skill_name() -> anyhow::Result<()> {
+        let tmp = TempDir::new().map_err(|e| {
+            eprintln!("Failed to create TempDir: {e}");
+            e
+        })?;
         let author = SkillAuthor::new(tmp.path().to_path_buf());
 
         assert_eq!(author.title_case_skill_name("my-skill"), "My Skill");
         assert_eq!(author.title_case_skill_name("pdf-analyzer"), "Pdf Analyzer");
         assert_eq!(author.title_case_skill_name("api-helper"), "Api Helper");
+
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_create_skill() {
-        let tmp = TempDir::new().unwrap();
+    async fn test_create_skill() -> anyhow::Result<()> {
+    let tmp = TempDir::new().map_err(|e| {
+        // Provide context on TempDir failure
+        eprintln!("Failed to create TempDir: {e}");
+        e
+    })?;
         let author = SkillAuthor::new(tmp.path().to_path_buf());
 
         let skill_dir = author
             .create_skill("test-skill", Some(tmp.path().to_path_buf()))
-            .unwrap();
+            .map_err(|e| {
+                eprintln!("Failed to write skill file: {e}");
+                e
+            })?;
 
         assert!(skill_dir.exists());
         assert!(skill_dir.join("SKILL.md").exists());
@@ -633,10 +651,15 @@ mod tests {
         assert!(skill_dir.join("assets").exists());
 
         // Verify SKILL.md has correct structure
-        let skill_md = fs::read_to_string(skill_dir.join("SKILL.md")).unwrap();
+        let skill_md = fs::read_to_string(skill_dir.join("SKILL.md")).map_err(|e| {
+            eprintln!("Failed to read SKILL.md: {e}");
+            e
+        })?;
         assert!(skill_md.starts_with("---"));
         assert!(skill_md.contains("name: test-skill"));
         assert!(skill_md.contains("# Test Skill"));
+
+        Ok(())
     }
 
     #[test]

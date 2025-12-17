@@ -26,8 +26,8 @@ impl CachedToolExecutor {
         let logging = LoggingMiddleware::new("tool-executor");
 
         let middleware = MiddlewareChain::new()
-            .with_middleware(logging)
-            .with_middleware(metrics);
+            .add(logging)
+            .add(metrics);
 
         Self { cache, middleware }
     }

@@ -673,7 +673,7 @@ impl GrepSearchManager {
                 && !matches.is_empty()
             {
                 let result = GrepSearchResult {
-                    query: query.clone(),
+                    query,
                     matches,
                     truncated,
                 };

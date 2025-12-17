@@ -6,7 +6,7 @@ use colorchoice_clap::Color as ColorSelection;
 use std::path::PathBuf;
 
 /// Main CLI structure for vtcode with advanced features
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 #[command(
     name = "vtcode",
     version,
@@ -325,7 +325,7 @@ pub enum AskOutputFormat {
 }
 
 /// Available commands with comprehensive features
-#[derive(Subcommand, Debug)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum Commands {
     /// Start Agent Client Protocol bridge for IDE integrations
     #[command(name = "acp")]
@@ -686,7 +686,7 @@ pub enum Commands {
 }
 
 /// Token-related subcommands
-#[derive(Subcommand, Debug)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum TokenCommands {
     /// Show current token budget status and usage
     Status,
@@ -706,7 +706,7 @@ pub enum AgentClientProtocolTarget {
 }
 
 /// Model management commands with concise, actionable help
-#[derive(Subcommand, Debug)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum ModelCommands {
     /// List all providers and models with status indicators
     List,
@@ -760,7 +760,7 @@ pub enum ModelCommands {
 }
 
 /// Skills subcommands
-#[derive(Debug, Subcommand)]
+#[derive(Debug, Subcommand, Clone)]
 pub enum SkillsSubcommand {
     /// List available skills
     #[command(name = "list")]
