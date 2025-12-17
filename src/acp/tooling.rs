@@ -178,7 +178,7 @@ impl AcpToolRegistry {
 
             let read_file = ToolDefinition::function(
                 tools::READ_FILE.to_string(),
-                read_file_description.clone(),
+                read_file_description,  // Avoid clone since we own the value now
                 read_file_schema,
             );
             mapping.insert(
@@ -273,7 +273,7 @@ impl AcpToolRegistry {
 
             let list_files = ToolDefinition::function(
                 tools::LIST_FILES.to_string(),
-                list_files_description.clone(),
+                list_files_description,  // Avoid clone since we own the value now
                 list_files_schema,
             );
             mapping.insert(

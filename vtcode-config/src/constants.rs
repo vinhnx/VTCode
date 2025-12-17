@@ -38,6 +38,7 @@ pub mod models {
             "gemini-2.5-flash-lite",
             "gemini-2.5-flash-preview-05-20",
             "gemini-3-pro-preview",
+            "gemini-3-flash-preview",
         ];
 
         /// Models that support thinking/reasoning capability
@@ -49,6 +50,7 @@ pub mod models {
             "gemini-2.5-flash-lite",
             "gemini-2.5-flash-preview-05-20",
             "gemini-3-pro-preview",
+            "gemini-3-flash-preview",
         ];
 
         /// Models that support context caching
@@ -59,6 +61,7 @@ pub mod models {
             "gemini-2.5-flash-lite",
             "gemini-2.5-flash-preview-05-20",
             "gemini-3-pro-preview",
+            "gemini-3-flash-preview",
         ];
 
         /// Models that support code execution
@@ -69,6 +72,7 @@ pub mod models {
             "gemini-2.5-flash-lite",
             "gemini-2.5-flash-preview-05-20",
             "gemini-3-pro-preview",
+            "gemini-3-flash-preview",
         ];
 
         // Convenience constants for commonly used models
@@ -77,6 +81,7 @@ pub mod models {
         pub const GEMINI_2_5_FLASH_LITE: &str = "gemini-2.5-flash-lite";
         pub const GEMINI_2_5_FLASH_PREVIEW: &str = "gemini-2.5-flash-preview-05-20";
         pub const GEMINI_3_PRO_PREVIEW: &str = "gemini-3-pro-preview";
+        pub const GEMINI_3_FLASH_PREVIEW: &str = "gemini-3-flash-preview";
     }
 
     // OpenAI models (from docs/models.json)
@@ -363,6 +368,7 @@ pub mod models {
     pub const GEMINI_2_5_PRO: &str = google::GEMINI_2_5_PRO;
     pub const GEMINI_2_5_FLASH_LITE: &str = google::GEMINI_2_5_FLASH_LITE;
     pub const GEMINI_3_PRO_PREVIEW: &str = google::GEMINI_3_PRO_PREVIEW;
+    pub const GEMINI_3_FLASH_PREVIEW: &str = google::GEMINI_3_FLASH_PREVIEW;
     pub const GPT_5: &str = openai::GPT_5;
     pub const GPT_5_CODEX: &str = openai::GPT_5_CODEX;
     pub const GPT_5_MINI: &str = openai::GPT_5_MINI;

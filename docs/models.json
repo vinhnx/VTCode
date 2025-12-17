@@ -128,10 +128,41 @@
           "search_grounding": true,
           "url_context": true
         }
+      },
+      "gemini-3-flash-preview": {
+        "id": "gemini-3-flash-preview",
+        "name": "Gemini 3 Flash",
+        "description": "Our most intelligent model built for speed, combining frontier intelligence with superior search and grounding",
+        "version": "preview",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1048576,
+        "output_tokens": 65536,
+        "capabilities": {
+          "caching": true,
+          "code_execution": true,
+          "batch_api": true,
+          "structured_output": true,
+          "search_grounding": true,
+          "url_context": true,
+          "thinking": true
+        }
       }
-    }
-  },
-  "openai": {
+      }
+      },
+      "openai": {
     "id": "openai",
     "env": [
       "OPENAI_API_KEY"

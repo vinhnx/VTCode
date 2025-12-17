@@ -180,6 +180,8 @@ pub enum ModelId {
     Gemini25Pro,
     /// Gemini 3 Pro Preview - Preview of next-generation Gemini model
     Gemini3ProPreview,
+    /// Gemini 3 Flash Preview - Our most intelligent model built for speed, combining frontier intelligence with superior search and grounding
+    Gemini3FlashPreview,
 
     // OpenAI models
     /// GPT-5 - Latest most capable OpenAI model (2025-08-07)
@@ -428,6 +430,7 @@ impl ModelId {
             ModelId::Gemini25FlashLite => models::GEMINI_2_5_FLASH_LITE,
             ModelId::Gemini25Pro => models::GEMINI_2_5_PRO,
             ModelId::Gemini3ProPreview => models::GEMINI_3_PRO_PREVIEW,
+            ModelId::Gemini3FlashPreview => models::GEMINI_3_FLASH_PREVIEW,
             // OpenAI models
             ModelId::GPT5 => models::GPT_5,
             ModelId::GPT52 => models::GPT_5_2,
@@ -557,7 +560,8 @@ impl ModelId {
             | ModelId::Gemini25Flash
             | ModelId::Gemini25FlashLite
             | ModelId::Gemini25Pro
-            | ModelId::Gemini3ProPreview => Provider::Gemini,
+            | ModelId::Gemini3ProPreview
+            | ModelId::Gemini3FlashPreview => Provider::Gemini,
             ModelId::GPT5
             | ModelId::GPT52
             | ModelId::GPT5Codex
@@ -750,6 +754,7 @@ impl ModelId {
             ModelId::Gemini25FlashLite => "Gemini 2.5 Flash Lite",
             ModelId::Gemini25Pro => "Gemini 2.5 Pro",
             ModelId::Gemini3ProPreview => "Gemini 3 Pro Preview",
+            ModelId::Gemini3FlashPreview => "Gemini 3 Flash",
             // OpenAI models
             ModelId::GPT5 => "GPT-5",
             ModelId::GPT52 => "GPT-5.2",
@@ -833,6 +838,9 @@ impl ModelId {
             ModelId::Gemini25Pro => "Latest most capable Gemini model with reasoning",
             ModelId::Gemini3ProPreview => {
                 "Preview of next-generation Gemini 3 Pro model with advanced reasoning and capabilities"
+            }
+            ModelId::Gemini3FlashPreview => {
+                "Our most intelligent model built for speed, combining frontier intelligence with superior search and grounding"
             }
             // OpenAI models
             ModelId::GPT5 => "Latest most capable OpenAI model with advanced reasoning",
@@ -1040,6 +1048,7 @@ impl ModelId {
             ModelId::Gemini25FlashLite,
             ModelId::Gemini25Pro,
             ModelId::Gemini3ProPreview,
+            ModelId::Gemini3FlashPreview,
             // OpenAI models
             ModelId::GPT5,
             ModelId::GPT52,
@@ -1206,6 +1215,7 @@ impl ModelId {
             ModelId::Gemini25FlashPreview
                 | ModelId::Gemini25Flash
                 | ModelId::Gemini25FlashLite
+                | ModelId::Gemini3FlashPreview
                 | ModelId::ZaiGlm45Flash
         )
     }
@@ -1235,6 +1245,7 @@ impl ModelId {
             ModelId::Gemini25FlashPreview
                 | ModelId::Gemini25Flash
                 | ModelId::Gemini25FlashLite
+                | ModelId::Gemini3FlashPreview
                 | ModelId::GPT5Mini
                 | ModelId::GPT5Nano
                 | ModelId::ClaudeHaiku45
@@ -1254,6 +1265,7 @@ impl ModelId {
         matches!(
             self,
             ModelId::Gemini25Pro
+                | ModelId::Gemini3FlashPreview
                 | ModelId::GPT52
                 | ModelId::GPT5
                 | ModelId::GPT5Codex
@@ -1294,7 +1306,8 @@ impl ModelId {
             | ModelId::Gemini25Flash
             | ModelId::Gemini25FlashLite
             | ModelId::Gemini25Pro => "2.5",
-            ModelId::Gemini3ProPreview => "3",
+            ModelId::Gemini3ProPreview
+            | ModelId::Gemini3FlashPreview => "3",
             // OpenAI generations
             ModelId::GPT52 => "5.2",
             ModelId::GPT5

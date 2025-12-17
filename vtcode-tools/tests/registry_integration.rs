@@ -47,7 +47,7 @@ mod tests {
     #[tokio::test]
     async fn test_middleware_metrics() -> anyhow::Result<()> {
         let metrics = MetricsMiddleware::new();
-        let chain = MiddlewareChain::new().with_middleware(metrics.clone());
+        let chain = MiddlewareChain::new().add(metrics.clone());
 
         let req = ToolRequest {
             tool_name: "test_tool".to_string(),
@@ -110,7 +110,7 @@ mod tests {
     async fn test_full_workflow_simulation() -> anyhow::Result<()> {
         let cache = Arc::new(LruCache::new(100, Duration::from_secs(60)));
         let metrics = MetricsMiddleware::new();
-        let chain = MiddlewareChain::new().with_middleware(metrics.clone());
+        let chain = MiddlewareChain::new().add(metrics.clone());
 
         let mut detector = PatternDetector::new(2);
         let now = std::time::Instant::now();

@@ -5,13 +5,13 @@
 # Core agent behavior; see docs/config/CONFIGURATION_PRECEDENCE.md.
 [agent]
 # Primary LLM provider to use (e.g., "openai", "gemini", "anthropic", "openrouter")
-provider = "ollama"
+provider = "gemini"
 
 # Environment variable containing the API key for the provider
-api_key_env = "OLLAMA_API_KEY"
+api_key_env = "GEMINI_API_KEY"
 
 # Default model to use when no specific model is specified
-default_model = "gpt-oss:20b-cloud"
+default_model = "gemini-3-flash-preview"
 
 # Visual theme for the terminal interface
 theme = "ciapre-dark"
@@ -542,15 +542,15 @@ llm_router_model = ""
 # Model mapping for different task types
 [router.models]
 # Model for simple queries
-simple = "gpt-oss:20b-cloud"
+simple = "gemini-3-flash-preview"
 # Model for standard tasks
-standard = "gpt-oss:20b-cloud"
+standard = "gemini-3-flash-preview"
 # Model for complex tasks
-complex = "gpt-oss:20b-cloud"
+complex = "gemini-3-flash-preview"
 # Model for code generation heavy tasks
-codegen_heavy = "gpt-oss:20b-cloud"
+codegen_heavy = "gemini-3-flash-preview"
 # Model for information retrieval heavy tasks
-retrieval_heavy = "gpt-oss:20b-cloud"
+retrieval_heavy = "gemini-3-flash-preview"
 
 # Router budget settings (if applicable)
 [router.budgets]
