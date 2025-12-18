@@ -200,14 +200,14 @@ fn backtrack_myers(
         }
 
         let k_idx = (k + max_d as i32) as usize;
-        
+
         // Determine if we came from k-1 or k+1
         let prev_k = if k == -(cur_d as i32) || (k != cur_d as i32 && v_index[cur_d - 1][k_idx - 1] < v_index[cur_d - 1][k_idx + 1]) {
             k + 1
         } else {
             k - 1
         };
-        
+
         let prev_k_idx = (prev_k + max_d as i32) as usize;
         let prev_x_val = v_index[cur_d - 1][prev_k_idx];
         let prev_y = (prev_x_val as i32 - prev_k) as usize;
@@ -233,7 +233,7 @@ fn backtrack_myers(
             edits.push(Edit::Delete);
             x -= 1;
         }
-        
+
         k = prev_k;
     }
 
