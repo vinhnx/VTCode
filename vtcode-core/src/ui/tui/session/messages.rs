@@ -46,11 +46,13 @@ impl Session {
     pub(super) fn push_line(&mut self, kind: InlineMessageKind, segments: Vec<InlineSegment>) {
         let previous_max_offset = self.current_max_scroll_offset();
         let revision = self.next_revision();
+        let index = self.lines.len();
         self.lines.push(MessageLine {
             kind,
             segments,
             revision,
         });
+        self.mark_line_dirty(index);
         self.invalidate_scroll_metrics();
         self.adjust_scroll_after_change(previous_max_offset);
 
@@ -121,6 +123,7 @@ impl Session {
     ) {
         let previous_max_offset = self.current_max_scroll_offset();
         let remove_count = min(count, self.lines.len());
+        let first_dirty = self.lines.len().saturating_sub(remove_count);
         for _ in 0..remove_count {
             self.lines.pop();
         }
@@ -132,6 +135,7 @@ impl Session {
                 revision,
             });
         }
+        self.mark_line_dirty(first_dirty);
         self.invalidate_scroll_metrics();
         self.adjust_scroll_after_change(previous_max_offset);
     }
@@ -188,6 +192,7 @@ impl Session {
         }
 
         if appended {
+            self.mark_line_dirty(self.lines.len() - 1);
             self.invalidate_scroll_metrics();
             return;
         }
@@ -199,6 +204,7 @@ impl Session {
             .unwrap_or(false);
         if can_reuse_last {
             let revision = self.next_revision();
+            let index = self.lines.len() - 1;
             if let Some(line) = self.lines.last_mut() {
                 line.segments.push(InlineSegment {
                     text: text.to_owned(),
@@ -206,11 +212,13 @@ impl Session {
                 });
                 line.revision = revision;
             }
+            self.mark_line_dirty(index);
             self.invalidate_scroll_metrics();
             return;
         }
 
         let revision = self.next_revision();
+        let index = self.lines.len();
         self.lines.push(MessageLine {
             kind,
             segments: vec![InlineSegment {
@@ -220,6 +228,7 @@ impl Session {
             revision,
         });
 
+        self.mark_line_dirty(index);
         self.invalidate_scroll_metrics();
     }
 
@@ -241,11 +250,13 @@ impl Session {
         }
         if cleared {
             let revision = self.next_revision();
+            let index = self.lines.len() - 1;
             if let Some(line) = self.lines.last_mut()
                 && line.kind == kind
             {
                 line.revision = revision;
             }
+            self.mark_line_dirty(index);
             self.invalidate_scroll_metrics();
             return;
         }
@@ -288,7 +299,9 @@ impl Session {
             .map(|line| line.kind == InlineMessageKind::Tool && line.segments.is_empty())
             .unwrap_or(false);
         if should_remove {
+            let index = self.lines.len() - 1;
             self.lines.pop();
+            self.mark_line_dirty(index);
         }
     }
 }

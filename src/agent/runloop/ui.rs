@@ -262,8 +262,7 @@ pub(crate) fn render_session_banner(
     _model_label: &str,
     _reasoning_label: &str,
 ) -> Result<()> {
-    renderer.line_if_not_empty(vtcode_core::utils::ansi::MessageStyle::Output)?;
-
+    // Minimal preamble - no output
     Ok(())
 }
 

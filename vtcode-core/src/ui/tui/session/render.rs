@@ -1,7 +1,5 @@
 #![allow(dead_code)]
 
-use std::{cmp::min, sync::Arc};
-
 use anstyle::Color as AnsiColorEnum;
 use ratatui::{
     Frame,
@@ -25,7 +23,6 @@ use super::{
     },
     prompt_palette::PromptPalette,
     text_utils,
-    transcript::{CachedMessage, TranscriptReflowCache},
 };
 use crate::config::constants::ui;
 
@@ -54,6 +51,7 @@ pub fn render(session: &mut Session, frame: &mut Frame<'_>) {
             {
                 line.segments[0].text = format!("{} Thinking...", frame);
                 line.revision = revision;
+                session.mark_line_dirty(spinner_idx);
             }
         }
     }
@@ -185,7 +183,7 @@ pub(super) fn apply_view_rows(session: &mut Session, rows: u16) {
         invalidate_scroll_metrics(session);
     }
     recalculate_transcript_rows(session);
-    enforce_scroll_bounds(session);
+    session.enforce_scroll_bounds();
 }
 
 fn apply_transcript_rows(session: &mut Session, rows: u16) {
@@ -229,9 +227,9 @@ fn render_transcript(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
     let viewport_rows = inner.height as usize;
     let padding = usize::from(ui::INLINE_TRANSCRIPT_BOTTOM_PADDING);
     let effective_padding = padding.min(viewport_rows.saturating_sub(1));
-    let total_rows = total_transcript_rows(session, content_width) + effective_padding;
+    let total_rows = session.total_transcript_rows(content_width) + effective_padding;
     let (top_offset, _clamped_total_rows) =
-        prepare_transcript_scroll(session, total_rows, viewport_rows);
+        session.prepare_transcript_scroll(total_rows, viewport_rows);
     let vertical_offset = top_offset.min(session.scroll_manager.max_offset());
     session.transcript_view_top = vertical_offset;
 
@@ -240,7 +238,7 @@ fn render_transcript(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
 
     // Use cached visible lines to avoid re-cloning on viewport-only scrolls
     let cached_lines =
-        collect_transcript_window_cached(session, content_width, visible_start, viewport_rows);
+        session.collect_transcript_window_cached(content_width, visible_start, viewport_rows);
 
     // Only clone if we need to mutate (fill or overlay)
     let fill_count = viewport_rows.saturating_sub(cached_lines.len());
@@ -838,154 +836,11 @@ fn text_fallback(session: &Session, kind: InlineMessageKind) -> Option<AnsiColor
 }
 
 fn viewport_height(session: &Session) -> usize {
-    session.transcript_rows.max(1) as usize
-}
-
-pub(super) fn current_max_scroll_offset(session: &mut Session) -> usize {
-    ensure_scroll_metrics(session);
-    session.scroll_manager.max_offset()
-}
-
-pub(super) fn enforce_scroll_bounds(session: &mut Session) {
-    let max_offset = current_max_scroll_offset(session);
-    if session.scroll_manager.offset() > max_offset {
-        session.scroll_manager.set_offset(max_offset);
-    }
+    session.viewport_height()
 }
 
 pub(super) fn invalidate_scroll_metrics(session: &mut Session) {
-    session.scroll_manager.invalidate_metrics();
-    invalidate_transcript_cache(session);
-}
-
-fn invalidate_transcript_cache(session: &mut Session) {
-    session.transcript_cache = None;
-    // Also invalidate visible lines cache when content changes
-    session.visible_lines_cache = None;
-    // Mark that content changed so we clear transcript on next render
-    session.transcript_content_changed = true;
-}
-
-fn collect_transcript_window_cached(
-    session: &mut Session,
-    width: u16,
-    start_row: usize,
-    max_rows: usize,
-) -> Arc<Vec<Line<'static>>> {
-    // Check if we have cached visible lines for this exact position and width
-    if let Some((cached_offset, cached_width, cached_lines)) = &session.visible_lines_cache
-        && *cached_offset == start_row
-        && *cached_width == width
-    {
-        // Return Arc clone (cheap pointer copy, no Vec allocation)
-        return Arc::clone(cached_lines);
-    }
-
-    // Not in cache, fetch from transcript
-    let visible_lines = collect_transcript_window(session, width, start_row, max_rows);
-
-    // Cache for next render (wrapped in Arc for cheap sharing)
-    let arc_lines = Arc::new(visible_lines);
-    session.visible_lines_cache = Some((start_row, width, Arc::clone(&arc_lines)));
-
-    arc_lines
-}
-
-fn ensure_scroll_metrics(session: &mut Session) {
-    if session.scroll_manager.metrics_valid() {
-        return;
-    }
-
-    let viewport_rows = viewport_height(session);
-    if session.transcript_width == 0 || viewport_rows == 0 {
-        let total_rows = session.lines.len().saturating_sub(viewport_rows.max(1));
-        session.scroll_manager.set_total_rows(total_rows);
-        return;
-    }
-
-    let padding = usize::from(ui::INLINE_TRANSCRIPT_BOTTOM_PADDING);
-    let effective_padding = padding.min(viewport_rows.saturating_sub(1));
-    let total_rows = total_transcript_rows(session, session.transcript_width) + effective_padding;
-    session.scroll_manager.set_total_rows(total_rows);
-}
-
-pub(super) fn ensure_reflow_cache(session: &mut Session, width: u16) -> &mut TranscriptReflowCache {
-    let mut cache = session
-        .transcript_cache
-        .take()
-        .unwrap_or_else(|| TranscriptReflowCache::new(width));
-
-    // Update width if needed and handle width changes
-    if cache.width != width {
-        cache.set_width(width);
-    }
-
-    // Resize message cache to match current line count
-    while cache.messages.len() > session.lines.len() {
-        cache.messages.pop();
-    }
-    while cache.messages.len() < session.lines.len() {
-        cache.messages.push(CachedMessage::default());
-    }
-
-    // Process any dirty messages (those that need reflow)
-    let mut first_dirty = session.lines.len(); // Start with all clean
-
-    // Find the first message that needs reflow
-    for (index, line) in session.lines.iter().enumerate() {
-        if cache.needs_reflow(index, line.revision) {
-            first_dirty = index;
-            break;
-        }
-    }
-
-    // If no messages need reflow, just return existing cache
-    if first_dirty == session.lines.len() {
-        // Still need to ensure row offsets are correct
-        cache.update_row_offsets();
-        session.transcript_cache = Some(cache);
-        return session.transcript_cache.as_mut().unwrap();
-    }
-
-    // Update all messages from the first dirty one onwards
-    for index in first_dirty..session.lines.len() {
-        if index < session.lines.len() {
-            let line = &session.lines[index];
-            if cache.needs_reflow(index, line.revision) {
-                // Use Session method from reflow.rs to avoid duplication
-                let new_lines = session.reflow_message_lines(index, width);
-                cache.update_message(index, line.revision, new_lines);
-            }
-        }
-    }
-
-    // Update row offsets and total row count
-    cache.update_row_offsets();
-    session.transcript_cache = Some(cache);
-    session.transcript_cache.as_mut().unwrap()
-}
-
-pub(super) fn total_transcript_rows(session: &mut Session, width: u16) -> usize {
-    if session.lines.is_empty() {
-        return 0;
-    }
-    let cache = ensure_reflow_cache(session, width);
-    cache.total_rows()
-}
-
-fn collect_transcript_window(
-    session: &mut Session,
-    width: u16,
-    start_row: usize,
-    max_rows: usize,
-) -> Vec<Line<'static>> {
-    if max_rows == 0 {
-        return Vec::new();
-    }
-    let cache = ensure_reflow_cache(session, width);
-
-    // Use the optimized method from the new TranscriptReflowCache
-    cache.get_visible_range(start_row, max_rows)
+    session.invalidate_scroll_metrics();
 }
 
 fn wrap_block_lines(
@@ -1523,73 +1378,6 @@ fn modal_render_styles(session: &Session) -> ModalRenderStyles {
         instruction_body: default_style(session),
         hint: default_style(session).add_modifier(Modifier::DIM | Modifier::ITALIC),
     }
-}
-
-#[allow(dead_code)]
-pub(super) fn adjust_scroll_after_change(session: &mut Session, previous_max_offset: usize) {
-    let new_max_offset = current_max_scroll_offset(session);
-    let current_offset = session.scroll_manager.offset();
-
-    if current_offset >= previous_max_offset && new_max_offset > previous_max_offset {
-        session.scroll_manager.set_offset(new_max_offset);
-    } else if current_offset > 0 && new_max_offset > previous_max_offset {
-        let delta = new_max_offset - previous_max_offset;
-        session
-            .scroll_manager
-            .set_offset(min(current_offset + delta, new_max_offset));
-    }
-    enforce_scroll_bounds(session);
-}
-
-#[allow(dead_code)]
-pub(super) fn scroll_line_up(session: &mut Session) {
-    let previous_offset = session.scroll_manager.offset();
-    session.scroll_manager.scroll_up(1);
-    // Only invalidate cache if scroll actually changed (not at top)
-    if session.scroll_manager.offset() != previous_offset {
-        session.visible_lines_cache = None;
-    }
-}
-
-#[allow(dead_code)]
-pub(super) fn scroll_line_down(session: &mut Session) {
-    let previous_offset = session.scroll_manager.offset();
-    session.scroll_manager.scroll_down(1);
-    // Only invalidate cache if scroll actually changed (not at bottom)
-    if session.scroll_manager.offset() != previous_offset {
-        session.visible_lines_cache = None;
-    }
-}
-
-#[allow(dead_code)]
-pub(super) fn scroll_page_up(session: &mut Session) {
-    let previous_offset = session.scroll_manager.offset();
-    let page = viewport_height(session).max(1);
-    session.scroll_manager.scroll_up(page);
-    // Only invalidate cache if scroll actually changed
-    if session.scroll_manager.offset() != previous_offset {
-        session.visible_lines_cache = None;
-    }
-}
-
-#[allow(dead_code)]
-pub(super) fn scroll_page_down(session: &mut Session) {
-    let page = viewport_height(session).max(1);
-    let previous_offset = session.scroll_manager.offset();
-    session.scroll_manager.scroll_down(page);
-    // Only invalidate cache if scroll actually changed
-    if session.scroll_manager.offset() != previous_offset {
-        session.visible_lines_cache = None;
-    }
-}
-
-#[allow(dead_code)]
-pub(super) fn toggle_timeline_pane(session: &mut Session) {
-    session.show_timeline_pane = !session.show_timeline_pane;
-    // recalculate_transcript_rows is in render.rs.
-    // Since we are in render.rs, we can call it directly if it's a function.
-    recalculate_transcript_rows(session);
-    session.mark_dirty();
 }
 
 #[allow(dead_code)]

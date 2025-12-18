@@ -5,6 +5,9 @@
 
 use ratatui::text::Line;
 use std::collections::HashMap;
+use std::sync::Arc;
+
+use super::Session;
 
 #[derive(Default, Clone)]
 pub struct CachedMessage {
@@ -57,7 +60,7 @@ impl TranscriptReflowCache {
     }
 
     /// Invalidates the content cache when width changes
-    fn invalidate_content(&mut self) {
+    pub fn invalidate_content(&mut self) {
         self.width_specific_cache.clear();
         for message in &mut self.messages {
             message.lines.clear(); // Clear cached lines
@@ -89,15 +92,29 @@ impl TranscriptReflowCache {
         message.hash = hash;
     }
 
-    /// Precomputes row offsets for faster access to transcript ranges
-    pub fn update_row_offsets(&mut self) {
-        self.row_offsets.clear();
-        self.row_offsets.reserve(self.messages.len());
+    /// Precomputes row offsets starting from a specific index
+    pub fn update_row_offsets_from(&mut self, start_index: usize) {
+        if start_index == 0 {
+            self.row_offsets.clear();
+            self.row_offsets.reserve(self.messages.len());
+        } else {
+            self.row_offsets.truncate(start_index);
+        }
 
-        let mut current_offset = 0;
-        for message in &self.messages {
+        let mut current_offset = if start_index > 0 && start_index <= self.row_offsets.len() {
+            // This case shouldn't happen with truncate above, but for safety:
+            self.row_offsets[start_index - 1] + self.messages[start_index - 1].lines.len()
+        } else if start_index > 0 && !self.row_offsets.is_empty() {
+            // After truncate(start_index), the last element is at start_index - 1
+            let last_idx = self.row_offsets.len() - 1;
+            self.row_offsets[last_idx] + self.messages[last_idx].lines.len()
+        } else {
+            0
+        };
+
+        for i in self.row_offsets.len()..self.messages.len() {
             self.row_offsets.push(current_offset);
-            current_offset += message.lines.len();
+            current_offset += self.messages[i].lines.len();
         }
 
         self.total_rows = current_offset;
@@ -164,6 +181,113 @@ impl TranscriptReflowCache {
     }
 }
 
+impl Session {
+    /// Ensures the reflow cache is up to date for the given width
+    pub(super) fn ensure_reflow_cache(&mut self, width: u16) -> &mut TranscriptReflowCache {
+        let mut cache = self
+            .transcript_cache
+            .take()
+            .unwrap_or_else(|| TranscriptReflowCache::new(width));
+
+        // Update width if needed and handle width changes
+        if cache.width != width {
+            cache.set_width(width);
+        }
+
+        // Resize message cache to match current line count
+        while cache.messages.len() > self.lines.len() {
+            cache.messages.pop();
+        }
+        while cache.messages.len() < self.lines.len() {
+            cache.messages.push(CachedMessage::default());
+        }
+
+        // Process any dirty messages (those that need reflow)
+        // Use the hint from session if available to avoid O(N) scan
+        let mut first_dirty = self.first_dirty_line.unwrap_or(self.lines.len());
+
+        // Verify and find the actual first dirty message
+        // We scan from the hint downwards to be safe, but usually it's accurate
+        first_dirty = (first_dirty..self.lines.len())
+            .find(|&index| cache.needs_reflow(index, self.lines[index].revision))
+            .unwrap_or(self.lines.len());
+
+        // If no messages need reflow, just return existing cache
+        if first_dirty == self.lines.len() {
+            // Still need to ensure row offsets are correct (e.g. if messages were removed)
+            cache.update_row_offsets_from(first_dirty);
+            self.first_dirty_line = None;
+            self.transcript_cache = Some(cache);
+            return self.transcript_cache.as_mut().unwrap();
+        }
+
+        // Update all messages from the first dirty one onwards
+        for index in first_dirty..self.lines.len() {
+            let line = &self.lines[index];
+            if cache.needs_reflow(index, line.revision) {
+                // Use Session method from reflow.rs to avoid duplication
+                let new_lines = self.reflow_message_lines(index, width);
+                cache.update_message(index, line.revision, new_lines);
+            }
+        }
+
+        // Update row offsets and total row count incrementally
+        cache.update_row_offsets_from(first_dirty);
+        self.first_dirty_line = None;
+        self.transcript_cache = Some(cache);
+        self.transcript_cache.as_mut().unwrap()
+    }
+
+    /// Gets the total number of rows in the transcript for a given width
+    pub(super) fn total_transcript_rows(&mut self, width: u16) -> usize {
+        if width == 0 {
+            return 0;
+        }
+        let cache = self.ensure_reflow_cache(width);
+        cache.total_rows()
+    }
+
+    /// Collects a window of visible lines from the transcript
+    pub(super) fn collect_transcript_window(
+        &mut self,
+        width: u16,
+        start_row: usize,
+        max_rows: usize,
+    ) -> Vec<Line<'static>> {
+        if max_rows == 0 {
+            return Vec::new();
+        }
+        let cache = self.ensure_reflow_cache(width);
+        cache.get_visible_range(start_row, max_rows)
+    }
+
+    /// Collects a window of visible lines with caching
+    pub(super) fn collect_transcript_window_cached(
+        &mut self,
+        width: u16,
+        start_row: usize,
+        max_rows: usize,
+    ) -> Arc<Vec<Line<'static>>> {
+        // Check if we have cached visible lines for this exact position and width
+        if let Some((cached_offset, cached_width, cached_lines)) = &self.visible_lines_cache
+            && *cached_offset == start_row
+            && *cached_width == width
+        {
+            // Return Arc clone (cheap pointer copy, no Vec allocation)
+            return Arc::clone(cached_lines);
+        }
+
+        // Not in cache, fetch from transcript
+        let visible_lines = self.collect_transcript_window(width, start_row, max_rows);
+
+        // Cache for next render (wrapped in Arc for cheap sharing)
+        let arc_lines = Arc::new(visible_lines);
+        self.visible_lines_cache = Some((start_row, width, Arc::clone(&arc_lines)));
+
+        arc_lines
+    }
+}
+
 impl Default for TranscriptReflowCache {
     fn default() -> Self {
         Self::new(80) // Default terminal width
@@ -209,7 +333,7 @@ mod tests {
             vec![Line::default(), Line::default(), Line::default()],
         );
 
-        cache.update_row_offsets();
+        cache.update_row_offsets_from(0);
 
         assert_eq!(cache.row_offsets, vec![0, 2, 3]); // [0, 0+2, 0+2+1]
         assert_eq!(cache.total_rows(), 6); // 2+1+3
@@ -223,7 +347,7 @@ mod tests {
         cache.update_message(0, 1, vec![Line::from("Line 1"), Line::from("Line 2")]);
         cache.update_message(1, 2, vec![Line::from("Line 3")]);
 
-        cache.update_row_offsets();
+        cache.update_row_offsets_from(0);
 
         // Get first 2 rows
         let range = cache.get_visible_range(0, 2);
@@ -264,7 +388,7 @@ mod tests {
         let mut cache = TranscriptReflowCache::new(80);
         cache.update_message(0, 1, vec![Line::from("Test"), Line::from("Lines")]);
 
-        cache.update_row_offsets();
+        cache.update_row_offsets_from(0);
 
         assert_eq!(cache.row_offsets.get(0).copied(), Some(0));
         assert_eq!(cache.messages.get(0).map(|m| m.lines.len()), Some(2));
@@ -284,5 +408,33 @@ mod tests {
         let cache = TranscriptReflowCache::new(80);
         let range = cache.get_visible_range(100, 10); // Start beyond available rows
         assert!(range.is_empty());
+    }
+
+    #[test]
+    fn test_incremental_row_offsets() {
+        let mut cache = TranscriptReflowCache::new(80);
+
+        // Add three messages
+        cache.update_message(0, 1, vec![Line::from("M1-L1"), Line::from("M1-L2")]);
+        cache.update_message(1, 2, vec![Line::from("M2-L1")]);
+        cache.update_message(2, 3, vec![Line::from("M3-L1"), Line::from("M3-L2")]);
+
+        cache.update_row_offsets_from(0);
+        assert_eq!(cache.row_offsets, vec![0, 2, 3]);
+        assert_eq!(cache.total_rows(), 5);
+
+        // Update second message (index 1)
+        cache.update_message(1, 4, vec![Line::from("M2-L1-New"), Line::from("M2-L2-New")]);
+        cache.update_row_offsets_from(1);
+
+        assert_eq!(cache.row_offsets, vec![0, 2, 4]);
+        assert_eq!(cache.total_rows(), 6);
+
+        // Add fourth message
+        cache.update_message(3, 5, vec![Line::from("M4-L1")]);
+        cache.update_row_offsets_from(3);
+
+        assert_eq!(cache.row_offsets, vec![0, 2, 4, 6]);
+        assert_eq!(cache.total_rows(), 7);
     }
 }

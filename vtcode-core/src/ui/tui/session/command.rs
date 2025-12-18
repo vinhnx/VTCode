@@ -23,28 +23,12 @@ const PROMPT_COMMAND_PREFIX: &str = "/prompt:";
 pub fn handle_command(session: &mut Session, command: InlineCommand) {
     match command {
         InlineCommand::AppendLine { kind, segments } => {
-            // Remove spinner message when agent response arrives
-            if kind == InlineMessageKind::Agent && session.thinking_spinner.is_active {
-                if let Some(spinner_idx) = session.thinking_spinner.spinner_line_index
-                    && spinner_idx < session.lines.len()
-                {
-                    session.lines.remove(spinner_idx);
-                }
-                session.thinking_spinner.stop();
-            }
+            session.clear_thinking_spinner_if_active(kind);
             session.push_line(kind, segments);
             session.transcript_content_changed = true;
         }
         InlineCommand::Inline { kind, segment } => {
-            // Remove spinner message when agent response arrives
-            if kind == InlineMessageKind::Agent && session.thinking_spinner.is_active {
-                if let Some(spinner_idx) = session.thinking_spinner.spinner_line_index
-                    && spinner_idx < session.lines.len()
-                {
-                    session.lines.remove(spinner_idx);
-                }
-                session.thinking_spinner.stop();
-            }
+            session.clear_thinking_spinner_if_active(kind);
             session.append_inline(kind, segment);
             session.transcript_content_changed = true;
         }
@@ -259,7 +243,8 @@ fn close_modal(session: &mut Session) {
         // Force full screen clear on next render to remove modal artifacts
         session.needs_full_clear = true;
         // Force transcript cache invalidation to ensure full redraw
-        session.transcript_cache = None;
+        session.invalidate_transcript_cache();
+        session.mark_line_dirty(0);
         mark_dirty(session);
     }
 }
@@ -625,15 +610,15 @@ pub(super) fn push_line(
     kind: InlineMessageKind,
     segments: Vec<crate::ui::tui::types::InlineSegment>,
 ) {
-    let previous_max_offset = super::render::current_max_scroll_offset(session);
+    let previous_max_offset = session.current_max_scroll_offset();
     let revision = session.next_revision();
     session.lines.push(super::message::MessageLine {
         kind,
         segments,
         revision,
     });
-    super::render::invalidate_scroll_metrics(session);
-    super::render::adjust_scroll_after_change(session, previous_max_offset);
+    session.invalidate_scroll_metrics();
+    session.adjust_scroll_after_change(previous_max_offset);
 }
 
 #[allow(dead_code)]
@@ -642,7 +627,7 @@ pub(super) fn append_inline(
     kind: InlineMessageKind,
     segment: crate::ui::tui::types::InlineSegment,
 ) {
-    let previous_max_offset = super::render::current_max_scroll_offset(session);
+    let previous_max_offset = session.current_max_scroll_offset();
 
     // For Tool messages, process the entire text as one unit to avoid excessive line breaks
     // Newlines in tool output will be preserved as actual newline characters rather than
@@ -688,8 +673,8 @@ pub(super) fn append_inline(
         }
     }
 
-    super::render::invalidate_scroll_metrics(session);
-    super::render::adjust_scroll_after_change(session, previous_max_offset);
+    session.invalidate_scroll_metrics();
+    session.adjust_scroll_after_change(previous_max_offset);
 }
 
 #[allow(dead_code)]
@@ -699,7 +684,7 @@ pub(super) fn replace_last(
     kind: InlineMessageKind,
     lines: Vec<Vec<crate::ui::tui::types::InlineSegment>>,
 ) {
-    let previous_max_offset = super::render::current_max_scroll_offset(session);
+    let previous_max_offset = session.current_max_scroll_offset();
     let remove_count = std::cmp::min(count, session.lines.len());
     for _ in 0..remove_count {
         session.lines.pop();
@@ -712,8 +697,8 @@ pub(super) fn replace_last(
             revision,
         });
     }
-    super::render::invalidate_scroll_metrics(session);
-    super::render::adjust_scroll_after_change(session, previous_max_offset);
+    session.invalidate_scroll_metrics();
+    session.adjust_scroll_after_change(previous_max_offset);
 }
 
 #[allow(dead_code)]
@@ -727,9 +712,7 @@ fn append_text(
         return;
     }
 
-    if kind == InlineMessageKind::Tool
-        && super::render::handle_tool_code_fence_marker(session, text)
-    {
+if kind == InlineMessageKind::Tool && session.handle_tool_code_fence_marker(text) {
         return;
     }
 
@@ -768,7 +751,7 @@ fn append_text(
     }
 
     if appended {
-        super::render::invalidate_scroll_metrics(session);
+        session.invalidate_scroll_metrics();
         return;
     }
 
@@ -786,7 +769,7 @@ fn append_text(
             });
             line.revision = revision;
         }
-        super::render::invalidate_scroll_metrics(session);
+        session.invalidate_scroll_metrics();
         return;
     }
 
@@ -800,7 +783,7 @@ fn append_text(
         revision,
     });
 
-    super::render::invalidate_scroll_metrics(session);
+    session.invalidate_scroll_metrics();
 }
 
 #[allow(dead_code)]
@@ -826,7 +809,7 @@ fn reset_line(session: &mut Session, kind: InlineMessageKind) {
         {
             line.revision = revision;
         }
-        super::render::invalidate_scroll_metrics(session);
+        session.invalidate_scroll_metrics();
         return;
     }
     start_line(session, kind);

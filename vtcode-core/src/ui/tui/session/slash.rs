@@ -124,7 +124,7 @@ pub(super) fn handle_slash_palette_change(session: &mut Session) {
     // Wait, I can't leave broken code.
     // I'll assume `crate::ui::tui::session::render::recalculate_transcript_rows(session)` works.
     crate::ui::tui::session::render::recalculate_transcript_rows(session);
-    crate::ui::tui::session::render::enforce_scroll_bounds(session);
+    session.enforce_scroll_bounds();
     session.mark_dirty();
 }
 
@@ -208,7 +208,7 @@ pub(super) fn handle_slash_selection_change(session: &mut Session, changed: bool
     if changed {
         preview_selected_slash_suggestion(session);
         crate::ui::tui::session::render::recalculate_transcript_rows(session);
-        crate::ui::tui::session::render::enforce_scroll_bounds(session);
+        session.enforce_scroll_bounds();
         session.mark_dirty();
         true
     } else {
