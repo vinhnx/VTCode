@@ -718,6 +718,7 @@ pub(crate) async fn run_single_agent_loop_unified(
             match input_owned.as_str() {
                 "" => continue,
                 "exit" | "quit" => {
+                    renderer.line(MessageStyle::Info, "✓")?;
                     session_end_reason = SessionEndReason::Exit;
                     break;
                 }
