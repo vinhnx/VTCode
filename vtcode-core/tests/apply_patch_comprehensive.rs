@@ -37,7 +37,7 @@ async fn test_multiple_chunks_precision() {
         .unwrap();
 
     assert!(result["success"].as_bool().unwrap_or(false), "Tool failed: {:?}", result);
-    
+
     let new_content = fs::read_to_string(&file_path).unwrap();
     let expected_content = "line 1\nline 2 modified\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9 modified\nline 10\n";
     assert_eq!(new_content, expected_content);
@@ -68,7 +68,7 @@ async fn test_fuzzy_matching_whitespace() {
         .unwrap();
 
     assert!(result["success"].as_bool().unwrap_or(false), "Tool failed: {:?}", result);
-    
+
     let new_content = fs::read_to_string(&file_path).unwrap();
     // Note: The current implementation might preserve or normalize based on how matcher.rs works.
     // Let's see what happens.
@@ -99,10 +99,10 @@ async fn test_delete_file_operation() {
 #[tokio::test]
 async fn test_mixed_operations() {
     let temp_dir = TempDir::new().unwrap();
-    
+
     let update_path = temp_dir.path().join("update.txt");
     fs::write(&update_path, "original\n").unwrap();
-    
+
     let delete_path = temp_dir.path().join("delete.txt");
     fs::write(&delete_path, "gone\n").unwrap();
 
@@ -121,14 +121,14 @@ async fn test_mixed_operations() {
     unsafe {
         std::env::set_var("VTCODE_SKIP_CONFIRMATIONS", "true");
     }
-    
+
     let result = registry
         .execute_tool("apply_patch", json!({ "input": patch_text }))
         .await
         .unwrap();
 
     assert!(result["success"].as_bool().unwrap_or(false), "Tool failed: {:?}", result);
-    
+
     assert!(temp_dir.path().join("new.txt").exists());
     assert_eq!(fs::read_to_string(temp_dir.path().join("new.txt")).unwrap(), "brand new\n");
     assert!(!delete_path.exists());
@@ -156,7 +156,7 @@ async fn test_eof_handling_no_newline() {
         .unwrap();
 
     assert!(result["success"].as_bool().unwrap_or(false), "Tool failed: {:?}", result);
-    
+
     let new_content = fs::read_to_string(&file_path).unwrap();
     // The tool should ideally preserve the missing trailing newline if it was missing,
     // or at least handle it gracefully.
@@ -279,7 +279,7 @@ async fn test_crlf_handling() {
         .unwrap();
 
     assert!(result["success"].as_bool().unwrap_or(false), "Tool failed: {:?}", result);
-    
+
     let new_content = fs::read_to_string(&file_path).unwrap();
     // Current implementation normalizes to LF
     assert!(new_content.contains("line 1 modified\n"));
@@ -306,7 +306,7 @@ async fn test_diff_preview_correctness() {
         .unwrap();
 
     assert!(result["success"].as_bool().unwrap_or(false));
-    
+
     let diff_preview = result["diff_preview"]["content"].as_str().unwrap();
     assert!(diff_preview.contains("-line 1"));
     assert!(diff_preview.contains("+line 1 modified"));
