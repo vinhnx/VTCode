@@ -35,33 +35,30 @@ impl SkillLocationType {
     fn from_path(path: &Path) -> Option<Self> {
         let path_str = path.to_string_lossy();
 
-        if path_str.contains(".vtcode/skills") {
-            if path_str.contains("~/")
+        if path_str.contains(".vtcode/skills")
+            && (path_str.contains("~/")
                 || path_str.contains("/home/")
-                || path_str.contains("/Users/")
-            {
-                Some(SkillLocationType::VtcodeUser)
-            } else {
-                Some(SkillLocationType::VtcodeProject)
-            }
+                || path_str.contains("/Users/"))
+        {
+            Some(SkillLocationType::VtcodeUser)
+        } else if path_str.contains(".vtcode/skills") {
+            Some(SkillLocationType::VtcodeProject)
+        } else if path_str.contains(".pi/skills")
+            && (path_str.contains("~/")
+                || path_str.contains("/home/")
+                || path_str.contains("/Users/"))
+        {
+            Some(SkillLocationType::PiUser)
         } else if path_str.contains(".pi/skills") {
-            if path_str.contains("~/")
+            Some(SkillLocationType::PiProject)
+        } else if path_str.contains(".claude/skills")
+            && (path_str.contains("~/")
                 || path_str.contains("/home/")
-                || path_str.contains("/Users/")
-            {
-                Some(SkillLocationType::PiUser)
-            } else {
-                Some(SkillLocationType::PiProject)
-            }
+                || path_str.contains("/Users/"))
+        {
+            Some(SkillLocationType::ClaudeUser)
         } else if path_str.contains(".claude/skills") {
-            if path_str.contains("~/")
-                || path_str.contains("/home/")
-                || path_str.contains("/Users/")
-            {
-                Some(SkillLocationType::ClaudeUser)
-            } else {
-                Some(SkillLocationType::ClaudeProject)
-            }
+            Some(SkillLocationType::ClaudeProject)
         } else if path_str.contains(".codex/skills") {
             Some(SkillLocationType::CodexUser)
         } else {
@@ -170,55 +167,47 @@ impl SkillLocations {
 
     /// Get default skill locations following pi-mono pattern
     pub fn default_locations() -> Vec<SkillLocation> {
-        let mut locations = vec![];
-
-        // VTCode locations (highest precedence)
-        locations.push(SkillLocation::new(
-            SkillLocationType::VtcodeUser,
-            PathBuf::from("~/.vtcode/skills"),
-            true, // recursive
-        ));
-
-        locations.push(SkillLocation::new(
-            SkillLocationType::VtcodeProject,
-            PathBuf::from(".vtcode/skills"),
-            true, // recursive
-        ));
-
-        // Pi locations (recursive with colon separator)
-        locations.push(SkillLocation::new(
-            SkillLocationType::PiUser,
-            PathBuf::from("~/.pi/agent/skills"),
-            true, // recursive
-        ));
-
-        locations.push(SkillLocation::new(
-            SkillLocationType::PiProject,
-            PathBuf::from(".pi/skills"),
-            true, // recursive
-        ));
-
-        // Claude Code locations (one-level only)
-        locations.push(SkillLocation::new(
-            SkillLocationType::ClaudeUser,
-            PathBuf::from("~/.claude/skills"),
-            false, // one-level
-        ));
-
-        locations.push(SkillLocation::new(
-            SkillLocationType::ClaudeProject,
-            PathBuf::from(".claude/skills"),
-            false, // one-level
-        ));
-
-        // Codex CLI locations (recursive)
-        locations.push(SkillLocation::new(
-            SkillLocationType::CodexUser,
-            PathBuf::from("~/.codex/skills"),
-            true, // recursive
-        ));
-
-        locations
+        vec![
+            // VTCode locations (highest precedence)
+            SkillLocation::new(
+                SkillLocationType::VtcodeUser,
+                PathBuf::from("~/.vtcode/skills"),
+                true, // recursive
+            ),
+            SkillLocation::new(
+                SkillLocationType::VtcodeProject,
+                PathBuf::from(".vtcode/skills"),
+                true, // recursive
+            ),
+            // Pi locations (recursive with colon separator)
+            SkillLocation::new(
+                SkillLocationType::PiUser,
+                PathBuf::from("~/.pi/agent/skills"),
+                true, // recursive
+            ),
+            SkillLocation::new(
+                SkillLocationType::PiProject,
+                PathBuf::from(".pi/skills"),
+                true, // recursive
+            ),
+            // Claude Code locations (one-level only)
+            SkillLocation::new(
+                SkillLocationType::ClaudeUser,
+                PathBuf::from("~/.claude/skills"),
+                false, // one-level
+            ),
+            SkillLocation::new(
+                SkillLocationType::ClaudeProject,
+                PathBuf::from(".claude/skills"),
+                false, // one-level
+            ),
+            // Codex CLI locations (recursive)
+            SkillLocation::new(
+                SkillLocationType::CodexUser,
+                PathBuf::from("~/.codex/skills"),
+                true, // recursive
+            ),
+        ]
     }
 
     /// Discover all skills across all locations
@@ -271,10 +260,7 @@ impl SkillLocations {
         );
 
         // Convert to final result
-        let mut final_skills: Vec<DiscoveredSkill> = discovered_skills
-            .into_iter()
-            .map(|(_, discovered)| discovered)
-            .collect();
+        let mut final_skills: Vec<DiscoveredSkill> = discovered_skills.into_values().collect();
 
         // Sort by location precedence (highest first) and then by name
         final_skills.sort_by(|a, b| match a.location_type.cmp(&b.location_type) {
@@ -296,87 +282,89 @@ impl SkillLocations {
         discovered: &mut HashMap<String, DiscoveredSkill>,
         stats: &mut DiscoveryStats,
     ) -> Result<()> {
-        self.walk_directory(&location.base_path, location, discovered, stats, 0)
+        walk_directory(&location.base_path, location, discovered, stats, 0)
+    }
+}
+
+/// Walk directory recursively
+fn walk_directory(
+    dir: &Path,
+    location: &SkillLocation,
+    discovered: &mut HashMap<String, DiscoveredSkill>,
+    stats: &mut DiscoveryStats,
+    depth: usize,
+) -> Result<()> {
+    if depth > 10 {
+        // Prevent infinite recursion
+        return Ok(());
     }
 
-    /// Walk directory recursively
-    fn walk_directory(
-        &self,
-        dir: &Path,
-        location: &SkillLocation,
-        discovered: &mut HashMap<String, DiscoveredSkill>,
-        stats: &mut DiscoveryStats,
-        depth: usize,
-    ) -> Result<()> {
-        if depth > 10 {
-            // Prevent infinite recursion
-            return Ok(());
-        }
+    if !dir.exists() || !dir.is_dir() {
+        return Ok(());
+    }
 
-        if !dir.exists() || !dir.is_dir() {
-            return Ok(());
-        }
+    // Check if this directory is a skill
+    if let Some(skill_name) = location.get_skill_name(dir) {
+        match parse_skill_file(dir) {
+            Ok((manifest, _)) => {
+                // Check if we already have this skill from a higher precedence location
+                let had_existing = discovered.contains_key(&manifest.name);
 
-        // Check if this directory is a skill
-        if let Some(skill_name) = location.get_skill_name(dir) {
-            match parse_skill_file(dir) {
-                Ok((manifest, _)) => {
-                    // Check if we already have this skill from a higher precedence location
-                    let had_existing = discovered.contains_key(&manifest.name);
-
-                    if let Some(existing) = discovered.get(&manifest.name) {
-                        if existing.location_type < location.location_type {
-                            // Existing skill has higher precedence, skip this one
-                            stats.skips_due_to_precedence += 1;
-                            debug!(
-                                "Skipping skill '{}' from {} (already exists from higher precedence {})",
-                                manifest.name, location.location_type, existing.location_type
-                            );
-                            return Ok(());
-                        }
-                    }
-
-                    // Add or update the skill
-                    let discovered_skill = DiscoveredSkill {
-                        location_type: location.location_type,
-                        skill_context: SkillContext::MetadataOnly(manifest.clone()),
-                        skill_path: dir.to_path_buf(),
-                        skill_name: skill_name.clone(),
-                    };
-
-                    discovered.insert(manifest.name.clone(), discovered_skill);
-                    stats.skills_found += 1;
-                    info!(
-                        "Discovered skill: '{}' from {} at {}",
-                        manifest.name,
-                        location.location_type,
-                        dir.display()
+                if let Some(existing) = discovered
+                    .get(&manifest.name)
+                    .filter(|e| e.location_type < location.location_type)
+                {
+                    // Existing skill has higher precedence, skip this one
+                    stats.skips_due_to_precedence += 1;
+                    debug!(
+                        "Skipping skill '{}' from {} (already exists from higher precedence {})",
+                        manifest.name, location.location_type, existing.location_type
                     );
-
-                    if had_existing {
-                        stats.skills_with_higher_precedence += 1;
-                    }
+                    return Ok(());
                 }
-                Err(e) => {
-                    warn!("Failed to parse skill from {}: {}", dir.display(), e);
-                    stats.parse_errors += 1;
+
+                // Add or update the skill
+                let discovered_skill = DiscoveredSkill {
+                    location_type: location.location_type,
+                    skill_context: SkillContext::MetadataOnly(manifest.clone()),
+                    skill_path: dir.to_path_buf(),
+                    skill_name: skill_name.clone(),
+                };
+
+                discovered.insert(manifest.name.clone(), discovered_skill);
+                stats.skills_found += 1;
+                info!(
+                    "Discovered skill: '{}' from {} at {}",
+                    manifest.name,
+                    location.location_type,
+                    dir.display()
+                );
+
+                if had_existing {
+                    stats.skills_with_higher_precedence += 1;
                 }
             }
-        }
-
-        // Continue walking subdirectories
-        if let Ok(entries) = std::fs::read_dir(dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_dir() {
-                    self.walk_directory(&path, location, discovered, stats, depth + 1)?;
-                }
+            Err(e) => {
+                warn!("Failed to parse skill from {}: {}", dir.display(), e);
+                stats.parse_errors += 1;
             }
         }
-
-        Ok(())
     }
 
+    // Continue walking subdirectories
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                walk_directory(&path, location, discovered, stats, depth + 1)?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+impl SkillLocations {
     /// Scan one-level location (Claude style)
     fn scan_one_level_location(
         &self,
@@ -392,38 +380,37 @@ impl SkillLocations {
             let entry = entry?;
             let path = entry.path();
 
-            if path.is_dir() {
-                if let Some(skill_name) = location.get_skill_name(&path) {
-                    match parse_skill_file(&path) {
-                        Ok((manifest, _)) => {
-                            // Check precedence
-                            if let Some(existing) = discovered.get(&manifest.name) {
-                                if existing.location_type < location.location_type {
-                                    stats.skips_due_to_precedence += 1;
-                                    continue;
-                                }
-                            }
-
-                            let discovered_skill = DiscoveredSkill {
-                                location_type: location.location_type,
-                                skill_context: SkillContext::MetadataOnly(manifest.clone()),
-                                skill_path: path.clone(),
-                                skill_name: skill_name.clone(),
-                            };
-
-                            discovered.insert(manifest.name.clone(), discovered_skill);
-                            stats.skills_found += 1;
-                            info!(
-                                "Discovered skill: '{}' from {} at {}",
-                                manifest.name,
-                                location.location_type,
-                                path.display()
-                            );
+            if let Some(skill_name) = location.get_skill_name(&path).filter(|_| path.is_dir()) {
+                match parse_skill_file(&path) {
+                    Ok((manifest, _)) => {
+                        // Check precedence
+                        if let Some(_existing) = discovered
+                            .get(&manifest.name)
+                            .filter(|e| e.location_type < location.location_type)
+                        {
+                            stats.skips_due_to_precedence += 1;
+                            continue;
                         }
-                        Err(e) => {
-                            warn!("Failed to parse skill from {}: {}", path.display(), e);
-                            stats.parse_errors += 1;
-                        }
+
+                        let discovered_skill = DiscoveredSkill {
+                            location_type: location.location_type,
+                            skill_context: SkillContext::MetadataOnly(manifest.clone()),
+                            skill_path: path.clone(),
+                            skill_name: skill_name.clone(),
+                        };
+
+                        discovered.insert(manifest.name.clone(), discovered_skill);
+                        stats.skills_found += 1;
+                        info!(
+                            "Discovered skill: '{}' from {} at {}",
+                            manifest.name,
+                            location.location_type,
+                            path.display()
+                        );
+                    }
+                    Err(e) => {
+                        warn!("Failed to parse skill from {}: {}", path.display(), e);
+                        stats.parse_errors += 1;
                     }
                 }
             }
@@ -434,10 +421,7 @@ impl SkillLocations {
 
     /// Get all location types in precedence order
     pub fn get_location_types(&self) -> Vec<SkillLocationType> {
-        self.locations
-            .iter()
-            .map(|loc| loc.location_type.clone())
-            .collect()
+        self.locations.iter().map(|loc| loc.location_type).collect()
     }
 
     /// Get location by type

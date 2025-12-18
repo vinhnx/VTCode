@@ -9,19 +9,23 @@ use tokio::sync::mpsc;
 
 use super::modern_tui::{Event, ModernTui};
 
+pub struct ModernTuiConfig {
+    pub theme: InlineTheme,
+    pub placeholder: Option<String>,
+    pub surface_preference: UiSurfacePreference,
+    pub inline_rows: u16,
+    pub show_timeline_pane: bool,
+    pub show_logs: bool,
+    pub log_theme: Option<String>,
+    pub event_callback: Option<InlineEventCallback>,
+}
+
 pub async fn run_modern_tui(
     mut command_rx: mpsc::UnboundedReceiver<InlineCommand>,
     event_tx: mpsc::UnboundedSender<InlineEvent>,
-    theme: InlineTheme,
-    placeholder: Option<String>,
-    surface_preference: UiSurfacePreference,
-    inline_rows: u16,
-    show_timeline_pane: bool,
-    show_logs: bool,
-    log_theme: Option<String>,
-    event_callback: Option<InlineEventCallback>,
+    config: ModernTuiConfig,
 ) -> Result<()> {
-    // Create a new ModernTUI instance
+    // Create a new ModernTui instance
     let mut tui = ModernTui::new()?
         .tick_rate(4.0)
         .frame_rate(30.0)
@@ -30,10 +34,15 @@ pub async fn run_modern_tui(
 
     // Create the session
     let (log_tx, log_rx) = tokio::sync::mpsc::unbounded_channel();
-    set_log_theme_name(log_theme.clone());
+    set_log_theme_name(config.log_theme.clone());
     register_tui_log_sender(log_tx);
-    let mut session =
-        Session::new_with_logs(theme, placeholder, inline_rows, show_timeline_pane, show_logs);
+    let mut session = Session::new_with_logs(
+        config.theme,
+        config.placeholder,
+        config.inline_rows,
+        config.show_timeline_pane,
+        config.show_logs,
+    );
     session.set_log_receiver(log_rx);
 
     // Enter the TUI
@@ -72,7 +81,7 @@ pub async fn run_modern_tui(
                                     session.render(frame);
                                 })?;
                             }
-                            Event::Resize(width, height) => {
+                            Event::Resize(_width, height) => {
                                 // Handle resize by telling the session about new dimensions
                                 session.apply_view_rows(height);
                             }
@@ -82,7 +91,7 @@ pub async fn run_modern_tui(
                                     let _ = event_tx.send(inline_event.clone());
 
                                     // Also call the callback if present
-                                    if let Some(ref callback) = event_callback {
+                                    if let Some(ref callback) = config.event_callback {
                                         callback(&inline_event);
                                     }
 
@@ -154,16 +163,7 @@ pub async fn run_modern_tui(
 }
 
 /// Helper function to create a modern TUI session that can be used similarly to the existing one
-pub fn spawn_modern_session(
-    theme: InlineTheme,
-    placeholder: Option<String>,
-    surface_preference: UiSurfacePreference,
-    inline_rows: u16,
-    show_timeline_pane: bool,
-    show_logs: bool,
-    log_theme: Option<String>,
-    event_callback: Option<InlineEventCallback>,
-) -> Result<super::InlineSession> {
+pub fn spawn_modern_session(config: ModernTuiConfig) -> Result<super::InlineSession> {
     // Initialize panic hook to restore terminal state if a panic occurs
     crate::ui::tui::panic_hook::init_panic_hook();
 
@@ -174,20 +174,7 @@ pub fn spawn_modern_session(
         // Create a guard to mark TUI as initialized during the session
         let _guard = crate::ui::tui::panic_hook::TuiPanicGuard::new();
 
-        if let Err(error) = run_modern_tui(
-            command_rx,
-            event_tx,
-            theme,
-            placeholder,
-            surface_preference,
-            inline_rows,
-            show_timeline_pane,
-            show_logs,
-            log_theme,
-            event_callback,
-        )
-        .await
-        {
+        if let Err(error) = run_modern_tui(command_rx, event_tx, config).await {
             tracing::error!(%error, "modern inline session terminated unexpectedly");
         }
     });

@@ -189,13 +189,11 @@ export class EnhancedChatViewProvider implements vscode.WebviewViewProvider {
             }
         } catch (error) {
             this.outputChannel.appendLine(
-                `[Chat] Error handling message: ${
-                    error instanceof Error ? error.message : String(error)
+                `[Chat] Error handling message: ${error instanceof Error ? error.message : String(error)
                 }`
             );
             this.sendSystemMessage(
-                `Error: ${
-                    error instanceof Error ? error.message : String(error)
+                `Error: ${error instanceof Error ? error.message : String(error)
                 }`,
                 "error"
             );
@@ -340,8 +338,7 @@ export class EnhancedChatViewProvider implements vscode.WebviewViewProvider {
             }
         } catch (error) {
             this.sendSystemMessage(
-                `Agent command failed: ${
-                    error instanceof Error ? error.message : String(error)
+                `Agent command failed: ${error instanceof Error ? error.message : String(error)
                 }`,
                 "error"
             );
@@ -353,7 +350,7 @@ export class EnhancedChatViewProvider implements vscode.WebviewViewProvider {
      */
     protected async handleToolCommand(command: string): Promise<void> {
         const cmd = command.slice(1).trim();
-        
+
         if (!cmd) {
             this.sendSystemMessage(
                 "No custom prompt specified. Use #<prompt-name> to invoke a custom prompt",
@@ -376,8 +373,7 @@ export class EnhancedChatViewProvider implements vscode.WebviewViewProvider {
             await this.processAgentResponse(`/prompt:${promptName}${args ? ` ${args}` : ""}`);
         } catch (error) {
             this.sendSystemMessage(
-                `Failed to load custom prompt: ${
-                    error instanceof Error ? error.message : String(error)
+                `Failed to load custom prompt: ${error instanceof Error ? error.message : String(error)
                 }`,
                 "error"
             );
@@ -667,8 +663,7 @@ export class EnhancedChatViewProvider implements vscode.WebviewViewProvider {
             );
         } catch (error) {
             this.sendSystemMessage(
-                `Tool execution failed: ${
-                    error instanceof Error ? error.message : String(error)
+                `Tool execution failed: ${error instanceof Error ? error.message : String(error)
                 }`,
                 "error"
             );
@@ -874,9 +869,8 @@ export class EnhancedChatViewProvider implements vscode.WebviewViewProvider {
                 const assistantMessage: ChatMessage = {
                     id: this.generateMessageId(),
                     role: "assistant",
-                    content: `I received your message: "${userInput}"\n\nNote: VTCode CLI integration encountered an error. This is a fallback response.\n\nError: ${
-                        error instanceof Error ? error.message : String(error)
-                    }`,
+                    content: `I received your message: "${userInput}"\n\nNote: VTCode CLI integration encountered an error. This is a fallback response.\n\nError: ${error instanceof Error ? error.message : String(error)
+                        }`,
                     timestamp: Date.now(),
                     metadata: {
                         model: "fallback",
@@ -889,8 +883,7 @@ export class EnhancedChatViewProvider implements vscode.WebviewViewProvider {
             }
         } catch (error) {
             this.sendSystemMessage(
-                `Error processing message: ${
-                    error instanceof Error ? error.message : String(error)
+                `Error processing message: ${error instanceof Error ? error.message : String(error)
                 }`,
                 "error"
             );
@@ -986,8 +979,7 @@ export class EnhancedChatViewProvider implements vscode.WebviewViewProvider {
                 );
             } catch (error) {
                 this.sendSystemMessage(
-                    `Tool ${toolCall.name} failed: ${
-                        error instanceof Error ? error.message : String(error)
+                    `Tool ${toolCall.name} failed: ${error instanceof Error ? error.message : String(error)
                     }`,
                     "error"
                 );
@@ -1063,8 +1055,7 @@ export class EnhancedChatViewProvider implements vscode.WebviewViewProvider {
             }
         } catch (error) {
             this.sendSystemMessage(
-                `Export failed: ${
-                    error instanceof Error ? error.message : String(error)
+                `Export failed: ${error instanceof Error ? error.message : String(error)
                 }`,
                 "error"
             );
@@ -1233,13 +1224,13 @@ export class EnhancedChatViewProvider implements vscode.WebviewViewProvider {
             newestMessage: this.transcript[this.transcript.length - 1]
                 ?.timestamp
                 ? new Date(
-                      this.transcript[this.transcript.length - 1].timestamp
-                  )
+                    this.transcript[this.transcript.length - 1].timestamp
+                )
                 : null,
         };
 
         const statsText = `
-📊 **Transcript Statistics**
+ **Transcript Statistics**
 
 **Current Session:**
 - Total Messages: ${stats.totalMessages}
@@ -1309,8 +1300,7 @@ export class EnhancedChatViewProvider implements vscode.WebviewViewProvider {
         const archiveList = this.archivedTranscripts
             .map(
                 (archive, index) =>
-                    `${index + 1}. ${archive.date.toLocaleString()} - ${
-                        archive.messages.length
+                    `${index + 1}. ${archive.date.toLocaleString()} - ${archive.messages.length
                     } messages`
             )
             .join("\n");
@@ -1438,8 +1428,7 @@ export class EnhancedChatViewProvider implements vscode.WebviewViewProvider {
         for (const msg of messages) {
             if (options.includeTimestamps) {
                 lines.push(
-                    `### [${new Date(msg.timestamp).toLocaleString()}] ${
-                        msg.role
+                    `### [${new Date(msg.timestamp).toLocaleString()}] ${msg.role
                     }`
                 );
             } else {
@@ -1513,29 +1502,27 @@ export class EnhancedChatViewProvider implements vscode.WebviewViewProvider {
     <h1>VTCode Chat Transcript</h1>
     <p>Exported: ${new Date().toLocaleString()}</p>
     ${messages
-        .map(
-            (msg) => `
+                .map(
+                    (msg) => `
         <div class="message ${msg.role}">
             <div class="role">${msg.role.toUpperCase()}</div>
-            ${
-                options.includeTimestamps
-                    ? `<div class="timestamp">${new Date(
-                          msg.timestamp
-                      ).toLocaleString()}</div>`
-                    : ""
-            }
+            ${options.includeTimestamps
+                            ? `<div class="timestamp">${new Date(
+                                msg.timestamp
+                            ).toLocaleString()}</div>`
+                            : ""
+                        }
             <div class="content">${this.escapeHtml(msg.content)}</div>
-            ${
-                options.includeMetadata && msg.metadata
-                    ? `<div class="metadata">${JSON.stringify(
-                          msg.metadata
-                      )}</div>`
-                    : ""
-            }
+            ${options.includeMetadata && msg.metadata
+                            ? `<div class="metadata">${JSON.stringify(
+                                msg.metadata
+                            )}</div>`
+                            : ""
+                        }
         </div>
     `
-        )
-        .join("")}
+                )
+                .join("")}
 </body>
 </html>
         `;
@@ -1673,8 +1660,7 @@ export class EnhancedChatViewProvider implements vscode.WebviewViewProvider {
             }
         } catch (error) {
             this.outputChannel.appendLine(
-                `[Chat] Failed to load transcript: ${
-                    error instanceof Error ? error.message : String(error)
+                `[Chat] Failed to load transcript: ${error instanceof Error ? error.message : String(error)
                 }`
             );
         }
@@ -1694,8 +1680,7 @@ export class EnhancedChatViewProvider implements vscode.WebviewViewProvider {
             );
         } catch (error) {
             this.outputChannel.appendLine(
-                `[Chat] Failed to save transcript: ${
-                    error instanceof Error ? error.message : String(error)
+                `[Chat] Failed to save transcript: ${error instanceof Error ? error.message : String(error)
                 }`
             );
         }
@@ -1715,8 +1700,7 @@ export class EnhancedChatViewProvider implements vscode.WebviewViewProvider {
             );
         } catch (error) {
             this.outputChannel.appendLine(
-                `[Chat] Failed to save archives: ${
-                    error instanceof Error ? error.message : String(error)
+                `[Chat] Failed to save archives: ${error instanceof Error ? error.message : String(error)
                 }`
             );
         }
@@ -1759,7 +1743,7 @@ export class EnhancedChatViewProvider implements vscode.WebviewViewProvider {
             <button id="export-btn" title="Export">📥</button>
             <button id="archive-btn" title="Archive">📦</button>
             <button id="clear-btn" title="Clear">🗑️</button>
-            <button id="stats-btn" title="Statistics">📊</button>
+            <button id="stats-btn" title="Statistics"> </button>
         </div>
 
         <!-- Search/Filter Panel -->

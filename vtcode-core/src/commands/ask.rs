@@ -51,7 +51,6 @@ pub async fn handle_ask_command(config: AgentConfig, prompt: Vec<String>) -> Res
         tool_config: None,
         generation_config: None,
         system_instruction: Some(system_instruction),
-        reasoning_config: None,
     };
 
     // Convert the request to a string prompt

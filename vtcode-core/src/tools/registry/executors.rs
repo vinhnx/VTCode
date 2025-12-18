@@ -618,13 +618,14 @@ impl ToolRegistry {
             }
 
             // Validate regex pattern syntax if not using literal matching
-            if payload.literal != Some(true) {
-                if let Err(e) = regex::Regex::new(&payload.pattern) {
-                    return Err(anyhow!(
-                        "Invalid regex pattern: {}. If you meant to match a literal string, set literal: true",
-                        e
-                    ));
-                }
+            if payload.literal != Some(true)
+                && let Err(e) = regex::Regex::new(&payload.pattern)
+            {
+                return Err(anyhow!(
+                    "Invalid regex pattern: {}. Error: {}. If you meant to match a literal string, set literal: true",
+                    payload.pattern,
+                    e
+                ));
             }
 
             // Validate the path parameter to avoid security issues

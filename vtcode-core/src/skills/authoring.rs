@@ -187,14 +187,12 @@ impl SkillAuthor {
                 "metadata",
             ];
             for key in map.keys() {
-                if let serde_yaml::Value::String(key_str) = key {
-                    if !allowed.contains(&key_str.as_str()) {
-                        report.errors.push(format!(
-                            "Unexpected property '{}' in frontmatter. Allowed: {}",
-                            key_str,
-                            allowed.join(", ")
-                        ));
-                    }
+                if let Some(key_str) = key.as_str().filter(|s| !allowed.contains(s)) {
+                    report.errors.push(format!(
+                        "Unexpected property '{}' in frontmatter. Allowed: {}",
+                        key_str,
+                        allowed.join(", ")
+                    ));
                 }
             }
         }
@@ -232,12 +230,22 @@ impl SkillAuthor {
         // Validate description
         if frontmatter.description.is_empty() {
             report.errors.push("Description is required".to_string());
-        } else {
-            if frontmatter.description.contains("[TODO") {
+        } else if frontmatter.description.contains("[TODO") {
+            report
+                .warnings
+                .push("Description contains TODO placeholder".to_string());
+            if frontmatter.description.contains('<') || frontmatter.description.contains('>') {
                 report
-                    .warnings
-                    .push("Description contains TODO placeholder".to_string());
+                    .errors
+                    .push("Description cannot contain angle brackets (< or >)".to_string());
             }
+            if frontmatter.description.len() > 1024 {
+                report.errors.push(format!(
+                    "Description is too long ({} characters). Maximum is 1024 characters.",
+                    frontmatter.description.len()
+                ));
+            }
+        } else {
             if frontmatter.description.contains('<') || frontmatter.description.contains('>') {
                 report
                     .errors
@@ -295,7 +303,7 @@ impl SkillAuthor {
         let mut zip = ZipWriter::new(file);
 
         // Add all files from skill_dir
-        self.add_directory_to_zip(&mut zip, skill_dir, skill_dir)?;
+        add_directory_to_zip(&mut zip, skill_dir, skill_dir)?;
 
         zip.finish()?;
         info!("Packaged skill to: {}", output_file.display());
@@ -411,37 +419,36 @@ impl SkillAuthor {
 
         Ok(())
     }
+}
 
-    fn add_directory_to_zip<W: std::io::Write + std::io::Seek>(
-        &self,
-        zip: &mut zip::ZipWriter<W>,
-        dir: &Path,
-        base: &Path,
-    ) -> Result<()> {
-        use std::io::Read;
-        use zip::write::SimpleFileOptions;
+fn add_directory_to_zip<W: std::io::Write + std::io::Seek>(
+    zip: &mut zip::ZipWriter<W>,
+    dir: &Path,
+    base: &Path,
+) -> Result<()> {
+    use std::io::Read;
+    use zip::write::SimpleFileOptions;
 
-        for entry in fs::read_dir(dir)? {
-            let entry = entry?;
-            let path = entry.path();
-            let name = path.strip_prefix(base)?;
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        let name = path.strip_prefix(base)?;
 
-            if path.is_file() {
-                debug!("Adding file: {}", name.display());
-                let options = SimpleFileOptions::default()
-                    .compression_method(zip::CompressionMethod::Deflated);
-                zip.start_file(name.to_string_lossy().to_string(), options)?;
-                let mut file = fs::File::open(&path)?;
-                let mut buffer = Vec::new();
-                file.read_to_end(&mut buffer)?;
-                zip.write_all(&buffer)?;
-            } else if path.is_dir() {
-                self.add_directory_to_zip(zip, &path, base)?;
-            }
+        if path.is_file() {
+            debug!("Adding file: {}", name.display());
+            let options =
+                SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+            zip.start_file(name.to_string_lossy().to_string(), options)?;
+            let mut file = fs::File::open(&path)?;
+            let mut buffer = Vec::new();
+            file.read_to_end(&mut buffer)?;
+            zip.write_all(&buffer)?;
+        } else if path.is_dir() {
+            add_directory_to_zip(zip, &path, base)?;
         }
-
-        Ok(())
     }
+
+    Ok(())
 }
 
 /// Validation report for skills
@@ -630,11 +637,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_skill() -> anyhow::Result<()> {
-    let tmp = TempDir::new().map_err(|e| {
-        // Provide context on TempDir failure
-        eprintln!("Failed to create TempDir: {e}");
-        e
-    })?;
+        let tmp = TempDir::new().map_err(|e| {
+            // Provide context on TempDir failure
+            eprintln!("Failed to create TempDir: {e}");
+            e
+        })?;
         let author = SkillAuthor::new(tmp.path().to_path_buf());
 
         let skill_dir = author

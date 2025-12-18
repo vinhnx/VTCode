@@ -13,6 +13,4 @@ pub struct GenerateContentRequest {
     pub system_instruction: Option<SystemInstruction>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "generationConfig")]
     pub generation_config: Option<Value>,
-    #[serde(skip_serializing_if = "Option::is_none", rename = "reasoningConfig")]
-    pub reasoning_config: Option<Value>,
 }

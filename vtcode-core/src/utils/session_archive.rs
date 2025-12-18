@@ -166,6 +166,17 @@ pub struct SessionListing {
     pub snapshot: SessionSnapshot,
 }
 
+#[derive(Debug, Clone)]
+pub struct SessionProgressArgs {
+    pub total_messages: usize,
+    pub distinct_tools: Vec<String>,
+    pub recent_messages: Vec<SessionMessage>,
+    pub turn_number: usize,
+    pub token_usage: Option<TokenUsageStats>,
+    pub max_context_tokens: Option<usize>,
+    pub loaded_skills: Option<Vec<String>>,
+}
+
 impl SessionListing {
     pub fn identifier(&self) -> String {
         self.path
@@ -282,32 +293,23 @@ impl SessionArchive {
         self.write_snapshot(snapshot)
     }
 
-    pub fn persist_progress(
-        &self,
-        total_messages: usize,
-        distinct_tools: Vec<String>,
-        recent_messages: Vec<SessionMessage>,
-        turn_number: usize,
-        token_usage: Option<TokenUsageStats>,
-        max_context_tokens: Option<usize>,
-        loaded_skills: Option<Vec<String>>,
-    ) -> Result<PathBuf> {
-        let tool_summaries = distinct_tools.clone();
+    pub fn persist_progress(&self, args: SessionProgressArgs) -> Result<PathBuf> {
+        let tool_summaries = args.distinct_tools.clone();
         let snapshot = SessionSnapshot {
             metadata: self.metadata.clone(),
             started_at: self.started_at,
             ended_at: Utc::now(),
-            total_messages,
-            distinct_tools,
+            total_messages: args.total_messages,
+            distinct_tools: args.distinct_tools,
             transcript: Vec::new(),
-            messages: recent_messages.clone(),
+            messages: args.recent_messages.clone(),
             progress: Some(SessionProgress {
-                turn_number,
-                recent_messages,
+                turn_number: args.turn_number,
+                recent_messages: args.recent_messages,
                 tool_summaries,
-                token_usage,
-                max_context_tokens,
-                loaded_skills: loaded_skills.unwrap_or_default(),
+                token_usage: args.token_usage,
+                max_context_tokens: args.max_context_tokens,
+                loaded_skills: args.loaded_skills.unwrap_or_default(),
             }),
         };
 
@@ -639,15 +641,15 @@ mod tests {
             ..TokenUsageStats::new()
         };
 
-        let path = archive.persist_progress(
-            1,
-            vec!["tool_a".to_owned()],
-            recent.clone(),
-            2,
-            Some(usage.clone()),
-            Some(128),
-            None, // loaded_skills
-        )?;
+        let path = archive.persist_progress(SessionProgressArgs {
+            total_messages: 1,
+            distinct_tools: vec!["tool_a".to_owned()],
+            recent_messages: recent.clone(),
+            turn_number: 2,
+            token_usage: Some(usage.clone()),
+            max_context_tokens: Some(128),
+            loaded_skills: None, // loaded_skills
+        })?;
 
         let stored = fs::read_to_string(&path)
             .with_context(|| format!("failed to read stored session: {}", path.display()))?;

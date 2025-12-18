@@ -10,14 +10,14 @@ use super::{PatchChunk, PatchError};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum LineEnding {
     LF,
-    CRLF,
+    Crlf,
 }
 
 impl LineEnding {
     pub fn as_str(&self) -> &'static str {
         match self {
             LineEnding::LF => "\n",
-            LineEnding::CRLF => "\r\n",
+            LineEnding::Crlf => "\r\n",
         }
     }
 }
@@ -55,7 +55,7 @@ pub(super) async fn load_file_lines(
             had_trailing_newline = true;
             if !detected_ending {
                 if line.ends_with("\r\n") {
-                    line_ending = LineEnding::CRLF;
+                    line_ending = LineEnding::Crlf;
                 }
                 detected_ending = true;
             }
@@ -158,11 +158,11 @@ pub(super) async fn write_patched_content(
 
     for (start_idx, old_len, new_segment) in replacements {
         // Write lines before the replacement
-        for i in current_idx..start_idx {
+        for line in original_lines.iter().take(start_idx).skip(current_idx) {
             if !first {
                 writer.write_all(ending.as_bytes()).await?;
             }
-            writer.write_all(original_lines[i].as_bytes()).await?;
+            writer.write_all(line.as_bytes()).await?;
             first = false;
         }
         // Write the replacement lines
@@ -177,11 +177,11 @@ pub(super) async fn write_patched_content(
     }
 
     // Write remaining lines
-    for i in current_idx..original_lines.len() {
+    for line in original_lines.iter().skip(current_idx) {
         if !first {
             writer.write_all(ending.as_bytes()).await?;
         }
-        writer.write_all(original_lines[i].as_bytes()).await?;
+        writer.write_all(line.as_bytes()).await?;
         first = false;
     }
 

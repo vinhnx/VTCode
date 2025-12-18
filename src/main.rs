@@ -78,7 +78,8 @@ async fn main() -> Result<()> {
             let prompt_text = workspace_path.to_string_lossy().to_string();
             // Create startup context with current directory as workspace
             let mut modified_args = args.clone();
-            modified_args.workspace_path = Some(std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+            modified_args.workspace_path =
+                Some(std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
             let startup = StartupContext::from_cli_args(&modified_args)
                 .await
                 .context("failed to initialize VTCode startup context")?;
@@ -122,7 +123,8 @@ async fn main() -> Result<()> {
 
     // Handle potential prompt from workspace_path argument (when user runs `vtcode "prompt"`)
     if let Some(prompt) = potential_prompt {
-        cli::handle_ask_single_command(core_cfg, &prompt, cli::AskCommandOptions::default()).await?;
+        cli::handle_ask_single_command(core_cfg, &prompt, cli::AskCommandOptions::default())
+            .await?;
         return Ok(());
     }
 

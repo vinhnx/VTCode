@@ -380,10 +380,8 @@ impl EnhancedSkillLoader {
 
     /// Expand path with home directory and workspace root
     fn expand_path(&self, path: &Path) -> PathBuf {
-        if path.starts_with("~") {
-            if let Ok(home) = std::env::var("HOME") {
-                return PathBuf::from(home).join(path.strip_prefix("~").unwrap_or(path));
-            }
+        if let Some(home) = std::env::var("HOME").ok().filter(|_| path.starts_with("~")) {
+            return PathBuf::from(home).join(path.strip_prefix("~").unwrap_or(path));
         }
 
         if path.is_relative() {
@@ -502,7 +500,7 @@ impl EnhancedSkillLoader {
         if available.is_empty() {
             "no skills available".to_string()
         } else if available.len() <= 5 {
-            format!("{}", available.join(", "))
+            available.join(", ").to_string()
         } else {
             format!(
                 "{} (and {} more)",
@@ -816,6 +814,9 @@ mod tests {
             description: "Extract text and tables from PDF documents".to_string(),
             version: None,
             author: None,
+            license: None,
+            model: None,
+            mode: None,
             vtcode_native: None,
             allowed_tools: None,
             disable_model_invocation: None,
@@ -838,6 +839,9 @@ mod tests {
             description: "Generate Excel spreadsheets with data analysis and charts".to_string(),
             version: None,
             author: None,
+            license: None,
+            model: None,
+            mode: None,
             vtcode_native: None,
             allowed_tools: None,
             disable_model_invocation: None,
@@ -860,6 +864,9 @@ mod tests {
             description: "Extract text and tables from PDF documents".to_string(),
             version: None,
             author: None,
+            license: None,
+            model: None,
+            mode: None,
             vtcode_native: None,
             allowed_tools: None,
             disable_model_invocation: None,
@@ -881,6 +888,9 @@ mod tests {
             description: "Generate technical documentation".to_string(),
             version: None,
             author: None,
+            license: None,
+            model: None,
+            mode: None,
             vtcode_native: None,
             allowed_tools: None,
             disable_model_invocation: None,
@@ -904,6 +914,9 @@ mod tests {
                 description: "Extract text from PDF documents".to_string(),
                 version: None,
                 author: None,
+                license: None,
+                model: None,
+                mode: None,
                 vtcode_native: None,
                 allowed_tools: None,
                 disable_model_invocation: None,
@@ -916,6 +929,9 @@ mod tests {
                 description: "Generate Excel spreadsheets with charts".to_string(),
                 version: None,
                 author: None,
+                license: None,
+                model: None,
+                mode: None,
                 vtcode_native: None,
                 allowed_tools: None,
                 disable_model_invocation: None,

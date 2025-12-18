@@ -103,7 +103,8 @@ syntect = { version = "5.2", default-features = false, features = [
 indicatif = { version = "0.18", default-features = false }
 unicode-segmentation = "1.11"
 unicode-width = { workspace = true }
-crossterm = { workspace = true }
+crossterm = { workspace = true, features = ["event-stream"] }
+nix = { version = "0.30", features = ["user", "signal"] }
 ratatui = { version = "0.29", default-features = false, features = [
     "crossterm",
     "unstable-rendered-line-info",
@@ -188,6 +189,5 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [dev-dependencies]
 assert_fs = "1.1"
-nix = { version = "0.30", features = ["user"] }
 mockito = "1.7"
 proptest = "1.5"

@@ -412,8 +412,8 @@ impl ContainerValidationReport {
 
     pub fn format_report(&self) -> String {
         let mut output = String::new();
-        output.push_str(&format!("📊 Container Skills Validation Report\n"));
-        output.push_str(&format!("=====================================\n\n"));
+        output.push_str(" Container Skills Validation Report\n");
+        output.push_str("=====================================\n\n");
         output.push_str(&format!(
             "Total Skills Analyzed: {}\n",
             self.total_skills_analyzed
@@ -427,7 +427,7 @@ impl ContainerValidationReport {
             "Incompatible: {}\n\n",
             self.summary.total_incompatible
         ));
-        output.push_str(&format!("{}", self.summary.recommendation));
+        output.push_str(&self.summary.recommendation);
 
         if !self.incompatible_skills.is_empty() {
             output.push_str("\n\nIncompatible Skills:");

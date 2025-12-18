@@ -8,19 +8,14 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 /// Skill scope indicating where the skill is defined
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum SkillScope {
     /// User-level skill (~/.vtcode/skills or ~/.claude/skills)
+    #[default]
     User,
     /// Repository-level skill (.vtcode/skills or .codex/skills in project root)
     Repo,
-}
-
-impl Default for SkillScope {
-    fn default() -> Self {
-        Self::User
-    }
 }
 
 /// Skill metadata for protocol/API responses (matches Codex protocol)
@@ -120,10 +115,10 @@ impl SkillManifest {
             );
         }
 
-        if let Some(when_to_use) = &self.when_to_use {
-            if when_to_use.len() > 512 {
-                anyhow::bail!("when-to-use must be 0-512 characters");
-            }
+        if let Some(when_to_use) = &self.when_to_use
+            && when_to_use.len() > 512
+        {
+            anyhow::bail!("when-to-use must be 0-512 characters");
         }
 
         if let Some(allowed_tools) = &self.allowed_tools {
@@ -136,16 +131,16 @@ impl SkillManifest {
             }
         }
 
-        if let Some(license) = &self.license {
-            if license.len() > 512 {
-                anyhow::bail!("license must be 0-512 characters");
-            }
+        if let Some(license) = &self.license
+            && license.len() > 512
+        {
+            anyhow::bail!("license must be 0-512 characters");
         }
 
-        if let Some(model) = &self.model {
-            if model.len() > 128 {
-                anyhow::bail!("model must be 0-128 characters");
-            }
+        if let Some(model) = &self.model
+            && model.len() > 128
+        {
+            anyhow::bail!("model must be 0-128 characters");
         }
 
         Ok(())

@@ -160,13 +160,13 @@ impl AutonomousExecutor {
 
                 // Check call count and provide early warning
                 let count = detector.get_call_count(tool_name);
-                if count >= 3 {
-                    if let Some(suggestion) = detector.suggest_alternative(tool_name) {
-                        return Some(format!(
-                            "Tool '{}' called {} times. Consider alternative approach:\n{}",
-                            tool_name, count, suggestion
-                        ));
-                    }
+                if count >= 3
+                    && let Some(suggestion) = detector.suggest_alternative(tool_name)
+                {
+                    return Some(format!(
+                        "Tool '{}' called {} times. Consider alternative approach:\n{}",
+                        tool_name, count, suggestion
+                    ));
                 }
             }
             Err(_) => {

@@ -1,7 +1,7 @@
 use serde_json::json;
+use std::fs;
 use tempfile::TempDir;
 use vtcode_core::tools::ToolRegistry;
-use std::fs;
 
 async fn setup_registry(root: &std::path::Path) -> ToolRegistry {
     let mut registry = ToolRegistry::new(root.to_path_buf()).await;
@@ -13,7 +13,8 @@ async fn setup_registry(root: &std::path::Path) -> ToolRegistry {
 async fn test_multiple_chunks_precision() {
     let temp_dir = TempDir::new().unwrap();
     let file_path = temp_dir.path().join("multi_chunk.txt");
-    let original_content = "line 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\n";
+    let original_content =
+        "line 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\n";
     fs::write(&file_path, original_content).unwrap();
 
     let patch_text = r#"*** Begin Patch
@@ -36,7 +37,11 @@ async fn test_multiple_chunks_precision() {
         .await
         .unwrap();
 
-    assert!(result["success"].as_bool().unwrap_or(false), "Tool failed: {:?}", result);
+    assert!(
+        result["success"].as_bool().unwrap_or(false),
+        "Tool failed: {:?}",
+        result
+    );
 
     let new_content = fs::read_to_string(&file_path).unwrap();
     let expected_content = "line 1\nline 2 modified\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9 modified\nline 10\n";
@@ -67,7 +72,11 @@ async fn test_fuzzy_matching_whitespace() {
         .await
         .unwrap();
 
-    assert!(result["success"].as_bool().unwrap_or(false), "Tool failed: {:?}", result);
+    assert!(
+        result["success"].as_bool().unwrap_or(false),
+        "Tool failed: {:?}",
+        result
+    );
 
     let new_content = fs::read_to_string(&file_path).unwrap();
     // Note: The current implementation might preserve or normalize based on how matcher.rs works.
@@ -92,7 +101,11 @@ async fn test_delete_file_operation() {
         .await
         .unwrap();
 
-    assert!(result["success"].as_bool().unwrap_or(false), "Tool failed: {:?}", result);
+    assert!(
+        result["success"].as_bool().unwrap_or(false),
+        "Tool failed: {:?}",
+        result
+    );
     assert!(!file_path.exists());
 }
 
@@ -127,10 +140,17 @@ async fn test_mixed_operations() {
         .await
         .unwrap();
 
-    assert!(result["success"].as_bool().unwrap_or(false), "Tool failed: {:?}", result);
+    assert!(
+        result["success"].as_bool().unwrap_or(false),
+        "Tool failed: {:?}",
+        result
+    );
 
     assert!(temp_dir.path().join("new.txt").exists());
-    assert_eq!(fs::read_to_string(temp_dir.path().join("new.txt")).unwrap(), "brand new\n");
+    assert_eq!(
+        fs::read_to_string(temp_dir.path().join("new.txt")).unwrap(),
+        "brand new\n"
+    );
     assert!(!delete_path.exists());
     assert_eq!(fs::read_to_string(&update_path).unwrap(), "updated\n");
 }
@@ -155,7 +175,11 @@ async fn test_eof_handling_no_newline() {
         .await
         .unwrap();
 
-    assert!(result["success"].as_bool().unwrap_or(false), "Tool failed: {:?}", result);
+    assert!(
+        result["success"].as_bool().unwrap_or(false),
+        "Tool failed: {:?}",
+        result
+    );
 
     let new_content = fs::read_to_string(&file_path).unwrap();
     // The tool should ideally preserve the missing trailing newline if it was missing,
@@ -182,10 +206,18 @@ async fn test_context_not_found_error() {
         .await
         .unwrap();
 
-    assert!(result["error"].is_object(), "Expected error object, got: {:?}", result);
+    assert!(
+        result["error"].is_object(),
+        "Expected error object, got: {:?}",
+        result
+    );
     // Check if it's a SegmentNotFound error
     let error_msg = result["error"]["message"].as_str().unwrap();
-    assert!(error_msg.contains("expected lines") || error_msg.contains("context"), "Unexpected error message: {}", error_msg);
+    assert!(
+        error_msg.contains("expected lines") || error_msg.contains("context"),
+        "Unexpected error message: {}",
+        error_msg
+    );
 }
 
 #[tokio::test]
@@ -200,7 +232,12 @@ async fn test_empty_patch_error() {
         .unwrap();
 
     assert!(result["error"].is_object());
-    assert!(result["error"]["message"].as_str().unwrap().contains("empty"));
+    assert!(
+        result["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("empty")
+    );
 }
 
 #[tokio::test]
@@ -215,7 +252,12 @@ async fn test_invalid_format_error() {
         .unwrap();
 
     assert!(result["error"].is_object());
-    assert!(result["error"]["message"].as_str().unwrap().contains("invalid patch format"));
+    assert!(
+        result["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("invalid patch format")
+    );
 }
 
 #[tokio::test]
@@ -235,7 +277,12 @@ async fn test_missing_file_for_update_error() {
         .unwrap();
 
     assert!(result["error"].is_object());
-    assert!(result["error"]["message"].as_str().unwrap().contains("not found"));
+    assert!(
+        result["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("not found")
+    );
 }
 
 #[tokio::test]
@@ -256,7 +303,12 @@ async fn test_add_existing_file_error() {
         .unwrap();
 
     assert!(result["error"].is_object());
-    assert!(result["error"]["message"].as_str().unwrap().contains("invalid patch operation"));
+    assert!(
+        result["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("invalid patch operation")
+    );
 }
 
 #[tokio::test]
@@ -278,7 +330,11 @@ async fn test_crlf_handling() {
         .await
         .unwrap();
 
-    assert!(result["success"].as_bool().unwrap_or(false), "Tool failed: {:?}", result);
+    assert!(
+        result["success"].as_bool().unwrap_or(false),
+        "Tool failed: {:?}",
+        result
+    );
 
     let new_content = fs::read_to_string(&file_path).unwrap();
     // Now we preserve CRLF!
@@ -312,5 +368,3 @@ async fn test_diff_preview_correctness() {
     assert!(diff_preview.contains("+line 1 modified"));
     assert!(diff_preview.contains("@@"));
 }
-
-

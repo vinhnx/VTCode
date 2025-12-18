@@ -3,6 +3,7 @@ use crate::config::core::{PromptCachingConfig, ProviderPromptCachingConfig};
 use crate::llm::error_display;
 use crate::llm::provider::{FinishReason, LLMError, LLMRequest, Message, ToolCall, ToolDefinition};
 use crate::llm::types as llm_types;
+use crate::llm::utils::extract_reasoning_content;
 use serde_json::Value;
 
 /// Serializes tool definitions to OpenAI-compatible JSON format.
@@ -536,7 +537,7 @@ where
         }
     })?;
 
-    let content = extract_content_from_message(message);
+    let mut content = extract_content_from_message(message);
 
     let tool_calls = message
         .get("tool_calls")
@@ -550,15 +551,40 @@ where
         .filter(|calls| !calls.is_empty());
 
     // Extract reasoning using custom extractor if provided
-    let reasoning = if let Some(extractor) = extract_reasoning {
-        extractor(message, choice)
+    let (mut reasoning, reasoning_details) = if let Some(extractor) = extract_reasoning {
+        // Extractor should return (reasoning, reasoning_details)
+        // For backwards compatibility, we'll wrap it if it only returns reasoning
+        // But let's assume we update the extractor signature if needed.
+        // For now, let's just stick to the current signature but handle it better.
+        (extractor(message, choice), None)
     } else {
-        // Default: check message.reasoning_content
-        message
+        // Default: check message.reasoning_content or choice.reasoning
+        let reasoning = message
             .get("reasoning_content")
+            .or_else(|| message.get("reasoning"))
             .and_then(|rc| rc.as_str())
-            .map(|s| s.to_string())
+            .map(|s| s.to_string());
+
+        let reasoning_details = message
+            .get("reasoning_details")
+            .and_then(|rd| rd.as_str())
+            .map(|s| vec![serde_json::json!(s)]);
+
+        (reasoning, reasoning_details)
     };
+
+    // Fallback: If no reasoning was found natively, try extracting from content
+    if reasoning.is_none()
+        && let Some(content_str) = &content
+        && !content_str.is_empty()
+    {
+        let (extracted_reasoning, cleaned_content) = extract_reasoning_content(content_str);
+        if !extracted_reasoning.is_empty() {
+            reasoning = Some(extracted_reasoning.join("\n\n"));
+            // If the content was mostly reasoning, we update it to the cleaned version
+            content = cleaned_content;
+        }
+    }
 
     let finish_reason = choice
         .get("finish_reason")
@@ -574,6 +600,6 @@ where
         usage,
         finish_reason,
         reasoning,
-        reasoning_details: None,
+        reasoning_details,
     })
 }

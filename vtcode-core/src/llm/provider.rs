@@ -1243,7 +1243,7 @@ pub struct LLMResponse {
     pub reasoning_details: Option<Vec<serde_json::Value>>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Usage {
     pub prompt_tokens: u32,
     pub completion_tokens: u32,

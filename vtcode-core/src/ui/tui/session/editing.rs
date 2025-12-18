@@ -57,7 +57,7 @@ impl Session {
     /// This preserves the full block (including large multi-line pastes) so the
     /// agent receives the exact content instead of dropping line breaks after
     /// hitting the interactive input's visual limit.
-    pub(super) fn insert_paste_text(&mut self, text: &str) {
+    pub fn insert_paste_text(&mut self, text: &str) {
         let sanitized: String = text
             .chars()
             .filter(|&ch| ch != '\r' && ch != '\u{7f}')

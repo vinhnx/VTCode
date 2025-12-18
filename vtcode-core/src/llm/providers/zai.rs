@@ -1,32 +1,39 @@
-#![allow(clippy::result_large_err)]
+#![allow(clippy::result_large_err, clippy::bind_instead_of_map)]
 use crate::config::TimeoutsConfig;
-use crate::config::constants::{env_vars, headers, models, urls};
+use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::PromptCachingConfig;
 use crate::llm::client::LLMClient;
-use crate::llm::error_display;
+use crate::llm::error_display::format_llm_error;
 use crate::llm::provider::{
-    LLMError, LLMErrorMetadata, LLMProvider, LLMRequest, LLMResponse, MessageRole, ToolChoice,
-    Usage,
+    FinishReason, LLMError, LLMErrorMetadata, LLMProvider, LLMRequest, LLMResponse, LLMStream,
+    LLMStreamEvent, MessageRole, ToolChoice, Usage,
 };
+use crate::llm::providers::shared::{
+    NoopStreamTelemetry, StreamTelemetry, ToolCallBuilder, finalize_tool_calls, update_tool_calls,
+};
+use crate::llm::providers::tag_sanitizer::TagStreamSanitizer;
 use crate::llm::types as llm_types;
+use async_stream::try_stream;
 use async_trait::async_trait;
+use futures::StreamExt;
 use reqwest::header::RETRY_AFTER;
 use reqwest::{Client as HttpClient, StatusCode};
 use serde_json::{Value, json};
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
-use tracing::error;
+// No tracing imports needed here currently, or just tracing::debug if needed
+// use tracing::error;
 
 use super::common::{
-    convert_usage_to_llm_types, override_base_url, parse_chat_request_openai_format_with_extractor,
-    parse_client_prompt_common, resolve_model, serialize_tools_openai_format,
-    validate_request_common,
+    convert_usage_to_llm_types, map_finish_reason_common, override_base_url,
+    parse_chat_request_openai_format_with_extractor, parse_client_prompt_common, resolve_model,
+    serialize_tools_openai_format, validate_request_common,
 };
+use super::error_handling::{format_network_error, format_parse_error};
 
+// Providers constants
 const PROVIDER_NAME: &str = "Z.AI";
 const PROVIDER_KEY: &str = "zai";
-const CHAT_COMPLETIONS_PATH: &str = "/paas/v4/chat/completions";
-const LOG_BODY_MAX_CHARS: usize = 2000;
 
 pub struct ZAIProvider {
     api_key: String,
@@ -163,7 +170,7 @@ impl ZAIProvider {
         }
 
         if messages.is_empty() {
-            let formatted = error_display::format_llm_error(PROVIDER_NAME, "No messages provided");
+            let formatted = format_llm_error(PROVIDER_NAME, "No messages provided");
             return Err(LLMError::InvalidRequest {
                 message: formatted,
                 metadata: None,
@@ -206,22 +213,16 @@ impl ZAIProvider {
         let reasoning_extractor = |message: &Value, _choice: &Value| {
             message
                 .get("reasoning_content")
-                .and_then(|value| match value {
-                    Value::String(text) => Some(text.to_string()),
-                    Value::Array(parts) => {
-                        let combined = parts
-                            .iter()
-                            .filter_map(|part| part.as_str())
-                            .collect::<Vec<_>>()
-                            .join("");
-                        if combined.is_empty() {
-                            None
-                        } else {
-                            Some(combined)
-                        }
-                    }
-                    _ => None,
+                .map(|value| match value {
+                    Value::String(text) => text.to_string(),
+                    Value::Array(parts) => parts
+                        .iter()
+                        .filter_map(|part| part.as_str())
+                        .collect::<Vec<_>>()
+                        .join(""),
+                    _ => String::new(),
                 })
+                .filter(|s| !s.is_empty())
         };
 
         // ZAI uses cached_tokens in prompt_tokens_details, not at top level
@@ -265,7 +266,7 @@ impl ZAIProvider {
         }
 
         if self.api_key.trim().is_empty() {
-            let formatted = error_display::format_llm_error(PROVIDER_NAME, "Missing Z.AI API key");
+            let formatted = format_llm_error(PROVIDER_NAME, "Missing Z.AI API key");
             return Err(LLMError::Authentication {
                 message: formatted,
                 metadata: None,
@@ -347,7 +348,7 @@ impl ZAIProvider {
         if is_balance_or_quota {
             let diagnostic =
                 Self::format_diagnostic(status, error_code, message, request_id, retry_after);
-            let formatted = error_display::format_llm_error(PROVIDER_NAME, &diagnostic);
+            let formatted = format_llm_error(PROVIDER_NAME, &diagnostic);
             return Some(LLMError::Provider {
                 message: formatted,
                 metadata: metadata.clone(),
@@ -357,7 +358,7 @@ impl ZAIProvider {
         if is_auth || is_account_issue {
             let diagnostic =
                 Self::format_diagnostic(status, error_code, message, request_id, retry_after);
-            let formatted = error_display::format_llm_error(PROVIDER_NAME, &diagnostic);
+            let formatted = format_llm_error(PROVIDER_NAME, &diagnostic);
             return Some(LLMError::Authentication {
                 message: formatted,
                 metadata: metadata.clone(),
@@ -384,7 +385,7 @@ impl ZAIProvider {
         None
     }
 
-    fn available_models() -> Vec<String> {
+    pub fn available_models() -> Vec<String> {
         models::zai::SUPPORTED_MODELS
             .iter()
             .map(|s| s.to_string())
@@ -399,7 +400,7 @@ impl LLMProvider for ZAIProvider {
     }
 
     fn supports_streaming(&self) -> bool {
-        false
+        true
     }
 
     fn supports_reasoning(&self, model: &str) -> bool {
@@ -424,73 +425,57 @@ impl LLMProvider for ZAIProvider {
             request.model = self.model.clone();
         }
 
-        if !Self::available_models().contains(&request.model) {
-            let formatted = error_display::format_llm_error(
-                PROVIDER_NAME,
-                &format!("Unsupported model: {}", request.model),
-            );
-            return Err(LLMError::InvalidRequest {
-                message: formatted,
-                metadata: None,
-            });
-        }
-
-        for message in &request.messages {
-            if let Err(err) = message.validate_for_provider(PROVIDER_KEY) {
-                let formatted = error_display::format_llm_error(PROVIDER_NAME, &err);
-                return Err(LLMError::InvalidRequest {
-                    message: formatted,
-                    metadata: None,
-                });
-            }
-        }
+        self.validate_request(&request)?;
 
         let payload = self.convert_to_zai_format(&request)?;
-        let url = format!("{}{}", self.base_url, CHAT_COMPLETIONS_PATH);
+        let url = format!("{}/chat/completions", self.base_url.trim_end_matches('/'));
 
         let response = self
             .http_client
             .post(&url)
-            .bearer_auth(&self.api_key)
-            .header(headers::ACCEPT_LANGUAGE, headers::ACCEPT_LANGUAGE_DEFAULT)
+            .header("Authorization", format!("Bearer {}", self.api_key))
             .json(&payload)
             .send()
             .await
-            .map_err(|err| {
-                let formatted = error_display::format_llm_error(
-                    PROVIDER_NAME,
-                    &format!("Network error: {}", err),
-                );
-                LLMError::Network {
-                    message: formatted,
-                    metadata: None,
-                }
-            })?;
+            .map_err(|err| format_network_error(PROVIDER_NAME, &err))?;
 
         if !response.status().is_success() {
             let status = response.status();
             let request_id = response
                 .headers()
                 .get("x-request-id")
-                .and_then(|value| value.to_str().ok())
-                .unwrap_or("<none>")
-                .to_string();
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("")
+                .to_owned();
             let retry_after = response
                 .headers()
                 .get(RETRY_AFTER)
-                .and_then(|value| value.to_str().ok())
-                .map(|value| value.to_string());
+                .and_then(|v| v.to_str().ok())
+                .map(|s| s.to_owned());
             let text = response.text().await.unwrap_or_default();
 
-            // Try to parse the error JSON structure first
-            // Z.AI error format: {"error": {"code": "1302", "message": "..."}}
-            let (error_code, message) = serde_json::from_str::<Value>(&text)
+            let (error_code, message): (String, String) = serde_json::from_str::<Value>(&text)
                 .ok()
                 .and_then(|value| {
-                    let error_obj = value.get("error")?;
-                    let code = error_obj.get("code").and_then(|c| c.as_str()).unwrap_or("");
-                    let msg = error_obj
-                        .get("message")
+                    let code = value
+                        .get("error")
+                        .and_then(|e| e.get("code"))
+                        .and_then(|c| {
+                            if let Some(s) = c.as_str() {
+                                Some(s.to_string())
+                            } else {
+                                c.as_u64().map(|v| v.to_string())
+                            }
+                        })
+                        .or_else(|| {
+                            value
+                                .get("code")
+                                .and_then(|c| c.as_str().map(|s| s.to_string()))
+                        })
+                        .unwrap_or_else(String::new);
+                    let msg = value
+                        .get("error")
+                        .and_then(|e| e.get("message"))
                         .and_then(|m| m.as_str())
                         .map(|s| s.to_string())
                         .or_else(|| {
@@ -502,6 +487,16 @@ impl LLMProvider for ZAIProvider {
                     Some((code.to_string(), msg))
                 })
                 .unwrap_or_else(|| (String::new(), text.clone()));
+
+            if let Some(mapped) = self.classify_error(
+                status,
+                &error_code,
+                &message,
+                &request_id,
+                retry_after.as_deref(),
+            ) {
+                return Err(mapped);
+            }
 
             let diagnostic = Self::format_diagnostic(
                 status,
@@ -522,17 +517,90 @@ impl LLMProvider for ZAIProvider {
                 retry_after.clone(),
                 Some(message.clone()),
             ));
-            let trimmed_body: String = text.chars().take(LOG_BODY_MAX_CHARS).collect();
-            error!(
-                target = "vtcode::llm::zai",
-                status = %status,
-                code = %error_code,
-                request_id = %request_id,
-                message = %message,
-                body = %trimmed_body,
-                retry_after = retry_after.as_deref().unwrap_or("<none>"),
-                "Z.AI request failed"
-            );
+
+            let formatted = format_llm_error(PROVIDER_NAME, &diagnostic);
+            return Err(LLMError::Provider {
+                message: formatted,
+                metadata,
+            });
+        }
+
+        let json: Value = response
+            .json()
+            .await
+            .map_err(|err| format_parse_error(PROVIDER_NAME, &err))?;
+        self.parse_zai_response(json)
+    }
+
+    async fn stream(&self, mut request: LLMRequest) -> Result<LLMStream, LLMError> {
+        self.ensure_api_key()?;
+
+        if request.model.trim().is_empty() {
+            request.model = self.model.clone();
+        }
+
+        self.validate_request(&request)?;
+        request.stream = true;
+
+        let payload = self.convert_to_zai_format(&request)?;
+        let url = format!("{}/chat/completions", self.base_url.trim_end_matches('/'));
+
+        let response = self
+            .http_client
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .json(&payload)
+            .send()
+            .await
+            .map_err(|err| format_network_error(PROVIDER_NAME, &err))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let request_id = response
+                .headers()
+                .get("x-request-id")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("")
+                .to_owned();
+            let retry_after = response
+                .headers()
+                .get(RETRY_AFTER)
+                .and_then(|v| v.to_str().ok())
+                .map(|s| s.to_owned());
+            let text = response.text().await.unwrap_or_default();
+
+            let (error_code, message) = serde_json::from_str::<Value>(&text)
+                .map(|value| {
+                    let code = value
+                        .get("error")
+                        .and_then(|e| e.get("code"))
+                        .and_then(|c| {
+                            if let Some(s) = c.as_str() {
+                                Some(s.to_string())
+                            } else {
+                                c.as_u64().map(|v| v.to_string())
+                            }
+                        })
+                        .or_else(|| {
+                            value
+                                .get("code")
+                                .and_then(|c| c.as_str().map(|s| s.to_string()))
+                        })
+                        .unwrap_or_else(String::new);
+                    let msg = value
+                        .get("error")
+                        .and_then(|e| e.get("message"))
+                        .and_then(|m| m.as_str())
+                        .map(|s| s.to_string())
+                        .or_else(|| {
+                            value
+                                .get("message")
+                                .and_then(|m| m.as_str().map(|s| s.to_string()))
+                        })
+                        .unwrap_or_else(|| text.clone());
+                    (code.to_string(), msg)
+                })
+                .unwrap_or_else(|_| (String::new(), text.clone()));
 
             if let Some(mapped) = self.classify_error(
                 status,
@@ -544,25 +612,131 @@ impl LLMProvider for ZAIProvider {
                 return Err(mapped);
             }
 
-            let formatted = error_display::format_llm_error(PROVIDER_NAME, &diagnostic);
+            let diagnostic = Self::format_diagnostic(
+                status,
+                &error_code,
+                &message,
+                &request_id,
+                retry_after.as_deref(),
+            );
+            let formatted = format_llm_error(PROVIDER_NAME, &diagnostic);
             return Err(LLMError::Provider {
                 message: formatted,
-                metadata,
+                metadata: None,
             });
         }
 
-        let json: Value = response.json().await.map_err(|err| {
-            let formatted = error_display::format_llm_error(
-                PROVIDER_NAME,
-                &format!("Failed to parse response: {}", err),
-            );
-            LLMError::Provider {
-                message: formatted,
-                metadata: None,
-            }
-        })?;
+        let mut bytes_stream = response.bytes_stream();
+        let mut buffer = String::new();
+        let telemetry = NoopStreamTelemetry;
 
-        self.parse_zai_response(json)
+        let stream = try_stream! {
+            let mut aggregated_content = String::new();
+            let mut aggregated_reasoning = String::new();
+            let mut tool_call_builders: Vec<ToolCallBuilder> = Vec::new();
+            let mut usage = None;
+            let mut finish_reason = FinishReason::Stop;
+            let mut sanitizer = TagStreamSanitizer::new();
+
+            while let Some(chunk_result) = bytes_stream.next().await {
+                let chunk_bytes = chunk_result.map_err(|e| format_network_error(PROVIDER_NAME, &e))?;
+                let chunk_str = String::from_utf8_lossy(&chunk_bytes);
+                buffer.push_str(&chunk_str);
+
+                while let Some((boundary_idx, boundary_len)) = crate::llm::providers::shared::find_sse_boundary(&buffer) {
+                    let event = buffer[..boundary_idx].to_string();
+                    buffer.drain(..boundary_idx + boundary_len);
+
+                    if let Some(data) = crate::llm::providers::shared::extract_data_payload(&event) {
+                        if data == "[DONE]" {
+                            break;
+                        }
+
+                        for line in data.lines() {
+                            if let Ok(value) = serde_json::from_str::<Value>(line) {
+                                if let Some(choices) = value.get("choices").and_then(|c| c.as_array())
+                                    && let Some(choice) = choices.first()
+                                {
+                                    if let Some(delta) = choice.get("delta") {
+                                        // Handle content
+                                        if let Some(content) = delta.get("content").and_then(|c| c.as_str()) {
+                                            aggregated_content.push_str(content);
+                                            telemetry.on_content_delta(content);
+
+                                            for event in sanitizer.process_chunk(content) {
+                                                match &event {
+                                                    LLMStreamEvent::Token { delta } => {
+                                                        yield LLMStreamEvent::Token { delta: delta.clone() };
+                                                    }
+                                                    LLMStreamEvent::Reasoning { delta } => {
+                                                        yield LLMStreamEvent::Reasoning { delta: delta.clone() };
+                                                    }
+                                                    _ => {}
+                                                }
+                                            }
+                                        }
+
+                                        // Handle ZAI reasoning_content
+                                        if let Some(reasoning) = delta.get("reasoning_content") {
+                                            let reasoning_text = match reasoning {
+                                                Value::String(s) => s.to_string(),
+                                                Value::Array(parts) => parts.iter().filter_map(|p| p.as_str()).collect::<String>(),
+                                                _ => String::new(),
+                                            };
+                                            if !reasoning_text.is_empty() {
+                                                aggregated_reasoning.push_str(&reasoning_text);
+                                                telemetry.on_reasoning_delta(&reasoning_text);
+                                                yield LLMStreamEvent::Reasoning { delta: reasoning_text };
+                                            }
+                                        }
+
+                                        // Handle tool calls
+                                        if let Some(tool_calls) = delta.get("tool_calls").and_then(|tc| tc.as_array()) {
+                                            update_tool_calls(&mut tool_call_builders, tool_calls);
+                                            telemetry.on_tool_call_delta();
+                                        }
+                                    }
+
+                                    if let Some(reason) = choice.get("finish_reason").and_then(|r| r.as_str()) {
+                                        finish_reason = map_finish_reason_common(reason);
+                                    }
+                                }
+
+                                if let Some(usage_value) = value.get("usage") {
+                                    usage = Some(Usage {
+                                        prompt_tokens: usage_value.get("prompt_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
+                                        completion_tokens: usage_value.get("completion_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
+                                        total_tokens: usage_value.get("total_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
+                                        cached_prompt_tokens: usage_value.get("prompt_tokens_details").and_then(|d| d.get("cached_tokens")).and_then(|v| v.as_u64()).map(|v| v as u32),
+                                        cache_creation_tokens: None,
+                                        cache_read_tokens: None,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Finalize sanitizer and yield leftover events
+            for event in sanitizer.finalize() {
+                yield event;
+            }
+
+            let tool_calls = finalize_tool_calls(tool_call_builders);
+            yield LLMStreamEvent::Completed {
+                response: LLMResponse {
+                    content: if aggregated_content.is_empty() { None } else { Some(aggregated_content) },
+                    tool_calls,
+                    usage,
+                    finish_reason,
+                    reasoning: if aggregated_reasoning.is_empty() { None } else { Some(aggregated_reasoning) },
+                    reasoning_details: None,
+                }
+            };
+        };
+
+        Ok(Box::pin(stream))
     }
 
     fn supported_models(&self) -> Vec<String> {

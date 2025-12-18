@@ -7,9 +7,11 @@ use crate::config::models::{ModelId, Provider as ModelProvider};
 use crate::config::types::{
     AgentConfig as CoreAgentConfig, ModelSelectionSource, ReasoningEffortLevel, VerbosityLevel,
 };
+use crate::core::agent::completion::{check_completion_indicators, check_for_response_loop};
 use crate::core::agent::conversation::{
     build_conversation, build_messages_from_conversation, compose_system_instruction,
 };
+use crate::core::agent::display::format_tool_result_for_display;
 use crate::core::agent::events::{EventSink, ExecEventRecorder};
 use crate::core::agent::state::{ApiFailureTracker, TaskRunState};
 pub use crate::core::agent::task::{ContextItem, Task, TaskOutcome, TaskResults};
@@ -56,126 +58,11 @@ macro_rules! runner_println {
     };
 }
 
-#[derive(Clone)]
-struct ShellPolicyCacheEntry {
-    signature: u64,
-    deny_regexes: Vec<(String, regex::Regex)>,
-    deny_globs: Vec<(String, regex::Regex)>,
-}
-
-/// Format tool result for display in the TUI.
-/// Limits verbose output from web_fetch to avoid overwhelming the terminal.
-#[inline]
-pub fn format_tool_result_for_display(tool_name: &str, result: &Value) -> String {
-    match tool_name {
-        tools::WEB_FETCH => {
-            // For web_fetch, show minimal info instead of the full content
-            if let Some(obj) = result.as_object() {
-                if obj.contains_key("error") {
-                    format!(
-                        "Tool {} result: {{\"error\": {}}}",
-                        tool_name,
-                        obj.get("error")
-                            .map(|v| v.to_string())
-                            .unwrap_or_else(|| "unknown error".into())
-                    )
-                } else {
-                    let status = serde_json::json!({
-                        "status": "fetched",
-                        "content_length": obj.get("content_length"),
-                        "truncated": obj.get("truncated"),
-                        "url": obj.get("url")
-                    });
-                    format!("Tool {} result: {}", tool_name, status)
-                }
-            } else {
-                format!("Tool {} result: {}", tool_name, result)
-            }
-        }
-        tools::GREP_FILE => {
-            // Show max 5 matches, indicate overflow
-            if let Some(obj) = result.as_object()
-                && let Some(matches) = obj.get("matches").and_then(|v| v.as_array())
-                && matches.len() > 5
-            {
-                let truncated: Vec<_> = matches.iter().take(5).cloned().collect();
-                let overflow = matches.len() - 5;
-                let summary = serde_json::json!({
-                    "matches": truncated,
-                    "overflow": format!("[+{} more matches]", overflow),
-                    "total": matches.len()
-                });
-                return format!("Tool {} result: {}", tool_name, summary);
-            }
-            format!("Tool {} result: {}", tool_name, result)
-        }
-        tools::LIST_FILES => {
-            // Summarize if 50+ items
-            if let Some(obj) = result.as_object()
-                && let Some(files) = obj.get("files").and_then(|v| v.as_array())
-                && files.len() > 50
-            {
-                let sample: Vec<_> = files.iter().take(5).cloned().collect();
-                let summary = serde_json::json!({
-                    "total_files": files.len(),
-                    "sample": sample,
-                    "note": format!("Showing 5 of {} files", files.len())
-                });
-                return format!("Tool {} result: {}", tool_name, summary);
-            }
-            format!("Tool {} result: {}", tool_name, result)
-        }
-        tools::RUN_PTY_CMD | "shell" => {
-            // Extract errors + 2 context lines for build output
-            if let Some(obj) = result.as_object()
-                && let Some(stdout) = obj.get("stdout").and_then(|v| v.as_str())
-                && stdout.len() > 2000
-                && (stdout.contains("error") || stdout.contains("Error"))
-            {
-                let lines: Vec<&str> = stdout.lines().collect();
-                let mut extracted = Vec::new();
-                for (i, line) in lines.iter().enumerate() {
-                    if line.to_lowercase().contains("error") {
-                        let start = i.saturating_sub(2);
-                        let end = (i + 3).min(lines.len());
-                        extracted.extend_from_slice(&lines[start..end]);
-                        extracted.push("...");
-                    }
-                }
-                if !extracted.is_empty() {
-                    let compact = serde_json::json!({
-                        "exit_code": obj.get("exit_code"),
-                        "errors": extracted.join("\n"),
-                        "note": "Showing error lines + context only"
-                    });
-                    return format!("Tool {} result: {}", tool_name, compact);
-                }
-            }
-            format!("Tool {} result: {}", tool_name, result)
-        }
-        _ => format!("Tool {} result: {}", tool_name, result),
-    }
-}
-
-#[inline]
-#[allow(dead_code)]
-fn record_turn_duration(
-    turn_durations: &mut Vec<u128>,
-    recorded: &mut bool,
-    start: &std::time::Instant,
-) {
-    if !*recorded {
-        turn_durations.push(start.elapsed().as_millis());
-        *recorded = true;
-    }
-}
-
 struct ProviderResponseSummary {
     response: crate::llm::provider::LLMResponse,
     content: String,
     reasoning: Option<String>,
     agent_message_streamed: bool,
-    used_streaming_fallback: bool,
     reasoning_recorded: bool,
 }
 
@@ -189,6 +76,7 @@ struct ToolFailureContext<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::agent::state::{ApiFailureTracker, TaskRunState, record_turn_duration};
 
     #[test]
     fn record_turn_duration_records_once() {
@@ -303,7 +191,7 @@ pub struct AgentRunner {
     /// Loop detector to prevent infinite exploration
     loop_detector: RefCell<LoopDetector>,
     /// Cached shell policy patterns to avoid recompilation
-    shell_policy_cache: RefCell<Option<ShellPolicyCacheEntry>>,
+
     /// API failure tracking for exponential backoff
     failure_tracker: RefCell<ApiFailureTracker>,
     /// Context optimizer for token budget management
@@ -596,6 +484,427 @@ impl AgentRunner {
         }
     }
 
+    /// Build universal ToolDefinitions for the current agent.
+    async fn build_universal_tools(&mut self) -> Result<Vec<ToolDefinition>> {
+        let gemini_tools = self.build_agent_tools()?;
+
+        // Convert Gemini tools to universal ToolDefinition format
+        let tools: Vec<ToolDefinition> = gemini_tools
+            .into_iter()
+            .flat_map(|tool| tool.function_declarations)
+            .map(|decl| ToolDefinition {
+                tool_type: "function".to_owned(),
+                function: Some(FunctionDefinition {
+                    name: decl.name,
+                    description: decl.description,
+                    parameters: crate::llm::providers::gemini::sanitize_function_parameters(
+                        decl.parameters,
+                    ),
+                }),
+                shell: None,
+                grammar: None,
+                strict: None,
+            })
+            .collect();
+
+        Ok(tools)
+    }
+
+    /// Determine the model and task class for the current turn based on task context and router configuration.
+    fn determine_route(&self, task: &Task, task_state: &TaskRunState) -> RouteDecision {
+        let latest_user = task_state
+            .conversation
+            .iter()
+            .rev()
+            .find(|c| c.role == ROLE_USER)
+            .and_then(|c| {
+                c.parts.iter().find_map(|p| match p {
+                    Part::Text { text, .. } => Some(text.as_str()),
+                    _ => None,
+                })
+            })
+            .unwrap_or("");
+        let trimmed_user: String = latest_user.chars().take(1000).collect();
+        let instruction_text = task.instructions.as_deref().unwrap_or_default();
+        let route_input = format!(
+            "Task: {}\nDescription: {}\nInstructions: {}\nLatest user: {}",
+            task.title, task.description, instruction_text, trimmed_user
+        );
+        let cfg = self.config();
+        let core_agent_cfg = self.core_agent_config();
+        let mut route_decision: RouteDecision = if cfg.router.enabled {
+            Router::route(cfg, &core_agent_cfg, &route_input)
+        } else {
+            RouteDecision {
+                class: TaskClass::Standard,
+                selected_model: self.model.clone(),
+            }
+        };
+
+        self.apply_routing_heuristics(&trimmed_user, task_state, &mut route_decision);
+
+        route_decision
+    }
+
+    /// Apply heuristics to adjust the routing decision based on recent activity and user input.
+    fn apply_routing_heuristics(
+        &self,
+        trimmed_user: &str,
+        task_state: &TaskRunState,
+        route_decision: &mut RouteDecision,
+    ) {
+        // Heuristic bias: prefer fast models for read/search-oriented turns
+        let user_lower = trimmed_user.to_lowercase();
+        let fast_hint = user_lower.contains("read")
+            || user_lower.contains("grep")
+            || user_lower.contains("search")
+            || user_lower.contains("list");
+
+        if fast_hint
+            && matches!(
+                route_decision.class,
+                TaskClass::Standard | TaskClass::Complex
+            )
+        {
+            route_decision.class = TaskClass::RetrievalHeavy;
+        }
+
+        if let Some(last_tool) = task_state.executed_commands.last() {
+            let lower = last_tool.to_lowercase();
+            let is_read_like =
+                lower.contains("read") || lower.contains("list") || lower.contains("grep");
+            let is_write_like =
+                lower.contains("write") || lower.contains("edit") || lower.contains("patch");
+
+            if is_read_like && !matches!(route_decision.class, TaskClass::RetrievalHeavy) {
+                route_decision.class = TaskClass::RetrievalHeavy;
+            } else if is_write_like
+                && matches!(
+                    route_decision.class,
+                    TaskClass::Standard | TaskClass::RetrievalHeavy
+                )
+            {
+                route_decision.class = TaskClass::CodegenHeavy;
+            }
+        }
+
+        let (read_count, write_count) =
+            task_state
+                .executed_commands
+                .iter()
+                .rev()
+                .take(3)
+                .fold((0f64, 0f64), |mut acc, cmd| {
+                    let lower = cmd.to_lowercase();
+                    let weight = if acc.0 + acc.1 == 0.0 {
+                        3.0
+                    } else if acc.0 + acc.1 < 2.0 {
+                        2.0
+                    } else {
+                        1.0
+                    };
+                    if lower.contains("read") || lower.contains("list") || lower.contains("grep") {
+                        acc.0 += weight;
+                    }
+                    if lower.contains("write") || lower.contains("edit") || lower.contains("patch")
+                    {
+                        acc.1 += weight;
+                    }
+                    acc
+                });
+
+        let user_len = trimmed_user.len();
+        let mut read_score = read_count;
+        let mut write_score = write_count;
+        if user_len < 200 {
+            read_score *= 1.5;
+        } else if user_len > 400 {
+            write_score *= 1.25;
+        }
+
+        if read_score > write_score && !matches!(route_decision.class, TaskClass::RetrievalHeavy) {
+            route_decision.class = TaskClass::RetrievalHeavy;
+        } else if write_score > read_score
+            && matches!(
+                route_decision.class,
+                TaskClass::Standard | TaskClass::RetrievalHeavy
+            )
+        {
+            route_decision.class = TaskClass::CodegenHeavy;
+        }
+    }
+
+    /// Record a tool call for loop detection and check if a hard limit has been exceeded.
+    /// Returns true if execution should halt due to a loop.
+    fn check_for_loop(&self, name: &str, args: &Value, task_state: &mut TaskRunState) -> bool {
+        if let Some(warning) = self.loop_detector.borrow_mut().record_call(name, args) {
+            if self.loop_detector.borrow().is_hard_limit_exceeded(name) {
+                runner_println!(self, "{}", style(&warning).red().bold());
+                task_state.warnings.push(warning.clone());
+                task_state.conversation.push(Content {
+                    role: ROLE_USER.to_owned(),
+                    parts: vec![Part::Text {
+                        text: warning,
+                        thought_signature: None,
+                    }],
+                });
+                task_state.has_completed = true;
+                task_state.completion_outcome = TaskOutcome::LoopDetected;
+                return true;
+            }
+            runner_println!(self, "{}", style(&warning).yellow().bold());
+            task_state.warnings.push(warning);
+        }
+        false
+    }
+
+    /// Execute multiple tool calls in parallel. Only safe for read-only operations.
+    async fn execute_parallel_tool_calls(
+        &self,
+        tool_calls: Vec<ToolCall>,
+        task_state: &mut TaskRunState,
+        event_recorder: &mut ExecEventRecorder,
+        agent_prefix: &str,
+        is_gemini: bool,
+    ) -> Result<()> {
+        use futures::future::join_all;
+
+        // Check loops for all calls first
+        for call in &tool_calls {
+            let name = match call.function.as_ref() {
+                Some(func) => &func.name,
+                None => continue,
+            };
+            let args = call
+                .parsed_arguments()
+                .unwrap_or_else(|_| serde_json::json!({}));
+            if self.check_for_loop(name, &args, task_state) {
+                return Ok(());
+            }
+        }
+
+        runner_println!(
+            self,
+            "{} [{}] Executing {} tools in parallel",
+            style("[PARALLEL]").cyan().bold(),
+            self.agent_type,
+            tool_calls.len()
+        );
+
+        let mut futures = Vec::with_capacity(tool_calls.len());
+        for call in tool_calls {
+            let name = match call.function.as_ref() {
+                Some(func) => func.name.clone(),
+                None => continue,
+            };
+            let args = call
+                .parsed_arguments()
+                .unwrap_or_else(|_| serde_json::json!({}));
+            let call_id = call.id.clone();
+
+            if !self.is_valid_tool(&name).await {
+                self.record_tool_denied(
+                    agent_prefix,
+                    task_state,
+                    event_recorder,
+                    &call_id,
+                    &name,
+                    None,
+                );
+                continue;
+            }
+
+            let tool_registry = self.tool_registry.clone();
+            futures.push(async move {
+                let mut registry = tool_registry;
+                let result = registry
+                    .execute_tool_ref(&name, &args)
+                    .await
+                    .map_err(|e| anyhow::anyhow!("Tool '{}' failed: {}", name, e));
+                (name, call_id, result)
+            });
+        }
+
+        let results = join_all(futures).await;
+        for (name, call_id, result) in results {
+            let command_event = event_recorder.command_started(&name);
+            match result {
+                Ok(result) => {
+                    runner_println!(
+                        self,
+                        "{} {}",
+                        agent_prefix,
+                        format!(
+                            "{} {} tool executed successfully",
+                            style("(OK)").green(),
+                            name
+                        )
+                    );
+
+                    let optimized_result = self.optimize_tool_result(&name, result).await;
+                    let tool_result = serde_json::to_string(&optimized_result)?;
+                    let display_text = format_tool_result_for_display(&name, &optimized_result);
+
+                    if is_gemini {
+                        task_state.conversation.push(Content {
+                            role: ROLE_USER.to_owned(),
+                            parts: vec![Part::Text {
+                                text: display_text,
+                                thought_signature: None,
+                            }],
+                        });
+                    }
+                    task_state
+                        .conversation_messages
+                        .push(Message::tool_response(call_id, tool_result));
+                    task_state.executed_commands.push(name.clone());
+                    event_recorder.command_finished(
+                        &command_event,
+                        CommandExecutionStatus::Completed,
+                        None,
+                        "",
+                    );
+                }
+                Err(e) => {
+                    let error_msg = format!("Error executing {}: {}", name, e);
+                    runner_println!(
+                        self,
+                        "{} {}",
+                        agent_prefix,
+                        format!("{} {}", style("(ERR)").red(), error_msg)
+                    );
+                    if is_gemini {
+                        task_state.conversation.push(Content {
+                            role: ROLE_USER.into(),
+                            parts: vec![Part::Text {
+                                text: error_msg.clone(),
+                                thought_signature: None,
+                            }],
+                        });
+                    }
+                    task_state
+                        .conversation_messages
+                        .push(Message::tool_response(call_id, error_msg));
+                    event_recorder.command_finished(
+                        &command_event,
+                        CommandExecutionStatus::Failed,
+                        None,
+                        &e.to_string(),
+                    );
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Execute multiple tool calls sequentially.
+    async fn execute_sequential_tool_calls(
+        &self,
+        tool_calls: Vec<ToolCall>,
+        task_state: &mut TaskRunState,
+        event_recorder: &mut ExecEventRecorder,
+        agent_prefix: &str,
+        is_gemini: bool,
+    ) -> Result<()> {
+        for call in tool_calls {
+            let name = match call.function.as_ref() {
+                Some(func) => func.name.clone(),
+                None => continue,
+            };
+            let args = call
+                .parsed_arguments()
+                .unwrap_or_else(|_| serde_json::json!({}));
+
+            if self.check_for_loop(&name, &args, task_state) {
+                break;
+            }
+
+            runner_println!(
+                self,
+                "{} [{}] Calling tool: {}",
+                style("[TOOL_CALL]").blue().bold(),
+                self.agent_type,
+                name
+            );
+
+            let command_event = event_recorder.command_started(&name);
+            if !self.is_valid_tool(&name).await {
+                self.record_tool_denied(
+                    agent_prefix,
+                    task_state,
+                    event_recorder,
+                    &call.id,
+                    &name,
+                    Some(&command_event),
+                );
+                continue;
+            }
+
+            let repeat_count = self.loop_detector.borrow().get_call_count(&name);
+            if repeat_count > 1 {
+                let delay_ms =
+                    (LOOP_THROTTLE_BASE_MS * repeat_count as u64).min(LOOP_THROTTLE_MAX_MS);
+                tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+            }
+
+            match self.execute_tool(&name, &args).await {
+                Ok(result) => {
+                    runner_println!(
+                        self,
+                        "{} {}",
+                        agent_prefix,
+                        format!(
+                            "{} {} tool executed successfully",
+                            style("(OK)").green(),
+                            name
+                        )
+                    );
+
+                    let optimized_result = self.optimize_tool_result(&name, result).await;
+                    let tool_result = serde_json::to_string(&optimized_result)?;
+                    let display_text = format_tool_result_for_display(&name, &optimized_result);
+
+                    if is_gemini {
+                        task_state.conversation.push(Content {
+                            role: ROLE_USER.to_owned(),
+                            parts: vec![Part::Text {
+                                text: display_text,
+                                thought_signature: None,
+                            }],
+                        });
+                    }
+                    task_state
+                        .conversation_messages
+                        .push(Message::tool_response(call.id.clone(), tool_result));
+                    task_state.executed_commands.push(name.clone());
+                    event_recorder.command_finished(
+                        &command_event,
+                        CommandExecutionStatus::Completed,
+                        None,
+                        "",
+                    );
+
+                    if name == tools::WRITE_FILE
+                        && let Some(filepath) = args.get("path").and_then(|p| p.as_str())
+                    {
+                        task_state.modified_files.push(filepath.to_owned());
+                        event_recorder.file_change_completed(filepath);
+                    }
+                }
+                Err(e) => {
+                    let mut failure_ctx = ToolFailureContext {
+                        agent_prefix,
+                        task_state,
+                        event_recorder,
+                        command_event: &command_event,
+                    };
+                    self.record_tool_failure(&mut failure_ctx, &name, &e, Some(call.id.as_str()));
+                }
+            }
+        }
+        Ok(())
+    }
+
     async fn optimize_tool_result(&self, name: &str, result: Value) -> Value {
         let mut optimizer = {
             let mut opt_ref = self.context_optimizer.borrow_mut();
@@ -638,7 +947,6 @@ impl AgentRunner {
             streaming_disabled = *self.streaming_failures.borrow() >= MAX_STREAMING_FAILURES;
         }
         let mut agent_message_streamed = false;
-        let mut used_streaming_fallback = false;
         let mut reasoning_recorded = false;
         // Optimize: Pre-allocate with capacity to reduce reallocations during streaming
         // Typical response: 500-2000 chars, reasoning: 200-1000 chars
@@ -668,6 +976,9 @@ impl AgentRunner {
                             }
                             Ok(crate::llm::provider::LLMStreamEvent::Reasoning { delta }) => {
                                 aggregated_reasoning.push_str(&delta);
+                                if event_recorder.reasoning_stream_update(&aggregated_reasoning) {
+                                    reasoning_recorded = true;
+                                }
                             }
                             Ok(crate::llm::provider::LLMStreamEvent::Completed { response }) => {
                                 streaming_response = Some(response);
@@ -691,7 +1002,6 @@ impl AgentRunner {
                                 if agent_message_streamed {
                                     event_recorder.agent_message_stream_complete();
                                 }
-                                used_streaming_fallback = agent_message_streamed;
                                 break;
                             }
                         }
@@ -712,7 +1022,6 @@ impl AgentRunner {
                     let warning = format!("Streaming request failed: {}", err);
                     event_recorder.warning(&warning);
                     warnings.push(warning);
-                    used_streaming_fallback = agent_message_streamed;
                 }
                 Err(_) => {
                     let mut failures = self.streaming_failures.borrow_mut();
@@ -732,7 +1041,6 @@ impl AgentRunner {
                     let warning = format!("Streaming request timed out after {}", timeout_display);
                     event_recorder.warning(&warning);
                     warnings.push(warning);
-                    used_streaming_fallback = agent_message_streamed;
                 }
             }
         } else if streaming_disabled {
@@ -772,10 +1080,11 @@ impl AgentRunner {
                 event_recorder.agent_message_stream_complete();
             }
 
-            if !aggregated_reasoning.trim().is_empty() {
-                event_recorder.reasoning(&aggregated_reasoning);
-                reasoning_recorded = true;
-                response.reasoning = Some(aggregated_reasoning);
+            if reasoning_recorded {
+                event_recorder.reasoning_stream_complete();
+                if response.reasoning.is_none() && !aggregated_reasoning.is_empty() {
+                    response.reasoning = Some(aggregated_reasoning);
+                }
             } else if let Some(ref reasoning) = response.reasoning {
                 event_recorder.reasoning(reasoning);
                 reasoning_recorded = true;
@@ -787,14 +1096,12 @@ impl AgentRunner {
                 content: aggregated_text,
                 reasoning,
                 agent_message_streamed,
-                used_streaming_fallback,
                 reasoning_recorded,
             });
         }
 
         if agent_message_streamed {
             event_recorder.agent_message_stream_complete();
-            used_streaming_fallback = true;
         }
 
         // Check circuit breaker before fallback
@@ -875,7 +1182,6 @@ impl AgentRunner {
             content,
             reasoning,
             agent_message_streamed,
-            used_streaming_fallback,
             reasoning_recorded,
         })
     }
@@ -916,6 +1222,7 @@ impl AgentRunner {
         let config = Arc::new(config_value);
         let mut tool_registry = ToolRegistry::new(workspace.clone()).await;
         tool_registry.set_harness_session(session_id.clone());
+        tool_registry.set_agent_type(agent_type.to_string());
         tool_registry.apply_timeout_policy(&config.timeouts);
         let loop_detector = LoopDetector::with_max_repeated_calls(max_repeated_tool_calls);
 
@@ -938,7 +1245,6 @@ impl AgentRunner {
             loop_detector: RefCell::new(loop_detector),
             failure_tracker: RefCell::new(ApiFailureTracker::new()),
             context_optimizer: RefCell::new(ContextOptimizer::new()),
-            shell_policy_cache: RefCell::new(None),
             streaming_failures: RefCell::new(0),
             streaming_last_failure: RefCell::new(None),
         })
@@ -974,7 +1280,6 @@ impl AgentRunner {
         self.config = Arc::new(vt_cfg.clone());
         *self.loop_detector.borrow_mut() =
             LoopDetector::with_max_repeated_calls(self.config.tools.max_repeated_tool_calls.max(1));
-        self.shell_policy_cache.borrow_mut().take();
 
         self.system_prompt =
             compose_system_instruction_text(self._workspace.as_path(), Some(self.config())).await;
@@ -1073,36 +1378,17 @@ impl AgentRunner {
             let conversation = build_conversation(task, contexts);
 
             // Build available tools for this agent
-            let gemini_tools = self.build_agent_tools()?;
+            let tools = self.build_universal_tools().await?;
 
             // Maintain a mirrored conversation history for providers that expect
             // OpenAI/Anthropic style message roles.
             let conversation_messages =
                 build_messages_from_conversation(&system_instruction, &conversation);
 
-            // Convert Gemini tools to universal ToolDefinition format
-            let tools: Vec<ToolDefinition> = gemini_tools
-                .into_iter()
-                .flat_map(|tool| tool.function_declarations)
-                .map(|decl| ToolDefinition {
-                    tool_type: "function".to_owned(),
-                    function: Some(FunctionDefinition {
-                        name: decl.name,
-                        description: decl.description,
-                        parameters: crate::llm::providers::gemini::sanitize_function_parameters(
-                            decl.parameters,
-                        ),
-                    }),
-                    shell: None,
-                    grammar: None,
-                    strict: None,
-                })
-                .collect();
-
             // Track execution results
             // Determine loop guards via cached configuration
-            let cfg = self.config();
-            let max_tool_loops = cfg.tools.max_tool_loops.max(1);
+            let max_tool_loops = self.config().tools.max_tool_loops.max(1);
+            let preserve_recent_turns = self.config().context.preserve_recent_turns;
 
             let mut task_state =
                 TaskRunState::new(conversation, conversation_messages, max_tool_loops);
@@ -1161,128 +1447,8 @@ impl AgentRunner {
                     turn + 1
                 );
 
-                // Model routing: choose per-turn model and reasoning effort
-                let latest_user = task_state
-                    .conversation
-                    .iter()
-                    .rev()
-                    .find(|c| c.role == ROLE_USER)
-                    .and_then(|c| {
-                        c.parts.iter().find_map(|p| match p {
-                            Part::Text { text, .. } => Some(text.as_str()),
-                            _ => None,
-                        })
-                    })
-                    .unwrap_or("");
-                let trimmed_user: String = latest_user.chars().take(1000).collect();
-                let route_input = format!(
-                    "Task: {}\nDescription: {}\nInstructions: {}\nLatest user: {}",
-                    task.title,
-                    task.description,
-                    task.instructions.clone().unwrap_or_default(),
-                    trimmed_user
-                );
-                let cfg = self.config();
-                let core_agent_cfg = self.core_agent_config();
-                let mut route_decision: RouteDecision = if cfg.router.enabled {
-                    Router::route(cfg, &core_agent_cfg, &route_input)
-                } else {
-                    RouteDecision {
-                        class: TaskClass::Standard,
-                        selected_model: self.model.clone(),
-                    }
-                };
-
-                // Heuristic bias: prefer fast models for read/search-oriented turns
-                let user_lower = trimmed_user.to_lowercase();
-                let fast_hint = user_lower.contains("read")
-                    || user_lower.contains("grep")
-                    || user_lower.contains("search")
-                    || user_lower.contains("list");
-                if fast_hint
-                    && matches!(
-                        route_decision.class,
-                        TaskClass::Standard | TaskClass::Complex
-                    )
-                {
-                    route_decision.class = TaskClass::RetrievalHeavy;
-                }
-
-                if let Some(last_tool) = task_state.executed_commands.last() {
-                    let lower = last_tool.to_lowercase();
-                    let is_read_like =
-                        lower.contains("read") || lower.contains("list") || lower.contains("grep");
-                    let is_write_like = lower.contains("write")
-                        || lower.contains("edit")
-                        || lower.contains("patch");
-
-                    if is_read_like && !matches!(route_decision.class, TaskClass::RetrievalHeavy) {
-                        route_decision.class = TaskClass::RetrievalHeavy;
-                    } else if is_write_like
-                        && matches!(
-                            route_decision.class,
-                            TaskClass::Standard | TaskClass::RetrievalHeavy
-                        )
-                    {
-                        route_decision.class = TaskClass::CodegenHeavy;
-                    }
-                }
-
-                let (read_count, write_count) =
-                    task_state.executed_commands.iter().rev().take(3).fold(
-                        (0f64, 0f64),
-                        |mut acc, cmd| {
-                            let lower = cmd.to_lowercase();
-                            let weight = if acc.0 + acc.1 == 0.0 {
-                                3.0
-                            } else if acc.0 + acc.1 < 2.0 {
-                                2.0
-                            } else {
-                                1.0
-                            };
-                            if lower.contains("read")
-                                || lower.contains("list")
-                                || lower.contains("grep")
-                            {
-                                acc.0 += weight;
-                            }
-                            if lower.contains("write")
-                                || lower.contains("edit")
-                                || lower.contains("patch")
-                            {
-                                acc.1 += weight;
-                            }
-                            acc
-                        },
-                    );
-                let user_len = trimmed_user.len();
-                let mut read_score = read_count;
-                let mut write_score = write_count;
-                if user_len < 200 {
-                    read_score *= 1.5;
-                } else if user_len > 400 {
-                    write_score *= 1.25;
-                }
-
-                if read_score > write_score
-                    && !matches!(route_decision.class, TaskClass::RetrievalHeavy)
-                {
-                    route_decision.class = TaskClass::RetrievalHeavy;
-                } else if write_score > read_score
-                    && matches!(
-                        route_decision.class,
-                        TaskClass::Standard | TaskClass::RetrievalHeavy
-                    )
-                {
-                    route_decision.class = TaskClass::CodegenHeavy;
-                }
-
-                let turn_model = if route_decision.selected_model.trim().is_empty() {
-                    self.model.clone()
-                } else {
-                    route_decision.selected_model.clone()
-                };
-
+                let route_decision = self.determine_route(task, &task_state);
+                let turn_model = route_decision.selected_model.clone();
                 let mut turn_reasoning = self.reasoning_effort;
                 match route_decision.class {
                     TaskClass::Simple | TaskClass::RetrievalHeavy => {
@@ -1298,7 +1464,7 @@ impl AgentRunner {
                 self.summarize_conversation_if_needed(
                     &system_instruction,
                     &mut task_state,
-                    cfg.context.preserve_recent_turns,
+                    preserve_recent_turns,
                     utilization,
                 );
 
@@ -1349,22 +1515,14 @@ impl AgentRunner {
                     task_state.last_processed_message_idx = task_state.conversation.len();
                 }
 
-                let request_messages = task_state.conversation_messages.clone();
-
-                let supports_streaming = self.provider_client.supports_streaming();
-
-                // NOTE: Do NOT perform complex MessageContent introspection here.
-                // WebFetch already returns a `next_action_hint` telling the model to analyze
-                // `content` with `prompt`. The router-level model selection can be extended
-                // separately to map such follow-ups to a small/fast model.
                 let request = LLMRequest {
-                    messages: request_messages,
+                    messages: task_state.conversation_messages.clone(),
                     system_prompt: Some(system_instruction.clone()),
                     tools: Some(tools.clone()),
                     model: turn_model.clone(),
                     max_tokens: Some(2000),
                     temperature: Some(0.7),
-                    stream: supports_streaming,
+                    stream: self.provider_client.supports_streaming(),
                     output_format: None,
                     tool_choice: None,
                     parallel_tool_calls: None,
@@ -1378,662 +1536,16 @@ impl AgentRunner {
                     verbosity: self.verbosity,
                 };
 
-                // Use provider-specific client for OpenAI/Anthropic (and generic support for others)
-                // Prepare for provider-specific vs Gemini handling
-                #[allow(unused_assignments)]
-                let mut response_opt: Option<crate::llm::types::LLMResponse> = None;
+                let resp_summary = self
+                    .collect_provider_response(
+                        &request,
+                        &mut event_recorder,
+                        &agent_prefix,
+                        &mut task_state.warnings,
+                        turn,
+                    )
+                    .await?;
 
-                if matches!(
-                    provider_kind,
-                    ModelProvider::OpenAI | ModelProvider::Anthropic | ModelProvider::DeepSeek
-                ) {
-                    let ProviderResponseSummary {
-                        response,
-                        content: response_text,
-                        reasoning,
-                        mut agent_message_streamed,
-                        used_streaming_fallback,
-                        reasoning_recorded,
-                    } = self
-                        .collect_provider_response(
-                            &request,
-                            &mut event_recorder,
-                            &agent_prefix,
-                            &mut task_state.warnings,
-                            turn,
-                        )
-                        .await?;
-                    let resp = response;
-
-                    runner_println!(
-                        self,
-                        "{} {}",
-                        agent_prefix,
-                        format!(
-                            "{} {} received response, processing...",
-                            self.agent_type,
-                            style("(RECV)").green().bold()
-                        )
-                    );
-
-                    let mut had_tool_call = false;
-                    let has_provider_tool_calls = resp
-                        .tool_calls
-                        .as_ref()
-                        .is_some_and(|calls| !calls.is_empty());
-
-                    if !reasoning_recorded && let Some(reasoning) = reasoning.as_ref() {
-                        event_recorder.reasoning(reasoning);
-                    }
-                    if response_text.trim().is_empty() && !has_provider_tool_calls {
-                        runner_println!(
-                            self,
-                            "{} {} received empty response with no tool calls",
-                            agent_prefix,
-                            style("(WARN)").yellow().bold()
-                        );
-                    }
-
-                    if !response_text.trim().is_empty() && !agent_message_streamed {
-                        event_recorder.agent_message(&response_text);
-                        agent_message_streamed = true;
-                        Self::print_compact_response(self.agent_type, &response_text, self.quiet);
-                        runner_println!(
-                            self,
-                            "{} {}",
-                            agent_prefix,
-                            format!(
-                                "{} {}",
-                                style("(ASSISTANT)").green().bold(),
-                                response_text.trim()
-                            )
-                        );
-                    }
-
-                    const LOOP_DETECTED_MESSAGE: &str = "A potential loop was detected";
-                    if response_text.contains(LOOP_DETECTED_MESSAGE) {
-                        if !response_text.trim().is_empty() {
-                            Self::print_compact_response(
-                                self.agent_type,
-                                &response_text,
-                                self.quiet,
-                            );
-                            if agent_message_streamed {
-                                if used_streaming_fallback {
-                                    event_recorder.agent_message(&response_text);
-                                }
-                            } else {
-                                event_recorder.agent_message(&response_text);
-                            }
-                            task_state.conversation.push(Content {
-                                role: ROLE_MODEL.into(),
-                                parts: vec![Part::Text {
-                                    text: response_text.clone(),
-                                    thought_signature: None,
-                                }],
-                            });
-                            task_state.conversation_messages.push(
-                                Message::assistant(response_text.clone())
-                                    .with_reasoning(reasoning.clone()),
-                            );
-                        }
-
-                        let warning_message =
-                            "Provider halted execution after detecting a potential tool loop";
-                        self.record_warning(
-                            &agent_prefix,
-                            &mut task_state,
-                            &mut event_recorder,
-                            warning_message,
-                        );
-                        task_state.mark_tool_loop_limit_hit();
-                        task_state.record_turn(&turn_started_at, &mut turn_recorded);
-                        break;
-                    }
-
-                    let mut effective_tool_calls = resp.tool_calls;
-
-                    if effective_tool_calls
-                        .as_ref()
-                        .is_none_or(|calls| calls.is_empty())
-                        && let Some(args_value) = resp
-                            .content
-                            .as_ref()
-                            .and_then(|text| detect_textual_run_pty_cmd(text))
-                    {
-                        let call_id = format!(
-                            "textual_call_{}_{}",
-                            turn,
-                            task_state.conversation_messages.len()
-                        );
-                        let args_json = serde_json::to_string(&args_value)?;
-                        effective_tool_calls = Some(vec![ToolCall::function(
-                            call_id,
-                            tools::RUN_PTY_CMD.to_owned(),
-                            args_json,
-                        )]);
-                    }
-
-                    if let Some(tool_calls) = effective_tool_calls.filter(|tc| !tc.is_empty()) {
-                        had_tool_call = true;
-                        // Clone tool_calls once for message, move original for processing
-                        task_state.conversation_messages.push(
-                            Message::assistant_with_tools(
-                                response_text.clone(),
-                                tool_calls.clone(),
-                            )
-                            .with_reasoning(reasoning.clone()),
-                        );
-
-                        // Determine if we can parallelize (read-only operations)
-                        let can_parallelize = tool_calls.len() > 1
-                            && tool_calls.iter().all(|call| {
-                                if let Some(func) = &call.function {
-                                    matches!(
-                                        func.name.as_str(),
-                                        "list_files" | "read_file" | "grep_file" | "search_tools"
-                                    )
-                                } else {
-                                    false
-                                }
-                            });
-
-                        if can_parallelize {
-                            // Parallel execution path
-                            use futures::future::join_all;
-
-                            // Check loops for all calls first
-                            let mut should_halt = false;
-                            for call in &tool_calls {
-                                let name = call
-                                    .function
-                                    .as_ref()
-                                    .ok_or_else(|| {
-                                        anyhow!("Tool call missing function definition")
-                                    })?
-                                    .name
-                                    .clone();
-                                let args = call
-                                    .parsed_arguments()
-                                    .unwrap_or_else(|_| serde_json::json!({}));
-
-                                if let Some(warning) =
-                                    self.loop_detector.borrow_mut().record_call(&name, &args)
-                                {
-                                    if self.loop_detector.borrow().is_hard_limit_exceeded(&name) {
-                                        runner_println!(self, "{}", style(&warning).red().bold());
-                                        task_state.warnings.push(warning.clone());
-                                        task_state.conversation.push(Content {
-                                            role: ROLE_USER.to_owned(),
-                                            parts: vec![Part::Text {
-                                                text: warning,
-                                                thought_signature: None,
-                                            }],
-                                        });
-                                        task_state.has_completed = true;
-                                        task_state.completion_outcome = TaskOutcome::LoopDetected;
-                                        should_halt = true;
-                                        break;
-                                    }
-                                    runner_println!(self, "{}", style(&warning).yellow().bold());
-                                    task_state.warnings.push(warning);
-                                }
-                            }
-
-                            if should_halt {
-                                break;
-                            }
-
-                            runner_println!(
-                                self,
-                                "{} [{}] Executing {} tools in parallel",
-                                style("[PARALLEL]").cyan().bold(),
-                                self.agent_type,
-                                tool_calls.len()
-                            );
-
-                            // Pre-allocate futures with exact capacity
-                            let mut futures = Vec::with_capacity(tool_calls.len());
-                            for call in &tool_calls {
-                                let name = match call.function.as_ref() {
-                                    Some(func) => func.name.clone(),
-                                    None => {
-                                        warn!("Tool call missing function definition");
-                                        continue;
-                                    }
-                                };
-                                let args = call
-                                    .parsed_arguments()
-                                    .unwrap_or_else(|_| serde_json::json!({}));
-                                let call_id = call.id.clone();
-
-                                if !self.is_valid_tool(&name).await {
-                                    self.record_tool_denied(
-                                        &agent_prefix,
-                                        &mut task_state,
-                                        &mut event_recorder,
-                                        &call_id,
-                                        &name,
-                                        None,
-                                    );
-                                    continue;
-                                }
-
-                                let tool_registry = self.tool_registry.clone();
-
-                                futures.push({
-                                    // OPTIMIZATION: Loop check already done before parallel execution
-                                    async move {
-                                        let mut registry = tool_registry;
-                                        let result = registry
-                                            .execute_tool_ref(&name, &args)
-                                            .await
-                                            .map_err(|e| {
-                                                anyhow::anyhow!("Tool '{}' failed: {}", name, e)
-                                            });
-                                        (name, args, call_id, result)
-                                    }
-                                });
-                            }
-
-                            let results = join_all(futures).await;
-
-                            for (name, _args, call_id, result) in results {
-                                let command_event = event_recorder.command_started(&name);
-
-                                match result {
-                                    Ok(result) => {
-                                        runner_println!(
-                                            self,
-                                            "{} {}",
-                                            agent_prefix,
-                                            format!(
-                                                "{} {} tool executed successfully",
-                                                style("(OK)").green(),
-                                                name
-                                            )
-                                        );
-
-                                        // Optimize result through context optimizer (same as sequential path)
-                                        let optimized_result =
-                                            self.optimize_tool_result(&name, result).await;
-
-                                        let tool_result = serde_json::to_string(&optimized_result)?;
-                                        let display_text = format_tool_result_for_display(
-                                            &name,
-                                            &optimized_result,
-                                        );
-                                        task_state.conversation.push(Content {
-                                            role: ROLE_USER.to_owned(),
-                                            parts: vec![Part::Text {
-                                                text: display_text,
-                                                thought_signature: None,
-                                            }],
-                                        });
-                                        task_state
-                                            .conversation_messages
-                                            .push(Message::tool_response(call_id, tool_result));
-                                        task_state.executed_commands.push(name.clone());
-                                        event_recorder.command_finished(
-                                            &command_event,
-                                            CommandExecutionStatus::Completed,
-                                            None,
-                                            "",
-                                        );
-                                    }
-                                    Err(e) => {
-                                        let error_msg = format!("Error executing {}: {}", name, e);
-                                        runner_println!(
-                                            self,
-                                            "{} {}",
-                                            agent_prefix,
-                                            format!("{} {}", style("(ERR)").red(), error_msg)
-                                        );
-                                        task_state.conversation.push(Content {
-                                            role: ROLE_USER.into(),
-                                            parts: vec![Part::Text {
-                                                text: error_msg.clone(),
-                                                thought_signature: None,
-                                            }],
-                                        });
-                                        task_state
-                                            .conversation_messages
-                                            .push(Message::tool_response(call_id, error_msg));
-                                        event_recorder.command_finished(
-                                            &command_event,
-                                            CommandExecutionStatus::Failed,
-                                            None,
-                                            &e.to_string(),
-                                        );
-                                    }
-                                }
-                            }
-                        } else {
-                            // Sequential execution path (write operations or single call)
-                            for call in tool_calls {
-                                let name = call
-                                    .function
-                                    .as_ref()
-                                    .ok_or_else(|| {
-                                        anyhow!("Tool call missing function definition")
-                                    })?
-                                    .name
-                                    .clone();
-
-                                let args = call
-                                    .parsed_arguments()
-                                    .unwrap_or_else(|_| serde_json::json!({}));
-
-                                // Check for loops before executing
-                                if let Some(warning) =
-                                    self.loop_detector.borrow_mut().record_call(&name, &args)
-                                {
-                                    // Check if hard limit exceeded
-                                    if self.loop_detector.borrow().is_hard_limit_exceeded(&name) {
-                                        runner_println!(self, "{}", style(&warning).red().bold());
-                                        task_state.warnings.push(warning.clone());
-
-                                        // Add error to conversation and halt
-                                        task_state.conversation.push(Content {
-                                            role: ROLE_USER.into(),
-                                            parts: vec![Part::Text {
-                                                text: warning,
-                                                thought_signature: None,
-                                            }],
-                                        });
-                                        task_state.has_completed = true;
-                                        task_state.completion_outcome = TaskOutcome::LoopDetected;
-                                        break;
-                                    }
-
-                                    runner_println!(self, "{}", style(&warning).yellow().bold());
-                                    task_state.warnings.push(warning);
-                                }
-
-                                runner_println!(
-                                    self,
-                                    "{} [{}] Calling tool: {}",
-                                    style("[TOOL_CALL]").blue().bold(),
-                                    self.agent_type,
-                                    name
-                                );
-
-                                let command_event = event_recorder.command_started(&name);
-
-                                // Safety: Validate tool name before execution
-                                if !self.is_valid_tool(&name).await {
-                                    self.record_tool_denied(
-                                        &agent_prefix,
-                                        &mut task_state,
-                                        &mut event_recorder,
-                                        &call.id,
-                                        &name,
-                                        Some(&command_event),
-                                    );
-                                    continue;
-                                }
-
-                                let repeat_count =
-                                    self.loop_detector.borrow().get_call_count(&name);
-                                if repeat_count > 1 {
-                                    let delay_ms = (LOOP_THROTTLE_BASE_MS * repeat_count as u64)
-                                        .min(LOOP_THROTTLE_MAX_MS);
-                                    tokio::time::sleep(Duration::from_millis(delay_ms)).await;
-                                }
-
-                                match self.execute_tool(&name, &args).await {
-                                    Ok(result) => {
-                                        runner_println!(
-                                            self,
-                                            "{} {}",
-                                            agent_prefix,
-                                            format!(
-                                                "{} {} tool executed successfully",
-                                                style("(OK)").green(),
-                                                name
-                                            )
-                                        );
-
-                                        // Optimize tool result through context optimizer before sending to LLM
-                                        let optimized_result =
-                                            self.optimize_tool_result(&name, result).await;
-
-                                        let tool_result = serde_json::to_string(&optimized_result)?;
-                                        // For display: use limited version to avoid overwhelming TUI
-                                        let display_text = format_tool_result_for_display(
-                                            &name,
-                                            &optimized_result,
-                                        );
-                                        task_state.conversation.push(Content {
-                                            role: ROLE_USER.to_owned(),
-                                            parts: vec![Part::Text {
-                                                text: display_text,
-                                                thought_signature: None,
-                                            }],
-                                        });
-                                        // For LLM: use full result
-                                        task_state.conversation_messages.push(
-                                            Message::tool_response(call.id.clone(), tool_result),
-                                        );
-
-                                        task_state.executed_commands.push(name.clone());
-                                        event_recorder.command_finished(
-                                            &command_event,
-                                            CommandExecutionStatus::Completed,
-                                            None,
-                                            "",
-                                        );
-
-                                        if name == tools::WRITE_FILE
-                                            && let Some(filepath) =
-                                                args.get("path").and_then(|p| p.as_str())
-                                        {
-                                            task_state.modified_files.push(filepath.to_owned());
-                                            event_recorder.file_change_completed(filepath);
-                                        }
-                                    }
-                                    Err(e) => {
-                                        let mut failure_ctx = ToolFailureContext {
-                                            agent_prefix: &agent_prefix,
-                                            task_state: &mut task_state,
-                                            event_recorder: &mut event_recorder,
-                                            command_event: &command_event,
-                                        };
-                                        self.record_tool_failure(
-                                            &mut failure_ctx,
-                                            &name,
-                                            &e,
-                                            Some(call.id.as_str()),
-                                        );
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    if !had_tool_call && !response_text.trim().is_empty() {
-                        Self::print_compact_response(self.agent_type, &response_text, self.quiet);
-                        if !agent_message_streamed || used_streaming_fallback {
-                            event_recorder.agent_message(&response_text);
-                        }
-                        task_state.conversation.push(Content {
-                            role: ROLE_MODEL.into(),
-                            parts: vec![Part::Text {
-                                text: response_text.clone(),
-                                thought_signature: None,
-                            }],
-                        });
-                        task_state.conversation_messages.push(
-                            Message::assistant(response_text.clone())
-                                .with_reasoning(reasoning.clone()),
-                        );
-                    }
-
-                    if !task_state.has_completed {
-                        // Use const to avoid repeated allocations
-                        const COMPLETION_INDICATORS: &[&str] = &[
-                            "task completed",
-                            "task done",
-                            "finished",
-                            "complete",
-                            "summary",
-                            "i have successfully",
-                            "i've completed",
-                            "i have finished",
-                            "task accomplished",
-                            "mission accomplished",
-                            "objective achieved",
-                            "work is done",
-                            "all done",
-                            "completed successfully",
-                            "task execution complete",
-                            "operation finished",
-                        ];
-                        let response_lower = response_text.to_lowercase();
-                        let is_completed = COMPLETION_INDICATORS
-                            .iter()
-                            .any(|&indicator| response_lower.contains(indicator));
-                        let has_explicit_completion = response_lower
-                            .contains("the task is complete")
-                            || response_lower.contains("task has been completed")
-                            || response_lower.contains("i am done")
-                            || response_lower.contains("that's all")
-                            || response_lower.contains("no more actions needed");
-                        if is_completed || has_explicit_completion {
-                            task_state.has_completed = true;
-                            runner_println!(
-                                self,
-                                "{} {}",
-                                agent_prefix,
-                                format!(
-                                    "{} {} completed task successfully",
-                                    self.agent_type,
-                                    style("(SUCCESS)").green().bold()
-                                )
-                            );
-                        }
-                    }
-
-                    let mut tool_loop_limit_triggered = false;
-                    if had_tool_call {
-                        let loops = task_state.register_tool_loop();
-                        if loops >= task_state.max_tool_loops {
-                            let warning_message = format!(
-                                "Reached tool-call limit of {} iterations; pausing autonomous loop",
-                                task_state.max_tool_loops
-                            );
-                            self.record_warning(
-                                &agent_prefix,
-                                &mut task_state,
-                                &mut event_recorder,
-                                warning_message,
-                            );
-                            task_state.mark_tool_loop_limit_hit();
-                            task_state.record_turn(&turn_started_at, &mut turn_recorded);
-                            tool_loop_limit_triggered = true;
-                        }
-                        task_state.consecutive_idle_turns = 0;
-                    } else {
-                        task_state.reset_tool_loop_guard();
-                        if !task_state.has_completed {
-                            task_state.consecutive_idle_turns =
-                                task_state.consecutive_idle_turns.saturating_add(1);
-                            if task_state.consecutive_idle_turns >= IDLE_TURN_LIMIT {
-                                let warning_message = format!(
-                                    "No tool calls or completion for {} consecutive turns; halting to avoid idle loop",
-                                    task_state.consecutive_idle_turns
-                                );
-                                self.record_warning(
-                                    &agent_prefix,
-                                    &mut task_state,
-                                    &mut event_recorder,
-                                    warning_message,
-                                );
-                                task_state.completion_outcome = TaskOutcome::StoppedNoAction;
-                                task_state.record_turn(&turn_started_at, &mut turn_recorded);
-                                break;
-                            }
-                        }
-                    }
-
-                    if tool_loop_limit_triggered {
-                        break;
-                    }
-
-                    let should_continue =
-                        had_tool_call || (!task_state.has_completed && (turn + 1) < self.max_turns);
-                    if !should_continue {
-                        if task_state.has_completed {
-                            task_state.completion_outcome = TaskOutcome::Success;
-                            runner_println!(
-                                self,
-                                "{} {}",
-                                agent_prefix,
-                                format!(
-                                    "{} {} finished - task completed",
-                                    self.agent_type,
-                                    style("(SUCCESS)").green().bold()
-                                )
-                            );
-                        } else if (turn + 1) >= self.max_turns {
-                            task_state.completion_outcome =
-                                TaskOutcome::turn_limit_reached(self.max_turns, turn + 1);
-                            runner_println!(
-                                self,
-                                "{} {}",
-                                agent_prefix,
-                                format!(
-                                    "{} {} finished - maximum turns reached",
-                                    self.agent_type,
-                                    style("(TIME)").yellow().bold()
-                                )
-                            );
-                        } else {
-                            task_state.completion_outcome = TaskOutcome::StoppedNoAction;
-                            runner_println!(
-                                self,
-                                "{} {}",
-                                agent_prefix,
-                                format!(
-                                    "{} {} finished",
-                                    self.agent_type,
-                                    style("(FINISH)").blue().bold()
-                                )
-                            );
-                        }
-                        task_state.record_turn(&turn_started_at, &mut turn_recorded);
-                        break;
-                    }
-
-                    task_state.record_turn(&turn_started_at, &mut turn_recorded);
-                    continue;
-                } else {
-                    // Gemini path (existing flow)
-                    let response = self
-                        .client
-                        .generate(&serde_json::to_string(&request)?)
-                        .await
-                        .map_err(|e| {
-                            runner_println!(
-                                self,
-                                "{} {} Failed",
-                                agent_prefix,
-                                style("(ERROR)").red().bold().on_black()
-                            );
-                            anyhow!(
-                                "Agent {} execution failed at turn {}: {}",
-                                self.agent_type,
-                                turn,
-                                e
-                            )
-                        })?;
-                    response_opt = Some(response);
-                }
-
-                // For Gemini path: use original response handling
-                let response = response_opt.expect("response should be set for Gemini path");
-
-                // Update progress for successful response
                 runner_println!(
                     self,
                     "{} {}",
@@ -2045,12 +1557,32 @@ impl AgentRunner {
                     )
                 );
 
-                // Use response content directly
-                if !response.content.is_empty() {
-                    // Force-print agent message to stdout/TUI even if streaming sinks miss it
+                if !resp_summary.reasoning_recorded
+                    && let Some(reasoning) = resp_summary.reasoning.as_ref()
+                {
+                    event_recorder.reasoning(reasoning);
+                }
+
+                if resp_summary.content.trim().is_empty()
+                    && resp_summary
+                        .response
+                        .tool_calls
+                        .as_ref()
+                        .is_none_or(|tc| tc.is_empty())
+                {
+                    runner_println!(
+                        self,
+                        "{} {} received empty response with no tool calls",
+                        agent_prefix,
+                        style("(WARN)").yellow().bold()
+                    );
+                }
+
+                if !resp_summary.content.trim().is_empty() && !resp_summary.agent_message_streamed {
+                    event_recorder.agent_message(&resp_summary.content);
                     Self::print_compact_response(
                         self.agent_type,
-                        response.content.trim(),
+                        &resp_summary.content,
                         self.quiet,
                     );
                     runner_println!(
@@ -2060,591 +1592,192 @@ impl AgentRunner {
                         format!(
                             "{} {}",
                             style("(ASSISTANT)").green().bold(),
-                            response.content.trim()
+                            resp_summary.content.trim()
                         )
                     );
-                    // Try to parse the response as JSON to check for tool calls
-                    let mut had_tool_call = false;
+                }
 
-                    // Try to parse as a tool call response
-                    if let Ok(tool_call_response) = serde_json::from_str::<Value>(&response.content)
-                    {
-                        // Check for standard tool_calls format
-                        if let Some(tool_calls) = tool_call_response
-                            .get("tool_calls")
-                            .and_then(|tc| tc.as_array())
-                        {
-                            had_tool_call = true;
+                const LOOP_DETECTED_MESSAGE: &str = "A potential loop was detected";
+                if resp_summary.content.contains(LOOP_DETECTED_MESSAGE) {
+                    let warning_message =
+                        "Provider halted execution after detecting a potential tool loop";
+                    self.record_warning(
+                        &agent_prefix,
+                        &mut task_state,
+                        &mut event_recorder,
+                        warning_message,
+                    );
+                    task_state.mark_tool_loop_limit_hit();
+                    task_state.record_turn(&turn_started_at, &mut turn_recorded);
+                    break;
+                }
 
-                            // Process each tool call
-                            #[allow(clippy::collapsible_if)]
-                            for tool_call in tool_calls {
-                                if let Some(function) = tool_call.get("function") {
-                                    if let (Some(name), Some(arguments)) = (
-                                        function.get("name").and_then(|n| n.as_str()),
-                                        function.get("arguments"),
-                                    ) {
-                                        runner_println!(
-                                            self,
-                                            "{} [{}] Calling tool: {}",
-                                            style("[TOOL_CALL]").blue().bold(),
-                                            self.agent_type,
-                                            name
-                                        );
+                let mut effective_tool_calls = resp_summary.response.tool_calls.clone();
 
-                                        // Execute the tool
-                                        let command_event = event_recorder.command_started(name);
-                                        match self.execute_tool(name, arguments).await {
-                                            Ok(result) => {
-                                                runner_println!(
-                                                    self,
-                                                    "{} {}",
-                                                    agent_prefix,
-                                                    format!(
-                                                        "{} {} tool executed successfully",
-                                                        style("(OK)").green(),
-                                                        name
-                                                    )
-                                                );
+                if effective_tool_calls
+                    .as_ref()
+                    .is_none_or(|calls| calls.is_empty())
+                    && let Some(args_value) = detect_textual_run_pty_cmd(&resp_summary.content)
+                {
+                    let call_id = format!(
+                        "textual_call_{}_{}",
+                        turn,
+                        task_state.conversation_messages.len()
+                    );
+                    effective_tool_calls = Some(vec![ToolCall::function(
+                        call_id,
+                        tools::RUN_PTY_CMD.to_owned(),
+                        serde_json::to_string(&args_value)?,
+                    )]);
+                }
 
-                                                // Add tool result to conversation
-                                                // For display: use limited version to avoid overwhelming TUI
-                                                let display_text =
-                                                    format_tool_result_for_display(name, &result);
-                                                task_state.conversation.push(Content {
-                                                    role: ROLE_USER.to_owned(), // Gemini API only accepts "user" and "model"
-                                                    parts: vec![Part::Text {
-                                                        text: display_text,
-                                                        thought_signature: None,
-                                                    }],
-                                                });
+                let is_gemini = matches!(provider_kind, ModelProvider::Gemini);
 
-                                                // Track what the agent did
-                                                task_state.executed_commands.push(name.to_owned());
-                                                event_recorder.command_finished(
-                                                    &command_event,
-                                                    CommandExecutionStatus::Completed,
-                                                    None,
-                                                    "",
-                                                );
-
-                                                // Special handling for certain tools
-                                                if name == tools::WRITE_FILE
-                                                    && let Some(filepath) = arguments
-                                                        .get("path")
-                                                        .and_then(|p| p.as_str())
-                                                {
-                                                    task_state
-                                                        .modified_files
-                                                        .push(filepath.to_owned());
-                                                    event_recorder.file_change_completed(filepath);
-                                                }
-                                            }
-                                            Err(e) => {
-                                                let mut failure_ctx = ToolFailureContext {
-                                                    agent_prefix: &agent_prefix,
-                                                    task_state: &mut task_state,
-                                                    event_recorder: &mut event_recorder,
-                                                    command_event: &command_event,
-                                                };
-                                                self.record_tool_failure(
-                                                    &mut failure_ctx,
-                                                    name,
-                                                    &e,
-                                                    None,
-                                                );
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        // Check for Gemini functionCall format
-                        else if let Some(function_call) = tool_call_response.get("functionCall") {
-                            had_tool_call = true;
-
-                            if let (Some(name), Some(args)) = (
-                                function_call.get("name").and_then(|n| n.as_str()),
-                                function_call.get("args"),
-                            ) {
-                                runner_println!(
-                                    self,
-                                    "{} [{}] Calling tool: {}",
-                                    style("[TOOL_CALL]").blue().bold(),
-                                    self.agent_type,
-                                    name
-                                );
-
-                                // Execute the tool
-                                let command_event = event_recorder.command_started(name);
-                                match self.execute_tool(name, args).await {
-                                    Ok(result) => {
-                                        runner_println!(
-                                            self,
-                                            "{} {}",
-                                            agent_prefix,
-                                            format!(
-                                                "{} {} tool executed successfully",
-                                                style("(OK)").green(),
-                                                name
-                                            )
-                                        );
-
-                                        // Add tool result to conversation
-                                        // For display: use limited version to avoid overwhelming TUI
-                                        let display_text =
-                                            format_tool_result_for_display(name, &result);
-                                        task_state.conversation.push(Content {
-                                            role: ROLE_USER.to_owned(), // Gemini API only accepts "user" and "model"
-                                            parts: vec![Part::Text {
-                                                text: display_text,
-                                                thought_signature: None,
-                                            }],
-                                        });
-
-                                        // Track what the agent did
-                                        task_state.executed_commands.push(name.to_owned());
-                                        event_recorder.command_finished(
-                                            &command_event,
-                                            CommandExecutionStatus::Completed,
-                                            None,
-                                            "",
-                                        );
-
-                                        // Special handling for certain tools
-                                        if name == tools::WRITE_FILE
-                                            && let Some(filepath) =
-                                                args.get("path").and_then(|p| p.as_str())
-                                        {
-                                            task_state.modified_files.push(filepath.to_owned());
-                                            event_recorder.file_change_completed(filepath);
-                                        }
-                                    }
-                                    Err(e) => {
-                                        let mut failure_ctx = ToolFailureContext {
-                                            agent_prefix: &agent_prefix,
-                                            task_state: &mut task_state,
-                                            event_recorder: &mut event_recorder,
-                                            command_event: &command_event,
-                                        };
-                                        self.record_tool_failure(&mut failure_ctx, name, &e, None);
-                                    }
-                                }
-                            }
-                        }
-                        // Check for tool_code format (what agents are actually producing)
-                        else if let Some(tool_code) = tool_call_response
-                            .get("tool_code")
-                            .and_then(|tc| tc.as_str())
-                        {
-                            had_tool_call = true;
-
-                            runner_println!(
-                                self,
-                                "{} [{}] Executing tool code: {}",
-                                style("[TOOL_EXEC]").cyan().bold().on_black(),
-                                self.agent_type,
-                                tool_code
-                            );
-
-                            // Try to parse the tool_code as a function call
-                            // This is a simplified parser for the format: function_name(args)
-                            if let Some((func_name, args_str)) = parse_tool_code(tool_code) {
-                                runner_println!(
-                                    self,
-                                    "{} [{}] Parsed tool: {} with args: {}",
-                                    style("[TOOL_PARSE]").yellow().bold().on_black(),
-                                    self.agent_type,
-                                    func_name,
-                                    args_str
-                                );
-
-                                // Parse arguments as JSON
-                                match serde_json::from_str::<Value>(&args_str) {
-                                    Ok(arguments) => {
-                                        // Execute the tool
-                                        let command_event =
-                                            event_recorder.command_started(&func_name);
-                                        match self.execute_tool(&func_name, &arguments).await {
-                                            Ok(result) => {
-                                                runner_println!(
-                                                    self,
-                                                    "{} {}",
-                                                    agent_prefix,
-                                                    format!(
-                                                        "{} {} tool executed successfully",
-                                                        style("(OK)").green(),
-                                                        func_name
-                                                    )
-                                                );
-
-                                                // Add tool result to conversation
-                                                // For display: use limited version to avoid overwhelming TUI
-                                                let display_text = format_tool_result_for_display(
-                                                    &func_name, &result,
-                                                );
-                                                task_state.conversation.push(Content {
-                                                    role: ROLE_USER.to_owned(), // Gemini API only accepts "user" and "model"
-                                                    parts: vec![Part::Text {
-                                                        text: display_text,
-                                                        thought_signature: None,
-                                                    }],
-                                                });
-
-                                                // Track what the agent did
-                                                task_state
-                                                    .executed_commands
-                                                    .push(func_name.to_owned());
-                                                event_recorder.command_finished(
-                                                    &command_event,
-                                                    CommandExecutionStatus::Completed,
-                                                    None,
-                                                    "",
-                                                );
-
-                                                // Special handling for certain tools
-                                                if func_name == tools::WRITE_FILE
-                                                    && let Some(filepath) = arguments
-                                                        .get("path")
-                                                        .and_then(|p| p.as_str())
-                                                {
-                                                    task_state
-                                                        .modified_files
-                                                        .push(filepath.to_owned());
-                                                    event_recorder.file_change_completed(filepath);
-                                                }
-                                            }
-                                            Err(e) => {
-                                                let mut failure_ctx = ToolFailureContext {
-                                                    agent_prefix: &agent_prefix,
-                                                    task_state: &mut task_state,
-                                                    event_recorder: &mut event_recorder,
-                                                    command_event: &command_event,
-                                                };
-                                                self.record_tool_failure(
-                                                    &mut failure_ctx,
-                                                    &func_name,
-                                                    &e,
-                                                    None,
-                                                );
-                                            }
-                                        }
-                                    }
-                                    Err(e) => {
-                                        let error_msg = format!(
-                                            "Failed to parse tool arguments '{}': {}",
-                                            args_str, e
-                                        );
-                                        event_recorder.warning(&error_msg);
-                                        task_state.warnings.push(error_msg.clone());
-                                        task_state.conversation.push(Content {
-                                            role: ROLE_USER.to_owned(), // Gemini API only accepts "user" and "model"
-                                            parts: vec![Part::Text {
-                                                text: error_msg,
-                                                thought_signature: None,
-                                            }],
-                                        });
-                                    }
-                                }
-                            } else {
-                                let error_msg = format!("Failed to parse tool code: {}", tool_code);
-                                event_recorder.warning(&error_msg);
-                                task_state.warnings.push(error_msg.clone());
-                                task_state.conversation.push(Content {
-                                    role: ROLE_USER.to_owned(), // Gemini API only accepts "user" and "model"
-                                    parts: vec![Part::Text {
-                                        text: error_msg,
-                                        thought_signature: None,
-                                    }],
-                                });
-                            }
-                        }
-                        // Check for tool_name format (alternative format)
-                        else if let Some(tool_name) = tool_call_response
-                            .get("tool_name")
-                            .and_then(|tn| tn.as_str())
-                        {
-                            had_tool_call = true;
-
-                            runner_println!(
-                                self,
-                                "{} [{}] Calling tool: {}",
-                                style("[TOOL_CALL]").blue().bold().on_black(),
-                                self.agent_type,
-                                tool_name
-                            );
-
-                            if let Some(parameters) = tool_call_response.get("parameters") {
-                                // Execute the tool
-                                let command_event = event_recorder.command_started(tool_name);
-                                match self.execute_tool(tool_name, parameters).await {
-                                    Ok(result) => {
-                                        runner_println!(
-                                            self,
-                                            "{} {}",
-                                            agent_prefix,
-                                            format!(
-                                                "{} {} tool executed successfully",
-                                                style("(SUCCESS)").green().bold(),
-                                                tool_name
-                                            )
-                                        );
-
-                                        // Add tool result to conversation
-                                        // For display: use limited version to avoid overwhelming TUI
-                                        let display_text =
-                                            format_tool_result_for_display(tool_name, &result);
-                                        task_state.conversation.push(Content {
-                                            role: ROLE_USER.to_owned(), // Gemini API only accepts "user" and "model"
-                                            parts: vec![Part::Text {
-                                                text: display_text,
-                                                thought_signature: None,
-                                            }],
-                                        });
-
-                                        // Track what the agent did
-                                        task_state.executed_commands.push(tool_name.to_owned());
-                                        event_recorder.command_finished(
-                                            &command_event,
-                                            CommandExecutionStatus::Completed,
-                                            None,
-                                            "",
-                                        );
-
-                                        // Special handling for certain tools
-                                        if tool_name == tools::WRITE_FILE
-                                            && let Some(filepath) =
-                                                parameters.get("path").and_then(|p| p.as_str())
-                                        {
-                                            task_state.modified_files.push(filepath.to_owned());
-                                            event_recorder.file_change_completed(filepath);
-                                        }
-                                    }
-                                    Err(e) => {
-                                        let mut failure_ctx = ToolFailureContext {
-                                            agent_prefix: &agent_prefix,
-                                            task_state: &mut task_state,
-                                            event_recorder: &mut event_recorder,
-                                            command_event: &command_event,
-                                        };
-                                        self.record_tool_failure(
-                                            &mut failure_ctx,
-                                            tool_name,
-                                            &e,
-                                            None,
-                                        );
-                                    }
-                                }
-                            }
-                        } else {
-                            // Regular content response
-                            Self::print_compact_response(
-                                self.agent_type,
-                                response.content.trim(),
-                                self.quiet,
-                            );
-                            event_recorder.agent_message(response.content.trim());
-                            task_state.conversation.push(Content {
-                                role: ROLE_MODEL.to_owned(),
-                                parts: vec![Part::Text {
-                                    text: response.content.clone(),
-                                    thought_signature: None,
-                                }],
-                            });
-                        }
-                    } else {
-                        // Regular text response
-                        Self::print_compact_response(
-                            self.agent_type,
-                            response.content.trim(),
-                            self.quiet,
-                        );
-                        event_recorder.agent_message(response.content.trim());
-                        task_state.conversation.push(Content {
-                            role: ROLE_MODEL.to_owned(),
-                            parts: vec![Part::Text {
-                                text: response.content.clone(),
-                                thought_signature: None,
-                            }],
-                        });
-                    }
-
-                    // Check for task completion indicators in the response
-                    if !task_state.has_completed {
-                        let response_lower = response.content.to_lowercase();
-
-                        // More comprehensive completion detection
-                        let completion_indicators = [
-                            "task completed",
-                            "task done",
-                            "finished",
-                            "complete",
-                            "summary",
-                            "i have successfully",
-                            "i've completed",
-                            "i have finished",
-                            "task accomplished",
-                            "mission accomplished",
-                            "objective achieved",
-                            "work is done",
-                            "all done",
-                            "completed successfully",
-                            "task execution complete",
-                            "operation finished",
-                        ];
-
-                        // Check if any completion indicator is present
-                        let is_completed = completion_indicators
-                            .iter()
-                            .any(|&indicator| response_lower.contains(indicator));
-
-                        // Also check for explicit completion statements
-                        let has_explicit_completion = response_lower
-                            .contains("the task is complete")
-                            || response_lower.contains("task has been completed")
-                            || response_lower.contains("i am done")
-                            || response_lower.contains("that's all")
-                            || response_lower.contains("no more actions needed");
-
-                        if is_completed || has_explicit_completion {
-                            task_state.has_completed = true;
-                            runner_println!(
-                                self,
-                                "{} {}",
-                                agent_prefix,
-                                format!(
-                                    "{} {} completed task successfully",
-                                    self.agent_type,
-                                    style("(SUCCESS)").green().bold()
-                                )
-                            );
-                        }
-                    }
-
-                    let mut tool_loop_limit_triggered = false;
-                    if had_tool_call {
-                        let loops = task_state.register_tool_loop();
-                        if loops >= task_state.max_tool_loops {
-                            let warning_message = format!(
-                                "Reached tool-call limit of {} iterations; pausing autonomous loop",
-                                task_state.max_tool_loops
-                            );
-                            runner_println!(
-                                self,
-                                "{} {}",
-                                agent_prefix,
-                                format!("{} {}", style("(WARN)").yellow().bold(), warning_message)
-                            );
-                            task_state.warnings.push(warning_message.clone());
-                            event_recorder.warning(&warning_message);
-                            task_state.mark_tool_loop_limit_hit();
-                            task_state.record_turn(&turn_started_at, &mut turn_recorded);
-                            tool_loop_limit_triggered = true;
-                        }
-                    } else {
-                        task_state.reset_tool_loop_guard();
-                    }
-
-                    if tool_loop_limit_triggered {
-                        break;
-                    }
-
-                    // Improved loop termination logic
-                    // Continue if: we had tool calls, task is not completed, and we haven't exceeded max turns
-                    let should_continue =
-                        had_tool_call || (!task_state.has_completed && (turn + 1) < self.max_turns);
-
-                    if !should_continue {
-                        if task_state.has_completed {
-                            task_state.completion_outcome = TaskOutcome::Success;
-                            runner_println!(
-                                self,
-                                "{} {}",
-                                agent_prefix,
-                                format!(
-                                    "{} {} finished - task completed",
-                                    self.agent_type,
-                                    style("(SUCCESS)").green().bold()
-                                )
-                            );
-                        } else if (turn + 1) >= self.max_turns {
-                            task_state.completion_outcome =
-                                TaskOutcome::turn_limit_reached(self.max_turns, turn + 1);
-                            runner_println!(
-                                self,
-                                "{} {}",
-                                agent_prefix,
-                                format!(
-                                    "{} {} finished - maximum turns reached",
-                                    self.agent_type,
-                                    style("(TIME)").yellow().bold()
-                                )
-                            );
-                        } else {
-                            task_state.completion_outcome = TaskOutcome::StoppedNoAction;
-                            runner_println!(
-                                self,
-                                "{} {}",
-                                agent_prefix,
-                                format!(
-                                    "{} {} finished - no more actions needed",
-                                    self.agent_type,
-                                    style("(FINISH)").blue().bold()
-                                )
-                            );
-                        }
-                        task_state.record_turn(&turn_started_at, &mut turn_recorded);
-                        break;
-                    }
+                // Build assistant message
+                let assistant_msg = if let Some(ref tc) = effective_tool_calls {
+                    Message::assistant_with_tools(resp_summary.content.clone(), tc.clone())
                 } else {
-                    // Empty response - check if we should continue or if task is actually complete
-                    if task_state.has_completed {
-                        task_state.record_turn(&turn_started_at, &mut turn_recorded);
-                        task_state.completion_outcome = TaskOutcome::Success;
-                        runner_println!(
-                            self,
-                            "{} {}",
-                            agent_prefix,
-                            format!(
-                                "{} {} finished - task was completed earlier",
-                                self.agent_type,
-                                style("(SUCCESS)").green().bold()
-                            )
-                        );
-                        break;
-                    } else if (turn + 1) >= self.max_turns {
-                        task_state.record_turn(&turn_started_at, &mut turn_recorded);
-                        task_state.completion_outcome =
-                            TaskOutcome::turn_limit_reached(self.max_turns, turn + 1);
-                        runner_println!(
-                            self,
-                            "{} {}",
-                            agent_prefix,
-                            format!(
-                                "{} {} finished - maximum turns reached with empty response",
-                                self.agent_type,
-                                style("(TIME)").yellow().bold()
-                            )
-                        );
-                        break;
+                    Message::assistant(resp_summary.content.clone())
+                }
+                .with_reasoning(resp_summary.reasoning.clone());
+
+                task_state.conversation_messages.push(assistant_msg.clone());
+
+                // Legacy conversation sync for Gemini
+                if is_gemini {
+                    task_state.conversation.push(Content {
+                        role: ROLE_MODEL.into(),
+                        parts: vec![Part::Text {
+                            text: resp_summary.content.clone(),
+                            thought_signature: None,
+                        }],
+                    });
+                    task_state.last_processed_message_idx = task_state.conversation.len();
+                }
+
+                if let Some(tool_calls) = effective_tool_calls.filter(|tc| !tc.is_empty()) {
+                    let can_parallelize = tool_calls.len() > 1
+                        && tool_calls.iter().all(|call| {
+                            if let Some(func) = &call.function {
+                                matches!(
+                                    func.name.as_str(),
+                                    "list_files" | "read_file" | "grep_file" | "search_tools"
+                                )
+                            } else {
+                                false
+                            }
+                        });
+
+                    if can_parallelize {
+                        self.execute_parallel_tool_calls(
+                            tool_calls,
+                            &mut task_state,
+                            &mut event_recorder,
+                            &agent_prefix,
+                            is_gemini,
+                        )
+                        .await?;
                     } else {
-                        // Empty response but task not complete - this might indicate an issue
-                        runner_println!(
-                            self,
-                            "{} {}",
-                            agent_prefix,
-                            format!(
-                                "{} {} received empty response, continuing...",
-                                self.agent_type,
-                                style("(EMPTY)").yellow()
-                            )
-                        );
-                        // Don't break here, let the loop continue to give the agent another chance
+                        self.execute_sequential_tool_calls(
+                            tool_calls,
+                            &mut task_state,
+                            &mut event_recorder,
+                            &agent_prefix,
+                            is_gemini,
+                        )
+                        .await?;
                     }
                 }
 
-                if !turn_recorded {
-                    task_state.record_turn(&turn_started_at, &mut turn_recorded);
+                if !task_state.has_completed && !resp_summary.content.is_empty() {
+                    if check_for_response_loop(&resp_summary.content, &mut task_state) {
+                        runner_println!(
+                            self,
+                            "[{}] {}",
+                            self.agent_type,
+                            style(
+                                "Repetitive assistant response detected. Breaking potential loop."
+                            )
+                            .yellow()
+                            .bold()
+                        );
+                        break;
+                    }
+
+                    if check_completion_indicators(&resp_summary.content) {
+                        runner_println!(
+                            self,
+                            "[{}] {}",
+                            self.agent_type,
+                            style("Completion indicator detected.").green().bold()
+                        );
+                        task_state.has_completed = true;
+                        task_state.completion_outcome = TaskOutcome::Success;
+                        break;
+                    }
+                }
+
+                let had_tool_call = assistant_msg
+                    .tool_calls
+                    .as_ref()
+                    .is_some_and(|tc| !tc.is_empty());
+                if had_tool_call {
+                    let loops = task_state.register_tool_loop();
+                    if loops >= task_state.max_tool_loops {
+                        let warning_message = format!(
+                            "Reached tool-call limit of {} iterations; pausing autonomous loop",
+                            task_state.max_tool_loops
+                        );
+                        self.record_warning(
+                            &agent_prefix,
+                            &mut task_state,
+                            &mut event_recorder,
+                            warning_message,
+                        );
+                        task_state.mark_tool_loop_limit_hit();
+                        task_state.record_turn(&turn_started_at, &mut turn_recorded);
+                        break;
+                    }
+                    task_state.consecutive_idle_turns = 0;
+                } else {
+                    task_state.reset_tool_loop_guard();
+                    if !task_state.has_completed {
+                        task_state.consecutive_idle_turns =
+                            task_state.consecutive_idle_turns.saturating_add(1);
+                        if task_state.consecutive_idle_turns >= IDLE_TURN_LIMIT {
+                            let warning_message = format!(
+                                "No tool calls or completion for {} consecutive turns; halting to avoid idle loop",
+                                task_state.consecutive_idle_turns
+                            );
+                            self.record_warning(
+                                &agent_prefix,
+                                &mut task_state,
+                                &mut event_recorder,
+                                warning_message,
+                            );
+                            task_state.completion_outcome = TaskOutcome::StoppedNoAction;
+                            task_state.record_turn(&turn_started_at, &mut turn_recorded);
+                            break;
+                        }
+                    }
+                }
+
+                let should_continue =
+                    had_tool_call || (!task_state.has_completed && (turn + 1) < self.max_turns);
+
+                // Record turn duration for the successfully completed turn
+                task_state.record_turn(&turn_started_at, &mut turn_recorded);
+
+                if !should_continue {
+                    if task_state.has_completed {
+                        task_state.completion_outcome = TaskOutcome::Success;
+                    } else if (turn + 1) >= self.max_turns {
+                        task_state.completion_outcome =
+                            TaskOutcome::turn_limit_reached(self.max_turns, turn + 1);
+                    } else {
+                        task_state.completion_outcome = TaskOutcome::StoppedNoAction;
+                    }
+                    break;
                 }
             }
 
@@ -2818,89 +1951,12 @@ impl AgentRunner {
                 }));
             }
 
-            use std::collections::hash_map::DefaultHasher;
-            use std::hash::{Hash, Hasher};
+            self.tool_registry.check_shell_policy(
+                &cmd_text,
+                &deny_regex_patterns,
+                &deny_glob_patterns,
+            )?;
 
-            let mut hasher = DefaultHasher::new();
-            deny_regex_patterns.hash(&mut hasher);
-            deny_glob_patterns.hash(&mut hasher);
-            let signature = hasher.finish();
-
-            let cached_entry = {
-                let cache_guard = self.shell_policy_cache.borrow();
-                cache_guard
-                    .as_ref()
-                    .filter(|entry| entry.signature == signature)
-                    .cloned()
-            };
-
-            let policy_entry = if let Some(entry) = cached_entry {
-                entry
-            } else {
-                let deny_regexes = deny_regex_patterns
-                    .iter()
-                    .filter_map(|pattern| {
-                        if pattern.is_empty() {
-                            return None;
-                        }
-                        match regex::Regex::new(pattern) {
-                            Ok(regex) => Some((pattern.clone(), regex)),
-                            Err(err) => {
-                                warn!(
-                                    agent = ?self.agent_type,
-                                    pattern,
-                                    error = %err,
-                                    "Invalid deny regex pattern skipped"
-                                );
-                                None
-                            }
-                        }
-                    })
-                    .collect::<Vec<_>>();
-
-                let deny_globs = deny_glob_patterns
-                    .iter()
-                    .filter_map(|pattern| {
-                        if pattern.is_empty() {
-                            return None;
-                        }
-                        let re_pattern =
-                            format!("^{}$", regex::escape(pattern).replace(r"\\*", ".*"));
-                        match regex::Regex::new(&re_pattern) {
-                            Ok(regex) => Some((pattern.clone(), regex)),
-                            Err(err) => {
-                                warn!(
-                                    agent = ?self.agent_type,
-                                    pattern,
-                                    error = %err,
-                                    "Invalid deny glob pattern skipped"
-                                );
-                                None
-                            }
-                        }
-                    })
-                    .collect::<Vec<_>>();
-
-                let entry = ShellPolicyCacheEntry {
-                    signature,
-                    deny_regexes,
-                    deny_globs,
-                };
-                self.shell_policy_cache.borrow_mut().replace(entry.clone());
-                entry
-            };
-
-            for (pattern, compiled) in &policy_entry.deny_regexes {
-                if compiled.is_match(&cmd_text) {
-                    return Err(anyhow!("Shell command denied by regex: {}", pattern));
-                }
-            }
-
-            for (pattern, compiled) in &policy_entry.deny_globs {
-                if compiled.is_match(&cmd_text) {
-                    return Err(anyhow!("Shell command denied by glob: {}", pattern));
-                }
-            }
             info!(target = "policy", agent = ?self.agent_type, tool = tool_name, cmd = %cmd_text, "shell_policy_checked");
         }
         // Clone the tool registry for this execution
@@ -3041,86 +2097,6 @@ impl AgentRunner {
 
         summary.join("\n")
     }
-}
-
-/// Parse tool code in the format: function_name(arg1=value1, arg2=value2)
-fn parse_tool_code(tool_code: &str) -> Option<(String, String)> {
-    // Remove any markdown code blocks
-    let code = tool_code.trim();
-    let code = if code.starts_with("```") && code.ends_with("```") {
-        code.trim_start_matches("```")
-            .trim_end_matches("```")
-            .trim()
-    } else {
-        code
-    };
-
-    // Try to match function call pattern: name(args)
-    if let Some(open_paren) = code.find('(')
-        && let Some(close_paren) = code.rfind(')')
-    {
-        let func_name = code[..open_paren].trim().to_owned();
-        let args_str = &code[open_paren + 1..close_paren];
-
-        // Convert Python-style arguments to JSON
-        let json_args = convert_python_args_to_json(args_str)?;
-        return Some((func_name, json_args));
-    }
-
-    None
-}
-
-/// Convert Python-style function arguments to JSON
-fn convert_python_args_to_json(args_str: &str) -> Option<String> {
-    if args_str.trim().is_empty() {
-        return Some("{}".to_owned());
-    }
-
-    let mut json_parts = Vec::new();
-
-    for arg in args_str.split(',').map(|s| s.trim()) {
-        if arg.is_empty() {
-            continue;
-        }
-
-        // Handle key=value format
-        if let Some(eq_pos) = arg.find('=') {
-            let key = arg[..eq_pos].trim().trim_matches('"').trim_matches('\'');
-            let value = arg[eq_pos + 1..].trim();
-
-            // Convert value to JSON format - properly escape string values
-            let json_value = if value.starts_with('"') && value.ends_with('"') {
-                // Already properly quoted, but ensure proper escaping
-                serde_json::to_string(&value[1..value.len() - 1]).unwrap_or_else(|_| {
-                    format!("\"{}\"", value[1..value.len() - 1].replace('"', "\\\""))
-                })
-            } else if value.starts_with('\'') && value.ends_with('\'') {
-                // Convert single-quoted to double-quoted with proper escaping
-                serde_json::to_string(&value[1..value.len() - 1]).unwrap_or_else(|_| {
-                    format!("\"{}\"", value[1..value.len() - 1].replace('"', "\\\""))
-                })
-            } else if value == "True" || value == "true" {
-                "true".to_owned()
-            } else if value == "False" || value == "false" {
-                "false".to_owned()
-            } else if value == "None" || value == "null" {
-                "null".to_owned()
-            } else if let Ok(num) = value.parse::<f64>() {
-                num.to_string()
-            } else {
-                // Assume it's a string that needs quotes - properly escape it
-                serde_json::to_string(value)
-                    .unwrap_or_else(|_| format!("\"{}\"", value.replace('"', "\\\"")))
-            };
-
-            json_parts.push(format!("\"{}\": {}", key, json_value));
-        } else {
-            // Handle positional arguments (not supported well, but try)
-            return None;
-        }
-    }
-
-    Some(format!("{{{}}}", json_parts.join(", ")))
 }
 
 fn detect_textual_run_pty_cmd(text: &str) -> Option<Value> {

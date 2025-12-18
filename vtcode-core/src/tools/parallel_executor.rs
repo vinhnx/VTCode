@@ -145,16 +145,16 @@ impl ParallelExecutionPlanner {
 
     fn conflicts(&self, tool_a: &str, tool_b: &str) -> bool {
         // Check both directions due to symmetry
-        if let Some(conflicts) = self.conflict_map.get(tool_a) {
-            if conflicts.iter().any(|&conflict| conflict == tool_b) {
-                return true;
-            }
+        if let Some(conflicts) = self.conflict_map.get(tool_a)
+            && conflicts.contains(&tool_b)
+        {
+            return true;
         }
 
-        if let Some(conflicts) = self.conflict_map.get(tool_b) {
-            if conflicts.iter().any(|&conflict| conflict == tool_a) {
-                return true;
-            }
+        if let Some(conflicts) = self.conflict_map.get(tool_b)
+            && conflicts.contains(&tool_a)
+        {
+            return true;
         }
 
         false
@@ -180,7 +180,15 @@ impl ExecutionResultCollector {
             errors: HashMap::new(),
         }
     }
+}
 
+impl Default for ExecutionResultCollector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ExecutionResultCollector {
     pub fn add_result(&mut self, call_id: String, result: Value) {
         self.results.insert(call_id, result);
     }

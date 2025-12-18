@@ -1915,14 +1915,16 @@ pub(crate) async fn run_single_agent_loop_unified(
                 .as_ref()
                 .and_then(|cfg| cfg.tools.max_tool_rate_per_second)
                 .filter(|v| *v > 0)
-                .unwrap_or_else(|| vt_cfg
-                    .as_ref()
-                    .map(|cfg| cfg.tools.max_tool_loops.max(1))
-                    .unwrap_or(max_tool_loops.max(1)));
+                .unwrap_or_else(|| {
+                    vt_cfg
+                        .as_ref()
+                        .map(|cfg| cfg.tools.max_tool_loops.max(1))
+                        .unwrap_or(max_tool_loops.max(1))
+                });
             let current_rate_limit = tool_call_safety.rate_limit_per_second();
             tool_call_safety.set_rate_limit_per_second(current_rate_limit.min(per_second_cap));
-                    // Coordinate with registry minute-level limit when configured (env-driven)
-                    tool_call_safety.set_rate_limit_per_minute(tool_registry.rate_limit_per_minute());
+            // Coordinate with registry minute-level limit when configured (env-driven)
+            tool_call_safety.set_rate_limit_per_minute(tool_registry.rate_limit_per_minute());
             tool_call_safety.start_turn();
             let mut autonomous_executor = AutonomousExecutor::new();
             autonomous_executor.set_workspace_dir(config.workspace.clone());

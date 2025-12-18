@@ -64,10 +64,12 @@ impl Language {
     }
 
     /// Get the best available Python interpreter (venv > uv > system)
-    pub fn detect_python_interpreter(workspace_root: &PathBuf) -> String {
+    pub fn detect_python_interpreter(workspace_root: &std::path::Path) -> String {
         // 1. Check for activated venv
         if let Ok(venv_python) = std::env::var("VIRTUAL_ENV") {
-            let venv_bin = PathBuf::from(venv_python).join("bin").join("python");
+            let venv_bin = std::path::PathBuf::from(venv_python)
+                .join("bin")
+                .join("python");
             if venv_bin.exists() {
                 debug!("Using venv Python: {:?}", venv_bin);
                 return venv_bin.to_string_lossy().into_owned();

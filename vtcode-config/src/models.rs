@@ -507,7 +507,9 @@ impl ModelId {
 
             ModelId::OllamaQwen3Coder480bCloud => models::ollama::QWEN3_CODER_480B_CLOUD,
             ModelId::OllamaGlm46Cloud => models::ollama::GLM_46_CLOUD,
-            ModelId::OllamaGemini3ProPreviewLatestCloud => models::ollama::GEMINI_3_PRO_PREVIEW_LATEST_CLOUD,
+            ModelId::OllamaGemini3ProPreviewLatestCloud => {
+                models::ollama::GEMINI_3_PRO_PREVIEW_LATEST_CLOUD
+            }
             ModelId::OllamaDevstral2123bCloud => models::ollama::DEVSTRAL_2_123B_CLOUD,
             ModelId::OllamaMinimaxM2Cloud => models::ollama::MINIMAX_M2_CLOUD,
             // LM Studio models
@@ -1132,9 +1134,7 @@ impl FromStr for ModelId {
             s if s == models::ollama::GPT_OSS_120B_CLOUD => Ok(ModelId::OllamaGptOss120bCloud),
             s if s == models::ollama::QWEN3_1_7B => Ok(ModelId::OllamaQwen317b),
             s if s == models::ollama::DEEPSEEK_V32_CLOUD => Ok(ModelId::OllamaDeepseekV32Cloud),
-            s if s == models::ollama::QWEN3_NEXT_80B_CLOUD => {
-                Ok(ModelId::OllamaQwen3Next80bCloud)
-            }
+            s if s == models::ollama::QWEN3_NEXT_80B_CLOUD => Ok(ModelId::OllamaQwen3Next80bCloud),
             s if s == models::ollama::MISTRAL_LARGE_3_675B_CLOUD => {
                 Ok(ModelId::OllamaMistralLarge3675bCloud)
             }

@@ -7,7 +7,7 @@ use std::time::Duration;
 use crate::core::agent::conversation::build_messages_from_conversation;
 
 #[inline]
-fn record_turn_duration(
+pub(crate) fn record_turn_duration(
     turn_durations: &mut Vec<u128>,
     recorded: &mut bool,
     start: &std::time::Instant,

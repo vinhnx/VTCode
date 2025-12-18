@@ -9,14 +9,12 @@
 use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::{OpenAIPromptCacheSettings, PromptCachingConfig};
-use crate::config::models::Provider;
+use crate::config::models::Provider as ModelProvider;
 use crate::config::types::ReasoningEffortLevel;
 use crate::llm::client::LLMClient;
 use crate::llm::error_display;
-use crate::llm::provider::{
-    FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
-    Message, MessageContent, MessageRole, ToolCall, ToolChoice, ToolDefinition,
-};
+use crate::llm::provider::{self, LLMProvider};
+use crate::llm::providers::tag_sanitizer::TagStreamSanitizer;
 use crate::llm::rig_adapter::reasoning_parameters_for;
 use crate::llm::types as llm_types;
 use async_stream::try_stream;
@@ -29,10 +27,7 @@ use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::time::Duration;
-#[cfg(debug_assertions)]
-use std::time::Instant;
-#[cfg(debug_assertions)]
+use std::time::{Duration, Instant};
 use tracing::debug;
 
 use openai_harmony::chat::{
@@ -40,7 +35,6 @@ use openai_harmony::chat::{
     Message as HarmonyMessage, Role as HarmonyRole, ToolDescription,
 };
 use openai_harmony::{HarmonyEncodingName, load_harmony_encoding};
-
 const MAX_COMPLETION_TOKENS_FIELD: &str = "max_completion_tokens";
 
 /// Detect if an OpenAI API error indicates the model was not found or is inaccessible
@@ -157,7 +151,7 @@ fn is_responses_api_unsupported(status: StatusCode, body: &str) -> bool {
 fn parse_responses_payload(
     response_json: Value,
     include_cached_prompt_metrics: bool,
-) -> Result<LLMResponse, LLMError> {
+) -> Result<provider::LLMResponse, provider::LLMError> {
     let output = response_json
         .get("output")
         .or_else(|| response_json.get("choices"))
@@ -167,7 +161,7 @@ fn parse_responses_payload(
                 "OpenAI",
                 "Invalid response format: missing output",
             );
-            LLMError::Provider {
+            provider::LLMError::Provider {
                 message: formatted_error,
                 metadata: None,
             }
@@ -175,7 +169,7 @@ fn parse_responses_payload(
 
     if output.is_empty() {
         let formatted_error = error_display::format_llm_error("OpenAI", "No output in response");
-        return Err(LLMError::Provider {
+        return Err(provider::LLMError::Provider {
             message: formatted_error,
             metadata: None,
         });
@@ -240,7 +234,7 @@ fn parse_responses_payload(
                                     value.to_string()
                                 }
                             });
-                            tool_calls_vec.push(ToolCall::function(
+                            tool_calls_vec.push(provider::ToolCall::function(
                                 id.to_string(),
                                 name.to_string(),
                                 serialized,
@@ -318,13 +312,13 @@ fn parse_responses_payload(
         .unwrap_or("stop");
 
     let finish_reason = match stop_reason {
-        "stop" => FinishReason::Stop,
-        "max_output_tokens" | "length" => FinishReason::Length,
-        "tool_use" | "tool_calls" => FinishReason::ToolCalls,
-        other => FinishReason::Error(other.to_string()),
+        "stop" => crate::llm::provider::FinishReason::Stop,
+        "max_output_tokens" | "length" => crate::llm::provider::FinishReason::Length,
+        "tool_use" | "tool_calls" => crate::llm::provider::FinishReason::ToolCalls,
+        other => crate::llm::provider::FinishReason::Error(other.to_string()),
     };
 
-    Ok(LLMResponse {
+    Ok(provider::LLMResponse {
         content,
         tool_calls,
         usage,
@@ -350,7 +344,7 @@ pub struct OpenAIProvider {
 }
 
 impl OpenAIProvider {
-    fn serialize_tools(tools: &[ToolDefinition]) -> Option<Value> {
+    fn serialize_tools(tools: &[provider::ToolDefinition]) -> Option<Value> {
         if tools.is_empty() {
             return None;
         }
@@ -408,7 +402,7 @@ impl OpenAIProvider {
     /// - Function tools use FLAT format: {"type": "function", "name": "...", "description": "...", "parameters": {...}}
     /// - Built-in tools like apply_patch use: {"type": "apply_patch"} (no other fields)
     ///   Note: Cannot have both built-in apply_patch AND a function named "apply_patch"
-    fn serialize_tools_for_responses(tools: &[ToolDefinition]) -> Option<Value> {
+    fn serialize_tools_for_responses(tools: &[provider::ToolDefinition]) -> Option<Value> {
         if tools.is_empty() {
             return None;
         }
@@ -574,8 +568,8 @@ impl OpenAIProvider {
 
     fn convert_to_harmony_conversation(
         &self,
-        request: &LLMRequest,
-    ) -> Result<Conversation, LLMError> {
+        request: &provider::LLMRequest,
+    ) -> Result<Conversation, provider::LLMError> {
         let mut harmony_messages = Vec::with_capacity(request.messages.len() + 2); // +2 for system prompt and developer message
         let mut tool_call_authors: HashMap<String, String> = HashMap::with_capacity(16); // Typical tool call count
 
@@ -617,7 +611,7 @@ impl OpenAIProvider {
         // Convert messages
         for msg in &request.messages {
             if !developer_inserted
-                && msg.role != MessageRole::System
+                && msg.role != provider::MessageRole::System
                 && let Some(dev_msg) = developer_message.take()
             {
                 harmony_messages.push(dev_msg);
@@ -625,19 +619,19 @@ impl OpenAIProvider {
             }
 
             match msg.role {
-                MessageRole::System => {
+                provider::MessageRole::System => {
                     harmony_messages.push(HarmonyMessage::from_role_and_content(
                         HarmonyRole::System,
                         msg.content.as_text(),
                     ));
                 }
-                MessageRole::User => {
+                provider::MessageRole::User => {
                     harmony_messages.push(HarmonyMessage::from_role_and_content(
                         HarmonyRole::User,
                         msg.content.as_text(),
                     ));
                 }
-                MessageRole::Assistant => {
+                provider::MessageRole::Assistant => {
                     if let Some(tool_calls) = &msg.tool_calls {
                         for call in tool_calls {
                             if let Some(ref func) = call.function {
@@ -652,7 +646,7 @@ impl OpenAIProvider {
                         msg.content.as_text(),
                     ));
                 }
-                MessageRole::Tool => {
+                provider::MessageRole::Tool => {
                     let author_name = msg
                         .tool_call_id
                         .as_ref()
@@ -805,11 +799,11 @@ impl OpenAIProvider {
         modes.insert(model.to_string(), state);
     }
 
-    fn parse_client_prompt(&self, prompt: &str) -> LLMRequest {
+    fn parse_client_prompt(&self, prompt: &str) -> provider::LLMRequest {
         parse_client_prompt_common(prompt, &self.model, |value| self.parse_chat_request(value))
     }
 
-    fn parse_chat_request(&self, value: &Value) -> Option<LLMRequest> {
+    fn parse_chat_request(&self, value: &Value) -> Option<provider::LLMRequest> {
         let messages_value = value.get("messages")?.as_array()?;
         let mut system_prompt = None;
         let mut messages = Vec::with_capacity(messages_value.len());
@@ -847,7 +841,7 @@ impl OpenAIProvider {
                                             value.to_string()
                                         }
                                     });
-                                    Some(ToolCall::function(
+                                    Some(provider::ToolCall::function(
                                         id.to_string(),
                                         name.to_string(),
                                         serialized,
@@ -858,9 +852,9 @@ impl OpenAIProvider {
                         .filter(|calls| !calls.is_empty());
 
                     let message = if let Some(calls) = tool_calls {
-                        Message::assistant_with_tools(text_content, calls)
+                        provider::Message::assistant_with_tools(text_content, calls)
                     } else {
-                        Message::assistant(text_content)
+                        provider::Message::assistant(text_content)
                     };
                     messages.push(message);
                 }
@@ -880,12 +874,12 @@ impl OpenAIProvider {
                         })
                         .unwrap_or_else(|| text_content.clone());
                     messages.push(if let Some(id) = tool_call_id {
-                        Message::tool_response(id, content_value)
+                        provider::Message::tool_response(id, content_value)
                     } else {
                         // Fallback: create a tool message without tool_call_id (invalid but graceful)
-                        Message {
-                            role: MessageRole::Tool,
-                            content: MessageContent::Text(content_value),
+                        provider::Message {
+                            role: provider::MessageRole::Tool,
+                            content: provider::MessageContent::Text(content_value),
                             reasoning: None,
                             reasoning_details: None,
                             tool_calls: None,
@@ -895,7 +889,7 @@ impl OpenAIProvider {
                     });
                 }
                 _ => {
-                    messages.push(Message::user(text_content));
+                    messages.push(provider::Message::user(text_content));
                 }
             }
         }
@@ -920,7 +914,7 @@ impl OpenAIProvider {
                         .get("parameters")
                         .cloned()
                         .unwrap_or_else(|| json!({}));
-                    Some(ToolDefinition::function(
+                    Some(provider::ToolDefinition::function(
                         name.to_string(),
                         description,
                         parameters,
@@ -967,7 +961,7 @@ impl OpenAIProvider {
             .unwrap_or(&self.model)
             .to_string();
 
-        Some(LLMRequest {
+        Some(provider::LLMRequest {
             messages,
             system_prompt,
             tools,
@@ -1005,12 +999,12 @@ impl OpenAIProvider {
         }
     }
 
-    fn parse_tool_choice(choice: &Value) -> Option<ToolChoice> {
+    fn parse_tool_choice(choice: &Value) -> Option<provider::ToolChoice> {
         match choice {
             Value::String(value) => match value.as_str() {
-                "auto" => Some(ToolChoice::auto()),
-                "none" => Some(ToolChoice::none()),
-                "required" => Some(ToolChoice::any()),
+                "auto" => Some(provider::ToolChoice::auto()),
+                "none" => Some(provider::ToolChoice::none()),
+                "required" => Some(provider::ToolChoice::any()),
                 _ => None,
             },
             Value::Object(map) => {
@@ -1020,10 +1014,10 @@ impl OpenAIProvider {
                         .get("function")
                         .and_then(|f| f.get("name"))
                         .and_then(|n| n.as_str())
-                        .map(|name| ToolChoice::function(name.to_string())),
-                    "auto" => Some(ToolChoice::auto()),
-                    "none" => Some(ToolChoice::none()),
-                    "any" | "required" => Some(ToolChoice::any()),
+                        .map(|name| provider::ToolChoice::function(name.to_string())),
+                    "auto" => Some(provider::ToolChoice::auto()),
+                    "none" => Some(provider::ToolChoice::none()),
+                    "any" | "required" => Some(provider::ToolChoice::any()),
                     _ => None,
                 }
             }
@@ -1031,7 +1025,10 @@ impl OpenAIProvider {
         }
     }
 
-    fn convert_to_openai_format(&self, request: &LLMRequest) -> Result<Value, LLMError> {
+    fn convert_to_openai_format(
+        &self,
+        request: &provider::LLMRequest,
+    ) -> Result<Value, provider::LLMError> {
         let mut messages = Vec::with_capacity(request.messages.len() + 1); // +1 for system prompt
         let mut active_tool_call_ids: HashSet<String> = HashSet::with_capacity(16); // Typical tool call count
 
@@ -1050,7 +1047,7 @@ impl OpenAIProvider {
             });
             let mut skip_message = false;
 
-            if msg.role == MessageRole::Assistant
+            if msg.role == provider::MessageRole::Assistant
                 && let Some(tool_calls) = &msg.tool_calls
                 && !tool_calls.is_empty()
             {
@@ -1074,7 +1071,7 @@ impl OpenAIProvider {
                 message["tool_calls"] = Value::Array(tool_calls_json);
             }
 
-            if msg.role == MessageRole::Tool {
+            if msg.role == provider::MessageRole::Tool {
                 match &msg.tool_call_id {
                     Some(tool_call_id) if active_tool_call_ids.contains(tool_call_id) => {
                         message["tool_call_id"] = Value::String(tool_call_id.clone());
@@ -1093,7 +1090,7 @@ impl OpenAIProvider {
 
         if messages.is_empty() {
             let formatted_error = error_display::format_llm_error("OpenAI", "No messages provided");
-            return Err(LLMError::InvalidRequest {
+            return Err(provider::LLMError::InvalidRequest {
                 message: formatted_error,
                 metadata: None,
             });
@@ -1160,7 +1157,10 @@ impl OpenAIProvider {
         Ok(openai_request)
     }
 
-    fn convert_to_openai_responses_format(&self, request: &LLMRequest) -> Result<Value, LLMError> {
+    fn convert_to_openai_responses_format(
+        &self,
+        request: &provider::LLMRequest,
+    ) -> Result<Value, provider::LLMError> {
         let responses_payload = if Self::is_gpt5_codex_model(&request.model) {
             build_codex_responses_payload(request)?
         } else {
@@ -1170,7 +1170,7 @@ impl OpenAIProvider {
         if responses_payload.input.is_empty() {
             let formatted_error =
                 error_display::format_llm_error("OpenAI", "No messages provided for Responses API");
-            return Err(LLMError::InvalidRequest {
+            return Err(provider::LLMError::InvalidRequest {
                 message: formatted_error,
                 metadata: None,
             });
@@ -1237,7 +1237,7 @@ impl OpenAIProvider {
 
         if let Some(effort) = request.reasoning_effort {
             if self.supports_reasoning_effort(&request.model) {
-                if let Some(payload) = reasoning_parameters_for(Provider::OpenAI, effort) {
+                if let Some(payload) = reasoning_parameters_for(ModelProvider::OpenAI, effort) {
                     openai_request["reasoning"] = payload;
                 } else {
                     openai_request["reasoning"] = json!({ "effort": effort.as_str() });
@@ -1264,7 +1264,7 @@ impl OpenAIProvider {
 
         // Add grammar constraint if tools include grammar definitions
         if let Some(ref tools) = request.tools {
-            let grammar_tools: Vec<&ToolDefinition> = tools
+            let grammar_tools: Vec<&provider::ToolDefinition> = tools
                 .iter()
                 .filter(|tool| tool.tool_type == "grammar")
                 .collect();
@@ -1312,7 +1312,10 @@ impl OpenAIProvider {
         Ok(openai_request)
     }
 
-    fn parse_openai_response(&self, response_json: Value) -> Result<LLMResponse, LLMError> {
+    fn parse_openai_response(
+        &self,
+        response_json: Value,
+    ) -> Result<provider::LLMResponse, provider::LLMError> {
         let choices = response_json
             .get("choices")
             .and_then(|c| c.as_array())
@@ -1321,7 +1324,7 @@ impl OpenAIProvider {
                     "OpenAI",
                     "Invalid response format: missing choices",
                 );
-                LLMError::Provider {
+                provider::LLMError::Provider {
                     message: formatted_error,
                     metadata: None,
                 }
@@ -1330,7 +1333,7 @@ impl OpenAIProvider {
         if choices.is_empty() {
             let formatted_error =
                 error_display::format_llm_error("OpenAI", "No choices in response");
-            return Err(LLMError::Provider {
+            return Err(provider::LLMError::Provider {
                 message: formatted_error,
                 metadata: None,
             });
@@ -1342,7 +1345,7 @@ impl OpenAIProvider {
                 "OpenAI",
                 "Invalid response format: missing message",
             );
-            LLMError::Provider {
+            provider::LLMError::Provider {
                 message: formatted_error,
                 metadata: None,
             }
@@ -1379,7 +1382,7 @@ impl OpenAIProvider {
                                 value.to_string()
                             }
                         });
-                        Some(ToolCall::function(
+                        Some(provider::ToolCall::function(
                             id.to_string(),
                             name.to_string(),
                             serialized,
@@ -1398,21 +1401,31 @@ impl OpenAIProvider {
                     .get("reasoning_content")
                     .and_then(extract_reasoning_trace)
             })
-            .or_else(|| choice.get("reasoning").and_then(extract_reasoning_trace));
+            .or_else(|| choice.get("reasoning").and_then(extract_reasoning_trace))
+            .or_else(|| {
+                content.as_ref().and_then(|c| {
+                    let (reasoning_parts, _) = crate::llm::utils::extract_reasoning_content(c);
+                    if reasoning_parts.is_empty() {
+                        None
+                    } else {
+                        Some(reasoning_parts.join("\n\n"))
+                    }
+                })
+            });
 
         let finish_reason = choice
             .get("finish_reason")
             .and_then(|fr| fr.as_str())
             .map(|fr| match fr {
-                "stop" => FinishReason::Stop,
-                "length" => FinishReason::Length,
-                "tool_calls" => FinishReason::ToolCalls,
-                "content_filter" => FinishReason::ContentFilter,
-                other => FinishReason::Error(other.to_string()),
+                "stop" => crate::llm::provider::FinishReason::Stop,
+                "length" => crate::llm::provider::FinishReason::Length,
+                "tool_calls" => crate::llm::provider::FinishReason::ToolCalls,
+                "content_filter" => crate::llm::provider::FinishReason::ContentFilter,
+                other => crate::llm::provider::FinishReason::Error(other.to_string()),
             })
-            .unwrap_or(FinishReason::Stop);
+            .unwrap_or(crate::llm::provider::FinishReason::Stop);
 
-        Ok(LLMResponse {
+        Ok(provider::LLMResponse {
             content,
             tool_calls,
             usage: response_json.get("usage").map(|usage_value| {
@@ -1457,20 +1470,23 @@ impl OpenAIProvider {
     fn parse_openai_responses_response(
         &self,
         response_json: Value,
-    ) -> Result<LLMResponse, LLMError> {
+    ) -> Result<provider::LLMResponse, provider::LLMError> {
         let include_metrics =
             self.prompt_cache_enabled && self.prompt_cache_settings.surface_metrics;
         parse_responses_payload(response_json, include_metrics)
     }
 
-    async fn generate_with_harmony(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
+    async fn generate_with_harmony(
+        &self,
+        request: provider::LLMRequest,
+    ) -> Result<provider::LLMResponse, provider::LLMError> {
         // Load harmony encoding
         let encoding = load_harmony_encoding(HarmonyEncodingName::HarmonyGptOss).map_err(|e| {
             let formatted_error = error_display::format_llm_error(
                 "OpenAI",
                 &format!("Failed to load harmony encoding: {}", e),
             );
-            LLMError::Provider {
+            provider::LLMError::Provider {
                 message: formatted_error,
                 metadata: None,
             }
@@ -1487,7 +1503,7 @@ impl OpenAIProvider {
                     "OpenAI",
                     &format!("Failed to render conversation: {}", e),
                 );
-                LLMError::Provider {
+                provider::LLMError::Provider {
                     message: formatted_error,
                     metadata: None,
                 }
@@ -1513,7 +1529,7 @@ impl OpenAIProvider {
                     "OpenAI",
                     &format!("Failed to parse completion tokens: {}", e),
                 );
-                LLMError::Provider {
+                provider::LLMError::Provider {
                     message: formatted_error,
                     metadata: None,
                 }
@@ -1566,7 +1582,7 @@ impl OpenAIProvider {
                                             .map(normalize_json_arguments)
                                             .unwrap_or_else(|| "{}".to_owned());
 
-                                        tool_calls.push(ToolCall::function(
+                                        tool_calls.push(provider::ToolCall::function(
                                             format!("call_{}", tool_calls.len()),
                                             function_name.to_string(),
                                             arguments,
@@ -1580,7 +1596,7 @@ impl OpenAIProvider {
                                                 .map(normalize_json_arguments)
                                                 .unwrap_or_else(|| "{}".to_string());
 
-                                            tool_calls.push(ToolCall::function(
+                                            tool_calls.push(provider::ToolCall::function(
                                                 format!("call_{}", tool_calls.len()),
                                                 tool_name,
                                                 arguments,
@@ -1598,7 +1614,7 @@ impl OpenAIProvider {
                                             let arguments = serde_json::to_string(&args)
                                                 .unwrap_or_else(|_| "{}".to_string());
 
-                                            tool_calls.push(ToolCall::function(
+                                            tool_calls.push(provider::ToolCall::function(
                                                 format!("call_{}", tool_calls.len()),
                                                 tool_name,
                                                 arguments,
@@ -1621,7 +1637,7 @@ impl OpenAIProvider {
             Some(tool_calls)
         };
 
-        Ok(LLMResponse {
+        Ok(provider::LLMResponse {
             content,
             tool_calls,
             usage: Some(crate::llm::provider::Usage {
@@ -1634,7 +1650,7 @@ impl OpenAIProvider {
                 cache_creation_tokens: None,
                 cache_read_tokens: None,
             }),
-            finish_reason: FinishReason::Stop,
+            finish_reason: crate::llm::provider::FinishReason::Stop,
             reasoning: None,
             reasoning_details: None,
         })
@@ -1669,7 +1685,7 @@ impl OpenAIProvider {
         tokens: &[u32],
         max_tokens: Option<u32>,
         temperature: Option<f32>,
-    ) -> Result<Vec<u32>, LLMError> {
+    ) -> Result<Vec<u32>, provider::LLMError> {
         // Get harmony inference server URL from environment variable
         // Default to localhost vLLM server if not configured
         let server_url = std::env::var("HARMONY_INFERENCE_SERVER_URL")
@@ -1681,7 +1697,7 @@ impl OpenAIProvider {
                 "OpenAI",
                 &format!("Failed to load harmony encoding for stop tokens: {}", e),
             );
-            LLMError::Provider {
+            provider::LLMError::Provider {
                 message: formatted_error,
                 metadata: None,
             }
@@ -1692,7 +1708,7 @@ impl OpenAIProvider {
                 "OpenAI",
                 &format!("Failed to get stop tokens: {}", e),
             );
-            LLMError::Provider {
+            provider::LLMError::Provider {
                 message: formatted_error,
                 metadata: None,
             }
@@ -1729,7 +1745,7 @@ impl OpenAIProvider {
                         server_url, e
                     ),
                 );
-                LLMError::Network {
+                provider::LLMError::Network {
                     message: formatted_error,
                     metadata: None,
                 }
@@ -1749,7 +1765,7 @@ impl OpenAIProvider {
                     "Harmony inference server error",
                 ),
             );
-            return Err(LLMError::Provider {
+            return Err(provider::LLMError::Provider {
                 message: formatted_error,
                 metadata: None,
             });
@@ -1761,7 +1777,7 @@ impl OpenAIProvider {
                 "OpenAI",
                 &format!("Failed to parse harmony inference response: {}", e),
             );
-            LLMError::Provider {
+            provider::LLMError::Provider {
                 message: formatted_error,
                 metadata: None,
             }
@@ -1813,7 +1829,7 @@ impl OpenAIProvider {
                 "OpenAI",
                 "No completion tokens received from harmony inference server",
             );
-            return Err(LLMError::Provider {
+            return Err(provider::LLMError::Provider {
                 message: formatted_error,
                 metadata: None,
             });
@@ -1873,8 +1889,8 @@ mod tests {
     use super::*;
     use crate::llm::provider::ParallelToolConfig;
 
-    fn sample_tool() -> ToolDefinition {
-        ToolDefinition::function(
+    fn sample_tool() -> provider::ToolDefinition {
+        provider::ToolDefinition::function(
             "search_workspace".to_owned(),
             "Search project files".to_owned(),
             json!({
@@ -1888,9 +1904,9 @@ mod tests {
         )
     }
 
-    fn sample_request(model: &str) -> LLMRequest {
-        LLMRequest {
-            messages: vec![Message::user("Hello".to_owned())],
+    fn sample_request(model: &str) -> provider::LLMRequest {
+        provider::LLMRequest {
+            messages: vec![provider::Message::user("Hello".to_owned())],
             system_prompt: None,
             tools: Some(vec![sample_tool()]),
             output_format: None,
@@ -2000,7 +2016,7 @@ mod tests {
 
     #[test]
     fn serialize_tools_dedupes_duplicate_names() {
-        let duplicate = ToolDefinition::function(
+        let duplicate = provider::ToolDefinition::function(
             "search_workspace".to_owned(),
             "dup".to_owned(),
             json!({"type": "object"}),
@@ -2014,8 +2030,8 @@ mod tests {
 
     #[test]
     fn responses_tools_dedupes_apply_patch_and_function() {
-        let apply_builtin = ToolDefinition::apply_patch("Apply patches".to_owned());
-        let apply_function = ToolDefinition::function(
+        let apply_builtin = provider::ToolDefinition::apply_patch("Apply patches".to_owned());
+        let apply_function = provider::ToolDefinition::function(
             "apply_patch".to_owned(),
             "alt apply".to_owned(),
             json!({"type": "object"}),
@@ -2294,8 +2310,8 @@ mod tests {
 }
 
 fn build_standard_responses_payload(
-    request: &LLMRequest,
-) -> Result<OpenAIResponsesPayload, LLMError> {
+    request: &provider::LLMRequest,
+) -> Result<OpenAIResponsesPayload, provider::LLMError> {
     let mut input = Vec::new();
     let mut active_tool_call_ids: HashSet<String> = HashSet::new();
     let mut instructions_segments = Vec::new();
@@ -2309,14 +2325,14 @@ fn build_standard_responses_payload(
 
     for msg in &request.messages {
         match msg.role {
-            MessageRole::System => {
+            provider::MessageRole::System => {
                 let content_text = msg.content.as_text();
                 let trimmed = content_text.trim();
                 if !trimmed.is_empty() {
                     instructions_segments.push(trimmed.to_string());
                 }
             }
-            MessageRole::User => {
+            provider::MessageRole::User => {
                 input.push(json!({
                     "role": "user",
                     "content": [{
@@ -2325,7 +2341,7 @@ fn build_standard_responses_payload(
                     }]
                 }));
             }
-            MessageRole::Assistant => {
+            provider::MessageRole::Assistant => {
                 let mut content_parts = Vec::new();
                 if !msg.content.is_empty() {
                     content_parts.push(json!({
@@ -2357,13 +2373,13 @@ fn build_standard_responses_payload(
                     }));
                 }
             }
-            MessageRole::Tool => {
+            provider::MessageRole::Tool => {
                 let tool_call_id = msg.tool_call_id.as_ref().ok_or_else(|| {
                     let formatted_error = error_display::format_llm_error(
                         "OpenAI",
                         "Tool messages must include tool_call_id for Responses API",
                     );
-                    LLMError::InvalidRequest {
+                    provider::LLMError::InvalidRequest {
                         message: formatted_error,
                         metadata: None,
                     }
@@ -2415,7 +2431,9 @@ fn build_standard_responses_payload(
     })
 }
 
-fn build_codex_responses_payload(request: &LLMRequest) -> Result<OpenAIResponsesPayload, LLMError> {
+fn build_codex_responses_payload(
+    request: &provider::LLMRequest,
+) -> Result<OpenAIResponsesPayload, provider::LLMError> {
     let mut additional_guidance = Vec::new();
 
     if let Some(system_prompt) = &request.system_prompt {
@@ -2430,14 +2448,14 @@ fn build_codex_responses_payload(request: &LLMRequest) -> Result<OpenAIResponses
 
     for msg in &request.messages {
         match msg.role {
-            MessageRole::System => {
+            provider::MessageRole::System => {
                 let content_text = msg.content.as_text();
                 let trimmed = content_text.trim();
                 if !trimmed.is_empty() {
                     additional_guidance.push(trimmed.to_owned());
                 }
             }
-            MessageRole::User => {
+            provider::MessageRole::User => {
                 input.push(json!({
                     "role": "user",
                     "content": [{
@@ -2446,7 +2464,7 @@ fn build_codex_responses_payload(request: &LLMRequest) -> Result<OpenAIResponses
                     }]
                 }));
             }
-            MessageRole::Assistant => {
+            provider::MessageRole::Assistant => {
                 let mut content_parts = Vec::new();
                 if !msg.content.is_empty() {
                     content_parts.push(json!({
@@ -2478,13 +2496,13 @@ fn build_codex_responses_payload(request: &LLMRequest) -> Result<OpenAIResponses
                     }));
                 }
             }
-            MessageRole::Tool => {
+            provider::MessageRole::Tool => {
                 let tool_call_id = msg.tool_call_id.clone().ok_or_else(|| {
                     let formatted_error = error_display::format_llm_error(
                         "OpenAI",
                         "Tool messages must include tool_call_id for Responses API",
                     );
-                    LLMError::InvalidRequest {
+                    provider::LLMError::InvalidRequest {
                         message: formatted_error,
                         metadata: None,
                     }
@@ -2538,7 +2556,7 @@ fn build_codex_responses_payload(request: &LLMRequest) -> Result<OpenAIResponses
 }
 
 #[async_trait]
-impl LLMProvider for OpenAIProvider {
+impl provider::LLMProvider for OpenAIProvider {
     fn name(&self) -> &str {
         "openai"
     }
@@ -2592,7 +2610,10 @@ impl LLMProvider for OpenAIProvider {
         !models::openai::TOOL_UNAVAILABLE_MODELS.contains(&requested)
     }
 
-    async fn stream(&self, mut request: LLMRequest) -> Result<LLMStream, LLMError> {
+    async fn stream(
+        &self,
+        mut request: provider::LLMRequest,
+    ) -> Result<provider::LLMStream, provider::LLMError> {
         if request.model.trim().is_empty() {
             request.model = self.model.to_string();
         }
@@ -2610,7 +2631,7 @@ impl LLMProvider for OpenAIProvider {
             request.stream = false;
             let response = self.generate(request).await?;
             let stream = try_stream! {
-                yield LLMStreamEvent::Completed { response };
+                yield provider::LLMStreamEvent::Completed { response };
             };
             return Ok(Box::pin(stream));
         }
@@ -2648,7 +2669,7 @@ impl LLMProvider for OpenAIProvider {
             .map_err(|e| {
                 let formatted_error =
                     error_display::format_llm_error("OpenAI", &format!("Network error: {}", e));
-                LLMError::Network {
+                provider::LLMError::Network {
                     message: formatted_error,
                     metadata: None,
                 }
@@ -2672,7 +2693,7 @@ impl LLMProvider for OpenAIProvider {
                 request.stream = false;
                 let response = self.generate(request).await?;
                 let stream = try_stream! {
-                    yield LLMStreamEvent::Completed { response };
+                    yield provider::LLMStreamEvent::Completed { response };
                 };
                 return Ok(Box::pin(stream));
             }
@@ -2682,7 +2703,7 @@ impl LLMProvider for OpenAIProvider {
                 || error_text.contains("quota")
                 || error_text.contains("rate limit")
             {
-                return Err(LLMError::RateLimit { metadata: None });
+                return Err(provider::LLMError::RateLimit { metadata: None });
             }
 
             if is_model_not_found(status, &error_text) {
@@ -2701,7 +2722,7 @@ impl LLMProvider for OpenAIProvider {
                     retry_request.stream = false;
                     let response = self.generate(retry_request).await?;
                     let stream = try_stream! {
-                        yield LLMStreamEvent::Completed { response };
+                        yield provider::LLMStreamEvent::Completed { response };
                     };
                     return Ok(Box::pin(stream));
                 }
@@ -2709,7 +2730,7 @@ impl LLMProvider for OpenAIProvider {
                     "OpenAI",
                     &format_openai_error(status, &error_text, &headers, "Model not available"),
                 );
-                return Err(LLMError::Provider {
+                return Err(provider::LLMError::Provider {
                     message: formatted_error,
                     metadata: None,
                 });
@@ -2719,7 +2740,7 @@ impl LLMProvider for OpenAIProvider {
                 "OpenAI",
                 &format_openai_error(status, &error_text, &headers, "Responses API error"),
             );
-            return Err(LLMError::Provider {
+            return Err(provider::LLMError::Provider {
                 message: formatted_error,
                 metadata: None,
             });
@@ -2743,6 +2764,7 @@ impl LLMProvider for OpenAIProvider {
             let mut reasoning_buffer = ReasoningBuffer::default();
             let mut final_response: Option<Value> = None;
             let mut done = false;
+            let mut sanitizer = TagStreamSanitizer::new();
             #[cfg(debug_assertions)]
             let mut streamed_events_counter: usize = 0;
             let telemetry = OpenAIStreamTelemetry;
@@ -2753,7 +2775,7 @@ impl LLMProvider for OpenAIProvider {
                         "OpenAI",
                         &format!("Streaming error: {}", err),
                     );
-                    LLMError::Network { message: formatted_error, metadata: None }
+                    provider::LLMError::Network { message: formatted_error, metadata: None }
                 })?;
 
                 buffer.push_str(&String::from_utf8_lossy(&chunk));
@@ -2794,7 +2816,18 @@ impl LLMProvider for OpenAIProvider {
                                         })?;
                                     aggregated_content.push_str(delta);
                                     telemetry.on_content_delta(delta);
-                                    yield LLMStreamEvent::Token { delta: delta.to_string() };
+
+                                    for event in sanitizer.process_chunk(delta) {
+                                        match &event {
+                                            provider::LLMStreamEvent::Token { delta } => {
+                                                yield provider::LLMStreamEvent::Token { delta: delta.clone() };
+                                            }
+                                            provider::LLMStreamEvent::Reasoning { delta } => {
+                                                yield provider::LLMStreamEvent::Reasoning { delta: delta.clone() };
+                                            }
+                                            _ => {}
+                                        }
+                                    }
                                 }
                                 "response.reasoning_text.delta"
                                 | "response.reasoning_summary_text.delta"
@@ -2807,7 +2840,7 @@ impl LLMProvider for OpenAIProvider {
                                                 .into_llm_error("OpenAI")
                                         })?;
                                     for fragment in append_reasoning_segments(&mut reasoning_buffer, delta, &telemetry) {
-                                        yield LLMStreamEvent::Reasoning { delta: fragment };
+                                        yield provider::LLMStreamEvent::Reasoning { delta: fragment };
                                     }
                                 }
                                 "response.completed" => {
@@ -2824,7 +2857,7 @@ impl LLMProvider for OpenAIProvider {
                                         .and_then(|value| value.as_str())
                                         .unwrap_or("Streaming response failed");
                                     let formatted_error = error_display::format_llm_error("OpenAI", message);
-                                    Err(LLMError::Provider { message: formatted_error, metadata: None })?;
+                                    Err(provider::LLMError::Provider { message: formatted_error, metadata: None })?;
                                 }
                                 "error" => {
                                     let message = payload
@@ -2832,7 +2865,7 @@ impl LLMProvider for OpenAIProvider {
                                         .and_then(|value| value.as_str())
                                         .unwrap_or("Streaming request failed");
                                     let formatted_error = error_display::format_llm_error("OpenAI", message);
-                                    Err(LLMError::Provider { message: formatted_error, metadata: None })?;
+                                    Err(provider::LLMError::Provider { message: formatted_error, metadata: None })?;
                                 }
                                 _ => {}
                             }
@@ -2843,6 +2876,11 @@ impl LLMProvider for OpenAIProvider {
                 if done {
                     break;
                 }
+            }
+
+            // Finalize sanitizer and yield leftover events
+            for event in sanitizer.finalize() {
+                yield event;
             }
 
             if !done && !buffer.trim().is_empty() {
@@ -2875,7 +2913,7 @@ impl LLMProvider for OpenAIProvider {
                         "OpenAI",
                         "Stream ended without a completion event",
                     );
-                    Err(LLMError::Provider { message: formatted_error, metadata: None })?
+                    Err(provider::LLMError::Provider { message: formatted_error, metadata: None })?
                 }
             };
 
@@ -2901,13 +2939,16 @@ impl LLMProvider for OpenAIProvider {
                 );
             }
 
-            yield LLMStreamEvent::Completed { response };
+            yield provider::LLMStreamEvent::Completed { response };
         };
 
         Ok(Box::pin(stream))
     }
 
-    async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
+    async fn generate(
+        &self,
+        request: provider::LLMRequest,
+    ) -> Result<provider::LLMResponse, provider::LLMError> {
         let mut request = request;
         if request.model.trim().is_empty() {
             request.model = self.model.to_string();
@@ -2954,7 +2995,7 @@ impl LLMProvider for OpenAIProvider {
                 .map_err(|e| {
                     let formatted_error =
                         error_display::format_llm_error("OpenAI", &format!("Network error: {}", e));
-                    LLMError::Network {
+                    provider::LLMError::Network {
                         message: formatted_error,
                         metadata: None,
                     }
@@ -2980,7 +3021,7 @@ impl LLMProvider for OpenAIProvider {
                     || error_text.contains("quota")
                     || error_text.contains("rate limit")
                 {
-                    return Err(LLMError::RateLimit { metadata: None });
+                    return Err(provider::LLMError::RateLimit { metadata: None });
                 } else if is_model_not_found(status, &error_text) {
                     if let Some(fallback_model) = fallback_model_if_not_found(&request.model) {
                         if fallback_model != request.model {
@@ -3006,7 +3047,7 @@ impl LLMProvider for OpenAIProvider {
                                         "OpenAI",
                                         &format!("Network error: {}", e),
                                     );
-                                    LLMError::Network {
+                                    provider::LLMError::Network {
                                         message: formatted_error,
                                         metadata: None,
                                     }
@@ -3018,7 +3059,7 @@ impl LLMProvider for OpenAIProvider {
                                             "OpenAI",
                                             &format!("Failed to parse response: {}", e),
                                         );
-                                        LLMError::Provider {
+                                        provider::LLMError::Provider {
                                             message: formatted_error,
                                             metadata: None,
                                         }
@@ -3033,7 +3074,7 @@ impl LLMProvider for OpenAIProvider {
                         "OpenAI",
                         &format_openai_error(status, &error_text, &headers, "Model not available"),
                     );
-                    return Err(LLMError::Provider {
+                    return Err(provider::LLMError::Provider {
                         message: formatted_error,
                         metadata: None,
                     });
@@ -3042,7 +3083,7 @@ impl LLMProvider for OpenAIProvider {
                         "OpenAI",
                         &format_openai_error(status, &error_text, &headers, "Responses API error"),
                     );
-                    return Err(LLMError::Provider {
+                    return Err(provider::LLMError::Provider {
                         message: formatted_error,
                         metadata: None,
                     });
@@ -3053,7 +3094,7 @@ impl LLMProvider for OpenAIProvider {
                         "OpenAI",
                         &format!("Failed to parse response: {}", e),
                     );
-                    LLMError::Provider {
+                    provider::LLMError::Provider {
                         message: formatted_error,
                         metadata: None,
                     }
@@ -3095,7 +3136,7 @@ impl LLMProvider for OpenAIProvider {
             .map_err(|e| {
                 let formatted_error =
                     error_display::format_llm_error("OpenAI", &format!("Network error: {}", e));
-                LLMError::Network {
+                provider::LLMError::Network {
                     message: formatted_error,
                     metadata: None,
                 }
@@ -3110,14 +3151,14 @@ impl LLMProvider for OpenAIProvider {
                 || error_text.contains("quota")
                 || error_text.contains("rate limit")
             {
-                return Err(LLMError::RateLimit { metadata: None });
+                return Err(provider::LLMError::RateLimit { metadata: None });
             }
 
             let formatted_error = error_display::format_llm_error(
                 "OpenAI",
                 &format!("HTTP {}: {}", status, error_text),
             );
-            return Err(LLMError::Provider {
+            return Err(provider::LLMError::Provider {
                 message: formatted_error,
                 metadata: None,
             });
@@ -3128,7 +3169,7 @@ impl LLMProvider for OpenAIProvider {
                 "OpenAI",
                 &format!("Failed to parse response: {}", e),
             );
-            LLMError::Provider {
+            provider::LLMError::Provider {
                 message: formatted_error,
                 metadata: None,
             }
@@ -3158,11 +3199,11 @@ impl LLMProvider for OpenAIProvider {
             .collect()
     }
 
-    fn validate_request(&self, request: &LLMRequest) -> Result<(), LLMError> {
+    fn validate_request(&self, request: &provider::LLMRequest) -> Result<(), provider::LLMError> {
         if request.messages.is_empty() {
             let formatted_error =
                 error_display::format_llm_error("OpenAI", "Messages cannot be empty");
-            return Err(LLMError::InvalidRequest {
+            return Err(provider::LLMError::InvalidRequest {
                 message: formatted_error,
                 metadata: None,
             });
@@ -3176,7 +3217,7 @@ impl LLMProvider for OpenAIProvider {
                 "OpenAI",
                 &format!("Unsupported model: {}", request.model),
             );
-            return Err(LLMError::InvalidRequest {
+            return Err(provider::LLMError::InvalidRequest {
                 message: formatted_error,
                 metadata: None,
             });
@@ -3185,7 +3226,7 @@ impl LLMProvider for OpenAIProvider {
         for message in &request.messages {
             if let Err(err) = message.validate_for_provider("openai") {
                 let formatted = error_display::format_llm_error("OpenAI", &err);
-                return Err(LLMError::InvalidRequest {
+                return Err(provider::LLMError::InvalidRequest {
                     message: formatted,
                     metadata: None,
                 });
@@ -3198,10 +3239,13 @@ impl LLMProvider for OpenAIProvider {
 
 #[async_trait]
 impl LLMClient for OpenAIProvider {
-    async fn generate(&mut self, prompt: &str) -> Result<llm_types::LLMResponse, LLMError> {
+    async fn generate(
+        &mut self,
+        prompt: &str,
+    ) -> Result<llm_types::LLMResponse, provider::LLMError> {
         let request = self.parse_client_prompt(prompt);
         let request_model = request.model.to_string();
-        let response = LLMProvider::generate(self, request).await?;
+        let response = provider::LLMProvider::generate(self, request).await?;
 
         Ok(llm_types::LLMResponse {
             content: response.content.unwrap_or_default(),

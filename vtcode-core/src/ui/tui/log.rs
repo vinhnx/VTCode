@@ -59,18 +59,10 @@ static LOG_THEME_NAME: Lazy<RwLock<Option<String>>> = Lazy::new(|| RwLock::new(N
 static LOG_HIGHLIGHTER_CACHE: Lazy<RwLock<Option<(String, Highlighter)>>> =
     Lazy::new(|| RwLock::new(None));
 
+#[derive(Default)]
 struct FieldVisitor {
     message: Option<String>,
     extras: Vec<(String, String)>,
-}
-
-impl Default for FieldVisitor {
-    fn default() -> Self {
-        Self {
-            message: None,
-            extras: Vec::new(),
-        }
-    }
 }
 
 impl Visit for FieldVisitor {
@@ -103,7 +95,15 @@ impl TuiLogLayer {
             forwarder: LOG_FORWARDER.clone(),
         }
     }
+}
 
+impl Default for TuiLogLayer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl TuiLogLayer {
     pub fn set_sender(sender: UnboundedSender<LogEntry>) {
         LOG_FORWARDER.set_sender(sender);
     }
@@ -210,10 +210,10 @@ fn highlighter_for_current_theme() -> Highlighter {
         .unwrap_or_else(|| DEFAULT_THEME_NAME.to_string());
     {
         let cache = LOG_HIGHLIGHTER_CACHE.read().unwrap();
-        if let Some((cached_name, cached)) = &*cache {
-            if *cached_name == resolved_name {
-                return cached.clone();
-            }
+        if let Some((cached_name, cached)) = &*cache
+            && *cached_name == resolved_name
+        {
+            return cached.clone();
         }
     }
 
@@ -263,22 +263,20 @@ fn prepend_metadata(text: &mut Text<'static>, entry: &LogEntry) {
 fn select_syntax(message: &str) -> &'static SyntaxReference {
     let trimmed = message.trim_start();
     if !trimmed.is_empty() {
-        if trimmed.starts_with('{') || trimmed.starts_with('[') {
-            if let Some(json) = LOG_SYNTAX_SET
+        if (trimmed.starts_with('{') || trimmed.starts_with('['))
+            && let Some(json) = LOG_SYNTAX_SET
                 .find_syntax_by_name("JSON")
                 .or_else(|| LOG_SYNTAX_SET.find_syntax_by_extension("json"))
-            {
-                return json;
-            }
+        {
+            return json;
         }
 
-        if trimmed.contains('$') || trimmed.contains(';') {
-            if let Some(shell) = LOG_SYNTAX_SET
+        if (trimmed.contains('$') || trimmed.contains(';'))
+            && let Some(shell) = LOG_SYNTAX_SET
                 .find_syntax_by_name("Bash")
                 .or_else(|| LOG_SYNTAX_SET.find_syntax_by_extension("sh"))
-            {
-                return shell;
-            }
+        {
+            return shell;
         }
     }
 

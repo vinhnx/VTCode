@@ -194,7 +194,15 @@ impl ContextManager {
             stats: Arc::new(Mutex::new(ContextStats::default())),
         }
     }
+}
 
+impl Default for ContextManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ContextManager {
     /// Register skill metadata (Level 1 loading)
     pub fn register_skill_metadata(&mut self, manifest: SkillManifest) -> Result<()> {
         let name = manifest.name.clone();
@@ -378,7 +386,7 @@ impl ContextManager {
         let mut evicted_skills = Vec::new();
 
         // Use LRU eviction
-        while freed_tokens < required_tokens && loaded_skills.len() > 0 {
+        while freed_tokens < required_tokens && !loaded_skills.is_empty() {
             if let Some((name, entry)) = loaded_skills.pop_lru() {
                 freed_tokens += entry.usage.token_cost;
                 evicted_skills.push(name);

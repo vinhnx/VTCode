@@ -707,7 +707,7 @@ impl Session {
         self.mark_dirty();
     }
 
-    fn apply_view_rows(&mut self, rows: u16) {
+    pub fn apply_view_rows(&mut self, rows: u16) {
         let resolved = rows.max(2);
         if self.view_rows != resolved {
             self.view_rows = resolved;

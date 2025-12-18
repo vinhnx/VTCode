@@ -12,6 +12,8 @@ pub mod openai;
 pub mod openrouter;
 pub mod provider_base;
 pub mod streaming_progress;
+pub mod tag_sanitizer;
+pub use tag_sanitizer::TagStreamSanitizer;
 pub mod xai;
 pub mod zai;
 
