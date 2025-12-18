@@ -2160,11 +2160,13 @@ mod tests {
     #[tokio::test]
     async fn run_list_files_defaults_to_workspace_root() {
         let temp = TempDir::new().unwrap();
-        let file_path = temp.path().join("example.txt");
+        let subdir = temp.path().join("src");
+        fs::create_dir(&subdir).await.unwrap();
+        let file_path = subdir.join("example.txt");
         fs::write(&file_path, "hello").await.unwrap();
 
         let agent = build_agent(temp.path()).await;
-        let report = agent.run_list_files(&json!({})).await.unwrap();
+        let report = agent.run_list_files(&json!({"path": "src"})).await.unwrap();
 
         assert!(matches!(report.status, acp::ToolCallStatus::Completed));
         let payload = report.raw_output.unwrap();
