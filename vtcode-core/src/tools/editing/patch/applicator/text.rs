@@ -7,7 +7,24 @@ use super::super::matcher::PatchContextMatcher;
 use super::io::AtomicWriter;
 use super::{PatchChunk, PatchError};
 
-pub(super) async fn load_file_lines(path: &Path) -> Result<(Vec<String>, bool), PatchError> {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum LineEnding {
+    LF,
+    CRLF,
+}
+
+impl LineEnding {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            LineEnding::LF => "\n",
+            LineEnding::CRLF => "\r\n",
+        }
+    }
+}
+
+pub(super) async fn load_file_lines(
+    path: &Path,
+) -> Result<(Vec<String>, bool, LineEnding), PatchError> {
     let file = fs::File::open(path).await.map_err(|err| PatchError::Io {
         action: "read",
         path: path.to_path_buf(),
@@ -16,6 +33,8 @@ pub(super) async fn load_file_lines(path: &Path) -> Result<(Vec<String>, bool), 
     let mut reader = BufReader::new(file);
     let mut lines = Vec::new();
     let mut had_trailing_newline = false;
+    let mut line_ending = LineEnding::LF;
+    let mut detected_ending = false;
 
     loop {
         let mut line = String::new();
@@ -34,6 +53,12 @@ pub(super) async fn load_file_lines(path: &Path) -> Result<(Vec<String>, bool), 
 
         if line.ends_with('\n') {
             had_trailing_newline = true;
+            if !detected_ending {
+                if line.ends_with("\r\n") {
+                    line_ending = LineEnding::CRLF;
+                }
+                detected_ending = true;
+            }
             line.pop();
             if line.ends_with('\r') {
                 line.pop();
@@ -49,7 +74,7 @@ pub(super) async fn load_file_lines(path: &Path) -> Result<(Vec<String>, bool), 
         lines.push(line);
     }
 
-    Ok((lines, had_trailing_newline))
+    Ok((lines, had_trailing_newline, line_ending))
 }
 
 pub(super) fn compute_replacements(
@@ -62,7 +87,9 @@ pub(super) fn compute_replacements(
     let mut line_index = 0usize;
 
     for chunk in chunks {
-        if let Some(context) = chunk.change_context() {
+        if let Some(hint_line) = chunk.parse_line_number() {
+            line_index = hint_line.saturating_sub(1);
+        } else if let Some(context) = chunk.change_context() {
             let search_pattern = vec![context.to_string()];
             if let Some(idx) = matcher.seek(&search_pattern, line_index, false) {
                 line_index = idx + 1;
@@ -123,33 +150,44 @@ pub(super) async fn write_patched_content(
     original_lines: Vec<String>,
     replacements: Vec<(usize, usize, Vec<String>)>,
     ensure_trailing_newline: bool,
+    line_ending: LineEnding,
 ) -> Result<(), PatchError> {
-    let new_lines = apply_replacements(original_lines, &replacements);
-    let mut content = new_lines.join("\n");
-    if ensure_trailing_newline && !content.ends_with('\n') {
-        content.push('\n');
-    }
-    writer.write_all(content.as_bytes()).await
-}
+    let mut current_idx = 0;
+    let ending = line_ending.as_str();
+    let mut first = true;
 
-fn apply_replacements(
-    mut lines: Vec<String>,
-    replacements: &[(usize, usize, Vec<String>)],
-) -> Vec<String> {
-    for (start_idx, old_len, new_segment) in replacements.iter().rev() {
-        let start = *start_idx;
-        let len = *old_len;
-
-        for _ in 0..len {
-            if start < lines.len() {
-                lines.remove(start);
+    for (start_idx, old_len, new_segment) in replacements {
+        // Write lines before the replacement
+        for i in current_idx..start_idx {
+            if !first {
+                writer.write_all(ending.as_bytes()).await?;
             }
+            writer.write_all(original_lines[i].as_bytes()).await?;
+            first = false;
         }
-
-        for (offset, value) in new_segment.iter().enumerate() {
-            lines.insert(start + offset, value.clone());
+        // Write the replacement lines
+        for line in new_segment {
+            if !first {
+                writer.write_all(ending.as_bytes()).await?;
+            }
+            writer.write_all(line.as_bytes()).await?;
+            first = false;
         }
+        current_idx = start_idx + old_len;
     }
 
-    lines
+    // Write remaining lines
+    for i in current_idx..original_lines.len() {
+        if !first {
+            writer.write_all(ending.as_bytes()).await?;
+        }
+        writer.write_all(original_lines[i].as_bytes()).await?;
+        first = false;
+    }
+
+    if ensure_trailing_newline {
+        writer.write_all(ending.as_bytes()).await?;
+    }
+
+    Ok(())
 }

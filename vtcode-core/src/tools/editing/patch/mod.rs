@@ -74,6 +74,24 @@ impl PatchChunk {
             .iter()
             .any(|line| matches!(line, PatchLine::Context(_) | PatchLine::Removal(_)))
     }
+
+    pub fn parse_line_number(&self) -> Option<usize> {
+        let ctx = self.change_context()?;
+        // Format is typically: -old_start,old_count +new_start,new_count @@
+        let parts: Vec<&str> = ctx.split_whitespace().collect();
+        let old_part = if !parts.is_empty() && parts[0].starts_with('-') {
+            Some(parts[0])
+        } else if parts.len() >= 2 && parts[1].starts_with('-') {
+            Some(parts[1])
+        } else {
+            None
+        }?;
+
+        let range_str = old_part.strip_prefix('-')?;
+        let range_parts: Vec<&str> = range_str.split(',').collect();
+        let start_str = range_parts.first()?;
+        start_str.parse::<usize>().ok()
+    }
 }
 
 pub type PatchHunk = PatchChunk;

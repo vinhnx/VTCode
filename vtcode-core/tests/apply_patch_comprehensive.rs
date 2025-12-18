@@ -281,9 +281,9 @@ async fn test_crlf_handling() {
     assert!(result["success"].as_bool().unwrap_or(false), "Tool failed: {:?}", result);
 
     let new_content = fs::read_to_string(&file_path).unwrap();
-    // Current implementation normalizes to LF
-    assert!(new_content.contains("line 1 modified\n"));
-    assert!(!new_content.contains("\r\n"), "CRLF should have been normalized to LF");
+    // Now we preserve CRLF!
+    assert!(new_content.contains("line 1 modified\r\n"));
+    assert!(new_content.contains("line 2\r\n"));
 }
 
 #[tokio::test]
