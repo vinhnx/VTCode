@@ -139,7 +139,9 @@ fn myers_diff(old: &[char], new: &[char]) -> Vec<Edit> {
     // V array stores the endpoints of furthest reaching paths for each diagonal
     let max_d = n + m;
     let mut v = vec![0; 2 * max_d + 1];
-    let mut v_index = vec![vec![0; 2 * max_d + 1]; max_d + 1];
+    // Use a flat vector for v_index to save allocations and memory (O(D * (N+M)) space)
+    let mut v_index = vec![0usize; (max_d + 1) * (2 * max_d + 1)];
+    let row_len = 2 * max_d + 1;
 
     v[max_d] = 0;
 
@@ -162,7 +164,7 @@ fn myers_diff(old: &[char], new: &[char]) -> Vec<Edit> {
             }
 
             v[k_idx] = x;
-            v_index[d][k_idx] = x;
+            v_index[d * row_len + k_idx] = x;
 
             if x >= n && y >= m {
                 // Backtrack to find the path
@@ -179,7 +181,7 @@ fn myers_diff(old: &[char], new: &[char]) -> Vec<Edit> {
 fn backtrack_myers(
     old: &[char],
     new: &[char],
-    v_index: &[Vec<usize>],
+    v_index: &[usize],
     d: usize,
     mut k: i32,
     max_d: usize,
@@ -187,6 +189,7 @@ fn backtrack_myers(
     let mut edits = Vec::new();
     let mut x = old.len();
     let mut y = new.len();
+    let row_len = 2 * max_d + 1;
 
     for cur_d in (0..=d).rev() {
         if cur_d == 0 {
@@ -200,16 +203,16 @@ fn backtrack_myers(
         }
 
         let k_idx = (k + max_d as i32) as usize;
-
+        
         // Determine if we came from k-1 or k+1
-        let prev_k = if k == -(cur_d as i32) || (k != cur_d as i32 && v_index[cur_d - 1][k_idx - 1] < v_index[cur_d - 1][k_idx + 1]) {
+        let prev_k = if k == -(cur_d as i32) || (k != cur_d as i32 && v_index[(cur_d - 1) * row_len + k_idx - 1] < v_index[(cur_d - 1) * row_len + k_idx + 1]) {
             k + 1
         } else {
             k - 1
         };
-
+        
         let prev_k_idx = (prev_k + max_d as i32) as usize;
-        let prev_x_val = v_index[cur_d - 1][prev_k_idx];
+        let prev_x_val = v_index[(cur_d - 1) * row_len + prev_k_idx];
         let prev_y = (prev_x_val as i32 - prev_k) as usize;
 
         let (move_x, move_y) = if prev_k == k + 1 {

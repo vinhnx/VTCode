@@ -30,7 +30,7 @@ impl<'a> UpdateOperation<'a> {
 
     pub(crate) async fn apply(self, root: &Path) -> Result<OperationEffect, PatchError> {
         let source_path = root.join(self.path);
-        let (original_lines, had_trailing_newline) = load_file_lines(&source_path).await?;
+        let (original_lines, had_trailing_newline, line_ending) = load_file_lines(&source_path).await?;
         let replacements = compute_replacements(&original_lines, self.chunks, self.path)?;
         let ensure_trailing_newline =
             had_trailing_newline || self.chunks.iter().any(|chunk| chunk.is_end_of_file());
@@ -58,6 +58,7 @@ impl<'a> UpdateOperation<'a> {
             original_lines,
             replacements,
             ensure_trailing_newline,
+            line_ending,
         )
         .await
         {
