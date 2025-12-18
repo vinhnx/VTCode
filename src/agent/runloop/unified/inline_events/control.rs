@@ -25,7 +25,6 @@ impl<'a, 'state> InlineControlProcessor<'a, 'state> {
     }
 
     pub(crate) fn exit(self) -> Result<InlineLoopAction> {
-        self.state.renderer().line(MessageStyle::Info, "Goodbye!")?;
         Ok(InlineLoopAction::Exit(SessionEndReason::Exit))
     }
 }

@@ -144,6 +144,8 @@ pub struct Session {
     show_timeline_pane: bool,
     plan: TaskPlan,
     line_revision_counter: u64,
+    /// Track the first line that needs reflow/update to avoid O(N) scans
+    first_dirty_line: Option<usize>,
     in_tool_code_fence: bool,
 
     // --- Palette Management ---
@@ -265,6 +267,7 @@ impl Session {
             plan: TaskPlan::default(),
             header_rows: initial_header_rows,
             line_revision_counter: 0,
+            first_dirty_line: None,
             in_tool_code_fence: false,
 
             // --- Palette Management ---
@@ -284,7 +287,7 @@ impl Session {
     }
 
     /// Clears the thinking spinner message when agent response or error arrives
-    fn clear_thinking_spinner_if_active(&mut self, kind: InlineMessageKind) {
+    pub(super) fn clear_thinking_spinner_if_active(&mut self, kind: InlineMessageKind) {
         if matches!(kind, InlineMessageKind::Agent | InlineMessageKind::Error)
             && self.thinking_spinner.is_active
         {
@@ -292,8 +295,8 @@ impl Session {
                 && spinner_idx < self.lines.len()
             {
                 self.lines.remove(spinner_idx);
-                // Invalidate transcript cache to ensure fresh render
-                self.transcript_cache = None;
+                // Mark as dirty from the removed line index onwards
+                self.mark_line_dirty(spinner_idx);
             }
             self.thinking_spinner.stop();
         }
@@ -763,7 +766,7 @@ impl Session {
         let viewport_rows = inner.height as usize;
         let padding = usize::from(ui::INLINE_TRANSCRIPT_BOTTOM_PADDING);
         let effective_padding = padding.min(viewport_rows.saturating_sub(1));
-        let total_rows = render::total_transcript_rows(self, content_width) + effective_padding;
+        let total_rows = self.total_transcript_rows(content_width) + effective_padding;
         let (top_offset, _clamped_total_rows) =
             self.prepare_transcript_scroll(total_rows, viewport_rows);
         let vertical_offset = top_offset.min(self.scroll_manager.max_offset());
@@ -773,15 +776,22 @@ impl Session {
         let scroll_area = Rect::new(inner.x, inner.y, content_width, inner.height);
 
         // Use cached visible lines to avoid re-cloning on viewport-only scrolls
-        let mut visible_lines =
+        let cached_lines =
             self.collect_transcript_window_cached(content_width, visible_start, viewport_rows);
 
-        let fill_count = viewport_rows.saturating_sub(visible_lines.len());
-        if fill_count > 0 {
-            let target_len = visible_lines.len() + fill_count;
-            visible_lines.resize_with(target_len, Line::default);
-        }
-        self.overlay_queue_lines(&mut visible_lines, content_width);
+        let fill_count = viewport_rows.saturating_sub(cached_lines.len());
+        let visible_lines = if fill_count > 0 || !self.queued_inputs.is_empty() {
+            let mut lines = (*cached_lines).clone();
+            if fill_count > 0 {
+                let target_len = lines.len() + fill_count;
+                lines.resize_with(target_len, Line::default);
+            }
+            self.overlay_queue_lines(&mut lines, content_width);
+            lines
+        } else {
+            (*cached_lines).clone()
+        };
+
         let paragraph = Paragraph::new(visible_lines)
             .style(self.styles.default_style())
             .wrap(Wrap { trim: true });

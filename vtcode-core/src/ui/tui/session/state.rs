@@ -1,4 +1,3 @@
-use ratatui::text::Line;
 /// State management and lifecycle operations for Session
 ///
 /// This module handles session state including:
@@ -9,7 +8,6 @@ use ratatui::text::Line;
 /// - Modal management
 /// - Timeline pane toggling
 /// - Scroll management operations
-use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedSender;
 
 use super::super::types::{
@@ -18,7 +16,6 @@ use super::super::types::{
 use super::{
     Session,
     modal::{ModalListState, ModalSearchState, ModalState},
-    render,
 };
 use crate::config::constants::ui;
 use tui_popup::PopupState;
@@ -55,6 +52,15 @@ impl Session {
     /// Mark the session as needing a redraw
     pub fn mark_dirty(&mut self) {
         self.needs_redraw = true;
+    }
+
+    /// Mark a specific line as dirty to optimize reflow scans
+    pub(super) fn mark_line_dirty(&mut self, index: usize) {
+        self.first_dirty_line = match self.first_dirty_line {
+            Some(current) => Some(current.min(index)),
+            None => Some(index),
+        };
+        self.mark_dirty();
     }
 
     /// Ensure the prompt style has a color set
@@ -194,9 +200,16 @@ impl Session {
 
     /// Invalidate the transcript cache
     pub(super) fn invalidate_transcript_cache(&mut self) {
-        self.transcript_cache = None;
+        if let Some(cache) = self.transcript_cache.as_mut() {
+            cache.invalidate_content();
+        }
         self.visible_lines_cache = None;
         self.transcript_content_changed = true;
+
+        // If no specific line was marked dirty, assume everything needs reflow
+        if self.first_dirty_line.is_none() {
+            self.first_dirty_line = Some(0);
+        }
     }
 
     /// Get the current maximum scroll offset
@@ -227,8 +240,7 @@ impl Session {
 
         let padding = usize::from(ui::INLINE_TRANSCRIPT_BOTTOM_PADDING);
         let effective_padding = padding.min(viewport_rows.saturating_sub(1));
-        let total_rows =
-            render::total_transcript_rows(self, self.transcript_width) + effective_padding;
+        let total_rows = self.total_transcript_rows(self.transcript_width) + effective_padding;
         self.scroll_manager.set_total_rows(total_rows);
     }
 
@@ -307,43 +319,5 @@ impl Session {
         self.scroll_line_up();
         self.mark_dirty();
         self.emit_inline_event(&InlineEvent::ScrollLineUp, events, callback);
-    }
-
-    /// Collect transcript window with caching
-    pub(super) fn collect_transcript_window_cached(
-        &mut self,
-        width: u16,
-        start_row: usize,
-        max_rows: usize,
-    ) -> Vec<Line<'static>> {
-        // Check cache
-        if let Some((cached_offset, cached_width, cached_lines)) = &self.visible_lines_cache
-            && *cached_offset == start_row
-            && *cached_width == width
-        {
-            return (**cached_lines).clone();
-        }
-
-        // Not in cache, fetch from transcript
-        let visible_lines = self.collect_transcript_window(width, start_row, max_rows);
-
-        // Cache for next render
-        self.visible_lines_cache = Some((start_row, width, Arc::new(visible_lines.clone())));
-
-        visible_lines
-    }
-
-    /// Collect transcript window without caching
-    pub(super) fn collect_transcript_window(
-        &mut self,
-        width: u16,
-        start_row: usize,
-        max_rows: usize,
-    ) -> Vec<Line<'static>> {
-        if max_rows == 0 {
-            return Vec::new();
-        }
-        let cache = render::ensure_reflow_cache(self, width);
-        cache.get_visible_range(start_row, max_rows)
     }
 }
