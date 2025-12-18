@@ -257,12 +257,22 @@ pub(crate) async fn build_inline_header_context(
 
 pub(crate) fn render_session_banner(
     renderer: &mut AnsiRenderer,
-    _config: &CoreAgentConfig,
+    config: &CoreAgentConfig,
     _session_bootstrap: &SessionBootstrap,
-    _model_label: &str,
+    model_label: &str,
     _reasoning_label: &str,
 ) -> Result<()> {
-    // Minimal preamble - no output
+    // Minimal preamble: show model and workspace in one compact line
+    let workspace_name = config
+        .workspace
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("workspace");
+    let model_short = model_label.split('/').last().unwrap_or(model_label);
+    renderer.line(
+        vtcode_core::utils::ansi::MessageStyle::Info,
+        &format!("→ {} @ {}", model_short, workspace_name),
+    )?;
     Ok(())
 }
 

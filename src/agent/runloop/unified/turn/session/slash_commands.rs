@@ -987,6 +987,7 @@ pub async fn handle_outcome(
         }
 
         SlashCommandOutcome::Exit => {
+            ctx.renderer.line(MessageStyle::Info, "✓")?;
             Ok(SlashCommandControl::BreakWithReason(SessionEndReason::Exit))
         }
     }
