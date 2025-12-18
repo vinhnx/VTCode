@@ -187,8 +187,8 @@ mod tests {
     use super::*;
     use anyhow::{Error, Result, anyhow};
     use assert_fs::TempDir;
-    use std::path::Path;
     use std::borrow::Cow;
+    use std::path::Path;
     use std::sync::{Arc, Mutex};
 
     #[derive(Clone)]

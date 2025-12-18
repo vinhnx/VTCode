@@ -75,7 +75,7 @@ print('PDF created: hello_world.pdf')
     );
 
     // BENEFITS SUMMARY
-    println!("\n📊 OPTIMIZATION BENEFITS:");
+    println!("\n OPTIMIZATION BENEFITS:");
     println!("   ✓ Single tool call (vs 8+)");
     println!("   ✓ Automatic file path detection");
     println!("   ✓ No 'where is it?' follow-ups");

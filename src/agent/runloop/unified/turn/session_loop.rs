@@ -27,7 +27,9 @@ use vtcode_core::ui::theme;
 use vtcode_core::ui::tui::{InlineEvent, InlineEventCallback, spawn_session, theme_from_styles};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::at_pattern::parse_at_patterns;
-use vtcode_core::utils::session_archive::{SessionArchive, SessionArchiveMetadata, SessionMessage};
+use vtcode_core::utils::session_archive::{
+    SessionArchive, SessionArchiveMetadata, SessionMessage, SessionProgressArgs,
+};
 use vtcode_core::utils::transcript;
 
 use crate::agent::runloop::ResumeSession;
@@ -1079,15 +1081,15 @@ pub(crate) async fn run_single_agent_loop_unified(
 
                 let skill_names: Vec<String> = loaded_skills.read().await.keys().cloned().collect();
 
-                if let Err(err) = archive.persist_progress(
-                    conversation_history.len(),
-                    distinct_tools.clone(),
+                if let Err(err) = archive.persist_progress(SessionProgressArgs {
+                    total_messages: conversation_history.len(),
+                    distinct_tools: distinct_tools.clone(),
                     recent_messages,
-                    progress_turn,
-                    Some(budget_usage),
-                    Some(trim_config.max_tokens),
-                    Some(skill_names),
-                ) {
+                    turn_number: progress_turn,
+                    token_usage: Some(budget_usage),
+                    max_context_tokens: Some(trim_config.max_tokens),
+                    loaded_skills: Some(skill_names),
+                }) {
                     tracing::warn!("Failed to persist session progress: {}", err);
                 }
             }

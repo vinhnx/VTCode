@@ -138,7 +138,15 @@ impl StreamingSkillExecutor {
     pub fn with_config(config: StreamingConfig) -> Self {
         Self { config }
     }
+}
 
+impl Default for StreamingSkillExecutor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl StreamingSkillExecutor {
     /// Execute CLI tool with streaming output
     pub fn execute_cli_tool_streaming(
         &self,
@@ -229,20 +237,18 @@ impl StreamingSkillExecutor {
             );
 
             // Stream stderr if enabled
-            let stderr_stream = if let Some(stderr) = stderr {
-                Some(Self::stream_output(
-                    stderr,
+            let stderr_stream = stderr.map(|s| {
+                Self::stream_output(
+                    s,
                     OutputType::Stderr,
                     config.clone(),
                     progress_tracker.clone(),
-                ))
-            } else {
-                None
-            };
+                )
+            });
 
             // Combine streams
             let mut stdout_stream = Box::pin(stdout_stream);
-            let mut stderr_stream = stderr_stream.map(|s| Box::pin(s));
+            let mut stderr_stream = stderr_stream.map(Box::pin);
 
             // Stream events
             let mut output_buffer = String::new();
@@ -269,13 +275,11 @@ impl StreamingSkillExecutor {
                                 output_buffer.push_str(&data);
 
                                 // Try to detect JSON objects
-                                if config.enable_partial_json {
-                                    if let Some(json_events) = Self::extract_json_objects(&mut json_buffer, &data) {
+                                if let Some(json_events) = Self::extract_json_objects(&mut json_buffer, &data).filter(|_| config.enable_partial_json) {
                                         for json_event in json_events {
                                             yield Ok(json_event);
                                         }
                                     }
-                                }
 
                                 yield Ok(StreamEvent::Output {
                                     data,

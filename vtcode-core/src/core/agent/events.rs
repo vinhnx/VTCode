@@ -31,6 +31,7 @@ pub struct ExecEventRecorder {
     next_item_index: u64,
     event_sink: Option<EventSink>,
     active_agent_message: Option<StreamingAgentMessage>,
+    active_reasoning: Option<StreamingAgentMessage>,
 }
 
 impl ExecEventRecorder {
@@ -40,6 +41,7 @@ impl ExecEventRecorder {
             next_item_index: 0,
             event_sink,
             active_agent_message: None,
+            active_reasoning: None,
         };
         recorder.record(ThreadEvent::ThreadStarted(ThreadStartedEvent {
             thread_id: thread_id.into(),
@@ -153,6 +155,51 @@ impl ExecEventRecorder {
         self.record(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
     }
 
+    pub fn reasoning_stream_update(&mut self, text: &str) -> bool {
+        if text.trim().is_empty() {
+            return false;
+        }
+
+        if let Some(active) = self.active_reasoning.as_mut() {
+            active.buffer = text.into();
+            let item = ThreadItem {
+                id: active.id.clone(),
+                details: ThreadItemDetails::Reasoning(ReasoningItem {
+                    text: active.buffer.clone(),
+                }),
+            };
+            self.record(ThreadEvent::ItemUpdated(ItemUpdatedEvent { item }));
+            true
+        } else {
+            let id = self.next_item_id();
+            let text_owned = text.to_string();
+            let item = ThreadItem {
+                id: id.clone(),
+                details: ThreadItemDetails::Reasoning(ReasoningItem {
+                    text: text_owned.clone(),
+                }),
+            };
+            self.record(ThreadEvent::ItemStarted(ItemStartedEvent { item }));
+            self.active_reasoning = Some(StreamingAgentMessage {
+                id,
+                buffer: text_owned,
+            });
+            true
+        }
+    }
+
+    pub fn reasoning_stream_complete(&mut self) {
+        if let Some(active) = self.active_reasoning.take() {
+            let item = ThreadItem {
+                id: active.id,
+                details: ThreadItemDetails::Reasoning(ReasoningItem {
+                    text: active.buffer,
+                }),
+            };
+            self.record(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
+        }
+    }
+
     pub fn command_started(&mut self, command: &str) -> ActiveCommandHandle {
         let id = self.next_item_id();
         let item = ThreadItem {
@@ -220,6 +267,15 @@ impl ExecEventRecorder {
             let item = ThreadItem {
                 id: active.id,
                 details: ThreadItemDetails::AgentMessage(AgentMessageItem {
+                    text: active.buffer,
+                }),
+            };
+            self.record(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
+        }
+        if let Some(active) = self.active_reasoning.take() {
+            let item = ThreadItem {
+                id: active.id,
+                details: ThreadItemDetails::Reasoning(ReasoningItem {
                     text: active.buffer,
                 }),
             };

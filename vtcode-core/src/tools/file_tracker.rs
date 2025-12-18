@@ -40,16 +40,16 @@ impl FileTracker {
             let matches = self.find_files_matching_pattern(pattern).await?;
 
             for file_path in matches {
-                if let Ok(metadata) = tokio::fs::metadata(&file_path).await {
-                    if let Ok(modified) = metadata.modified() {
-                        if modified > since && metadata.is_file() {
-                            new_files.push(TrackedFile {
-                                absolute_path: file_path,
-                                size: metadata.len(),
-                                modified,
-                            });
-                        }
-                    }
+                if let Ok(metadata) = tokio::fs::metadata(&file_path).await
+                    && let Ok(modified) = metadata.modified()
+                    && modified > since
+                    && metadata.is_file()
+                {
+                    new_files.push(TrackedFile {
+                        absolute_path: file_path,
+                        size: metadata.len(),
+                        modified,
+                    });
                 }
             }
         }
@@ -91,10 +91,8 @@ impl FileTracker {
             let mut files = Vec::new();
 
             if let Ok(glob_pattern) = glob::glob(&format!("{}/{}", workspace.display(), pattern)) {
-                for entry in glob_pattern {
-                    if let Ok(path) = entry {
-                        files.push(path);
-                    }
+                for path in glob_pattern.flatten() {
+                    files.push(path);
                 }
             }
 

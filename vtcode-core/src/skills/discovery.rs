@@ -109,7 +109,15 @@ impl SkillDiscovery {
             cache: HashMap::new(),
         }
     }
+}
 
+impl Default for SkillDiscovery {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SkillDiscovery {
     /// Discover all available skills and tools
     pub async fn discover_all(&mut self, workspace_root: &Path) -> Result<DiscoveryResult> {
         let start_time = std::time::Instant::now();
@@ -517,7 +525,7 @@ impl ProgressiveSkillLoader {
         // Check CLI tools
         for tool in &result.tools {
             if tool.name == name {
-                return Ok(tool_config_to_skill_context(tool)?);
+                return tool_config_to_skill_context(tool);
             }
         }
 

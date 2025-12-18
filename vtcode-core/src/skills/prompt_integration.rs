@@ -8,18 +8,13 @@ use std::collections::HashMap;
 use std::fmt::Write;
 
 /// Rendering mode for skills section
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SkillsRenderMode {
     /// Full metadata (version, author, vtcode-native flags)
     Full,
     /// Lean mode: only name + description + file path (Codex-style, 40-60% token savings)
+    #[default]
     Lean,
-}
-
-impl Default for SkillsRenderMode {
-    fn default() -> Self {
-        SkillsRenderMode::Lean // Default to Codex-style lean rendering
-    }
 }
 
 /// Usage rules embedded in skills section (Codex pattern)
@@ -156,15 +151,15 @@ pub fn test_skills_prompt_generation() {
             description: "Analyze PDF documents".to_string(),
             version: Some("1.0.0".to_string()),
             author: Some("Test".to_string()),
-                license: None,
-                model: None,
-                mode: None,
-                vtcode_native: Some(true),
-                allowed_tools: None,
-                disable_model_invocation: None,
-                when_to_use: None,
-                requires_container: None,
-                disallow_container: None,
+            license: None,
+            model: None,
+            mode: None,
+            vtcode_native: Some(true),
+            allowed_tools: None,
+            disable_model_invocation: None,
+            when_to_use: None,
+            requires_container: None,
+            disallow_container: None,
         },
         PathBuf::from("/tmp/test"),
         "Instructions".to_string(),

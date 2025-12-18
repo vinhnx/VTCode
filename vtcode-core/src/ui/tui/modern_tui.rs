@@ -1,8 +1,5 @@
-use std::io;
-use std::time::Duration;
-use tokio::sync::mpsc;
-use tokio_util::sync::CancellationToken;
-use futures::future::FutureExt;
+use anyhow::{Context, Result};
+use async_trait::async_trait;
 use crossterm::{
     event::{
         self, DisableBracketedPaste, DisableFocusChange, EnableBracketedPaste, EnableFocusChange,
@@ -11,21 +8,18 @@ use crossterm::{
     },
     execute,
     terminal::{
-        self, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
+        self, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode,
         supports_keyboard_enhancement,
     },
 };
-use ratatui::{
-    backend::CrosstermBackend,
-    Terminal,
-};
-use anyhow::{Context, Result};
-
-use crate::config::types::UiSurfacePreference;
+use futures::StreamExt;
+use futures::future::FutureExt;
+use ratatui::backend::CrosstermBackend;
+use std::io;
+use tokio::sync::mpsc;
+use tokio_util::sync::CancellationToken;
 
 // Check if nix is available for Unix-specific signal handling
-#[cfg(unix)]
-use nix::sys::signal;
 
 // Event enum that covers all terminal events following the Ratatui recipe
 #[derive(Clone, Debug)]
@@ -58,10 +52,11 @@ pub struct ModernTui {
 }
 
 // A trait to allow both old and new TUI implementations to work with the same interface
+#[async_trait]
 pub trait TuiInterface {
     type Event;
     type Error;
-    
+
     async fn enter(&mut self) -> Result<(), Self::Error>;
     async fn exit(&mut self) -> Result<(), Self::Error>;
     async fn suspend(&mut self) -> Result<(), Self::Error>;
@@ -69,7 +64,9 @@ pub trait TuiInterface {
     fn draw<F>(&mut self, f: F) -> Result<(), Self::Error>
     where
         F: FnOnce(&mut ratatui::Frame);
-    fn next_event(&mut self) -> std::pin::Pin<Box<dyn futures::Future<Output = Option<Self::Event>> + Send>>;
+    fn next_event(
+        &mut self,
+    ) -> std::pin::Pin<Box<dyn futures::Future<Output = Option<Self::Event>> + Send>>;
 }
 
 impl ModernTui {
@@ -124,20 +121,22 @@ impl ModernTui {
             //     .context("failed to enable mouse capture")?;
         }
         if self.paste {
-            execute!(stdout, EnableBracketedPaste)
-                .context("failed to enable bracketed paste")?;
+            execute!(stdout, EnableBracketedPaste).context("failed to enable bracketed paste")?;
         }
-        
+
         // Enable focus change events if supported
         let _ = execute!(stdout, EnableFocusChange);
 
         // Enable keyboard enhancements if supported
         if supports_keyboard_enhancement().unwrap_or(false) {
-            let _ = execute!(stdout, PushKeyboardEnhancementFlags(
-                KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
-                    | KeyboardEnhancementFlags::REPORT_EVENT_TYPES
-                    | KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS,
-            ));
+            let _ = execute!(
+                stdout,
+                PushKeyboardEnhancementFlags(
+                    KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
+                        | KeyboardEnhancementFlags::REPORT_EVENT_TYPES
+                        | KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS,
+                )
+            );
         }
 
         let tick_delay = std::time::Duration::from_secs_f64(1.0 / self.tick_rate);
@@ -205,12 +204,11 @@ impl ModernTui {
 
     pub async fn exit(&mut self) -> Result<()> {
         self.cancellation_token.cancel();
-        let _ = self.task.await;
+        self.task.abort();
         if terminal::is_raw_mode_enabled().unwrap_or(false) {
             terminal::disable_raw_mode().context("failed to disable raw mode")?;
         }
-        execute!(io::stderr(), LeaveAlternateScreen)
-            .context("failed to leave alternate screen")?;
+        execute!(io::stderr(), LeaveAlternateScreen).context("failed to leave alternate screen")?;
         if self.mouse {
             // Mouse functionality disabled
             // execute!(io::stderr(), event::DisableMouseCapture)
@@ -218,10 +216,10 @@ impl ModernTui {
         }
         execute!(io::stderr(), DisableBracketedPaste)
             .context("failed to disable bracketed paste")?;
-        
+
         // Disable focus change events if they were enabled
         let _ = execute!(io::stderr(), DisableFocusChange);
-        
+
         // Pop keyboard enhancements if they were pushed
         let _ = execute!(io::stderr(), PopKeyboardEnhancementFlags);
 
@@ -230,13 +228,12 @@ impl ModernTui {
 
     pub async fn suspend(&mut self) -> Result<()> {
         self.cancellation_token.cancel();
-        let _ = self.task.await;
+        self.task.abort();
         if terminal::is_raw_mode_enabled().unwrap_or(false) {
             terminal::disable_raw_mode().context("failed to disable raw mode")?;
         }
-        execute!(io::stderr(), LeaveAlternateScreen)
-            .context("failed to leave alternate screen")?;
-        
+        execute!(io::stderr(), LeaveAlternateScreen).context("failed to leave alternate screen")?;
+
         // Execute suspend command to allow job control (Ctrl+Z)
         #[cfg(unix)]
         {
@@ -244,15 +241,14 @@ impl ModernTui {
             use nix::sys::signal;
             signal::raise(signal::Signal::SIGTSTP).context("failed to send SIGTSTP")?;
         }
-        
+
         Ok(())
     }
 
     pub async fn resume(&mut self) -> Result<()> {
         // Enable raw mode and enter alternate screen again
         terminal::enable_raw_mode().context("failed to enable raw mode")?;
-        execute!(io::stderr(), EnterAlternateScreen)
-            .context("failed to enter alternate screen")?;
+        execute!(io::stderr(), EnterAlternateScreen).context("failed to enter alternate screen")?;
         if self.mouse {
             // Mouse functionality disabled
             // execute!(io::stderr(), event::EnableMouseCapture)
@@ -262,15 +258,18 @@ impl ModernTui {
             execute!(io::stderr(), EnableBracketedPaste)
                 .context("failed to enable bracketed paste")?;
         }
-        
+
         // Enable focus change and keyboard enhancements
         let _ = execute!(io::stderr(), EnableFocusChange);
         if supports_keyboard_enhancement().unwrap_or(false) {
-            let _ = execute!(io::stderr(), PushKeyboardEnhancementFlags(
-                KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
-                    | KeyboardEnhancementFlags::REPORT_EVENT_TYPES
-                    | KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS,
-            ));
+            let _ = execute!(
+                io::stderr(),
+                PushKeyboardEnhancementFlags(
+                    KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
+                        | KeyboardEnhancementFlags::REPORT_EVENT_TYPES
+                        | KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS,
+                )
+            );
         }
 
         let tick_delay = std::time::Duration::from_secs_f64(1.0 / self.tick_rate);
@@ -339,16 +338,10 @@ impl ModernTui {
 
 impl Drop for ModernTui {
     fn drop(&mut self) {
-        // Don't panic if called from a thread where tokio runtime is not available
-        if tokio::runtime::Handle::try_current().is_ok() {
-            // Use a timeout to avoid hanging indefinitely
-            let _ = tokio::time::timeout(std::time::Duration::from_millis(100), async {
-                self.cancellation_token.cancel();
-                let _ = self.task.await;
-            }).now_or_never();
-        }
+        self.cancellation_token.cancel();
+        self.task.abort();
 
-        // Ensure cleanup even if async cleanup fails
+        // Ensure cleanup
         let _ = disable_raw_mode();
         let _ = execute!(io::stderr(), LeaveAlternateScreen);
     }

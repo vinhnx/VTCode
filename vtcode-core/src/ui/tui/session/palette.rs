@@ -29,7 +29,7 @@ impl Session {
     }
 
     /// Check if the current input should trigger the file palette
-    pub(super) fn check_file_reference_trigger(&mut self) {
+    pub fn check_file_reference_trigger(&mut self) {
         if let Some(palette) = self.file_palette.as_mut() {
             if let Some((_start, _end, query)) =
                 extract_file_reference(self.input_manager.content(), self.input_manager.cursor())
@@ -138,7 +138,7 @@ impl Session {
     }
 
     /// Check if the current input should trigger the prompt palette
-    pub(super) fn check_prompt_reference_trigger(&mut self) {
+    pub fn check_prompt_reference_trigger(&mut self) {
         // Initialize prompt palette on-demand if it doesn't exist
         if self.prompt_palette.is_none()
             && let Some(registry) = &self.custom_prompts

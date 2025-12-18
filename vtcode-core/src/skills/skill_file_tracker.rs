@@ -49,12 +49,12 @@ impl SkillFileTracker {
         // Extract potential filenames from output
         for pattern in &self.file_patterns {
             for capture in pattern.captures_iter(output) {
-                if let Some(file_match) = capture.get(1) {
-                    let filename = file_match.as_str();
-                    // Filter out common false positives
-                    if !Self::is_false_positive(filename) {
-                        detected_files.insert(filename.to_string());
-                    }
+                if let Some(filename) = capture
+                    .get(1)
+                    .map(|m| m.as_str())
+                    .filter(|f| !Self::is_false_positive(f))
+                {
+                    detected_files.insert(filename.to_string());
                 }
             }
         }
@@ -133,16 +133,15 @@ impl SkillFileTracker {
 
         // Search entire workspace recursively
         let pattern = format!("**/{}", filename);
-        if let Ok(mut files) = self
+        if let Some(path) = self
             .file_tracker
             .find_files_matching_pattern(&pattern)
             .await
+            .ok()
+            .and_then(|mut files| files.pop())
+            && let Ok(Some(file_info)) = self.verify_file_at_path(&path).await
         {
-            if let Some(path) = files.pop() {
-                if let Ok(Some(file_info)) = self.verify_file_at_path(&path).await {
-                    return Ok(Some(file_info));
-                }
-            }
+            return Ok(Some(file_info));
         }
 
         Ok(None)
@@ -150,14 +149,12 @@ impl SkillFileTracker {
 
     /// Verify file at specific path
     async fn verify_file_at_path(&self, path: &PathBuf) -> Result<Option<TrackedFile>> {
-        if let Ok(metadata) = tokio::fs::metadata(path).await {
-            if metadata.is_file() {
-                return Ok(Some(TrackedFile {
-                    absolute_path: path.clone(),
-                    size: metadata.len(),
-                    modified: metadata.modified().unwrap_or(std::time::SystemTime::now()),
-                }));
-            }
+        if let Some(metadata) = tokio::fs::metadata(path).await.ok().filter(|m| m.is_file()) {
+            return Ok(Some(TrackedFile {
+                absolute_path: path.clone(),
+                size: metadata.len(),
+                modified: metadata.modified().unwrap_or(std::time::SystemTime::now()),
+            }));
         }
         Ok(None)
     }

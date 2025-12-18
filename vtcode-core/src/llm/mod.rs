@@ -187,7 +187,7 @@ mod error_display_test;
 pub use capabilities::ProviderCapabilities;
 pub use client::{AnyClient, make_client};
 pub use factory::{create_provider_with_config, get_factory};
-pub use provider::{LLMStream, LLMStreamEvent};
+pub use provider::{FinishReason, LLMStream, LLMStreamEvent, Usage};
 pub use providers::{
     AnthropicProvider, GeminiProvider, OllamaProvider, OpenAIProvider, XAIProvider, ZAIProvider,
 };

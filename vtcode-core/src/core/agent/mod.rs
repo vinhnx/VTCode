@@ -2,10 +2,12 @@
 
 pub mod bootstrap;
 pub mod chat;
+pub mod completion;
 
 pub mod config;
 pub mod conversation;
 pub mod core;
+pub mod display;
 pub mod events;
 pub mod examples;
 

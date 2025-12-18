@@ -526,7 +526,8 @@ async fn run_single_tool_attempt(
 ) -> ToolExecutionStatus {
     let start_time = Instant::now();
     let warning_fraction = registry.timeout_policy().warning_fraction();
-    let mut warning_guard = TimeoutWarningGuard::new(name, start_time, tool_timeout, warning_fraction);
+    let mut warning_guard =
+        TimeoutWarningGuard::new(name, start_time, tool_timeout, warning_fraction);
 
     progress_reporter
         .set_message(format!("Preparing {}...", name))
@@ -548,7 +549,6 @@ async fn run_single_tool_attempt(
     progress_reporter.set_progress(20).await;
 
     let status = loop {
-
         if ctrl_c_state.is_cancel_requested() || ctrl_c_state.is_exit_requested() {
             progress_reporter
                 .set_message(format!("{} cancelled", name))

@@ -479,7 +479,9 @@ impl ModelId {
 
             ModelId::OllamaQwen3Coder480bCloud => models::ollama::QWEN3_CODER_480B_CLOUD,
             ModelId::OllamaGlm46Cloud => models::ollama::GLM_46_CLOUD,
-            ModelId::OllamaGemini3ProPreviewLatestCloud => models::ollama::GEMINI_3_PRO_PREVIEW_LATEST_CLOUD,
+            ModelId::OllamaGemini3ProPreviewLatestCloud => {
+                models::ollama::GEMINI_3_PRO_PREVIEW_LATEST_CLOUD
+            }
             ModelId::OllamaDevstral2123bCloud => models::ollama::DEVSTRAL_2_123B_CLOUD,
             ModelId::OllamaMinimaxM2Cloud => models::ollama::MINIMAX_M2_CLOUD,
             ModelId::OllamaNemotron3Nano30bCloud => models::ollama::NEMOTRON_3_NANO_30B_CLOUD,
@@ -499,36 +501,27 @@ impl ModelId {
             | ModelId::OpenRouterZaiGlm46
             | ModelId::OpenRouterMoonshotaiKimiK20905
             | ModelId::OpenRouterMoonshotaiKimiK2Thinking
-            
             | ModelId::OpenRouterQwen3Max
             | ModelId::OpenRouterQwen3235bA22b
-            
             | ModelId::OpenRouterQwen3235bA22b2507
             | ModelId::OpenRouterQwen3235bA22bThinking2507
             | ModelId::OpenRouterQwen332b
             | ModelId::OpenRouterQwen330bA3b
-            
             | ModelId::OpenRouterQwen330bA3bInstruct2507
             | ModelId::OpenRouterQwen330bA3bThinking2507
             | ModelId::OpenRouterQwen314b
-            
             | ModelId::OpenRouterQwen38b
-            
-            
             | ModelId::OpenRouterQwen3Next80bA3bInstruct
             | ModelId::OpenRouterQwen3Next80bA3bThinking
             | ModelId::OpenRouterQwen3Coder
-            
             | ModelId::OpenRouterQwen3CoderPlus
             | ModelId::OpenRouterQwen3CoderFlash
             | ModelId::OpenRouterQwen3Coder30bA3bInstruct
             | ModelId::OpenRouterDeepSeekV32Exp
             | ModelId::OpenRouterDeepSeekChatV31
             | ModelId::OpenRouterDeepSeekR1
-            
             | ModelId::OpenRouterOpenAIGptOss120b
             | ModelId::OpenRouterOpenAIGptOss20b
-            
             | ModelId::OpenRouterOpenAIGpt5
             | ModelId::OpenRouterOpenAIGpt5Codex
             | ModelId::OpenRouterOpenAIGpt5Chat
@@ -541,8 +534,7 @@ impl ModelId {
             | ModelId::OpenRouterDeepseekChat
             | ModelId::OpenRouterDeepSeekV32
             | ModelId::OpenRouterDeepseekReasoner
-            | ModelId::OpenRouterDeepSeekV32Speciale
-             => {
+            | ModelId::OpenRouterDeepSeekV32Speciale => {
                 // Fallback to a default value for OpenRouter models without metadata
                 // In production, these should have metadata
                 "openrouter-model"
@@ -621,36 +613,27 @@ impl ModelId {
             | ModelId::OpenRouterZaiGlm46
             | ModelId::OpenRouterMoonshotaiKimiK20905
             | ModelId::OpenRouterMoonshotaiKimiK2Thinking
-            
             | ModelId::OpenRouterQwen3Max
             | ModelId::OpenRouterQwen3235bA22b
-            
             | ModelId::OpenRouterQwen3235bA22b2507
             | ModelId::OpenRouterQwen3235bA22bThinking2507
             | ModelId::OpenRouterQwen332b
             | ModelId::OpenRouterQwen330bA3b
-            
             | ModelId::OpenRouterQwen330bA3bInstruct2507
             | ModelId::OpenRouterQwen330bA3bThinking2507
             | ModelId::OpenRouterQwen314b
-            
             | ModelId::OpenRouterQwen38b
-            
-            
             | ModelId::OpenRouterQwen3Next80bA3bInstruct
             | ModelId::OpenRouterQwen3Next80bA3bThinking
             | ModelId::OpenRouterQwen3Coder
-            
             | ModelId::OpenRouterQwen3CoderPlus
             | ModelId::OpenRouterQwen3CoderFlash
             | ModelId::OpenRouterQwen3Coder30bA3bInstruct
             | ModelId::OpenRouterDeepSeekV32Exp
             | ModelId::OpenRouterDeepSeekChatV31
             | ModelId::OpenRouterDeepSeekR1
-            
             | ModelId::OpenRouterOpenAIGptOss120b
             | ModelId::OpenRouterOpenAIGptOss20b
-            
             | ModelId::OpenRouterOpenAIGpt5
             | ModelId::OpenRouterOpenAIGpt5Codex
             | ModelId::OpenRouterOpenAIGpt5Chat
@@ -663,8 +646,7 @@ impl ModelId {
             | ModelId::OpenRouterDeepseekChat
             | ModelId::OpenRouterDeepSeekV32
             | ModelId::OpenRouterDeepseekReasoner
-            | ModelId::OpenRouterDeepSeekV32Speciale
-             => Provider::OpenRouter,
+            | ModelId::OpenRouterDeepSeekV32Speciale => Provider::OpenRouter,
         }
     }
 
@@ -983,33 +965,25 @@ impl ModelId {
             | ModelId::OpenRouterZaiGlm46
             | ModelId::OpenRouterQwen3Max
             | ModelId::OpenRouterQwen3235bA22b
-            
             | ModelId::OpenRouterQwen3235bA22b2507
             | ModelId::OpenRouterQwen3235bA22bThinking2507
             | ModelId::OpenRouterQwen332b
             | ModelId::OpenRouterQwen330bA3b
-            
             | ModelId::OpenRouterQwen330bA3bInstruct2507
             | ModelId::OpenRouterQwen330bA3bThinking2507
             | ModelId::OpenRouterQwen314b
-            
             | ModelId::OpenRouterQwen38b
-            
-            
             | ModelId::OpenRouterQwen3Next80bA3bInstruct
             | ModelId::OpenRouterQwen3Next80bA3bThinking
             | ModelId::OpenRouterQwen3Coder
-            
             | ModelId::OpenRouterQwen3CoderPlus
             | ModelId::OpenRouterQwen3CoderFlash
             | ModelId::OpenRouterQwen3Coder30bA3bInstruct
             | ModelId::OpenRouterDeepSeekV32Exp
             | ModelId::OpenRouterDeepSeekChatV31
             | ModelId::OpenRouterDeepSeekR1
-            
             | ModelId::OpenRouterOpenAIGptOss120b
             | ModelId::OpenRouterOpenAIGptOss20b
-            
             | ModelId::OpenRouterOpenAIGpt5
             | ModelId::OpenRouterOpenAIGpt5Codex
             | ModelId::OpenRouterOpenAIGpt5Chat
@@ -1024,9 +998,7 @@ impl ModelId {
             | ModelId::OpenRouterDeepseekReasoner
             | ModelId::OpenRouterDeepSeekV32Speciale
             | ModelId::OpenRouterMoonshotaiKimiK20905
-            | ModelId::OpenRouterMoonshotaiKimiK2Thinking
-            
-             => {
+            | ModelId::OpenRouterMoonshotaiKimiK2Thinking => {
                 // Fallback description for OpenRouter models
                 // In production, these should have metadata
                 "Model available via OpenRouter marketplace"
@@ -1306,8 +1278,7 @@ impl ModelId {
             | ModelId::Gemini25Flash
             | ModelId::Gemini25FlashLite
             | ModelId::Gemini25Pro => "2.5",
-            ModelId::Gemini3ProPreview
-            | ModelId::Gemini3FlashPreview => "3",
+            ModelId::Gemini3ProPreview | ModelId::Gemini3FlashPreview => "3",
             // OpenAI generations
             ModelId::GPT52 => "5.2",
             ModelId::GPT5
@@ -1375,36 +1346,27 @@ impl ModelId {
             | ModelId::OpenRouterZaiGlm46
             | ModelId::OpenRouterMoonshotaiKimiK20905
             | ModelId::OpenRouterMoonshotaiKimiK2Thinking
-            
             | ModelId::OpenRouterQwen3Max
             | ModelId::OpenRouterQwen3235bA22b
-            
             | ModelId::OpenRouterQwen3235bA22b2507
             | ModelId::OpenRouterQwen3235bA22bThinking2507
             | ModelId::OpenRouterQwen332b
             | ModelId::OpenRouterQwen330bA3b
-            
             | ModelId::OpenRouterQwen330bA3bInstruct2507
             | ModelId::OpenRouterQwen330bA3bThinking2507
             | ModelId::OpenRouterQwen314b
-            
             | ModelId::OpenRouterQwen38b
-            
-            
             | ModelId::OpenRouterQwen3Next80bA3bInstruct
             | ModelId::OpenRouterQwen3Next80bA3bThinking
             | ModelId::OpenRouterQwen3Coder
-            
             | ModelId::OpenRouterQwen3CoderPlus
             | ModelId::OpenRouterQwen3CoderFlash
             | ModelId::OpenRouterQwen3Coder30bA3bInstruct
             | ModelId::OpenRouterDeepSeekV32Exp
             | ModelId::OpenRouterDeepSeekChatV31
             | ModelId::OpenRouterDeepSeekR1
-            
             | ModelId::OpenRouterOpenAIGptOss120b
             | ModelId::OpenRouterOpenAIGptOss20b
-            
             | ModelId::OpenRouterOpenAIGpt5
             | ModelId::OpenRouterOpenAIGpt5Codex
             | ModelId::OpenRouterOpenAIGpt5Chat
@@ -1417,8 +1379,7 @@ impl ModelId {
             | ModelId::OpenRouterDeepseekChat
             | ModelId::OpenRouterDeepSeekV32
             | ModelId::OpenRouterDeepseekReasoner
-            | ModelId::OpenRouterDeepSeekV32Speciale
-             => "unknown", // fallback generation for OpenRouter models
+            | ModelId::OpenRouterDeepSeekV32Speciale => "unknown", // fallback generation for OpenRouter models
         }
     }
 
@@ -1507,9 +1468,7 @@ impl FromStr for ModelId {
             s if s == models::ollama::GPT_OSS_120B_CLOUD => Ok(ModelId::OllamaGptOss120bCloud),
             s if s == models::ollama::QWEN3_1_7B => Ok(ModelId::OllamaQwen317b),
             s if s == models::ollama::DEEPSEEK_V32_CLOUD => Ok(ModelId::OllamaDeepseekV32Cloud),
-            s if s == models::ollama::QWEN3_NEXT_80B_CLOUD => {
-                Ok(ModelId::OllamaQwen3Next80bCloud)
-            }
+            s if s == models::ollama::QWEN3_NEXT_80B_CLOUD => Ok(ModelId::OllamaQwen3Next80bCloud),
             s if s == models::ollama::MISTRAL_LARGE_3_675B_CLOUD => {
                 Ok(ModelId::OllamaMistralLarge3675bCloud)
             }
@@ -2065,7 +2024,10 @@ mod tests {
         );
         assert_eq!(ModelId::OllamaQwen3Coder480bCloud.generation(), "qwen3");
         assert_eq!(ModelId::OllamaGlm46Cloud.generation(), "glm-4.6");
-        assert_eq!(ModelId::OllamaNemotron3Nano30bCloud.generation(), "nemotron-3");
+        assert_eq!(
+            ModelId::OllamaNemotron3Nano30bCloud.generation(),
+            "nemotron-3"
+        );
         assert_eq!(
             ModelId::LmStudioMetaLlama38BInstruct.generation(),
             "meta-llama-3"

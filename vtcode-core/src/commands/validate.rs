@@ -108,7 +108,6 @@ async fn check_api_connectivity(config: &AgentConfig) -> Result<()> {
             "temperature": 0.1
         })),
         system_instruction: Some(system_instruction),
-        reasoning_config: None,
     };
 
     client.generate(&request).await?;

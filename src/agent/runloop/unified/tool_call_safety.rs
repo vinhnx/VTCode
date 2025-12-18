@@ -96,6 +96,7 @@ impl ToolCallSafetyValidator {
     }
 
     /// Inspect the current per-minute rate limit.
+    #[allow(dead_code)]
     pub fn rate_limit_per_minute(&self) -> Option<usize> {
         self.rate_limit_per_minute
     }

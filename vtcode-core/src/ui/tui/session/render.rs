@@ -140,17 +140,15 @@ pub fn render(session: &mut Session, frame: &mut Frame<'_>) {
                 .border_style(border_style(session));
             frame.render_widget(block, timeline_chunks[1]);
         }
+    } else if session.show_logs {
+        let split = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Percentage(70), Constraint::Percentage(30)].as_ref())
+            .split(transcript_area);
+        render_transcript(session, frame, split[0]);
+        render_log_view(session, frame, split[1]);
     } else {
-        if session.show_logs {
-            let split = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([Constraint::Percentage(70), Constraint::Percentage(30)].as_ref())
-                .split(transcript_area);
-            render_transcript(session, frame, split[0]);
-            render_log_view(session, frame, split[1]);
-        } else {
-            render_transcript(session, frame, transcript_area);
-        }
+        render_transcript(session, frame, transcript_area);
     }
     session.render_input(frame, input_area);
     render_modal(session, frame, size);

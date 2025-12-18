@@ -1056,7 +1056,7 @@ fn code_block_style(theme_styles: &ThemeStyles, base_style: Style) -> Style {
 /// Normalize indentation in code using tree-sitter parsing
 fn normalize_code_indentation(code: &str, language: Option<&str>) -> String {
     // Check if we should normalize based on language hint
-    let has_language_hint = language.map_or(false, |hint| {
+    let has_language_hint = language.is_some_and(|hint| {
         matches!(
             hint.to_lowercase().as_str(),
             "rust"

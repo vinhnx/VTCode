@@ -149,7 +149,7 @@ impl Session {
     }
 
     /// Scroll operations
-    pub(super) fn scroll_line_up(&mut self) {
+    pub fn scroll_line_up(&mut self) {
         let previous_offset = self.scroll_manager.offset();
         self.scroll_manager.scroll_up(1);
         if self.scroll_manager.offset() != previous_offset {
@@ -157,7 +157,7 @@ impl Session {
         }
     }
 
-    pub(super) fn scroll_line_down(&mut self) {
+    pub fn scroll_line_down(&mut self) {
         let previous_offset = self.scroll_manager.offset();
         self.scroll_manager.scroll_down(1);
         if self.scroll_manager.offset() != previous_offset {

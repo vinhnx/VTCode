@@ -194,12 +194,10 @@ impl CliToolBridge {
             let entry = entry?;
             let path = entry.path();
 
-            if path.is_file() {
-                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                    if name.to_lowercase().starts_with("readme") && name.ends_with(".md") {
-                        readmes.push(path);
-                    }
-                }
+            if let Some(_name) = path.file_name().and_then(|n| n.to_str()).filter(|n| {
+                path.is_file() && n.to_lowercase().starts_with("readme") && n.ends_with(".md")
+            }) {
+                readmes.push(path);
             }
         }
 
@@ -208,10 +206,8 @@ impl CliToolBridge {
 
     /// Load README/documentation content
     fn load_readme(config: &CliToolConfig) -> Result<String> {
-        if let Some(readme_path) = &config.readme_path {
-            if readme_path.exists() {
-                return std::fs::read_to_string(readme_path).context("Failed to read README file");
-            }
+        if let Some(readme_path) = config.readme_path.as_ref().filter(|p| p.exists()) {
+            return std::fs::read_to_string(readme_path).context("Failed to read README file");
         }
 
         // Generate basic instructions if no README
@@ -224,14 +220,12 @@ impl CliToolBridge {
 
     /// Load JSON schema for validation
     fn load_schema(config: &CliToolConfig) -> Result<Option<Value>> {
-        if let Some(schema_path) = &config.schema_path {
-            if schema_path.exists() {
-                let content =
-                    std::fs::read_to_string(schema_path).context("Failed to read schema file")?;
-                let schema: Value =
-                    serde_json::from_str(&content).context("Failed to parse schema JSON")?;
-                return Ok(Some(schema));
-            }
+        if let Some(schema_path) = config.schema_path.as_ref().filter(|p| p.exists()) {
+            let content =
+                std::fs::read_to_string(schema_path).context("Failed to read schema file")?;
+            let schema: Value =
+                serde_json::from_str(&content).context("Failed to parse schema JSON")?;
+            return Ok(Some(schema));
         }
 
         Ok(None)
@@ -356,10 +350,8 @@ impl CliToolBridge {
         // For now, just check required fields
         if let Some(required) = schema.get("required").and_then(|v| v.as_array()) {
             for field in required {
-                if let Some(field_name) = field.as_str() {
-                    if args.get(field_name).is_none() {
-                        return Err(anyhow!("Missing required field: {}", field_name));
-                    }
+                if let Some(field_name) = field.as_str().filter(|f| args.get(*f).is_none()) {
+                    return Err(anyhow!("Missing required field: {}", field_name));
                 }
             }
         }
@@ -522,10 +514,8 @@ trait PathExt {
 
 impl PathExt for PathBuf {
     fn expand_home(&self) -> Result<PathBuf> {
-        if self.starts_with("~") {
-            if let Ok(home) = std::env::var("HOME") {
-                return Ok(PathBuf::from(home).join(self.strip_prefix("~").unwrap()));
-            }
+        if let Some(home) = std::env::var("HOME").ok().filter(|_| self.starts_with("~")) {
+            return Ok(PathBuf::from(home).join(self.strip_prefix("~").unwrap()));
         }
         Ok(self.clone())
     }

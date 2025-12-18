@@ -45,19 +45,14 @@ impl Default for SkillsConfig {
 }
 
 /// Skills rendering mode
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum SkillsRenderMode {
     /// Lean mode (Codex-style): name + description + path only
+    #[default]
     Lean,
     /// Full mode: all metadata including version, author, native flags
     Full,
-}
-
-impl Default for SkillsRenderMode {
-    fn default() -> Self {
-        Self::Lean
-    }
 }
 
 fn default_render_mode() -> SkillsRenderMode {

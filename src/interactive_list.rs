@@ -17,7 +17,8 @@ use ratatui::widgets::{
     Block, BorderType, Borders, List, ListDirection, ListItem, ListState, Paragraph, Wrap,
 };
 
-const CONTROLS_HINT: &str = "↑/↓ j/k to move  •  Home/End to jump  •  Enter/Tab confirm  •  Esc cancel";
+const CONTROLS_HINT: &str =
+    "↑/↓ j/k to move  •  Home/End to jump  •  Enter/Tab confirm  •  Esc cancel";
 const NUMBER_JUMP_HINT: &str = "Tip: Type number to jump";
 
 /// Ratatui style definitions for interactive list UI

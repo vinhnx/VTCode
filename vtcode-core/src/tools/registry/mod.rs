@@ -14,6 +14,7 @@ mod policy;
 mod pty;
 mod registration;
 mod risk_scorer;
+mod shell_policy;
 mod telemetry;
 mod utils;
 
@@ -31,6 +32,7 @@ pub use justification_extractor::JustificationExtractor;
 pub use pty::{PtySessionGuard, PtySessionManager};
 pub use registration::{ToolExecutorFn, ToolHandler, ToolRegistration};
 pub use risk_scorer::{RiskLevel, ToolRiskContext, ToolRiskScorer, ToolSource, WorkspaceTrust};
+pub use shell_policy::ShellPolicyChecker;
 pub use telemetry::ToolTelemetryEvent;
 
 use builtins::register_builtin_tools;
@@ -601,6 +603,9 @@ pub struct ToolRegistry {
     mcp_healthy: bool,
     mcp_last_failed: Option<SystemTime>,
     initialized: bool,
+    // Security & Identity
+    shell_policy: Arc<RwLock<ShellPolicyChecker>>,
+    agent_type: Cow<'static, str>,
     // Caching
     cached_available_tools: Arc<RwLock<Option<Vec<String>>>>,
 }
@@ -703,6 +708,8 @@ impl ToolRegistry {
             mcp_healthy: true,
             mcp_last_failed: None,
             initialized: false,
+            shell_policy: Arc::new(RwLock::new(ShellPolicyChecker::new())),
+            agent_type: Cow::Borrowed("unknown"),
             cached_available_tools: Arc::new(RwLock::new(None)),
         };
 
@@ -839,6 +846,26 @@ impl ToolRegistry {
         let available = self.available_tools().await;
         self.policy_gateway
             .enable_full_auto_mode(allowed_tools, &available);
+    }
+
+    pub fn set_agent_type(&mut self, agent_type: impl Into<Cow<'static, str>>) {
+        self.agent_type = agent_type.into();
+    }
+
+    pub fn check_shell_policy(
+        &self,
+        command: &str,
+        deny_regex_patterns: &[String],
+        deny_glob_patterns: &[String],
+    ) -> Result<()> {
+        let agent_type = self.agent_type.clone();
+        let mut checker = self.shell_policy.write().unwrap();
+        checker.check_command(
+            command,
+            &agent_type,
+            deny_regex_patterns,
+            deny_glob_patterns,
+        )
     }
 
     pub fn disable_full_auto_mode(&mut self) {
@@ -1370,6 +1397,19 @@ impl ToolRegistry {
         // Capture harness context snapshot for structured telemetry and history
         let context_snapshot = self.harness_context_snapshot();
         let context_payload = context_snapshot.to_json();
+
+        // Validate arguments against schema if available
+        if let Some(registration) = self.inventory.registration_for(tool_name) {
+            if let Some(schema) = registration.parameter_schema() {
+                if let Err(errors) = jsonschema::validate(schema, args) {
+                    return Err(anyhow::anyhow!(
+                        "Invalid arguments for tool '{}': {}",
+                        tool_name,
+                        errors
+                    ));
+                }
+            }
+        }
 
         let timeout_category = self.timeout_category_for(tool_name).await;
 

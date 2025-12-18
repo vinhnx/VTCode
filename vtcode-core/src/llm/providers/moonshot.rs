@@ -5,17 +5,26 @@ use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::PromptCachingConfig;
 use crate::config::models::Provider as ModelProvider;
 use crate::llm::client::LLMClient;
-use crate::llm::error_display;
-use crate::llm::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse};
+use crate::llm::provider::{
+    FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
+};
 use crate::llm::providers::common::{
     convert_usage_to_llm_types, forward_prompt_cache_with_state, make_default_request,
-    override_base_url, parse_response_openai_format, resolve_model,
+    map_finish_reason_common, override_base_url, parse_response_openai_format, resolve_model,
     serialize_messages_openai_format, serialize_tools_openai_format, validate_request_common,
 };
-use crate::llm::providers::error_handling::handle_openai_http_error;
+use crate::llm::providers::error_handling::{
+    format_network_error, format_parse_error, handle_openai_http_error,
+};
+use crate::llm::providers::shared::{
+    NoopStreamTelemetry, StreamTelemetry, ToolCallBuilder, finalize_tool_calls, update_tool_calls,
+};
+use crate::llm::providers::tag_sanitizer::TagStreamSanitizer;
 use crate::llm::rig_adapter::reasoning_parameters_for;
 use crate::llm::types as llm_types;
+use async_stream::try_stream;
 use async_trait::async_trait;
+use futures::StreamExt;
 use reqwest::Client;
 use serde_json::{Map, Value};
 
@@ -169,12 +178,16 @@ impl LLMProvider for MoonshotProvider {
         PROVIDER_KEY
     }
 
-    fn supports_reasoning(&self, _model: &str) -> bool {
-        false
+    fn supports_streaming(&self) -> bool {
+        true
     }
 
-    fn supports_reasoning_effort(&self, _model: &str) -> bool {
-        false
+    fn supports_reasoning(&self, model: &str) -> bool {
+        model.to_lowercase().contains("thinking") || model.to_lowercase().contains("k2")
+    }
+
+    fn supports_reasoning_effort(&self, model: &str) -> bool {
+        self.supports_reasoning(model)
     }
 
     async fn generate(&self, mut request: LLMRequest) -> Result<LLMResponse, LLMError> {
@@ -182,7 +195,8 @@ impl LLMProvider for MoonshotProvider {
             request.model = self.model.clone();
         }
 
-        // Convert request to Moonshot-specific format
+        self.validate_request(&request)?;
+
         let payload = self.convert_to_moonshot_format(&request)?;
         let url = format!("{}/chat/completions", self.base_url.trim_end_matches('/'));
 
@@ -193,32 +207,138 @@ impl LLMProvider for MoonshotProvider {
             .json(&payload)
             .send()
             .await
-            .map_err(|e| {
-                let formatted_error = error_display::format_llm_error(
-                    PROVIDER_NAME,
-                    &format!("Network error: {}", e),
-                );
-                LLMError::Network {
-                    message: formatted_error,
-                    metadata: None,
-                }
-            })?;
+            .map_err(|e| format_network_error(PROVIDER_NAME, &e))?;
 
         let response =
             handle_openai_http_error(response, PROVIDER_NAME, "MOONSHOT_API_KEY").await?;
 
-        let response_json: Value = response.json().await.map_err(|e| {
-            let formatted_error = error_display::format_llm_error(
-                PROVIDER_NAME,
-                &format!("Failed to parse response: {}", e),
-            );
-            LLMError::Provider {
-                message: formatted_error,
-                metadata: None,
-            }
-        })?;
+        let response_json: Value = response
+            .json()
+            .await
+            .map_err(|e| format_parse_error(PROVIDER_NAME, &e))?;
 
         self.parse_response(response_json)
+    }
+
+    async fn stream(&self, mut request: LLMRequest) -> Result<LLMStream, LLMError> {
+        if request.model.trim().is_empty() {
+            request.model = self.model.clone();
+        }
+
+        self.validate_request(&request)?;
+        request.stream = true;
+
+        let payload = self.convert_to_moonshot_format(&request)?;
+        let url = format!("{}/chat/completions", self.base_url.trim_end_matches('/'));
+
+        let response = self
+            .http_client
+            .post(&url)
+            .bearer_auth(&self.api_key)
+            .json(&payload)
+            .send()
+            .await
+            .map_err(|e| format_network_error(PROVIDER_NAME, &e))?;
+
+        let response =
+            handle_openai_http_error(response, PROVIDER_NAME, "MOONSHOT_API_KEY").await?;
+
+        let mut bytes_stream = response.bytes_stream();
+        let mut buffer = String::new();
+        let telemetry = NoopStreamTelemetry;
+
+        let stream = try_stream! {
+            let mut aggregated_content = String::new();
+            let mut aggregated_reasoning = String::new();
+            let mut tool_call_builders: Vec<ToolCallBuilder> = Vec::new();
+            let mut usage = None;
+            let mut finish_reason = FinishReason::Stop;
+            let mut sanitizer = TagStreamSanitizer::new();
+
+            while let Some(chunk_result) = bytes_stream.next().await {
+                let chunk_bytes = chunk_result.map_err(|e| format_network_error(PROVIDER_NAME, &e))?;
+                let chunk_str = String::from_utf8_lossy(&chunk_bytes);
+                buffer.push_str(&chunk_str);
+
+                while let Some((boundary_idx, boundary_len)) = crate::llm::providers::shared::find_sse_boundary(&buffer) {
+                    let event = buffer[..boundary_idx].to_string();
+                    buffer.drain(..boundary_idx + boundary_len);
+
+                    if let Some(data) = crate::llm::providers::shared::extract_data_payload(&event) {
+                        if data == "[DONE]" {
+                            break;
+                        }
+
+                        for line in data.lines() {
+                            if let Ok(value) = serde_json::from_str::<Value>(line) {
+                                if let Some(choices) = value.get("choices").and_then(|c| c.as_array())
+                                    && let Some(choice) = choices.first()
+                                {
+                                    if let Some(delta) = choice.get("delta") {
+                                        // Moonshot Kimi models often put reasoning in a "reasoning_content" field
+                                        // similar to DeepSeek or ZAI.
+                                        if let Some(reasoning) = delta.get("reasoning_content").and_then(|r| r.as_str()) {
+                                            aggregated_reasoning.push_str(reasoning);
+                                            telemetry.on_reasoning_delta(reasoning);
+                                            yield LLMStreamEvent::Reasoning { delta: reasoning.to_string() };
+                                        }
+
+                                        if let Some(content) = delta.get("content").and_then(|c| c.as_str()) {
+                                            aggregated_content.push_str(content);
+                                            telemetry.on_content_delta(content);
+
+                                            for event in sanitizer.process_chunk(content) {
+                                                match &event {
+                                                    LLMStreamEvent::Token { delta } => {
+                                                        yield LLMStreamEvent::Token { delta: delta.clone() };
+                                                    }
+                                                    LLMStreamEvent::Reasoning { delta } => {
+                                                        yield LLMStreamEvent::Reasoning { delta: delta.clone() };
+                                                    }
+                                                    _ => {}
+                                                }
+                                            }
+                                        }
+
+                                        if let Some(tool_calls) = delta.get("tool_calls").and_then(|tc| tc.as_array()) {
+                                            update_tool_calls(&mut tool_call_builders, tool_calls);
+                                            telemetry.on_tool_call_delta();
+                                        }
+                                    }
+
+                                    if let Some(reason) = choice.get("finish_reason").and_then(|r| r.as_str()) {
+                                        finish_reason = map_finish_reason_common(reason);
+                                    }
+                                }
+
+                                if let Some(_usage_value) = value.get("usage") {
+                                    usage = Some(crate::llm::providers::common::parse_usage_openai_format(&value, true).unwrap_or_default());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Finalize sanitizer and yield leftover events
+            for event in sanitizer.finalize() {
+                yield event;
+            }
+
+            let tool_calls = finalize_tool_calls(tool_call_builders);
+            yield LLMStreamEvent::Completed {
+                response: LLMResponse {
+                    content: if aggregated_content.is_empty() { None } else { Some(aggregated_content) },
+                    tool_calls,
+                    usage,
+                    finish_reason,
+                    reasoning: if aggregated_reasoning.is_empty() { None } else { Some(aggregated_reasoning) },
+                    reasoning_details: None,
+                }
+            };
+        };
+
+        Ok(Box::pin(stream))
     }
 
     fn supported_models(&self) -> Vec<String> {

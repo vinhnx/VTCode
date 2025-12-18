@@ -93,7 +93,7 @@ pub async fn execute_skill_with_sub_llm(
         let response = provider.generate(request.clone()).await?;
 
         // Extract content - handle Option
-        let content = response.content.unwrap_or_else(|| String::new());
+        let content = response.content.unwrap_or_default();
 
         // Add assistant response to conversation
         if let Some(tool_calls) = &response.tool_calls {
@@ -332,6 +332,9 @@ mod tests {
             when_to_use: None,
             requires_container: None,
             disallow_container: None,
+            license: None,
+            mode: None,
+            model: None,
         };
 
         let skill = Skill::new(
@@ -358,6 +361,9 @@ mod tests {
             when_to_use: None,
             requires_container: None,
             disallow_container: None,
+            license: None,
+            mode: None,
+            model: None,
         };
 
         let skill = Skill::new(
@@ -390,6 +396,9 @@ mod tests {
             when_to_use: None,
             requires_container: None,
             disallow_container: None,
+            license: None,
+            mode: None,
+            model: None,
         };
 
         let skill = Skill::new(manifest, PathBuf::from("/tmp"), "Instructions".to_string())

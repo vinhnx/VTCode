@@ -137,6 +137,7 @@ pub mod request_builder {
         temperature: Option<f32>,
         tools: Option<Vec<Value>>,
         stream: bool,
+        reasoning_effort: Option<String>,
     ) -> Value {
         let mut body = serde_json::json!({
             "model": model,
@@ -154,8 +155,12 @@ pub mod request_builder {
             body["temperature"] = serde_json::json!(temp);
         }
 
-        if let Some(tools_val) = tools {
-            body["tools"] = serde_json::json!(tools_val);
+        if let Some(val) = tools {
+            body["tools"] = serde_json::json!(val);
+        }
+
+        if let Some(effort) = reasoning_effort {
+            body["reasoning_effort"] = serde_json::json!(effort);
         }
 
         if stream {

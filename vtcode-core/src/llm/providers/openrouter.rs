@@ -24,7 +24,7 @@ use std::str::FromStr;
 use tracing::debug;
 
 use super::{
-    ReasoningBuffer,
+    ReasoningBuffer, TagStreamSanitizer,
     common::{
         convert_usage_to_llm_types, extract_prompt_cache_settings, map_finish_reason_common,
         override_base_url, parse_client_prompt_common, resolve_model,
@@ -1906,6 +1906,7 @@ impl LLMProvider for OpenRouterProvider {
             let mut usage: Option<Usage> = None;
             let mut finish_reason = FinishReason::Stop;
             let mut done = false;
+            let mut sanitizer = TagStreamSanitizer::new();
             let telemetry = OpenRouterStreamTelemetry;
 
             while let Some(chunk_result) = body_stream.next().await {
@@ -1948,7 +1949,17 @@ impl LLMProvider for OpenRouterProvider {
                                 for fragment in delta.into_fragments() {
                                     match fragment {
                                         StreamFragment::Content(text) if !text.is_empty() => {
-                                            yield LLMStreamEvent::Token { delta: text };
+                                            for event in sanitizer.process_chunk(&text) {
+                                                match &event {
+                                                    LLMStreamEvent::Token { delta } => {
+                                                        yield LLMStreamEvent::Token { delta: delta.clone() };
+                                                    }
+                                                    LLMStreamEvent::Reasoning { delta } => {
+                                                        yield LLMStreamEvent::Reasoning { delta: delta.clone() };
+                                                    }
+                                                    _ => {}
+                                                }
+                                            }
                                         }
                                         StreamFragment::Reasoning(text) if !text.is_empty() => {
                                             yield LLMStreamEvent::Reasoning { delta: text };
@@ -1987,7 +1998,17 @@ impl LLMProvider for OpenRouterProvider {
                             for fragment in delta.into_fragments() {
                                 match fragment {
                                     StreamFragment::Content(text) if !text.is_empty() => {
-                                        yield LLMStreamEvent::Token { delta: text };
+                                        for event in sanitizer.process_chunk(&text) {
+                                            match &event {
+                                                LLMStreamEvent::Token { delta } => {
+                                                    yield LLMStreamEvent::Token { delta: delta.clone() };
+                                                }
+                                                LLMStreamEvent::Reasoning { delta } => {
+                                                    yield LLMStreamEvent::Reasoning { delta: delta.clone() };
+                                                }
+                                                _ => {}
+                                            }
+                                        }
                                     }
                                     StreamFragment::Reasoning(text) if !text.is_empty() => {
                                         yield LLMStreamEvent::Reasoning { delta: text };
@@ -1998,6 +2019,11 @@ impl LLMProvider for OpenRouterProvider {
                         }
                     }
                 }
+            }
+
+            // Finalize sanitizer and yield leftover events
+            for event in sanitizer.finalize() {
+                yield event;
             }
 
             let response = finalize_stream_response(

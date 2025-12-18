@@ -21,20 +21,15 @@ pub enum SkillType {
 }
 
 /// Skill version specification
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(untagged)]
 pub enum SkillVersion {
     /// Always use latest version
     #[serde(rename = "latest")]
+    #[default]
     Latest,
     /// Specific version by ID (epoch timestamp for custom skills, date for Anthropic)
     Specific(String),
-}
-
-impl Default for SkillVersion {
-    fn default() -> Self {
-        SkillVersion::Latest
-    }
 }
 
 impl SkillVersion {

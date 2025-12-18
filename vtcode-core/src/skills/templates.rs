@@ -112,7 +112,15 @@ impl TemplateEngine {
         engine.register_builtin_templates();
         engine
     }
+}
 
+impl Default for TemplateEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl TemplateEngine {
     /// Register built-in templates
     fn register_builtin_templates(&mut self) {
         // Traditional skill template

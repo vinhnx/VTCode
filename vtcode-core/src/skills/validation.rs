@@ -228,7 +228,15 @@ impl SkillValidator {
     pub fn new() -> Self {
         Self::with_config(ValidationConfig::default())
     }
+}
 
+impl Default for SkillValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SkillValidator {
     /// Create new validator with custom configuration
     pub fn with_config(config: ValidationConfig) -> Self {
         Self {
@@ -244,7 +252,7 @@ impl SkillValidator {
     ) -> Result<ValidationReport> {
         let start_time = Instant::now();
         let mut checks = HashMap::new();
-        let mut performance = PerformanceMetrics::default();
+        // Performance tracking initialized at end
 
         info!("Validating skill directory: {}", skill_path.display());
 
@@ -289,7 +297,10 @@ impl SkillValidator {
         // Determine overall status
         let status = self.determine_overall_status(&checks, &security);
 
-        performance.total_time_ms = start_time.elapsed().as_millis() as u64;
+        let performance = PerformanceMetrics {
+            total_time_ms: start_time.elapsed().as_millis() as u64,
+            ..Default::default()
+        };
 
         Ok(ValidationReport {
             status,
@@ -344,8 +355,10 @@ impl SkillValidator {
         // Determine overall status
         let status = self.determine_overall_status(&checks, &security);
 
-        let mut performance = PerformanceMetrics::default();
-        performance.total_time_ms = start_time.elapsed().as_millis() as u64;
+        let performance = PerformanceMetrics {
+            total_time_ms: start_time.elapsed().as_millis() as u64,
+            ..Default::default()
+        };
 
         Ok(ValidationReport {
             status,
@@ -471,43 +484,40 @@ impl SkillValidator {
         let start_time = Instant::now();
         let mut issues = vec![];
 
-        for entry in std::fs::read_dir(scripts_dir).unwrap() {
-            if let Ok(entry) = entry {
-                let path = entry.path();
-                if path.is_file() {
-                    // Check file size
-                    if let Ok(metadata) = entry.metadata() {
-                        if metadata.len() > self.config.max_script_size as u64 {
-                            issues.push(format!(
-                                "Script too large: {} ({} bytes)",
-                                path.display(),
-                                metadata.len()
-                            ));
-                        }
-                    }
+        for entry in std::fs::read_dir(scripts_dir).unwrap().flatten() {
+            let path = entry.path();
+            if path.is_file() {
+                // Check file size
+                if let Some(metadata) = entry
+                    .metadata()
+                    .ok()
+                    .filter(|m| m.len() > self.config.max_script_size as u64)
+                {
+                    issues.push(format!(
+                        "Script too large: {} ({} bytes)",
+                        path.display(),
+                        metadata.len()
+                    ));
+                }
 
-                    // Check extension
-                    if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-                        if !self
-                            .config
-                            .allowed_script_extensions
-                            .contains(&ext.to_string())
-                        {
-                            issues.push(format!("Unsupported script type: {}", ext));
-                        }
-                    }
+                // Check extension
+                if let Some(ext) = path.extension().and_then(|e| e.to_str()).filter(|e| {
+                    !self
+                        .config
+                        .allowed_script_extensions
+                        .contains(&e.to_string())
+                }) {
+                    issues.push(format!("Unsupported script type: {}", ext));
+                }
 
-                    // Security check
-                    if self.config.enable_security_checks {
-                        if let Ok(content) = std::fs::read_to_string(&path) {
-                            for blocked in &self.config.blocked_commands {
-                                if content.contains(blocked) {
-                                    issues.push(format!(
-                                        "Potentially dangerous content found: {}",
-                                        blocked
-                                    ));
-                                }
-                            }
+                // Security check
+                if self.config.enable_security_checks
+                    && let Ok(content) = std::fs::read_to_string(&path)
+                {
+                    for blocked in &self.config.blocked_commands {
+                        if content.contains(blocked) {
+                            issues
+                                .push(format!("Potentially dangerous content found: {}", blocked));
                         }
                     }
                 }
@@ -563,21 +573,18 @@ impl SkillValidator {
 
         let mut issues = vec![];
 
-        for entry in std::fs::read_dir(dir_path).unwrap() {
-            if let Ok(entry) = entry {
-                let path = entry.path();
-                if path.is_file() {
-                    // Check file size
-                    if let Ok(metadata) = entry.metadata() {
-                        if metadata.len() > 10 * 1024 * 1024 {
-                            // 10MB limit for resources
-                            issues.push(format!(
-                                "Resource file too large: {} ({} bytes)",
-                                path.display(),
-                                metadata.len()
-                            ));
-                        }
-                    }
+        for entry in std::fs::read_dir(dir_path).unwrap().flatten() {
+            let path = entry.path();
+            if path.is_file() {
+                // Check file size
+                if let Some(metadata) = entry.metadata().ok().filter(|m| m.len() > 10 * 1024 * 1024)
+                {
+                    // 10MB limit for resources
+                    issues.push(format!(
+                        "Resource file too large: {} ({} bytes)",
+                        path.display(),
+                        metadata.len()
+                    ));
                 }
             }
         }
@@ -840,25 +847,25 @@ impl SkillValidator {
         let mut security_level = SecurityLevel::Safe;
 
         // Check for script security issues
-        if let Some(scripts_check) = checks.get("scripts_valid") {
-            if scripts_check.status == CheckStatus::Warning {
-                if let Some(details) = &scripts_check.details {
-                    if let Some(issues) = details.as_array() {
-                        for issue in issues {
-                            if let Some(issue_str) = issue.as_str() {
-                                if issue_str.contains("dangerous") {
-                                    warnings.push(SecurityWarning {
-                                        warning_type: "dangerous_content".to_string(),
-                                        message: issue_str.to_string(),
-                                        severity: SecurityLevel::HighRisk,
-                                        suggestion: Some(
-                                            "Review script content for security issues".to_string(),
-                                        ),
-                                    });
-                                    security_level = SecurityLevel::HighRisk;
-                                }
-                            }
-                        }
+        if let Some(scripts_check) = checks.get("scripts_valid")
+            && scripts_check.status == CheckStatus::Warning
+        {
+            if let Some(details) = &scripts_check.details
+                && let Some(issues) = details.as_array()
+            {
+                for issue in issues {
+                    if let Some(issue_str) = issue.as_str()
+                        && issue_str.contains("dangerous")
+                    {
+                        warnings.push(SecurityWarning {
+                            warning_type: "dangerous_content".to_string(),
+                            message: issue_str.to_string(),
+                            severity: SecurityLevel::HighRisk,
+                            suggestion: Some(
+                                "Review script content for security issues".to_string(),
+                            ),
+                        });
+                        security_level = SecurityLevel::HighRisk;
                     }
                 }
             }
