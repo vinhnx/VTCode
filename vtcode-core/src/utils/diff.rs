@@ -147,7 +147,7 @@ fn myers_diff(old: &[char], new: &[char]) -> Vec<Edit> {
         for k in (-(d as i32)..=(d as i32)).step_by(2) {
             let k_idx = (k + max_d as i32) as usize;
 
-            let (mut x, prev_x) =
+            let (mut x, _prev_x) =
                 if k == -(d as i32) || (k != d as i32 && v[k_idx - 1] < v[k_idx + 1]) {
                     (v[k_idx + 1], 1)
                 } else {
@@ -162,7 +162,7 @@ fn myers_diff(old: &[char], new: &[char]) -> Vec<Edit> {
             }
 
             v[k_idx] = x;
-            v_index[d][k_idx] = prev_x;
+            v_index[d][k_idx] = x;
 
             if x >= n && y >= m {
                 // Backtrack to find the path
@@ -189,46 +189,52 @@ fn backtrack_myers(
     let mut y = new.len();
 
     for cur_d in (0..=d).rev() {
-        let k_idx = (k + max_d as i32) as usize;
-        let prev_x = v_index[cur_d][k_idx];
-
-        if prev_x == 1 {
-            k -= 1;
-        } else if prev_x == 0 {
-            k += 1;
-        }
-
-        let prev_k = k;
-        let prev_k_idx = (prev_k + max_d as i32) as usize;
-        let prev_x_val = if cur_d > 0 {
-            if prev_k == -(cur_d as i32)
-                || (prev_k != cur_d as i32
-                    && v_index[cur_d - 1][prev_k_idx - 1] < v_index[cur_d - 1][prev_k_idx + 1])
-            {
-                v_index[cur_d - 1][prev_k_idx + 1]
-            } else {
-                v_index[cur_d - 1][prev_k_idx - 1] + 1
-            }
-        } else {
-            0
-        };
-
-        let prev_y = (prev_x_val as i32 - prev_k) as usize;
-
-        // Determine what operation happened
-        while x > prev_x_val || y > prev_y {
-            if x > prev_x_val && y > prev_y && old[x - 1] == new[y - 1] {
+        if cur_d == 0 {
+            // Follow diagonal back to origin
+            while x > 0 && y > 0 {
                 edits.push(Edit::Equal);
                 x -= 1;
                 y -= 1;
-            } else if y > prev_y {
-                edits.push(Edit::Insert);
-                y -= 1;
-            } else {
-                edits.push(Edit::Delete);
-                x -= 1;
             }
+            break;
         }
+
+        let k_idx = (k + max_d as i32) as usize;
+        
+        // Determine if we came from k-1 or k+1
+        let prev_k = if k == -(cur_d as i32) || (k != cur_d as i32 && v_index[cur_d - 1][k_idx - 1] < v_index[cur_d - 1][k_idx + 1]) {
+            k + 1
+        } else {
+            k - 1
+        };
+        
+        let prev_k_idx = (prev_k + max_d as i32) as usize;
+        let prev_x_val = v_index[cur_d - 1][prev_k_idx];
+        let prev_y = (prev_x_val as i32 - prev_k) as usize;
+
+        let (move_x, move_y) = if prev_k == k + 1 {
+            (prev_x_val, prev_y + 1)
+        } else {
+            (prev_x_val + 1, prev_y)
+        };
+
+        // Follow diagonal from (x, y) back to (move_x, move_y)
+        while x > move_x && y > move_y {
+            edits.push(Edit::Equal);
+            x -= 1;
+            y -= 1;
+        }
+
+        // Add the move itself
+        if prev_k == k + 1 {
+            edits.push(Edit::Insert);
+            y -= 1;
+        } else {
+            edits.push(Edit::Delete);
+            x -= 1;
+        }
+        
+        k = prev_k;
     }
 
     edits.reverse();

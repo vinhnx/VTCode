@@ -45,7 +45,13 @@ impl<'a> UpdateOperation<'a> {
             .map(|rel| root.join(rel))
             .unwrap_or_else(|| source_path.clone());
 
-        let mut writer = AtomicWriter::create(&destination_path, Some(self.permissions)).await?;
+        let mut writer = match AtomicWriter::create(&destination_path, Some(self.permissions)).await {
+            Ok(w) => w,
+            Err(err) => {
+                backup.restore(&source_path).await?;
+                return Err(err);
+            }
+        };
 
         if let Err(err) = write_patched_content(
             &mut writer,
