@@ -3,6 +3,7 @@
 mod approval_recorder;
 mod builtins;
 mod cache;
+mod circuit_breaker;
 mod declarations;
 mod error;
 mod executors;
@@ -600,8 +601,8 @@ pub struct ToolRegistry {
     success_trackers: HashMap<ToolTimeoutCategory, u32>,
     latency_stats: HashMap<ToolTimeoutCategory, ToolLatencyStats>,
     adaptive_tuning: AdaptiveTimeoutTuning,
-    mcp_healthy: bool,
-    mcp_last_failed: Option<SystemTime>,
+    /// MP-3: Circuit breaker for MCP client failures
+    mcp_circuit_breaker: Arc<circuit_breaker::McpCircuitBreaker>,
     initialized: bool,
     // Security & Identity
     shell_policy: Arc<RwLock<ShellPolicyChecker>>,
@@ -705,8 +706,7 @@ impl ToolRegistry {
             success_trackers: HashMap::new(),
             latency_stats: HashMap::new(),
             adaptive_tuning: AdaptiveTimeoutTuning::default(),
-            mcp_healthy: true,
-            mcp_last_failed: None,
+            mcp_circuit_breaker: Arc::new(circuit_breaker::McpCircuitBreaker::new()),
             initialized: false,
             shell_policy: Arc::new(RwLock::new(ShellPolicyChecker::new())),
             agent_type: Cow::Borrowed("unknown"),
@@ -793,7 +793,8 @@ impl ToolRegistry {
             _ => {} // Continue with computation if cache miss or lock contested
         }
 
-        let mut tools = self.inventory.available_tools();
+        // HP-7: Inventory tools are already sorted, just convert to Vec
+        let mut tools = self.inventory.available_tools().to_vec();
         tools.extend(self.inventory.registered_aliases());
 
         // Add MCP tools if available
@@ -1754,70 +1755,32 @@ impl ToolRegistry {
             return Ok(error.to_json_value());
         }
 
-        const MCP_COOLDOWN: Duration = Duration::from_secs(10);
-        if is_mcp_tool
-            && let Some(last_failed) = self.mcp_last_failed
-            && let Ok(elapsed) = last_failed.elapsed()
-            && elapsed < MCP_COOLDOWN
-        {
+        // MP-3: Circuit breaker check for MCP tools
+        if is_mcp_tool && !self.mcp_circuit_breaker.allow_request() {
+            let diag = self.mcp_circuit_breaker.diagnostics();
             let error = ToolExecutionError::new(
                 tool_name_owned.clone(),
                 ToolErrorType::ExecutionError,
-                "MCP provider cooling down after failure; skipping execution".to_string(),
+                format!(
+                    "MCP circuit breaker {:?}; skipping execution",
+                    diag.state
+                ),
             );
             let payload = json!({
                 "error": error.to_json_value(),
-                "mcp_unhealthy": true,
-                "note": "MCP provider cooling down after failure; execution skipped",
-                "last_failed_at": self.mcp_last_failed
+                "circuit_breaker_state": format!("{:?}", diag.state),
+                "consecutive_failures": diag.consecutive_failures,
+                "note": "MCP provider circuit breaker open; execution skipped",
+                "last_failed_at": diag.last_failure_time
                     .and_then(|ts| ts.duration_since(SystemTime::UNIX_EPOCH).ok())
                     .map(|d| d.as_secs()),
-                "cooldown_seconds": MCP_COOLDOWN.as_secs(),
+                "current_timeout_seconds": diag.current_timeout.as_secs(),
                 "mcp_provider": mcp_provider,
             });
             warn!(
                 tool = %tool_name_owned,
                 payload = %payload,
-                "Skipping MCP tool execution due to cooldown"
-            );
-            self.execution_history
-                .add_record(ToolExecutionRecord::failure(
-                    tool_name_owned,
-                    requested_name.clone(),
-                    is_mcp_tool,
-                    mcp_provider.clone(),
-                    args_for_recording,
-                    "MCP provider in cooldown; execution skipped".to_string(),
-                    context_snapshot.clone(),
-                    timeout_category_label.clone(),
-                    base_timeout_ms,
-                    adaptive_timeout_ms,
-                    None,
-                    false,
-                ));
-            return Ok(payload);
-        }
-
-        if is_mcp_tool && !self.mcp_healthy {
-            let error = ToolExecutionError::new(
-                tool_name_owned.clone(),
-                ToolErrorType::ExecutionError,
-                "MCP provider unhealthy; skipping tool execution until refresh succeeds"
-                    .to_string(),
-            );
-            let payload = json!({
-                "error": error.to_json_value(),
-                "mcp_unhealthy": true,
-                "note": "MCP provider unhealthy; execution skipped",
-                "last_failed_at": self.mcp_last_failed
-                    .and_then(|ts| ts.duration_since(SystemTime::UNIX_EPOCH).ok())
-                    .map(|d| d.as_secs()),
-                "mcp_provider": mcp_provider,
-            });
-            warn!(
-                tool = %tool_name_owned,
-                payload = %payload,
-                "Skipping MCP tool execution due to unhealthy provider"
+                "Skipping MCP tool execution due to circuit breaker"
             );
             self.execution_history
                 .add_record(ToolExecutionRecord::failure(
@@ -1826,7 +1789,7 @@ impl ToolRegistry {
                     is_mcp_tool,
                     mcp_provider.clone(),
                     args_for_recording,
-                    "MCP provider unhealthy; execution skipped".to_string(),
+                    format!("MCP circuit breaker {:?}; execution skipped", diag.state),
                     context_snapshot.clone(),
                     timeout_category_label.clone(),
                     base_timeout_ms,
@@ -2229,8 +2192,8 @@ impl ToolRegistry {
                         error = %last_err.unwrap_or_else(|| anyhow::anyhow!("unknown MCP error")),
                         "Failed to refresh MCP tools after retries; keeping existing cache"
                     );
-                    self.mcp_healthy = false;
-                    self.mcp_last_failed = Some(SystemTime::now());
+                    // MP-3: Record failure in circuit breaker
+                    self.mcp_circuit_breaker.record_failure();
                     return Ok(());
                 }
             };
@@ -2281,8 +2244,8 @@ impl ToolRegistry {
             }
 
             self.sync_policy_catalog().await;
-            self.mcp_healthy = true;
-            self.mcp_last_failed = None;
+            // MP-3: Record success in circuit breaker
+            self.mcp_circuit_breaker.record_success();
             Ok(())
         } else {
             debug!("No MCP client configured, nothing to refresh");

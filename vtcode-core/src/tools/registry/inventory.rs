@@ -23,6 +23,8 @@ pub(super) struct ToolInventory {
     aliases: HashMap<String, String>,
     frequently_used: HashSet<String>,
     last_cache_cleanup: Instant,
+    /// HP-7: Maintain sorted list of tool names for O(1) available_tools() calls
+    sorted_names: Vec<String>,
 
     // Common tools that are used frequently
     file_ops_tool: FileOpsTool,
@@ -45,6 +47,7 @@ impl ToolInventory {
             aliases: HashMap::new(),
             frequently_used: HashSet::new(),
             last_cache_cleanup: Instant::now(),
+            sorted_names: Vec::new(),
             file_ops_tool,
             command_tool,
             grep_search,
@@ -93,6 +96,9 @@ impl ToolInventory {
                     last_used: Instant::now(),
                     use_count: 0,
                 });
+                // HP-7: Maintain sorted invariant - insert at correct position
+                let pos = self.sorted_names.binary_search(&name).unwrap_or_else(|e| e);
+                self.sorted_names.insert(pos, name.clone());
             }
         }
 
@@ -142,8 +148,9 @@ impl ToolInventory {
         self.tools.contains_key(name) || self.aliases.contains_key(name)
     }
 
-    pub fn available_tools(&self) -> Vec<String> {
-        self.tools.keys().cloned().collect()
+    pub fn available_tools(&self) -> &[String] {
+        // HP-7: O(1) - already sorted, just return reference
+        &self.sorted_names
     }
 
     pub fn registered_aliases(&self) -> Vec<String> {

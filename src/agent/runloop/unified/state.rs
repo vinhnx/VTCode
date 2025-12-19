@@ -52,11 +52,11 @@ impl CtrlCState {
     }
 
     pub(crate) fn is_cancel_requested(&self) -> bool {
-        self.cancel_requested.load(Ordering::SeqCst)
+        self.cancel_requested.load(Ordering::Relaxed)
     }
 
     pub(crate) fn is_exit_requested(&self) -> bool {
-        self.exit_requested.load(Ordering::SeqCst)
+        self.exit_requested.load(Ordering::Relaxed)
     }
 
     pub(crate) fn disarm_exit(&self) {

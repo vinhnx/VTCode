@@ -115,6 +115,26 @@ impl ContextManager {
         outcome
     }
 
+    /// HP-9: Check if context window enforcement is needed
+    ///
+    /// Returns true if history should be trimmed based on heuristics:
+    /// - Message count exceeds 75% of estimated max (assuming ~100 tokens/msg)
+    /// - OR always enforce if semantic compression is enabled (for quality)
+    pub(crate) fn should_enforce_context(&self, history: &[uni::Message]) -> bool {
+        // Always enforce if semantic compression is enabled for quality
+        if self.trim_config.semantic_compression {
+            return true;
+        }
+
+        // Estimate: ~100 tokens per message on average
+        const ESTIMATED_TOKENS_PER_MESSAGE: usize = 100;
+        let estimated_max_messages = self.trim_config.max_tokens / ESTIMATED_TOKENS_PER_MESSAGE;
+
+        // Enforce when we exceed 75% of estimated capacity
+        let threshold = (estimated_max_messages * 3) / 4;
+        history.len() > threshold
+    }
+
     /// Apply ContextPruner recommendations to remove low-priority messages with decision tracking
     pub(crate) fn prune_with_semantic_priority(
         &mut self,

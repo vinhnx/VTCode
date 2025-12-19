@@ -41,6 +41,8 @@ pub(crate) struct TurnProcessingContext<'a> {
     pub working_history: &'a mut Vec<uni::Message>,
     pub tool_registry: &'a mut ToolRegistry,
     pub tools: &'a Arc<tokio::sync::RwLock<Vec<uni::ToolDefinition>>>,
+    /// Cached tool definitions for efficient reuse (HP-3 optimization)
+    pub cached_tools: &'a Option<Arc<Vec<uni::ToolDefinition>>>,
     pub ctrl_c_state: &'a Arc<CtrlCState>,
     pub ctrl_c_notify: &'a Arc<Notify>,
     pub vt_cfg: Option<&'a VTCodeConfig>,
@@ -68,15 +70,17 @@ pub(crate) async fn execute_llm_request(
         );
     }
 
-    // Enforce context window even when semantic compression is disabled
-    let _ = ctx
-        .context_manager
-        .enforce_context_window(ctx.working_history);
-    let request_history = ctx.working_history.clone();
+    // HP-9: Lazy context window enforcement - only when needed
+    if ctx.context_manager.should_enforce_context(ctx.working_history) {
+        let _ = ctx
+            .context_manager
+            .enforce_context_window(ctx.working_history);
+    }
+    // HP-1: Eliminate unnecessary clone - work directly on working_history
     ctx.context_manager.reset_token_budget().await;
     let system_prompt = ctx
         .context_manager
-        .build_system_prompt(&request_history, step_count)
+        .build_system_prompt(ctx.working_history, step_count)
         .await?;
 
     let use_streaming = provider_client.supports_streaming();
@@ -88,13 +92,8 @@ pub(crate) async fn execute_llm_request(
         }
     });
 
-    let tools_guard = ctx.tools.read().await;
-    let current_tools = if tools_guard.is_empty() {
-        None
-    } else {
-        Some(tools_guard.clone())
-    };
-    drop(tools_guard);
+    // HP-3: Use cached tools instead of acquiring lock and cloning
+    let current_tools = ctx.cached_tools.as_ref().map(|arc| (**arc).clone());
     let has_tools = current_tools.is_some();
     let parallel_config =
         if has_tools && provider_client.supports_parallel_tool_config(active_model) {
@@ -108,7 +107,8 @@ pub(crate) async fn execute_llm_request(
         None
     };
     let request = uni::LLMRequest {
-        messages: request_history.clone(),
+        // HP-1: Single clone only when building LLMRequest
+        messages: ctx.working_history.iter().cloned().collect(),
         system_prompt: Some(system_prompt),
         tools: current_tools,
         model: active_model.to_string(),
@@ -242,7 +242,7 @@ pub(crate) async fn execute_llm_request(
             return Err(anyhow::Error::new(error));
         }
     };
-    *ctx.working_history = request_history;
+    // HP-1: No restoration needed - working_history was never modified
     Ok((response, response_streamed))
 }
 
