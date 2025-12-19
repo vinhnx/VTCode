@@ -30,7 +30,7 @@
     "analyze_agent": "allow",
     "apply_patch": "prompt",
     "close_pty_session": "allow",
-    "create_file": "prompt",
+    "create_file": "allow",
     "create_pty_session": "allow",
     "debug_agent": "allow",
     "delete_file": "prompt",
@@ -55,7 +55,8 @@
     "mcp_get_current_time": "prompt",
     "mcp_time_get_current_time": "prompt",
     "mcp_convert_time": "prompt",
-    "mcp_time_convert_time": "prompt"
+    "mcp_time_convert_time": "prompt",
+    "assistant<|channel|>commentary": "allow"
   },
   "constraints": {},
   "mcp": {
