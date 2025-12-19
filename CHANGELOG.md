@@ -3,6 +3,36 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.50.6] - 2025-12-19
+
+
+### Features
+    - feat: Add success indicators to renderer on exit commands and session end
+    - feat: Update tool policy to prompt for file creation and execution, enhance session state management, and adjust LLM provider settings in configuration.
+    - feat: Enhance skill definitions with new metadata fields, improve LLM provider support, and refine TUI components.
+    - feat: Implement shell command policy checking with regex and glob patterns and add new metadata fields to skill definitions.
+    - feat: enhance line ending handling in patch operations and tests
+
+
+### Bug Fixes
+    - fix: Correct test expectations for token threshold boundaries
+    - fix: handle errors in AtomicWriter creation and improve diff operations tests
+
+
+### Refactors
+    - refactor: remove unnecessary whitespace in diff and test files
+
+
+### Documentation
+    - docs: update changelog for v0.50.5 [skip ci]
+
+
+### Chores
+    - chore: update VSCode extension package.json to v0.50.5 [skip ci]
+    - chore: update npm package.json to v0.50.5 [skip ci]
+    - chore: release v0.50.5
+    - chore: update VSCode extension package.json to v0.50.4 [skip ci]
+    - chore: update npm package.json to v0.50.4 [skip ci]
 # [Version 0.50.5] - 2025-12-19
 
 
