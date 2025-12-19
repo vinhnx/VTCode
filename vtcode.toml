@@ -11,7 +11,7 @@ provider = "ollama"
 api_key_env = "OLLAMA_API_KEY"
 
 # Default model to use when no specific model is specified
-default_model = "nemotron-3-nano:30b-cloud"
+default_model = "gpt-oss:120b-cloud"
 
 # Visual theme for the terminal interface
 theme = "ciapre-dark"
@@ -542,15 +542,15 @@ llm_router_model = ""
 # Model mapping for different task types
 [router.models]
 # Model for simple queries
-simple = "nemotron-3-nano:30b-cloud"
+simple = "gpt-oss:120b-cloud"
 # Model for standard tasks
-standard = "nemotron-3-nano:30b-cloud"
+standard = "gpt-oss:120b-cloud"
 # Model for complex tasks
-complex = "nemotron-3-nano:30b-cloud"
+complex = "gpt-oss:120b-cloud"
 # Model for code generation heavy tasks
-codegen_heavy = "nemotron-3-nano:30b-cloud"
+codegen_heavy = "gpt-oss:120b-cloud"
 # Model for information retrieval heavy tasks
-retrieval_heavy = "nemotron-3-nano:30b-cloud"
+retrieval_heavy = "gpt-oss:120b-cloud"
 
 # Router budget settings (if applicable)
 [router.budgets]
