@@ -171,6 +171,8 @@ pub struct TurnLoopContext<'a> {
     pub token_counter: &'a Arc<RwLock<TokenCounter>>,
     pub tool_registry: &'a mut ToolRegistry,
     pub tools: &'a Arc<RwLock<Vec<uni::ToolDefinition>>>,
+    /// Cached tool definitions for efficient reuse (HP-3 optimization)
+    pub cached_tools: &'a Option<Arc<Vec<uni::ToolDefinition>>>,
     pub ctrl_c_state: &'a Arc<crate::agent::runloop::unified::state::CtrlCState>,
     pub ctrl_c_notify: &'a Arc<tokio::sync::Notify>,
     pub context_manager: &'a mut crate::agent::runloop::unified::context_manager::ContextManager,
@@ -250,6 +252,7 @@ pub async fn run_turn_loop(
                 working_history: &mut working_history,
                 tool_registry: ctx.tool_registry,
                 tools: ctx.tools,
+                cached_tools: ctx.cached_tools,
                 ctrl_c_state: ctx.ctrl_c_state,
                 ctrl_c_notify: ctx.ctrl_c_notify,
                 vt_cfg,

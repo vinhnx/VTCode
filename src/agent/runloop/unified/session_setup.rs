@@ -52,6 +52,8 @@ pub(crate) struct SessionState {
     pub provider_client: Box<dyn uni::LLMProvider>,
     pub tool_registry: ToolRegistry,
     pub tools: Arc<RwLock<Vec<uni::ToolDefinition>>>,
+    /// Cached tool definitions for efficient reuse across turns (HP-3 optimization)
+    pub cached_tools: Option<Arc<Vec<uni::ToolDefinition>>>,
     pub trim_config: ContextTrimConfig,
     pub conversation_history: Vec<uni::Message>,
     pub decision_ledger: Arc<RwLock<DecisionTracker>>,
@@ -365,11 +367,22 @@ pub(crate) async fn initialize_session(
     let tool_permission_cache = Arc::new(RwLock::new(ToolPermissionCache::new())); // Session-scoped
     let search_metrics = Arc::new(RwLock::new(SearchMetrics::new())); // Track search performance
 
+    // HP-3: Cache tool definitions once for efficient reuse across turns
+    let cached_tools = {
+        let guard = tools.read().await;
+        if guard.is_empty() {
+            None
+        } else {
+            Some(Arc::new(guard.clone()))
+        }
+    };
+
     Ok(SessionState {
         session_bootstrap,
         provider_client,
         tool_registry,
         tools,
+        cached_tools,
         trim_config,
         conversation_history,
         decision_ledger,

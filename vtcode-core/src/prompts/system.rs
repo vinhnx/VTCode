@@ -98,7 +98,7 @@ Use JSON named params for every tool. Prefer MCP first. Minimize tokens.
 - Exceptions only: brief snippets (1-3 lines) when essential to explain a specific change.
 
 ## Token Constants
-- Warning 75%, Alert 85%, Compact 90%, Checkpoint 95% (see token_budget.rs/context_optimizer.rs).
+- Thresholds defined in `core/token_budget_constants.rs`: THRESHOLD_WARNING, THRESHOLD_ALERT, THRESHOLD_COMPACT, THRESHOLD_CHECKPOINT
 "#;
 
 pub fn default_system_prompt() -> &'static str {
@@ -174,9 +174,19 @@ pub async fn compose_system_instruction_text(
     project_root: &Path,
     vtcode_config: Option<&crate::config::VTCodeConfig>,
 ) -> String {
-    // OPTIMIZATION: Pre-allocate with estimated capacity
+    // OPTIMIZATION: Pre-allocate with improved capacity estimation
+    // Read instruction hierarchy once upfront for accurate sizing
+    let home_path = home_dir();
+    let instruction_bundle = read_instruction_hierarchy(project_root, vtcode_config).await;
+
     let base_len = DEFAULT_SYSTEM_PROMPT.len();
-    let mut instruction = String::with_capacity(base_len + 2048);
+    let config_overhead = vtcode_config.map_or(0, |_| 1024);
+    let instruction_hierarchy_size = instruction_bundle.as_ref()
+        .map(|b| b.segments.iter().map(|s| s.contents.len() + 200).sum::<usize>())
+        .unwrap_or(0);
+
+    let estimated_capacity = base_len + config_overhead + instruction_hierarchy_size + 512;
+    let mut instruction = String::with_capacity(estimated_capacity);
     instruction.push_str(DEFAULT_SYSTEM_PROMPT);
 
     if let Some(cfg) = vtcode_config {
@@ -241,9 +251,7 @@ pub async fn compose_system_instruction_text(
         instruction.push_str("\n**IMPORTANT**: Respect these configuration policies. Commands not in the allow list will require user confirmation. Always inform users when actions require confirmation due to security policies.\n");
     }
 
-    let home_path = home_dir();
-
-    if let Some(bundle) = read_instruction_hierarchy(project_root, vtcode_config).await {
+    if let Some(bundle) = instruction_bundle {
         let home_ref = home_path.as_deref();
         instruction.push_str("\n\n## AGENTS.MD INSTRUCTION HIERARCHY\n");
         instruction.push_str(

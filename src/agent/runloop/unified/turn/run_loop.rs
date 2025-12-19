@@ -874,6 +874,7 @@ pub(crate) async fn run_single_agent_loop_unified(
             mut provider_client,
             mut tool_registry,
             tools,
+            cached_tools,
             trim_config,
             mut conversation_history,
             decision_ledger,
