@@ -890,8 +890,8 @@ pub(crate) async fn stream_and_render_response(
     };
 
     // Prevent agent from giving up with "Complex. Probably stop." or similar
-    if let Some(reasoning) = &response.reasoning {
-        if is_giving_up_reasoning(reasoning) {
+    if let Some(reasoning) = &response.reasoning
+        && is_giving_up_reasoning(reasoning) {
             #[cfg(debug_assertions)]
             eprintln!(
                 "Detected giving-up reasoning '{}', replacing with constructive reasoning",
@@ -908,7 +908,6 @@ pub(crate) async fn stream_and_render_response(
             // Replace with constructive reasoning that provides specific solutions
             response.reasoning = Some(get_constructive_reasoning(reasoning));
         }
-    }
 
     // Also ensure response content doesn't contain giving-up messages
     if let Some(content) = &response.content {

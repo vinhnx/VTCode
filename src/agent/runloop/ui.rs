@@ -268,7 +268,7 @@ pub(crate) fn render_session_banner(
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or("workspace");
-    let model_short = model_label.split('/').last().unwrap_or(model_label);
+    let model_short = model_label.split('/').next_back().unwrap_or(model_label);
     renderer.line(
         vtcode_core::utils::ansi::MessageStyle::Info,
         &format!("→ {} @ {}", model_short, workspace_name),

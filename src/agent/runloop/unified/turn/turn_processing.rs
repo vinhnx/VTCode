@@ -201,9 +201,9 @@ pub(crate) async fn execute_llm_request(
     };
 
     // Prevent agent from giving up with "Complex. Probably stop." or similar
-    if let Ok((response, _)) = &mut llm_result {
-        if let Some(reasoning) = &response.reasoning {
-            if is_giving_up_reasoning(reasoning) {
+    if let Ok((response, _)) = &mut llm_result
+        && let Some(reasoning) = &response.reasoning
+            && is_giving_up_reasoning(reasoning) {
                 #[cfg(debug_assertions)]
                 eprintln!(
                     "Detected giving-up reasoning '{}', replacing with constructive reasoning",
@@ -220,8 +220,6 @@ pub(crate) async fn execute_llm_request(
                 // Replace with constructive reasoning that encourages continuation
                 response.reasoning = Some(get_constructive_reasoning(reasoning));
             }
-        }
-    }
 
     #[cfg(debug_assertions)]
     {

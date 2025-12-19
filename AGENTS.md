@@ -69,6 +69,7 @@ cargo fmt                   # Format code
 
 -   For files >1000 lines, use `read_range=[start, end]`
 -   Don't: Read entire massive files; request sections
+-   **CRITICAL**: Read tool output includes line number prefixes (e.g., `1: code`, `746: line`). When using output in `edit_file`, **strip all line number prefixes** - they are for reference only, not part of actual file content
 
 **Cargo / Build Output**:
 
@@ -417,6 +418,7 @@ Self-Diagnostic and Error Recovery:
 - Exact replacements → edit_file (preferred for speed + precision)
 - Whole-file writes → write_file (when many changes)
 - Structured diffs → apply_patch (for complex changes)
+- **IMPORTANT**: When copying Read tool output for edit_file, remove line number prefixes (e.g., strip "746: " from line content) - they corrupt the actual code
 
 **Command Execution Strategy**:
 - Interactive work → PTY sessions (create_pty_session → send_pty_input → read_pty_session → close_pty_session)

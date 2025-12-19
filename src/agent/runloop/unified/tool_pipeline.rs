@@ -299,8 +299,8 @@ pub(crate) async fn run_tool_call(
     let outcome = if is_read_only_tool {
         if let ToolExecutionStatus::Success { output, .. } = &outcome {
             // Check if this is actually a loop detection error wrapped as success
-            if let Some(loop_detected) = output.get("loop_detected").and_then(|v| v.as_bool()) {
-                if loop_detected {
+            if let Some(loop_detected) = output.get("loop_detected").and_then(|v| v.as_bool())
+                && loop_detected {
                     // Tool was blocked due to loop detection - try to get cached result
                     let mut cache = ctx.tool_result_cache.write().await;
                     let cache_key = vtcode_core::tools::result_cache::ToolCacheKey::from_json(
@@ -325,7 +325,6 @@ pub(crate) async fn run_tool_call(
                         ));
                     }
                 }
-            }
         }
         outcome
     } else {
@@ -702,8 +701,8 @@ fn backoff_for_attempt(attempt: usize) -> Duration {
 /// Process the output from a tool execution and convert it to a ToolExecutionStatus
 fn process_tool_output(output: Value) -> ToolExecutionStatus {
     // Check for loop detection first - this is a critical signal to stop retrying
-    if let Some(loop_detected) = output.get("loop_detected").and_then(|v| v.as_bool()) {
-        if loop_detected {
+    if let Some(loop_detected) = output.get("loop_detected").and_then(|v| v.as_bool())
+        && loop_detected {
             let tool_name = output
                 .get("tool")
                 .and_then(|v| v.as_str())
@@ -733,7 +732,6 @@ fn process_tool_output(output: Value) -> ToolExecutionStatus {
                 error: anyhow::anyhow!(clear_error_msg),
             };
         }
-    }
 
     // Check if the output contains an error object
     if let Some(error_value) = output.get("error") {

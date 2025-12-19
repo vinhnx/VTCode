@@ -253,7 +253,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 }
                 session.mark_dirty();
             }
-            None
+            None // Right arrow never triggers any event, including editor launch
         }
         KeyCode::Home => {
             if session.input_enabled {

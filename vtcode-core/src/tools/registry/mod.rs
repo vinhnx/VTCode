@@ -1399,17 +1399,15 @@ impl ToolRegistry {
         let context_payload = context_snapshot.to_json();
 
         // Validate arguments against schema if available
-        if let Some(registration) = self.inventory.registration_for(tool_name) {
-            if let Some(schema) = registration.parameter_schema() {
-                if let Err(errors) = jsonschema::validate(schema, args) {
+        if let Some(registration) = self.inventory.registration_for(tool_name)
+            && let Some(schema) = registration.parameter_schema()
+                && let Err(errors) = jsonschema::validate(schema, args) {
                     return Err(anyhow::anyhow!(
                         "Invalid arguments for tool '{}': {}",
                         tool_name,
                         errors
                     ));
                 }
-            }
-        }
 
         let timeout_category = self.timeout_category_for(tool_name).await;
 

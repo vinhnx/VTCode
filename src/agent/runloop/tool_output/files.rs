@@ -5,9 +5,9 @@ use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::styles::{GitStyles, LsStyles, select_line_style};
 
-/// Constants for line and content limits
-const MAX_DIFF_LINES: usize = 500;
-const MAX_DIFF_LINE_LENGTH: usize = 200;
+/// Constants for line and content limits (compact display)
+const MAX_DIFF_LINES: usize = 30; // Reduced for compact view
+const MAX_DIFF_LINE_LENGTH: usize = 100; // Reduced for compact view
 const MAX_DISPLAYED_FILES: usize = 100; // Limit displayed files to reduce clutter
 
 /// Safely truncate text to a maximum character length, respecting UTF-8 boundaries
@@ -42,15 +42,15 @@ pub(crate) fn render_write_file_preview(
     git_styles: &GitStyles,
     ls_styles: &LsStyles,
 ) -> Result<()> {
-    // Show basic metadata
+    // Show basic metadata (compact format)
     if get_bool(payload, "created") {
-        renderer.line(MessageStyle::Response, "  File created")?;
+        renderer.line(MessageStyle::Response, "File created")?;
     }
 
     if let Some(encoding) = get_string(payload, "encoding") {
         renderer.line(
             MessageStyle::Info,
-            &format!("  {:16} {}", "encoding", encoding),
+            &format!("encoding: {}", encoding),
         )?;
     }
 
@@ -65,10 +65,10 @@ pub(crate) fn render_write_file_preview(
         if let Some(detail) = get_string(diff_value, "detail") {
             renderer.line(
                 MessageStyle::Info,
-                &format!("  diff: {} ({})", reason, detail),
+                &format!("diff: {} ({})", reason, detail),
             )?;
         } else {
-            renderer.line(MessageStyle::Info, &format!("  diff: {}", reason))?;
+            renderer.line(MessageStyle::Info, &format!("diff: {}", reason))?;
         }
         return Ok(());
     }
@@ -76,12 +76,12 @@ pub(crate) fn render_write_file_preview(
     let diff_content = get_string(diff_value, "content").unwrap_or("");
 
     if diff_content.is_empty() && get_bool(diff_value, "is_empty") {
-        renderer.line(MessageStyle::Info, "  (no changes)")?;
+        renderer.line(MessageStyle::Info, "(no changes)")?;
         return Ok(());
     }
 
     if !diff_content.is_empty() {
-        renderer.line(MessageStyle::Info, "[diff]")?;
+        renderer.line(MessageStyle::Info, "▼ diff")?;
         render_diff_content(renderer, diff_content, git_styles, ls_styles)?;
     }
 
@@ -89,10 +89,10 @@ pub(crate) fn render_write_file_preview(
         if let Some(omitted) = get_u64(diff_value, "omitted_line_count") {
             renderer.line(
                 MessageStyle::Info,
-                &format!("  + {} more lines (use read_file for full view)", omitted),
+                &format!("… +{} lines (use read_file for full view)", omitted),
             )?;
         } else {
-            renderer.line(MessageStyle::Info, "  ... diff truncated")?;
+            renderer.line(MessageStyle::Info, "… diff truncated")?;
         }
     }
 
@@ -282,8 +282,8 @@ pub(crate) fn render_read_file_output(renderer: &mut AnsiRenderer, val: &Value) 
     }
 
     // Suppress raw content echo to keep token usage low; only report summary
-    if let Some(content) = get_string(val, "content") {
-        if !content.is_empty() {
+    if let Some(content) = get_string(val, "content")
+        && !content.is_empty() {
             let line_count = content.lines().count();
             let byte_count = content.len();
             renderer.line(
@@ -294,12 +294,11 @@ pub(crate) fn render_read_file_output(renderer: &mut AnsiRenderer, val: &Value) 
                 ),
             )?;
         }
-    }
 
     Ok(())
 }
 
-/// Render diff content lines with proper truncation and styling
+/// Render diff content lines with proper truncation and styling (compact format)
 fn render_diff_content(
     renderer: &mut AnsiRenderer,
     diff_content: &str,
@@ -307,29 +306,49 @@ fn render_diff_content(
     ls_styles: &LsStyles,
 ) -> Result<()> {
     let total_lines = diff_content.lines().count();
+    let mut added_count = 0;
+    let mut removed_count = 0;
+    let mut lines_to_render = Vec::new();
 
+    // Collect lines to render in a single pass
     for (line_count, line) in diff_content.lines().enumerate() {
         if line_count >= MAX_DIFF_LINES {
-            renderer.line(
-                MessageStyle::Info,
-                &format!(
-                    "  ... ({} more lines truncated, view full diff in tool logs)",
-                    total_lines - MAX_DIFF_LINES
-                ),
-            )?;
+            lines_to_render.push((true, format!(
+                "… ({} more lines, view full diff in logs)",
+                total_lines - MAX_DIFF_LINES
+            )));
             break;
         }
 
-        let truncated = truncate_text_safe(line, MAX_DIFF_LINE_LENGTH);
-        let display = format!("  {truncated}");
-
-        if let Some(style) =
-            select_line_style(Some(tools::WRITE_FILE), truncated, git_styles, ls_styles)
-        {
-            renderer.line_with_style(style, &display)?;
-        } else {
-            renderer.line(MessageStyle::Response, &display)?;
+        let trimmed = line.trim_start();
+        if trimmed.starts_with('+') && !trimmed.starts_with("+++") {
+            added_count += 1;
+        } else if trimmed.starts_with('-') && !trimmed.starts_with("---") {
+            removed_count += 1;
         }
+
+        let truncated = truncate_text_safe(line, MAX_DIFF_LINE_LENGTH);
+        lines_to_render.push((false, truncated.to_string()));
+    }
+
+    // Render all lines compactly (minimal padding)
+    for (is_truncation, content) in lines_to_render {
+        if is_truncation {
+            renderer.line(MessageStyle::Info, &format!("…{}", content))?;
+        } else {
+            if let Some(style) =
+                select_line_style(Some(tools::WRITE_FILE), &content, git_styles, ls_styles)
+            {
+                renderer.line_with_style(style, &content)?;
+            } else {
+                renderer.line(MessageStyle::Response, &content)?;
+            }
+        }
+    }
+
+    // Show summary stats if we rendered changes (compact format)
+    if added_count + removed_count > 0 {
+        renderer.line(MessageStyle::Info, &format!("▸ +{} -{}", added_count, removed_count))?;
     }
 
     Ok(())

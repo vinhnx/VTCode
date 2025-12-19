@@ -39,7 +39,7 @@ pub async fn handle_skills_validate_all(options: &SkillsCommandOptions) -> Resul
         }
         Err(e) => {
             println!(" Failed to generate validation report: {}", e);
-            return Err(e.into());
+            return Err(e);
         }
     }
 
@@ -246,11 +246,10 @@ pub async fn handle_skills_info(options: &SkillsCommandOptions, name: &str) -> R
             if let Some(when_to_use) = &skill.manifest.when_to_use {
                 println!("When to use: {}", when_to_use);
             }
-            if let Some(allowed_tools) = &skill.manifest.allowed_tools {
-                if !allowed_tools.is_empty() {
+            if let Some(allowed_tools) = &skill.manifest.allowed_tools
+                && !allowed_tools.is_empty() {
                     println!("Allowed tools: {}", allowed_tools.join(", "));
                 }
-            }
             if let Some(disable) = skill.manifest.disable_model_invocation {
                 println!("Disable model invocation: {}", disable);
             }
