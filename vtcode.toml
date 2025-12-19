@@ -224,7 +224,7 @@ default_policy = "prompt"
 # Maximum number of tool loops allowed per turn (prevents infinite loops)
 # Higher values allow more complex operations but risk performance issues
 # Recommended: 20 for most tasks, 50 for complex multi-step workflows
-max_tool_loops = 20
+max_tool_loops = 50
 
 # Maximum number of repeated identical tool calls (prevents stuck loops)
 max_repeated_tool_calls = 2
@@ -497,8 +497,8 @@ max_structural_depth = 3
 
 # Number of recent tool responses to keep when tool-aware retention is enabled
 preserve_recent_tools = 5
-max_context_tokens = 90000
-trim_to_percent = 80
+max_context_tokens = 200000
+trim_to_percent = 90
 preserve_recent_turns = 12
 
 # Token-based truncation for tool outputs before model input
@@ -531,7 +531,7 @@ detailed_tracking = false
 # AI model routing - Intelligent model selection
 [router]
 # Enable intelligent model routing
-enabled = true
+enabled = false
 
 # Enable heuristic-based model selection
 heuristic_classification = true
@@ -612,7 +612,7 @@ bottleneck_tracing = false
 [syntax_highlighting]
 # Enable syntax highlighting for code in tool output
 # Set to false to remove ANSI codes from pty_cmd output
-enabled = false
+enabled = true
 
 # Theme for syntax highlighting
 theme = "base16-ocean.dark"
@@ -624,14 +624,7 @@ cache_themes = true
 max_file_size_mb = 10
 
 # Programming languages to enable syntax highlighting for
-enabled_languages = [
-    "rust",
-    "python",
-    "javascript",
-    "typescript",
-    "go",
-    "java",
-]
+enabled_languages = ["rust", "python", "javascript", "typescript", "go", "java"]
 
 # Timeout for syntax highlighting operations (milliseconds)
 highlight_timeout_ms = 1000
@@ -674,7 +667,7 @@ strategy = "bandit"
 # Prompt caching - Cache model responses for efficiency
 [prompt_cache]
 # Enable prompt caching (reduces API calls for repeated prompts)
-enabled = false
+enabled = true
 
 # Directory for cache storage
 cache_dir = "~/.vtcode/cache/prompts"

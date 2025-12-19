@@ -28,7 +28,7 @@
   ],
   "policies": {
     "analyze_agent": "allow",
-    "apply_patch": "prompt",
+    "apply_patch": "allow",
     "close_pty_session": "allow",
     "create_file": "allow",
     "create_pty_session": "allow",
@@ -46,7 +46,7 @@
     "search_tools": "allow",
     "send_pty_input": "allow",
     "update_plan": "allow",
-    "web_fetch": "prompt",
+    "web_fetch": "allow",
     "write_file": "allow",
     "search_replace": "prompt",
     "skill": "prompt",
@@ -56,7 +56,9 @@
     "mcp_time_get_current_time": "prompt",
     "mcp_convert_time": "prompt",
     "mcp_time_convert_time": "prompt",
-    "assistant<|channel|>commentary": "allow"
+    "assistant<|channel|>commentary": "allow",
+    "": "allow",
+    "assistant<|channel|>analysis": "allow"
   },
   "constraints": {},
   "mcp": {
