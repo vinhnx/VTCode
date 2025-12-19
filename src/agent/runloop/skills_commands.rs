@@ -84,11 +84,10 @@ pub fn parse_skill_command(input: &str) -> Result<Option<SkillCommandAction>> {
                 if name.contains("--path") {
                     let name_parts: Vec<&str> = name.split_whitespace().collect();
                     name_str = name_parts[0].to_string();
-                    if let Some(idx) = name_parts.iter().position(|&x| x == "--path") {
-                        if let Some(path_str) = name_parts.get(idx + 1) {
+                    if let Some(idx) = name_parts.iter().position(|&x| x == "--path")
+                        && let Some(path_str) = name_parts.get(idx + 1) {
                             path = Some(PathBuf::from(path_str));
                         }
-                    }
                 }
 
                 Ok(Some(SkillCommandAction::Create {
@@ -138,7 +137,7 @@ pub fn parse_skill_command(input: &str) -> Result<Option<SkillCommandAction>> {
         "use" => {
             if let Some(rest_str) = parts.get(1) {
                 let use_parts: Vec<&str> = rest_str.splitn(2, ' ').collect();
-                if let Some(name) = use_parts.get(0) {
+                if let Some(name) = use_parts.first() {
                     let input = use_parts.get(1).map(|s| s.to_string()).unwrap_or_default();
                     Ok(Some(SkillCommandAction::Use {
                         name: name.to_string(),
@@ -385,11 +384,10 @@ pub async fn detect_mentioned_skills(
     // Load the mentioned skills
     let mut skills = Vec::new();
     for name in mentioned_names {
-        if let Ok(enhanced_skill) = loader.get_skill(&name).await {
-            if let vtcode_core::skills::loader::EnhancedSkill::Traditional(skill) = enhanced_skill {
+        if let Ok(enhanced_skill) = loader.get_skill(&name).await
+            && let vtcode_core::skills::loader::EnhancedSkill::Traditional(skill) = enhanced_skill {
                 skills.push((name.clone(), skill));
             }
-        }
     }
 
     Ok(skills)

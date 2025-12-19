@@ -1999,8 +1999,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                 if let Ok(outcome) = context_manager
                     .adaptive_trim(working_history, None, step_count)
                     .await
-                {
-                    if outcome.is_trimmed() {
+                    && outcome.is_trimmed() {
                         let note = format!(
                             "Context trimmed ({:?}, removed {}).",
                             outcome.phase, outcome.removed_messages
@@ -2023,7 +2022,6 @@ pub(crate) async fn run_single_agent_loop_unified(
                             },
                         );
                     }
-                }
 
                 // Turn balancer: cap low-signal churn and request compaction if looping
                 if should_trigger_turn_balancer(

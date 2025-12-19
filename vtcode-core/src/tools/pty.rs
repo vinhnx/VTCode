@@ -1002,16 +1002,25 @@ impl PtyManager {
         let result = tokio::task::spawn_blocking(move || -> Result<PtyCommandResult> {
             let timeout_duration = Duration::from_millis(timeout);
 
-            // Always use login shell for command execution to ensure user's PATH and environment
-            // is properly initialized from their shell configuration files (~/.bashrc, ~/.zshrc, etc)
-            let shell = resolve_fallback_shell();
-            let full_command = join(std::iter::once(program.clone()).chain(args.iter().cloned()));
-            let (exec_program, exec_args, display_program, _use_shell_wrapper) = (
-                shell.clone(),
-                vec!["-lc".to_owned(), full_command.clone()],
-                program.clone(),
-                true,
-            );
+            // Use login shell for command execution to ensure user's PATH and environment
+            // is properly initialized from their shell configuration files (~/.bashrc, ~/.zshrc, etc).
+            // However, we avoid double-wrapping if the command is already a shell invocation.
+            let (exec_program, exec_args, display_program, _use_shell_wrapper) =
+                if is_shell_program(&program) && args.iter().any(|arg| arg == "-c" || arg == "/C") {
+                    // Already a shell command, don't wrap again
+                    (program.clone(), args.clone(), program.clone(), false)
+                } else {
+                    let shell = resolve_fallback_shell();
+                    let full_command =
+                        join(std::iter::once(program.clone()).chain(args.iter().cloned()));
+                    (
+                        shell.clone(),
+                        vec!["-lc".to_owned(), full_command.clone()],
+                        program.clone(),
+                        true,
+                    )
+                };
+
             let mut builder = CommandBuilder::new(exec_program.clone());
             for arg in &exec_args {
                 builder.arg(arg);
@@ -1243,28 +1252,33 @@ impl PtyManager {
         let args = command_parts;
         let extra_paths = self.extra_paths.lock().clone();
 
-        // Always use login shell for command execution to ensure user's PATH and environment
-        // is properly initialized from their shell configuration files (~/.bashrc, ~/.zshrc, etc)
-        // The '-l' flag forces login shell mode which sources all initialization files
-        // The '-c' flag executes the command
-        // This combination ensures development tools like cargo, npm, etc. are in PATH
-        let shell = resolve_fallback_shell();
-        let full_command = join(std::iter::once(program.clone()).chain(args.iter().cloned()));
+        // Use login shell for command execution to ensure user's PATH and environment
+        // is properly initialized from their shell configuration files (~/.bashrc, ~/.zshrc, etc).
+        // However, we avoid double-wrapping if the command is already a shell invocation.
+        let (exec_program, exec_args, display_program) =
+            if is_shell_program(&program) && args.iter().any(|arg| arg == "-c" || arg == "/C") {
+                // Already a shell command, don't wrap again
+                (program.clone(), args.clone(), program.clone())
+            } else {
+                let shell = resolve_fallback_shell();
+                let full_command =
+                    join(std::iter::once(program.clone()).chain(args.iter().cloned()));
 
-        // Verify we have a valid command string
-        if full_command.is_empty() {
-            return Err(anyhow!(
-                "Failed to construct command string from program '{}' and args {:?}",
-                program,
-                args
-            ));
-        }
+                // Verify we have a valid command string
+                if full_command.is_empty() {
+                    return Err(anyhow!(
+                        "Failed to construct command string from program '{}' and args {:?}",
+                        program,
+                        args
+                    ));
+                }
 
-        let (exec_program, exec_args, display_program) = (
-            shell.clone(),
-            vec!["-lc".to_owned(), full_command.clone()],
-            program.clone(),
-        );
+                (
+                    shell.clone(),
+                    vec!["-lc".to_owned(), full_command.clone()],
+                    program.clone(),
+                )
+            };
 
         let pty_system = native_pty_system();
         let pair = pty_system
@@ -1641,6 +1655,21 @@ fn set_command_environment(
 
     // For Rust/Cargo, disable colors at the source
     builder.env("CARGO_TERM_COLOR", "never");
+
+    // Suppress macOS malloc debugging junk that can pollute PTY output
+    // This is especially common when running in login shells (-l)
+    builder.env_remove("MallocStackLogging");
+    builder.env_remove("MallocStackLoggingNoCompact");
+    builder.env_remove("MallocStackLoggingDirectory");
+    builder.env_remove("MallocErrorAbort");
+    builder.env_remove("MallocCheckHeapStart");
+    builder.env_remove("MallocCheckHeapEach");
+    builder.env_remove("MallocCheckHeapSleep");
+    builder.env_remove("MallocCheckHeapAbort");
+    builder.env_remove("MallocGuardEdges");
+    builder.env_remove("MallocScribble");
+    builder.env_remove("MallocDoNotProtectSentinel");
+    builder.env_remove("MallocQuiet");
 
     if is_shell_program(program) {
         builder.env("SHELL", program);

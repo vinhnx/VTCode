@@ -272,7 +272,7 @@ impl ContextManager {
         // Track efficiency after any action
         if outcome.is_trimmed() {
             self.record_efficiency_after_trim(history, &outcome);
-            if let Some(ledger) = pruning_ledger.as_deref_mut() {
+            if let Some(ledger) = pruning_ledger {
                 ledger.record_pruning_round();
             }
         }

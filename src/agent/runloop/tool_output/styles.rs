@@ -139,17 +139,24 @@ pub(crate) fn select_line_style(
         tool_name
     {
         let trimmed = line.trim_start();
+        // Improved diff header detection: covers diff markers, index lines, hunk headers, and file mode changes
         if trimmed.starts_with("diff --")
             || trimmed.starts_with("index ")
             || trimmed.starts_with("@@")
+            || trimmed.starts_with("---")
+            || trimmed.starts_with("+++")
+            || trimmed.starts_with("new file mode")
+            || trimmed.starts_with("deleted file mode")
         {
             return git.header;
         }
 
-        if trimmed.starts_with('+') {
+        // Enhanced addition/removal detection: +++ and --- are headers (already handled above)
+        // Style remaining + and - prefixed lines as additions/removals
+        if trimmed.starts_with('+') && !trimmed.starts_with("+++") {
             return git.add;
         }
-        if trimmed.starts_with('-') {
+        if trimmed.starts_with('-') && !trimmed.starts_with("---") {
             return git.remove;
         }
         if let Some(style) = ls.style_for_line(trimmed) {

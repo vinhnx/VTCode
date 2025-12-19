@@ -849,8 +849,7 @@ impl SkillValidator {
         // Check for script security issues
         if let Some(scripts_check) = checks.get("scripts_valid")
             && scripts_check.status == CheckStatus::Warning
-        {
-            if let Some(details) = &scripts_check.details
+            && let Some(details) = &scripts_check.details
                 && let Some(issues) = details.as_array()
             {
                 for issue in issues {
@@ -869,7 +868,6 @@ impl SkillValidator {
                     }
                 }
             }
-        }
 
         let safe_to_execute = security_level != SecurityLevel::HighRisk;
 
@@ -915,12 +913,11 @@ impl SkillValidator {
         }
 
         // Performance recommendations
-        if let Some(loading_check) = checks.get("skill_file_valid") {
-            if loading_check.execution_time_ms > 1000 {
+        if let Some(loading_check) = checks.get("skill_file_valid")
+            && loading_check.execution_time_ms > 1000 {
                 recommendations
                     .push("Consider optimizing skill file parsing performance".to_string());
             }
-        }
 
         recommendations
     }

@@ -2035,6 +2035,9 @@ This skill generates files. After execution, file locations will be automaticall
         let result = self.execute_single_pty_attempt(&setup, 0).await?;
 
         let mut capture = result.1;
+        // Strip ANSI escape codes and filter junk output to provide clean text to the agent
+        capture.output = filter_pty_output(&strip_ansi(&capture.output));
+
         let snapshot = result.2;
         let mut truncated = false;
 
@@ -2544,7 +2547,7 @@ This skill generates files. After execution, file locations will be automaticall
             Value::Bool(input.append_newline),
         );
         if let Some(output) = output {
-            response.insert("output".to_string(), Value::String(strip_ansi(&output)));
+            response.insert("output".to_string(), Value::String(filter_pty_output(&strip_ansi(&output))));
         }
 
         // Add the input that was sent as stdin (if it's valid UTF-8)
@@ -2628,6 +2631,7 @@ This skill generates files. After execution, file locations will be automaticall
 
         // Apply max_tokens truncation if specified
         let processed_output = if let Some(output) = output {
+            let output = filter_pty_output(&strip_ansi(&output));
             if let Some(max_tokens) = view_args.max_tokens {
                 if max_tokens > 0 {
                     use crate::core::agent::runloop::token_trunc::truncate_content_by_tokens;
@@ -2752,8 +2756,26 @@ fn parse_command_parts(
 ) -> Result<Vec<String>> {
     let mut parts = match payload.get("command") {
         Some(Value::String(command)) => {
-            // Use the same tokenization logic as terminal commands to handle "cargo fmt" correctly
-            tokenize_command_string(command, None)?
+            let trimmed = command.trim();
+            if trimmed.starts_with('[') && trimmed.ends_with(']') {
+                // Robustness: if the LLM passed a string that looks like a JSON array, try to parse it.
+                // This handles cases where models get confused between string and array schemas.
+                if let Ok(Value::Array(values)) = serde_json::from_str(trimmed) {
+                    values
+                        .iter()
+                        .map(|value| {
+                            value
+                                .as_str()
+                                .map(|part| part.to_string())
+                                .ok_or_else(|| anyhow!("command array must contain only strings"))
+                        })
+                        .collect::<Result<Vec<_>>>()?
+                } else {
+                    tokenize_command_string(command, None)?
+                }
+            } else {
+                tokenize_command_string(command, None)?
+            }
         }
         Some(Value::Array(values)) => values
             .iter()

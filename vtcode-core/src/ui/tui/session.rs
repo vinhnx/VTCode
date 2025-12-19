@@ -1148,9 +1148,11 @@ mod tests {
         let mut session = session_with_input(text, 0);
 
         let event = KeyEvent::new(KeyCode::Right, KeyModifiers::SUPER);
-        session.process_key(event);
+        let result = session.process_key(event);
 
         assert_eq!(session.cursor(), text.len());
+        // Ensure Command+Right does NOT launch editor
+        assert!(!matches!(result, Some(InlineEvent::LaunchEditor)));
     }
 
     #[test]
@@ -1201,6 +1203,43 @@ mod tests {
 
         // Should not launch editor when both Control and Super (Cmd) are pressed
         assert!(!matches!(result, Some(InlineEvent::LaunchEditor)));
+    }
+
+    #[test]
+    fn arrow_keys_never_launch_editor() {
+        let text = "hello world";
+        let mut session = session_with_input(text, 0);
+
+        // Test Right arrow with all possible modifier combinations
+        for modifiers in [
+            KeyModifiers::empty(),
+            KeyModifiers::CONTROL,
+            KeyModifiers::SHIFT,
+            KeyModifiers::ALT,
+            KeyModifiers::SUPER,
+            KeyModifiers::META,
+            KeyModifiers::CONTROL | KeyModifiers::SHIFT,
+            KeyModifiers::CONTROL | KeyModifiers::SUPER,
+        ] {
+            let event = KeyEvent::new(KeyCode::Right, modifiers);
+            let result = session.process_key(event);
+            assert!(
+                !matches!(result, Some(InlineEvent::LaunchEditor)),
+                "Right arrow with modifiers {:?} should not launch editor",
+                modifiers
+            );
+        }
+
+        // Test other arrow keys for safety
+        for key_code in [KeyCode::Left, KeyCode::Up, KeyCode::Down] {
+            let event = KeyEvent::new(key_code, KeyModifiers::SUPER);
+            let result = session.process_key(event);
+            assert!(
+                !matches!(result, Some(InlineEvent::LaunchEditor)),
+                "{:?} with SUPER should not launch editor",
+                key_code
+            );
+        }
     }
 
     #[test]

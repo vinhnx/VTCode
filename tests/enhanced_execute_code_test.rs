@@ -12,7 +12,7 @@ async fn test_execute_code_with_file_tracking() {
     let workspace_root = temp_dir.path().to_path_buf();
 
     // Create a ToolRegistry
-    let mut registry = ToolRegistry::new(workspace_root.clone()).await;
+    let mut registry = ToolRegistry::new(workspace_root.clone());
 
     // Test case 1: Generate a PDF file and verify tracking
     let python_code = r#"
@@ -59,7 +59,7 @@ print('PDF generated successfully')
 async fn test_execute_code_without_file_tracking() {
     let temp_dir = TempDir::new().unwrap();
     let workspace_root = temp_dir.path().to_path_buf();
-    let mut registry = ToolRegistry::new(workspace_root).await;
+    let mut registry = ToolRegistry::new(workspace_root);
 
     let python_code = r#"
 print('Hello World')
@@ -97,7 +97,7 @@ print(f'Result: {x}')
 async fn test_multiple_file_generation() {
     let temp_dir = TempDir::new().unwrap();
     let workspace_root = temp_dir.path().to_path_buf();
-    let mut registry = ToolRegistry::new(workspace_root).await;
+    let mut registry = ToolRegistry::new(workspace_root);
 
     let python_code = r#"
 # Generate multiple files
@@ -168,7 +168,7 @@ raise Exception("Intentional error")
         "track_files": true
     });
 
-    let result = registry.execute("execute_code", args).await.unwrap();
+    let result = registry.execute_tool("execute_code", args).await.unwrap();
 
     // Should still include file tracking info (likely empty since no files generated)
     assert!(result.get("generated_files").is_some());
@@ -209,7 +209,7 @@ print('PDF created: hello_world.pdf')
         "track_files": false  // Old way: no tracking
     });
 
-    let exec_result = registry.execute("execute_code", exec_args).await.unwrap();
+    let exec_result = registry.execute_tool("execute_code", exec_args).await.unwrap();
     println!(
         "Execution result: {}",
         serde_json::to_string_pretty(&exec_result).unwrap()
@@ -227,7 +227,7 @@ print(f'Verification: {file_path} exists={exists}')
         "timeout_secs": 5
     });
 
-    let verify_result = registry.execute("execute_code", verify_args).await.unwrap();
+    let verify_result = registry.execute_tool("execute_code", verify_args).await.unwrap();
     println!(
         "Verification result: {}\n",
         serde_json::to_string_pretty(&verify_result).unwrap()
@@ -244,7 +244,7 @@ print(f'Verification: {file_path} exists={exists}')
     });
 
     let exec_result_new = registry
-        .execute("execute_code", exec_args_new)
+        .execute_tool("execute_code", exec_args_new)
         .await
         .unwrap();
     println!(

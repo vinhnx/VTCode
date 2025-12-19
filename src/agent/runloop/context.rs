@@ -70,18 +70,15 @@ impl ContextTrimConfig {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[allow(dead_code)]
+#[derive(Default)]
 pub(crate) enum TrimPhase {
+    #[default]
     None,
     WarningToolPrune,
     AlertSemantic,
     WindowEnforced,
 }
 
-impl Default for TrimPhase {
-    fn default() -> Self {
-        TrimPhase::None
-    }
-}
 
 /// Result of a context trimming operation
 #[derive(Default, Clone, Copy, Debug)]
