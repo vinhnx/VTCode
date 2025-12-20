@@ -44,7 +44,7 @@ use utils::normalize_tool_output;
 use crate::config::constants::defaults;
 use crate::config::constants::tools;
 use crate::config::{CommandsConfig, PtyConfig, TimeoutsConfig, ToolsConfig};
-use crate::tool_policy::{ToolPolicy, ToolPolicyManager};
+use crate::tool_policy::{ToolExecutionDecision, ToolPolicy, ToolPolicyManager};
 use crate::tools::file_ops::FileOpsTool;
 use crate::tools::grep_file::GrepSearchManager;
 use crate::tools::mcp::build_mcp_registration;
@@ -1612,12 +1612,25 @@ impl ToolRegistry {
         }
 
         let skip_policy_prompt = self.policy_gateway.take_preapproved(tool_name);
+        
+        let decision = if skip_policy_prompt {
+            ToolExecutionDecision::Allowed
+        } else {
+            self.policy_gateway.should_execute_tool(tool_name).await?
+        };
 
-        if !skip_policy_prompt && !self.policy_gateway.should_execute_tool(tool_name).await? {
+        if !decision.is_allowed() {
+            let error_msg = match decision {
+                ToolExecutionDecision::DeniedWithFeedback(feedback) => {
+                    format!("Tool '{}' denied by user: {}", display_name, feedback)
+                }
+                _ => format!("Tool '{}' execution denied by policy", display_name),
+            };
+
             let error = ToolExecutionError::new(
                 tool_name_owned.clone(),
                 ToolErrorType::PolicyViolation,
-                format!("Tool '{}' execution denied by policy", display_name),
+                error_msg.clone(),
             );
 
             self.execution_history
@@ -1627,7 +1640,7 @@ impl ToolRegistry {
                     false,
                     None,
                     args_for_recording,
-                    "Tool execution denied by policy".to_string(),
+                    error_msg,
                     context_snapshot.clone(),
                     timeout_category_label.clone(),
                     base_timeout_ms,

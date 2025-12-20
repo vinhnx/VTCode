@@ -6,11 +6,7 @@
 
 use crate::utils::error_messages::ERR_CREATE_POLICY_DIR;
 use anyhow::{Context, Result};
-use dialoguer::{
-    Confirm,
-    console::{Color as ConsoleColor, Style as ConsoleStyle, style},
-    theme::ColorfulTheme,
-};
+use dialoguer::console::style;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -18,6 +14,7 @@ use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 
 use crate::ui::theme;
+use crate::ui::user_confirmation::{ToolConfirmationResult, UserConfirmation};
 use crate::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use crate::config::constants::tools;
@@ -53,6 +50,20 @@ pub enum ToolPolicy {
     Prompt,
     /// Never allow tool execution
     Deny,
+}
+
+/// Decision result for tool execution
+#[derive(Debug, Clone, PartialEq)]
+pub enum ToolExecutionDecision {
+    Allowed,
+    Denied,
+    DeniedWithFeedback(String),
+}
+
+impl ToolExecutionDecision {
+    pub fn is_allowed(&self) -> bool {
+        matches!(self, Self::Allowed)
+    }
 }
 
 /// Tool policy configuration stored in ~/.vtcode/tool-policy.json
@@ -818,16 +829,16 @@ impl ToolPolicyManager {
     }
 
     /// Check if tool should be executed based on policy
-    pub async fn should_execute_tool(&mut self, tool_name: &str) -> Result<bool> {
+    pub async fn should_execute_tool(&mut self, tool_name: &str) -> Result<ToolExecutionDecision> {
         if let Some((provider, tool)) = parse_mcp_policy_key(tool_name) {
             return match self.get_mcp_tool_policy(&provider, &tool) {
-                ToolPolicy::Allow => Ok(true),
-                ToolPolicy::Deny => Ok(false),
+                ToolPolicy::Allow => Ok(ToolExecutionDecision::Allowed),
+                ToolPolicy::Deny => Ok(ToolExecutionDecision::Denied),
                 ToolPolicy::Prompt => {
                     if ToolPolicyManager::is_auto_allow_tool(tool_name) {
                         self.set_mcp_tool_policy(&provider, &tool, ToolPolicy::Allow)
                             .await?;
-                        Ok(true)
+                        Ok(ToolExecutionDecision::Allowed)
                     } else {
                         self.prompt_user_for_tool(tool_name).await
                     }
@@ -838,16 +849,15 @@ impl ToolPolicyManager {
         let canonical = canonical_tool_name(tool_name);
 
         match self.get_policy(canonical.as_ref()) {
-            ToolPolicy::Allow => Ok(true),
-            ToolPolicy::Deny => Ok(false),
+            ToolPolicy::Allow => Ok(ToolExecutionDecision::Allowed),
+            ToolPolicy::Deny => Ok(ToolExecutionDecision::Denied),
             ToolPolicy::Prompt => {
                 let canonical_name = canonical.as_ref();
                 if AUTO_ALLOW_TOOLS.contains(&canonical_name) {
                     self.set_policy(canonical_name, ToolPolicy::Allow).await?;
-                    return Ok(true);
+                    return Ok(ToolExecutionDecision::Allowed);
                 }
-                let should_execute = self.prompt_user_for_tool(canonical_name).await?;
-                Ok(should_execute)
+                self.prompt_user_for_tool(canonical_name).await
             }
         }
     }
@@ -865,7 +875,7 @@ impl ToolPolicyManager {
     /// In TUI mode, tool permissions should be handled by `ensure_tool_permission()`
     /// in `src/agent/runloop/unified/tool_routing.rs` which uses TUI modals.
     /// The preapproval system should prevent this function from being called.
-    async fn prompt_user_for_tool(&mut self, tool_name: &str) -> Result<bool> {
+    async fn prompt_user_for_tool(&mut self, tool_name: &str) -> Result<ToolExecutionDecision> {
         // SAFETY CHECK: Detect if we're in TUI mode by checking for RATATUI environment
         // If this function is called during TUI mode, it's a bug in the preapproval system
         if std::env::var("VTCODE_TUI_MODE").is_ok() {
@@ -893,96 +903,27 @@ impl ToolPolicyManager {
             );
             renderer.line_with_style(banner_style, &message)?;
             self.set_policy(tool_name, ToolPolicy::Allow).await?;
-            return Ok(true);
+            return Ok(ToolExecutionDecision::Allowed);
         }
 
-        let header = format!("Tool Permission Request: {}", tool_name);
-        renderer.line_with_style(banner_style, &header)?;
-        renderer.line_with_style(
-            banner_style,
-            &format!("The agent wants to use the '{}' tool.", tool_name),
-        )?;
-        renderer.line_with_style(banner_style, "")?;
-        renderer.line_with_style(
-            banner_style,
-            "This decision applies to the current request only.",
-        )?;
-        renderer.line_with_style(
-            banner_style,
-            "Update the policy file or use CLI flags to change the default.",
-        )?;
-        renderer.line_with_style(banner_style, "")?;
-
-        if AUTO_ALLOW_TOOLS.contains(&tool_name) {
-            renderer.line_with_style(
-                banner_style,
-                &format!(
-                    "Auto-approving '{}' tool (default trusted tool).",
-                    tool_name
-                ),
-            )?;
-            return Ok(true);
-        }
-
-        let rgb = theme::banner_color();
-        let to_ansi_256 = |value: u8| -> u8 {
-            if value < 48 {
-                0
-            } else if value < 114 {
-                1
-            } else {
-                ((value - 35) / 40).min(5)
+        // Use the new centralized confirmation logic
+        match UserConfirmation::confirm_tool_usage(tool_name, None)? {
+            ToolConfirmationResult::Yes => {
+                renderer.line(MessageStyle::Tool, &format!("✓ Approved: '{}' tool will run now", tool_name))?;
+                Ok(ToolExecutionDecision::Allowed)
             }
-        };
-        let rgb_to_index = |r: u8, g: u8, b: u8| -> u8 {
-            let r_idx = to_ansi_256(r);
-            let g_idx = to_ansi_256(g);
-            let b_idx = to_ansi_256(b);
-            16 + 36 * r_idx + 6 * g_idx + b_idx
-        };
-        let color_index = rgb_to_index(rgb.0, rgb.1, rgb.2);
-        let dialog_color = ConsoleColor::Color256(color_index);
-        let tinted_style = ConsoleStyle::new().for_stderr().fg(dialog_color);
-
-        let mut dialog_theme = ColorfulTheme::default();
-        dialog_theme.prompt_style = tinted_style;
-        dialog_theme.prompt_prefix = style("—".to_owned()).for_stderr().fg(dialog_color);
-        dialog_theme.prompt_suffix = style("—".to_owned()).for_stderr().fg(dialog_color);
-        dialog_theme.hint_style = ConsoleStyle::new().for_stderr().fg(dialog_color);
-        dialog_theme.defaults_style = dialog_theme.hint_style.clone();
-        dialog_theme.success_prefix = style("✓".to_owned()).for_stderr().fg(dialog_color);
-        dialog_theme.success_suffix = style("·".to_owned()).for_stderr().fg(dialog_color);
-        dialog_theme.error_prefix = style("✗".to_owned()).for_stderr().fg(dialog_color);
-        dialog_theme.error_style = ConsoleStyle::new().for_stderr().fg(dialog_color);
-        dialog_theme.values_style = ConsoleStyle::new().for_stderr().fg(dialog_color);
-
-        let prompt_text = format!("Allow the agent to use '{}'?", tool_name);
-
-        match Confirm::with_theme(&dialog_theme)
-            .with_prompt(prompt_text)
-            .default(false)
-            .interact()
-        {
-            Ok(confirmed) => {
-                let message = if confirmed {
-                    format!("✓ Approved: '{}' tool will run now", tool_name)
-                } else {
-                    format!("✗ Denied: '{}' tool will not run", tool_name)
-                };
-                let style = if confirmed {
-                    MessageStyle::Tool
-                } else {
-                    MessageStyle::Error
-                };
-                renderer.line(style, &message)?;
-                Ok(confirmed)
+            ToolConfirmationResult::YesAutoAccept => {
+                renderer.line(MessageStyle::Tool, &format!("✓ Approved: '{}' tool will run now and in future", tool_name))?;
+                self.set_policy(tool_name, ToolPolicy::Allow).await?;
+                Ok(ToolExecutionDecision::Allowed)
             }
-            Err(e) => {
-                renderer.line(
-                    MessageStyle::Error,
-                    &format!("Failed to read confirmation: {}", e),
-                )?;
-                Ok(false)
+            ToolConfirmationResult::No => {
+                renderer.line(MessageStyle::Error, &format!("✗ Denied: '{}' tool will not run", tool_name))?;
+                Ok(ToolExecutionDecision::Denied)
+            }
+            ToolConfirmationResult::Feedback(msg) => {
+                renderer.line(MessageStyle::Error, &format!("✗ Denied with feedback: '{}' tool will not run", tool_name))?;
+                Ok(ToolExecutionDecision::DeniedWithFeedback(msg))
             }
         }
     }
