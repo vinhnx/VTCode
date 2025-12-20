@@ -279,11 +279,6 @@ pub async fn execute_groups_sequential(
         for (call_id, error) in group_result.get_errors() {
             final_collector.add_error(call_id.clone(), error.clone());
         }
-
-        // Stop on first error if needed
-        if final_collector.has_errors() {
-            break;
-        }
     }
 
     Ok(final_collector)
