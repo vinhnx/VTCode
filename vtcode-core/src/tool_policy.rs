@@ -32,6 +32,7 @@ const AUTO_ALLOW_TOOLS: &[&str] = &[
     tools::ANALYZE_AGENT,
     tools::LIST_PTY_SESSIONS,
     tools::READ_PTY_SESSION,
+    tools::RUN_PTY_CMD,
     "cargo_check",
     "cargo_test",
     "git_status",

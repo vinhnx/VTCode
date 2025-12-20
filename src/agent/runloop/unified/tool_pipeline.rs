@@ -167,7 +167,7 @@ pub(crate) async fn run_tool_call(
     lifecycle_hooks: Option<&LifecycleHookEngine>,
     skip_confirmations: bool,
     _token_budget: &Arc<vtcode_core::core::token_budget::TokenBudgetManager>,
-    _vt_cfg: Option<&VTCodeConfig>,
+    vt_cfg: Option<&VTCodeConfig>,
     turn_index: usize,
 ) -> Result<ToolPipelineOutcome, anyhow::Error> {
     let function = match call.function.as_ref() {
@@ -209,6 +209,7 @@ pub(crate) async fn run_tool_call(
         Some(ctx.approval_recorder),
         Some(ctx.decision_ledger),
         Some(ctx.tool_permission_cache),
+        vt_cfg.and_then(|cfg| Some(cfg.security.hitl_notification_bell)).unwrap_or(true),
     )
     .await
     {

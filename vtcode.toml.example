@@ -576,6 +576,9 @@ require_write_tool_for_claims = true
 # Auto-apply patches without prompting (DANGEROUS - disable for safety)
 auto_apply_detected_patches = false
 
+# Play terminal bell notification when HITL approval is required
+hitl_notification_bell = true
+
 # UI configuration - Terminal and display settings
 [ui]
 # Tool output display mode
