@@ -3,6 +3,44 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.50.8] - 2025-12-20
+
+
+### Features
+    - feat: Implement Agent Skills specification by adding `compatibility` and `metadata` fields to skill manifests, updating `allowed-tools` to a space-delimited string, and clarifying skill loading behavior.
+    - feat: Enhance tool execution policy with granular user confirmation, auto-acceptance, and feedback capabilities.
+    - feat: extract anthropic config, reduce configuration complexity, document experimental features
+    - feat: remove reinforcement learning and optimization modules and configurations.
+    - feat: Add context-aware prompt enrichment (vibe coding) with new context modules and wizard modal interaction events.
+    - feat: Add full-auto mode support and update tool policies for improved automation
+    - feat: Implement per-tool rate limiting and refactor agent tool execution state management.
+    - feat: implement circuit breaker pattern for MCP client failures and optimize tool inventory management
+    - feat: add code reviewer and commit message generator skills
+
+
+### Bug Fixes
+    - fix: update tool policies and configuration settings for improved performance
+    - fix: remove external editor keybinding (Control+E)
+    - fix: prevent arrow keys from triggering external editor launch
+
+
+### Refactors
+    - refactor: remove router configuration and related core logic
+
+
+### Documentation
+    - docs: update changelog for v0.50.7 [skip ci]
+    - docs: update changelog for v0.50.6 [skip ci]
+
+
+### Chores
+    - chore: remove AI model routing configuration from TOML files
+    - chore: update VSCode extension package.json to v0.50.7 [skip ci]
+    - chore: update npm package.json to v0.50.7 [skip ci]
+    - chore: release v0.50.7
+    - chore: release v0.50.6
+    - chore: update VSCode extension package.json to v0.50.5 [skip ci]
+    - chore: update npm package.json to v0.50.5 [skip ci]
 # [Version 0.50.7] - 2025-12-19
 
 
