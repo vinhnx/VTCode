@@ -563,9 +563,9 @@ pub fn render_wizard_modal_body(
 
     // Layout: [Tabs Header (1 row)] [Question text] [List]
     let chunks = Layout::vertical(vec![
-        Constraint::Length(1),  // Tabs
-        Constraint::Length(2),  // Question with padding
-        Constraint::Min(3),     // List
+        Constraint::Length(1), // Tabs
+        Constraint::Length(2), // Question with padding
+        Constraint::Min(3),    // List
     ])
     .split(area);
 
@@ -586,7 +586,6 @@ pub fn render_wizard_modal_body(
         render_modal_list(frame, chunks[2], &mut step.list, styles);
     }
 }
-
 
 fn modal_list_block(list: &ModalListState, styles: &ModalRenderStyles) -> Block<'static> {
     let mut block = Block::default()

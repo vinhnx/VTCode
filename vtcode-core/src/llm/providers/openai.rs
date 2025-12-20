@@ -32,7 +32,8 @@ use tracing::debug;
 
 use openai_harmony::chat::{
     Author as HarmonyAuthor, Content as HarmonyContent, Conversation, DeveloperContent,
-    Message as HarmonyMessage, Role as HarmonyRole, ToolDescription, SystemContent, ReasoningEffort,
+    Message as HarmonyMessage, ReasoningEffort, Role as HarmonyRole, SystemContent,
+    ToolDescription,
 };
 use openai_harmony::{HarmonyEncodingName, load_harmony_encoding};
 const MAX_COMPLETION_TOKENS_FIELD: &str = "max_completion_tokens";
@@ -688,11 +689,8 @@ impl OpenAIProvider {
                         let text = msg.content.as_text();
                         if !text.is_empty() {
                             harmony_messages.push(
-                                HarmonyMessage::from_role_and_content(
-                                    HarmonyRole::Assistant,
-                                    text,
-                                )
-                                .with_channel("final"),
+                                HarmonyMessage::from_role_and_content(HarmonyRole::Assistant, text)
+                                    .with_channel("final"),
                             );
                         }
                     }
@@ -710,12 +708,9 @@ impl OpenAIProvider {
                         .unwrap_or_else(|| HarmonyAuthor::from(HarmonyRole::Tool));
 
                     harmony_messages.push(
-                        HarmonyMessage::from_author_and_content(
-                            author,
-                            msg.content.as_text(),
-                        )
-                        .with_channel("commentary")
-                        .with_recipient("assistant"),
+                        HarmonyMessage::from_author_and_content(author, msg.content.as_text())
+                            .with_channel("commentary")
+                            .with_recipient("assistant"),
                     );
                 }
             }

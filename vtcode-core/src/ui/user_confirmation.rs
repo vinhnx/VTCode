@@ -56,11 +56,17 @@ impl UserConfirmation {
 
         match selection {
             0 => {
-                println!("{}", style("✓ Using Gemini 2.5 Pro model for this task").green());
+                println!(
+                    "{}",
+                    style("✓ Using Gemini 2.5 Pro model for this task").green()
+                );
                 Ok(true)
             }
             1 => {
-                println!("{}", style("✓ Using Gemini 2.5 Pro model (will auto-accept in future)").green());
+                println!(
+                    "{}",
+                    style("✓ Using Gemini 2.5 Pro model (will auto-accept in future)").green()
+                );
                 // Note: Auto-accept logic would need to be implemented in the caller
                 Ok(true)
             }

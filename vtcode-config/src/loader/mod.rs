@@ -4,8 +4,8 @@ pub mod bootstrap;
 use crate::acp::AgentClientProtocolConfig;
 use crate::context::ContextFeaturesConfig;
 use crate::core::{
-    AgentConfig, AutomationConfig, CommandsConfig, ModelConfig, PermissionsConfig,
-    PromptCachingConfig, SecurityConfig, SkillsConfig, ToolsConfig, AnthropicConfig,
+    AgentConfig, AnthropicConfig, AutomationConfig, CommandsConfig, ModelConfig, PermissionsConfig,
+    PromptCachingConfig, SecurityConfig, SkillsConfig, ToolsConfig,
 };
 use crate::debug::DebugConfig;
 use crate::defaults::{self, ConfigDefaultsProvider, SyntaxHighlightingDefaults};

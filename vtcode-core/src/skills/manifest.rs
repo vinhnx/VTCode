@@ -2,6 +2,7 @@
 //!
 //! Parses YAML frontmatter from SKILL.md files to extract skill metadata and instructions.
 
+use crate::skills::file_references::FileReferenceValidator;
 use crate::skills::types::SkillManifest;
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
@@ -68,7 +69,23 @@ pub fn parse_skill_file(skill_path: &Path) -> anyhow::Result<(SkillManifest, Str
     let content = fs::read_to_string(&skill_md)
         .context(format!("Failed to read SKILL.md at {}", skill_md.display()))?;
 
-    parse_skill_content(&content)
+    let (manifest, instructions) = parse_skill_content(&content)?;
+
+    // Validate directory name matches per Agent Skills spec
+    // For traditional skills (not CLI tools), the name must match the directory
+    manifest.validate_directory_name_match(&skill_md)?;
+
+    // Validate file references in instructions
+    // For traditional skills (SKILL.md files), validate references
+    let skill_root = skill_md.parent().unwrap_or_else(|| Path::new("."));
+    let reference_validator = FileReferenceValidator::new(skill_root.to_path_buf());
+    let reference_errors = reference_validator.validate_references(&instructions);
+
+    if !reference_errors.is_empty() {
+        tracing::warn!("File reference validation warnings: {:?}", reference_errors);
+    }
+
+    Ok((manifest, instructions))
 }
 
 /// Parse SKILL.md content string
@@ -128,37 +145,61 @@ pub fn generate_skill_template(name: &str, description: &str) -> String {
 name: {}
 description: {}
 version: 0.1.0
-author: Anonymous
 license: MIT
-model: inherit
-mode: false
-# Optional skill controls (uncomment to use)
+# Optional fields (uncomment to use):
+# author: Your Name
+# compatibility: "Requires: tool1, tool2, network access"
 # allowed-tools: "Read Write Bash"  # Space-delimited list per Agent Skills spec
-# compatibility: "Designed for VTCode (or similar CLI agents)"
 # metadata:
-#   custom-key: "custom-value"
-#   another-key: "another-value"
-# disable-model-invocation: false
-# when-to-use: "Trigger for data-heavy spreadsheet generation"
-# requires-container: false
-# disallow-container: false
+#   version: "1.0"
+#   author: your-org
+#   custom: "value"
 ---
 
 # {} Skill
 
+## Overview
+
+Brief description of what this skill does and when to use it.
+
 ## Instructions
 
-[Add step-by-step guidance for Claude to follow when this skill is active]
+Provide step-by-step guidance for the agent to follow when this skill is activated.
+
+### Steps:
+
+1. First step
+2. Second step
+3. Third step
 
 ## Examples
 
-- Example usage 1
-- Example usage 2
+### Example 1: Basic Usage
 
-## Guidelines
+**Input:** Describe what the user might ask
+**Process:** Describe what the skill does
+**Output:** Describe the expected result
 
-- Guideline 1
-- Guideline 2
+### Example 2: Advanced Usage
+
+**Input:** More complex user request
+**Process:** More detailed processing steps
+**Output:** More complex output
+
+## Notes
+
+- Important considerations
+- Edge cases to watch for
+- Prerequisites or requirements
+
+## File References
+
+You can reference files in your skill using relative paths:
+- Scripts: `scripts/your-script.py`
+- References: `references/reference.md`
+- Assets: `assets/template.json`
+
+Remember to create these files in the appropriate directories.
 "#,
         name, description, name
     )

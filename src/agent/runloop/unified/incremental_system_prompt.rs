@@ -159,7 +159,10 @@ impl IncrementalSystemPrompt {
 
             if context.full_auto {
                 let _ = writeln!(prompt, "\n# FULL-AUTO MODE ENABLED");
-                let _ = writeln!(prompt, "You are running in autonomous mode. You are expected to complete the task without asking for permission or help unless you are completely blocked by something only a human can provide. Continue executing steps until the goal is reached.");
+                let _ = writeln!(
+                    prompt,
+                    "You are running in autonomous mode. You are expected to complete the task without asking for permission or help unless you are completely blocked by something only a human can provide. Continue executing steps until the goal is reached."
+                );
             }
 
             if let Some(plan) = &context.current_plan {
@@ -181,7 +184,10 @@ impl IncrementalSystemPrompt {
                     };
                     let _ = writeln!(prompt, "{}. {} {}", i + 1, status_mark, step.step);
                 }
-                let _ = writeln!(prompt, "\n**IMPORTANT**: You MUST continue with the next step in your plan autonomously. Do not stop until all steps are completed or you are blocked by something only a human can provide.");
+                let _ = writeln!(
+                    prompt,
+                    "\n**IMPORTANT**: You MUST continue with the next step in your plan autonomously. Do not stop until all steps are completed or you are blocked by something only a human can provide."
+                );
             }
         }
 

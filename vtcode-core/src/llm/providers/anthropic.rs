@@ -63,7 +63,13 @@ impl AnthropicProvider {
         let model_value = resolve_model(model, models::anthropic::DEFAULT_MODEL);
 
         let anthropic_cfg = anthropic_config.unwrap_or_default();
-        Self::with_model_internal(api_key_value, model_value, prompt_cache, base_url, anthropic_cfg)
+        Self::with_model_internal(
+            api_key_value,
+            model_value,
+            prompt_cache,
+            base_url,
+            anthropic_cfg,
+        )
     }
 
     fn with_model_internal(
@@ -726,7 +732,9 @@ impl AnthropicProvider {
         let mut reasoning_val = None;
         if self.supports_reasoning_effort(&request.model) {
             // Always enable thinking with configured budget tokens for all supported models
-            reasoning_val = Some(super::common::make_anthropic_thinking_config(&self.anthropic_config));
+            reasoning_val = Some(super::common::make_anthropic_thinking_config(
+                &self.anthropic_config,
+            ));
         } else if let Some(effort) = request.reasoning_effort {
             // Fallback to effort-based reasoning if model doesn't support interleaved thinking
             if let Some(payload) = reasoning_parameters_for(Provider::Anthropic, effort) {

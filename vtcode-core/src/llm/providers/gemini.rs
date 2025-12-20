@@ -2,7 +2,9 @@
 
 use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
-use crate::config::core::{AnthropicConfig, GeminiPromptCacheMode, GeminiPromptCacheSettings, PromptCachingConfig};
+use crate::config::core::{
+    AnthropicConfig, GeminiPromptCacheMode, GeminiPromptCacheSettings, PromptCachingConfig,
+};
 use crate::gemini::function_calling::{
     FunctionCall as GeminiFunctionCall, FunctionCallingConfig, FunctionResponse,
 };

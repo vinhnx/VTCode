@@ -93,7 +93,14 @@ impl MoonshotProvider {
         prompt_cache: Option<PromptCachingConfig>,
         timeouts: Option<TimeoutsConfig>,
     ) -> Self {
-        Self::from_config(Some(api_key), Some(model), None, prompt_cache, timeouts, None)
+        Self::from_config(
+            Some(api_key),
+            Some(model),
+            None,
+            prompt_cache,
+            timeouts,
+            None,
+        )
     }
 
     fn convert_to_moonshot_format(&self, request: &LLMRequest) -> Result<Value, LLMError> {

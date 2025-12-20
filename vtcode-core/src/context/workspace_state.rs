@@ -67,8 +67,8 @@ pub struct UnresolvedReference {
 pub enum RelativeOp {
     Half,
     Double,
-    Increase(u32),  // Increase by percentage
-    Decrease(u32),  // Decrease by percentage
+    Increase(u32), // Increase by percentage
+    Decrease(u32), // Decrease by percentage
 }
 
 /// Tracks workspace state for contextual inference
@@ -77,6 +77,7 @@ pub struct WorkspaceState {
     recent_files: VecDeque<FileActivity>,
 
     /// Files currently open/being edited
+    #[allow(dead_code)]
     open_files: HashSet<PathBuf>,
 
     /// Recent changes
@@ -92,6 +93,7 @@ pub struct WorkspaceState {
     last_user_intent: Option<String>,
 
     /// Pending unresolved references
+    #[allow(dead_code)]
     pending_references: Vec<UnresolvedReference>,
 }
 
@@ -158,13 +160,13 @@ impl WorkspaceState {
         let mut terms = Vec::new();
 
         // Extract filename without extension
-        if let Some(file_stem) = path.file_stem() {
-            if let Some(name) = file_stem.to_str() {
-                // Split on common separators
-                for term in name.split(|c: char| !c.is_alphanumeric()) {
-                    if !term.is_empty() {
-                        terms.push(term.to_lowercase());
-                    }
+        if let Some(file_stem) = path.file_stem()
+            && let Some(name) = file_stem.to_str()
+        {
+            // Split on common separators
+            for term in name.split(|c: char| !c.is_alphanumeric()) {
+                if !term.is_empty() {
+                    terms.push(term.to_lowercase());
                 }
             }
         }
@@ -239,10 +241,10 @@ impl WorkspaceState {
     fn extract_percentage(&self, text: &str) -> Option<u32> {
         // Look for patterns like "20%", "20 percent", etc.
         for word in text.split_whitespace() {
-            if let Some(num_str) = word.strip_suffix('%') {
-                if let Ok(num) = num_str.parse::<u32>() {
-                    return Some(num);
-                }
+            if let Some(num_str) = word.strip_suffix('%')
+                && let Ok(num) = num_str.parse::<u32>()
+            {
+                return Some(num);
             }
             if let Ok(num) = word.parse::<u32>() {
                 return Some(num);
@@ -390,7 +392,12 @@ impl WorkspaceState {
     }
 
     /// Record a file change
-    pub fn record_change(&mut self, path: PathBuf, content_before: Option<String>, content_after: String) {
+    pub fn record_change(
+        &mut self,
+        path: PathBuf,
+        content_before: Option<String>,
+        content_after: String,
+    ) {
         let change = FileChange {
             path,
             content_before,
@@ -446,11 +453,7 @@ impl WorkspaceState {
 
     /// Get recent files (up to N)
     pub fn recent_files(&self, count: usize) -> Vec<&FileActivity> {
-        self.recent_files
-            .iter()
-            .rev()
-            .take(count)
-            .collect()
+        self.recent_files.iter().rev().take(count).collect()
     }
 
     /// Check if file was recently accessed
@@ -512,18 +515,9 @@ mod tests {
     #[test]
     fn test_extract_css_value() {
         let state = WorkspaceState::new();
-        assert_eq!(
-            state.extract_css_value("  padding: 16px;"),
-            Some(16.0)
-        );
-        assert_eq!(
-            state.extract_css_value("  width: 50%;"),
-            Some(50.0)
-        );
-        assert_eq!(
-            state.extract_css_value("  margin: 1.5rem;"),
-            Some(1.5)
-        );
+        assert_eq!(state.extract_css_value("  padding: 16px;"), Some(16.0));
+        assert_eq!(state.extract_css_value("  width: 50%;"), Some(50.0));
+        assert_eq!(state.extract_css_value("  margin: 1.5rem;"), Some(1.5));
     }
 
     #[test]
@@ -576,49 +570,28 @@ mod tests {
     #[test]
     fn test_extract_config_value_toml() {
         let state = WorkspaceState::new();
-        assert_eq!(
-            state.extract_config_value("timeout = 30"),
-            Some(30.0)
-        );
-        assert_eq!(
-            state.extract_config_value("max_retries = 5"),
-            Some(5.0)
-        );
+        assert_eq!(state.extract_config_value("timeout = 30"), Some(30.0));
+        assert_eq!(state.extract_config_value("max_retries = 5"), Some(5.0));
     }
 
     #[test]
     fn test_extract_code_value_javascript() {
         let state = WorkspaceState::new();
-        assert_eq!(
-            state.extract_code_value("const padding = 16;"),
-            Some(16.0)
-        );
-        assert_eq!(
-            state.extract_code_value("let width = 320;"),
-            Some(320.0)
-        );
+        assert_eq!(state.extract_code_value("const padding = 16;"), Some(16.0));
+        assert_eq!(state.extract_code_value("let width = 320;"), Some(320.0));
     }
 
     #[test]
     fn test_extract_code_value_python() {
         let state = WorkspaceState::new();
-        assert_eq!(
-            state.extract_code_value("padding = 24"),
-            Some(24.0)
-        );
-        assert_eq!(
-            state.extract_code_value("TIMEOUT = 1000"),
-            Some(1000.0)
-        );
+        assert_eq!(state.extract_code_value("padding = 24"), Some(24.0));
+        assert_eq!(state.extract_code_value("TIMEOUT = 1000"), Some(1000.0));
     }
 
     #[test]
     fn test_extract_code_value_rust() {
         let state = WorkspaceState::new();
-        assert_eq!(
-            state.extract_code_value("let size = 42;"),
-            Some(42.0)
-        );
+        assert_eq!(state.extract_code_value("let size = 42;"), Some(42.0));
         assert_eq!(
             state.extract_code_value("const MAX_SIZE: usize = 100;"),
             Some(100.0)

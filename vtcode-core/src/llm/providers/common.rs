@@ -606,15 +606,17 @@ where
 
 /// Generates the interleaved thinking configuration for Anthropic models.
 /// This provides consistent thinking configuration across all Anthropic provider implementations.
-/// 
+///
 /// # Arguments
 /// * `config` - Anthropic configuration containing thinking settings
-/// 
+///
 /// Returns a JSON Value containing the thinking configuration with:
 /// - type: Configured value (default: "enabled")
 /// - budget_tokens: Configured value (default: 12000)
 #[inline]
-pub fn make_anthropic_thinking_config(config: &crate::config::core::AnthropicConfig) -> serde_json::Value {
+pub fn make_anthropic_thinking_config(
+    config: &crate::config::core::AnthropicConfig,
+) -> serde_json::Value {
     serde_json::json!({
         "thinking": {
             "type": config.interleaved_thinking_type_enabled,

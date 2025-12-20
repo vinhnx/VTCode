@@ -31,6 +31,7 @@ async fn mock_responses_api_receives_prompt_cache_retention() {
         Some(base_url.to_string()),
         Some(pc),
         None,
+        None,
     );
 
     // Build a simple request that will be sent via Responses API

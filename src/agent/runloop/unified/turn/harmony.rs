@@ -15,9 +15,10 @@ pub(crate) fn strip_harmony_syntax(text: &str) -> String {
             let mut earliest_end = None;
             for tag in end_tags {
                 if let Some(pos) = after_msg.find(tag)
-                    && earliest_end.is_none_or(|(p, _)| pos < p) {
-                        earliest_end = Some((pos, tag));
-                    }
+                    && earliest_end.is_none_or(|(p, _)| pos < p)
+                {
+                    earliest_end = Some((pos, tag));
+                }
             }
 
             if let Some((end_pos, tag)) = earliest_end {

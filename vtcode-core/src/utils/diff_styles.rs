@@ -24,7 +24,7 @@ impl Default for DiffColorPalette {
             removed_fg: RgbColor(240, 180, 180),
             removed_bg: RgbColor(24, 10, 10), // Very soft red (~20% brightness, desaturated)
             header_fg: RgbColor(150, 200, 220), // Soft cyan foreground
-            header_bg: RgbColor(10, 16, 20), // Very soft cyan background (~15% brightness)
+            header_bg: RgbColor(10, 16, 20),  // Very soft cyan background (~15% brightness)
         }
     }
 }

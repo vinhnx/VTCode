@@ -489,8 +489,13 @@ mod tests {
 
         skills.insert("test-format".to_string(), skill);
 
-        let xml_output = generate_skills_prompt_with_format(&skills, SkillsRenderMode::Lean, PromptFormat::Xml);
-        let markdown_output = generate_skills_prompt_with_format(&skills, SkillsRenderMode::Lean, PromptFormat::Markdown);
+        let xml_output =
+            generate_skills_prompt_with_format(&skills, SkillsRenderMode::Lean, PromptFormat::Xml);
+        let markdown_output = generate_skills_prompt_with_format(
+            &skills,
+            SkillsRenderMode::Lean,
+            PromptFormat::Markdown,
+        );
 
         // XML format should have XML tags
         assert!(xml_output.contains("<available_skills>"));

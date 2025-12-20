@@ -70,7 +70,8 @@ fn test_all_tools_have_policies() {
             "analyze_agent",
             "web_fetch",
         ]
-        .iter().copied(),
+        .iter()
+        .copied(),
     );
 
     let missing_policies: Vec<_> = tools_requiring_policies
@@ -178,7 +179,8 @@ fn test_no_tools_in_constants_without_declarations() {
             "web_fetch",
             "update_plan",
         ]
-        .iter().copied(),
+        .iter()
+        .copied(),
     );
 
     // Note: list_files may not have declarations and need investigation
@@ -200,8 +202,7 @@ fn test_no_tools_in_constants_without_declarations() {
 #[test]
 fn test_acp_tool_subset_is_documented() {
     // ACP exposes only a subset of tools - verify this is intentional
-    let acp_tools: HashSet<&str> =
-        HashSet::from_iter(["read_file", "list_files"].iter().copied());
+    let acp_tools: HashSet<&str> = HashSet::from_iter(["read_file", "list_files"].iter().copied());
 
     let all_tools: HashSet<_> = HashSet::from_iter(
         vec![
@@ -227,7 +228,8 @@ fn test_acp_tool_subset_is_documented() {
             "analyze_agent",
             "web_fetch",
         ]
-        .iter().copied(),
+        .iter()
+        .copied(),
     );
 
     let tools_excluded_from_acp: Vec<_> = all_tools.difference(&acp_tools).copied().collect();

@@ -11,13 +11,13 @@
 //! - `conversation_memory`: Maintains entity mentions across conversation
 //! - `proactive_gatherer`: Automatically gathers relevant context
 
-pub mod entity_resolver;
-pub mod workspace_state;
 pub mod conversation_memory;
+pub mod entity_resolver;
 pub mod proactive_gatherer;
+pub mod workspace_state;
 
 // Re-export key types for convenience
-pub use entity_resolver::{EntityResolver, EntityIndex, EntityMatch, FileLocation};
-pub use workspace_state::{WorkspaceState, FileActivity, ValueHistory};
-pub use conversation_memory::{ConversationMemory, MentionHistory, EntityMention};
-pub use proactive_gatherer::{ProactiveGatherer, GatheredContext};
+pub use conversation_memory::{ConversationMemory, EntityMention, MentionHistory};
+pub use entity_resolver::{EntityIndex, EntityMatch, EntityResolver, FileLocation};
+pub use proactive_gatherer::{GatheredContext, ProactiveGatherer};
+pub use workspace_state::{FileActivity, ValueHistory, WorkspaceState};

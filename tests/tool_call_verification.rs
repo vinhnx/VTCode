@@ -178,8 +178,8 @@ fn test_all_providers_tool_validation() {
     let openai = OpenAIProvider::new("test_key".to_string());
     let anthropic = AnthropicProvider::new("test_key".to_string());
     let openrouter = OpenRouterProvider::new("test_key".to_string());
-    let ollama = OllamaProvider::from_config(None, None, None, None, None);
-    let lmstudio = LmStudioProvider::from_config(None, None, None, None, None);
+    let ollama = OllamaProvider::from_config(None, None, None, None, None, None);
+    let lmstudio = LmStudioProvider::from_config(None, None, None, None, None, None);
 
     // Test valid requests with tools
     let tool = ToolDefinition::function(
@@ -353,7 +353,7 @@ fn test_provider_tool_support_matrix() {
     let openai = OpenAIProvider::new("test_key".to_string());
     let anthropic = AnthropicProvider::new("test_key".to_string());
     let openrouter = OpenRouterProvider::new("test_key".to_string());
-    let ollama = OllamaProvider::from_config(None, None, None, None, None);
+    let ollama = OllamaProvider::from_config(None, None, None, None, None, None);
 
     for &model in models::google::SUPPORTED_MODELS {
         assert!(

@@ -479,45 +479,46 @@ fn parse_channel_tool_call(text: &str) -> Option<(String, Value)> {
         let message_idx = segment.find("<|message|>");
 
         if let (Some(c_idx), Some(m_idx)) = (channel_idx, message_idx)
-            && m_idx > c_idx {
-                let header = &segment[..m_idx];
+            && m_idx > c_idx
+        {
+            let header = &segment[..m_idx];
 
-                // Check if this is a commentary channel or has a recipient
-                if header.contains("commentary") || header.contains("to=") {
-                    let stop_idx = segment
-                        .find("<|call|>")
-                        .or_else(|| segment.find("<|end|>"))
-                        .or_else(|| segment.find("<|return|>"))
-                        .unwrap_or(segment.len());
+            // Check if this is a commentary channel or has a recipient
+            if header.contains("commentary") || header.contains("to=") {
+                let stop_idx = segment
+                    .find("<|call|>")
+                    .or_else(|| segment.find("<|end|>"))
+                    .or_else(|| segment.find("<|return|>"))
+                    .unwrap_or(segment.len());
 
-                    let content_raw = segment[m_idx + "<|message|>".len()..stop_idx].trim();
+                let content_raw = segment[m_idx + "<|message|>".len()..stop_idx].trim();
 
-                    // Parse tool name from header
-                    let tool_name = if let Some(to_pos) = header.find("to=") {
-                        let after_to = &header[to_pos + 3..];
-                        let tool_ref = after_to
-                            .split(|c: char| c.is_whitespace() || c == '<')
-                            .next()
-                            .unwrap_or("");
-                        parse_tool_name_from_reference(tool_ref)
-                    } else if header.contains("container.exec") || header.contains("exec") {
-                        "run_pty_cmd"
-                    } else if header.contains("read") || header.contains("file") {
-                        "read_file"
-                    } else {
-                        // Default to pty command if it's a commentary channel but no recipient
-                        "run_pty_cmd"
-                    };
+                // Parse tool name from header
+                let tool_name = if let Some(to_pos) = header.find("to=") {
+                    let after_to = &header[to_pos + 3..];
+                    let tool_ref = after_to
+                        .split(|c: char| c.is_whitespace() || c == '<')
+                        .next()
+                        .unwrap_or("");
+                    parse_tool_name_from_reference(tool_ref)
+                } else if header.contains("container.exec") || header.contains("exec") {
+                    "run_pty_cmd"
+                } else if header.contains("read") || header.contains("file") {
+                    "read_file"
+                } else {
+                    // Default to pty command if it's a commentary channel but no recipient
+                    "run_pty_cmd"
+                };
 
-                    // Parse JSON from content
-                    if let Ok(parsed) = serde_json::from_str::<Value>(content_raw) {
-                        // Convert to expected format
-                        if let Ok(args) = convert_harmony_args_to_tool_format(tool_name, parsed) {
-                            return Some((tool_name.to_string(), args));
-                        }
+                // Parse JSON from content
+                if let Ok(parsed) = serde_json::from_str::<Value>(content_raw) {
+                    // Convert to expected format
+                    if let Ok(args) = convert_harmony_args_to_tool_format(tool_name, parsed) {
+                        return Some((tool_name.to_string(), args));
                     }
                 }
             }
+        }
     }
 
     None

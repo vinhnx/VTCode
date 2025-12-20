@@ -29,6 +29,7 @@ async fn mock_responses_api_streaming_includes_prompt_cache_retention() {
         Some(base_url.to_string()),
         Some(pc),
         None,
+        None,
     );
 
     let request = LLMRequest {

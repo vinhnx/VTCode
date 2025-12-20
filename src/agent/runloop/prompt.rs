@@ -5,9 +5,7 @@ use tokio::sync::RwLock;
 
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
-use vtcode_core::context::{
-    ConversationMemory, EntityResolver, ProactiveGatherer, WorkspaceState,
-};
+use vtcode_core::context::{ConversationMemory, EntityResolver, ProactiveGatherer, WorkspaceState};
 use vtcode_core::llm::{factory::create_provider_with_config, provider as uni};
 
 const MIN_PROMPT_LENGTH_FOR_REFINEMENT: usize = 20;
@@ -27,15 +25,12 @@ pub(crate) async fn refine_and_enrich_prompt(
     let refined = refine_user_prompt_if_enabled(raw, cfg, vt_cfg).await;
 
     // Step 2: Apply vibe coding enrichment if enabled
-    if let Some(vtc) = vt_cfg {
-        if should_enrich_prompt(&refined, Some(vtc)) {
-            let enricher = PromptEnricher::new(
-                cfg.workspace.clone(),
-                vtc.clone(),
-            );
-            let enriched = enricher.enrich_vague_prompt(&refined).await;
-            return enriched.to_llm_prompt();
-        }
+    if let Some(vtc) = vt_cfg
+        && should_enrich_prompt(&refined, Some(vtc))
+    {
+        let enricher = PromptEnricher::new(cfg.workspace.clone(), vtc.clone());
+        let enriched = enricher.enrich_vague_prompt(&refined).await;
+        return enriched.to_llm_prompt();
     }
 
     refined
@@ -214,19 +209,20 @@ fn keyword_set(text: &str) -> HashSet<String> {
 
 /// Vague patterns that indicate casual, imprecise requests
 const VAGUE_PATTERNS: &[&str] = &[
-    r"\bit\b",      // "make it blue"
-    r"\bthat\b",    // "fix that bug"
-    r"\bthe\b",     // "decrease the padding"
-    r"\bthis\b",    // "update this"
-    r"\bhere\b",    // "add here"
-    r"\bthese\b",   // "remove these"
-    r"\bthose\b",   // "change those"
+    r"\bit\b",    // "make it blue"
+    r"\bthat\b",  // "fix that bug"
+    r"\bthe\b",   // "decrease the padding"
+    r"\bthis\b",  // "update this"
+    r"\bhere\b",  // "add here"
+    r"\bthese\b", // "remove these"
+    r"\bthose\b", // "change those"
 ];
 
 /// A vague reference detected in the prompt
 #[derive(Debug, Clone)]
 pub struct VagueReference {
     pub term: String,
+    #[allow(dead_code)]
     pub position: usize,
 }
 
@@ -386,15 +382,19 @@ pub fn should_enrich_prompt(prompt: &str, vt_cfg: Option<&VTCodeConfig>) -> bool
 /// Orchestrator that ties together all vibe coding components
 pub struct PromptEnricher {
     /// Entity resolver for fuzzy matching
+    #[allow(dead_code)]
     entity_resolver: Arc<RwLock<EntityResolver>>,
 
     /// Workspace state tracker
+    #[allow(dead_code)]
     workspace_state: Arc<RwLock<WorkspaceState>>,
 
     /// Conversation memory for pronoun resolution
+    #[allow(dead_code)]
     conversation_memory: Arc<RwLock<ConversationMemory>>,
 
     /// Proactive context gatherer
+    #[allow(dead_code)]
     proactive_gatherer: Arc<ProactiveGatherer>,
 
     /// Configuration
@@ -403,10 +403,7 @@ pub struct PromptEnricher {
 
 impl PromptEnricher {
     /// Create new enricher
-    pub fn new(
-        workspace_root: PathBuf,
-        vt_cfg: VTCodeConfig,
-    ) -> Self {
+    pub fn new(workspace_root: PathBuf, vt_cfg: VTCodeConfig) -> Self {
         let workspace_state = Arc::new(RwLock::new(WorkspaceState::new()));
         let entity_resolver = Arc::new(RwLock::new(EntityResolver::with_cache(
             workspace_root.clone(),
@@ -428,6 +425,7 @@ impl PromptEnricher {
     }
 
     /// Create enricher with existing components (for testing)
+    #[allow(dead_code)]
     pub fn with_components(
         entity_resolver: Arc<RwLock<EntityResolver>>,
         workspace_state: Arc<RwLock<WorkspaceState>>,
@@ -460,16 +458,16 @@ impl PromptEnricher {
         if self.vt_cfg.agent.vibe_coding.enable_entity_resolution {
             let resolver = self.entity_resolver.read().await;
             for vague_ref in &vague_refs {
-                if let Some(entity_match) = resolver.resolve(&vague_ref.term) {
-                    if let Some(location) = entity_match.locations.first() {
-                        enriched.add_resolution(EntityResolution {
-                            original: vague_ref.term.clone(),
-                            resolved: entity_match.entity.clone(),
-                            file: location.path.display().to_string(),
-                            line: location.line_start,
-                            confidence: entity_match.total_score(),
-                        });
-                    }
+                if let Some(entity_match) = resolver.resolve(&vague_ref.term)
+                    && let Some(location) = entity_match.locations.first()
+                {
+                    enriched.add_resolution(EntityResolution {
+                        original: vague_ref.term.clone(),
+                        resolved: entity_match.entity.clone(),
+                        file: location.path.display().to_string(),
+                        line: location.line_start,
+                        confidence: entity_match.total_score(),
+                    });
                 }
             }
         }
@@ -502,7 +500,12 @@ impl PromptEnricher {
         }
 
         // Step 5: Infer values for relative expressions (if enabled)
-        if self.vt_cfg.agent.vibe_coding.enable_relative_value_inference {
+        if self
+            .vt_cfg
+            .agent
+            .vibe_coding
+            .enable_relative_value_inference
+        {
             let state = self.workspace_state.read().await;
             if let Some(resolved_value) = state.resolve_relative_value(prompt) {
                 enriched.add_inferred_value(prompt.to_string(), resolved_value);
@@ -513,16 +516,19 @@ impl PromptEnricher {
     }
 
     /// Get reference to workspace state (for tool execution tracking)
+    #[allow(dead_code)]
     pub fn workspace_state(&self) -> Arc<RwLock<WorkspaceState>> {
         self.workspace_state.clone()
     }
 
     /// Get reference to conversation memory (for message tracking)
+    #[allow(dead_code)]
     pub fn conversation_memory(&self) -> Arc<RwLock<ConversationMemory>> {
         self.conversation_memory.clone()
     }
 
     /// Get reference to entity resolver (for index updates)
+    #[allow(dead_code)]
     pub fn entity_resolver(&self) -> Arc<RwLock<EntityResolver>> {
         self.entity_resolver.clone()
     }
@@ -886,7 +892,7 @@ mod tests {
         use std::path::PathBuf;
 
         let workspace_root = std::env::current_dir().unwrap();
-        let cfg = CoreAgentConfig {
+        let _cfg = CoreAgentConfig {
             model: "test-model".to_string(),
             api_key: "test-key".to_string(),
             provider: "test".to_string(),
@@ -930,10 +936,10 @@ mod tests {
 
         // Should detect "the" as vague reference and infer value
         assert!(enriched.original.contains("padding"));
-        assert!(enriched.inferred_values.len() > 0);
+        assert!(!enriched.inferred_values.is_empty());
 
         // Should calculate half of 32 = 16
-        let (expr, value) = &enriched.inferred_values[0];
+        let (_expr, value) = &enriched.inferred_values[0];
         assert!(value.contains("16"));
     }
 
@@ -942,7 +948,7 @@ mod tests {
         use std::path::PathBuf;
 
         let workspace_root = std::env::current_dir().unwrap();
-        let cfg = CoreAgentConfig {
+        let _cfg = CoreAgentConfig {
             model: "test-model".to_string(),
             api_key: "test-key".to_string(),
             provider: "test".to_string(),

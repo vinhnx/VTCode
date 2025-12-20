@@ -1423,13 +1423,14 @@ impl ToolRegistry {
         // Validate arguments against schema if available
         if let Some(registration) = self.inventory.registration_for(tool_name)
             && let Some(schema) = registration.parameter_schema()
-                && let Err(errors) = jsonschema::validate(schema, args) {
-                    return Err(anyhow::anyhow!(
-                        "Invalid arguments for tool '{}': {}",
-                        tool_name,
-                        errors
-                    ));
-                }
+            && let Err(errors) = jsonschema::validate(schema, args)
+        {
+            return Err(anyhow::anyhow!(
+                "Invalid arguments for tool '{}': {}",
+                tool_name,
+                errors
+            ));
+        }
 
         let timeout_category = self.timeout_category_for(tool_name).await;
 
@@ -1612,7 +1613,7 @@ impl ToolRegistry {
         }
 
         let skip_policy_prompt = self.policy_gateway.take_preapproved(tool_name);
-        
+
         let decision = if skip_policy_prompt {
             ToolExecutionDecision::Allowed
         } else {
@@ -1795,10 +1796,7 @@ impl ToolRegistry {
             let error = ToolExecutionError::new(
                 tool_name_owned.clone(),
                 ToolErrorType::ExecutionError,
-                format!(
-                    "MCP circuit breaker {:?}; skipping execution",
-                    diag.state
-                ),
+                format!("MCP circuit breaker {:?}; skipping execution", diag.state),
             );
             let payload = json!({
                 "error": error.to_json_value(),

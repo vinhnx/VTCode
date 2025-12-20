@@ -95,44 +95,117 @@ pub struct SkillManifest {
 impl SkillManifest {
     /// Validate manifest against Anthropic spec
     pub fn validate(&self) -> anyhow::Result<()> {
-        if self.name.is_empty() || self.name.len() > 64 {
-            anyhow::bail!("Skill name must be 1-64 characters");
+        self.validate_name()?;
+        self.validate_description()?;
+        self.validate_optional_fields()?;
+        Ok(())
+    }
+
+    /// Validate name field per Agent Skills spec
+    fn validate_name(&self) -> anyhow::Result<()> {
+        if self.name.is_empty() {
+            anyhow::bail!("name is required and must not be empty");
         }
 
+        if self.name.len() > 64 {
+            anyhow::bail!(
+                "name exceeds maximum length: {} characters (max 64)",
+                self.name.len()
+            );
+        }
+
+        // Check for lowercase letters, numbers, and hyphens only
         if !self
             .name
             .chars()
             .all(|c| c.is_lowercase() || c.is_numeric() || c == '-')
         {
-            anyhow::bail!("Skill name must contain only lowercase letters, numbers, and hyphens");
+            anyhow::bail!(
+                "name contains invalid characters: '{}'\nMust contain only lowercase letters, numbers, and hyphens",
+                self.name
+            );
         }
 
+        // Check for consecutive hyphens
+        if self.name.contains("--") {
+            anyhow::bail!(
+                "name contains consecutive hyphens: '{}'\nHyphens must not appear consecutively",
+                self.name
+            );
+        }
+
+        // Check for leading hyphen
+        if self.name.starts_with('-') {
+            anyhow::bail!(
+                "name starts with hyphen: '{}'\nMust not start with a hyphen",
+                self.name
+            );
+        }
+
+        // Check for trailing hyphen
+        if self.name.ends_with('-') {
+            anyhow::bail!(
+                "name ends with hyphen: '{}'\nMust not end with a hyphen",
+                self.name
+            );
+        }
+
+        // Check for reserved words
         if self.name.contains("anthropic") || self.name.contains("claude") {
-            anyhow::bail!("Skill name cannot contain 'anthropic' or 'claude'");
+            anyhow::bail!(
+                "name contains reserved word: '{}'\nMust not contain 'anthropic' or 'claude'",
+                self.name
+            );
         }
 
-        if self.description.is_empty() || self.description.len() > 1024 {
-            anyhow::bail!("Skill description must be 1-1024 characters");
+        Ok(())
+    }
+
+    /// Validate description field per Agent Skills spec
+    fn validate_description(&self) -> anyhow::Result<()> {
+        if self.description.is_empty() {
+            anyhow::bail!("description is required and must not be empty");
         }
 
+        if self.description.len() > 1024 {
+            anyhow::bail!(
+                "description exceeds maximum length: {} characters (max 1024)",
+                self.description.len()
+            );
+        }
+
+        Ok(())
+    }
+
+    /// Validate optional fields per Agent Skills spec
+    fn validate_optional_fields(&self) -> anyhow::Result<()> {
+        // Check for conflicting container flags
         if let (Some(true), Some(true)) = (self.requires_container, self.disallow_container) {
             anyhow::bail!(
                 "Skill manifest cannot set both requires-container and disallow-container"
             );
         }
 
+        // Validate when-to-use field
         if let Some(when_to_use) = &self.when_to_use
             && when_to_use.len() > 512
         {
-            anyhow::bail!("when-to-use must be 0-512 characters");
+            anyhow::bail!(
+                "when-to-use exceeds maximum length: {} characters (max 512)",
+                when_to_use.len()
+            );
         }
 
+        // Validate allowed-tools field
         if let Some(allowed_tools) = &self.allowed_tools {
             // Parse space-delimited string per Agent Skills spec
             let tools: Vec<&str> = allowed_tools.split_whitespace().collect();
 
             if tools.len() > 16 {
-                anyhow::bail!("allowed-tools must list at most 16 tools");
+                anyhow::bail!(
+                    "allowed-tools exceeds maximum tool count: {} tools (max 16)",
+                    tools.len()
+                );
             }
 
             if tools.is_empty() {
@@ -140,22 +213,67 @@ impl SkillManifest {
             }
         }
 
+        // Validate license field
         if let Some(license) = &self.license
             && license.len() > 512
         {
-            anyhow::bail!("license must be 0-512 characters");
+            anyhow::bail!(
+                "license exceeds maximum length: {} characters (max 512)",
+                license.len()
+            );
         }
 
+        // Validate model field
         if let Some(model) = &self.model
             && model.len() > 128
         {
-            anyhow::bail!("model must be 0-128 characters");
+            anyhow::bail!(
+                "model exceeds maximum length: {} characters (max 128)",
+                model.len()
+            );
         }
 
-        if let Some(compatibility) = &self.compatibility
-            && (compatibility.is_empty() || compatibility.len() > 500)
-        {
-            anyhow::bail!("compatibility must be 1-500 characters");
+        // Validate compatibility field
+        if let Some(compatibility) = &self.compatibility && (compatibility.is_empty() || compatibility.len() > 500) {
+            anyhow::bail!(
+                "compatibility must be between 1-500 characters if provided, got {} characters",
+                compatibility.len()
+            );
+        }
+
+        Ok(())
+    }
+
+    /// Validate that skill name matches the parent directory name
+    /// This is a requirement per Agent Skills specification
+    pub fn validate_directory_name_match(
+        &self,
+        skill_path: &std::path::Path,
+    ) -> anyhow::Result<()> {
+        // For CLI tools, the directory name might not match the skill name
+        // Check if this is a CLI tool by looking for tool.json
+        let tool_json = skill_path.join("tool.json");
+        if tool_json.exists() {
+            return Ok(());
+        }
+
+        let parent_dir = skill_path.parent().ok_or_else(|| {
+            anyhow::anyhow!("Cannot determine parent directory of: {:?}", skill_path)
+        })?;
+
+        let dir_name = parent_dir
+            .file_name()
+            .and_then(|name| name.to_str())
+            .ok_or_else(|| {
+                anyhow::anyhow!("Cannot extract directory name from: {:?}", parent_dir)
+            })?;
+
+        if dir_name != self.name {
+            anyhow::bail!(
+                "Skill name '{}' does not match directory name '{}'\nPer Agent Skills spec, the name field must match the parent directory name",
+                self.name,
+                dir_name
+            );
         }
 
         Ok(())
@@ -532,7 +650,10 @@ mod tests {
         assert!(m.validate().is_err());
 
         // Invalid: too many tools (> 16)
-        let tools = (0..17).map(|i| format!("Tool{}", i)).collect::<Vec<_>>().join(" ");
+        let tools = (0..17)
+            .map(|i| format!("Tool{}", i))
+            .collect::<Vec<_>>()
+            .join(" ");
         let m = SkillManifest {
             name: "test-skill".to_string(),
             description: "Test description".to_string(),

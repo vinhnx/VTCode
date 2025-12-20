@@ -29,8 +29,7 @@ pub use context::{ContextFeaturesConfig, LedgerConfig};
 pub use core::{
     AgentConfig, AgentCustomPromptsConfig, AgentOnboardingConfig, AutomationConfig, CommandsConfig,
     FullAutoConfig, ModelConfig, PermissionsConfig, PromptCachingConfig,
-    ProviderPromptCachingConfig, SecurityConfig, ToolPolicy,
-    ToolsConfig,
+    ProviderPromptCachingConfig, SecurityConfig, ToolPolicy, ToolsConfig,
 };
 pub use core::{PluginRuntimeConfig, PluginTrustLevel};
 pub use defaults::{

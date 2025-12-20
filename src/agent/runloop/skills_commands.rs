@@ -85,9 +85,10 @@ pub fn parse_skill_command(input: &str) -> Result<Option<SkillCommandAction>> {
                     let name_parts: Vec<&str> = name.split_whitespace().collect();
                     name_str = name_parts[0].to_string();
                     if let Some(idx) = name_parts.iter().position(|&x| x == "--path")
-                        && let Some(path_str) = name_parts.get(idx + 1) {
-                            path = Some(PathBuf::from(path_str));
-                        }
+                        && let Some(path_str) = name_parts.get(idx + 1)
+                    {
+                        path = Some(PathBuf::from(path_str));
+                    }
                 }
 
                 Ok(Some(SkillCommandAction::Create {
@@ -385,9 +386,10 @@ pub async fn detect_mentioned_skills(
     let mut skills = Vec::new();
     for name in mentioned_names {
         if let Ok(enhanced_skill) = loader.get_skill(&name).await
-            && let vtcode_core::skills::loader::EnhancedSkill::Traditional(skill) = enhanced_skill {
-                skills.push((name.clone(), skill));
-            }
+            && let vtcode_core::skills::loader::EnhancedSkill::Traditional(skill) = enhanced_skill
+        {
+            skills.push((name.clone(), skill));
+        }
     }
 
     Ok(skills)

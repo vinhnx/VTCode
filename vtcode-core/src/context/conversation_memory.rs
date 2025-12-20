@@ -103,6 +103,7 @@ pub struct ConversationMemory {
     recent_file_contexts: VecDeque<PathBuf>,
 
     /// Unresolved pronouns
+    #[allow(dead_code)]
     unresolved_pronouns: Vec<PronounReference>,
 
     /// Resolved reference mappings
@@ -171,15 +172,19 @@ impl ConversationMemory {
             }
 
             // Capitalized words (likely proper nouns)
-            if cleaned.chars().next().map(|c| c.is_uppercase()).unwrap_or(false) {
+            if cleaned
+                .chars()
+                .next()
+                .map(|c| c.is_uppercase())
+                .unwrap_or(false)
+            {
                 entities.push(cleaned.to_string());
                 continue;
             }
 
             // camelCase or PascalCase (likely identifiers)
-            let has_mixed_case = cleaned
-                .chars()
-                .any(|c| c.is_uppercase()) && cleaned.chars().any(|c| c.is_lowercase());
+            let has_mixed_case = cleaned.chars().any(|c| c.is_uppercase())
+                && cleaned.chars().any(|c| c.is_lowercase());
 
             if has_mixed_case {
                 entities.push(cleaned.to_string());
@@ -284,11 +289,7 @@ impl ConversationMemory {
 
     /// Get recent file contexts
     pub fn recent_file_contexts(&self, count: usize) -> Vec<&PathBuf> {
-        self.recent_file_contexts
-            .iter()
-            .rev()
-            .take(count)
-            .collect()
+        self.recent_file_contexts.iter().rev().take(count).collect()
     }
 
     /// Check if entity was recently mentioned
@@ -298,18 +299,12 @@ impl ConversationMemory {
         self.entity_timeline
             .iter()
             .rev()
-            .any(|m| {
-                m.entity.eq_ignore_ascii_case(entity) && m.turn >= cutoff_turn
-            })
+            .any(|m| m.entity.eq_ignore_ascii_case(entity) && m.turn >= cutoff_turn)
     }
 
     /// Get context summary for recent conversation
     pub fn get_context_summary(&self, turns: usize) -> String {
-        let messages: Vec<_> = self.recent_user_messages
-            .iter()
-            .rev()
-            .take(turns)
-            .collect();
+        let messages: Vec<_> = self.recent_user_messages.iter().rev().take(turns).collect();
 
         if messages.is_empty() {
             return String::from("No recent context available");

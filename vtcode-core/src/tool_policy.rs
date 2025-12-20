@@ -909,20 +909,35 @@ impl ToolPolicyManager {
         // Use the new centralized confirmation logic
         match UserConfirmation::confirm_tool_usage(tool_name, None)? {
             ToolConfirmationResult::Yes => {
-                renderer.line(MessageStyle::Tool, &format!("✓ Approved: '{}' tool will run now", tool_name))?;
+                renderer.line(
+                    MessageStyle::Tool,
+                    &format!("✓ Approved: '{}' tool will run now", tool_name),
+                )?;
                 Ok(ToolExecutionDecision::Allowed)
             }
             ToolConfirmationResult::YesAutoAccept => {
-                renderer.line(MessageStyle::Tool, &format!("✓ Approved: '{}' tool will run now and in future", tool_name))?;
+                renderer.line(
+                    MessageStyle::Tool,
+                    &format!(
+                        "✓ Approved: '{}' tool will run now and in future",
+                        tool_name
+                    ),
+                )?;
                 self.set_policy(tool_name, ToolPolicy::Allow).await?;
                 Ok(ToolExecutionDecision::Allowed)
             }
             ToolConfirmationResult::No => {
-                renderer.line(MessageStyle::Error, &format!("✗ Denied: '{}' tool will not run", tool_name))?;
+                renderer.line(
+                    MessageStyle::Error,
+                    &format!("✗ Denied: '{}' tool will not run", tool_name),
+                )?;
                 Ok(ToolExecutionDecision::Denied)
             }
             ToolConfirmationResult::Feedback(msg) => {
-                renderer.line(MessageStyle::Error, &format!("✗ Denied with feedback: '{}' tool will not run", tool_name))?;
+                renderer.line(
+                    MessageStyle::Error,
+                    &format!("✗ Denied with feedback: '{}' tool will not run", tool_name),
+                )?;
                 Ok(ToolExecutionDecision::DeniedWithFeedback(msg))
             }
         }

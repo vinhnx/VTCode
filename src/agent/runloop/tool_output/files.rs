@@ -48,10 +48,7 @@ pub(crate) fn render_write_file_preview(
     }
 
     if let Some(encoding) = get_string(payload, "encoding") {
-        renderer.line(
-            MessageStyle::Info,
-            &format!("encoding: {}", encoding),
-        )?;
+        renderer.line(MessageStyle::Info, &format!("encoding: {}", encoding))?;
     }
 
     // Handle diff preview
@@ -283,17 +280,18 @@ pub(crate) fn render_read_file_output(renderer: &mut AnsiRenderer, val: &Value) 
 
     // Suppress raw content echo to keep token usage low; only report summary
     if let Some(content) = get_string(val, "content")
-        && !content.is_empty() {
-            let line_count = content.lines().count();
-            let byte_count = content.len();
-            renderer.line(
-                MessageStyle::Info,
-                &format!(
-                    "  content: loaded ({} lines, {} bytes); output suppressed to save tokens",
-                    line_count, byte_count
-                ),
-            )?;
-        }
+        && !content.is_empty()
+    {
+        let line_count = content.lines().count();
+        let byte_count = content.len();
+        renderer.line(
+            MessageStyle::Info,
+            &format!(
+                "  content: loaded ({} lines, {} bytes); output suppressed to save tokens",
+                line_count, byte_count
+            ),
+        )?;
+    }
 
     Ok(())
 }
@@ -313,10 +311,13 @@ fn render_diff_content(
     // Collect lines to render in a single pass
     for (line_count, line) in diff_content.lines().enumerate() {
         if line_count >= MAX_DIFF_LINES {
-            lines_to_render.push((true, format!(
-                "… ({} more lines, view full diff in logs)",
-                total_lines - MAX_DIFF_LINES
-            )));
+            lines_to_render.push((
+                true,
+                format!(
+                    "… ({} more lines, view full diff in logs)",
+                    total_lines - MAX_DIFF_LINES
+                ),
+            ));
             break;
         }
 
@@ -346,7 +347,10 @@ fn render_diff_content(
 
     // Show summary stats if we rendered changes (compact format)
     if added_count + removed_count > 0 {
-        renderer.line(MessageStyle::Info, &format!("▸ +{} -{}", added_count, removed_count))?;
+        renderer.line(
+            MessageStyle::Info,
+            &format!("▸ +{} -{}", added_count, removed_count),
+        )?;
     }
 
     Ok(())

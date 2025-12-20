@@ -209,7 +209,10 @@ print('PDF created: hello_world.pdf')
         "track_files": false  // Old way: no tracking
     });
 
-    let exec_result = registry.execute_tool("execute_code", exec_args).await.unwrap();
+    let exec_result = registry
+        .execute_tool("execute_code", exec_args)
+        .await
+        .unwrap();
     println!(
         "Execution result: {}",
         serde_json::to_string_pretty(&exec_result).unwrap()
@@ -227,7 +230,10 @@ print(f'Verification: {file_path} exists={exists}')
         "timeout_secs": 5
     });
 
-    let verify_result = registry.execute_tool("execute_code", verify_args).await.unwrap();
+    let verify_result = registry
+        .execute_tool("execute_code", verify_args)
+        .await
+        .unwrap();
     println!(
         "Verification result: {}\n",
         serde_json::to_string_pretty(&verify_result).unwrap()

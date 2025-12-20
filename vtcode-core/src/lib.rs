@@ -167,9 +167,9 @@ pub use config::types::{
     PerformanceMetrics, ReasoningEffortLevel, SessionInfo, ToolConfig,
 };
 pub use config::{
-    AgentClientProtocolConfig, AgentClientProtocolTransport,
-    AgentClientProtocolZedConfig, AgentClientProtocolZedToolsConfig, AgentConfig,
-    PluginRuntimeConfig, PluginTrustLevel, VTCodeConfig, WorkspaceTrustLevel,
+    AgentClientProtocolConfig, AgentClientProtocolTransport, AgentClientProtocolZedConfig,
+    AgentClientProtocolZedToolsConfig, AgentConfig, PluginRuntimeConfig, PluginTrustLevel,
+    VTCodeConfig, WorkspaceTrustLevel,
 };
 pub use core::agent::core::Agent;
 pub use core::agent::runner::AgentRunner;

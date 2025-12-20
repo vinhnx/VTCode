@@ -850,24 +850,22 @@ impl SkillValidator {
         if let Some(scripts_check) = checks.get("scripts_valid")
             && scripts_check.status == CheckStatus::Warning
             && let Some(details) = &scripts_check.details
-                && let Some(issues) = details.as_array()
-            {
-                for issue in issues {
-                    if let Some(issue_str) = issue.as_str()
-                        && issue_str.contains("dangerous")
-                    {
-                        warnings.push(SecurityWarning {
-                            warning_type: "dangerous_content".to_string(),
-                            message: issue_str.to_string(),
-                            severity: SecurityLevel::HighRisk,
-                            suggestion: Some(
-                                "Review script content for security issues".to_string(),
-                            ),
-                        });
-                        security_level = SecurityLevel::HighRisk;
-                    }
+            && let Some(issues) = details.as_array()
+        {
+            for issue in issues {
+                if let Some(issue_str) = issue.as_str()
+                    && issue_str.contains("dangerous")
+                {
+                    warnings.push(SecurityWarning {
+                        warning_type: "dangerous_content".to_string(),
+                        message: issue_str.to_string(),
+                        severity: SecurityLevel::HighRisk,
+                        suggestion: Some("Review script content for security issues".to_string()),
+                    });
+                    security_level = SecurityLevel::HighRisk;
                 }
             }
+        }
 
         let safe_to_execute = security_level != SecurityLevel::HighRisk;
 
@@ -914,10 +912,10 @@ impl SkillValidator {
 
         // Performance recommendations
         if let Some(loading_check) = checks.get("skill_file_valid")
-            && loading_check.execution_time_ms > 1000 {
-                recommendations
-                    .push("Consider optimizing skill file parsing performance".to_string());
-            }
+            && loading_check.execution_time_ms > 1000
+        {
+            recommendations.push("Consider optimizing skill file parsing performance".to_string());
+        }
 
         recommendations
     }

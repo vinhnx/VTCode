@@ -98,9 +98,10 @@ async fn build_conversation_history_from_resume(
     token_budget: &TokenBudgetManager,
 ) -> Vec<uni::Message> {
     if let Some(progress) = resume.and_then(|session| session.snapshot.progress.clone())
-        && let Some(usage) = progress.token_usage {
-            token_budget.restore_stats(usage).await;
-        }
+        && let Some(usage) = progress.token_usage
+    {
+        token_budget.restore_stats(usage).await;
+    }
 
     resume
         .map(|session| session.history.clone())

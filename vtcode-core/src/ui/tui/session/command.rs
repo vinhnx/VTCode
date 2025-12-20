@@ -726,7 +726,7 @@ fn append_text(
         return;
     }
 
-if kind == InlineMessageKind::Tool && session.handle_tool_code_fence_marker(text) {
+    if kind == InlineMessageKind::Tool && session.handle_tool_code_fence_marker(text) {
         return;
     }
 
