@@ -3,6 +3,29 @@
 All notable changes to vtcode will be documented in this file.
 
 ## [Unreleased] - 2025-12-14
+# [Version 0.50.11] - 2025-12-20
+
+
+### Features
+    - feat: Add Linux build and release support, fix npm publish, and improve release asset uploads and install script error handling.
+    - feat: Add npm publishing troubleshooting guide and authentication setup script, and automate binary stub creation in the release process.
+    - feat: Enable manual versioned builds in the release workflow and significantly enhance the install script with improved dependency/platform detection, asset verification, and a cargo fallback.
+
+
+### Bug Fixes
+    - fix: resolve GitHub release binary upload failures and enhance release script verification with new documentation.
+
+
+### Documentation
+    - docs: update changelog for v0.50.10 [skip ci]
+
+
+### Chores
+    - chore: update VSCode extension package.json to v0.50.10 [skip ci]
+    - chore: update npm package.json to v0.50.10 [skip ci]
+    - chore: release v0.50.10
+    - chore: update VSCode extension package.json to v0.50.9 [skip ci]
+    - chore: update npm package.json to v0.50.9 [skip ci]
 # [Version 0.50.10] - 2025-12-20
 
 
