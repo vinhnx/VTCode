@@ -131,6 +131,7 @@ pub mod code;
 pub mod commands;
 pub mod config;
 pub mod constants;
+pub mod context; // Vibe coding support: entity resolution, workspace state, conversation memory
 pub mod core;
 pub mod diagnostics;
 pub mod exec;

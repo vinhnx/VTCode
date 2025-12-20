@@ -34,7 +34,7 @@ use vtcode_core::utils::transcript;
 
 use crate::agent::runloop::ResumeSession;
 use crate::agent::runloop::model_picker::{ModelPickerProgress, ModelPickerState};
-use crate::agent::runloop::prompt::refine_user_prompt_if_enabled;
+use crate::agent::runloop::prompt::{refine_and_enrich_prompt, refine_user_prompt_if_enabled};
 use crate::agent::runloop::slash_commands::handle_slash_command;
 use crate::agent::runloop::ui::{build_inline_header_context, render_session_banner};
 use crate::agent::runloop::unified::mcp_tool_manager::McpToolManager;
@@ -903,11 +903,11 @@ pub(crate) async fn run_single_agent_loop_unified(
                 }
             };
 
-            // Apply prompt refinement if enabled
+            // Apply prompt refinement and vibe coding enrichment if enabled
             let refined_content = match &processed_content {
                 uni::MessageContent::Text(text) => {
                     let refined_text =
-                        refine_user_prompt_if_enabled(text, &config, vt_cfg.as_ref()).await;
+                        refine_and_enrich_prompt(text, &config, vt_cfg.as_ref()).await;
                     uni::MessageContent::text(refined_text)
                 }
                 uni::MessageContent::Parts(parts) => {
@@ -916,7 +916,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                         match part {
                             uni::ContentPart::Text { text } => {
                                 let refined_text =
-                                    refine_user_prompt_if_enabled(text, &config, vt_cfg.as_ref())
+                                    refine_and_enrich_prompt(text, &config, vt_cfg.as_ref())
                                         .await;
                                 refined_parts.push(uni::ContentPart::text(refined_text));
                             }

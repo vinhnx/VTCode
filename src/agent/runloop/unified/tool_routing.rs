@@ -243,6 +243,14 @@ pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
                 tokio::time::sleep(Duration::from_millis(100)).await;
                 return Ok(HitlDecision::Denied);
             }
+            InlineEvent::WizardModalSubmit(_)
+            | InlineEvent::WizardModalStepComplete { .. }
+            | InlineEvent::WizardModalBack { .. }
+            | InlineEvent::WizardModalCancel => {
+                ctrl_c_state.disarm_exit();
+                // Wizard modal events: treat as denial
+                return Ok(HitlDecision::Denied);
+            }
             InlineEvent::Cancel => {
                 ctrl_c_state.disarm_exit();
                 handle.close_modal();

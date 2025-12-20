@@ -48,7 +48,7 @@ fn should_trigger_turn_balancer(
 use crate::agent::runloop::ResumeSession;
 use crate::agent::runloop::git::confirm_changes_with_git_diff;
 use crate::agent::runloop::model_picker::{ModelPickerProgress, ModelPickerState};
-use crate::agent::runloop::prompt::refine_user_prompt_if_enabled;
+use crate::agent::runloop::prompt::{refine_and_enrich_prompt, refine_user_prompt_if_enabled};
 use crate::agent::runloop::slash_commands::handle_slash_command;
 use crate::agent::runloop::text_tools::{detect_textual_tool_call, extract_code_fence_blocks};
 use crate::agent::runloop::tool_output::render_code_fence_blocks;
@@ -1654,11 +1654,11 @@ pub(crate) async fn run_single_agent_loop_unified(
                 }
             };
 
-            // Apply prompt refinement if enabled
+            // Apply prompt refinement and vibe coding enrichment if enabled
             let refined_content = match &processed_content {
                 uni::MessageContent::Text(text) => {
                     let refined_text =
-                        refine_user_prompt_if_enabled(text, &config, vt_cfg.as_ref()).await;
+                        refine_and_enrich_prompt(text, &config, vt_cfg.as_ref()).await;
                     uni::MessageContent::text(refined_text)
                 }
                 uni::MessageContent::Parts(parts) => {
@@ -1667,7 +1667,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                         match part {
                             uni::ContentPart::Text { text } => {
                                 let refined_text =
-                                    refine_user_prompt_if_enabled(text, &config, vt_cfg.as_ref())
+                                    refine_and_enrich_prompt(text, &config, vt_cfg.as_ref())
                                         .await;
                                 refined_parts.push(uni::ContentPart::text(refined_text));
                             }
