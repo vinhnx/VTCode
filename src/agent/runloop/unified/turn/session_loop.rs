@@ -1021,6 +1021,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                 &mut provider_client,
                 &traj,
                 skip_confirmations,
+                full_auto,
                 &mut session_end_reason,
             )
             .await
@@ -1101,6 +1102,16 @@ pub(crate) async fn run_single_agent_loop_unified(
             if matches!(session_end_reason, SessionEndReason::Exit) {
                 break;
             }
+
+            // If we are in full-auto mode and the plan is still in progress,
+            // we should auto-continue by pushing "continue" to queued_inputs.
+            if full_auto {
+                let plan = tool_registry.current_plan();
+                if plan.summary.status == vtcode_core::tools::PlanCompletionState::InProgress {
+                    queued_inputs.push_back("continue".to_string());
+                }
+            }
+
             continue;
         }
 

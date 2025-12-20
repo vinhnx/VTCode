@@ -2209,6 +2209,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                     request_history: &[uni::Message],
                     step_count: usize,
                     tool_registry: &vtcode_core::tools::registry::ToolRegistry,
+                    full_auto: bool,
                 ) -> Result<String> {
                     context_manager.reset_token_budget().await;
                     let current_plan = tool_registry.current_plan();
@@ -2218,7 +2219,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                         None
                     };
                     let system_prompt = context_manager
-                        .build_system_prompt(request_history, step_count, plan_opt)
+                        .build_system_prompt(request_history, step_count, plan_opt, full_auto)
                         .await?;
                     Ok(system_prompt)
                 }
@@ -2229,6 +2230,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                         working_history,
                         step_count,
                         &tool_registry,
+                        full_auto,
                     )
                     .await?;
 

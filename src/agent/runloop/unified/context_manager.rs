@@ -305,6 +305,7 @@ impl ContextManager {
         attempt_history: &[uni::Message],
         retry_attempts: usize,
         current_plan: Option<vtcode_core::tools::TaskPlan>,
+        full_auto: bool,
     ) -> Result<String> {
         if self.base_system_prompt.trim().is_empty() {
             bail!("Base system prompt is empty; cannot build prompt");
@@ -336,6 +337,7 @@ impl ContextManager {
                 0.0
             },
             current_plan,
+            full_auto,
         };
 
         // Use incremental builder to avoid redundant cloning and processing

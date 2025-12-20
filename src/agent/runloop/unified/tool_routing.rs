@@ -264,6 +264,12 @@ pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
                 // Ignore text input when modal is shown
                 continue;
             }
+            InlineEvent::WizardModalSubmit(_)
+            | InlineEvent::WizardModalStepComplete { .. }
+            | InlineEvent::WizardModalBack { .. }
+            | InlineEvent::WizardModalCancel => {
+                ctrl_c_state.disarm_exit();
+            }
             InlineEvent::ScrollLineUp
             | InlineEvent::ScrollLineDown
             | InlineEvent::ScrollPageUp
