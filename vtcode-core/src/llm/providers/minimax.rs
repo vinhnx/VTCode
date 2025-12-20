@@ -3,7 +3,7 @@
 use super::AnthropicProvider;
 use crate::config::TimeoutsConfig;
 use crate::config::constants::models;
-use crate::config::core::PromptCachingConfig;
+use crate::config::core::{AnthropicConfig, PromptCachingConfig};
 use crate::llm::client::LLMClient;
 use crate::llm::provider::{
     FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
@@ -33,6 +33,7 @@ impl MinimaxProvider {
         base_url: Option<String>,
         prompt_cache: Option<PromptCachingConfig>,
         timeouts: Option<TimeoutsConfig>,
+        anthropic: Option<AnthropicConfig>,
     ) -> Self {
         let effective_model = model.unwrap_or_else(|| models::minimax::MINIMAX_M2.to_string());
 
@@ -42,6 +43,7 @@ impl MinimaxProvider {
             base_url,
             prompt_cache,
             timeouts,
+            anthropic,
         );
 
         Self { inner }

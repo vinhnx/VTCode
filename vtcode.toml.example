@@ -984,6 +984,20 @@ post_tool_use = [
   }
 ]
 
+# Provider-specific configuration
+[provider.anthropic]
+# Beta header for interleaved thinking feature
+# Default: "interleaved-thinking-2025-05-14"
+interleaved_thinking_beta = "interleaved-thinking-2025-05-14"
+
+# Budget tokens for interleaved thinking (controls maximum thinking tokens)
+# Default: 12000
+interleaved_thinking_budget_tokens = 12000
+
+# Type value for enabling interleaved thinking
+# Default: "enabled"
+interleaved_thinking_type_enabled = "enabled"
+
 # Model-specific behavior configuration
 [model]
 # Enable loop hang detection to identify when model is stuck in repetitive behavior

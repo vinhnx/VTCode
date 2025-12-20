@@ -97,6 +97,7 @@ impl ExampleAnthropicProvider {
         base_url: Option<String>,
         prompt_cache: Option<PromptCachingConfig>,
         _timeouts: Option<TimeoutsConfig>,
+        _anthropic: Option<AnthropicConfig>,
     ) -> Self {
         // Use the shared builder function to handle all the common logic
         let mut config = build_provider_config(ProviderConfigParams {

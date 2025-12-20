@@ -2,7 +2,7 @@
 
 use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
-use crate::config::core::PromptCachingConfig;
+use crate::config::core::{AnthropicConfig, PromptCachingConfig};
 use crate::config::models::Provider as ModelProvider;
 use crate::llm::client::LLMClient;
 use crate::llm::provider::{
@@ -60,6 +60,7 @@ impl MoonshotProvider {
         base_url: Option<String>,
         prompt_cache: Option<PromptCachingConfig>,
         _timeouts: Option<TimeoutsConfig>,
+        _anthropic: Option<AnthropicConfig>,
     ) -> Self {
         let resolved_model = resolve_model(model, "kimi-k2-0905"); // Deprecated: use OpenRouter models instead
         let resolved_base_url = override_base_url(
@@ -92,7 +93,7 @@ impl MoonshotProvider {
         prompt_cache: Option<PromptCachingConfig>,
         timeouts: Option<TimeoutsConfig>,
     ) -> Self {
-        Self::from_config(Some(api_key), Some(model), None, prompt_cache, timeouts)
+        Self::from_config(Some(api_key), Some(model), None, prompt_cache, timeouts, None)
     }
 
     fn convert_to_moonshot_format(&self, request: &LLMRequest) -> Result<Value, LLMError> {

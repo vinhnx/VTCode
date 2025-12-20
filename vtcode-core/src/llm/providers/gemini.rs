@@ -2,7 +2,7 @@
 
 use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
-use crate::config::core::{GeminiPromptCacheMode, GeminiPromptCacheSettings, PromptCachingConfig};
+use crate::config::core::{AnthropicConfig, GeminiPromptCacheMode, GeminiPromptCacheSettings, PromptCachingConfig};
 use crate::gemini::function_calling::{
     FunctionCall as GeminiFunctionCall, FunctionCallingConfig, FunctionResponse,
 };
@@ -84,8 +84,8 @@ impl GeminiProvider {
         model: Option<String>,
         base_url: Option<String>,
         prompt_cache: Option<PromptCachingConfig>,
-
         timeouts: Option<TimeoutsConfig>,
+        _anthropic: Option<AnthropicConfig>,
     ) -> Self {
         let api_key_value = api_key.unwrap_or_default();
         let model_value = resolve_model(model, models::google::GEMINI_2_5_FLASH);

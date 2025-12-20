@@ -1,0 +1,245 @@
+================================================================================
+VTCODE CONFIGURATION COMPLEXITY AUDIT - COMPLETE
+================================================================================
+
+REVIEW OBJECTIVE:
+  - Identify and remove unnecessary complexity from vtcode.toml
+  - Preserve core agent/LLM functionality
+  - Reduce configuration noise and user confusion
+
+REVIEW SCOPE:
+  ✅ vtcode.toml (775 lines)
+  ✅ vtcode-core/src/config/* (configuration system)
+  ✅ src/agent/runloop/unified/* (core agent loop)
+  ✅ Configuration references across codebase
+
+DELIVERABLES CREATED:
+  ✅ COMPLEXITY_AUDIT.md (325 lines)
+     - Detailed analysis of all complex features
+     - Classification: essential vs. experimental vs. dead
+     - Per-feature impact assessment
+     
+  ✅ CLEANUP_ACTION_PLAN.md (290 lines)
+     - Phased implementation approach
+     - Specific line numbers and git diffs
+     - Estimated time per task
+     - Verification procedures
+     
+  ✅ CLEANUP_CHECKLIST.md (170 lines)
+     - Task-by-task implementation checklist
+     - CLI commands for verification
+     - Rollback instructions
+     - Success criteria
+     
+  ✅ REVIEW_SUMMARY.md (280 lines)
+     - Executive summary of findings
+     - Impact assessment
+     - Configuration size comparison
+     - Q&A section
+
+================================================================================
+KEY FINDINGS
+================================================================================
+
+CORE AGENT LOGIC:
+  Status: ✅ HEALTHY
+  - Well-architected unified runloop
+  - Clean separation of concerns
+  - Proper provider abstraction
+  - Comprehensive tool security model
+  
+  NO CODE CHANGES NEEDED
+
+CONFIGURATION COMPLEXITY:
+  Total lines: 775
+  Dead/unused: 37 lines (4.8%)
+  Experimental (enabled): 40+ lines
+  
+  Issues found:
+    🔴 semantic_compression config: DEAD (code disabled, config not read)
+    🔴 tool_aware_retention config: DEAD (code disabled, config not read)
+    🔴 hooks.lifecycle section: COMMENTED OUT (all 29 examples commented)
+    🟡 vibe_coding: EXPERIMENTAL (enabled by default, should be disabled)
+    🟡 telemetry dashboards: EXPERIMENTAL (not implemented)
+
+CORE FUNCTIONALITY STATUS:
+  ✅ LLM inference: NO IMPACT
+  ✅ Tool execution: NO IMPACT
+  ✅ Context management: NO IMPACT
+  ✅ Security policies: NO IMPACT
+  ✅ PTY/terminal: NO IMPACT
+  
+  CRITICAL (Must preserve):
+    ✅ Decision Ledger - Required (embedded in runloop)
+    ✅ Trajectory Logger - Required (embedded in runloop)
+    ✅ All context trimming logic - Required (token budgeting)
+
+================================================================================
+RECOMMENDED CLEANUP
+================================================================================
+
+PHASE 1: Configuration Changes (10 minutes)
+  ✓ Remove semantic_compression config (2 lines)
+  ✓ Remove tool_aware_retention config (2 lines)
+  ✓ Remove commented hooks section (29 lines)
+  ✓ Disable vibe_coding by default (1 line change)
+  ✓ Verify telemetry defaults correct (0 changes)
+  
+  Result: vtcode.toml: 775 → 738 lines (-37 lines, -4.8%)
+
+PHASE 2: Documentation (26 minutes)
+  ✓ Create docs/experimental/HOOKS.md (~40 lines)
+  ✓ Create docs/experimental/VIBE_CODING.md (~35 lines)
+  ✓ Create docs/experimental/CONTEXT_OPTIMIZATION.md (~35 lines)
+  ✓ Update docs/config.md (remove dead references)
+  
+  Result: Experimental features documented, disabled by default
+
+PHASE 3: Verification (2 minutes + build time)
+  ✓ cargo check (no errors)
+  ✓ cargo nextest run config (tests pass)
+  ✓ cargo run (agent starts normally)
+  
+  Result: No regressions, core functionality intact
+
+TOTAL TIME: ~50 minutes + build
+
+RISK LEVEL: Very Low
+  - Configuration and documentation changes only
+  - No breaking changes (disabled features not used)
+  - Zero code changes to core runloop
+  - 100% reversible (git revert)
+
+================================================================================
+CONFIGURATION BREAKDOWN (After Cleanup)
+================================================================================
+
+ESSENTIAL (100+ lines) - KEEP AS-IS
+  [agent]                    - Provider, model, generation settings
+  [context]                  - Token budgeting, memory management
+  [context.ledger]           - Decision tracking (required)
+  [telemetry.trajectory]     - Execution audit (required)
+  [tools]                    - Security policies
+  [pty]                      - Terminal configuration
+  [timeouts]                 - Execution limits
+
+VALUABLE (150+ lines) - KEEP AND DOCUMENT
+  [prompt_cache]             - Provider-specific caching (8 providers)
+  [mcp]                      - Model Context Protocol (extensible)
+  [acp]                      - IDE integration
+  [commands/permissions]     - Security rules
+
+EXPERIMENTAL (30+ lines) - DISABLE BY DEFAULT
+  [agent.vibe_coding]        - Entity resolution (disabled by default)
+  [telemetry.dashboards]     - Not implemented (disabled)
+  [telemetry.bottleneck]     - Not implemented (disabled)
+
+REMOVED (0 lines) - DOCUMENTED IN docs/experimental/
+  Semantic compression       - Dead config, documented in CONTEXT_OPTIMIZATION.md
+  Tool-aware retention       - Dead config, documented in CONTEXT_OPTIMIZATION.md
+  Lifecycle hooks            - Commented examples, documented in HOOKS.md
+
+================================================================================
+CORE AGENT ARCHITECTURE (Unchanged)
+================================================================================
+
+Unified Runloop Flow:
+  1. User submits prompt
+  2. LLM generates response (with provider routing)
+  3. Tool decisions routed to executor
+  4. Tools executed (bash, file ops, etc)
+  5. Context trimmed if needed (token budgeting)
+  6. Trajectory recorded (execution audit)
+  7. Decision ledger updated (tracking)
+  8. Loop continues or completes
+
+All of this is:
+  ✅ Well-architected
+  ✅ Security-hardened
+  ✅ Token-aware
+  ✅ NOT affected by cleanup
+
+================================================================================
+IMPLEMENTATION NOTES
+================================================================================
+
+What's being removed:
+  - 37 lines of dead/commented config
+  - No code deletions
+  - No feature removals (just disabling experimental)
+
+What's being preserved:
+  - All core execution logic
+  - All tool implementations
+  - All security policies
+  - All context management
+  - Trajectory logging (required)
+  - Decision ledger (required)
+
+What's being improved:
+  - Configuration clarity
+  - User experience (less confusion)
+  - Documentation organization
+  - Experimental features clearly marked
+
+What can be easily re-enabled:
+  - Vibe coding (change enabled = true)
+  - Semantic compression (add back config)
+  - Hooks (copy from docs/experimental/HOOKS.md)
+
+================================================================================
+NEXT STEPS
+================================================================================
+
+1. Review the four documents created:
+   - COMPLEXITY_AUDIT.md (detailed analysis)
+   - CLEANUP_ACTION_PLAN.md (implementation guide)
+   - CLEANUP_CHECKLIST.md (task checklist)
+   - REVIEW_SUMMARY.md (executive summary)
+
+2. Run Phase 1 cleanup (10 minutes):
+   - Edit vtcode.toml according to CLEANUP_ACTION_PLAN.md
+   - Make 5 specific changes (remove dead config, disable vibe_coding)
+
+3. Run Phase 2 documentation (26 minutes):
+   - Create docs/experimental/ directory
+   - Create 3 markdown files (HOOKS, VIBE_CODING, CONTEXT_OPTIMIZATION)
+
+4. Run Phase 3 verification:
+   - cargo check
+   - cargo nextest run config
+   - cargo run -- ask "test"
+
+5. Commit and close:
+   - git add . && git commit
+   - PR review if needed
+
+================================================================================
+QUESTIONS?
+================================================================================
+
+See REVIEW_SUMMARY.md section "Questions & Answers" for:
+  - Will this break anything?
+  - Should we remove code too?
+  - Is trajectory logging required?
+  - Can users still enable experimental features?
+  - What about decision ledger?
+
+================================================================================
+CONCLUSION
+================================================================================
+
+vtcode.toml and related core logics have been thoroughly reviewed.
+
+FINDING: ✅ Core agent functionality is solid. Configuration has
+         unnecessary complexity from experimental features.
+
+RECOMMENDATION: Remove 37 lines of dead/commented config, disable
+                experimental features by default, document them separately.
+
+IMPACT: ~5% reduction in configuration size, zero impact on core
+        functionality, very low risk (config/docs only).
+
+Ready for implementation.
+
+================================================================================

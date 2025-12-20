@@ -177,6 +177,7 @@ pub(crate) async fn initialize_session(
         Some(config.model.clone()),
         Some(config.prompt_cache.clone()),
         None,
+        vt_cfg.as_ref().map(|cfg| cfg.provider.anthropic.clone()),
     )
     .context("Failed to initialize provider client")?;
 

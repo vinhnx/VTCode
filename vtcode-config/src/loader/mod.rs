@@ -5,7 +5,7 @@ use crate::acp::AgentClientProtocolConfig;
 use crate::context::ContextFeaturesConfig;
 use crate::core::{
     AgentConfig, AutomationConfig, CommandsConfig, ModelConfig, PermissionsConfig,
-    PromptCachingConfig, SecurityConfig, ToolsConfig,
+    PromptCachingConfig, SecurityConfig, ToolsConfig, AnthropicConfig,
 };
 use crate::debug::DebugConfig;
 use crate::defaults::{self, ConfigDefaultsProvider, SyntaxHighlightingDefaults};
@@ -95,6 +95,15 @@ impl SyntaxHighlightingConfig {
     }
 }
 
+/// Provider-specific configuration
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct ProviderConfig {
+    /// Anthropic provider configuration
+    #[serde(default)]
+    pub anthropic: AnthropicConfig,
+}
+
 /// Main configuration structure for VTCode
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
@@ -170,6 +179,10 @@ pub struct VTCodeConfig {
     /// Model-specific behavior configuration
     #[serde(default)]
     pub model: ModelConfig,
+
+    /// Provider-specific configuration
+    #[serde(default)]
+    pub provider: ProviderConfig,
 }
 
 impl VTCodeConfig {

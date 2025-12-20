@@ -347,6 +347,11 @@ pub mod models {
             CLAUDE_OPUS_4_1,
             CLAUDE_OPUS_4_5,
         ];
+
+        /// Interleaved thinking configuration for Anthropic models
+        pub const INTERLEAVED_THINKING_BETA: &str = "interleaved-thinking-2025-05-14";
+        pub const INTERLEAVED_THINKING_BUDGET_TOKENS: u32 = 12000;
+        pub const INTERLEAVED_THINKING_TYPE_ENABLED: &str = "enabled";
     }
 
     // MiniMax models (Anthropic-compatible API, standalone provider)

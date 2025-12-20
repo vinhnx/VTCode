@@ -1,5 +1,6 @@
 use crate::llm_modular::client::LLMClient;
 use crate::llm_modular::types::{BackendKind, LLMResponse, LLMError, Usage};
+use crate::config::constants::models;
 use async_trait::async_trait;
 use reqwest;
 use serde_json::{Value, json};
@@ -31,13 +32,18 @@ impl LLMClient for AnthropicProvider {
                 "content": prompt
             }],
             "max_tokens": 1024,
-            "temperature": 0.7
+            "temperature": 0.7,
+            "thinking": {
+                "type": models::anthropic::INTERLEAVED_THINKING_TYPE_ENABLED,
+                "budget_tokens": models::anthropic::INTERLEAVED_THINKING_BUDGET_TOKENS
+            }
         });
 
         let response = self.client
             .post("https://api.anthropic.com/v1/messages")
             .header("x-api-key", &self.api_key)
             .header("anthropic-version", "2023-06-01")
+            .header("anthropic-beta", models::anthropic::INTERLEAVED_THINKING_BETA)
             .header("Content-Type", "application/json")
             .json(&request_body)
             .send()

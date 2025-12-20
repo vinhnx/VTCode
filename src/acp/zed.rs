@@ -1814,6 +1814,7 @@ impl acp::Agent for ZedAgent {
                 Some(self.config.model.clone()),
                 Some(self.config.prompt_cache.clone()),
                 None,
+                None,
             )
             .map_err(acp::Error::into_internal_error)?,
         };

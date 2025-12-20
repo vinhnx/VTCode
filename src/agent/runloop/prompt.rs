@@ -82,6 +82,7 @@ pub(crate) async fn refine_user_prompt_if_enabled(
         Some(refiner_model.clone()),
         Some(cfg.prompt_cache.clone()),
         None,
+        None,
     ) else {
         return raw.to_string();
     };

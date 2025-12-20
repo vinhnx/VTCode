@@ -1,7 +1,7 @@
 #![allow(clippy::result_large_err)]
 use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
-use crate::config::core::PromptCachingConfig;
+use crate::config::core::{AnthropicConfig, PromptCachingConfig};
 use crate::llm::client::LLMClient;
 use crate::llm::error_display;
 use crate::llm::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse};
@@ -33,6 +33,7 @@ impl XAIProvider {
         base_url: Option<String>,
         prompt_cache: Option<PromptCachingConfig>,
         timeouts: Option<TimeoutsConfig>,
+        _anthropic: Option<AnthropicConfig>,
     ) -> Self {
         let resolved_model = resolve_model(model, models::xai::DEFAULT_MODEL);
         let resolved_base_url =
@@ -48,6 +49,7 @@ impl XAIProvider {
             Some(resolved_base_url),
             prompt_cache_forward,
             timeouts,
+            _anthropic,
         );
 
         Self {
@@ -62,7 +64,7 @@ impl XAIProvider {
         model: String,
         prompt_cache: Option<PromptCachingConfig>,
     ) -> Self {
-        Self::from_config(Some(api_key), Some(model), None, prompt_cache, None)
+        Self::from_config(Some(api_key), Some(model), None, prompt_cache, None, None)
     }
 }
 
