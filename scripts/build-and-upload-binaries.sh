@@ -76,17 +76,18 @@ check_dependencies() {
     
     print_success "GitHub CLI authenticated with correct account: $expected_account"
 
-    # By default, disable Docker usage to avoid Docker daemon dependency
-    # Users can override by setting VTCODE_DISABLE_CROSS=0 to re-enable cross
-    if [[ "${VTCODE_DISABLE_CROSS:-1}" == "1" ]] || [[ "${CROSS_CONTAINER_ENGINE:-}" == "" ]]; then
-        BUILD_TOOL="cargo"
-        print_info "Docker/cross usage disabled by default (set VTCODE_DISABLE_CROSS=0 to enable) – using cargo for builds"
-    elif command -v cross &> /dev/null; then
+    # Check if cross is available and should be used
+    if command -v cross &> /dev/null; then
         BUILD_TOOL="cross"
         print_success "Detected cross – using it for reproducible cross-compilation builds"
+        # Set default container engine if not set
+        if [[ -z "${CROSS_CONTAINER_ENGINE:-}" ]]; then
+            export CROSS_CONTAINER_ENGINE="docker"
+        fi
     else
         BUILD_TOOL="cargo"
         print_warning "cross not found. Install with 'cargo install cross' for faster, sandboxed cross-compilation."
+        print_info "Falling back to cargo with native compilation"
     fi
 
     print_success "All required tools are available"
@@ -104,6 +105,7 @@ install_rust_targets() {
     # Check if targets are installed
     local targets=$(rustc --print target-list)
 
+    # macOS targets
     if ! echo "$targets" | grep -q "x86_64-apple-darwin"; then
         print_info "Installing x86_64-apple-darwin target..."
         rustup target add x86_64-apple-darwin
@@ -112,6 +114,17 @@ install_rust_targets() {
     if ! echo "$targets" | grep -q "aarch64-apple-darwin"; then
         print_info "Installing aarch64-apple-darwin target..."
         rustup target add aarch64-apple-darwin
+    fi
+
+    # Linux targets
+    if ! echo "$targets" | grep -q "x86_64-unknown-linux-gnu"; then
+        print_info "Installing x86_64-unknown-linux-gnu target..."
+        rustup target add x86_64-unknown-linux-gnu
+    fi
+
+    if ! echo "$targets" | grep -q "aarch64-unknown-linux-gnu"; then
+        print_info "Installing aarch64-unknown-linux-gnu target..."
+        rustup target add aarch64-unknown-linux-gnu
     fi
 
     print_success "Required Rust targets are installed"
@@ -222,12 +235,13 @@ build_binaries() {
     # Create dist directory
     mkdir -p "$dist_dir"
 
+    # macOS builds
     # Build for x86_64 macOS
     print_info "Building for x86_64 macOS..."
     build_with_tool x86_64-apple-darwin
 
     # Package x86_64 binary
-    print_info "Packaging x86_64 binary..."
+    print_info "Packaging x86_64 macOS binary..."
     cp "target/x86_64-apple-darwin/release/vtcode" "$dist_dir/"
     cd "$dist_dir"
     tar -czf "vtcode-v$version-x86_64-apple-darwin.tar.gz" vtcode
@@ -238,10 +252,33 @@ build_binaries() {
     build_with_tool aarch64-apple-darwin
 
     # Package aarch64 binary
-    print_info "Packaging aarch64 binary..."
+    print_info "Packaging aarch64 macOS binary..."
     cp "target/aarch64-apple-darwin/release/vtcode" "$dist_dir/"
     cd "$dist_dir"
     tar -czf "vtcode-v$version-aarch64-apple-darwin.tar.gz" vtcode
+    cd ..
+
+    # Linux builds
+    # Build for x86_64 Linux
+    print_info "Building for x86_64 Linux..."
+    build_with_tool x86_64-unknown-linux-gnu
+
+    # Package x86_64 Linux binary
+    print_info "Packaging x86_64 Linux binary..."
+    cp "target/x86_64-unknown-linux-gnu/release/vtcode" "$dist_dir/"
+    cd "$dist_dir"
+    tar -czf "vtcode-v$version-x86_64-unknown-linux-gnu.tar.gz" vtcode
+    cd ..
+
+    # Build for aarch64 Linux
+    print_info "Building for aarch64 Linux..."
+    build_with_tool aarch64-unknown-linux-gnu
+
+    # Package aarch64 Linux binary
+    print_info "Packaging aarch64 Linux binary..."
+    cp "target/aarch64-unknown-linux-gnu/release/vtcode" "$dist_dir/"
+    cd "$dist_dir"
+    tar -czf "vtcode-v$version-aarch64-unknown-linux-gnu.tar.gz" vtcode
     cd ..
 
     print_success "Binaries built and packaged successfully"
@@ -256,16 +293,26 @@ calculate_checksums() {
 
     cd "$dist_dir"
 
-    local x86_64_sha256=$(shasum -a 256 "vtcode-v$version-x86_64-apple-darwin.tar.gz" | cut -d' ' -f1)
-    local aarch64_sha256=$(shasum -a 256 "vtcode-v$version-aarch64-apple-darwin.tar.gz" | cut -d' ' -f1)
+    # macOS checksums
+    local x86_64_macos_sha256=$(shasum -a 256 "vtcode-v$version-x86_64-apple-darwin.tar.gz" | cut -d' ' -f1)
+    local aarch64_macos_sha256=$(shasum -a 256 "vtcode-v$version-aarch64-apple-darwin.tar.gz" | cut -d' ' -f1)
+    
+    # Linux checksums
+    local x86_64_linux_sha256=$(shasum -a 256 "vtcode-v$version-x86_64-unknown-linux-gnu.tar.gz" | cut -d' ' -f1)
+    local aarch64_linux_sha256=$(shasum -a 256 "vtcode-v$version-aarch64-unknown-linux-gnu.tar.gz" | cut -d' ' -f1)
 
     cd ..
 
-    echo "$x86_64_sha256" > "$dist_dir/vtcode-v$version-x86_64-apple-darwin.sha256"
-    echo "$aarch64_sha256" > "$dist_dir/vtcode-v$version-aarch64-apple-darwin.sha256"
+    # Write checksum files
+    echo "$x86_64_macos_sha256" > "$dist_dir/vtcode-v$version-x86_64-apple-darwin.sha256"
+    echo "$aarch64_macos_sha256" > "$dist_dir/vtcode-v$version-aarch64-apple-darwin.sha256"
+    echo "$x86_64_linux_sha256" > "$dist_dir/vtcode-v$version-x86_64-unknown-linux-gnu.sha256"
+    echo "$aarch64_linux_sha256" > "$dist_dir/vtcode-v$version-aarch64-unknown-linux-gnu.sha256"
 
-    print_info "x86_64 SHA256: $x86_64_sha256"
-    print_info "aarch64 SHA256: $aarch64_sha256"
+    print_info "x86_64 macOS SHA256: $x86_64_macos_sha256"
+    print_info "aarch64 macOS SHA256: $aarch64_macos_sha256"
+    print_info "x86_64 Linux SHA256: $x86_64_linux_sha256"
+    print_info "aarch64 Linux SHA256: $aarch64_linux_sha256"
 
     print_success "SHA256 checksums calculated"
 }
@@ -291,10 +338,16 @@ upload_binaries() {
     print_info "Uploading assets to GitHub release..."
     
     local files_to_upload=()
+    # macOS files
     files_to_upload+=("vtcode-v$version-x86_64-apple-darwin.tar.gz")
     files_to_upload+=("vtcode-v$version-x86_64-apple-darwin.sha256")
     files_to_upload+=("vtcode-v$version-aarch64-apple-darwin.tar.gz")
     files_to_upload+=("vtcode-v$version-aarch64-apple-darwin.sha256")
+    # Linux files
+    files_to_upload+=("vtcode-v$version-x86_64-unknown-linux-gnu.tar.gz")
+    files_to_upload+=("vtcode-v$version-x86_64-unknown-linux-gnu.sha256")
+    files_to_upload+=("vtcode-v$version-aarch64-unknown-linux-gnu.tar.gz")
+    files_to_upload+=("vtcode-v$version-aarch64-unknown-linux-gnu.sha256")
     
     # Verify all files exist before uploading
     for file in "${files_to_upload[@]}"; do

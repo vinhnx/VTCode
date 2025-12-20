@@ -20,9 +20,6 @@
     "type": "git",
     "url": "git+https://github.com/vinhnx/vtcode.git"
   },
-  "publishConfig": {
-    "@vinhnx:registry": "https://npm.pkg.github.com"
-  },
   "readme": "README.md",
   "main": "index.js",
   "bin": {
@@ -36,8 +33,7 @@
   ],
   "scripts": {
     "postinstall": "node scripts/postinstall.js",
-    "preuninstall": "node scripts/preuninstall.js",
-    "publish-github": "node scripts/publish-to-github.js"
+    "preuninstall": "node scripts/preuninstall.js"
   },
   "engines": {
     "node": ">=14.0.0"
