@@ -1002,6 +1002,14 @@ impl LLMProvider for AnthropicProvider {
     }
 
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
+        // Validate API key before making request
+        if self.api_key.trim().is_empty() {
+            return Err(LLMError::Authentication {
+                message: "Anthropic API key is not configured. Set ANTHROPIC_API_KEY environment variable.".to_string(),
+                metadata: None,
+            });
+        }
+
         let anthropic_request = self.convert_to_anthropic_format(&request)?;
         let url = format!("{}/messages", self.base_url);
 

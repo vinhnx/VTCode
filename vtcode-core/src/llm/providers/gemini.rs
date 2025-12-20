@@ -227,16 +227,25 @@ impl LLMProvider for GeminiProvider {
     }
 
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
+        // Validate API key before making request
+        if self.api_key.trim().is_empty() {
+            return Err(LLMError::Authentication {
+                message: "Gemini API key is not configured. Set GEMINI_API_KEY or GOOGLE_API_KEY environment variable.".to_string(),
+                metadata: None,
+            });
+        }
+
         let gemini_request = self.convert_to_gemini_request(&request)?;
 
         let url = format!(
-            "{}/models/{}:generateContent?key={}",
-            self.base_url, request.model, self.api_key
+            "{}/models/{}:generateContent",
+            self.base_url, request.model
         );
 
         let response = self
             .http_client
             .post(&url)
+            .header("x-goog-api-key", self.api_key.as_ref())
             .json(&gemini_request)
             .send()
             .await
@@ -257,16 +266,25 @@ impl LLMProvider for GeminiProvider {
     }
 
     async fn stream(&self, request: LLMRequest) -> Result<LLMStream, LLMError> {
+        // Validate API key before making request
+        if self.api_key.trim().is_empty() {
+            return Err(LLMError::Authentication {
+                message: "Gemini API key is not configured. Set GEMINI_API_KEY or GOOGLE_API_KEY environment variable.".to_string(),
+                metadata: None,
+            });
+        }
+
         let gemini_request = self.convert_to_gemini_request(&request)?;
 
         let url = format!(
-            "{}/models/{}:streamGenerateContent?key={}",
-            self.base_url, request.model, self.api_key
+            "{}/models/{}:streamGenerateContent",
+            self.base_url, request.model
         );
 
         let response = self
             .http_client
             .post(&url)
+            .header("x-goog-api-key", self.api_key.as_ref())
             .json(&gemini_request)
             .send()
             .await

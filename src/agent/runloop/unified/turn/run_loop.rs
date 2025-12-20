@@ -1289,12 +1289,10 @@ pub(crate) async fn run_single_agent_loop_unified(
                                             let _updated_snapshot = {
                                                 let mut guard = tools.write().await;
                                                 guard.retain(|tool| {
-                                                    !tool
-                                                        .function
+                                                    tool.function
                                                         .as_ref()
-                                                        .unwrap()
-                                                        .name
-                                                        .starts_with("mcp_")
+                                                        .map(|f| !f.name.starts_with("mcp_"))
+                                                        .unwrap_or(true)
                                                 });
                                                 guard.extend(new_definitions);
                                                 guard.clone()
@@ -1368,12 +1366,10 @@ pub(crate) async fn run_single_agent_loop_unified(
                                             let _updated_snapshot = {
                                                 let mut guard = tools.write().await;
                                                 guard.retain(|tool| {
-                                                    !tool
-                                                        .function
+                                                    tool.function
                                                         .as_ref()
-                                                        .unwrap()
-                                                        .name
-                                                        .starts_with("mcp_")
+                                                        .map(|f| !f.name.starts_with("mcp_"))
+                                                        .unwrap_or(true)
                                                 });
                                                 guard.extend(new_definitions);
                                                 guard.clone()
@@ -2448,15 +2444,26 @@ pub(crate) async fn run_single_agent_loop_unified(
                     // This prevents the loop from breaking after tool execution
                     let _ = final_text.take();
                     for call in &tool_calls {
-                        let name = call
-                            .function
-                            .as_ref()
-                            .expect("Tool call must have function")
-                            .name
-                            .as_str();
-                        let args_val = call
-                            .parsed_arguments()
-                            .unwrap_or_else(|_| serde_json::json!({}));
+                        let Some(function) = call.function.as_ref() else {
+                            tracing::warn!("Malformed tool call: missing function definition");
+                            working_history.push(uni::Message::system(
+                                "Skipped malformed tool call: missing function definition".to_string(),
+                            ));
+                            continue;
+                        };
+                        let name = function.name.as_str();
+                        let args_val = match call.parsed_arguments() {
+                            Ok(args) => args,
+                            Err(err) => {
+                                tracing::warn!("Failed to parse args for '{}': {}", name, err);
+                                let error_msg = format!(
+                                    "Tool '{}' received invalid arguments: {}",
+                                    name, err
+                                );
+                                working_history.push(uni::Message::system(error_msg));
+                                continue;
+                            }
+                        };
 
                         // Normalize args for loop detection: strip pagination params and normalize paths
                         let normalized_args = if let Some(obj) = args_val.as_object() {

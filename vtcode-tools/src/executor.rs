@@ -138,7 +138,23 @@ impl CachedToolExecutor {
 
         // Execute tool (caller provides actual execution)
         // This is where your tool registry would call the actual tool
-        let result = self.execute_tool_internal(tool_name, &*owned_args).await?;
+        let result = match self.execute_tool_internal(tool_name, &*owned_args).await {
+            Ok(r) => r,
+            Err(e) => {
+                // Invoke error handlers before propagating
+                if let Err(hook_err) = self.middleware.on_error(&req, &e).await {
+                    eprintln!("[vtcode-tools] Middleware on_error hook failed: {}", hook_err);
+                }
+                // Update failed stats
+                {
+                    let mut stats = self.stats.write().await;
+                    stats.failed_calls += 1;
+                }
+                // Record failure in pattern detector
+                self.record_pattern(tool_name, false, start.elapsed().as_millis() as u64).await;
+                return Err(e);
+            }
+        };
 
         let duration_ms = start.elapsed().as_millis() as u64;
 

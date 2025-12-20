@@ -19,6 +19,14 @@ mod shared {
 
     const ERR_ARGS_OBJECT: &str = "Arguments must be an object";
     const ERR_CLIENT_UNINITIALIZED: &str = "ACP client not initialized";
+    /// Maximum allowed length for agent IDs to prevent DoS via oversized strings.
+    const MAX_AGENT_ID_LEN: usize = 256;
+    /// Maximum allowed length for action names.
+    const MAX_ACTION_LEN: usize = 128;
+    /// Maximum JSON depth for call_args to prevent stack overflow.
+    const MAX_JSON_DEPTH: usize = 32;
+    /// Maximum size for call_args payload in bytes.
+    const MAX_ARGS_SIZE: usize = 1024 * 1024; // 1MB
 
     pub fn extract_args_object(args: &Value) -> anyhow::Result<&serde_json::Map<String, Value>> {
         args.as_object()
@@ -53,6 +61,78 @@ mod shared {
             return Err(anyhow::anyhow!("Missing required field: {}", field));
         }
         Ok(())
+    }
+
+    /// Validate agent ID format: alphanumeric, hyphens, underscores only, length limit.
+    pub fn validate_agent_id(agent_id: &str) -> anyhow::Result<()> {
+        if agent_id.is_empty() {
+            return Err(anyhow::anyhow!("agent_id cannot be empty"));
+        }
+        if agent_id.len() > MAX_AGENT_ID_LEN {
+            return Err(anyhow::anyhow!(
+                "agent_id exceeds maximum length of {} characters",
+                MAX_AGENT_ID_LEN
+            ));
+        }
+        if !agent_id
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == '.')
+        {
+            return Err(anyhow::anyhow!(
+                "agent_id contains invalid characters (allowed: alphanumeric, hyphen, underscore, dot)"
+            ));
+        }
+        Ok(())
+    }
+
+    /// Validate action name format.
+    pub fn validate_action(action: &str) -> anyhow::Result<()> {
+        if action.is_empty() {
+            return Err(anyhow::anyhow!("action cannot be empty"));
+        }
+        if action.len() > MAX_ACTION_LEN {
+            return Err(anyhow::anyhow!(
+                "action exceeds maximum length of {} characters",
+                MAX_ACTION_LEN
+            ));
+        }
+        if !action
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == '.')
+        {
+            return Err(anyhow::anyhow!(
+                "action contains invalid characters"
+            ));
+        }
+        Ok(())
+    }
+
+    /// Validate call_args size and depth.
+    pub fn validate_call_args(args: &Value) -> anyhow::Result<()> {
+        let serialized = serde_json::to_string(args)
+            .map_err(|e| anyhow::anyhow!("Failed to serialize args: {}", e))?;
+        if serialized.len() > MAX_ARGS_SIZE {
+            return Err(anyhow::anyhow!(
+                "call_args exceeds maximum size of {} bytes",
+                MAX_ARGS_SIZE
+            ));
+        }
+        if json_depth(args) > MAX_JSON_DEPTH {
+            return Err(anyhow::anyhow!(
+                "call_args exceeds maximum nesting depth of {}",
+                MAX_JSON_DEPTH
+            ));
+        }
+        Ok(())
+    }
+
+    /// Calculate JSON nesting depth.
+    fn json_depth(value: &Value) -> usize {
+        match value {
+            Value::Array(arr) => 1 + arr.iter().map(json_depth).max().unwrap_or(0),
+            Value::Object(obj) => 1 + obj.values().map(json_depth).max().unwrap_or(0),
+            _ => 0,
+        }
     }
 }
 
@@ -106,6 +186,23 @@ impl Tool for AcpTool {
         let obj = shared::extract_args_object(args)?;
         shared::validate_field_exists(obj, "action")?;
         shared::validate_field_exists(obj, "remote_agent_id")?;
+        // Validate formats
+        if let Some(action) = obj.get("action").and_then(|v| v.as_str()) {
+            shared::validate_action(action)?;
+        }
+        if let Some(agent_id) = obj.get("remote_agent_id").and_then(|v| v.as_str()) {
+            shared::validate_agent_id(agent_id)?;
+        }
+        // Validate method if provided
+        if let Some(method) = obj.get("method").and_then(|v| v.as_str()) {
+            if method != "sync" && method != "async" {
+                return Err(anyhow::anyhow!("Invalid method '{}': must be 'sync' or 'async'", method));
+            }
+        }
+        // Validate call_args if provided
+        if let Some(call_args) = obj.get("args") {
+            shared::validate_call_args(call_args)?;
+        }
         Ok(())
     }
 
@@ -116,7 +213,12 @@ impl Tool for AcpTool {
         let remote_agent_id = shared::get_required_field(obj, "remote_agent_id", None)?;
         let method = obj.get("method").and_then(|v| v.as_str()).unwrap_or("sync");
 
+        // Validate inputs before use
+        shared::validate_action(action)?;
+        shared::validate_agent_id(remote_agent_id)?;
+
         let call_args = obj.get("args").cloned().unwrap_or(json!({}));
+        shared::validate_call_args(&call_args)?;
 
         let client = self.client.read().await;
         let client = shared::check_client_initialized(&*client)?;

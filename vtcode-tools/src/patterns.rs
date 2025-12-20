@@ -25,25 +25,40 @@ pub struct DetectedPattern {
     pub confidence: f64,
 }
 
+/// Maximum events to retain before eviction (prevents unbounded memory growth).
+const MAX_EVENTS_CAPACITY: usize = 1000;
+
 /// Pattern detector using sequence analysis.
 pub struct PatternDetector {
     events: Vec<ToolEvent>,
     patterns: HashMap<String, DetectedPattern>,
     sequence_length: usize,
+    max_events: usize,
 }
 
 impl PatternDetector {
     /// Create new detector with sliding window size.
     pub fn new(sequence_length: usize) -> Self {
+        Self::with_capacity(sequence_length, MAX_EVENTS_CAPACITY)
+    }
+
+    /// Create new detector with custom event capacity limit.
+    pub fn with_capacity(sequence_length: usize, max_events: usize) -> Self {
         Self {
-            events: Vec::with_capacity(64),
+            events: Vec::with_capacity(64.min(max_events)),
             patterns: HashMap::with_capacity(16),
             sequence_length,
+            max_events: max_events.max(sequence_length * 2),
         }
     }
 
-    /// Add an event to the detector.
+    /// Add an event to the detector with automatic eviction.
     pub fn record_event(&mut self, event: ToolEvent) {
+        // Evict oldest events if at capacity (sliding window)
+        if self.events.len() >= self.max_events {
+            let drain_count = self.max_events / 4; // Remove 25% of oldest
+            self.events.drain(0..drain_count);
+        }
         self.events.push(event);
         self.analyze();
     }
