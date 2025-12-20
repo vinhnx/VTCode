@@ -514,7 +514,11 @@ impl AgentRunner {
     /// Catches configuration errors early to avoid wasted API calls.
     fn validate_llm_request(&self, request: &LLMRequest) -> Result<()> {
         // Validate system prompt presence
-        if request.system_prompt.as_ref().is_none_or(|s| s.trim().is_empty()) {
+        if request
+            .system_prompt
+            .as_ref()
+            .is_none_or(|s| s.trim().is_empty())
+        {
             return Err(anyhow!("System prompt cannot be empty"));
         }
 
@@ -1771,7 +1775,7 @@ impl AgentRunner {
         max_retries: u32,
     ) -> Result<TaskResults> {
         use crate::core::orchestrator_retry::is_retryable_error;
-        use tokio::time::{sleep, Duration};
+        use tokio::time::{Duration, sleep};
 
         let mut delay_secs = 2u64;
         let max_delay_secs = 30u64;

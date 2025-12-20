@@ -2329,7 +2329,9 @@ impl ToolRegistry {
 }
 
 fn planning_allowed(name: &str) -> bool {
-    PLANNING_ALLOWED_TOOLS.iter().any(|allowed| *allowed == name)
+    PLANNING_ALLOWED_TOOLS
+        .iter()
+        .any(|allowed| *allowed == name)
 }
 
 impl ToolRegistry {

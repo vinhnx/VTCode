@@ -345,8 +345,8 @@ pub async fn handle_skills_create(skill_path: &PathBuf) -> Result<()> {
 
 /// Validate SKILL.md
 pub async fn handle_skills_validate(skill_path: &Path) -> Result<()> {
-    use vtcode_core::skills::manifest::parse_skill_file;
     use vtcode_core::skills::enhanced_validator::ComprehensiveSkillValidator;
+    use vtcode_core::skills::manifest::parse_skill_file;
 
     println!("Validating skill at: {}\n", skill_path.display());
 
@@ -358,12 +358,12 @@ pub async fn handle_skills_validate(skill_path: &Path) -> Result<()> {
     // Run comprehensive validation with detailed report
     let validator = ComprehensiveSkillValidator::new();
     let mut report = validator.validate_manifest(&manifest, skill_path);
-    
+
     // Also validate file references if we have instructions
     if !instructions.is_empty() {
         validator.validate_file_references(&manifest, skill_path, &instructions, &mut report);
     }
-    
+
     report.finalize();
 
     // Print detailed report
@@ -372,7 +372,10 @@ pub async fn handle_skills_validate(skill_path: &Path) -> Result<()> {
     if report.is_valid {
         Ok(())
     } else {
-        Err(anyhow::anyhow!("Skill validation failed with {} errors", report.stats.error_count))
+        Err(anyhow::anyhow!(
+            "Skill validation failed with {} errors",
+            report.stats.error_count
+        ))
     }
 }
 

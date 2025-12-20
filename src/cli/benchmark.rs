@@ -227,7 +227,12 @@ pub async fn handle_benchmark_command(
         let result = runner
             .execute_task_with_retry(&prepared.task, &prepared.contexts, max_retries)
             .await
-            .with_context(|| format!("Failed to execute task '{}' after retries", prepared.task.id))?;
+            .with_context(|| {
+                format!(
+                    "Failed to execute task '{}' after retries",
+                    prepared.task.id
+                )
+            })?;
         reports.push(BenchmarkTaskReport::from(&prepared.task, result));
     }
 

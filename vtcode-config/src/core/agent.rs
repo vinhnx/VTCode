@@ -302,7 +302,7 @@ const fn default_instruction_max_bytes() -> usize {
 
 #[inline]
 const fn default_max_task_retries() -> u32 {
-    2  // Retry twice on transient failures
+    2 // Retry twice on transient failures
 }
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]

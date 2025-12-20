@@ -234,7 +234,9 @@ impl SkillManifest {
         }
 
         // Validate compatibility field
-        if let Some(compatibility) = &self.compatibility && (compatibility.is_empty() || compatibility.len() > 500) {
+        if let Some(compatibility) = &self.compatibility
+            && (compatibility.is_empty() || compatibility.len() > 500)
+        {
             anyhow::bail!(
                 "compatibility must be between 1-500 characters if provided, got {} characters",
                 compatibility.len()

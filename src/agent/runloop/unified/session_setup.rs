@@ -126,8 +126,11 @@ pub(crate) async fn initialize_session(
                 cfg.mcp.providers.len()
             );
 
-            let manager =
-                AsyncMcpManager::new(cfg.mcp.clone(), Arc::new(|_event: mcp_events::McpEvent| {}));
+            let manager = AsyncMcpManager::new(
+                cfg.mcp.clone(),
+                cfg.security.hitl_notification_bell,
+                Arc::new(|_event: mcp_events::McpEvent| {}),
+            );
             let manager_arc = Arc::new(manager);
 
             // Start async initialization (non-blocking)
