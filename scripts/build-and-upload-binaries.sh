@@ -54,6 +54,28 @@ check_dependencies() {
         exit 1
     fi
 
+    # Verify correct GitHub account is active
+    local expected_account="vinhnx"
+    if ! gh auth status >/dev/null 2>&1; then
+        print_error "GitHub CLI is not authenticated. Please run: gh auth login"
+        exit 1
+    fi
+    
+    # Check if we're logged in to the expected account and it's active
+    if ! gh auth status 2>&1 | grep -q "Logged in to github.com account $expected_account"; then
+        print_error "Not logged in to GitHub account: $expected_account"
+        print_info "Run: gh auth login --hostname github.com"
+        exit 1
+    fi
+    
+    if ! gh auth status 2>&1 | grep -A 5 "account $expected_account" | grep -q "Active account: true"; then
+        print_error "GitHub account '$expected_account' is not active"
+        print_info "Run: gh auth switch --hostname github.com --user $expected_account"
+        exit 1
+    fi
+    
+    print_success "GitHub CLI authenticated with correct account: $expected_account"
+
     # By default, disable Docker usage to avoid Docker daemon dependency
     # Users can override by setting VTCODE_DISABLE_CROSS=0 to re-enable cross
     if [[ "${VTCODE_DISABLE_CROSS:-1}" == "1" ]] || [[ "${CROSS_CONTAINER_ENGINE:-}" == "" ]]; then
@@ -256,20 +278,52 @@ upload_binaries() {
 
     print_info "Uploading binaries to GitHub Release $tag..."
 
+    # Verify the release exists before attempting upload
+    if ! gh release view "$tag" >/dev/null 2>&1; then
+        print_error "GitHub release '$tag' does not exist. Please ensure the release is created first."
+        print_info "You may need to wait a moment for the release to be created by cargo-release."
+        return 1
+    fi
+
     cd "$dist_dir"
 
-    # Upload x86_64 binary
-    print_info "Uploading x86_64 binary..."
-    if ! gh release upload "$tag" "vtcode-v$version-x86_64-apple-darwin.tar.gz" --clobber; then
-        print_warning "Failed to upload x86_64 binary - it may already exist or there might be permission issues"
+    # Upload all files in batch for better performance
+    print_info "Uploading assets to GitHub release..."
+    
+    local files_to_upload=()
+    files_to_upload+=("vtcode-v$version-x86_64-apple-darwin.tar.gz")
+    files_to_upload+=("vtcode-v$version-x86_64-apple-darwin.sha256")
+    files_to_upload+=("vtcode-v$version-aarch64-apple-darwin.tar.gz")
+    files_to_upload+=("vtcode-v$version-aarch64-apple-darwin.sha256")
+    
+    # Verify all files exist before uploading
+    for file in "${files_to_upload[@]}"; do
+        if [[ ! -f "$file" ]]; then
+            print_error "Required file not found: $file"
+            cd ..
+            return 1
+        fi
+    done
+    
+    # Upload all files
+    print_info "Uploading ${#files_to_upload[@]} files to release $tag..."
+    if ! gh release upload "$tag" "${files_to_upload[@]}" --clobber; then
+        print_error "Failed to upload assets to GitHub release"
+        cd ..
+        return 1
     fi
-
-    # Upload aarch64 binary
-    print_info "Uploading aarch64 binary..."
-    if ! gh release upload "$tag" "vtcode-v$version-aarch64-apple-darwin.tar.gz" --clobber; then
-        print_warning "Failed to upload aarch64 binary - it may already exist or there might be permission issues"
+    
+    # Verify upload was successful
+    print_info "Verifying uploaded assets..."
+    sleep 2  # Give GitHub a moment to process the upload
+    local asset_count=$(gh release view "$tag" --json assets --jq '.assets | length' 2>/dev/null || echo "0")
+    if [[ $asset_count -lt ${#files_to_upload[@]} ]]; then
+        print_warning "Expected ${#files_to_upload[@]} assets, but found $asset_count in release"
+        print_info "This may be temporary - check the release on GitHub to confirm all assets uploaded"
+    else
+        print_success "All $asset_count assets uploaded successfully"
     fi
-
+    
     cd ..
 
     print_success "Binary upload process completed"
