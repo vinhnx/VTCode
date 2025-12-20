@@ -216,6 +216,21 @@ pub struct SecurePromptConfig {
     pub label: String,
 }
 
+/// A single step in a wizard modal flow
+#[derive(Clone, Debug)]
+pub struct WizardStep {
+    /// Title displayed in the tab header
+    pub title: String,
+    /// Question or instruction shown above the list
+    pub question: String,
+    /// Selectable items for this step
+    pub items: Vec<InlineListItem>,
+    /// Whether this step has been completed
+    pub completed: bool,
+    /// The selected answer for this step (if completed)
+    pub answer: Option<InlineListSelection>,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InlineMessageKind {
     Agent,
@@ -286,6 +301,12 @@ pub enum InlineCommand {
         selected: Option<InlineListSelection>,
         search: Option<InlineListSearchConfig>,
     },
+    ShowWizardModal {
+        title: String,
+        steps: Vec<WizardStep>,
+        current_step: usize,
+        search: Option<InlineListSearchConfig>,
+    },
     CloseModal,
     SetCustomPrompts {
         registry: crate::prompts::CustomPromptRegistry,
@@ -307,6 +328,15 @@ pub enum InlineEvent {
     QueueSubmit(String),
     ListModalSubmit(InlineListSelection),
     ListModalCancel,
+    WizardModalSubmit(Vec<InlineListSelection>),
+    WizardModalStepComplete {
+        step: usize,
+        answer: InlineListSelection,
+    },
+    WizardModalBack {
+        from_step: usize,
+    },
+    WizardModalCancel,
     Cancel,
     Exit,
     Interrupt,
@@ -462,6 +492,21 @@ impl InlineHandle {
             lines,
             items,
             selected,
+            search,
+        });
+    }
+
+    /// Show a multi-step wizard modal with tabs for navigation
+    pub fn show_wizard_modal(
+        &self,
+        title: String,
+        steps: Vec<WizardStep>,
+        search: Option<InlineListSearchConfig>,
+    ) {
+        let _ = self.sender.send(InlineCommand::ShowWizardModal {
+            title,
+            steps,
+            current_step: 0,
             search,
         });
     }

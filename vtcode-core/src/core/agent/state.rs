@@ -254,4 +254,50 @@ impl TaskRunState {
         self.conversation_messages
             .push(Message::tool_response(call_id, content));
     }
+
+    /// Push a successful tool result to both conversation (for Gemini) and conversation_messages.
+    /// This ensures state consistency between the two collections.
+    #[inline]
+    pub fn push_tool_result(
+        &mut self,
+        call_id: String,
+        tool_name: &str,
+        display_text: String,
+        serialized_result: String,
+        is_gemini: bool,
+    ) {
+        if is_gemini {
+            self.conversation.push(Content {
+                role: "user".to_string(),
+                parts: vec![Part::Text {
+                    text: display_text,
+                    thought_signature: None,
+                }],
+            });
+        }
+        self.conversation_messages
+            .push(Message::tool_response(call_id, serialized_result));
+        self.executed_commands.push(tool_name.to_owned());
+    }
+
+    /// Push a tool error to both conversation (for Gemini) and conversation_messages.
+    #[inline]
+    pub fn push_tool_error(
+        &mut self,
+        call_id: String,
+        error_msg: String,
+        is_gemini: bool,
+    ) {
+        if is_gemini {
+            self.conversation.push(Content {
+                role: "user".to_string(),
+                parts: vec![Part::Text {
+                    text: error_msg.clone(),
+                    thought_signature: None,
+                }],
+            });
+        }
+        self.conversation_messages
+            .push(Message::tool_response(call_id, error_msg));
+    }
 }
