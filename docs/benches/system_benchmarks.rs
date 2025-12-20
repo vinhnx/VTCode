@@ -5,8 +5,6 @@ use std::env;
 use vtcode::StartupContext;
 use vtcode_core::cli::args::Cli;
 use vtcode_core::config::constants::tools;
-use vtcode_core::config::router::{HeuristicSettings, RouterConfig};
-use vtcode_core::core::router::{ModelSelector, TaskClass, TaskClassifier};
 use vtcode_core::tools::ToolRegistry;
 
 fn benchmark_startup_context(c: &mut Criterion) {
@@ -64,52 +62,7 @@ fn benchmark_startup_context(c: &mut Criterion) {
     }
 }
 
-fn benchmark_router_decisions(c: &mut Criterion) {
-    let prompts = [
-        "quick summary of README",
-        "generate a patch fixing panic in src/main.rs",
-        "research concurrency primitives across crates.io",
-        "refactor module structure to separate startup logic",
-        "write integration tests for router heuristics",
-    ];
 
-    let classes = [
-        TaskClass::Simple,
-        TaskClass::Standard,
-        TaskClass::Complex,
-        TaskClass::CodegenHeavy,
-        TaskClass::RetrievalHeavy,
-    ];
-
-    let mut group = c.benchmark_group("router");
-    group.bench_function("heuristic_classification", |b| {
-        b.iter_batched(
-            HeuristicSettings::default,
-            |heuristics| {
-                let classifier = TaskClassifier::new(&heuristics);
-                for prompt in &prompts {
-                    black_box(classifier.classify(black_box(prompt)));
-                }
-            },
-            BatchSize::SmallInput,
-        );
-    });
-
-    group.bench_function("model_selection", |b| {
-        b.iter_batched(
-            RouterConfig::default,
-            |router_cfg| {
-                let fallback_owned = router_cfg.models.standard.clone();
-                let selector = ModelSelector::new(&router_cfg, &fallback_owned);
-                for class in &classes {
-                    black_box(selector.select(*class));
-                }
-            },
-            BatchSize::SmallInput,
-        );
-    });
-    group.finish();
-}
 
 fn benchmark_tool_execution(c: &mut Criterion) {
     let workspace = TempDir::new().expect("temp workspace");
@@ -141,7 +94,6 @@ fn benchmark_tool_execution(c: &mut Criterion) {
 criterion_group!(
     benches,
     benchmark_startup_context,
-    benchmark_router_decisions,
     benchmark_tool_execution
 );
 criterion_main!(benches);

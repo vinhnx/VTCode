@@ -56,11 +56,6 @@ pub fn apply_runtime_overrides(vt_cfg: Option<&mut VTCodeConfig>, runtime_cfg: &
         if matches!(runtime_cfg.model_source, ModelSelectionSource::CliOverride) {
             let override_model = runtime_cfg.model.clone();
             cfg.agent.default_model = override_model.clone();
-            cfg.router.models.simple = override_model.clone();
-            cfg.router.models.standard = override_model.clone();
-            cfg.router.models.complex = override_model.clone();
-            cfg.router.models.codegen_heavy = override_model.clone();
-            cfg.router.models.retrieval_heavy = override_model;
         }
     }
 }
@@ -77,16 +72,11 @@ mod tests {
     };
 
     #[test]
-    fn cli_model_override_updates_router_models() {
+    fn cli_model_override_updates_default_model() {
         const OVERRIDE_MODEL: &str = "override-model";
 
         let mut vt_cfg = VTCodeConfig::default();
         vt_cfg.agent.default_model = "config-model".to_string();
-        vt_cfg.router.models.simple = "config-simple".to_string();
-        vt_cfg.router.models.standard = "config-standard".to_string();
-        vt_cfg.router.models.complex = "config-complex".to_string();
-        vt_cfg.router.models.codegen_heavy = "config-codegen".to_string();
-        vt_cfg.router.models.retrieval_heavy = "config-retrieval".to_string();
 
         let runtime_cfg = CoreAgentConfig {
             model: OVERRIDE_MODEL.to_string(),
@@ -110,18 +100,13 @@ mod tests {
         apply_runtime_overrides(Some(&mut vt_cfg), &runtime_cfg);
 
         assert_eq!(vt_cfg.agent.default_model, OVERRIDE_MODEL);
-        assert_eq!(vt_cfg.router.models.simple, OVERRIDE_MODEL);
-        assert_eq!(vt_cfg.router.models.standard, OVERRIDE_MODEL);
-        assert_eq!(vt_cfg.router.models.complex, OVERRIDE_MODEL);
-        assert_eq!(vt_cfg.router.models.codegen_heavy, OVERRIDE_MODEL);
-        assert_eq!(vt_cfg.router.models.retrieval_heavy, OVERRIDE_MODEL);
         assert_eq!(vt_cfg.agent.provider, "cli-provider");
     }
 
     #[test]
-    fn workspace_config_preserves_router_models() {
+    fn workspace_config_preserves_default_model() {
         let mut vt_cfg = VTCodeConfig::default();
-        vt_cfg.router.models.standard = "config-standard".to_string();
+        vt_cfg.agent.default_model = "config-model".to_string();
 
         let runtime_cfg = CoreAgentConfig {
             model: "config-standard".to_string(),
@@ -144,7 +129,7 @@ mod tests {
 
         apply_runtime_overrides(Some(&mut vt_cfg), &runtime_cfg);
 
-        assert_eq!(vt_cfg.router.models.standard, "config-standard");
+        assert_eq!(vt_cfg.agent.default_model, "config-model");
         assert_eq!(vt_cfg.agent.provider, "config-provider");
     }
 }

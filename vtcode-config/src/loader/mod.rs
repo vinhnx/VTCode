@@ -12,7 +12,6 @@ use crate::defaults::{self, ConfigDefaultsProvider, SyntaxHighlightingDefaults};
 use crate::hooks::HooksConfig;
 use crate::mcp::McpClientConfig;
 use crate::root::{PtyConfig, UiConfig};
-use crate::router::RouterConfig;
 use crate::telemetry::TelemetryConfig;
 use crate::timeouts::TimeoutsConfig;
 use anyhow::{Context, Result, ensure};
@@ -136,10 +135,6 @@ pub struct VTCodeConfig {
     #[serde(default)]
     pub context: ContextFeaturesConfig,
 
-    /// Router configuration (dynamic model + engine selection)
-    #[serde(default)]
-    pub router: RouterConfig,
-
     /// Telemetry configuration (logging, trajectory)
     #[serde(default)]
     pub telemetry: TelemetryConfig,
@@ -190,10 +185,6 @@ impl VTCodeConfig {
         self.context
             .validate()
             .context("Invalid context configuration")?;
-
-        self.router
-            .validate()
-            .context("Invalid router configuration")?;
 
         self.hooks
             .validate()
@@ -604,76 +595,6 @@ alert_threshold = 0.85
 detailed_tracking = false
 
 # AI model routing - Intelligent model selection
-[router]
-# Enable intelligent model routing
-enabled = true
-
-# Enable heuristic-based model selection
-heuristic_classification = true
-
-# Optional override model for routing decisions (empty = use default)
-llm_router_model = ""
-
-# Model mapping for different task types
-[router.models]
-# Model for simple queries
-simple = "gpt-5-nano"
-# Model for standard tasks
-standard = "gpt-5-nano"
-# Model for complex tasks
-complex = "gpt-5-nano"
-# Model for code generation heavy tasks
-codegen_heavy = "gpt-5-nano"
-# Model for information retrieval heavy tasks
-retrieval_heavy = "gpt-5-nano"
-
-# Router budget settings (if applicable)
-[router.budgets]
-
-# Router heuristic patterns for task classification
-[router.heuristics]
-# Maximum characters for short requests
-short_request_max_chars = 120
-# Minimum characters for long requests
-long_request_min_chars = 1200
-
-# Text patterns that indicate code patch operations
-code_patch_markers = [
-    "```",
-    "diff --git",
-    "apply_patch",
-    "unified diff",
-    "patch",
-    "edit_file",
-    "create_file",
-]
-
-# Text patterns that indicate information retrieval
-retrieval_markers = [
-    "search",
-    "web",
-    "google",
-    "docs",
-    "cite",
-    "source",
-    "up-to-date",
-]
-
-# Text patterns that indicate complex multi-step tasks
-complex_markers = [
-    "plan",
-    "multi-step",
-    "decompose",
-    "orchestrate",
-    "architecture",
-    "benchmark",
-    "implement end-to-end",
-    "design api",
-    "refactor module",
-    "evaluate",
-    "tests suite",
-]
-
 # Telemetry and analytics
 [telemetry]
 # Enable trajectory logging for usage analysis

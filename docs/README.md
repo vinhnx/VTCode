@@ -167,12 +167,6 @@ VT Code implements a **multi-layered security model** to protect against prompt 
 
 ### Usage Notes
 
-**LLM Routing:**
-To enable LLM routing: set `[router] llm_router_model = "<model-id>"`.
-
-**Budget Tuning:**
-To tune budgets: add `[router.budgets.<class>]` with max_tokens and max_parallel_tools.
-
 **Trajectory Logs:**
 Logs for trajectory: check `.vtcode/logs/trajectory.jsonl`.
 
