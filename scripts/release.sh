@@ -645,6 +645,34 @@ build_and_upload_binaries() {
         return 0
     fi
 
+    # Ensure correct GitHub account before building/uploading
+    print_info "Verifying GitHub CLI authentication for binary upload..."
+    if ! command -v gh &> /dev/null; then
+        print_error "GitHub CLI (gh) is required for binary uploads but not installed"
+        return 1
+    fi
+    
+    local expected_account="vinhnx"
+    if ! gh auth status >/dev/null 2>&1; then
+        print_error "GitHub CLI is not authenticated. Please run: gh auth login"
+        return 1
+    fi
+    
+    # Check if we're logged in to the expected account and it's active
+    if ! gh auth status 2>&1 | grep -q "Logged in to github.com account $expected_account"; then
+        print_error "Not logged in to GitHub account: $expected_account"
+        print_info "Run: gh auth login --hostname github.com"
+        return 1
+    fi
+    
+    if ! gh auth status 2>&1 | grep -A 5 "account $expected_account" | grep -q "Active account: true"; then
+        print_error "GitHub account '$expected_account' is not active"
+        print_info "Run: gh auth switch --hostname github.com --user $expected_account"
+        return 1
+    fi
+    
+    print_success "GitHub CLI authenticated with correct account: $expected_account"
+
     if ! ./scripts/build-and-upload-binaries.sh -v "$version"; then
         print_warning 'Binary build/distribution failed'
         return 1
@@ -1056,6 +1084,25 @@ main() {
     print_info "Pushing commits and tags to remote..."
     git push origin main && git push --tags origin
     print_success "Commits and tags pushed successfully"
+
+    # Verify GitHub release was created before starting uploads
+    print_info "Verifying GitHub release v$released_version exists..."
+    local retry_count=0
+    local max_retries=10
+    while ! gh release view "v$released_version" >/dev/null 2>&1; do
+        retry_count=$((retry_count + 1))
+        if [[ $retry_count -gt $max_retries ]]; then
+            print_warning "GitHub release v$released_version not found after $max_retries attempts"
+            print_info "Continuing anyway - uploads may still succeed if release is being created"
+            break
+        fi
+        print_info "Release not found yet, waiting... (attempt $retry_count/$max_retries)"
+        sleep 2
+    done
+    
+    if gh release view "v$released_version" >/dev/null 2>&1; then
+        print_success "GitHub release v$released_version confirmed"
+    fi
 
     # Perform post-release operations in parallel with proper dependency management
     local pid_docs=""
