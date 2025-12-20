@@ -2,7 +2,6 @@ pub mod agent;
 pub mod automation;
 pub mod commands;
 pub mod model;
-pub mod optimization;
 pub mod permissions;
 pub mod plugins;
 pub mod prompt_cache;
@@ -14,9 +13,6 @@ pub use agent::{AgentConfig, AgentCustomPromptsConfig, AgentOnboardingConfig};
 pub use automation::{AutomationConfig, FullAutoConfig};
 pub use commands::CommandsConfig;
 pub use model::ModelConfig;
-pub use optimization::{
-    ActorCriticConfig, BanditConfig, ReinforcementLearningConfig, RewardShapingConfig, RlStrategy,
-};
 pub use permissions::PermissionsConfig;
 pub use plugins::{PluginRuntimeConfig, PluginTrustLevel};
 pub use prompt_cache::{

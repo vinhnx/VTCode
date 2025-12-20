@@ -615,10 +615,6 @@ require_profile_ack = false
 # Path to full auto profile configuration
 profile_path = "automation/full_auto_profile.toml"
 
-[optimization]
-enabled = false
-strategy = "bandit"
-
 # Prompt caching - Cache model responses for efficiency
 [prompt_cache]
 # Enable prompt caching (reduces API calls for repeated prompts)
@@ -639,11 +635,6 @@ enable_auto_cleanup = true
 # Minimum quality threshold to keep cache entries
 min_quality_threshold = 0.7
 
-[optimization.bandit]
-exploration_epsilon = 0.1
-rolling_window = 50
-latency_weight = 0.35
-
 # Prompt cache configuration for OpenAI
 [prompt_cache.providers.openai]
 enabled = true
@@ -655,11 +646,6 @@ surface_metrics = true
 # reduce cost and latency for repeated reasoning prompts.
 prompt_cache_retention = "24h"
 
-[optimization.actor_critic]
-learning_rate = 0.02
-discount_factor = 0.85
-trace_decay = 0.8
-
 # Prompt cache configuration for Anthropic
 [prompt_cache.providers.anthropic]
 enabled = true
@@ -668,11 +654,6 @@ extended_ttl_seconds = 3600
 max_breakpoints = 4
 cache_system_messages = true
 cache_user_messages = true
-
-[optimization.reward_shaping]
-success_reward = 1.0
-timeout_penalty = -0.8
-latency_penalty_weight = 0.25
 
 # Prompt cache configuration for Gemini
 [prompt_cache.providers.gemini]
