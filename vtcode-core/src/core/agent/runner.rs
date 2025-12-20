@@ -2009,25 +2009,21 @@ impl AgentRunner {
 
             info!(target = "policy", agent = ?self.agent_type, tool = tool_name, cmd = %cmd_text, "shell_policy_checked");
         }
-        // Clone the tool registry for this execution
+
+        // Use pre-computed retry delays to avoid repeated Duration construction
+        const RETRY_DELAYS_MS: [u64; 3] = [200, 400, 800];
+
+        // Clone the registry once and reuse across retries (avoids cloning on each attempt)
         let mut registry = self.tool_registry.clone();
 
-        // Initialize async components
-        registry
-            .initialize_async()
-            .await
-            .context("Failed to initialize tool registry before execution")?;
-
-        // Try with simple adaptive retry (up to 2 retries)
-        let mut delay = std::time::Duration::from_millis(200);
+        // Execute tool with adaptive retry
         let mut last_error: Option<anyhow::Error> = None;
-        for attempt in 0..3 {
+        for (attempt, delay_ms) in RETRY_DELAYS_MS.iter().enumerate() {
             match registry.execute_tool_ref(tool_name, args).await {
                 Ok(result) => return Ok(result),
                 Err(e) if attempt < 2 => {
                     last_error = Some(e);
-                    tokio::time::sleep(delay).await;
-                    delay = delay.saturating_mul(2);
+                    tokio::time::sleep(Duration::from_millis(*delay_ms)).await;
                     continue;
                 }
                 Err(e) => {
