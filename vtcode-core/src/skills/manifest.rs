@@ -5,6 +5,7 @@
 use crate::skills::types::SkillManifest;
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
@@ -49,6 +50,10 @@ pub struct SkillYaml {
     #[serde(rename = "disallow-container")]
     #[serde(alias = "disallow_container")]
     pub disallow_container: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub compatibility: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<HashMap<String, String>>,
 }
 
 /// Parse SKILL.md file and extract manifest + instructions
@@ -83,6 +88,16 @@ pub fn parse_skill_content(content: &str) -> anyhow::Result<(SkillManifest, Stri
     let yaml: SkillYaml =
         serde_yaml::from_str(yaml_str).context("Failed to parse SKILL.md YAML frontmatter")?;
 
+    // Convert allowed_tools from Vec<String> to space-delimited string for backward compatibility
+    let allowed_tools_string = yaml.allowed_tools.map(|tools| {
+        if !tools.is_empty() {
+            tracing::warn!(
+                "allowed-tools uses deprecated array format, please use space-delimited string instead"
+            );
+        }
+        tools.join(" ")
+    });
+
     let manifest = SkillManifest {
         name: yaml.name,
         description: yaml.description,
@@ -92,11 +107,13 @@ pub fn parse_skill_content(content: &str) -> anyhow::Result<(SkillManifest, Stri
         model: yaml.model,
         mode: yaml.mode,
         vtcode_native: yaml.vtcode_native,
-        allowed_tools: yaml.allowed_tools,
+        allowed_tools: allowed_tools_string,
         disable_model_invocation: yaml.disable_model_invocation,
         when_to_use: yaml.when_to_use,
         requires_container: yaml.requires_container,
         disallow_container: yaml.disallow_container,
+        compatibility: yaml.compatibility,
+        metadata: yaml.metadata,
     };
 
     manifest.validate()?;
@@ -116,9 +133,11 @@ license: MIT
 model: inherit
 mode: false
 # Optional skill controls (uncomment to use)
-# allowed-tools:
-#   - code_execution
-#   - bash
+# allowed-tools: "Read Write Bash"  # Space-delimited list per Agent Skills spec
+# compatibility: "Designed for VTCode (or similar CLI agents)"
+# metadata:
+#   custom-key: "custom-value"
+#   another-key: "another-value"
 # disable-model-invocation: false
 # when-to-use: "Trigger for data-heavy spreadsheet generation"
 # requires-container: false

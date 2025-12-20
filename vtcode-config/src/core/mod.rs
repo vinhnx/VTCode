@@ -24,5 +24,5 @@ pub use prompt_cache::{
 };
 pub use provider::AnthropicConfig;
 pub use security::SecurityConfig;
-pub use skills::{SkillsConfig, SkillsRenderMode};
+pub use skills::{PromptFormat, SkillsConfig, SkillsRenderMode};
 pub use tools::{ToolPolicy, ToolsConfig, WebFetchConfig};

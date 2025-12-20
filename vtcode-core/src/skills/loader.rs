@@ -823,6 +823,8 @@ mod tests {
             when_to_use: None,
             requires_container: None,
             disallow_container: None,
+            compatibility: None,
+            metadata: None,
         }];
 
         // Test explicit $skill-name syntax (Codex pattern)
@@ -848,6 +850,8 @@ mod tests {
             when_to_use: None,
             requires_container: None,
             disallow_container: None,
+            compatibility: None,
+            metadata: None,
         }];
 
         // Test description keyword matching (requires 2+ keyword matches)
@@ -873,6 +877,8 @@ mod tests {
             when_to_use: None,
             requires_container: None,
             disallow_container: None,
+            compatibility: None,
+            metadata: None,
         }];
 
         // No match - only 1 keyword
@@ -897,6 +903,8 @@ mod tests {
             when_to_use: None,
             requires_container: None,
             disallow_container: None,
+            compatibility: None,
+            metadata: None,
         }];
 
         // Case insensitive matching
@@ -923,6 +931,8 @@ mod tests {
                 when_to_use: None,
                 requires_container: None,
                 disallow_container: None,
+            compatibility: None,
+            metadata: None,
             },
             SkillManifest {
                 name: "spreadsheet-generator".to_string(),
@@ -938,6 +948,8 @@ mod tests {
                 when_to_use: None,
                 requires_container: None,
                 disallow_container: None,
+            compatibility: None,
+            metadata: None,
             },
         ];
 

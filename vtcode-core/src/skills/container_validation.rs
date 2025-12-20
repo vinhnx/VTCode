@@ -481,6 +481,8 @@ mod tests {
             when_to_use: None,
             requires_container: None,
             disallow_container: None,
+            compatibility: None,
+            metadata: None,
         };
 
         let instructions = r#"
@@ -524,6 +526,8 @@ mod tests {
             when_to_use: None,
             requires_container: None,
             disallow_container: None,
+            compatibility: None,
+            metadata: None,
         };
 
         let instructions = r#"
@@ -575,6 +579,8 @@ mod tests {
             when_to_use: None,
             requires_container: None,
             disallow_container: None,
+            compatibility: None,
+            metadata: None,
         };
 
         let instructions = r#"

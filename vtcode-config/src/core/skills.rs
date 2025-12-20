@@ -2,6 +2,20 @@
 //!
 //! Configuration for VT Code skills system, including rendering modes
 //! and discovery settings.
+//!
+//! ## Current Implementation Note
+//!
+//! As of v0.50.7, VTCode implements skills as **callable tools** (via Tool trait),
+//! not as prompt text in the system prompt. Skills are loaded on-demand via
+//! `/skills load <name>` commands and registered in the tool registry.
+//!
+//! The `prompt_format` and `render_mode` configs are currently **unused** but
+//! available for future features such as:
+//! - Optional skills summary in system prompt (opt-in via config flag)
+//! - Rich formatting for `/skills list` command output
+//! - Documentation generation
+//!
+//! Per Agent Skills specification: Skills are loaded on-demand, not auto-loaded.
 
 use serde::{Deserialize, Serialize};
 
@@ -14,6 +28,12 @@ pub struct SkillsConfig {
     /// - "full": Full metadata with version, author, native flags
     #[serde(default = "default_render_mode")]
     pub render_mode: SkillsRenderMode,
+
+    /// Prompt format for skills section (Agent Skills spec)
+    /// - "xml": XML wrapping for safety (Claude models default)
+    /// - "markdown": Plain markdown sections
+    #[serde(default = "default_prompt_format")]
+    pub prompt_format: PromptFormat,
 
     /// Maximum number of skills to show in system prompt
     #[serde(default = "default_max_skills_in_prompt")]
@@ -36,6 +56,7 @@ impl Default for SkillsConfig {
     fn default() -> Self {
         Self {
             render_mode: default_render_mode(),
+            prompt_format: default_prompt_format(),
             max_skills_in_prompt: default_max_skills_in_prompt(),
             enable_auto_trigger: default_enable_auto_trigger(),
             enable_description_matching: default_enable_description_matching(),
@@ -55,8 +76,23 @@ pub enum SkillsRenderMode {
     Full,
 }
 
+/// Prompt format for skills section (Agent Skills spec)
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum PromptFormat {
+    /// XML wrapping for safety (Claude models default, per Agent Skills spec)
+    #[default]
+    Xml,
+    /// Plain markdown sections
+    Markdown,
+}
+
 fn default_render_mode() -> SkillsRenderMode {
     SkillsRenderMode::Lean
+}
+
+fn default_prompt_format() -> PromptFormat {
+    PromptFormat::Xml
 }
 
 fn default_max_skills_in_prompt() -> usize {
@@ -83,6 +119,7 @@ mod tests {
     fn test_default_skills_config() {
         let config = SkillsConfig::default();
         assert_eq!(config.render_mode, SkillsRenderMode::Lean);
+        assert_eq!(config.prompt_format, PromptFormat::Xml);
         assert_eq!(config.max_skills_in_prompt, 10);
         assert!(config.enable_auto_trigger);
         assert!(config.enable_description_matching);
@@ -109,9 +146,29 @@ mod tests {
     }
 
     #[test]
+    fn test_prompt_format_serde() {
+        // Test serialization
+        let xml = PromptFormat::Xml;
+        let xml_json = serde_json::to_string(&xml).unwrap();
+        assert_eq!(xml_json, r#""xml""#);
+
+        let markdown = PromptFormat::Markdown;
+        let markdown_json = serde_json::to_string(&markdown).unwrap();
+        assert_eq!(markdown_json, r#""markdown""#);
+
+        // Test deserialization
+        let xml_de: PromptFormat = serde_json::from_str(r#""xml""#).unwrap();
+        assert_eq!(xml_de, PromptFormat::Xml);
+
+        let markdown_de: PromptFormat = serde_json::from_str(r#""markdown""#).unwrap();
+        assert_eq!(markdown_de, PromptFormat::Markdown);
+    }
+
+    #[test]
     fn test_skills_config_serde() {
         let config = SkillsConfig {
             render_mode: SkillsRenderMode::Full,
+            prompt_format: PromptFormat::Markdown,
             max_skills_in_prompt: 15,
             enable_auto_trigger: false,
             enable_description_matching: false,

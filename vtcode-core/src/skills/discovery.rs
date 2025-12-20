@@ -485,6 +485,8 @@ pub fn tool_config_to_skill_context(config: &CliToolConfig) -> Result<SkillConte
         when_to_use: None,
         requires_container: None,
         disallow_container: None,
+        compatibility: None,
+        metadata: None,
     };
 
     Ok(SkillContext::MetadataOnly(manifest))

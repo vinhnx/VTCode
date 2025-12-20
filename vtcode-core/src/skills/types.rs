@@ -59,11 +59,11 @@ pub struct SkillManifest {
     #[serde(rename = "vtcode-native")]
     #[serde(alias = "vtcode_native")]
     pub vtcode_native: Option<bool>,
-    /// Explicit allowed tools for this skill (Claude-style allowlist)
+    /// Space-delimited list of pre-approved tools (Agent Skills spec)
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "allowed-tools")]
     #[serde(alias = "allowed_tools")]
-    pub allowed_tools: Option<Vec<String>>,
+    pub allowed_tools: Option<String>,
     /// Optional guard to disable direct model invocations when skill is active
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "disable-model-invocation")]
@@ -84,6 +84,12 @@ pub struct SkillManifest {
     #[serde(rename = "disallow-container")]
     #[serde(alias = "disallow_container")]
     pub disallow_container: Option<bool>,
+    /// Environment/platform requirements (1-500 chars, Agent Skills spec)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub compatibility: Option<String>,
+    /// Arbitrary key-value metadata (Agent Skills spec)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<HashMap<String, String>>,
 }
 
 impl SkillManifest {
@@ -122,12 +128,15 @@ impl SkillManifest {
         }
 
         if let Some(allowed_tools) = &self.allowed_tools {
-            if allowed_tools.len() > 16 {
-                anyhow::bail!("allowed_tools must list at most 16 tools");
+            // Parse space-delimited string per Agent Skills spec
+            let tools: Vec<&str> = allowed_tools.split_whitespace().collect();
+
+            if tools.len() > 16 {
+                anyhow::bail!("allowed-tools must list at most 16 tools");
             }
 
-            if allowed_tools.iter().any(|tool| tool.trim().is_empty()) {
-                anyhow::bail!("allowed_tools entries must be non-empty");
+            if tools.is_empty() {
+                anyhow::bail!("allowed-tools must not be empty if specified");
             }
         }
 
@@ -141,6 +150,12 @@ impl SkillManifest {
             && model.len() > 128
         {
             anyhow::bail!("model must be 0-128 characters");
+        }
+
+        if let Some(compatibility) = &self.compatibility
+            && (compatibility.is_empty() || compatibility.len() > 500)
+        {
+            anyhow::bail!("compatibility must be 1-500 characters");
         }
 
         Ok(())
@@ -337,6 +352,8 @@ mod tests {
             when_to_use: None,
             requires_container: None,
             disallow_container: None,
+            compatibility: None,
+            metadata: None,
         };
         assert!(m.validate().is_ok());
     }
@@ -357,6 +374,8 @@ mod tests {
             when_to_use: None,
             requires_container: None,
             disallow_container: None,
+            compatibility: None,
+            metadata: None,
         };
         assert!(m.validate().is_err());
     }
@@ -377,6 +396,8 @@ mod tests {
             when_to_use: None,
             requires_container: None,
             disallow_container: None,
+            compatibility: None,
+            metadata: None,
         };
         assert!(m.validate().is_err());
     }
@@ -397,9 +418,164 @@ mod tests {
             when_to_use: None,
             requires_container: None,
             disallow_container: None,
+            compatibility: None,
+            metadata: None,
         };
 
         let meta_ctx = SkillContext::MetadataOnly(manifest.clone());
         assert_eq!(meta_ctx.tokens(), 100);
+    }
+
+    #[test]
+    fn test_compatibility_validation() {
+        // Valid compatibility
+        let m = SkillManifest {
+            name: "test-skill".to_string(),
+            description: "Test description".to_string(),
+            version: None,
+            author: None,
+            license: None,
+            model: None,
+            mode: None,
+            vtcode_native: None,
+            allowed_tools: None,
+            disable_model_invocation: None,
+            when_to_use: None,
+            requires_container: None,
+            disallow_container: None,
+            compatibility: Some("Designed for VTCode".to_string()),
+            metadata: None,
+        };
+        assert!(m.validate().is_ok());
+
+        // Invalid: empty compatibility
+        let m = SkillManifest {
+            name: "test-skill".to_string(),
+            description: "Test description".to_string(),
+            version: None,
+            author: None,
+            license: None,
+            model: None,
+            mode: None,
+            vtcode_native: None,
+            allowed_tools: None,
+            disable_model_invocation: None,
+            when_to_use: None,
+            requires_container: None,
+            disallow_container: None,
+            compatibility: Some("".to_string()),
+            metadata: None,
+        };
+        assert!(m.validate().is_err());
+
+        // Invalid: too long (> 500 chars)
+        let m = SkillManifest {
+            name: "test-skill".to_string(),
+            description: "Test description".to_string(),
+            version: None,
+            author: None,
+            license: None,
+            model: None,
+            mode: None,
+            vtcode_native: None,
+            allowed_tools: None,
+            disable_model_invocation: None,
+            when_to_use: None,
+            requires_container: None,
+            disallow_container: None,
+            compatibility: Some("a".repeat(501)),
+            metadata: None,
+        };
+        assert!(m.validate().is_err());
+    }
+
+    #[test]
+    fn test_allowed_tools_string_format() {
+        // Valid space-delimited string
+        let m = SkillManifest {
+            name: "test-skill".to_string(),
+            description: "Test description".to_string(),
+            version: None,
+            author: None,
+            license: None,
+            model: None,
+            mode: None,
+            vtcode_native: None,
+            allowed_tools: Some("Read Write Bash".to_string()),
+            disable_model_invocation: None,
+            when_to_use: None,
+            requires_container: None,
+            disallow_container: None,
+            compatibility: None,
+            metadata: None,
+        };
+        assert!(m.validate().is_ok());
+
+        // Invalid: empty string
+        let m = SkillManifest {
+            name: "test-skill".to_string(),
+            description: "Test description".to_string(),
+            version: None,
+            author: None,
+            license: None,
+            model: None,
+            mode: None,
+            vtcode_native: None,
+            allowed_tools: Some("".to_string()),
+            disable_model_invocation: None,
+            when_to_use: None,
+            requires_container: None,
+            disallow_container: None,
+            compatibility: None,
+            metadata: None,
+        };
+        assert!(m.validate().is_err());
+
+        // Invalid: too many tools (> 16)
+        let tools = (0..17).map(|i| format!("Tool{}", i)).collect::<Vec<_>>().join(" ");
+        let m = SkillManifest {
+            name: "test-skill".to_string(),
+            description: "Test description".to_string(),
+            version: None,
+            author: None,
+            license: None,
+            model: None,
+            mode: None,
+            vtcode_native: None,
+            allowed_tools: Some(tools),
+            disable_model_invocation: None,
+            when_to_use: None,
+            requires_container: None,
+            disallow_container: None,
+            compatibility: None,
+            metadata: None,
+        };
+        assert!(m.validate().is_err());
+    }
+
+    #[test]
+    fn test_metadata_field() {
+        let mut metadata = HashMap::new();
+        metadata.insert("author".to_string(), "Test Author".to_string());
+        metadata.insert("version".to_string(), "1.0.0".to_string());
+
+        let m = SkillManifest {
+            name: "test-skill".to_string(),
+            description: "Test description".to_string(),
+            version: None,
+            author: None,
+            license: None,
+            model: None,
+            mode: None,
+            vtcode_native: None,
+            allowed_tools: None,
+            disable_model_invocation: None,
+            when_to_use: None,
+            requires_container: None,
+            disallow_container: None,
+            compatibility: None,
+            metadata: Some(metadata),
+        };
+        assert!(m.validate().is_ok());
     }
 }

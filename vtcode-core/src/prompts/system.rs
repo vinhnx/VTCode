@@ -184,6 +184,21 @@ pub async fn read_agent_guidelines(project_root: &Path) -> Option<String> {
     }
 }
 
+/// Compose the system instruction text for the agent
+///
+/// ## Skills Integration Note
+///
+/// Skills are **NOT** included in the system prompt. Per the Agent Skills specification,
+/// skills are loaded on-demand via `/skills load <name>` commands and registered as
+/// callable tools in the tool registry. This approach:
+///
+/// - Follows the on-demand loading model (spec requirement)
+/// - Avoids bloating system prompt with unused skills metadata
+/// - Allows progressive disclosure of skill instructions
+/// - Enables dynamic skill loading/unloading during sessions
+///
+/// When a skill is loaded, it becomes available as a tool that the LLM can invoke
+/// via tool use, rather than being shown as text in the prompt.
 pub async fn compose_system_instruction_text(
     project_root: &Path,
     vtcode_config: Option<&crate::config::VTCodeConfig>,

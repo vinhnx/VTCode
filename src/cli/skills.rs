@@ -248,7 +248,7 @@ pub async fn handle_skills_info(options: &SkillsCommandOptions, name: &str) -> R
             }
             if let Some(allowed_tools) = &skill.manifest.allowed_tools
                 && !allowed_tools.is_empty() {
-                    println!("Allowed tools: {}", allowed_tools.join(", "));
+                    println!("Allowed tools: {}", allowed_tools);
                 }
             if let Some(disable) = skill.manifest.disable_model_invocation {
                 println!("Disable model invocation: {}", disable);
