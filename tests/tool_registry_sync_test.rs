@@ -43,7 +43,7 @@ fn test_all_tools_have_policies() {
     ];
 
     // Tools that MUST have policies defined
-    let tools_requiring_policies: HashSet<&str> = HashSet::from_iter(all_tools.iter().map(|s| *s));
+    let tools_requiring_policies: HashSet<&str> = HashSet::from_iter(all_tools.iter().copied());
 
     // Currently defined policies (from DEFAULT_TOOL_POLICIES)
     let tools_with_policies: HashSet<&str> = HashSet::from_iter(
@@ -70,8 +70,7 @@ fn test_all_tools_have_policies() {
             "analyze_agent",
             "web_fetch",
         ]
-        .iter()
-        .map(|s| *s),
+        .iter().copied(),
     );
 
     let missing_policies: Vec<_> = tools_requiring_policies
@@ -179,12 +178,11 @@ fn test_no_tools_in_constants_without_declarations() {
             "web_fetch",
             "update_plan",
         ]
-        .iter()
-        .map(|s| *s),
+        .iter().copied(),
     );
 
     // Note: list_files may not have declarations and need investigation
-    let tools_in_constants_set: HashSet<_> = tools_in_constants.iter().map(|s| *s).collect();
+    let tools_in_constants_set: HashSet<_> = tools_in_constants.iter().copied().collect();
     let missing_declarations: Vec<_> = tools_in_constants_set
         .difference(&tools_with_declarations)
         .copied()
@@ -203,7 +201,7 @@ fn test_no_tools_in_constants_without_declarations() {
 fn test_acp_tool_subset_is_documented() {
     // ACP exposes only a subset of tools - verify this is intentional
     let acp_tools: HashSet<&str> =
-        HashSet::from_iter(vec!["read_file", "list_files"].iter().map(|s| *s));
+        HashSet::from_iter(["read_file", "list_files"].iter().copied());
 
     let all_tools: HashSet<_> = HashSet::from_iter(
         vec![
@@ -229,8 +227,7 @@ fn test_acp_tool_subset_is_documented() {
             "analyze_agent",
             "web_fetch",
         ]
-        .iter()
-        .map(|s| *s),
+        .iter().copied(),
     );
 
     let tools_excluded_from_acp: Vec<_> = all_tools.difference(&acp_tools).copied().collect();

@@ -1,7 +1,7 @@
-/// Integration test for parallel tool execution
-///
-/// This test verifies that read-only tools (list_files, read_file, grep_file)
-/// execute in parallel when multiple are called together.
+//! Integration test for parallel tool execution
+//!
+//! This test verifies that read-only tools (list_files, read_file, grep_file)
+//! execute in parallel when multiple are called together.
 
 #[cfg(test)]
 mod parallel_execution_tests {

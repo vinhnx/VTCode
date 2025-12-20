@@ -10,6 +10,7 @@ use vtcode_core::utils::error_messages::{ERR_CREATE_DIR, ERR_WRITE_FILE};
 /// Lightweight harness helper for tests needing a workspace and tool registry.
 pub struct TestHarness {
     temp_dir: TempDir,
+    #[allow(dead_code)]
     session_id: String,
 }
 
@@ -26,10 +27,12 @@ impl TestHarness {
         self.temp_dir.path()
     }
 
+    #[allow(dead_code)]
     pub fn workspace_path(&self) -> PathBuf {
         self.temp_dir.path().to_path_buf()
     }
 
+    #[allow(dead_code)]
     pub fn write_file(
         &self,
         relative: impl AsRef<Path>,
@@ -45,12 +48,14 @@ impl TestHarness {
         Ok(path)
     }
 
+    #[allow(dead_code)]
     pub async fn registry(&self) -> ToolRegistry {
         let mut registry = ToolRegistry::new(self.workspace_path()).await;
         registry.set_harness_session(self.session_id.clone());
         registry
     }
 
+    #[allow(dead_code)]
     pub fn session_id(&self) -> &str {
         &self.session_id
     }

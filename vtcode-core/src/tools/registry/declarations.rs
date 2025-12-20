@@ -665,14 +665,14 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
         // ============================================================
         FunctionDeclaration {
             name: tools::UPDATE_PLAN.to_string(),
-            description: "Track multi-step plan with status (pending|in_progress|completed). Follow GPT-5.1 format: 2-5 milestone items with one in_progress at a time for complex tasks.".to_string(),
+            description: "Track multi-step plan with status (pending|in_progress|completed). Use this tool for any task requiring 4+ steps to maintain state and provide visibility. Do NOT just list steps in text; use this tool to manage the TODO list.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
-                    "explanation": {"type": "string", "description": "Plan summary"},
+                    "explanation": {"type": "string", "description": "Plan summary or current focus"},
                     "plan": {
                         "type": "array",
-                        "description": "Plan steps with status, following GPT-5.1 recommended format: 2-5 milestone items with one in_progress at a time",
+                        "description": "Plan steps with status. Recommended: 3-7 milestone items with one in_progress at a time.",
                         "items": {
                             "type": "object",
                             "properties": {

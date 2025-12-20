@@ -65,6 +65,9 @@ use std::collections::VecDeque;
 use std::sync::RwLock;
 use std::time::SystemTime;
 
+/// Callback for tool progress and output streaming
+pub type ToolProgressCallback = Arc<dyn Fn(&str, &str) + Send + Sync>;
+
 #[cfg(test)]
 use super::traits::Tool;
 #[cfg(test)]
@@ -609,6 +612,8 @@ pub struct ToolRegistry {
     agent_type: Cow<'static, str>,
     // Caching
     cached_available_tools: Arc<RwLock<Option<Vec<String>>>>,
+    /// Callback for streaming tool output and progress
+    progress_callback: Option<ToolProgressCallback>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -711,6 +716,7 @@ impl ToolRegistry {
             shell_policy: Arc::new(RwLock::new(ShellPolicyChecker::new())),
             agent_type: Cow::Borrowed("unknown"),
             cached_available_tools: Arc::new(RwLock::new(None)),
+            progress_callback: None,
         };
 
         registry.sync_policy_catalog().await;
@@ -851,6 +857,21 @@ impl ToolRegistry {
 
     pub fn set_agent_type(&mut self, agent_type: impl Into<Cow<'static, str>>) {
         self.agent_type = agent_type.into();
+    }
+
+    /// Set the callback for streaming tool output and progress
+    pub fn set_progress_callback(&mut self, callback: ToolProgressCallback) {
+        self.progress_callback = Some(callback);
+    }
+
+    /// Clear the progress callback
+    pub fn clear_progress_callback(&mut self) {
+        self.progress_callback = None;
+    }
+
+    /// Get the current progress callback if set
+    pub fn progress_callback(&self) -> Option<ToolProgressCallback> {
+        self.progress_callback.clone()
     }
 
     pub fn check_shell_policy(

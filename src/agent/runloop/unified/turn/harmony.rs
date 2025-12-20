@@ -1,26 +1,63 @@
 pub(crate) fn strip_harmony_syntax(text: &str) -> String {
-    // Remove harmony tool call patterns
-    let mut result = text.to_string();
-    // Pattern: <|start|>assistant<|channel|>commentary to=... <|constrain|>...<|message|>...<|call|>
-    // We want to remove everything from <|start|> to <|call|> inclusive
-    while let Some(start_pos) = result.find("<|start|>") {
-        if let Some(call_pos) = result[start_pos..].find("<|call|>") {
-            let end_pos = start_pos + call_pos + "<|call|>".len();
-            result.replace_range(start_pos..end_pos, "");
+    let mut result = String::with_capacity(text.len());
+    let mut current = text;
+
+    while let Some(start_pos) = current.find("<|start|>") {
+        // Add text before <|start|>
+        result.push_str(&current[..start_pos]);
+
+        let rest = &current[start_pos + "<|start|>".len()..];
+        if let Some(msg_pos) = rest.find("<|message|>") {
+            let after_msg = &rest[msg_pos + "<|message|>".len()..];
+
+            // Find the end of this message
+            let end_tags = ["<|end|>", "<|call|>", "<|return|>"];
+            let mut earliest_end = None;
+            for tag in end_tags {
+                if let Some(pos) = after_msg.find(tag)
+                    && earliest_end.is_none_or(|(p, _)| pos < p) {
+                        earliest_end = Some((pos, tag));
+                    }
+            }
+
+            if let Some((end_pos, tag)) = earliest_end {
+                // Check if this is a "final" channel message. If so, keep the content.
+                // Otherwise (analysis, commentary), skip it.
+                let header = &rest[..msg_pos];
+                if header.contains("final") {
+                    result.push_str(&after_msg[..end_pos]);
+                }
+
+                current = &after_msg[end_pos + tag.len()..];
+            } else {
+                // No end tag found, just skip the rest of the header and keep the rest of the content
+                result.push_str(after_msg);
+                current = "";
+            }
         } else {
-            // If no matching <|call|>, just remove <|start|>
-            result.replace_range(start_pos..start_pos + "<|start|>".len(), "");
+            // No <|message|> found, skip <|start|>
+            current = rest;
         }
     }
 
-    // Clean up any remaining harmony tags
-    result = result.replace("<|channel|>", "");
-    result = result.replace("<|constrain|>", "");
-    result = result.replace("<|message|>", "");
-    result = result.replace("<|call|>", "");
+    result.push_str(current);
 
-    // Clean up extra whitespace
-    result.trim().to_string()
+    // Clean up any remaining tags just in case
+    let tags = [
+        "<|start|>",
+        "<|end|>",
+        "<|message|>",
+        "<|channel|>",
+        "<|constrain|>",
+        "<|call|>",
+        "<|return|>",
+    ];
+    let mut final_result = result;
+    for tag in tags {
+        final_result = final_result.replace(tag, "");
+    }
+
+    final_result.trim().to_string()
 }
 
 #[cfg(test)]

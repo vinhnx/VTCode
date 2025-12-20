@@ -147,6 +147,7 @@ which = "8.0.0"
 regex = "1.12"
 smallvec = "1.13"
 signal-hook = "0.3"
+serde_yaml = "0.9"
 
 [features]
 default = ["tool-chat"]

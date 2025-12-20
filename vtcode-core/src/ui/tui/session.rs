@@ -112,6 +112,7 @@ pub struct Session {
     // --- UI State ---
     slash_palette: SlashPalette,
     navigation_state: ListState,
+    plan_navigation_state: ListState,
     input_enabled: bool,
     cursor_visible: bool,
     needs_redraw: bool,
@@ -237,6 +238,7 @@ impl Session {
             // --- UI State ---
             slash_palette: SlashPalette::new(),
             navigation_state: ListState::default(),
+            plan_navigation_state: ListState::default(),
             input_enabled: true,
             cursor_visible: true,
             needs_redraw: true,

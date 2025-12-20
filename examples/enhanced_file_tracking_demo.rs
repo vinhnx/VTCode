@@ -5,7 +5,6 @@
 
 use serde_json::json;
 use tempfile::TempDir;
-use vtcode_core::tools::ToolRegistry;
 
 fn main() {
     println!("=== VTCode File Tracking Optimization Demo ===\n");

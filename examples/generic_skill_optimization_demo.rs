@@ -3,10 +3,8 @@
 //! Demonstrates how file tracking works for ALL skills generically,
 //! not just execute_code.
 
-use serde_json::json;
 use tempfile::TempDir;
 use vtcode_core::skills::auto_verification::AutoSkillVerifier;
-use vtcode_core::tools::ToolRegistry;
 
 #[tokio::main]
 async fn main() {
@@ -149,6 +147,7 @@ All files saved to output directory.
     println!("{}", enhanced);
 }
 
+#[allow(dead_code)]
 fn show_usage_example() {
     println!("\n=== Usage Example ===");
     println!("No code changes needed! Just use skills normally:");

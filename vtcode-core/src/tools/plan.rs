@@ -166,6 +166,12 @@ pub struct TaskPlan {
     pub updated_at: DateTime<Utc>,
 }
 
+impl TaskPlan {
+    pub fn current_step(&self) -> Option<&PlanStep> {
+        self.steps.iter().find(|s| !s.status.is_complete())
+    }
+}
+
 impl Default for TaskPlan {
     fn default() -> Self {
         Self {

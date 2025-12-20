@@ -67,6 +67,7 @@ impl Default for CircuitBreakerConfig {
     }
 }
 
+#[allow(dead_code)]
 impl McpCircuitBreaker {
     /// Create a new circuit breaker with default configuration
     pub fn new() -> Self {
@@ -213,6 +214,7 @@ impl McpCircuitBreaker {
     }
 
     /// Reset the circuit breaker to closed state
+    #[allow(dead_code)]
     pub fn reset(&self) {
         self.state
             .store(CircuitState::Closed as u8, Ordering::Release);
@@ -230,9 +232,11 @@ impl Default for McpCircuitBreaker {
 
 /// Diagnostic information about circuit breaker state
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct CircuitBreakerDiagnostics {
     pub state: CircuitState,
     pub consecutive_failures: u32,
+    #[allow(dead_code)]
     pub half_open_successes: u32,
     pub last_failure_time: Option<SystemTime>,
     pub current_timeout: Duration,

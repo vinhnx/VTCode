@@ -78,9 +78,16 @@ pub(crate) async fn execute_llm_request(
     }
     // HP-1: Eliminate unnecessary clone - work directly on working_history
     ctx.context_manager.reset_token_budget().await;
+    let current_plan = ctx.tool_registry.current_plan();
+    let plan_opt = if current_plan.summary.total_steps > 0 {
+        Some(current_plan)
+    } else {
+        None
+    };
+
     let system_prompt = ctx
         .context_manager
-        .build_system_prompt(ctx.working_history, step_count)
+        .build_system_prompt(ctx.working_history, step_count, plan_opt)
         .await?;
 
     let use_streaming = provider_client.supports_streaming();
@@ -108,7 +115,7 @@ pub(crate) async fn execute_llm_request(
     };
     let request = uni::LLMRequest {
         // HP-1: Single clone only when building LLMRequest
-        messages: ctx.working_history.iter().cloned().collect(),
+        messages: ctx.working_history.to_vec(),
         system_prompt: Some(system_prompt),
         tools: current_tools,
         model: active_model.to_string(),
@@ -278,6 +285,69 @@ fn get_constructive_reasoning(original: &str) -> String {
     }
 }
 
+/// Check if content is likely just internal monologue/thinking without actionable output
+pub(crate) fn is_thinking_only_content(text: &str) -> bool {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return true;
+    }
+
+    let lower = trimmed.to_lowercase();
+
+    // Patterns that indicate the agent is just thinking or planning
+    let thinking_patterns = [
+        "thinking:",
+        "i need to",
+        "i will",
+        "let me",
+        "probably",
+        "maybe",
+        "i should",
+        "next steps:",
+        "plan:",
+        "i'll start by",
+        "i'll begin by",
+        "first, i'll",
+        "i'm going to",
+        "let's look at",
+        "i'll check",
+        "i'll search",
+        "i'll read",
+    ];
+
+    // If it's short and contains thinking patterns, it's likely just thinking
+    if trimmed.len() < 300 && thinking_patterns.iter().any(|p| lower.contains(p)) {
+        return true;
+    }
+
+    // If it's just a list of steps without any other content
+    if trimmed.lines().all(|l| {
+        let t = l.trim();
+        t.is_empty()
+            || t.starts_with(|c: char| c.is_numeric() || c == '-' || c == '*' || c == '[')
+            || (t.starts_with('(') && t.ends_with(')'))
+    }) {
+        // But only if it's not too long (long lists might be actual answers)
+        if trimmed.len() < 500 {
+            return true;
+        }
+    }
+
+    // Check for "stalling" phrases where the agent is just narrating without acting
+    let stalling_phrases = [
+        "i am reviewing the code",
+        "i am analyzing the files",
+        "i am looking for optimization",
+        "i am systematically identifying",
+    ];
+
+    if trimmed.len() < 200 && stalling_phrases.iter().any(|p| lower.contains(p)) {
+        return true;
+    }
+
+    false
+}
+
 /// Result of processing a single turn
 #[allow(dead_code)]
 pub(crate) enum TurnProcessingResult {
@@ -315,16 +385,18 @@ pub(crate) fn process_llm_response(
     let mut final_text = response.content.clone();
     let mut tool_calls = response.tool_calls.clone().unwrap_or_default();
     let mut interpreted_textual_call = false;
+    let mut is_harmony = false;
 
     // Strip harmony syntax from displayed content if present
     if let Some(ref text) = final_text
         && (text.contains("<|start|>") || text.contains("<|channel|>") || text.contains("<|call|>"))
     {
+        is_harmony = true;
         let cleaned = strip_harmony_syntax(text);
         if !cleaned.trim().is_empty() {
             final_text = Some(cleaned);
         } else {
-            final_text = None;
+            final_text = Some("".to_string());
         }
     }
 
@@ -376,7 +448,7 @@ pub(crate) fn process_llm_response(
     }
 
     if let Some(text) = final_text
-        && !text.trim().is_empty()
+        && (!text.trim().is_empty() || is_harmony)
     {
         return Ok(TurnProcessingResult::TextResponse {
             text,

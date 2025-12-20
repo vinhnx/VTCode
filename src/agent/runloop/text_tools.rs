@@ -173,6 +173,12 @@ pub(crate) fn detect_textual_tool_call(text: &str) -> Option<(String, Value)> {
         return Some(result);
     }
 
+    if let Some((name, args)) = parse_bracketed_tool_call(text)
+        && let Some(result) = canonicalize_tool_result(name, args)
+    {
+        return Some(result);
+    }
+
     for prefix in TEXTUAL_TOOL_PREFIXES {
         let prefix_bytes = prefix.as_bytes();
         let text_bytes = text.as_bytes();
@@ -390,56 +396,131 @@ fn parse_key_value_arguments(input: &str) -> Option<Value> {
     Some(Value::Object(map))
 }
 
-fn parse_channel_tool_call(text: &str) -> Option<(String, Value)> {
-    // Format: <|start|>assistant<|channel|>commentary to=container.exec code<|constrain|>json<|message|>{"cmd":...}<|call|>
-    // Also supports: <|start|>assistant<|channel|>commentary to=container.exec code<|message|>{"cmd":...}<|call|>
-    let channel_start = text.find("<|channel|>")?;
-    let message_start = text.find("<|message|>")?;
-    let call_end = text.find("<|call|>")?;
+fn parse_bracketed_tool_call(text: &str) -> Option<(String, Value)> {
+    let start_tag = "[tool: ";
+    let start_idx = text.find(start_tag)?;
+    let rest = &text[start_idx + start_tag.len()..];
 
-    if message_start <= channel_start || call_end <= message_start {
-        return None;
-    }
+    let end_bracket_idx = rest.find(']')?;
+    let header = rest[..end_bracket_idx].trim();
 
-    // Extract the channel commentary to find tool name
-    // Handle both formats: with and without <|constrain|> tag
-    let channel_end =
-        if let Some(constrain_pos) = text[channel_start..message_start].find("<|constrain|>") {
-            channel_start + "<|channel|>".len() + constrain_pos
-        } else {
-            message_start
-        };
-
-    let channel_text = &text[channel_start + "<|channel|>".len()..channel_end];
-
-    // Parse tool name from channel commentary
-    let tool_name = if let Some(to_pos) = channel_text.find("to=") {
-        let after_to = &channel_text[to_pos + 3..];
-        if let Some(space_pos) = after_to.find(' ') {
-            let tool_ref = &after_to[..space_pos];
-            parse_tool_name_from_reference(tool_ref)
-        } else {
-            parse_tool_name_from_reference(after_to.trim())
-        }
-    } else if channel_text.contains("container.exec") || channel_text.contains("exec") {
-        "run_pty_cmd"
-    } else if channel_text.contains("read") || channel_text.contains("file") {
-        "read_file"
+    // Extract tool name from header (supporting to= and functions. prefix)
+    let tool_name = if let Some(to_pos) = header.find("to=") {
+        let after_to = &header[to_pos + 3..];
+        let tool_ref = after_to
+            .split(|c: char| c.is_whitespace() || c == ':' || c == '<')
+            .next()
+            .unwrap_or("");
+        parse_tool_name_from_reference(tool_ref).to_string()
     } else {
-        // Default to pty command
-        "run_pty_cmd"
+        parse_tool_name_from_reference(header).to_string()
     };
 
-    // Extract JSON from message
-    let json_text = &text[message_start + "<|message|>".len()..call_end].trim();
+    let after_name = &rest[end_bracket_idx + 1..].trim_start();
 
-    // Parse the JSON
-    let parsed: Value = serde_json::from_str(json_text).ok()?;
+    if after_name.starts_with('{') {
+        // Try to parse as JSON
+        let mut depth = 0;
+        let mut end_idx = None;
+        for (idx, ch) in after_name.char_indices() {
+            if ch == '{' {
+                depth += 1;
+            } else if ch == '}' {
+                depth -= 1;
+                if depth == 0 {
+                    end_idx = Some(idx);
+                    break;
+                }
+            }
+        }
+        if let Some(idx) = end_idx {
+            let json_str = &after_name[..idx + 1];
+            if let Ok(args) = serde_json::from_str::<Value>(json_str) {
+                return Some((tool_name, args));
+            }
+        }
+    } else if after_name.starts_with('(') {
+        // Try to parse as function arguments
+        let mut depth = 0;
+        let mut end_idx = None;
+        for (idx, ch) in after_name.char_indices() {
+            if ch == '(' {
+                depth += 1;
+            } else if ch == ')' {
+                depth -= 1;
+                if depth == 0 {
+                    end_idx = Some(idx);
+                    break;
+                }
+            }
+        }
+        if let Some(idx) = end_idx {
+            let args_str = &after_name[1..idx];
+            if let Some(args) = parse_textual_arguments(args_str) {
+                return Some((tool_name, args));
+            }
+        }
+    }
 
-    // Convert to expected format based on tool name and arguments
-    let args = convert_harmony_args_to_tool_format(tool_name, parsed).ok()?;
+    None
+}
 
-    Some((tool_name.to_string(), args))
+fn parse_channel_tool_call(text: &str) -> Option<(String, Value)> {
+    // Harmony format: <|start|>{header}<|message|>{content}<|end|>
+    // We look for a message that is a tool call (ends with <|call|> or has commentary channel)
+
+    for segment in text.split("<|start|>") {
+        let trimmed_segment = segment.trim();
+        if trimmed_segment.is_empty() {
+            continue;
+        }
+
+        let channel_idx = segment.find("<|channel|>");
+        let message_idx = segment.find("<|message|>");
+
+        if let (Some(c_idx), Some(m_idx)) = (channel_idx, message_idx)
+            && m_idx > c_idx {
+                let header = &segment[..m_idx];
+
+                // Check if this is a commentary channel or has a recipient
+                if header.contains("commentary") || header.contains("to=") {
+                    let stop_idx = segment
+                        .find("<|call|>")
+                        .or_else(|| segment.find("<|end|>"))
+                        .or_else(|| segment.find("<|return|>"))
+                        .unwrap_or(segment.len());
+
+                    let content_raw = segment[m_idx + "<|message|>".len()..stop_idx].trim();
+
+                    // Parse tool name from header
+                    let tool_name = if let Some(to_pos) = header.find("to=") {
+                        let after_to = &header[to_pos + 3..];
+                        let tool_ref = after_to
+                            .split(|c: char| c.is_whitespace() || c == '<')
+                            .next()
+                            .unwrap_or("");
+                        parse_tool_name_from_reference(tool_ref)
+                    } else if header.contains("container.exec") || header.contains("exec") {
+                        "run_pty_cmd"
+                    } else if header.contains("read") || header.contains("file") {
+                        "read_file"
+                    } else {
+                        // Default to pty command if it's a commentary channel but no recipient
+                        "run_pty_cmd"
+                    };
+
+                    // Parse JSON from content
+                    if let Ok(parsed) = serde_json::from_str::<Value>(content_raw) {
+                        // Convert to expected format
+                        if let Ok(args) = convert_harmony_args_to_tool_format(tool_name, parsed) {
+                            return Some((tool_name.to_string(), args));
+                        }
+                    }
+                }
+            }
+    }
+
+    None
 }
 
 fn parse_tool_name_from_reference(tool_ref: &str) -> &str {

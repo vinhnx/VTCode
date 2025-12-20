@@ -155,6 +155,28 @@ impl IncrementalSystemPrompt {
                 "- token_usage: {:.2}%",
                 context.token_usage_ratio * 100.0
             );
+
+            if let Some(plan) = &context.current_plan {
+                let _ = writeln!(prompt, "\n## CURRENT TASK PLAN (v{})", plan.version);
+                if let Some(explanation) = &plan.explanation {
+                    let _ = writeln!(prompt, "Goal: {}", explanation);
+                }
+                let _ = writeln!(
+                    prompt,
+                    "Progress: {}/{} steps completed",
+                    plan.summary.completed_steps, plan.summary.total_steps
+                );
+                let _ = writeln!(prompt, "\nSteps:");
+                for (i, step) in plan.steps.iter().enumerate() {
+                    let status_mark = match step.status {
+                        vtcode_core::tools::StepStatus::Completed => "[x]",
+                        vtcode_core::tools::StepStatus::InProgress => "[>]",
+                        vtcode_core::tools::StepStatus::Pending => "[ ]",
+                    };
+                    let _ = writeln!(prompt, "{}. {} {}", i + 1, status_mark, step.step);
+                }
+                let _ = writeln!(prompt, "\n**IMPORTANT**: You MUST continue with the next step in your plan autonomously. Do not stop until all steps are completed or you are blocked by something only a human can provide.");
+            }
         }
 
         prompt
@@ -214,6 +236,7 @@ pub struct SystemPromptContext {
     pub tool_usage_count: usize,
     pub error_count: usize,
     pub token_usage_ratio: f64,
+    pub current_plan: Option<vtcode_core::tools::TaskPlan>,
 }
 
 impl SystemPromptContext {
@@ -226,6 +249,10 @@ impl SystemPromptContext {
         self.tool_usage_count.hash(&mut hasher);
         self.error_count.hash(&mut hasher);
         ((self.token_usage_ratio * 1000.0) as usize).hash(&mut hasher);
+        if let Some(plan) = &self.current_plan {
+            plan.version.hash(&mut hasher);
+            plan.summary.completed_steps.hash(&mut hasher);
+        }
         hasher.finish()
     }
 }
@@ -243,6 +270,7 @@ mod tests {
             tool_usage_count: 1,
             error_count: 0,
             token_usage_ratio: 0.1,
+            current_plan: None,
         };
 
         // First call - should build from scratch
@@ -271,8 +299,7 @@ mod tests {
             conversation_length: 1,
             tool_usage_count: 0,
             error_count: 0,
-            token_usage_ratio: 0.0,
-        };
+            token_usage_ratio: 0.0,            current_plan: None,        };
 
         // Build initial prompt
         let _ = prompt_builder

@@ -210,8 +210,7 @@ mod tests {
     fn applies_extension_based_styles() {
         let git = GitStyles::new();
         use vtcode_core::utils::style_helpers::bold_color;
-        let mut suffixes = Vec::new();
-        suffixes.push((".rs".to_string(), bold_color(AnsiColor::Red)));
+        let suffixes = vec![(".rs".to_string(), bold_color(AnsiColor::Red))];
         let ls = LsStyles::from_components(HashMap::new(), suffixes);
         let styled = select_line_style(Some("run_pty_cmd"), "main.rs", &git, &ls);
         assert!(styled.is_some());
@@ -221,8 +220,7 @@ mod tests {
     fn extension_matching_requires_dot_boundary() {
         let git = GitStyles::new();
         use vtcode_core::utils::style_helpers::bold_color;
-        let mut suffixes = Vec::new();
-        suffixes.push((".rs".to_string(), bold_color(AnsiColor::Green)));
+        let suffixes = vec![(".rs".to_string(), bold_color(AnsiColor::Green))];
         let ls = LsStyles::from_components(HashMap::new(), suffixes);
 
         let without_extension = select_line_style(Some("run_pty_cmd"), "helpers", &git, &ls);

@@ -4,7 +4,7 @@
 //! Anthropic Agent Skills within VTCode.
 
 use anyhow::{Context, Result};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tracing::info;
 use vtcode_core::skills::loader::EnhancedSkillLoader;
 use vtcode_core::skills::manifest::generate_skill_template;
@@ -343,7 +343,7 @@ pub async fn handle_skills_create(skill_path: &PathBuf) -> Result<()> {
 }
 
 /// Validate SKILL.md
-pub async fn handle_skills_validate(skill_path: &PathBuf) -> Result<()> {
+pub async fn handle_skills_validate(skill_path: &Path) -> Result<()> {
     use vtcode_core::skills::manifest::parse_skill_file;
 
     println!("Validating skill at: {}", skill_path.display());

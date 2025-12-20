@@ -874,7 +874,7 @@ pub(crate) async fn run_single_agent_loop_unified(
             mut provider_client,
             mut tool_registry,
             tools,
-            cached_tools,
+            cached_tools: _,
             trim_config,
             mut conversation_history,
             decision_ledger,
@@ -2208,17 +2208,29 @@ pub(crate) async fn run_single_agent_loop_unified(
                     context_manager: &mut ContextManager,
                     request_history: &[uni::Message],
                     step_count: usize,
+                    tool_registry: &vtcode_core::tools::registry::ToolRegistry,
                 ) -> Result<String> {
                     context_manager.reset_token_budget().await;
+                    let current_plan = tool_registry.current_plan();
+                    let plan_opt = if current_plan.summary.total_steps > 0 {
+                        Some(current_plan)
+                    } else {
+                        None
+                    };
                     let system_prompt = context_manager
-                        .build_system_prompt(request_history, step_count)
+                        .build_system_prompt(request_history, step_count, plan_opt)
                         .await?;
                     Ok(system_prompt)
                 }
 
                 let system_prompt =
-                    run_turn_build_system_prompt(&mut context_manager, working_history, step_count)
-                        .await?;
+                    run_turn_build_system_prompt(
+                        &mut context_manager,
+                        working_history,
+                        step_count,
+                        &tool_registry,
+                    )
+                    .await?;
 
                 let use_streaming = provider_client.supports_streaming();
                 let reasoning_effort = vt_cfg.as_ref().and_then(|cfg| {
