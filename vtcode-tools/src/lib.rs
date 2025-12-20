@@ -92,15 +92,15 @@ pub use search::GrepSearchManager;
 #[cfg(feature = "planner")]
 pub mod planner {
     pub use vtcode_core::tools::plan::{
-        PlanCompletionState, PlanManager, PlanStep, PlanSummary, PlanUpdateResult, StepStatus,
-        TaskPlan, UpdatePlanArgs,
+        PlanCompletionState, PlanManager, PlanPhase, PlanStep, PlanSummary, PlanUpdateResult,
+        StepStatus, TaskPlan, UpdatePlanArgs,
     };
 }
 
 #[cfg(feature = "planner")]
 pub use planner::{
-    PlanCompletionState, PlanManager, PlanStep, PlanSummary, PlanUpdateResult, StepStatus,
-    TaskPlan, UpdatePlanArgs,
+    PlanCompletionState, PlanManager, PlanPhase, PlanStep, PlanSummary, PlanUpdateResult,
+    StepStatus, TaskPlan, UpdatePlanArgs,
 };
 
 #[cfg(feature = "policies")]

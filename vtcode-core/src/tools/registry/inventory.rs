@@ -39,7 +39,8 @@ impl ToolInventory {
         let command_tool = CommandTool::new(workspace_root.clone());
         let grep_search = Arc::new(GrepSearchManager::new(workspace_root.clone()));
         let file_ops_tool = FileOpsTool::new(workspace_root.clone(), Arc::clone(&grep_search));
-        let plan_manager = PlanManager::new();
+        let plan_file = workspace_root.join(".vtcode").join("plan.md");
+        let plan_manager = PlanManager::with_plan_file(Some(plan_file));
 
         Self {
             workspace_root,

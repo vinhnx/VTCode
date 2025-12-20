@@ -121,6 +121,14 @@ fn normalize_context(context: &str) -> String {
         }
     }
 
+    if let Some(phase) = parsed
+        .get("plan_phase")
+        .and_then(|v| v.as_str())
+        .filter(|p| !p.is_empty())
+    {
+        normalized.insert("plan_phase".into(), Value::String(phase.to_string()));
+    }
+
     serde_json::to_string(&Value::Object(normalized)).unwrap_or_else(|_| "{}".to_string())
 }
 
@@ -169,6 +177,10 @@ impl AsyncMiddleware for AsyncLoggingMiddleware {
         let plan_status = plan_summary
             .and_then(|v| v.get("status").and_then(|s| s.as_str()))
             .unwrap_or("");
+        let plan_phase = context_json
+            .as_ref()
+            .and_then(|v| v.get("plan_phase").and_then(|p| p.as_str()))
+            .unwrap_or("");
         let plan_total_steps = plan_summary
             .and_then(|v| v.get("total_steps").and_then(|n| n.as_u64()))
             .unwrap_or(0);
@@ -186,6 +198,7 @@ impl AsyncMiddleware for AsyncLoggingMiddleware {
             task_id = %task_id,
             plan_version,
             plan_status = %plan_status,
+            plan_phase = %plan_phase,
             plan_total_steps,
             plan_completed_steps,
             "tool execution started"
@@ -210,6 +223,7 @@ impl AsyncMiddleware for AsyncLoggingMiddleware {
                 task_id = %task_id,
                 plan_version,
                 plan_status = %plan_status,
+                plan_phase = %plan_phase,
                 plan_total_steps,
                 plan_completed_steps,
                 from_cache = result.from_cache,

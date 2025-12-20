@@ -665,11 +665,16 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
         // ============================================================
         FunctionDeclaration {
             name: tools::UPDATE_PLAN.to_string(),
-            description: "Track multi-step plan with status (pending|in_progress|completed). Use this tool for any task requiring 4+ steps to maintain state and provide visibility. Do NOT just list steps in text; use this tool to manage the TODO list.".to_string(),
+            description: "Track the plan file in planning mode. Write a concise TODO list with status (pending|in_progress|completed) and the current plan phase (understanding/design/review/final_plan). Use this for tasks that need 4+ steps and user-visible progress; keep tools read-only except for this plan update while drafting.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
                     "explanation": {"type": "string", "description": "Plan summary or current focus"},
+                    "phase": {
+                        "type": "string",
+                        "description": "Current planning phase: understanding (gather context), design (propose approaches), review (validate with request), or final_plan (ready to execute)",
+                        "enum": ["understanding", "design", "review", "final_plan"]
+                    },
                     "plan": {
                         "type": "array",
                         "description": "Plan steps with status. Recommended: 3-7 milestone items with one in_progress at a time.",
