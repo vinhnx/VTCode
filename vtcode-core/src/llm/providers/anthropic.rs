@@ -1,7 +1,7 @@
 #![allow(clippy::result_large_err)]
 use crate::config::TimeoutsConfig;
 use crate::config::constants::{defaults, env_vars, models, urls};
-use crate::config::core::{AnthropicPromptCacheSettings, PromptCachingConfig};
+use crate::config::core::{AnthropicConfig, AnthropicPromptCacheSettings, PromptCachingConfig};
 use crate::config::models::Provider;
 use crate::config::types::ReasoningEffortLevel;
 use crate::llm::client::LLMClient;
@@ -33,6 +33,7 @@ pub struct AnthropicProvider {
     model: String,
     prompt_cache_enabled: bool,
     prompt_cache_settings: AnthropicPromptCacheSettings,
+    anthropic_config: AnthropicConfig,
 }
 
 impl AnthropicProvider {
@@ -42,11 +43,12 @@ impl AnthropicProvider {
             models::anthropic::DEFAULT_MODEL.to_string(),
             None,
             None,
+            AnthropicConfig::default(),
         )
     }
 
     pub fn with_model(api_key: String, model: String) -> Self {
-        Self::with_model_internal(api_key, model, None, None)
+        Self::with_model_internal(api_key, model, None, None, AnthropicConfig::default())
     }
 
     pub fn from_config(
@@ -55,11 +57,13 @@ impl AnthropicProvider {
         base_url: Option<String>,
         prompt_cache: Option<PromptCachingConfig>,
         _timeouts: Option<TimeoutsConfig>,
+        anthropic_config: Option<AnthropicConfig>,
     ) -> Self {
         let api_key_value = api_key.unwrap_or_default();
         let model_value = resolve_model(model, models::anthropic::DEFAULT_MODEL);
 
-        Self::with_model_internal(api_key_value, model_value, prompt_cache, base_url)
+        let anthropic_cfg = anthropic_config.unwrap_or_default();
+        Self::with_model_internal(api_key_value, model_value, prompt_cache, base_url, anthropic_cfg)
     }
 
     fn with_model_internal(
@@ -67,6 +71,7 @@ impl AnthropicProvider {
         model: String,
         prompt_cache: Option<PromptCachingConfig>,
         base_url: Option<String>,
+        anthropic_config: AnthropicConfig,
     ) -> Self {
         let (prompt_cache_enabled, prompt_cache_settings) = extract_prompt_cache_settings(
             prompt_cache,
@@ -91,6 +96,7 @@ impl AnthropicProvider {
             model,
             prompt_cache_enabled,
             prompt_cache_settings,
+            anthropic_config,
         }
     }
 
@@ -183,6 +189,7 @@ impl AnthropicProvider {
     }
 
     /// Combines prompt cache betas with structured outputs beta when requested.
+    /// Always includes interleaved-thinking beta for all Anthropic models.
     fn combined_beta_header_value(&self, include_structured: bool) -> Option<String> {
         let mut pieces: Vec<String> = Vec::new();
         if let Some(pc) = self.prompt_cache_beta_header_value() {
@@ -194,6 +201,8 @@ impl AnthropicProvider {
                 pieces.push(p);
             }
         }
+        // Always add interleaved-thinking beta header for all Anthropic models
+        pieces.push(self.anthropic_config.interleaved_thinking_beta.clone());
         if include_structured {
             // Use the correct beta header for structured outputs
             pieces.push("structured-outputs-2025-11-13".to_owned());
@@ -713,10 +722,13 @@ impl AnthropicProvider {
             });
         }
 
+        // Enable interleaved thinking by default for all Anthropic models
         let mut reasoning_val = None;
-        if let Some(effort) = request.reasoning_effort
-            && self.supports_reasoning_effort(&request.model)
-        {
+        if self.supports_reasoning_effort(&request.model) {
+            // Always enable thinking with configured budget tokens for all supported models
+            reasoning_val = Some(super::common::make_anthropic_thinking_config(&self.anthropic_config));
+        } else if let Some(effort) = request.reasoning_effort {
+            // Fallback to effort-based reasoning if model doesn't support interleaved thinking
             if let Some(payload) = reasoning_parameters_for(Provider::Anthropic, effort) {
                 reasoning_val = Some(payload);
             } else {

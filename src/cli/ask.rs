@@ -100,6 +100,7 @@ pub async fn handle_ask_command(
             Some(config.model.clone()),
             Some(config.prompt_cache.clone()),
             None,
+            None,
         )
         .context("Failed to initialize provider for ask command")?,
     };

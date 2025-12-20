@@ -3,7 +3,7 @@ use super::common::resolve_model;
 use super::openai::OpenAIProvider;
 use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
-use crate::config::core::PromptCachingConfig;
+use crate::config::core::{AnthropicConfig, PromptCachingConfig};
 use crate::llm::client::LLMClient;
 use crate::llm::error_display;
 use crate::llm::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream};
@@ -93,6 +93,7 @@ impl LmStudioProvider {
         base_url: Option<String>,
         prompt_cache: Option<PromptCachingConfig>,
         _timeouts: Option<TimeoutsConfig>,
+        _anthropic: Option<AnthropicConfig>,
     ) -> OpenAIProvider {
         let resolved_model = resolve_model(model, models::lmstudio::DEFAULT_MODEL);
         let resolved_base = Self::resolve_base_url(base_url);
@@ -102,6 +103,7 @@ impl LmStudioProvider {
             Some(resolved_base),
             prompt_cache,
             _timeouts,
+            _anthropic,
         )
     }
 
@@ -119,6 +121,7 @@ impl LmStudioProvider {
         base_url: Option<String>,
         prompt_cache: Option<PromptCachingConfig>,
         _timeouts: Option<TimeoutsConfig>,
+        _anthropic: Option<AnthropicConfig>,
     ) -> Self {
         Self::with_model_internal(api_key, model, base_url, prompt_cache)
     }
@@ -129,7 +132,7 @@ impl LmStudioProvider {
         base_url: Option<String>,
         prompt_cache: Option<PromptCachingConfig>,
     ) -> Self {
-        let inner = Self::build_inner(api_key, model, base_url, prompt_cache, None);
+        let inner = Self::build_inner(api_key, model, base_url, prompt_cache, None, None);
         Self { inner }
     }
 }

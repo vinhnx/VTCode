@@ -1,7 +1,7 @@
 #![allow(clippy::result_large_err, clippy::bind_instead_of_map)]
 use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
-use crate::config::core::PromptCachingConfig;
+use crate::config::core::{AnthropicConfig, PromptCachingConfig};
 use crate::llm::client::LLMClient;
 use crate::llm::error_display::format_llm_error;
 use crate::llm::provider::{
@@ -77,6 +77,7 @@ impl ZAIProvider {
         base_url: Option<String>,
         prompt_cache: Option<PromptCachingConfig>,
         _timeouts: Option<TimeoutsConfig>,
+        _anthropic: Option<AnthropicConfig>,
     ) -> Self {
         let api_key_value = api_key.unwrap_or_default();
         let model_value = resolve_model(model, models::zai::DEFAULT_MODEL);

@@ -119,6 +119,7 @@ macro_rules! impl_provider_constructors {
                 base_url: Option<String>,
                 prompt_cache: Option<$crate::config::core::PromptCachingConfig>,
                 _timeouts: Option<$crate::config::TimeoutsConfig>,
+                _anthropic: Option<$crate::config::core::AnthropicConfig>,
             ) -> Self {
                 let config = $crate::llm::providers::provider_base::build_provider_config(
                     $crate::llm::providers::provider_base::ProviderConfigParams {

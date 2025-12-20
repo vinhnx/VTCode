@@ -77,32 +77,6 @@ instruction_max_bytes = 16384
 instruction_files = []
 verbosity = "medium"
 
-# Small model configuration for efficient operations
-# Following Claude Code's pattern, use a smaller model for 50%+ of calls (large reads, parsing, summarization)
-# Typically 70-80% cheaper than main model; same quality for summary/parse tasks
-[agent.small_model]
-# Enable small model tier
-enabled = true
-
-# Small model ID (e.g., "claude-3-5-haiku", "gpt-4o-mini", "gemini-2.0-flash")
-# Leave empty to auto-select lightweight sibling of main model
-model = ""
-
-# Maximum tokens for small model responses (use smaller value for summaries/parsing)
-max_tokens = 1000
-
-# Temperature for small model (lower = more deterministic for parsing)
-temperature = 0.3
-
-# Use small model for large file reads (>50KB) - significant token savings
-use_for_large_reads = true
-
-# Use small model for web content summarization
-use_for_web_summary = true
-
-# Use small model for git history processing
-use_for_git_history = true
-
 # Ripgrep dependency management - Auto-install ripgrep on startup for faster file search
 [agent.ripgrep]
 # Enable automatic ripgrep installation on startup (disable in CI/CD environments)
@@ -195,7 +169,7 @@ max_snapshots = 50
 max_age_days = 30
 
 [agent.vibe_coding]
-enabled = true
+enabled = false
 min_prompt_length = 5
 min_prompt_words = 2
 enable_entity_resolution = true
@@ -505,17 +479,6 @@ max_debug_log_age_days = 7
 
 # Context management configuration - Controls conversation memory
 [context]
-# Enable semantic-aware context compression using structural analysis
-semantic_compression = false
-
-# Retain tool outputs longer when related actions are in progress
-tool_aware_retention = false
-
-# Maximum AST depth to preserve when semantic compression is active
-max_structural_depth = 3
-
-# Number of recent tool responses to keep when tool-aware retention is enabled
-preserve_recent_tools = 5
 max_context_tokens = 128000
 trim_to_percent = 90
 preserve_recent_turns = 12
@@ -769,33 +732,7 @@ schema_validation_enabled = true
 path_traversal_protection = true
 max_argument_size = 1048576
 
-[hooks.lifecycle]
-session_start = []
-session_end = []
-user_prompt_submit = []
-pre_tool_use = []
-post_tool_use = []
-
 [model]
 skip_loop_detection = false
 loop_detection_threshold = 1
 loop_detection_interactive = true
-
-# [hooks.lifecycle]
-# # Session start hook that provides project context
-# session_start = [{ hooks = [{ command = "$VT_PROJECT_DIR/.vtcode/hooks/setup-env.sh", timeout_seconds = 30 }] }]
-
-# # Session end hook for cleanup/logging
-# session_end = [{ hooks = [{ command = "$VT_PROJECT_DIR/.vtcode/hooks/log-session-end.sh" }] }]
-
-# # Security validation for bash commands
-# pre_tool_use = [
-#   { matcher = "Bash", hooks = [{ command = "$VT_PROJECT_DIR/.vtcode/hooks/security-check.sh", timeout_seconds = 10 }] }
-# ]
-
-# # Post-tool hook to run linters and log commands
-# post_tool_use = [
-#   { matcher = "Write|Edit", hooks = [{ command = "$VT_PROJECT_DIR/.vtcode/hooks/run-linter.sh" }] },
-#   { matcher = "Bash", hooks = [{ command = "$VT_PROJECT_DIR/.vtcode/hooks/log-command.sh" }] },
-#   { matcher = ".*", hooks = [{ command = "$VT_PROJECT_DIR/.vtcode/hooks/log-tool-usage.sh" }] }
-# ]

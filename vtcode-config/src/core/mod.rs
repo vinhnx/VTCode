@@ -5,6 +5,7 @@ pub mod model;
 pub mod permissions;
 pub mod plugins;
 pub mod prompt_cache;
+pub mod provider;
 pub mod security;
 pub mod skills;
 pub mod tools;
@@ -21,6 +22,7 @@ pub use prompt_cache::{
     OpenRouterPromptCacheSettings, PromptCachingConfig, ProviderPromptCachingConfig,
     XAIPromptCacheSettings, ZaiPromptCacheSettings,
 };
+pub use provider::AnthropicConfig;
 pub use security::SecurityConfig;
 pub use skills::{SkillsConfig, SkillsRenderMode};
 pub use tools::{ToolPolicy, ToolsConfig, WebFetchConfig};

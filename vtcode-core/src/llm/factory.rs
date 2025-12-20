@@ -3,7 +3,7 @@ use super::providers::{
     MoonshotProvider, OllamaProvider, OpenAIProvider, OpenRouterProvider, XAIProvider, ZAIProvider,
 };
 use crate::config::TimeoutsConfig;
-use crate::config::core::PromptCachingConfig;
+use crate::config::core::{AnthropicConfig, PromptCachingConfig};
 use crate::config::models::{ModelId, Provider};
 use crate::ctx_err;
 use crate::llm::provider::{LLMError, LLMProvider};
@@ -24,6 +24,7 @@ pub struct ProviderConfig {
     pub model: Option<String>,
     pub prompt_cache: Option<PromptCachingConfig>,
     pub timeouts: Option<TimeoutsConfig>,
+    pub anthropic: Option<AnthropicConfig>,
 }
 
 trait BuiltinProvider: LLMProvider {
@@ -220,6 +221,7 @@ pub fn create_provider_for_model(
             model: Some(model.to_string()),
             prompt_cache,
             timeouts: None,
+            anthropic: None,
         },
     )
 }
@@ -233,6 +235,7 @@ pub fn create_provider_with_config(
     model: Option<String>,
     prompt_cache: Option<PromptCachingConfig>,
     timeouts: Option<TimeoutsConfig>,
+    anthropic: Option<AnthropicConfig>,
 ) -> Result<Box<dyn LLMProvider>, LLMError> {
     let factory = get_factory().lock().map_err(|_| LLMError::Provider {
         message: ctx_err!("llm factory", "lock poisoned"),
@@ -246,6 +249,7 @@ pub fn create_provider_with_config(
             model,
             prompt_cache,
             timeouts,
+            anthropic,
         },
     )
 }
@@ -262,6 +266,7 @@ macro_rules! impl_builtin_provider {
                         model,
                         prompt_cache,
                         timeouts,
+                        anthropic,
                     } = config;
 
                     Box::new(<$provider>::from_config(
@@ -270,6 +275,7 @@ macro_rules! impl_builtin_provider {
                         base_url,
                         prompt_cache,
                         timeouts,
+                        anthropic,
                     ))
                 }
             }
@@ -277,11 +283,34 @@ macro_rules! impl_builtin_provider {
     };
 }
 
+// Manual implementation for AnthropicProvider to support provider-specific config
+impl BuiltinProvider for AnthropicProvider {
+    fn build_from_config(config: ProviderConfig) -> Box<dyn LLMProvider> {
+        let ProviderConfig {
+            api_key,
+            base_url,
+            model,
+            prompt_cache,
+            timeouts,
+            anthropic,
+        } = config;
+
+        Box::new(AnthropicProvider::from_config(
+            api_key,
+            model,
+            base_url,
+            prompt_cache,
+            timeouts,
+            anthropic,
+        ))
+    }
+}
+
 // Implement BuiltinProvider for all standard providers using the macro
 impl_builtin_provider!(
     GeminiProvider,
     OpenAIProvider,
-    AnthropicProvider,
+    // AnthropicProvider is manually implemented above
     MinimaxProvider,
     DeepSeekProvider,
     OpenRouterProvider,
