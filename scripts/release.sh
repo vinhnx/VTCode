@@ -1032,30 +1032,8 @@ main() {
         pid_docs=$!
     fi
 
-    # Trigger docs.rs rebuild in background if not skipped
-    if [[ "$skip_crates" == 'false' && "$skip_docs" == 'false' ]]; then
-        trigger_docs_rs_rebuild "$released_version" false &
-        pid_docs=$!
-    fi
-
-    # Publish to npmjs.com registry in background if not skipped
-    if [[ "$skip_npm" == 'false' ]]; then
-        publish_npm_package "$released_version" &
-        pid_npm=$!
-    fi
-
-    # Build binaries in background if not skipped
-    local binaries_completed=false
-    if [[ "$skip_binaries" == 'false' ]]; then
-        # Disable cross compilation by default to avoid Docker dependency
-        # Users can override with VTCODE_DISABLE_CROSS=0 to use cross
-        export VTCODE_DISABLE_CROSS=${VTCODE_DISABLE_CROSS:-1}
-        build_and_upload_binaries "$released_version" &
-        pid_binaries=$!
-        binaries_completed=true
-    fi
-
-    # Wait for binaries to complete before updating Zed checksums
+    # Wait for background docs.rs process if it was started
+    if [[ -n "$pid_docs" ]]; then
     if [[ $binaries_completed == true ]]; then
         wait "$pid_binaries" || print_error "Binary build failed"
         # Zed extension checksum update removed

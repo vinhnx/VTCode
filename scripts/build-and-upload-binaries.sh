@@ -235,7 +235,7 @@ build_binaries() {
     # Create dist directory
     mkdir -p "$dist_dir"
 
-    # macOS builds
+    # macOS builds - always build these
     # Build for x86_64 macOS
     print_info "Building for x86_64 macOS..."
     build_with_tool x86_64-apple-darwin
@@ -258,28 +258,36 @@ build_binaries() {
     tar -czf "vtcode-v$version-aarch64-apple-darwin.tar.gz" vtcode
     cd ..
 
-    # Linux builds
-    # Build for x86_64 Linux
-    print_info "Building for x86_64 Linux..."
-    build_with_tool x86_64-unknown-linux-gnu
+    # Linux builds - skip on macOS due to cross-compilation issues
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        print_warning "Linux cross-compilation skipped on macOS"
+        print_info "Linux binaries can be built via:"
+        print_info "  1. GitHub Actions CI/CD (recommended)"
+        print_info "  2. Linux VM or container"
+        print_info "  3. cargo install vtcode (from source)"
+    else
+        # Build for x86_64 Linux
+        print_info "Building for x86_64 Linux..."
+        build_with_tool x86_64-unknown-linux-gnu
 
-    # Package x86_64 Linux binary
-    print_info "Packaging x86_64 Linux binary..."
-    cp "target/x86_64-unknown-linux-gnu/release/vtcode" "$dist_dir/"
-    cd "$dist_dir"
-    tar -czf "vtcode-v$version-x86_64-unknown-linux-gnu.tar.gz" vtcode
-    cd ..
+        # Package x86_64 Linux binary
+        print_info "Packaging x86_64 Linux binary..."
+        cp "target/x86_64-unknown-linux-gnu/release/vtcode" "$dist_dir/"
+        cd "$dist_dir"
+        tar -czf "vtcode-v$version-x86_64-unknown-linux-gnu.tar.gz" vtcode
+        cd ..
 
-    # Build for aarch64 Linux
-    print_info "Building for aarch64 Linux..."
-    build_with_tool aarch64-unknown-linux-gnu
+        # Build for aarch64 Linux
+        print_info "Building for aarch64 Linux..."
+        build_with_tool aarch64-unknown-linux-gnu
 
-    # Package aarch64 Linux binary
-    print_info "Packaging aarch64 Linux binary..."
-    cp "target/aarch64-unknown-linux-gnu/release/vtcode" "$dist_dir/"
-    cd "$dist_dir"
-    tar -czf "vtcode-v$version-aarch64-unknown-linux-gnu.tar.gz" vtcode
-    cd ..
+        # Package aarch64 Linux binary
+        print_info "Packaging aarch64 Linux binary..."
+        cp "target/aarch64-unknown-linux-gnu/release/vtcode" "$dist_dir/"
+        cd "$dist_dir"
+        tar -czf "vtcode-v$version-aarch64-unknown-linux-gnu.tar.gz" vtcode
+        cd ..
+    fi
 
     print_success "Binaries built and packaged successfully"
 }
@@ -293,26 +301,30 @@ calculate_checksums() {
 
     cd "$dist_dir"
 
-    # macOS checksums
+    # macOS checksums (always built)
     local x86_64_macos_sha256=$(shasum -a 256 "vtcode-v$version-x86_64-apple-darwin.tar.gz" | cut -d' ' -f1)
     local aarch64_macos_sha256=$(shasum -a 256 "vtcode-v$version-aarch64-apple-darwin.tar.gz" | cut -d' ' -f1)
     
-    # Linux checksums
-    local x86_64_linux_sha256=$(shasum -a 256 "vtcode-v$version-x86_64-unknown-linux-gnu.tar.gz" | cut -d' ' -f1)
-    local aarch64_linux_sha256=$(shasum -a 256 "vtcode-v$version-aarch64-unknown-linux-gnu.tar.gz" | cut -d' ' -f1)
+    # Write macOS checksum files
+    echo "$x86_64_macos_sha256" > "$dist_dir/vtcode-v$version-x86_64-apple-darwin.sha256"
+    echo "$aarch64_macos_sha256" > "$dist_dir/vtcode-v$version-aarch64-apple-darwin.sha256"
+
+    # Linux checksums (only if on Linux)
+    if [[ "$OSTYPE" != "darwin"* ]] && [[ -f "vtcode-v$version-x86_64-unknown-linux-gnu.tar.gz" ]]; then
+        local x86_64_linux_sha256=$(shasum -a 256 "vtcode-v$version-x86_64-unknown-linux-gnu.tar.gz" | cut -d' ' -f1)
+        local aarch64_linux_sha256=$(shasum -a 256 "vtcode-v$version-aarch64-unknown-linux-gnu.tar.gz" | cut -d' ' -f1)
+        
+        echo "$x86_64_linux_sha256" > "$dist_dir/vtcode-v$version-x86_64-unknown-linux-gnu.sha256"
+        echo "$aarch64_linux_sha256" > "$dist_dir/vtcode-v$version-aarch64-unknown-linux-gnu.sha256"
+        
+        print_info "x86_64 Linux SHA256: $x86_64_linux_sha256"
+        print_info "aarch64 Linux SHA256: $aarch64_linux_sha256"
+    fi
 
     cd ..
 
-    # Write checksum files
-    echo "$x86_64_macos_sha256" > "$dist_dir/vtcode-v$version-x86_64-apple-darwin.sha256"
-    echo "$aarch64_macos_sha256" > "$dist_dir/vtcode-v$version-aarch64-apple-darwin.sha256"
-    echo "$x86_64_linux_sha256" > "$dist_dir/vtcode-v$version-x86_64-unknown-linux-gnu.sha256"
-    echo "$aarch64_linux_sha256" > "$dist_dir/vtcode-v$version-aarch64-unknown-linux-gnu.sha256"
-
     print_info "x86_64 macOS SHA256: $x86_64_macos_sha256"
     print_info "aarch64 macOS SHA256: $aarch64_macos_sha256"
-    print_info "x86_64 Linux SHA256: $x86_64_linux_sha256"
-    print_info "aarch64 Linux SHA256: $aarch64_linux_sha256"
 
     print_success "SHA256 checksums calculated"
 }
@@ -338,29 +350,39 @@ upload_binaries() {
     print_info "Uploading assets to GitHub release..."
     
     local files_to_upload=()
-    # macOS files
+    # macOS files (always built)
     files_to_upload+=("vtcode-v$version-x86_64-apple-darwin.tar.gz")
     files_to_upload+=("vtcode-v$version-x86_64-apple-darwin.sha256")
     files_to_upload+=("vtcode-v$version-aarch64-apple-darwin.tar.gz")
     files_to_upload+=("vtcode-v$version-aarch64-apple-darwin.sha256")
-    # Linux files
-    files_to_upload+=("vtcode-v$version-x86_64-unknown-linux-gnu.tar.gz")
-    files_to_upload+=("vtcode-v$version-x86_64-unknown-linux-gnu.sha256")
-    files_to_upload+=("vtcode-v$version-aarch64-unknown-linux-gnu.tar.gz")
-    files_to_upload+=("vtcode-v$version-aarch64-unknown-linux-gnu.sha256")
     
-    # Verify all files exist before uploading
+    # Linux files (only if on Linux)
+    if [[ "$OSTYPE" != "darwin"* ]]; then
+        files_to_upload+=("vtcode-v$version-x86_64-unknown-linux-gnu.tar.gz")
+        files_to_upload+=("vtcode-v$version-x86_64-unknown-linux-gnu.sha256")
+        files_to_upload+=("vtcode-v$version-aarch64-unknown-linux-gnu.tar.gz")
+        files_to_upload+=("vtcode-v$version-aarch64-unknown-linux-gnu.sha256")
+    fi
+    
+    # Verify all files exist before uploading (filter out missing files)
+    local files_to_upload_filtered=()
     for file in "${files_to_upload[@]}"; do
-        if [[ ! -f "$file" ]]; then
-            print_error "Required file not found: $file"
-            cd ..
-            return 1
+        if [[ -f "$file" ]]; then
+            files_to_upload_filtered+=("$file")
+        else
+            print_warning "File not found, skipping: $file"
         fi
     done
     
-    # Upload all files
-    print_info "Uploading ${#files_to_upload[@]} files to release $tag..."
-    if ! gh release upload "$tag" "${files_to_upload[@]}" --clobber; then
+    if [[ ${#files_to_upload_filtered[@]} -eq 0 ]]; then
+        print_error "No files to upload"
+        cd ..
+        return 1
+    fi
+    
+    # Upload files
+    print_info "Uploading ${#files_to_upload_filtered[@]} files to release $tag..."
+    if ! gh release upload "$tag" "${files_to_upload_filtered[@]}" --clobber; then
         print_error "Failed to upload assets to GitHub release"
         cd ..
         return 1
@@ -370,8 +392,8 @@ upload_binaries() {
     print_info "Verifying uploaded assets..."
     sleep 2  # Give GitHub a moment to process the upload
     local asset_count=$(gh release view "$tag" --json assets --jq '.assets | length' 2>/dev/null || echo "0")
-    if [[ $asset_count -lt ${#files_to_upload[@]} ]]; then
-        print_warning "Expected ${#files_to_upload[@]} assets, but found $asset_count in release"
+    if [[ $asset_count -lt ${#files_to_upload_filtered[@]} ]]; then
+        print_warning "Expected ${#files_to_upload_filtered[@]} assets, but found $asset_count in release"
         print_info "This may be temporary - check the release on GitHub to confirm all assets uploaded"
     else
         print_success "All $asset_count assets uploaded successfully"

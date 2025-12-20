@@ -2,9 +2,7 @@
 # Optimized for cross-compilation of the multi-platform Rust-based terminal coding agent
 
 [build]
-# Enable caching for faster builds
-xargo = true
-# Build in release mode by default for binaries
+# Force Docker usage for cross-compilation
 default-target = "x86_64-unknown-linux-gnu"
 
 # Environment variables needed for cross-compilation
@@ -20,7 +18,13 @@ passthrough = [
     "VCPKG_ROOT",
     "VCPKG_ROOT_STATUS", 
     "OPENSSL_STATIC",
+    "CROSS_CONTAINER_ENGINE",
 ]
+
+# Force Docker for all targets to ensure cross-compilation works
+[build]
+container-engine = "docker"
+target = ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"]
 
 # Target-specific configurations - these will use Docker by default
 # To build without Docker, use `cargo build` directly or set CROSS_CONTAINER_ENGINE=
@@ -42,6 +46,7 @@ pre-build = [
 
 [target.x86_64-unknown-linux-gnu]
 image = "ghcr.io/cross-rs/x86_64-unknown-linux-gnu:latest"
+dockerfile = "./Dockerfile.x86_64-unknown-linux-gnu"
 pre-build = [
     "apt-get update && apt-get install -y pkg-config libssl-dev",
     "export PKG_CONFIG_ALLOW_CROSS=1"
@@ -49,6 +54,7 @@ pre-build = [
 
 [target.aarch64-unknown-linux-gnu]
 image = "ghcr.io/cross-rs/aarch64-unknown-linux-gnu:latest"
+dockerfile = "./Dockerfile.aarch64-unknown-linux-gnu"
 pre-build = [
     "apt-get update && apt-get install -y pkg-config libssl-dev",
     "export PKG_CONFIG_ALLOW_CROSS=1"
