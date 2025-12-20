@@ -26,7 +26,7 @@ use crate::llm::provider::{FunctionDefinition, LLMRequest, Message, ToolCall, To
 use crate::llm::{AnyClient, make_client};
 use crate::mcp::McpClient;
 use crate::prompts::system::compose_system_instruction_text;
-use crate::tools::{ToolRegistry, build_function_declarations};
+use crate::tools::{PlanPhase, ToolRegistry, build_function_declarations};
 
 use crate::utils::colors::style;
 use crate::utils::error_messages::ERR_TOOL_DENIED;
@@ -677,6 +677,7 @@ impl AgentRunner {
         }
 
         let results = join_all(futures).await;
+        let mut halt_turn = false;
         for (name, call_id, result) in results {
             let command_event = event_recorder.command_started(&name);
             match result {
@@ -718,6 +719,21 @@ impl AgentRunner {
                         agent_prefix,
                         format!("{} {}", style("(ERR)").red(), error_msg)
                     );
+                    let err_lower = error_msg.to_lowercase();
+                    if err_lower.contains("rate limit") {
+                        task_state.warnings.push(
+                            "Tool was rate limited; halting further tool calls this turn.".into(),
+                        );
+                        task_state.mark_tool_loop_limit_hit();
+                        halt_turn = true;
+                    } else if err_lower.contains("denied by policy")
+                        || err_lower.contains("not permitted while full-auto")
+                    {
+                        task_state.warnings.push(
+                            "Tool denied by policy; halting further tool calls this turn.".into(),
+                        );
+                        halt_turn = true;
+                    }
                     task_state.push_tool_error(call_id, error_msg, is_gemini);
                     event_recorder.command_finished(
                         &command_event,
@@ -725,8 +741,15 @@ impl AgentRunner {
                         None,
                         &e.to_string(),
                     );
+                    if halt_turn {
+                        break;
+                    }
                 }
             }
+        }
+        if halt_turn {
+            tokio::time::sleep(Duration::from_millis(250)).await;
+            return Ok(());
         }
         Ok(())
     }
@@ -821,13 +844,51 @@ impl AgentRunner {
                     }
                 }
                 Err(e) => {
-                    let mut failure_ctx = ToolFailureContext {
-                        agent_prefix,
-                        task_state,
-                        event_recorder,
-                        command_event: &command_event,
-                    };
-                    self.record_tool_failure(&mut failure_ctx, &name, &e, Some(call.id.as_str()));
+                    let err_msg = e.to_string();
+                    let err_lower = err_msg.to_lowercase();
+                    if err_lower.contains("rate limit") {
+                        task_state.warnings.push(
+                            "Tool was rate limited; halting further tool calls this turn.".into(),
+                        );
+                        task_state.mark_tool_loop_limit_hit();
+                        let mut failure_ctx = ToolFailureContext {
+                            agent_prefix,
+                            task_state,
+                            event_recorder,
+                            command_event: &command_event,
+                        };
+                        self.record_tool_failure(&mut failure_ctx, &name, &e, Some(call.id.as_str()));
+                        tokio::time::sleep(Duration::from_millis(250)).await;
+                        break;
+                    } else if err_lower.contains("denied by policy")
+                        || err_lower.contains("not permitted while full-auto")
+                    {
+                        task_state.warnings.push(
+                            "Tool denied by policy; halting further tool calls this turn.".into(),
+                        );
+                        let mut failure_ctx = ToolFailureContext {
+                            agent_prefix,
+                            task_state,
+                            event_recorder,
+                            command_event: &command_event,
+                        };
+                        self.record_tool_failure(&mut failure_ctx, &name, &e, Some(call.id.as_str()));
+                        tokio::time::sleep(Duration::from_millis(250)).await;
+                        break;
+                    } else {
+                        let mut failure_ctx = ToolFailureContext {
+                            agent_prefix,
+                            task_state,
+                            event_recorder,
+                            command_event: &command_event,
+                        };
+                        self.record_tool_failure(
+                            &mut failure_ctx,
+                            &name,
+                            &e,
+                            Some(call.id.as_str()),
+                        );
+                    }
                 }
             }
         }
@@ -1576,6 +1637,30 @@ impl AgentRunner {
                 }
 
                 if let Some(tool_calls) = effective_tool_calls.filter(|tc| !tc.is_empty()) {
+                    let plan_phase = self.tool_registry.current_plan().phase;
+                    if matches!(
+                        plan_phase,
+                        Some(PlanPhase::Understanding | PlanPhase::Design | PlanPhase::Review)
+                    ) {
+                        let warning_message = format!(
+                            "Planning mode active (phase: {}). Tool calls are blocked until final_plan.",
+                            plan_phase
+                                .as_ref()
+                                .map(|p| p.label())
+                                .unwrap_or("planning"),
+                        );
+                        self.record_warning(
+                            &agent_prefix,
+                            &mut task_state,
+                            &mut event_recorder,
+                            &warning_message,
+                        );
+                        task_state.completion_outcome = TaskOutcome::StoppedNoAction;
+                        task_state.has_completed = true;
+                        task_state.record_turn(&turn_started_at, &mut turn_recorded);
+                        break;
+                    }
+
                     let can_parallelize = tool_calls.len() > 1
                         && tool_calls.iter().all(|call| {
                             if let Some(func) = &call.function {

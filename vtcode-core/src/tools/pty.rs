@@ -1200,7 +1200,7 @@ impl PtyManager {
 
     pub async fn resolve_working_dir(&self, requested: Option<&str>) -> Result<PathBuf> {
         let requested = match requested {
-            Some(dir) if !dir.trim().is_empty() => dir,
+            Some(dir) if !dir.trim().is_empty() => dir.trim(),
             _ => return Ok(self.workspace_root.clone()),
         };
 
@@ -1550,8 +1550,17 @@ impl PtyManager {
                 .context("failed to poll PTY session status")?
                 .is_none()
             {
+                let kill_started = Instant::now();
                 child.kill().context("failed to terminate PTY session")?;
                 let _ = child.wait();
+                let elapsed = kill_started.elapsed();
+                if elapsed > Duration::from_secs(2) {
+                    warn!(
+                        session = %session_id,
+                        elapsed_ms = %elapsed.as_millis(),
+                        "PTY session termination exceeded budget"
+                    );
+                }
             }
         }
 

@@ -59,6 +59,9 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tracing::{debug, trace, warn};
 
+// Match agent runner throttle ceiling
+const LOOP_THROTTLE_MAX_MS: u64 = 500;
+
 use super::plan::PlanManager;
 use crate::mcp::{McpClient, McpToolExecutor, McpToolInfo};
 use std::collections::VecDeque;
@@ -1532,7 +1535,7 @@ impl ToolRegistry {
                 .execution_history
                 .calls_in_window(Duration::from_secs(60));
             if calls_last_minute >= rate_limit {
-                let error = ToolExecutionError::new(
+                let _error = ToolExecutionError::new(
                     tool_name_owned.clone(),
                     ToolErrorType::PolicyViolation,
                     format!(
@@ -1540,20 +1543,14 @@ impl ToolRegistry {
                         display_name, rate_limit
                     ),
                 );
-                let payload = json!({
-                    "error": error.to_json_value(),
-                    "rate_limited": true,
-                    "limit_per_minute": rate_limit,
-                    "recent_calls": calls_last_minute,
-                });
 
                 self.execution_history
                     .add_record(ToolExecutionRecord::failure(
-                        tool_name_owned,
-                        requested_name,
+                        tool_name_owned.clone(),
+                        requested_name.clone(),
                         false,
                         None,
-                        args_for_recording,
+                        args_for_recording.clone(),
                         "Tool rate limit reached".to_string(),
                         context_snapshot.clone(),
                         timeout_category_label.clone(),
@@ -1563,13 +1560,23 @@ impl ToolRegistry {
                         false,
                     ));
 
-                return Ok(payload);
+                return Err(anyhow!(
+                    "Tool '{}' rate limited ({} calls/min, {} recent)",
+                    display_name, rate_limit, calls_last_minute
+                )
+                .context("tool rate limited"));
             }
         }
 
         // LOOP DETECTION: Check if we're calling the same tool repeatedly with identical params
         let loop_limit = self.execution_history.loop_limit_for(tool_name);
         let (is_loop, repeat_count, _) = self.execution_history.detect_loop(tool_name, args);
+        if is_loop && repeat_count > 1 {
+            let delay_ms = (25 * repeat_count as u64).min(LOOP_THROTTLE_MAX_MS);
+            if delay_ms > 0 {
+                tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+            }
+        }
         if loop_limit > 0 && is_loop {
             warn!(
                 tool = %tool_name,
@@ -1626,7 +1633,7 @@ impl ToolRegistry {
         if self.policy_gateway.has_full_auto_allowlist()
             && !self.policy_gateway.is_allowed_in_full_auto(tool_name)
         {
-            let error = ToolExecutionError::new(
+            let _error = ToolExecutionError::new(
                 tool_name_owned.clone(),
                 ToolErrorType::PolicyViolation,
                 format!(
@@ -1637,11 +1644,11 @@ impl ToolRegistry {
 
             self.execution_history
                 .add_record(ToolExecutionRecord::failure(
-                    tool_name_owned,
+                    tool_name_owned.clone(),
                     requested_name.clone(),
                     false,
                     None,
-                    args_for_recording,
+                    args_for_recording.clone(),
                     "Tool execution denied by policy".to_string(),
                     context_snapshot.clone(),
                     timeout_category_label.clone(),
@@ -1651,7 +1658,11 @@ impl ToolRegistry {
                     false,
                 ));
 
-            return Ok(error.to_json_value());
+            return Err(anyhow!(
+                "Tool '{}' is not permitted while full-auto mode is active",
+                display_name
+            )
+            .context("tool denied by full-auto allowlist"));
         }
 
         let skip_policy_prompt = self.policy_gateway.take_preapproved(tool_name);
@@ -1670,7 +1681,7 @@ impl ToolRegistry {
                 _ => format!("Tool '{}' execution denied by policy", display_name),
             };
 
-            let error = ToolExecutionError::new(
+            let _error = ToolExecutionError::new(
                 tool_name_owned.clone(),
                 ToolErrorType::PolicyViolation,
                 error_msg.clone(),
@@ -1678,12 +1689,12 @@ impl ToolRegistry {
 
             self.execution_history
                 .add_record(ToolExecutionRecord::failure(
-                    tool_name_owned,
+                    tool_name_owned.clone(),
                     requested_name.clone(),
                     false,
                     None,
-                    args_for_recording,
-                    error_msg,
+                    args_for_recording.clone(),
+                    error_msg.clone(),
                     context_snapshot.clone(),
                     timeout_category_label.clone(),
                     base_timeout_ms,
@@ -1692,7 +1703,7 @@ impl ToolRegistry {
                     false,
                 ));
 
-            return Ok(error.to_json_value());
+            return Err(anyhow!("{}", error_msg).context("tool denied by policy"));
         }
 
         let args = match self
