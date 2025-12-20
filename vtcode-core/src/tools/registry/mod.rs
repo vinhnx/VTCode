@@ -50,8 +50,8 @@ use crate::tools::grep_file::GrepSearchManager;
 use crate::tools::mcp::build_mcp_registration;
 use crate::tools::names::canonical_tool_name;
 use crate::tools::pty::PtyManager;
-use crate::tools::{PlanSummary, TaskPlan};
-use anyhow::Result;
+use crate::tools::{PlanPhase, PlanSummary, TaskPlan};
+use anyhow::{Result, anyhow};
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -68,6 +68,16 @@ use std::time::SystemTime;
 /// Callback for tool progress and output streaming
 pub type ToolProgressCallback = Arc<dyn Fn(&str, &str) + Send + Sync>;
 
+// Safe tools allowed during planning phases (read-only or plan-related)
+const PLANNING_ALLOWED_TOOLS: &[&str] = &[
+    tools::UPDATE_PLAN,
+    tools::READ_FILE,
+    tools::LIST_FILES,
+    tools::GREP_FILE,
+    tools::SEARCH_TOOLS,
+    tools::WEB_FETCH,
+];
+
 #[cfg(test)]
 use super::traits::Tool;
 #[cfg(test)]
@@ -79,6 +89,7 @@ pub struct HarnessContextSnapshot {
     pub session_id: String,
     pub task_id: Option<String>,
     pub plan_version: u64,
+    pub plan_phase: Option<PlanPhase>,
     pub plan_summary: PlanSummary,
 }
 
@@ -87,12 +98,14 @@ impl HarnessContextSnapshot {
         session_id: String,
         task_id: Option<String>,
         plan_version: u64,
+        plan_phase: Option<PlanPhase>,
         plan_summary: PlanSummary,
     ) -> Self {
         Self {
             session_id,
             task_id,
             plan_version,
+            plan_phase,
             plan_summary,
         }
     }
@@ -103,6 +116,7 @@ impl HarnessContextSnapshot {
             "session_id": self.session_id,
             "task_id": self.task_id,
             "plan_version": self.plan_version,
+            "plan_phase": self.plan_phase.as_ref().map(|p| p.label()),
             "plan_summary": {
                 "status": self.plan_summary.status.label(),
                 "total_steps": self.plan_summary.total_steps,
@@ -583,6 +597,7 @@ impl HarnessContext {
             session_id: self.session_id.clone(),
             task_id: self.task_id.clone(),
             plan_version: plan.version,
+            plan_phase: plan.phase.clone(),
             plan_summary: plan.summary.clone(),
         }
     }
@@ -1420,6 +1435,23 @@ impl ToolRegistry {
         let context_snapshot = self.harness_context_snapshot();
         let context_payload = context_snapshot.to_json();
 
+        // Enforce read-only planning mode: allow only safe tools during planning phases
+        if matches!(
+            context_snapshot.plan_phase,
+            Some(PlanPhase::Understanding | PlanPhase::Design | PlanPhase::Review)
+        ) && !planning_allowed(tool_name)
+        {
+            return Err(anyhow!(
+                "Planning mode active (phase: {}). Only planning-allowed tools ({}) are permitted until phase is final_plan.",
+                context_snapshot
+                    .plan_phase
+                    .as_ref()
+                    .map(|p| p.label())
+                    .unwrap_or("planning"),
+                PLANNING_ALLOWED_TOOLS.join(", ")
+            ));
+        }
+
         // Validate arguments against schema if available
         if let Some(registration) = self.inventory.registration_for(tool_name)
             && let Some(schema) = registration.parameter_schema()
@@ -1451,6 +1483,11 @@ impl ToolRegistry {
             session_id = %context_snapshot.session_id,
             task_id = %context_snapshot.task_id.as_deref().unwrap_or(""),
             plan_version = context_snapshot.plan_version,
+            plan_phase = %context_snapshot
+                .plan_phase
+                .as_ref()
+                .map(|p| p.label())
+                .unwrap_or(""),
             plan_status = %context_snapshot.plan_summary.status.label(),
             plan_total_steps = context_snapshot.plan_summary.total_steps,
             plan_completed_steps = context_snapshot.plan_summary.completed_steps
@@ -1462,6 +1499,11 @@ impl ToolRegistry {
             session_id = %context_snapshot.session_id,
             task_id = %context_snapshot.task_id.as_deref().unwrap_or(""),
             plan_version = context_snapshot.plan_version,
+            plan_phase = %context_snapshot
+                .plan_phase
+                .as_ref()
+                .map(|p| p.label())
+                .unwrap_or(""),
             plan_status = ?context_snapshot.plan_summary.status,
             "Executing tool with harness context"
         );
@@ -2286,6 +2328,10 @@ impl ToolRegistry {
     }
 }
 
+fn planning_allowed(name: &str) -> bool {
+    PLANNING_ALLOWED_TOOLS.iter().any(|allowed| *allowed == name)
+}
+
 impl ToolRegistry {
     /// Prompt for permission before starting long-running tool executions to avoid spinner conflicts
     pub async fn preflight_tool_permission(&mut self, name: &str) -> Result<bool> {
@@ -2498,6 +2544,7 @@ mod tests {
         let plan_manager = registry.plan_manager();
         let updated_plan = plan_manager.update_plan(UpdatePlanArgs {
             explanation: Some("ensure snapshot captures plan state".to_owned()),
+            phase: None,
             plan: vec![PlanStep {
                 step: "do-a-thing".to_owned(),
                 status: StepStatus::InProgress,
@@ -2509,6 +2556,7 @@ mod tests {
         assert_eq!(snapshot.session_id, "session-test");
         assert_eq!(snapshot.task_id.as_deref(), Some("task-123"));
         assert_eq!(snapshot.plan_version, updated_plan.version);
+        assert_eq!(snapshot.plan_phase, updated_plan.phase);
         assert_eq!(snapshot.plan_summary.total_steps, 1);
         assert_eq!(
             snapshot.plan_summary.status,

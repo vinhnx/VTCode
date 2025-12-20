@@ -194,8 +194,8 @@ pub use fallback_chains::{
 };
 pub use grep_file::GrepSearchManager;
 pub use plan::{
-    PlanCompletionState, PlanManager, PlanStep, PlanSummary, PlanUpdateResult, StepStatus,
-    TaskPlan, UpdatePlanArgs,
+    PlanCompletionState, PlanManager, PlanPhase, PlanStep, PlanSummary, PlanUpdateResult,
+    StepStatus, TaskPlan, UpdatePlanArgs,
 };
 pub use plugins::{PluginHandle, PluginId, PluginInstaller, PluginManifest, PluginRuntime};
 pub use pty::{PtyCommandRequest, PtyCommandResult, PtyManager};

@@ -1,6 +1,9 @@
+use std::fmt::Write;
+use std::fs;
+use std::path::PathBuf;
 use std::sync::Arc;
 
-use anyhow::{Result, anyhow, ensure};
+use anyhow::{Context, Result, anyhow, ensure};
 use chrono::{DateTime, Utc};
 use parking_lot::RwLock;
 use serde::de::Deserializer;
@@ -15,6 +18,35 @@ const CHECKBOX_PENDING: &str = "[ ]";
 const CHECKBOX_IN_PROGRESS: &str = "[ ]";
 const CHECKBOX_COMPLETED: &str = "[x]";
 const IN_PROGRESS_NOTE: &str = " _(in progress)_";
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum PlanPhase {
+    Understanding,
+    Design,
+    Review,
+    FinalPlan,
+}
+
+impl PlanPhase {
+    pub fn label(&self) -> &'static str {
+        match self {
+            PlanPhase::Understanding => "understanding",
+            PlanPhase::Design => "design",
+            PlanPhase::Review => "review",
+            PlanPhase::FinalPlan => "final_plan",
+        }
+    }
+
+    pub fn description(&self) -> &'static str {
+        match self {
+            PlanPhase::Understanding => "Gathering context and open questions",
+            PlanPhase::Design => "Drafting approaches and tradeoffs",
+            PlanPhase::Review => "Validating plan aligns with request",
+            PlanPhase::FinalPlan => "Ready to execute agreed plan",
+        }
+    }
+}
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -160,6 +192,8 @@ impl PlanSummary {
 pub struct TaskPlan {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub explanation: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub phase: Option<PlanPhase>,
     pub steps: Vec<PlanStep>,
     pub summary: PlanSummary,
     pub version: u64,
@@ -176,6 +210,7 @@ impl Default for TaskPlan {
     fn default() -> Self {
         Self {
             explanation: None,
+            phase: None,
             steps: Vec::new(),
             summary: PlanSummary::default(),
             version: 0,
@@ -188,6 +223,8 @@ impl Default for TaskPlan {
 pub struct UpdatePlanArgs {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub explanation: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub phase: Option<PlanPhase>,
     pub plan: Vec<PlanStep>,
 }
 
@@ -216,19 +253,25 @@ impl PlanUpdateResult {
 #[derive(Debug, Clone)]
 pub struct PlanManager {
     inner: Arc<RwLock<TaskPlan>>,
+    plan_file: Option<PathBuf>,
 }
 
 impl Default for PlanManager {
     fn default() -> Self {
-        Self {
-            inner: Arc::new(RwLock::new(TaskPlan::default())),
-        }
+        Self::new()
     }
 }
 
 impl PlanManager {
     pub fn new() -> Self {
-        Self::default()
+        Self::with_plan_file(None)
+    }
+
+    pub fn with_plan_file(plan_file: Option<PathBuf>) -> Self {
+        Self {
+            inner: Arc::new(RwLock::new(TaskPlan::default())),
+            plan_file,
+        }
     }
 
     pub fn snapshot(&self) -> TaskPlan {
@@ -265,17 +308,76 @@ impl PlanManager {
 
         let mut guard = self.inner.write();
         let version = guard.version.saturating_add(1);
+        let phase = update.phase.or_else(|| guard.phase.clone());
         let summary = PlanSummary::from_steps(&sanitized_steps);
         let updated_plan = TaskPlan {
             explanation: sanitized_explanation,
+            phase,
             steps: sanitized_steps,
             summary,
             version,
             updated_at: Utc::now(),
         };
         *guard = updated_plan.clone();
+        drop(guard);
+
+        self.persist_plan(&updated_plan)?;
+
         Ok(updated_plan)
     }
+
+    fn persist_plan(&self, plan: &TaskPlan) -> Result<()> {
+        let Some(path) = &self.plan_file else {
+            return Ok(());
+        };
+
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)
+                .with_context(|| format!("Failed to create plan directory '{}'", parent.display()))?;
+        }
+
+        let content = render_plan_markdown(plan);
+        fs::write(path, content)
+            .with_context(|| format!("Failed to write plan file '{}'", path.display()))?;
+
+        Ok(())
+    }
+}
+
+fn render_plan_markdown(plan: &TaskPlan) -> String {
+    let mut output = String::new();
+
+    let _ = writeln!(output, "# Task Plan (v{})", plan.version);
+    let _ = writeln!(output, "Updated: {}", plan.updated_at.to_rfc3339());
+    let _ = writeln!(
+        output,
+        "Status: {} ({} of {} completed)",
+        plan.summary.status.label(),
+        plan.summary.completed_steps,
+        plan.summary.total_steps
+    );
+
+    if let Some(phase) = &plan.phase {
+        let _ = writeln!(output, "Plan Phase: {} - {}", phase.label(), phase.description());
+    }
+
+    if let Some(explanation) = &plan.explanation {
+        if !explanation.is_empty() {
+            let _ = writeln!(output, "\nFocus: {}", explanation);
+        }
+    }
+
+    let _ = writeln!(output, "\n## Steps");
+    for (idx, step) in plan.steps.iter().enumerate() {
+        let mut line = String::new();
+        let _ = write!(line, "{}. {} {}", idx + 1, step.status.checkbox(), step.step);
+        if let Some(note) = step.status.status_note() {
+            line.push_str(note);
+        }
+        let _ = writeln!(output, "{}", line);
+    }
+
+    output
 }
 
 fn validate_plan(update: &UpdatePlanArgs) -> Result<()> {
@@ -305,6 +407,9 @@ fn validate_plan(update: &UpdatePlanArgs) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+
+    use tempfile::tempdir;
 
     #[test]
     fn initializes_with_default_state() {
@@ -321,6 +426,7 @@ mod tests {
         let manager = PlanManager::new();
         let args = UpdatePlanArgs {
             explanation: None,
+            phase: None,
             plan: Vec::new(),
         };
         assert!(manager.update_plan(args).is_err());
@@ -331,6 +437,7 @@ mod tests {
         let manager = PlanManager::new();
         let args = UpdatePlanArgs {
             explanation: None,
+            phase: None,
             plan: vec![
                 PlanStep {
                     step: "Step one".to_string(),
@@ -350,6 +457,7 @@ mod tests {
         let manager = PlanManager::new();
         let args = UpdatePlanArgs {
             explanation: Some("Focus on API layer".to_string()),
+            phase: None,
             plan: vec![
                 PlanStep {
                     step: "Audit handlers".to_string(),
@@ -375,6 +483,7 @@ mod tests {
         let manager = PlanManager::new();
         let args = UpdatePlanArgs {
             explanation: None,
+            phase: None,
             plan: vec![PlanStep {
                 step: "Finalize deployment".to_string(),
                 status: StepStatus::Completed,
@@ -424,5 +533,57 @@ mod tests {
         let manager = PlanManager::new();
         let result = manager.update_plan(args).expect("plan should update");
         assert_eq!(result.summary.total_steps, 2);
+    }
+
+    #[test]
+    fn persists_plan_to_disk_with_phase() {
+        let dir = tempdir().expect("temp directory");
+        let plan_path = dir.path().join("plan.md");
+        let manager = PlanManager::with_plan_file(Some(plan_path.clone()));
+
+        let args = UpdatePlanArgs {
+            explanation: Some("Planning in read-only mode".to_string()),
+            phase: Some(PlanPhase::Design),
+            plan: vec![PlanStep {
+                step: "Outline API surface".to_string(),
+                status: StepStatus::InProgress,
+            }],
+        };
+
+        let updated = manager.update_plan(args).expect("plan should update");
+        assert_eq!(updated.phase, Some(PlanPhase::Design));
+
+        let content = fs::read_to_string(plan_path).expect("plan markdown should exist");
+        assert!(content.contains("Plan Phase: design"));
+        assert!(content.contains("[ ] Outline API surface"));
+    }
+
+    #[test]
+    fn retains_previous_phase_when_not_provided() {
+        let manager = PlanManager::new();
+
+        let _ = manager
+            .update_plan(UpdatePlanArgs {
+                explanation: None,
+                phase: Some(PlanPhase::Understanding),
+                plan: vec![PlanStep {
+                    step: "Read requirements".to_string(),
+                    status: StepStatus::InProgress,
+                }],
+            })
+            .expect("plan should update");
+
+        let updated = manager
+            .update_plan(UpdatePlanArgs {
+                explanation: Some("Refine design".to_string()),
+                phase: None,
+                plan: vec![PlanStep {
+                    step: "Draft approach".to_string(),
+                    status: StepStatus::Pending,
+                }],
+            })
+            .expect("plan should update");
+
+        assert_eq!(updated.phase, Some(PlanPhase::Understanding));
     }
 }
