@@ -491,6 +491,34 @@ impl AutonomousExecutor {
 
     fn is_rate_limited(&self, tool_name: &str) -> bool {
         let now = Instant::now();
+
+        // First, try with a read lock to check without modifying
+        // This is the common fast path when there are no expired entries
+        if let Ok(history) = self.rate_history.read() {
+            if let Some(entries) = history.get(tool_name) {
+                // Quick check: if all entries are within window and at limit, we're rate limited
+                if entries
+                    .front()
+                    .is_some_and(|front| now.duration_since(*front) <= self.rate_limit_window)
+                    && entries.len() >= self.rate_limit_max_calls
+                {
+                    return true;
+                }
+                // If entries exist but are under limit and no expired entries, not rate limited
+                if entries
+                    .front()
+                    .is_some_and(|front| now.duration_since(*front) <= self.rate_limit_window)
+                    && entries.len() < self.rate_limit_max_calls
+                {
+                    return false;
+                }
+            } else {
+                // No entries for this tool, definitely not rate limited
+                return false;
+            }
+        }
+
+        // Fall back to write lock only when we need to clean up expired entries
         if let Ok(mut history) = self.rate_history.write() {
             let entries = history.entry(tool_name.to_string()).or_default();
             while let Some(front) = entries.front()
