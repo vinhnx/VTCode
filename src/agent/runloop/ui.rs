@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use std::path::Path;
 use vtcode_core::config::WorkspaceTrustLevel;
 use vtcode_core::config::constants::ui;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
@@ -11,6 +12,7 @@ use tracing::warn;
 use super::git::git_status_summary;
 use super::welcome::SessionBootstrap;
 use crate::workspace_trust;
+use dirs::home_dir;
 
 #[derive(Clone, Debug)]
 enum ToolStatusSummary {
@@ -107,6 +109,13 @@ async fn gather_inline_status_details(
     })
 }
 
+fn is_home_directory(workspace_path: &Path) -> bool {
+    if let Some(home_dir) = home_dir() {
+        return workspace_path == home_dir;
+    }
+    false
+}
+
 pub(crate) async fn build_inline_header_context(
     config: &CoreAgentConfig,
     session_bootstrap: &SessionBootstrap,
@@ -120,6 +129,18 @@ pub(crate) async fn build_inline_header_context(
         tool_status,
         mcp_status,
     } = gather_inline_status_details(config, session_bootstrap).await?;
+
+    // Check if we're running in the home directory and add a warning if so
+    let mut highlights = session_bootstrap.header_highlights.clone();
+    if is_home_directory(&config.workspace) {
+        highlights.push(vtcode_core::ui::tui::InlineHeaderHighlight {
+            title: "Warning".to_string(),
+            lines: vec![
+                "You are running VT Code in your home directory. It is recommended to run in a project-specific directory for better organization and safety."
+                    .to_string(),
+            ],
+        });
+    }
 
     let git_value = match git_status_summary(&config.workspace) {
         Ok(Some(summary)) => {
@@ -251,7 +272,7 @@ pub(crate) async fn build_inline_header_context(
         workspace_trust: trust_value,
         tools: tools_value,
         mcp: mcp_value,
-        highlights: session_bootstrap.header_highlights.clone(),
+        highlights, // Use the modified highlights that may include the home directory warning
     })
 }
 

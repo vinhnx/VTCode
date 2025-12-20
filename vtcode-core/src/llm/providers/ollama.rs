@@ -950,6 +950,7 @@ mod tests {
             Some(urls::OLLAMA_API_BASE.to_string()),
             None,
             None,
+            None,
         );
 
         assert!(provider.api_key.is_none());
@@ -960,6 +961,7 @@ mod tests {
         let provider = OllamaProvider::from_config(
             Some("secret".to_string()),
             Some(models::ollama::DEFAULT_CLOUD_MODEL.to_string()),
+            None,
             None,
             None,
             None,
@@ -977,6 +979,7 @@ mod tests {
             Some("https://remote-ollama.example.com".to_string()),
             None,
             None,
+            None,
         );
 
         assert_eq!(provider.api_key, Some("secret".to_string()));
@@ -991,6 +994,7 @@ mod tests {
         let provider = OllamaProvider::from_config(
             None,
             Some(models::ollama::DEFAULT_LOCAL_MODEL.to_string()),
+            None,
             None,
             None,
             None,
