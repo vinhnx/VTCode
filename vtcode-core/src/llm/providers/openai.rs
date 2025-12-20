@@ -32,7 +32,7 @@ use tracing::debug;
 
 use openai_harmony::chat::{
     Author as HarmonyAuthor, Content as HarmonyContent, Conversation, DeveloperContent,
-    Message as HarmonyMessage, Role as HarmonyRole, ToolDescription,
+    Message as HarmonyMessage, Role as HarmonyRole, ToolDescription, SystemContent, ReasoningEffort,
 };
 use openai_harmony::{HarmonyEncodingName, load_harmony_encoding};
 const MAX_COMPLETION_TOKENS_FIELD: &str = "max_completion_tokens";
@@ -570,18 +570,37 @@ impl OpenAIProvider {
         &self,
         request: &provider::LLMRequest,
     ) -> Result<Conversation, provider::LLMError> {
-        let mut harmony_messages = Vec::with_capacity(request.messages.len() + 2); // +2 for system prompt and developer message
-        let mut tool_call_authors: HashMap<String, String> = HashMap::with_capacity(16); // Typical tool call count
+        let mut harmony_messages = Vec::with_capacity(request.messages.len() + 4); // +4 for system, developer, and potential splits
+        let mut tool_call_authors: HashMap<String, String> = HashMap::with_capacity(16);
 
-        // Add system message if present
+        // 1. Add standard system message as per Harmony spec
+        let current_date = chrono::Local::now().format("%Y-%m-%d").to_string();
+        let reasoning_effort = match request.reasoning_effort {
+            Some(ReasoningEffortLevel::Low) => ReasoningEffort::Low,
+            Some(ReasoningEffortLevel::Medium) => ReasoningEffort::Medium,
+            Some(ReasoningEffortLevel::High) => ReasoningEffort::High,
+            _ => ReasoningEffort::Medium,
+        };
+
+        let system_content = SystemContent::new()
+            .with_conversation_start_date(&current_date)
+            .with_reasoning_effort(reasoning_effort);
+
+        // Note: The identity and valid channels are typically handled by the SystemContent renderer
+        // in openai-harmony, but we can also add them to instructions if needed.
+
+        harmony_messages.push(HarmonyMessage::from_role_and_content(
+            HarmonyRole::System,
+            system_content,
+        ));
+
+        // 2. Add developer message (instructions + tools)
+        let mut developer_content = DeveloperContent::new();
         if let Some(system_prompt) = &request.system_prompt {
-            harmony_messages.push(HarmonyMessage::from_role_and_content(
-                HarmonyRole::System,
-                system_prompt.to_string(),
-            ));
+            developer_content = developer_content.with_instructions(system_prompt);
         }
 
-        let mut developer_message = request.tools.as_ref().and_then(|tools| {
+        if let Some(tools) = &request.tools {
             let tool_descriptions: Vec<ToolDescription> = tools
                 .iter()
                 .filter_map(|tool| {
@@ -597,29 +616,21 @@ impl OpenAIProvider {
                 })
                 .collect();
 
-            if tool_descriptions.is_empty() {
-                None
-            } else {
-                Some(HarmonyMessage::from_role_and_content(
-                    HarmonyRole::Developer,
-                    DeveloperContent::new().with_function_tools(tool_descriptions),
-                ))
+            if !tool_descriptions.is_empty() {
+                developer_content = developer_content.with_function_tools(tool_descriptions);
             }
-        });
-        let mut developer_inserted = developer_message.is_none();
+        }
+
+        harmony_messages.push(HarmonyMessage::from_role_and_content(
+            HarmonyRole::Developer,
+            developer_content,
+        ));
 
         // Convert messages
-        for msg in &request.messages {
-            if !developer_inserted
-                && msg.role != provider::MessageRole::System
-                && let Some(dev_msg) = developer_message.take()
-            {
-                harmony_messages.push(dev_msg);
-                developer_inserted = true;
-            }
-
+        for (i, msg) in request.messages.iter().enumerate() {
             match msg.role {
                 provider::MessageRole::System => {
+                    // Additional system messages (rare in vtcode)
                     harmony_messages.push(HarmonyMessage::from_role_and_content(
                         HarmonyRole::System,
                         msg.content.as_text(),
@@ -632,19 +643,59 @@ impl OpenAIProvider {
                     ));
                 }
                 provider::MessageRole::Assistant => {
-                    if let Some(tool_calls) = &msg.tool_calls {
-                        for call in tool_calls {
-                            if let Some(ref func) = call.function {
-                                tool_call_authors
-                                    .insert(call.id.clone(), format!("functions.{}", func.name));
-                            }
+                    let has_final = !msg.content.as_text().is_empty();
+                    let is_last = i == request.messages.len() - 1;
+
+                    // Spec: Drop CoT (analysis) if the response ended in a 'final' message,
+                    // as it's no longer needed for subsequent turns.
+                    // Keep it if there are tool calls (as they are part of the CoT flow)
+                    // or if it's the last message and has no final content yet.
+                    let should_keep_analysis = msg.tool_calls.is_some() || (is_last && !has_final);
+
+                    // 1. Handle reasoning (analysis channel)
+                    if let Some(reasoning) = &msg.reasoning {
+                        if should_keep_analysis {
+                            harmony_messages.push(
+                                HarmonyMessage::from_role_and_content(
+                                    HarmonyRole::Assistant,
+                                    reasoning.clone(),
+                                )
+                                .with_channel("analysis"),
+                            );
                         }
                     }
 
-                    harmony_messages.push(HarmonyMessage::from_role_and_content(
-                        HarmonyRole::Assistant,
-                        msg.content.as_text(),
-                    ));
+                    // 2. Handle tool calls (commentary channel)
+                    if let Some(tool_calls) = &msg.tool_calls {
+                        for call in tool_calls {
+                            if let Some(ref func) = call.function {
+                                let recipient = format!("functions.{}", func.name);
+                                tool_call_authors.insert(call.id.clone(), recipient.clone());
+
+                                harmony_messages.push(
+                                    HarmonyMessage::from_role_and_content(
+                                        HarmonyRole::Assistant,
+                                        func.arguments.clone(),
+                                    )
+                                    .with_channel("commentary")
+                                    .with_recipient(&recipient)
+                                    .with_content_type("<|constrain|> json"),
+                                );
+                            }
+                        }
+                    } else {
+                        // 3. Handle final content (final channel)
+                        let text = msg.content.as_text();
+                        if !text.is_empty() {
+                            harmony_messages.push(
+                                HarmonyMessage::from_role_and_content(
+                                    HarmonyRole::Assistant,
+                                    text,
+                                )
+                                .with_channel("final"),
+                            );
+                        }
+                    }
                 }
                 provider::MessageRole::Tool => {
                     let author_name = msg
@@ -656,18 +707,18 @@ impl OpenAIProvider {
 
                     let author = author_name
                         .map(|name| HarmonyAuthor::new(HarmonyRole::Tool, name))
-                        .unwrap_or_else(|| HarmonyAuthor::from(HarmonyRole::Tool)); // This is safe - unwrap_or_else is acceptable for simple defaults
+                        .unwrap_or_else(|| HarmonyAuthor::from(HarmonyRole::Tool));
 
-                    harmony_messages.push(HarmonyMessage::from_author_and_content(
-                        author,
-                        msg.content.as_text(),
-                    ));
+                    harmony_messages.push(
+                        HarmonyMessage::from_author_and_content(
+                            author,
+                            msg.content.as_text(),
+                        )
+                        .with_channel("commentary")
+                        .with_recipient("assistant"),
+                    );
                 }
             }
-        }
-
-        if let Some(dev_msg) = developer_message {
-            harmony_messages.push(dev_msg);
         }
 
         Ok(Conversation::from_messages(harmony_messages))

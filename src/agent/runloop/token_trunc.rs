@@ -119,6 +119,20 @@ pub fn safe_truncate_to_bytes_with_marker(s: &str, max_bytes: usize) -> String {
     out
 }
 
+fn yamlify_value(v: &Value) -> String {
+    if v.is_array() || v.is_object() {
+        serde_yaml::to_string(v).unwrap_or_else(|_| v.to_string())
+    } else if let Some(s) = v.as_str() {
+        if let Ok(inner_v) = serde_json::from_str::<Value>(s)
+            && (inner_v.is_array() || inner_v.is_object()) {
+                return serde_yaml::to_string(&inner_v).unwrap_or_else(|_| s.to_string());
+            }
+        s.to_string()
+    } else {
+        v.to_string()
+    }
+}
+
 /// Aggregate relevant textual fields from a tool output JSON in a stable order
 /// and apply token-based truncation plus byte fuse. Returns a model-friendly string.
 pub async fn aggregate_tool_output_for_model(
@@ -132,20 +146,38 @@ pub async fn aggregate_tool_output_for_model(
     let mut parts: Vec<(String, String)> = Vec::new();
 
     // Common fields
-    if let Some(s) = output.get("output").and_then(Value::as_str) {
-        parts.push(("output".to_string(), s.to_string()));
+    if let Some(v) = output.get("output") {
+        parts.push(("output".to_string(), yamlify_value(v)));
     }
-    if let Some(s) = output.get("stdout").and_then(Value::as_str) {
-        parts.push(("stdout".to_string(), s.to_string()));
+    if let Some(v) = output.get("stdout") {
+        parts.push(("stdout".to_string(), yamlify_value(v)));
     }
-    if let Some(s) = output.get("stderr").and_then(Value::as_str) {
-        parts.push(("stderr".to_string(), s.to_string()));
+    if let Some(v) = output.get("stderr") {
+        parts.push(("stderr".to_string(), yamlify_value(v)));
     }
-    if let Some(s) = output.get("content").and_then(Value::as_str) {
-        parts.push(("content".to_string(), s.to_string()));
+    if let Some(v) = output.get("content") {
+        parts.push(("content".to_string(), yamlify_value(v)));
     }
-    if let Some(s) = output.get("message").and_then(Value::as_str) {
-        parts.push(("message".to_string(), s.to_string()));
+    if let Some(v) = output.get("message") {
+        parts.push(("message".to_string(), yamlify_value(v)));
+    }
+    if let Some(v) = output.get("error") {
+        parts.push(("error".to_string(), yamlify_value(v)));
+    }
+    if let Some(v) = output.get("payload") {
+        parts.push(("payload".to_string(), yamlify_value(v)));
+    }
+    if let Some(v) = output.get("items") {
+        parts.push(("items".to_string(), yamlify_value(v)));
+    }
+    if let Some(v) = output.get("results") {
+        parts.push(("results".to_string(), yamlify_value(v)));
+    }
+    if let Some(v) = output.get("matches") {
+        parts.push(("matches".to_string(), yamlify_value(v)));
+    }
+    if let Some(s) = output.get("summary").and_then(Value::as_str) {
+        parts.push(("summary".to_string(), s.to_string()));
     }
 
     // Fallback: if nothing obvious, serialize concisely

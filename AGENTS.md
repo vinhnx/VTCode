@@ -184,6 +184,11 @@ cargo test -- --nocapture
 -   Tool policies (allow/deny/prompt) in `vtcode.toml`
 -   Human-in-the-loop approval system
 
+### Autonomy & Verification
+
+-   **Verification Autonomy**: The agent MUST run verification commands (`cargo check`, `cargo test`, etc.) itself using `run_pty_cmd` after making changes. Do NOT ask the user to run these commands.
+-   **Planning**: Use `update_plan` for any task requiring 4+ steps to maintain state and provide visibility to the user.
+
 ### Memory & Performance
 
 -   LTO enabled even in dev profile (optimized for M4 Apple Silicon)

@@ -71,10 +71,12 @@ fn test_code_quality_integration() {
     let _linting = LintingOrchestrator::new();
 
     // Test quality metrics
-    let mut metrics = QualityMetrics::default();
-    metrics.total_files = 10;
-    metrics.formatted_files = 8;
-    metrics.lint_errors = 2;
+    let metrics = QualityMetrics {
+        total_files: 10,
+        formatted_files: 8,
+        lint_errors: 2,
+        ..Default::default()
+    };
 
     let score = metrics.quality_score();
     assert!(score > 0.0 && score <= 100.0);

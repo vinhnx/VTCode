@@ -1,6 +1,6 @@
 use ratatui::{
     Frame,
-    layout::Rect,
+    layout::{Constraint, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, BorderType, Borders, Clear, List, ListItem},
@@ -21,8 +21,30 @@ impl Session {
             return;
         }
 
+        if self.should_show_plan() {
+            let plan_len = self.plan.steps.len();
+            // Calculate desired plan height: steps + header + borders + padding
+            // We cap it at 40% of the available height to ensure timeline remains visible
+            let desired_plan_height = (plan_len as u16).saturating_add(4);
+            let max_plan_height = (area.height as f32 * 0.4) as u16;
+            let plan_height = desired_plan_height.min(max_plan_height).max(5);
+
+            let chunks = Layout::vertical([
+                Constraint::Min(5), // Timeline gets the rest, but at least 5 rows
+                Constraint::Length(plan_height),
+            ])
+            .split(area);
+
+            self.render_timeline_pane(frame, chunks[0]);
+            self.render_plan_pane(frame, chunks[1]);
+        } else {
+            self.render_timeline_pane(frame, area);
+        }
+    }
+
+    fn render_timeline_pane(&mut self, frame: &mut Frame<'_>, area: Rect) {
         let block = Block::default()
-            .title(self.navigation_block_title())
+            .title(self.timeline_block_title())
             .borders(Borders::LEFT)
             .border_type(BorderType::Plain)
             .style(self.styles.default_style())
@@ -33,24 +55,11 @@ impl Session {
             return;
         }
 
-        let items = self.navigation_items();
+        let items = self.timeline_navigation_items();
         let item_count = items.len();
         let viewport = inner.height as usize;
 
-        if self.should_show_plan() {
-            if item_count == 0 {
-                self.navigation_state.select(None);
-                *self.navigation_state.offset_mut() = 0;
-            } else if let Some(selected) = self.plan_selected_index() {
-                self.navigation_state.select(Some(selected));
-                let max_offset = item_count.saturating_sub(viewport);
-                let desired_offset = selected.saturating_sub(viewport.saturating_sub(1));
-                *self.navigation_state.offset_mut() = desired_offset.min(max_offset);
-            } else {
-                self.navigation_state.select(None);
-                *self.navigation_state.offset_mut() = 0;
-            }
-        } else if self.lines.is_empty() {
+        if self.lines.is_empty() {
             self.navigation_state.select(None);
             *self.navigation_state.offset_mut() = 0;
         } else {
@@ -68,11 +77,61 @@ impl Session {
         frame.render_stateful_widget(list, area, &mut self.navigation_state);
     }
 
-    pub(super) fn navigation_block_title(&self) -> Line<'static> {
-        if self.should_show_plan() {
-            return self.plan_block_title();
+    fn render_plan_pane(&mut self, frame: &mut Frame<'_>, area: Rect) {
+        let block = Block::default()
+            .title(self.plan_block_title())
+            .borders(Borders::LEFT | Borders::TOP)
+            .border_type(BorderType::Plain)
+            .style(self.styles.default_style())
+            .border_style(self.styles.border_style());
+        let inner = block.inner(area);
+        if inner.height == 0 {
+            frame.render_widget(block, area);
+            return;
         }
 
+        let mut items = Vec::new();
+        let mut offset = 0;
+
+        // Add goal/explanation if it exists and we have space
+        if let Some(explanation) = &self.plan.explanation {
+            if inner.height > 4 {
+                items.push(ListItem::new(Line::from(vec![
+                    Span::styled("Goal: ", self.navigation_index_style()),
+                    Span::styled(explanation.clone(), self.styles.default_style()),
+                ])));
+                items.push(ListItem::new(Line::from("")));
+                offset = 2;
+            }
+        }
+
+        items.extend(self.plan_navigation_items());
+        let item_count = items.len();
+        let viewport = inner.height as usize;
+
+        if item_count == 0 {
+            self.plan_navigation_state.select(None);
+            *self.plan_navigation_state.offset_mut() = 0;
+        } else if let Some(selected) = self.plan_selected_index() {
+            let adjusted_selected = selected + offset;
+            self.plan_navigation_state.select(Some(adjusted_selected));
+            let max_offset = item_count.saturating_sub(viewport);
+            let desired_offset = adjusted_selected.saturating_sub(viewport.saturating_sub(1));
+            *self.plan_navigation_state.offset_mut() = desired_offset.min(max_offset);
+        } else {
+            self.plan_navigation_state.select(None);
+            *self.plan_navigation_state.offset_mut() = 0;
+        }
+
+        let list = List::new(items)
+            .block(block)
+            .style(self.styles.default_style())
+            .highlight_style(self.navigation_highlight_style());
+
+        frame.render_stateful_widget(list, area, &mut self.plan_navigation_state);
+    }
+
+    pub(super) fn timeline_block_title(&self) -> Line<'static> {
         let mut spans = Vec::new();
         spans.push(Span::styled(
             ui::NAVIGATION_BLOCK_TITLE.to_owned(),
@@ -118,13 +177,6 @@ impl Session {
             PlanCompletionState::InProgress => ui::PLAN_STATUS_IN_PROGRESS,
             PlanCompletionState::Empty => ui::PLAN_STATUS_EMPTY,
         }
-    }
-
-    fn navigation_items(&self) -> Vec<ListItem<'static>> {
-        if self.should_show_plan() {
-            return self.plan_navigation_items();
-        }
-        self.timeline_navigation_items()
     }
 
     fn timeline_navigation_items(&self) -> Vec<ListItem<'static>> {

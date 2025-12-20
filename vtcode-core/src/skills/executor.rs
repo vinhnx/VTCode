@@ -76,9 +76,20 @@ pub async fn execute_skill_with_sub_llm(
 
     // Loop: Make LLM request and handle tool calls
     const MAX_ITERATIONS: usize = 10;
+    const BACKOFF_BASE_MS: u64 = 50; // initial back‑off delay
     let mut iterations = 0;
+    let mut backoff = BACKOFF_BASE_MS;
 
     loop {
+        // Rate‑limit tool execution before each iteration
+        if let Err(e) = crate::tools::rate_limiter::try_acquire() {
+            // If rate limited, wait a bit and retry without counting as an iteration
+            warn!("Rate limit hit: {} – backing off {}ms", e, backoff);
+            tokio::time::sleep(std::time::Duration::from_millis(backoff)).await;
+            backoff = (backoff * 2).min(2000); // cap back‑off at 2 s
+            continue;
+        }
+
         iterations += 1;
         if iterations > MAX_ITERATIONS {
             return Err(anyhow!(

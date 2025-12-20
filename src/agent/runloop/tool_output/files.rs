@@ -335,14 +335,12 @@ fn render_diff_content(
     for (is_truncation, content) in lines_to_render {
         if is_truncation {
             renderer.line(MessageStyle::Info, &format!("…{}", content))?;
+        } else if let Some(style) =
+            select_line_style(Some(tools::WRITE_FILE), &content, git_styles, ls_styles)
+        {
+            renderer.line_with_style(style, &content)?;
         } else {
-            if let Some(style) =
-                select_line_style(Some(tools::WRITE_FILE), &content, git_styles, ls_styles)
-            {
-                renderer.line_with_style(style, &content)?;
-            } else {
-                renderer.line(MessageStyle::Response, &content)?;
-            }
+            renderer.line(MessageStyle::Response, &content)?;
         }
     }
 

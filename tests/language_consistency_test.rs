@@ -86,8 +86,6 @@ fn sanitize_key_name(key: &str) -> String {
         .map(|c| {
             if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
                 c
-            } else if c.is_whitespace() {
-                '_'
             } else {
                 '_'
             }
@@ -145,7 +143,8 @@ fn validate_markdown_language_consistency(markdown: &str) -> Result<()> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Script {
     Latin,
-    CJK,
+    #[allow(non_camel_case_types)]
+    Cjk,
     Cyrillic,
     Arabic,
     Mixed,
@@ -177,7 +176,7 @@ fn detect_predominant_script(text: &str) -> Script {
     if latin_count == max_count {
         Script::Latin
     } else if cjk_count == max_count {
-        Script::CJK
+        Script::Cjk
     } else if cyrillic_count == max_count {
         Script::Cyrillic
     } else if arabic_count == max_count {
@@ -293,7 +292,7 @@ This is in English.
     #[test]
     fn test_script_detection_cjk() {
         let text = "这是中文文本，包含一些汉字。";
-        assert_eq!(detect_predominant_script(text), Script::CJK);
+        assert_eq!(detect_predominant_script(text), Script::Cjk);
     }
 
     #[test]
@@ -303,8 +302,8 @@ This is in English.
         let script = detect_predominant_script(text);
         // Should be either Mixed or one of the predominant scripts
         assert!(
-            matches!(script, Script::Mixed | Script::Latin | Script::CJK),
-            "Expected Mixed, Latin, or CJK, got {:?}",
+            matches!(script, Script::Mixed | Script::Latin | Script::Cjk),
+            "Expected Mixed, Latin, or Cjk, got {:?}",
             script
         );
     }

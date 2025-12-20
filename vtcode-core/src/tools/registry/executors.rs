@@ -2167,6 +2167,9 @@ This skill generates files. After execution, file locations will be automaticall
             if let Ok(Some(new_output)) = self.pty_manager().read_session_output(session_id, true)
                 && !new_output.is_empty()
             {
+                if let Some(callback) = &self.progress_callback {
+                    callback("run_pty_cmd", &new_output);
+                }
                 output.push_str(&new_output);
             }
 
@@ -2176,6 +2179,9 @@ This skill generates files. After execution, file locations will be automaticall
                 if let Ok(Some(final_output)) =
                     self.pty_manager().read_session_output(session_id, true)
                 {
+                    if let Some(callback) = &self.progress_callback {
+                        callback("run_pty_cmd", &final_output);
+                    }
                     output.push_str(&final_output);
                 }
 
