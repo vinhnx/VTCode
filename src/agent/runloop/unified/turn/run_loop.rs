@@ -165,6 +165,7 @@ pub(crate) async fn run_turn_prepare_tool_call<
         approval_recorder,
         decision_ledger,
         tool_permission_cache,
+        vt_cfg.and_then(|cfg| Some(cfg.security.hitl_notification_bell)).unwrap_or(true),
     )
     .await
     {

@@ -540,6 +540,7 @@ pub async fn handle_outcome(
                 ctx.approval_recorder,
                 Some(ctx.decision_ledger),
                 Some(ctx.tool_permission_cache),
+                ctx.vt_cfg.as_ref().and_then(|cfg| Some(cfg.security.hitl_notification_bell)).unwrap_or(true),
             )
             .await
             {

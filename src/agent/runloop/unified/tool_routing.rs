@@ -1,5 +1,6 @@
 #![allow(clippy::too_many_arguments)]
 use std::collections::HashSet;
+use std::io::Write;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -56,6 +57,7 @@ pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
     default_placeholder: Option<String>,
     justification: Option<&vtcode_core::tools::ToolJustification>,
     approval_recorder: Option<&vtcode_core::tools::ApprovalRecorder>,
+    hitl_notification_bell: bool,
 ) -> Result<HitlDecision> {
     use vtcode_core::ui::tui::{InlineListItem, InlineListSelection};
 
@@ -150,6 +152,14 @@ pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
     ];
 
     let default_selection = InlineListSelection::ToolApproval(true);
+
+    // Play terminal bell notification if enabled
+    if hitl_notification_bell {
+        use vtcode_core::utils::ansi_codes::BEL;
+        print!("{}", BEL);
+        // Flush stdout to ensure bell plays immediately
+        let _ = std::io::stdout().flush();
+    }
 
     // Show modal list with full context - arrow keys will work here and history navigation is disabled
     handle.show_list_modal(
@@ -301,6 +311,7 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         &Arc<tokio::sync::RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>,
     >,
     tool_permission_cache: Option<&Arc<RwLock<ToolPermissionCache>>>,
+    hitl_notification_bell: bool,
 ) -> Result<ToolPermissionFlow> {
     // Check tool permission cache for previously granted permissions
     if let Some(cache) = tool_permission_cache {
@@ -432,6 +443,7 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         default_placeholder,
         final_justification,
         approval_recorder,
+        hitl_notification_bell,
     )
     .await?;
     match decision {

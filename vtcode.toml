@@ -367,6 +367,9 @@ zero_trust_mode = false
 encrypt_payloads = false
 integrity_checks = true
 
+# Play terminal bell notification when HITL approval is required
+hitl_notification_bell = true
+
 # UI configuration - Terminal and display settings
 [ui]
 # Tool output display mode
