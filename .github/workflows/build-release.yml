@@ -78,18 +78,18 @@ jobs:
         if: matrix.os != 'windows-latest'
         run: |
           cd target/${{ matrix.target }}/release
-          tar -czf ../../../vtcode-${{ matrix.name }}.tar.gz vtcode
+          tar -czf ../../../vtcode-${{ github.event.release.tag_name }}-${{ matrix.name }}.tar.gz vtcode
 
       - name: Package binary (Windows)
         if: matrix.os == 'windows-latest'
         run: |
           cd target/${{ matrix.target }}/release
-          7z a ../../../vtcode-${{ matrix.name }}.zip vtcode.exe
+          7z a ../../../vtcode-${{ github.event.release.tag_name }}-${{ matrix.name }}.zip vtcode.exe
 
       - name: Upload binary
         uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          files: vtcode-${{ matrix.name }}.${{ matrix.os == 'windows-latest' && 'zip' || 'tar.gz' }}
+          files: vtcode-${{ github.event.release.tag_name }}-${{ matrix.name }}.${{ matrix.os == 'windows-latest' && 'zip' || 'tar.gz' }}
           fail_on_unmatched_files: true
