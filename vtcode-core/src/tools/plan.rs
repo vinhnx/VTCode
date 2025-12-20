@@ -332,8 +332,9 @@ impl PlanManager {
         };
 
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)
-                .with_context(|| format!("Failed to create plan directory '{}'", parent.display()))?;
+            fs::create_dir_all(parent).with_context(|| {
+                format!("Failed to create plan directory '{}'", parent.display())
+            })?;
         }
 
         let content = render_plan_markdown(plan);
@@ -358,7 +359,12 @@ fn render_plan_markdown(plan: &TaskPlan) -> String {
     );
 
     if let Some(phase) = &plan.phase {
-        let _ = writeln!(output, "Plan Phase: {} - {}", phase.label(), phase.description());
+        let _ = writeln!(
+            output,
+            "Plan Phase: {} - {}",
+            phase.label(),
+            phase.description()
+        );
     }
 
     if let Some(explanation) = &plan.explanation {
@@ -370,7 +376,13 @@ fn render_plan_markdown(plan: &TaskPlan) -> String {
     let _ = writeln!(output, "\n## Steps");
     for (idx, step) in plan.steps.iter().enumerate() {
         let mut line = String::new();
-        let _ = write!(line, "{}. {} {}", idx + 1, step.status.checkbox(), step.step);
+        let _ = write!(
+            line,
+            "{}. {} {}",
+            idx + 1,
+            step.status.checkbox(),
+            step.step
+        );
         if let Some(note) = step.status.status_note() {
             line.push_str(note);
         }

@@ -83,6 +83,8 @@ impl Display for McpInitStatus {
 pub struct AsyncMcpManager {
     /// Configuration for MCP client
     config: McpClientConfig,
+    /// Whether to ring terminal bell for HITL prompts
+    hitl_notification_bell: bool,
     /// Current initialization status
     status: Arc<RwLock<McpInitStatus>>,
     /// Mutex to prevent multiple concurrent initializations
@@ -94,6 +96,7 @@ pub struct AsyncMcpManager {
 impl AsyncMcpManager {
     pub fn new(
         config: McpClientConfig,
+        hitl_notification_bell: bool,
         event_callback: Arc<dyn Fn(McpEvent) + Send + Sync>,
     ) -> Self {
         let init_status = if config.enabled {
@@ -106,6 +109,7 @@ impl AsyncMcpManager {
 
         Self {
             config,
+            hitl_notification_bell,
             status: Arc::new(RwLock::new(init_status)),
             initialization_mutex: Arc::new(Mutex::new(())),
             event_callback,
@@ -126,6 +130,7 @@ impl AsyncMcpManager {
         let status = Arc::clone(&self.status);
         let mutex = Arc::clone(&self.initialization_mutex);
         let event_callback = Arc::clone(&self.event_callback);
+        let hitl_notification_bell = self.hitl_notification_bell;
 
         // Spawn the initialization task. We keep the JoinHandle to allow explicit waiting if needed,
         // though initialization runs in the background. See: https://ratatui.rs/faq/
@@ -150,7 +155,7 @@ impl AsyncMcpManager {
             }
 
             // Initialize MCP client
-            match Self::initialize_mcp_client(config, event_callback).await {
+            match Self::initialize_mcp_client(config, hitl_notification_bell, event_callback).await {
                 Ok(client) => {
                     let mut status_guard = status.write().await;
                     *status_guard = McpInitStatus::Ready {
@@ -183,6 +188,7 @@ impl AsyncMcpManager {
 
     async fn initialize_mcp_client(
         config: McpClientConfig,
+        hitl_notification_bell: bool,
         event_callback: Arc<dyn Fn(McpEvent) + Send + Sync>,
     ) -> Result<McpClient> {
         info!(
@@ -203,7 +209,9 @@ impl AsyncMcpManager {
 
         // Set up elicitation handler
         use crate::agent::runloop::mcp_elicitation::InteractiveMcpElicitationHandler;
-        client.set_elicitation_handler(Arc::new(InteractiveMcpElicitationHandler::new()));
+        client.set_elicitation_handler(Arc::new(InteractiveMcpElicitationHandler::new(
+            hitl_notification_bell,
+        )));
 
         // Initialize with timeout
         match timeout(startup_timeout, client.initialize()).await {
@@ -295,7 +303,7 @@ mod tests {
         let config = McpClientConfig::default();
         let event_callback: Arc<dyn Fn(McpEvent) + Send + Sync> = Arc::new(|_event| {});
 
-        let manager = AsyncMcpManager::new(config, event_callback);
+        let manager = AsyncMcpManager::new(config, true, event_callback);
         let status = manager.get_status().await;
 
         // With default config, MCP should be disabled

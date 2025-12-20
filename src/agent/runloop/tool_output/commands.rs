@@ -241,10 +241,13 @@ pub(crate) async fn render_terminal_command_panel(
     }
 
     // Render follow-up prompt if present (with double-rendering protection)
-    if let Some(follow_up_prompt) = unwrapped_payload.get("follow_up_prompt").and_then(Value::as_str) {
+    if let Some(follow_up_prompt) = unwrapped_payload
+        .get("follow_up_prompt")
+        .and_then(Value::as_str)
+    {
         // Check if prompt already appears in output to avoid double-rendering
         let already_rendered = stdout.contains(follow_up_prompt);
-        
+
         if !already_rendered {
             renderer.line(MessageStyle::Info, "")?; // Add spacing
             renderer.line(MessageStyle::Response, follow_up_prompt)?;

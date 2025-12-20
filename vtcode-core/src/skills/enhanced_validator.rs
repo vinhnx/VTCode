@@ -28,10 +28,8 @@ impl ComprehensiveSkillValidator {
         manifest: &SkillManifest,
         skill_path: &Path,
     ) -> SkillValidationReport {
-        let mut report = SkillValidationReport::new(
-            manifest.name.clone(),
-            skill_path.to_path_buf(),
-        );
+        let mut report =
+            SkillValidationReport::new(manifest.name.clone(), skill_path.to_path_buf());
 
         // Validate name field
         self.validate_name_field(manifest, &mut report);
@@ -133,12 +131,19 @@ impl ComprehensiveSkillValidator {
     }
 
     /// Validate description field
-    fn validate_description_field(&self, manifest: &SkillManifest, report: &mut SkillValidationReport) {
+    fn validate_description_field(
+        &self,
+        manifest: &SkillManifest,
+        report: &mut SkillValidationReport,
+    ) {
         if manifest.description.is_empty() {
             report.add_error(
                 Some("description".to_string()),
                 "description is required and must not be empty".to_string(),
-                Some("Add a description explaining what the skill does and when to use it".to_string()),
+                Some(
+                    "Add a description explaining what the skill does and when to use it"
+                        .to_string(),
+                ),
             );
             return;
         }
@@ -174,24 +179,37 @@ impl ComprehensiveSkillValidator {
             report.add_warning(
                 Some("name".to_string()),
                 e.to_string(),
-                Some("Rename the skill directory to match the name field, or rename the skill".to_string()),
+                Some(
+                    "Rename the skill directory to match the name field, or rename the skill"
+                        .to_string(),
+                ),
             );
         }
     }
 
     /// Validate all optional fields
-    fn validate_optional_fields(&self, manifest: &SkillManifest, report: &mut SkillValidationReport) {
+    fn validate_optional_fields(
+        &self,
+        manifest: &SkillManifest,
+        report: &mut SkillValidationReport,
+    ) {
         // Check for conflicting container flags
-        if let (Some(true), Some(true)) = (manifest.requires_container, manifest.disallow_container) {
+        if let (Some(true), Some(true)) = (manifest.requires_container, manifest.disallow_container)
+        {
             report.add_error(
                 None,
-                "Skill manifest cannot set both requires-container and disallow-container".to_string(),
-                Some("Choose either requires-container or disallow-container, not both".to_string()),
+                "Skill manifest cannot set both requires-container and disallow-container"
+                    .to_string(),
+                Some(
+                    "Choose either requires-container or disallow-container, not both".to_string(),
+                ),
             );
         }
 
         // Validate when-to-use field
-        if let Some(when_to_use) = &manifest.when_to_use && when_to_use.len() > 512 {
+        if let Some(when_to_use) = &manifest.when_to_use
+            && when_to_use.len() > 512
+        {
             report.add_error(
                 Some("when-to-use".to_string()),
                 format!(
@@ -227,7 +245,9 @@ impl ComprehensiveSkillValidator {
         }
 
         // Validate license field
-        if let Some(license) = &manifest.license && license.len() > 512 {
+        if let Some(license) = &manifest.license
+            && license.len() > 512
+        {
             report.add_error(
                 Some("license".to_string()),
                 format!(
@@ -239,7 +259,9 @@ impl ComprehensiveSkillValidator {
         }
 
         // Validate model field
-        if let Some(model) = &manifest.model && model.len() > 128 {
+        if let Some(model) = &manifest.model
+            && model.len() > 128
+        {
             report.add_error(
                 Some("model".to_string()),
                 format!(
@@ -256,7 +278,9 @@ impl ComprehensiveSkillValidator {
                 report.add_error(
                     Some("compatibility".to_string()),
                     "compatibility must not be empty if specified".to_string(),
-                    Some("Either remove the field or add meaningful compatibility info".to_string()),
+                    Some(
+                        "Either remove the field or add meaningful compatibility info".to_string(),
+                    ),
                 );
             } else if compatibility.len() > 500 {
                 report.add_error(
@@ -281,13 +305,18 @@ impl ComprehensiveSkillValidator {
         if manifest.compatibility.is_none() {
             report.add_suggestion(
                 Some("compatibility".to_string()),
-                "Consider adding a compatibility field if the skill has specific requirements".to_string(),
+                "Consider adding a compatibility field if the skill has specific requirements"
+                    .to_string(),
             );
         }
     }
 
     /// Validate instructions length (suggest keeping under 500 lines)
-    fn validate_instructions_length(&self, _manifest: &SkillManifest, report: &mut SkillValidationReport) {
+    fn validate_instructions_length(
+        &self,
+        _manifest: &SkillManifest,
+        report: &mut SkillValidationReport,
+    ) {
         // This is a suggestion based on the spec recommendation
         report.add_suggestion(
             None,
@@ -327,12 +356,17 @@ impl ComprehensiveSkillValidator {
         // List valid references as info
         let valid_refs = validator.list_valid_references();
         if !valid_refs.is_empty() {
-            let ref_list: Vec<String> = valid_refs.iter()
+            let ref_list: Vec<String> = valid_refs
+                .iter()
                 .map(|p| p.to_string_lossy().to_string())
                 .collect();
             report.add_suggestion(
                 None,
-                format!("Found {} valid file references: {}", ref_list.len(), ref_list.join(", "))
+                format!(
+                    "Found {} valid file references: {}",
+                    ref_list.len(),
+                    ref_list.join(", ")
+                ),
             );
         }
     }
@@ -372,9 +406,15 @@ mod tests {
 
         // Note: We can't easily test directory validation without creating temp dirs
         // So we'll test with a non-existent path which should generate warnings
-        let report = validator.validate_manifest(&manifest, PathBuf::from("/tmp/nonexistent").as_path());
+        let report =
+            validator.validate_manifest(&manifest, PathBuf::from("/tmp/nonexistent").as_path());
 
         // Should have some suggestions for missing fields
-        assert!(report.suggestions.iter().any(|s| s.field == Some("license".to_string())));
+        assert!(
+            report
+                .suggestions
+                .iter()
+                .any(|s| s.field == Some("license".to_string()))
+        );
     }
 }

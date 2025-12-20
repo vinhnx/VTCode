@@ -1,6 +1,5 @@
 #![allow(clippy::too_many_arguments)]
 use std::collections::HashSet;
-use std::io::Write;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -153,13 +152,8 @@ pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
 
     let default_selection = InlineListSelection::ToolApproval(true);
 
-    // Play terminal bell notification if enabled
-    if hitl_notification_bell {
-        use vtcode_core::utils::ansi_codes::BEL;
-        print!("{}", BEL);
-        // Flush stdout to ensure bell plays immediately
-        let _ = std::io::stdout().flush();
-    }
+    // Play terminal notification (rich OSC when available, fallback to bell)
+    vtcode_core::utils::ansi_codes::notify_attention(hitl_notification_bell, Some("Tool approval required"));
 
     // Show modal list with full context - arrow keys will work here and history navigation is disabled
     handle.show_list_modal(

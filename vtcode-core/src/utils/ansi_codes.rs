@@ -1,3 +1,6 @@
+use once_cell::sync::Lazy;
+use std::io::{IsTerminal, Write};
+
 /// ANSI escape sequence constants and utilities
 ///
 /// This module provides constants and helper functions for working with ANSI escape sequences.
@@ -42,6 +45,143 @@ pub const ST: &str = "\x1b\\";
 
 /// Bell character (BEL = 0x07)
 pub const BEL: &str = "\x07";
+
+/// Notification preference (rich OSC vs bell-only)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HitlNotifyMode {
+    Off,
+    Bell,
+    Rich,
+}
+
+/// Terminal-specific notification capabilities
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TerminalNotifyKind {
+    BellOnly,
+    Iterm2,
+    Kitty,
+}
+
+static DETECTED_NOTIFY_KIND: Lazy<TerminalNotifyKind> = Lazy::new(detect_terminal_notify_kind);
+
+/// Play the terminal bell when enabled.
+///
+/// The `enabled` flag is typically driven by configuration (e.g., `security.hitl_notification_bell`).
+/// Users can override via `VTCODE_HITL_BELL=false` to silence the bell even when enabled.
+#[inline]
+pub fn play_bell(enabled: bool) {
+    if !is_bell_enabled(enabled) {
+        return;
+    }
+    emit_bell();
+}
+
+/// Determine whether the bell should play, honoring an env override.
+#[inline]
+pub fn is_bell_enabled(default_enabled: bool) -> bool {
+    if let Ok(val) = std::env::var("VTCODE_HITL_BELL") {
+        return !matches!(val.trim().to_ascii_lowercase().as_str(), "false" | "0" | "off");
+    }
+    default_enabled
+}
+
+#[inline]
+fn emit_bell() {
+    print!("{}", BEL);
+    let _ = std::io::stdout().flush();
+}
+
+#[inline]
+pub fn notify_attention(default_enabled: bool, message: Option<&str>) {
+    if !is_bell_enabled(default_enabled) {
+        return;
+    }
+
+    // Skip in non-interactive pipelines to avoid leaking control sequences
+    if !std::io::stdout().is_terminal() {
+        return;
+    }
+
+    let mode = hitl_notify_mode(default_enabled);
+    if matches!(mode, HitlNotifyMode::Off) {
+        return;
+    }
+
+    if matches!(mode, HitlNotifyMode::Rich) {
+        match *DETECTED_NOTIFY_KIND {
+            TerminalNotifyKind::Kitty => send_kitty_notification(message),
+            TerminalNotifyKind::Iterm2 => send_iterm_notification(message),
+            TerminalNotifyKind::BellOnly => {}
+        }
+    }
+
+    // Always fall back to an audible/visual bell
+    emit_bell();
+}
+
+fn hitl_notify_mode(default_enabled: bool) -> HitlNotifyMode {
+    if let Ok(raw) = std::env::var("VTCODE_HITL_NOTIFY") {
+        let v = raw.trim().to_ascii_lowercase();
+        return match v.as_str() {
+            "off" | "0" | "false" => HitlNotifyMode::Off,
+            "bell" => HitlNotifyMode::Bell,
+            "rich" | "osc" | "notify" => HitlNotifyMode::Rich,
+            _ => HitlNotifyMode::Bell,
+        };
+    }
+
+    if default_enabled {
+        HitlNotifyMode::Rich
+    } else {
+        HitlNotifyMode::Off
+    }
+}
+
+fn detect_terminal_notify_kind() -> TerminalNotifyKind {
+    let term = std::env::var("TERM").unwrap_or_default().to_ascii_lowercase();
+    let term_program = std::env::var("TERM_PROGRAM").unwrap_or_default().to_ascii_lowercase();
+
+    if term.contains("kitty") || std::env::var("KITTY_WINDOW_ID").is_ok() {
+        return TerminalNotifyKind::Kitty;
+    }
+
+    if term_program.contains("iterm") || std::env::var("ITERM_SESSION_ID").is_ok() {
+        return TerminalNotifyKind::Iterm2;
+    }
+
+    TerminalNotifyKind::BellOnly
+}
+
+fn send_kitty_notification(message: Option<&str>) {
+    // Kitty remote control: OSC 777;notify=title;body=message BEL
+    let body = sanitize_notification_text(message.unwrap_or("Human approval required"));
+    // Keep the title short and ASCII-safe
+    let title = "VTCode";
+    let payload = format!("{}777;notify={};body={}", OSC, title, body);
+    print!("{}{}", payload, BEL);
+    let _ = std::io::stdout().flush();
+}
+
+fn send_iterm_notification(message: Option<&str>) {
+    // iTerm2 proprietary notification: OSC 9;message BEL
+    let body = sanitize_notification_text(message.unwrap_or("Human approval required"));
+    let payload = format!("{}9;{}", OSC, body);
+    print!("{}{}", payload, BEL);
+    let _ = std::io::stdout().flush();
+}
+
+fn sanitize_notification_text(raw: &str) -> String {
+    const MAX_LEN: usize = 200;
+    let mut cleaned = raw
+        .chars()
+        .filter(|c| *c >= ' ' && *c != '\u{007f}') // strip control chars
+        .collect::<String>();
+    if cleaned.len() > MAX_LEN {
+        cleaned.truncate(MAX_LEN);
+    }
+    // Avoid stray semicolons that could break OSC payloads
+    cleaned.replace(';', ":")
+}
 
 // === Reset ===
 /// Reset all attributes (ESC[0m)

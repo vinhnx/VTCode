@@ -121,7 +121,9 @@ impl FileReferenceValidator {
 
         for subdir in &["scripts", "references", "assets"] {
             let dir = self.skill_root.join(subdir);
-            if dir.is_dir() && let Ok(entries) = std::fs::read_dir(&dir) {
+            if dir.is_dir()
+                && let Ok(entries) = std::fs::read_dir(&dir)
+            {
                 for entry in entries.flatten() {
                     let path = entry.path();
                     if path.is_file() {

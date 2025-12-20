@@ -6,17 +6,20 @@ use tokio::sync::Mutex;
 use vtcode_core::mcp::{
     ElicitationAction, McpElicitationHandler, McpElicitationRequest, McpElicitationResponse,
 };
+use vtcode_core::utils::ansi_codes::notify_attention;
 
 /// Interactive handler that prompts the user on the terminal when an MCP provider
 /// requests additional input via the elicitation flow.
 pub struct InteractiveMcpElicitationHandler {
     prompt_lock: Mutex<()>,
+    hitl_notification_bell: bool,
 }
 
 impl InteractiveMcpElicitationHandler {
-    pub fn new() -> Self {
+    pub fn new(hitl_notification_bell: bool) -> Self {
         Self {
             prompt_lock: Mutex::new(()),
+            hitl_notification_bell,
         }
     }
 }
@@ -31,6 +34,9 @@ impl McpElicitationHandler for InteractiveMcpElicitationHandler {
         use std::io::{self, Write};
 
         let _guard = self.prompt_lock.lock().await;
+
+        // Notify the user that attention is required
+        notify_attention(self.hitl_notification_bell, Some("MCP input required"));
 
         println!();
         println!("=== MCP elicitation request from '{}' ===", provider);

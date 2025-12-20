@@ -16,6 +16,7 @@ use std::path::{Path, PathBuf};
 use crate::ui::theme;
 use crate::ui::user_confirmation::{ToolConfirmationResult, UserConfirmation};
 use crate::utils::ansi::{AnsiRenderer, MessageStyle};
+use crate::utils::ansi_codes::notify_attention;
 
 use crate::config::constants::tools;
 use crate::config::core::tools::{ToolPolicy as ConfigToolPolicy, ToolsConfig};
@@ -877,23 +878,22 @@ impl ToolPolicyManager {
     /// in `src/agent/runloop/unified/tool_routing.rs` which uses TUI modals.
     /// The preapproval system should prevent this function from being called.
     async fn prompt_user_for_tool(&mut self, tool_name: &str) -> Result<ToolExecutionDecision> {
-        // SAFETY CHECK: Detect if we're in TUI mode by checking for RATATUI environment
-        // If this function is called during TUI mode, it's a bug in the preapproval system
+        // SAFETY CHECK: If we are in TUI mode, use a Ratatui-based picker instead of dialoguer.
         if std::env::var("VTCODE_TUI_MODE").is_ok() {
-            tracing::error!(
-                "BUG: prompt_user_for_tool() called in TUI mode for tool '{}'. \
-                This should never happen - the preapproval system should prevent this. \
-                Denying tool execution to prevent TUI corruption.",
+            tracing::warn!(
+                "prompt_user_for_tool invoked in TUI mode for tool '{}' - using inline TUI dialog",
                 tool_name
             );
-            anyhow::bail!(
-                "Internal error: CLI prompt attempted in TUI mode for tool '{}'. \
-                This is a bug - please report it. Tool execution denied to prevent display corruption.",
-                tool_name
-            );
+
+            notify_attention(true, Some("Tool approval required"));
+            let selection = prompt_tool_usage_tui(tool_name)?;
+            return self.handle_tool_confirmation(tool_name, selection).await;
         }
 
         let interactive = std::io::stdin().is_terminal() && std::io::stdout().is_terminal();
+
+        // Attention signal for human-in-the-loop consent (CLI mode)
+        notify_attention(true, Some("Tool approval required"));
         let mut renderer = AnsiRenderer::stdout();
         let banner_style = theme::banner_style();
 
@@ -907,8 +907,19 @@ impl ToolPolicyManager {
             return Ok(ToolExecutionDecision::Allowed);
         }
 
-        // Use the new centralized confirmation logic
-        match UserConfirmation::confirm_tool_usage(tool_name, None)? {
+        // Use the centralized confirmation logic for CLI mode
+        let selection = UserConfirmation::confirm_tool_usage(tool_name, None)?;
+        self.handle_tool_confirmation(tool_name, selection).await
+    }
+
+    async fn handle_tool_confirmation(
+        &mut self,
+        tool_name: &str,
+        selection: ToolConfirmationResult,
+    ) -> Result<ToolExecutionDecision> {
+        let mut renderer = AnsiRenderer::stdout();
+
+        match selection {
             ToolConfirmationResult::Yes => {
                 renderer.line(
                     MessageStyle::Tool,
@@ -1070,6 +1081,148 @@ impl ToolPolicyManager {
     pub fn config_path(&self) -> &Path {
         &self.config_path
     }
+}
+
+/// Render a Ratatui-based confirmation dialog when running in TUI mode.
+fn prompt_tool_usage_tui(tool_name: &str) -> Result<ToolConfirmationResult> {
+    use crossterm::cursor::{Hide, Show};
+    use crossterm::event::{Event, KeyCode, KeyEventKind, read};
+    use crossterm::terminal::{
+        EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
+    };
+    use crossterm::{ExecutableCommand, execute};
+    use ratatui::Terminal;
+    use ratatui::backend::CrosstermBackend;
+    use ratatui::layout::{Constraint, Direction, Layout};
+    use ratatui::style::{Color, Modifier, Style};
+    use ratatui::text::{Line, Span};
+    use ratatui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph};
+
+    struct TerminalGuard;
+
+    impl Drop for TerminalGuard {
+        fn drop(&mut self) {
+            let _ = disable_raw_mode();
+            let _ = std::io::stderr().execute(Show);
+            let _ = execute!(std::io::stderr(), LeaveAlternateScreen);
+        }
+    }
+
+    let mut stderr = std::io::stderr();
+
+    enable_raw_mode().context("Failed to enable raw mode for TUI prompt")?;
+    execute!(stderr, EnterAlternateScreen, Hide)
+        .context("Failed to enter alternate screen for TUI prompt")?;
+    let _guard = TerminalGuard;
+
+    let backend = CrosstermBackend::new(stderr);
+    let mut terminal = Terminal::new(backend).context("Failed to initialize TUI terminal")?;
+
+    let items: Vec<(&str, &str)> = vec![
+        ("Approve once", "Allow this execution only"),
+        ("Always allow", "Persist approval for future runs"),
+        ("Deny", "Reject this execution"),
+        (
+            "Deny with feedback",
+            "Reject and send feedback to the agent",
+        ),
+    ];
+
+    let mut state = ListState::default();
+    state.select(Some(0));
+
+    let selection = loop {
+        terminal
+            .draw(|frame| {
+                let area = frame.area();
+                let layout = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([Constraint::Length(4), Constraint::Min(5)])
+                    .split(area);
+
+                let header = Paragraph::new(format!(
+                    "Tool: {tool_name}\nUse ↑/↓ to choose, Enter to confirm, Esc to deny"
+                ))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title("Tool Confirmation"),
+                );
+                frame.render_widget(header, layout[0]);
+
+                let list_items: Vec<ListItem> = items
+                    .iter()
+                    .map(|(title, detail)| {
+                        ListItem::new(vec![
+                            Line::from(Span::raw(*title)),
+                            Line::from(Span::styled(
+                                format!("  {detail}"),
+                                Style::default().fg(Color::Gray),
+                            )),
+                        ])
+                    })
+                    .collect();
+
+                let list = List::new(list_items)
+                    .block(
+                        Block::default()
+                            .borders(Borders::ALL)
+                            .title("Select an action"),
+                    )
+                    .highlight_symbol("➜ ")
+                    .highlight_style(
+                        Style::default()
+                            .fg(Color::Cyan)
+                            .add_modifier(Modifier::BOLD),
+                    );
+
+                frame.render_stateful_widget(list, layout[1], &mut state);
+            })
+            .context("Failed to render TUI confirmation dialog")?;
+
+        match read()? {
+            Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
+                KeyCode::Up => {
+                    let idx = state.selected().unwrap_or(0);
+                    state.select(Some(idx.saturating_sub(1)));
+                }
+                KeyCode::Down => {
+                    let idx = state.selected().unwrap_or(0);
+                    let next = (idx + 1).min(items.len().saturating_sub(1));
+                    state.select(Some(next));
+                }
+                KeyCode::Enter => {
+                    let choice = state.selected().unwrap_or(0);
+                    let result = match choice {
+                        0 => ToolConfirmationResult::Yes,
+                        1 => ToolConfirmationResult::YesAutoAccept,
+                        2 => ToolConfirmationResult::No,
+                        _ => ToolConfirmationResult::Feedback(String::new()),
+                    };
+                    break result;
+                }
+                KeyCode::Esc | KeyCode::Char('q') => break ToolConfirmationResult::No,
+                _ => {}
+            },
+            _ => {}
+        }
+    };
+
+    if matches!(&selection, ToolConfirmationResult::Feedback(msg) if msg.is_empty()) {
+        let feedback = prompt_feedback_for_tool(tool_name)?;
+        return Ok(ToolConfirmationResult::Feedback(feedback));
+    }
+
+    Ok(selection)
+}
+
+fn prompt_feedback_for_tool(tool_name: &str) -> Result<String> {
+    let prompt = format!("Enter feedback for '{tool_name}'");
+    dialoguer::Input::new()
+        .with_prompt(prompt)
+        .allow_empty(false)
+        .interact_text()
+        .map_err(Into::into)
 }
 
 /// Scoped, optional constraints for a tool to align with safe defaults
