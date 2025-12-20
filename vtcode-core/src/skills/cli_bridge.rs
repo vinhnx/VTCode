@@ -397,6 +397,8 @@ impl CliToolBridge {
             when_to_use: None,
             requires_container: None,
             disallow_container: None,
+            compatibility: None,
+            metadata: None,
         };
 
         let mut skill = Skill::new(

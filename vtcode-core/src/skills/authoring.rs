@@ -17,6 +17,13 @@ use tracing::{debug, info};
 pub const SKILL_TEMPLATE: &str = r#"---
 name: {skill_name}
 description: [TODO: Complete and informative explanation of what the skill does and when to use it. Include WHEN to use this skill - specific scenarios, file types, or tasks that trigger it.]
+# Optional fields following Agent Skills spec:
+# allowed-tools: "Read Write Bash"  # Space-delimited list
+# compatibility: "Designed for VTCode (or similar CLI agents)"
+# license: MIT
+# metadata:
+#   author: Your Name
+#   version: "1.0.0"
 ---
 
 # {skill_title}
@@ -90,7 +97,9 @@ pub struct SkillFrontmatter {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub license: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "allowed-tools")]
-    pub allowed_tools: Option<Vec<String>>,
+    pub allowed_tools: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub compatibility: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<HashMap<String, String>>,
 }

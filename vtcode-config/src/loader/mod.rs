@@ -5,7 +5,7 @@ use crate::acp::AgentClientProtocolConfig;
 use crate::context::ContextFeaturesConfig;
 use crate::core::{
     AgentConfig, AutomationConfig, CommandsConfig, ModelConfig, PermissionsConfig,
-    PromptCachingConfig, SecurityConfig, ToolsConfig, AnthropicConfig,
+    PromptCachingConfig, SecurityConfig, SkillsConfig, ToolsConfig, AnthropicConfig,
 };
 use crate::debug::DebugConfig;
 use crate::defaults::{self, ConfigDefaultsProvider, SyntaxHighlightingDefaults};
@@ -183,6 +183,10 @@ pub struct VTCodeConfig {
     /// Provider-specific configuration
     #[serde(default)]
     pub provider: ProviderConfig,
+
+    /// Skills system configuration (Agent Skills spec)
+    #[serde(default)]
+    pub skills: SkillsConfig,
 }
 
 impl VTCodeConfig {

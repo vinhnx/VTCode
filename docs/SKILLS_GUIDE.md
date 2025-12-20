@@ -1,8 +1,8 @@
-# Anthropic Agent Skills Guide
+# Agent Skills Guide
 
 ## Overview
 
-Agent Skills extend Claude's functionality with specialized, reusable capabilities. VTCode now supports Anthropic's Agent Skills specification, allowing you to:
+Agent Skills are a simple, open format for giving agents new capabilities and expertise. VT Code implements the [open Agent Skills standard](http://agentskills.io/), allowing you to:
 
 -   **Discover** skills from your filesystem or Anthropic's marketplace
 -   **Load** skills into your agent sessions
@@ -59,7 +59,7 @@ Generates a template with:
 vtcode skills validate ./my-skill
 ```
 
-Checks that `SKILL.md` is valid per Anthropic's specification.
+Checks that `SKILL.md` is valid per the [Agent Skills specification](http://agentskills.io/specification).
 
 ### Show Skill Paths
 
@@ -73,7 +73,7 @@ Displays configured skill search paths and directory structure.
 
 ## Skill Structure
 
-Every skill is a directory with a required `SKILL.md` file:
+Every skill is a directory with a required `SKILL.md` file, following the [Agent Skills standard](http://agentskills.io/specification):
 
 ```
 my-skill/
@@ -124,6 +124,19 @@ author: Your Name
 
 -   `version` - Semantic versioning (e.g., "1.0.0")
 -   `author` - Skill creator name
+-   `license` - License name or bundled license file reference
+-   `compatibility` - Environment requirements and product compatibility
+
+### Compliance with Agent Skills Standard
+
+VT Code's skill system fully complies with the [open Agent Skills standard](http://agentskills.io/specification). Your skills are:
+
+-   **Portable** - Work across any Agent Skills-compatible tool or agent
+-   **Discoverable** - Listed and managed by VT Code's skill discovery system
+-   **Standardized** - Follow the common SKILL.md format for consistency
+-   **Composable** - Can be shared with other developers and teams
+
+For the complete specification, visit http://agentskills.io/specification.
 
 ---
 
@@ -598,9 +611,11 @@ You can further organize skills by purpose:
 
 ## Best Practices
 
+VT Code follows best practices from the [Agent Skills standard](http://agentskills.io/what-are-skills). Here are practical guidelines for creating effective skills:
+
 ### 1. Clear Descriptions
 
-Write descriptions that help Claude understand when and how to use the skill:
+Write descriptions that help your agent understand when and how to use the skill:
 
 ```yaml
 # Good 
@@ -791,6 +806,9 @@ vtcode skills info <name>  # Preview
 
 ## Resources
 
+-   **Agent Skills Standard**: http://agentskills.io/ - The open standard for agent skills
+-   **Agent Skills Specification**: http://agentskills.io/specification - Complete SKILL.md format spec
+-   **Agent Skills Integration Guide**: http://agentskills.io/integrate-skills - How to add skills support to your agent
 -   **Anthropic Skills Spec**: https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview
 -   **Skills Cookbook**: https://github.com/anthropics/claude-cookbooks/tree/main/skills
 -   **VTCode Skills Implementation**: `SKILLS_IMPLEMENTATION_SUMMARY.md`

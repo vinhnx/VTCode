@@ -594,6 +594,8 @@ mod tests {
             when_to_use: None,
             requires_container: None,
             disallow_container: None,
+            compatibility: None,
+            metadata: None,
         };
 
         assert!(manager.register_skill_metadata(manifest).is_ok());
@@ -619,6 +621,8 @@ mod tests {
             when_to_use: None,
             requires_container: None,
             disallow_container: None,
+            compatibility: None,
+            metadata: None,
         };
 
         manager.register_skill_metadata(manifest.clone()).unwrap();

@@ -7,6 +7,9 @@ use crate::skills::types::{Skill, SkillScope};
 use std::collections::HashMap;
 use std::fmt::Write;
 
+// Re-export PromptFormat from config for consistency
+pub use vtcode_config::core::skills::PromptFormat;
+
 /// Rendering mode for skills section
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SkillsRenderMode {
@@ -138,6 +141,90 @@ fn render_skills_lean(skills: &HashMap<String, Skill>) -> String {
     prompt
 }
 
+/// Generate skills prompt in XML format (Agent Skills spec recommendation for Claude models)
+///
+/// Wraps skills in `<available_skills>` tags for improved safety and isolation.
+/// This is the recommended format per the Agent Skills specification.
+pub fn generate_skills_prompt_xml(skills: &HashMap<String, Skill>) -> String {
+    if skills.is_empty() {
+        return String::new();
+    }
+
+    let mut xml = String::from("\n<available_skills>\n");
+
+    // Sort skills by name for stable ordering
+    let mut skill_list: Vec<_> = skills.values().collect();
+    skill_list.sort_by_key(|skill| skill.name());
+
+    // Show up to 10 skills to keep prompt lean
+    let overflow = skill_list.len().saturating_sub(10);
+    if overflow > 0 {
+        skill_list.truncate(10);
+    }
+
+    for skill in skill_list {
+        xml.push_str("  <skill>\n");
+        let _ = writeln!(xml, "    <name>{}</name>", xml_escape(skill.name()));
+        let _ = writeln!(
+            xml,
+            "    <description>{}</description>",
+            xml_escape(skill.description())
+        );
+        let _ = writeln!(
+            xml,
+            "    <location>{}</location>",
+            xml_escape(&skill.path.display().to_string())
+        );
+
+        // Optional fields per Agent Skills spec
+        if let Some(ref compatibility) = skill.manifest.compatibility {
+            let _ = writeln!(
+                xml,
+                "    <compatibility>{}</compatibility>",
+                xml_escape(compatibility)
+            );
+        }
+
+        if let Some(ref allowed_tools) = skill.manifest.allowed_tools {
+            let _ = writeln!(
+                xml,
+                "    <allowed-tools>{}</allowed-tools>",
+                xml_escape(allowed_tools)
+            );
+        }
+
+        xml.push_str("  </skill>\n");
+    }
+
+    if overflow > 0 {
+        let _ = writeln!(xml, "  <!-- +{} more skills available -->", overflow);
+    }
+
+    xml.push_str("</available_skills>\n");
+    xml
+}
+
+/// Escape special XML characters
+fn xml_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&apos;")
+}
+
+/// Generate skills prompt with format specification
+pub fn generate_skills_prompt_with_format(
+    skills: &HashMap<String, Skill>,
+    render_mode: SkillsRenderMode,
+    format: PromptFormat,
+) -> String {
+    match format {
+        PromptFormat::Xml => generate_skills_prompt_xml(skills),
+        PromptFormat::Markdown => generate_skills_prompt_with_mode(skills, render_mode),
+    }
+}
+
 /// Test helper
 pub fn test_skills_prompt_generation() {
     use std::path::PathBuf;
@@ -160,6 +247,8 @@ pub fn test_skills_prompt_generation() {
             when_to_use: None,
             requires_container: None,
             disallow_container: None,
+            compatibility: None,
+            metadata: None,
         },
         PathBuf::from("/tmp/test"),
         "Instructions".to_string(),
@@ -209,6 +298,8 @@ mod tests {
                 when_to_use: None,
                 requires_container: None,
                 disallow_container: None,
+                compatibility: None,
+                metadata: None,
             },
             PathBuf::from("/tmp/test-skill"),
             "Test instructions".to_string(),
@@ -254,6 +345,8 @@ mod tests {
                     when_to_use: None,
                     requires_container: None,
                     disallow_container: None,
+                    compatibility: None,
+                    metadata: None,
                 },
                 PathBuf::from(format!("/path/to/skill-{}", i)),
                 "Instructions".to_string(),
@@ -277,5 +370,134 @@ mod tests {
         // Verify both modes include usage rules (lean) or preamble (full)
         assert!(lean_prompt.contains("Usage Rules"));
         assert!(full_prompt.contains("Available Skills"));
+    }
+
+    #[test]
+    fn test_xml_generation() {
+        let mut skills = HashMap::new();
+        use std::collections::HashMap as StdHashMap;
+
+        let mut metadata = StdHashMap::new();
+        metadata.insert("author".to_string(), "Test Author".to_string());
+
+        let skill = Skill::new(
+            crate::skills::types::SkillManifest {
+                name: "test-xml-skill".to_string(),
+                description: "Test XML generation".to_string(),
+                version: None,
+                author: None,
+                license: None,
+                model: None,
+                mode: None,
+                vtcode_native: None,
+                allowed_tools: Some("Read Write Bash".to_string()),
+                disable_model_invocation: None,
+                when_to_use: None,
+                requires_container: None,
+                disallow_container: None,
+                compatibility: Some("Designed for VTCode".to_string()),
+                metadata: Some(metadata),
+            },
+            PathBuf::from("/tmp/test-xml-skill"),
+            "Test instructions".to_string(),
+        )
+        .unwrap();
+
+        skills.insert("test-xml-skill".to_string(), skill);
+
+        let xml_prompt = generate_skills_prompt_xml(&skills);
+
+        // Should be wrapped in XML tags
+        assert!(xml_prompt.contains("<available_skills>"));
+        assert!(xml_prompt.contains("</available_skills>"));
+        assert!(xml_prompt.contains("<skill>"));
+        assert!(xml_prompt.contains("</skill>"));
+
+        // Should include required fields
+        assert!(xml_prompt.contains("<name>test-xml-skill</name>"));
+        assert!(xml_prompt.contains("<description>Test XML generation</description>"));
+        assert!(xml_prompt.contains("<location>/tmp/test-xml-skill</location>"));
+
+        // Should include optional fields
+        assert!(xml_prompt.contains("<compatibility>Designed for VTCode</compatibility>"));
+        assert!(xml_prompt.contains("<allowed-tools>Read Write Bash</allowed-tools>"));
+    }
+
+    #[test]
+    fn test_xml_escaping() {
+        let mut skills = HashMap::new();
+
+        let skill = Skill::new(
+            crate::skills::types::SkillManifest {
+                name: "test-escape".to_string(),
+                description: "Test <special> & \"characters\"".to_string(),
+                version: None,
+                author: None,
+                license: None,
+                model: None,
+                mode: None,
+                vtcode_native: None,
+                allowed_tools: None,
+                disable_model_invocation: None,
+                when_to_use: None,
+                requires_container: None,
+                disallow_container: None,
+                compatibility: None,
+                metadata: None,
+            },
+            PathBuf::from("/tmp/test"),
+            "Instructions".to_string(),
+        )
+        .unwrap();
+
+        skills.insert("test-escape".to_string(), skill);
+
+        let xml_prompt = generate_skills_prompt_xml(&skills);
+
+        // XML special characters should be escaped
+        assert!(xml_prompt.contains("&lt;special&gt;"));
+        assert!(xml_prompt.contains("&amp;"));
+        assert!(xml_prompt.contains("&quot;"));
+    }
+
+    #[test]
+    fn test_prompt_format_selection() {
+        let mut skills = HashMap::new();
+
+        let skill = Skill::new(
+            crate::skills::types::SkillManifest {
+                name: "test-format".to_string(),
+                description: "Test format selection".to_string(),
+                version: None,
+                author: None,
+                license: None,
+                model: None,
+                mode: None,
+                vtcode_native: None,
+                allowed_tools: None,
+                disable_model_invocation: None,
+                when_to_use: None,
+                requires_container: None,
+                disallow_container: None,
+                compatibility: None,
+                metadata: None,
+            },
+            PathBuf::from("/tmp/test"),
+            "Instructions".to_string(),
+        )
+        .unwrap();
+
+        skills.insert("test-format".to_string(), skill);
+
+        let xml_output = generate_skills_prompt_with_format(&skills, SkillsRenderMode::Lean, PromptFormat::Xml);
+        let markdown_output = generate_skills_prompt_with_format(&skills, SkillsRenderMode::Lean, PromptFormat::Markdown);
+
+        // XML format should have XML tags
+        assert!(xml_output.contains("<available_skills>"));
+        assert!(!markdown_output.contains("<available_skills>"));
+
+        // Markdown format should have markdown headers
+        assert!(markdown_output.contains("## Skills"));
+        assert!(!xml_output.contains("## Skills"));
     }
 }
