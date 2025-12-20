@@ -71,6 +71,22 @@ impl<'a> InlineEventContext<'a> {
                 self.state.reset_interrupt_state();
                 self.modal.handle_cancel(self.state.renderer())?
             }
+            InlineEvent::WizardModalSubmit(_) => {
+                self.state.reset_interrupt_state();
+                self.input_processor().passive()
+            }
+            InlineEvent::WizardModalStepComplete { .. } => {
+                self.state.reset_interrupt_state();
+                self.input_processor().passive()
+            }
+            InlineEvent::WizardModalBack { .. } => {
+                self.state.reset_interrupt_state();
+                self.input_processor().passive()
+            }
+            InlineEvent::WizardModalCancel => {
+                self.state.reset_interrupt_state();
+                self.input_processor().passive()
+            }
             InlineEvent::Cancel => self.control_processor().cancel()?,
             InlineEvent::Exit => self.control_processor().exit()?,
             InlineEvent::Interrupt => self.handle_interrupt(),
