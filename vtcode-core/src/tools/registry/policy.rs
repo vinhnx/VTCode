@@ -6,7 +6,7 @@ use serde_json::{Value, json};
 
 use crate::config::constants::tools;
 use crate::config::mcp::McpAllowListConfig;
-use crate::tool_policy::{ToolPolicy, ToolPolicyManager};
+use crate::tool_policy::{ToolExecutionDecision, ToolPolicy, ToolPolicyManager};
 use crate::tools::names::canonical_tool_name;
 
 use super::ToolPermissionDecision;
@@ -351,12 +351,12 @@ impl ToolPolicyGateway {
         );
     }
 
-    pub async fn should_execute_tool(&mut self, name: &str) -> Result<bool> {
+    pub async fn should_execute_tool(&mut self, name: &str) -> Result<ToolExecutionDecision> {
         let canonical = canonical_tool_name(name);
         if let Some(policy_manager) = self.tool_policy.as_mut() {
             policy_manager.should_execute_tool(canonical.as_ref()).await
         } else {
-            Ok(true)
+            Ok(ToolExecutionDecision::Allowed)
         }
     }
 

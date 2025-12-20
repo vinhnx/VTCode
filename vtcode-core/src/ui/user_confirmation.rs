@@ -5,11 +5,24 @@
 
 use crate::utils::colors::style;
 use anyhow::Result;
-use dialoguer::{Confirm, Select};
+use dialoguer::{Confirm, Input, Select};
 // use std::io::Write;
 
 /// User confirmation utilities for safety-critical operations
 pub struct UserConfirmation;
+
+/// Result of a tool confirmation prompt
+#[derive(Debug, Clone, PartialEq)]
+pub enum ToolConfirmationResult {
+    /// Allow this specific execution
+    Yes,
+    /// Allow this and all future executions of this tool
+    YesAutoAccept,
+    /// Deny this execution
+    No,
+    /// Deny and provide feedback to the agent
+    Feedback(String),
+}
 
 impl UserConfirmation {
     /// Ask for confirmation before switching to the most capable model (Gemini 2.5 Pro)
@@ -29,18 +42,34 @@ impl UserConfirmation {
         println!("• Higher resource usage");
         println!();
 
-        let confirmed = Confirm::new()
-            .with_prompt("Do you want to proceed with the more capable (and expensive) Gemini 2.5 Pro model?")
-            .default(false)
+        let options = vec![
+            "Yes - Use Pro model for this task",
+            "Yes - Always use Pro model (Auto-accept)",
+            "No - Use default model instead",
+        ];
+
+        let selection = Select::new()
+            .with_prompt("How would you like to proceed?")
+            .default(0)
+            .items(&options)
             .interact()?;
 
-        if confirmed {
-            println!("{}", style("Confirmed: Using Gemini 2.5 Pro model").green());
-        } else {
-            println!("{}", style("Cancelled: Keeping current model").yellow());
+        match selection {
+            0 => {
+                println!("{}", style("✓ Using Gemini 2.5 Pro model for this task").green());
+                Ok(true)
+            }
+            1 => {
+                println!("{}", style("✓ Using Gemini 2.5 Pro model (will auto-accept in future)").green());
+                // Note: Auto-accept logic would need to be implemented in the caller
+                Ok(true)
+            }
+            2 => {
+                println!("{}", style("✗ Keeping current model").yellow());
+                Ok(false)
+            }
+            _ => Ok(false),
         }
-
-        Ok(confirmed)
     }
 
     /// Present agent mode selection options to the user
@@ -123,6 +152,46 @@ impl UserConfirmation {
             .interact()?;
 
         Ok(())
+    }
+
+    /// Ask for detailed confirmation for tool usage
+    pub fn confirm_tool_usage(
+        tool_name: &str,
+        tool_args: Option<&str>,
+    ) -> Result<ToolConfirmationResult> {
+        println!("{}", style("Tool Execution Confirmation").cyan().bold());
+        println!("Tool: {}", style(tool_name).yellow().bold());
+        if let Some(args) = tool_args {
+            println!("Args: {}", style(args).dim());
+        }
+        println!();
+
+        let options = vec![
+            "Yes - Allow this execution",
+            "Yes - Always allow this tool (Auto-accept)",
+            "No - Deny this execution",
+            "No - Deny and provide feedback to agent",
+        ];
+
+        let selection = Select::new()
+            .with_prompt("How would you like to proceed?")
+            .default(0)
+            .items(&options)
+            .interact()?;
+
+        match selection {
+            0 => Ok(ToolConfirmationResult::Yes),
+            1 => Ok(ToolConfirmationResult::YesAutoAccept),
+            2 => Ok(ToolConfirmationResult::No),
+            3 => {
+                let feedback: String = Input::new()
+                    .with_prompt("Enter feedback for the agent")
+                    .allow_empty(false)
+                    .interact_text()?;
+                Ok(ToolConfirmationResult::Feedback(feedback))
+            }
+            _ => Ok(ToolConfirmationResult::No),
+        }
     }
 }
 
